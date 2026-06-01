@@ -8,9 +8,9 @@ from backend.core.config import get_config
 from backend.core.time import get_time
 from backend.core.events import add_event, get_events
 from backend.core.logs import get_logs
+from backend.finance.routes import router as finance_router
 
 from fastapi.middleware.cors import CORSMiddleware
-
 
 app = FastAPI(title="Jarvis Core")
 
@@ -25,6 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(finance_router)
 
 class AskRequest(BaseModel):
     text: str

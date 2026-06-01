@@ -15,5 +15,39 @@ def interpret(text: str):
 
     if "logs" in text or "historial" in text:
         return "GET_LOGS"
+    
+    if (
+        ("cuánto debo" in text or "cuanto debo" in text)
+        and ("popular" in text or "bac" in text or "reloj" in text or "minicuotas" in text)
+    ):
+        return "GET_DEBT_BY_NAME"
+
+    if "cuánto debo" in text or "cuanto debo" in text or "deuda total" in text:
+        return "GET_TOTAL_DEBT"
+
+    if (
+        "cuánto tengo libre" in text
+        or "cuanto tengo libre" in text
+        or "dinero libre" in text
+        or "disponible" in text
+    ):
+        return "GET_AVAILABLE_CASH"
+
+    if (
+        "cuánto puedo gastar" in text
+        or "cuanto puedo gastar" in text
+        or "puedo gastar" in text
+        or "puedo comprar" in text
+        or "me alcanza" in text
+    ):
+        return "CHECK_SPENDING"
+
+    if (
+        "resumen financiero" in text
+        or "estado financiero" in text
+        or "cómo estoy financieramente" in text
+        or "como estoy financieramente" in text
+    ):
+        return "GET_FINANCIAL_SUMMARY"
 
     return "UNKNOWN"

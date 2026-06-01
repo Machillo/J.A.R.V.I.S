@@ -7,7 +7,7 @@ from backend.core.logs import add_log
 
 def process_input(text: str):
     intent = interpret(text)
-    result = route(intent)
+    result = route(intent, text)
 
     add_log(
         action="USER_INPUT",
