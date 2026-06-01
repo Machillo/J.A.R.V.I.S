@@ -49,5 +49,14 @@ def interpret(text: str):
         or "como estoy financieramente" in text
     ):
         return "GET_FINANCIAL_SUMMARY"
+    
+    if (
+        "estrategia" in text
+        or "qué hago con mi dinero" in text
+        or "que hago con mi dinero" in text
+        or "qué recomiendas financieramente" in text
+        or "que recomiendas financieramente" in text
+    ):
+        return "GET_RECOMMENDED_STRATEGY"
 
     return "UNKNOWN"

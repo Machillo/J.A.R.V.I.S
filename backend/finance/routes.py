@@ -1,4 +1,6 @@
 from fastapi import APIRouter
+from backend.finance.strategies import get_all_strategies
+from backend.finance.strategy_rules import get_strategy_report, select_recommended_strategy
 
 from backend.finance.models import (
     SalaryRequest,
@@ -249,3 +251,17 @@ def payroll_events():
 @router.get("/salary-projection")
 def salary_projection():
     return calculate_monthly_salary_projection()
+
+@router.get("/strategies")
+def strategies():
+    return get_all_strategies()
+
+
+@router.get("/strategies/recommended")
+def recommended_strategy():
+    return select_recommended_strategy()
+
+
+@router.get("/strategies/report")
+def strategy_report():
+    return get_strategy_report()
