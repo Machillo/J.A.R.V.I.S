@@ -9,8 +9,21 @@ from backend.core.time import get_time
 from backend.core.events import add_event, get_events
 from backend.core.logs import get_logs
 
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI(title="Jarvis Core")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class AskRequest(BaseModel):
