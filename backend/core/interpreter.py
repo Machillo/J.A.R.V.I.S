@@ -58,5 +58,16 @@ def interpret(text: str):
         or "que recomiendas financieramente" in text
     ):
         return "GET_RECOMMENDED_STRATEGY"
+    
+    if (
+        "cómo reparto mi dinero" in text
+        or "como reparto mi dinero" in text
+        or "cómo distribuyo mi dinero" in text
+        or "como distribuyo mi dinero" in text
+        or "allocation" in text
+        or "plan financiero" in text
+        or "repartir dinero" in text
+    ):
+        return "GET_ALLOCATION_PLAN"
 
     return "UNKNOWN"

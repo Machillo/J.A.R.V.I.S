@@ -85,3 +85,14 @@ class DebtMonthlyPaymentRequest(BaseModel):
     new_remaining_amount: float
     new_monthly_payment: float | None = None
     description: str = ""
+
+class LoanEvaluationRequest(BaseModel):
+    amount: float
+    monthly_payment: float
+    purpose: str = "general"
+
+
+class InstallmentEvaluationRequest(BaseModel):
+    amount: float
+    month_options: list[int]
+    purpose: str = "general"

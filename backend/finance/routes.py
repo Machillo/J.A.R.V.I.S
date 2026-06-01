@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 from backend.finance.strategies import get_all_strategies
 from backend.finance.strategy_rules import get_strategy_report, select_recommended_strategy
+from backend.finance.allocation_engine import calculate_allocation_plan
+from backend.finance.evaluators import evaluate_loan, evaluate_installment_purchase
 
 from backend.finance.models import (
     SalaryRequest,
@@ -16,6 +18,8 @@ from backend.finance.models import (
     DebtUpdateRequest,
     DebtExtraPaymentRequest,
     DebtMonthlyPaymentRequest,
+    LoanEvaluationRequest,
+    InstallmentEvaluationRequest,
 )
 
 from backend.finance.service import (
@@ -265,3 +269,24 @@ def recommended_strategy():
 @router.get("/strategies/report")
 def strategy_report():
     return get_strategy_report()
+
+@router.get("/allocation-plan")
+def allocation_plan():
+    return calculate_allocation_plan()
+
+@router.post("/evaluate-loan")
+def loan_evaluation(request: LoanEvaluationRequest):
+    return evaluate_loan(
+    amount=request.amount,
+    monthly_payment=request.monthly_payment,
+    purpose=request.purpose,
+)
+
+
+@router.post("/evaluate-installment-purchase")
+def installment_purchase_evaluation(request: InstallmentEvaluationRequest):
+    return evaluate_installment_purchase(
+    amount=request.amount,
+    month_options=request.month_options,
+    purpose=request.purpose,
+)

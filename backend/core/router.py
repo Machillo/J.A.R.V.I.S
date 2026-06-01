@@ -7,6 +7,7 @@ from backend.core.events import get_events
 from backend.core.logs import get_logs
 from backend.finance.service import get_financial_summary, check_spending, get_debt_by_name
 from backend.finance.strategy_rules import select_recommended_strategy
+from backend.finance.allocation_engine import calculate_allocation_plan
 
 
 def extract_amount_from_text(text: str):
@@ -77,6 +78,9 @@ def route(intent: str, text: str = ""):
     
     if intent == "GET_RECOMMENDED_STRATEGY":
         return select_recommended_strategy()
+    
+    if intent == "GET_ALLOCATION_PLAN":
+        return calculate_allocation_plan()
 
     return {
         "message": "No entiendo la intención todavía."

@@ -119,3 +119,14 @@ CREATE TABLE IF NOT EXISTS debt_payments (
     created_at TEXT NOT NULL,
     FOREIGN KEY (debt_id) REFERENCES debts(id)
 );
+
+CREATE TABLE IF NOT EXISTS financial_goals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    target_amount REAL NOT NULL,
+    current_amount REAL NOT NULL DEFAULT 0,
+    target_date TEXT,
+    priority TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL
+);
