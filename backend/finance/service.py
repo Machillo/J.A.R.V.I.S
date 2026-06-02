@@ -1179,3 +1179,87 @@ def get_net_worth_report():
             "debt_to_asset_ratio": debt_to_asset_ratio
         }
     }
+
+def get_user_status():
+    summary = get_financial_summary()
+    net_worth = get_net_worth_report()
+
+    with get_connection() as conn:
+        goals = conn.execute(
+            """
+            SELECT id, name, target_amount, current_amount, target_date,
+                   priority, status, created_at
+            FROM financial_goals
+            WHERE status = 'active'
+            ORDER BY
+                CASE priority
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                    ELSE 5
+                END,
+                target_date ASC
+            """
+        ).fetchall()
+
+    goals_list = [dict(row) for row in goals]
+
+    active_goals_count = len(goals_list)
+    critical_goals = [
+        goal for goal in goals_list
+        if goal["priority"] == "critical"
+    ]
+
+    total_goals_remaining = sum(
+        max(goal["target_amount"] - goal["current_amount"], 0)
+        for goal in goals_list
+    )
+
+    most_urgent_goal = goals_list[0] if goals_list else None
+
+    return {
+        "income": {
+            "monthly_net_income": summary["income"]["projected_net_income"],
+            "total_income": summary["income"]["total_income"]
+        },
+
+        "assets": {
+            "savings": net_worth["assets"]["savings_total"],
+            "investments": net_worth["assets"]["investments_total"],
+            "assets_total": net_worth["assets"]["assets_total"],
+            "net_worth": net_worth["net_worth"]
+        },
+
+        "debts": {
+            "total": net_worth["liabilities"]["debt_total"],
+            "monthly_payments": net_worth["liabilities"]["monthly_debt_payments"],
+            "highest_debt": (
+                net_worth["liabilities"]["highest_debt"]["name"]
+                if net_worth["liabilities"]["highest_debt"]
+                else None
+            )
+        },
+
+        "expenses": {
+            "fixed_expenses": summary["expenses"]["fixed_expenses_total"],
+            "total_expenses": summary["expenses"]["expenses_total"]
+        },
+
+        "cashflow": {
+            "available_cash": summary["results"]["available_cash"]
+        },
+
+        "goals": {
+            "active_goals_count": active_goals_count,
+            "critical_goals_count": len(critical_goals),
+            "total_goals_remaining": total_goals_remaining,
+            "most_urgent_goal": most_urgent_goal,
+            "active_goals": goals_list
+        },
+
+        "financial_health": {
+            "status": net_worth["status"],
+            "risk_level": net_worth["risk_level"]
+        }
+    }
