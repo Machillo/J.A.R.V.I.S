@@ -130,3 +130,35 @@ CREATE TABLE IF NOT EXISTS financial_goals (
     status TEXT NOT NULL DEFAULT 'active',
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS payment_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id INTEGER,
+    payment_method TEXT NOT NULL,
+    frequency TEXT NOT NULL,
+    day_of_month INTEGER,
+    cut_day INTEGER,
+    payment_day INTEGER,
+    auto_deducted INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pay_schedule (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pay_frequency TEXT NOT NULL,
+    pay_day TEXT,
+    first_pay_date TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS credit_card_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    cut_day INTEGER NOT NULL,
+    payment_day INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);

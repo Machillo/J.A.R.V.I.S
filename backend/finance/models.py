@@ -96,3 +96,18 @@ class InstallmentEvaluationRequest(BaseModel):
     amount: float
     month_options: list[int]
     purpose: str = "general"
+
+class PayScheduleRequest(BaseModel):
+    pay_frequency: str
+    pay_day: str | None = None
+    first_pay_date: str | None = None
+    notes: str = ""
+
+class CreditCardSettingsRequest(BaseModel):
+    name: str
+    cut_day: int
+    payment_day: int
+
+class CardPurchaseEvaluationRequest(BaseModel):
+    amount: float
+    description: str = ""

@@ -1,0 +1,76 @@
+from backend.core.database import get_connection
+
+
+def add_payment_schedule(
+    name: str,
+    entity_type: str,
+    entity_id: int | None,
+    payment_method: str,
+    frequency: str,
+    day_of_month: int | None = None,
+    cut_day: int | None = None,
+    payment_day: int | None = None,
+    auto_deducted: bool = False,
+    notes: str = ""
+):
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO payment_schedules (
+                name,
+                entity_type,
+                entity_id,
+                payment_method,
+                frequency,
+                day_of_month,
+                cut_day,
+                payment_day,
+                auto_deducted,
+                notes,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            """,
+            (
+                name,
+                entity_type,
+                entity_id,
+                payment_method,
+                frequency,
+                day_of_month,
+                cut_day,
+                payment_day,
+                1 if auto_deducted else 0,
+                notes
+            )
+        )
+
+        conn.commit()
+
+    return {
+        "id": cursor.lastrowid,
+        "name": name,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "payment_method": payment_method,
+        "frequency": frequency,
+        "day_of_month": day_of_month,
+        "cut_day": cut_day,
+        "payment_day": payment_day,
+        "auto_deducted": auto_deducted,
+        "notes": notes
+    }
+
+
+def get_payment_schedules():
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, entity_type, entity_id, payment_method, frequency,
+                   day_of_month, cut_day, payment_day, auto_deducted, notes, created_at
+            FROM payment_schedules
+            ORDER BY id DESC
+            """
+        ).fetchall()
+
+    return [dict(row) for row in rows]

@@ -8,6 +8,8 @@ from backend.core.logs import get_logs
 from backend.finance.service import get_financial_summary, check_spending, get_debt_by_name
 from backend.finance.strategy_rules import select_recommended_strategy
 from backend.finance.allocation_engine import calculate_allocation_plan
+from backend.finance.card_cycle import evaluate_card_purchase
+from backend.goals.goal_planner import generate_goal_plan, generate_goal_plan_by_name
 
 
 def extract_amount_from_text(text: str):
@@ -71,6 +73,13 @@ def route(intent: str, text: str = ""):
             "message": f"Actualmente tienes ₡{available_cash:,.2f} disponibles según los datos registrados.",
             "available_cash": available_cash
         }
+    
+    if intent == "EVALUATE_CARD_PURCHASE":
+        amount = extract_amount_from_text(text)
+        return evaluate_card_purchase(
+            amount=amount,
+            description=text
+        )
 
     if intent == "CHECK_SPENDING":
         amount = extract_amount_from_text(text)
@@ -81,6 +90,9 @@ def route(intent: str, text: str = ""):
     
     if intent == "GET_ALLOCATION_PLAN":
         return calculate_allocation_plan()
+    
+    if intent == "GET_ECUADOR_GOAL_PLAN":
+        return generate_goal_plan_by_name("ecuador")
 
     return {
         "message": "No entiendo la intención todavía."

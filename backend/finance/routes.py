@@ -20,6 +20,9 @@ from backend.finance.models import (
     DebtMonthlyPaymentRequest,
     LoanEvaluationRequest,
     InstallmentEvaluationRequest,
+    PayScheduleRequest,
+    CreditCardSettingsRequest,
+    CardPurchaseEvaluationRequest,
 )
 
 from backend.finance.service import (
@@ -50,6 +53,20 @@ from backend.finance.service import (
     apply_extra_payment_to_debt,
     apply_monthly_payment_to_debt,
     get_debt_payments,
+)
+
+from backend.finance.cashflow import (
+    set_pay_schedule,
+    get_pay_schedule,
+    get_next_pay_date,
+    get_basic_cashflow_forecast,
+)
+
+from backend.finance.card_cycle import (
+    set_credit_card_settings,
+    get_credit_card_settings,
+    evaluate_card_purchase_date,
+    evaluate_card_purchase,
 )
 
 
@@ -290,3 +307,54 @@ def installment_purchase_evaluation(request: InstallmentEvaluationRequest):
     month_options=request.month_options,
     purpose=request.purpose,
 )
+
+@router.post("/pay-schedule")
+def create_pay_schedule(request: PayScheduleRequest):
+    return set_pay_schedule(
+        pay_frequency=request.pay_frequency,
+        pay_day=request.pay_day,
+        first_pay_date=request.first_pay_date,
+        notes=request.notes,
+    )
+
+
+@router.get("/pay-schedule")
+def pay_schedule():
+    return get_pay_schedule()
+
+
+@router.get("/cashflow/next-pay-date")
+def next_pay_date():
+    return get_next_pay_date()
+
+
+@router.get("/cashflow/forecast")
+def cashflow_forecast():
+    return get_basic_cashflow_forecast()
+
+@router.post("/credit-card-settings")
+def create_credit_card_settings(
+    request: CreditCardSettingsRequest
+):
+    return set_credit_card_settings(
+        name=request.name,
+        cut_day=request.cut_day,
+        payment_day=request.payment_day,
+    )
+
+
+@router.get("/credit-card-settings")
+def credit_card_settings():
+    return get_credit_card_settings()
+
+
+@router.get("/credit-card-cycle")
+def credit_card_cycle():
+    return evaluate_card_purchase_date()
+
+@router.post("/credit-card/evaluate-purchase")
+def card_purchase_evaluation(request: CardPurchaseEvaluationRequest):
+    return evaluate_card_purchase(
+        amount=request.amount,
+        description=request.description,
+    )

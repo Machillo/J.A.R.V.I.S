@@ -231,3 +231,26 @@ def format_goal(goal: dict):
     goal["monthly_required"] = monthly_required
 
     return goal
+
+def get_financial_goal_by_name(name: str):
+    search = f"%{name.lower()}%"
+
+    with get_connection() as conn:
+        goal = conn.execute(
+            """
+            SELECT id, name, target_amount, current_amount, target_date, priority, status, created_at
+            FROM financial_goals
+            WHERE lower(name) LIKE ?
+            AND status = 'active'
+            LIMIT 1
+            """,
+            (search,)
+        ).fetchone()
+
+    if not goal:
+        return {
+            "message": f"No encontré una meta activa que coincida con '{name}'.",
+            "status": "ERROR"
+        }
+
+    return format_goal(dict(goal))

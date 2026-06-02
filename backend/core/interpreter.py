@@ -32,13 +32,23 @@ def interpret(text: str):
         or "disponible" in text
     ):
         return "GET_AVAILABLE_CASH"
+    
+    if (
+        "puedo comprar" in text
+        or "puedo gastar" in text
+        or "me alcanza" in text
+        or "compra" in text
+    ) and "efectivo" not in text:
+        return "EVALUATE_CARD_PURCHASE"
 
     if (
-        "cuánto puedo gastar" in text
-        or "cuanto puedo gastar" in text
-        or "puedo gastar" in text
-        or "puedo comprar" in text
-        or "me alcanza" in text
+        "efectivo" in text
+        and (
+            "puedo usar" in text
+            or "puedo gastar" in text
+            or "puedo comprar" in text
+            or "me alcanza" in text
+        )
     ):
         return "CHECK_SPENDING"
 
@@ -69,5 +79,17 @@ def interpret(text: str):
         or "repartir dinero" in text
     ):
         return "GET_ALLOCATION_PLAN"
+    
+    if (
+        "ecuador" in text
+        and (
+            "plan" in text
+            or "cómo va" in text
+            or "como va" in text
+            or "probabilidad" in text
+            or "meta" in text
+        )
+    ):
+        return "GET_ECUADOR_GOAL_PLAN"
 
     return "UNKNOWN"

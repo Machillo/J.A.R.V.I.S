@@ -1,4 +1,6 @@
 from fastapi import APIRouter
+from backend.goals.goal_analyzer import analyze_goal_by_id, analyze_all_goals
+from backend.goals.goal_planner import generate_goal_plan
 
 from backend.goals.models import (
     FinancialGoalRequest,
@@ -64,3 +66,16 @@ def contribute_to_goal(goal_id: int, request: GoalContributionRequest):
         goal_id=goal_id,
         amount=request.amount,
     )
+
+@router.get("/analysis/all")
+def all_goals_analysis():
+    return analyze_all_goals()
+
+
+@router.get("/{goal_id}/analysis")
+def goal_analysis(goal_id: int):
+    return analyze_goal_by_id(goal_id)
+
+@router.get("/{goal_id}/plan")
+def goal_plan(goal_id: int):
+    return generate_goal_plan(goal_id)
