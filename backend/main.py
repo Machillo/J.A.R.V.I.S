@@ -10,6 +10,7 @@ from backend.core.events import add_event, get_events
 from backend.core.logs import get_logs
 from backend.finance.routes import router as finance_router
 from backend.goals.routes import router as goals_router
+from backend.decision_engine.routes import router as decision_router
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -28,6 +29,7 @@ app.add_middleware(
 
 app.include_router(finance_router)
 app.include_router(goals_router)
+app.include_router(decision_router)
 
 class AskRequest(BaseModel):
     text: str

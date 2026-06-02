@@ -12,56 +12,34 @@ El objetivo es construir un asistente personal capaz de gestionar información, 
 
 JARVIS será un sistema capaz de:
 
-* Comprender instrucciones en lenguaje natural.
-* Gestionar finanzas personales.
-* Mantener memoria persistente.
-* Administrar metas y proyectos.
-* Analizar deudas, ahorros e inversiones.
-* Consultar información en internet.
-* Interactuar mediante voz.
-* Funcionar desde PC y teléfono.
-* Actuar como un asistente personal centralizado.
-
----
-
-# Estado Actual
-
-## Fase 1 — JARVIS CORE
-
-Completada ✅
-
-Características implementadas:
-
-* Usuario persistente.
-* Configuración persistente.
-* Fecha y hora.
-* Zona horaria.
-* Eventos.
-* Logs.
-* SQLite.
-* API REST con FastAPI.
-* Brain → Interpreter → Router.
-
----
+- Comprender instrucciones en lenguaje natural.
+- Gestionar finanzas personales.
+- Mantener memoria persistente.
+- Administrar metas y proyectos.
+- Analizar deudas, ahorros e inversiones.
+- Consultar información en internet.
+- Interactuar mediante voz.
+- Funcionar desde PC y teléfono.
+- Actuar como un asistente personal centralizado.
 
 # Tecnologías
 
 ## Backend
 
-* Python 3.11+
-* FastAPI
-* SQLite
+- Python 3.11+
+- FastAPI
+- SQLite
 
 ## Frontend (planeado)
 
-* React
-* TypeScript
-* Vite
+- React
+- TypeScript
+- Vite
 
 ## Base de Datos
 
-* SQLite (actual)
-* PostgreSQL (futuro)
+- SQLite (actual)
+- PostgreSQL (futuro)
 
 ---
 
@@ -119,10 +97,10 @@ GET /status
 
 Obtiene:
 
-* Usuario
-* Configuración
-* Fecha
-* Hora
+- Usuario
+- Configuración
+- Fecha
+- Hora
 
 ---
 
@@ -167,7 +145,6 @@ GET /logs
 ```
 
 ---
-
 
 # Objetivo Final
 
