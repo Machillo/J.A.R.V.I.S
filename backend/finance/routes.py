@@ -53,6 +53,7 @@ from backend.finance.service import (
     apply_extra_payment_to_debt,
     apply_monthly_payment_to_debt,
     get_debt_payments,
+    get_net_worth_report,
 )
 
 from backend.finance.cashflow import (
@@ -76,6 +77,10 @@ router = APIRouter(prefix="/finance", tags=["Finance"])
 @router.get("/summary")
 def financial_summary():
     return get_financial_summary()
+
+@router.get("/net-worth")
+def net_worth_report():
+    return get_net_worth_report()
 
 
 @router.post("/salaries")

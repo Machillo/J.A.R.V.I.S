@@ -1039,3 +1039,143 @@ def get_debt_payments(debt_id: int | None = None):
             ).fetchall()
 
     return [dict(row) for row in rows]
+
+def get_net_worth_report():
+    with get_connection() as conn:
+        savings = conn.execute(
+            """
+            SELECT id, name, amount, created_at
+            FROM savings
+            ORDER BY id DESC
+            """
+        ).fetchall()
+
+        investments = conn.execute(
+            """
+            SELECT id, name, amount, created_at
+            FROM investments
+            ORDER BY id DESC
+            """
+        ).fetchall()
+
+        debts = conn.execute(
+            """
+            SELECT id, name, debt_type, total_amount, remaining_amount,
+                   monthly_payment, interest_rate, term_months, payment_day, created_at
+            FROM debts
+            ORDER BY remaining_amount DESC
+            """
+        ).fetchall()
+
+    savings_list = [dict(row) for row in savings]
+    investments_list = [dict(row) for row in investments]
+    debts_list = [dict(row) for row in debts]
+
+    savings_total = sum(item["amount"] for item in savings_list)
+    investments_total = sum(item["amount"] for item in investments_list)
+    assets_total = savings_total + investments_total
+
+    debt_total = sum(item["remaining_amount"] for item in debts_list)
+    monthly_debt_payments = sum(item["monthly_payment"] for item in debts_list)
+
+    net_worth = assets_total - debt_total
+
+    if net_worth < 0:
+        status = "negative"
+        interpretation = (
+            "Tu patrimonio neto es negativo porque tus deudas registradas "
+            "son mayores que tus activos registrados."
+        )
+    elif net_worth == 0:
+        status = "neutral"
+        interpretation = (
+            "Tu patrimonio neto está en cero. Tus activos registrados cubren "
+            "exactamente tus deudas registradas."
+        )
+    else:
+        status = "positive"
+        interpretation = (
+            "Tu patrimonio neto es positivo. Tus activos registrados superan "
+            "tus deudas registradas."
+        )
+
+    if debt_total > 0 and assets_total == 0:
+        risk_level = "high"
+        priority = (
+            "Registrar activos reales si existen y priorizar reducción de deuda."
+        )
+    elif debt_total > assets_total:
+        risk_level = "medium_high"
+        priority = (
+            "Reducir deudas de mayor interés y aumentar activos líquidos."
+        )
+    elif debt_total == 0:
+        risk_level = "low"
+        priority = (
+            "Mantener activos, crear fondo de emergencia e invertir de forma ordenada."
+        )
+    else:
+        risk_level = "medium"
+        priority = (
+            "Mantener control de deuda y seguir aumentando patrimonio."
+        )
+
+    if assets_total > 0:
+        debt_to_asset_ratio = debt_total / assets_total
+    else:
+        debt_to_asset_ratio = None
+
+    highest_debt = debts_list[0] if debts_list else None
+
+    recommendations = []
+
+    if assets_total == 0:
+        recommendations.append(
+            "Registrar ahorros, inversiones o saldos disponibles reales para que el patrimonio sea más preciso."
+        )
+
+    if highest_debt:
+        recommendations.append(
+            f"Priorizar seguimiento de la deuda más grande: {highest_debt['name']} por ₡{highest_debt['remaining_amount']:,.2f}."
+        )
+
+    high_interest_debts = [
+        debt for debt in debts_list
+        if debt["interest_rate"] and debt["interest_rate"] >= 20
+    ]
+
+    if high_interest_debts:
+        recommendations.append(
+            "Revisar deudas con interés alto para aplicar estrategia de avalancha o refinanciamiento."
+        )
+
+    if monthly_debt_payments > 0:
+        recommendations.append(
+            f"Tus pagos mensuales de deuda registrados suman aproximadamente ₡{monthly_debt_payments:,.2f}."
+        )
+
+    return {
+        "assets": {
+            "savings": savings_list,
+            "investments": investments_list,
+            "savings_total": savings_total,
+            "investments_total": investments_total,
+            "assets_total": assets_total
+        },
+        "liabilities": {
+            "debts": debts_list,
+            "debt_total": debt_total,
+            "monthly_debt_payments": monthly_debt_payments,
+            "highest_debt": highest_debt,
+            "high_interest_debts": high_interest_debts
+        },
+        "net_worth": net_worth,
+        "status": status,
+        "risk_level": risk_level,
+        "interpretation": interpretation,
+        "priority": priority,
+        "recommendations": recommendations,
+        "ratios": {
+            "debt_to_asset_ratio": debt_to_asset_ratio
+        }
+    }
