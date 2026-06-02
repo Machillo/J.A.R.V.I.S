@@ -1263,3 +1263,114 @@ def get_user_status():
             "risk_level": net_worth["risk_level"]
         }
     }
+
+def get_financial_dashboard():
+    user_status = get_user_status()
+    net_worth = get_net_worth_report()
+
+    income = user_status["income"]
+    expenses = user_status["expenses"]
+    debts = user_status["debts"]
+    cashflow = user_status["cashflow"]
+    goals = user_status["goals"]
+    financial_health = user_status["financial_health"]
+
+    alerts = []
+    quick_recommendations = []
+
+    if financial_health["risk_level"] == "high":
+        alerts.append({
+            "type": "risk",
+            "level": "high",
+            "message": "Tu riesgo financiero está alto por patrimonio neto negativo y deudas activas."
+        })
+
+    if cashflow["available_cash"] < 100000:
+        alerts.append({
+            "type": "cashflow",
+            "level": "medium",
+            "message": "Tu efectivo disponible estimado es menor a ₡100,000."
+        })
+
+    if goals["critical_goals_count"] > 0:
+        alerts.append({
+            "type": "goal",
+            "level": "high",
+            "message": "Tienes una meta crítica activa que requiere seguimiento."
+        })
+
+    if debts["monthly_payments"] > 0:
+        quick_recommendations.append(
+            "Mantener pagos mínimos y priorizar deudas con mayor interés."
+        )
+
+    if goals["most_urgent_goal"]:
+        quick_recommendations.append(
+            f"Revisar progreso de la meta: {goals['most_urgent_goal']['name']}."
+        )
+
+    if cashflow["available_cash"] > 0:
+        quick_recommendations.append(
+            "Distribuir el disponible entre meta crítica, deuda e imprevistos."
+        )
+
+    dashboard_cards = [
+        {
+            "title": "Ingreso mensual neto",
+            "value": income["monthly_net_income"],
+            "type": "currency",
+            "status": "info"
+        },
+        {
+            "title": "Disponible estimado",
+            "value": cashflow["available_cash"],
+            "type": "currency",
+            "status": "warning" if cashflow["available_cash"] < 100000 else "good"
+        },
+        {
+            "title": "Gastos fijos",
+            "value": expenses["fixed_expenses"],
+            "type": "currency",
+            "status": "info"
+        },
+        {
+            "title": "Deuda total",
+            "value": debts["total"],
+            "type": "currency",
+            "status": "danger"
+        },
+        {
+            "title": "Patrimonio neto",
+            "value": user_status["assets"]["net_worth"],
+            "type": "currency",
+            "status": "danger" if user_status["assets"]["net_worth"] < 0 else "good"
+        },
+        {
+            "title": "Meta principal",
+            "value": (
+                goals["most_urgent_goal"]["name"]
+                if goals["most_urgent_goal"]
+                else "Sin meta activa"
+            ),
+            "type": "text",
+            "status": "warning" if goals["most_urgent_goal"] else "good"
+        }
+    ]
+
+    top_debts = net_worth["liabilities"]["debts"][:3]
+
+    return {
+        "cards": dashboard_cards,
+        "alerts": alerts,
+        "quick_recommendations": quick_recommendations,
+        "top_debts": top_debts,
+        "summary": {
+            "income": income,
+            "expenses": expenses,
+            "cashflow": cashflow,
+            "debts": debts,
+            "assets": user_status["assets"],
+            "goals": goals,
+            "financial_health": financial_health
+        }
+    }

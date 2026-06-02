@@ -55,6 +55,7 @@ from backend.finance.service import (
     get_debt_payments,
     get_net_worth_report,
     get_user_status,
+    get_financial_dashboard,
 )
 
 from backend.finance.cashflow import (
@@ -368,3 +369,7 @@ def card_purchase_evaluation(request: CardPurchaseEvaluationRequest):
 @router.get("/user-status")
 def user_status():
     return get_user_status()
+
+@router.get("/dashboard")
+def financial_dashboard():
+    return get_financial_dashboard()
