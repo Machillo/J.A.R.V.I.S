@@ -162,3 +162,23 @@ CREATE TABLE IF NOT EXISTS credit_card_settings (
     payment_day INTEGER NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_date TEXT NOT NULL,
+    description TEXT NOT NULL,
+
+    amount REAL NOT NULL,
+
+    transaction_type TEXT NOT NULL,
+    category TEXT NOT NULL,
+    account TEXT,
+    source TEXT,
+    notes TEXT,
+
+    original_amount REAL,
+    original_currency TEXT,
+    exchange_rate REAL,
+
+    created_at TEXT NOT NULL
+);
