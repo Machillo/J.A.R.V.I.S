@@ -250,6 +250,8 @@ def get_expenses():
 
 
 def get_financial_summary():
+    user_id = get_current_user_id()
+
     salary_projection = calculate_monthly_salary_projection()
 
     if salary_projection.get("status") == "ERROR":
@@ -263,23 +265,46 @@ def get_financial_summary():
 
     with get_connection() as conn:
         bonus_total = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) AS total FROM bonuses"
+            """
+            SELECT COALESCE(SUM(amount), 0) AS total
+            FROM bonuses
+            """
         ).fetchone()["total"]
 
         debt_total = conn.execute(
-            "SELECT COALESCE(SUM(remaining_amount), 0) AS total FROM debts"
+            """
+            SELECT COALESCE(SUM(remaining_amount), 0) AS total
+            FROM debts
+            WHERE user_id = ?
+            """,
+            (user_id,)
         ).fetchone()["total"]
 
         monthly_debt_payments = conn.execute(
-            "SELECT COALESCE(SUM(monthly_payment), 0) AS total FROM debts"
+            """
+            SELECT COALESCE(SUM(monthly_payment), 0) AS total
+            FROM debts
+            WHERE user_id = ?
+            """,
+            (user_id,)
         ).fetchone()["total"]
 
         savings_total = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) AS total FROM savings"
+            """
+            SELECT COALESCE(SUM(amount), 0) AS total
+            FROM savings
+            WHERE user_id = ?
+            """,
+            (user_id,)
         ).fetchone()["total"]
 
         investments_total = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) AS total FROM investments"
+            """
+            SELECT COALESCE(SUM(amount), 0) AS total
+            FROM investments
+            WHERE user_id = ?
+            """,
+            (user_id,)
         ).fetchone()["total"]
 
         fixed_expenses_total = conn.execute(
@@ -287,7 +312,9 @@ def get_financial_summary():
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'fixed'
-            """
+            AND user_id = ?
+            """,
+            (user_id,)
         ).fetchone()["total"]
 
         variable_expenses_total = conn.execute(
@@ -295,7 +322,9 @@ def get_financial_summary():
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'variable'
-            """
+            AND user_id = ?
+            """,
+            (user_id,)
         ).fetchone()["total"]
 
         one_time_expenses_total = conn.execute(
@@ -303,7 +332,9 @@ def get_financial_summary():
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'one_time'
-            """
+            AND user_id = ?
+            """,
+            (user_id,)
         ).fetchone()["total"]
 
     total_income = projected_net_income + bonus_total
@@ -342,7 +373,8 @@ def get_financial_summary():
         "results": {
             "available_cash": available_cash,
             "net_worth": net_worth
-        }
+        },
+        "user_id": user_id
     }
 
 def check_spending(amount: float = 0):
@@ -1113,30 +1145,39 @@ def get_debt_payments(debt_id: int | None = None):
     return [dict(row) for row in rows]
 
 def get_net_worth_report():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         savings = conn.execute(
             """
-            SELECT id, name, amount, created_at
+            SELECT id, name, amount, created_at, user_id
             FROM savings
+            WHERE user_id = ?
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
         investments = conn.execute(
             """
-            SELECT id, name, amount, created_at
+            SELECT id, name, amount, created_at, user_id
             FROM investments
+            WHERE user_id = ?
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
         debts = conn.execute(
             """
             SELECT id, name, debt_type, total_amount, remaining_amount,
-                   monthly_payment, interest_rate, term_months, payment_day, created_at
+                   monthly_payment, interest_rate, term_months,
+                   payment_day, created_at, user_id
             FROM debts
+            WHERE user_id = ?
             ORDER BY remaining_amount DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     savings_list = [dict(row) for row in savings]
@@ -1249,20 +1290,24 @@ def get_net_worth_report():
         "recommendations": recommendations,
         "ratios": {
             "debt_to_asset_ratio": debt_to_asset_ratio
-        }
+        },
+        "user_id": user_id
     }
 
 def get_user_status():
     summary = get_financial_summary()
     net_worth = get_net_worth_report()
 
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         goals = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at
+                   priority, status, created_at, user_id
             FROM financial_goals
             WHERE status = 'active'
+            AND user_id = ?
             ORDER BY
                 CASE priority
                     WHEN 'critical' THEN 1
@@ -1272,7 +1317,8 @@ def get_user_status():
                     ELSE 5
                 END,
                 target_date ASC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     goals_list = [dict(row) for row in goals]
@@ -1333,7 +1379,8 @@ def get_user_status():
         "financial_health": {
             "status": net_worth["status"],
             "risk_level": net_worth["risk_level"]
-        }
+        },
+        "user_id": user_id
     }
 
 def get_financial_dashboard():
