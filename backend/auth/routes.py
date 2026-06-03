@@ -7,6 +7,7 @@ from backend.auth.service import (
     delete_allowed_user,
     check_user_access,
 )
+from backend.auth.current_user import get_current_user
 
 
 router = APIRouter(
@@ -42,3 +43,7 @@ def remove_allowed_user(user_id: int):
 @router.post("/check-access")
 def check_access(request: CheckAccessRequest):
     return check_user_access(request.email)
+
+@router.get("/me")
+def me():
+    return get_current_user()

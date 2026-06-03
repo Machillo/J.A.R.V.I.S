@@ -1,4 +1,5 @@
 from backend.core.database import get_connection
+from backend.auth.current_user import get_current_user_id
 
 
 def create_transaction(
@@ -14,6 +15,8 @@ def create_transaction(
     original_currency: str | None = None,
     exchange_rate: float | None = None
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
@@ -29,9 +32,10 @@ def create_transaction(
                 original_amount,
                 original_currency,
                 exchange_rate,
+                user_id,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             """,
             (
                 transaction_date,
@@ -44,7 +48,8 @@ def create_transaction(
                 notes,
                 original_amount,
                 original_currency,
-                exchange_rate
+                exchange_rate,
+                user_id
             )
         )
 
@@ -52,32 +57,40 @@ def create_transaction(
 
     return {
         "message": "Transacción registrada correctamente.",
-        "id": cursor.lastrowid
+        "id": cursor.lastrowid,
+        "user_id": user_id
     }
 
 
 def get_transactions():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT *
             FROM transactions
+            WHERE user_id = ?
             ORDER BY transaction_date DESC, id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
 
 
 def get_transaction(transaction_id: int):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         row = conn.execute(
             """
             SELECT *
             FROM transactions
             WHERE id = ?
+            AND user_id = ?
             """,
-            (transaction_id,)
+            (transaction_id, user_id)
         ).fetchone()
 
     if not row:
@@ -90,13 +103,32 @@ def get_transaction(transaction_id: int):
 
 
 def delete_transaction(transaction_id: int):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
+        existing = conn.execute(
+            """
+            SELECT id
+            FROM transactions
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (transaction_id, user_id)
+        ).fetchone()
+
+        if not existing:
+            return {
+                "status": "ERROR",
+                "message": "Transacción no encontrada o no pertenece al usuario actual."
+            }
+
         conn.execute(
             """
             DELETE FROM transactions
             WHERE id = ?
+            AND user_id = ?
             """,
-            (transaction_id,)
+            (transaction_id, user_id)
         )
 
         conn.commit()
@@ -147,20 +179,23 @@ def update_transaction(
     original_currency: str | None = None,
     exchange_rate: float | None = None
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         existing = conn.execute(
             """
             SELECT id
             FROM transactions
             WHERE id = ?
+            AND user_id = ?
             """,
-            (transaction_id,)
+            (transaction_id, user_id)
         ).fetchone()
 
         if not existing:
             return {
                 "status": "ERROR",
-                "message": "Transacción no encontrada."
+                "message": "Transacción no encontrada o no pertenece al usuario actual."
             }
 
         conn.execute(
@@ -178,6 +213,7 @@ def update_transaction(
                 original_currency = ?,
                 exchange_rate = ?
             WHERE id = ?
+            AND user_id = ?
             """,
             (
                 transaction_date,
@@ -191,7 +227,8 @@ def update_transaction(
                 original_amount,
                 original_currency,
                 exchange_rate,
-                transaction_id
+                transaction_id,
+                user_id
             )
         )
 
