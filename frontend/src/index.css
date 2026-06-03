@@ -905,3 +905,97 @@ input {
 
   color: var(--cyan);
 }
+
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at top, rgba(41, 230, 255, 0.18), transparent 38%),
+    linear-gradient(135deg, #02070d, #031923 55%, #02070d);
+  color: #e8fbff;
+}
+
+.login-card {
+  width: min(460px, calc(100vw - 32px));
+  text-align: center;
+  padding: 42px 34px;
+  border: 1px solid rgba(41, 230, 255, 0.38);
+  background: rgba(3, 22, 32, 0.78);
+  box-shadow:
+    0 0 60px rgba(41, 230, 255, 0.18),
+    inset 0 0 40px rgba(41, 230, 255, 0.06);
+  clip-path: polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px);
+}
+
+.login-orb {
+  position: relative;
+  width: 126px;
+  height: 126px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 24px;
+  color: #29e6ff;
+}
+
+.login-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(transparent, #29e6ff, transparent, rgba(41, 230, 255, 0.25));
+  filter: drop-shadow(0 0 28px rgba(41, 230, 255, 0.75));
+  animation: rotateOrb 5s linear infinite;
+}
+
+.login-kicker {
+  color: #29e6ff;
+  letter-spacing: 4px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.login-card h1 {
+  font-size: clamp(42px, 8vw, 74px);
+  letter-spacing: 10px;
+  margin: 0;
+  color: #29e6ff;
+  text-shadow: 0 0 26px rgba(41, 230, 255, 0.8);
+}
+
+.login-subtitle {
+  color: #9ccad3;
+  margin: 14px auto 28px;
+}
+
+.login-google-btn {
+  border: 1px solid rgba(41, 230, 255, 0.5);
+  background: rgba(41, 230, 255, 0.08);
+  color: #e8fbff;
+  padding: 14px 22px;
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 800;
+  letter-spacing: 1px;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+.login-google-btn:hover {
+  background: rgba(41, 230, 255, 0.18);
+  box-shadow: 0 0 28px rgba(41, 230, 255, 0.25);
+}
+
+.login-warning {
+  margin-top: 22px;
+  color: #6f9fab;
+  font-size: 13px;
+}
+
+.jarvis-response {
+  color: #d8f7ff;
+  font-size: 1rem;
+  line-height: 1.8;
+  padding: 1rem;
+  min-height: 120px;
+}

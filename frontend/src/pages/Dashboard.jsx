@@ -1,5 +1,25 @@
 import { Brain, Mic, Sparkles } from "lucide-react";
 
+function formatJarvisResponse(data) {
+  if (!data) {
+    return "Señor, estoy listo para asistirle.";
+  }
+
+  if (data.response?.reason) {
+    return `Señor, considero que la mejor estrategia es "${data.response.name}". ${data.response.reason}`;
+  }
+
+  if (data.message) {
+    return data.message;
+  }
+
+  if (data.response?.message) {
+    return data.response.message;
+  }
+
+  return "Señor, análisis completado.";
+}
+
 export default function Dashboard({ jarvisResponse }) {
   return (
     <section className="jarvis-home">
@@ -11,6 +31,7 @@ export default function Dashboard({ jarvisResponse }) {
       </div>
 
       <h1>J.A.R.V.I.S.</h1>
+
       <p className="home-subtitle">
         Sistema personal activo. Finanzas, metas, memoria y automatización.
       </p>
@@ -38,14 +59,13 @@ export default function Dashboard({ jarvisResponse }) {
             <h3>CONSOLA DE JARVIS</h3>
             <p>Última interacción</p>
           </div>
+
           <Sparkles size={20} />
         </div>
 
-        <pre>
-          {jarvisResponse
-            ? JSON.stringify(jarvisResponse, null, 2)
-            : "Pregúntame algo para comenzar..."}
-        </pre>
+        <div className="jarvis-response">
+          {formatJarvisResponse(jarvisResponse)}
+        </div>
       </div>
 
       <div className="home-hint">

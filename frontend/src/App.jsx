@@ -9,6 +9,8 @@ import Memory from "./pages/Memory";
 import Settings from "./pages/Settings";
 
 import { askJarvis, getFinanceDashboard, getStatus } from "./services/jarvisApi";
+import { supabase } from "./lib/supabase";
+import Login from "./pages/Login";
 
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
@@ -18,6 +20,7 @@ export default function App() {
   const [jarvisInput, setJarvisInput] = useState("");
   const [jarvisResponse, setJarvisResponse] = useState(null);
   const [isListening, setIsListening] = useState(false);
+  const [session, setSession] = useState(null);
 
   useEffect(() => {
     async function loadData() {
@@ -36,6 +39,20 @@ export default function App() {
 
     loadData();
   }, []);
+
+useEffect(() => {
+  supabase.auth.getSession().then(({ data }) => {
+    setSession(data.session);
+  });
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    setSession(session);
+  });
+
+  return () => subscription.unsubscribe();
+}, []);
 
   const speakText = (text) => {
     const utterance = new SpeechSynthesisUtterance(text);
@@ -108,7 +125,12 @@ export default function App() {
     };
   };
 
+  if (!session) {
+  return <Login />;
+}
+
   const renderPage = () => {
+    
     switch (activePage) {
       case "finance":
         return <Finance dashboard={financeDashboard} />;
