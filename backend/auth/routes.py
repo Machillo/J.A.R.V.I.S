@@ -1,10 +1,11 @@
 from fastapi import APIRouter
 
-from backend.auth.models import AllowedUserRequest
+from backend.auth.models import AllowedUserRequest, CheckAccessRequest
 from backend.auth.service import (
     get_allowed_users,
     create_allowed_user,
-    delete_allowed_user
+    delete_allowed_user,
+    check_user_access,
 )
 
 
@@ -37,3 +38,7 @@ def add_allowed_user(request: AllowedUserRequest):
 @router.delete("/allowed-users/{user_id}")
 def remove_allowed_user(user_id: int):
     return delete_allowed_user(user_id)
+
+@router.post("/check-access")
+def check_access(request: CheckAccessRequest):
+    return check_user_access(request.email)

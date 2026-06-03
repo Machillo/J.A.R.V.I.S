@@ -107,3 +107,37 @@ def delete_allowed_user(user_id: int):
         "status": "OK",
         "message": "Usuario eliminado."
     }
+
+def check_user_access(email: str):
+    normalized_email = email.lower().strip()
+
+    with get_connection() as conn:
+        user = conn.execute(
+            """
+            SELECT id, email, role, status, created_at
+            FROM allowed_users
+            WHERE email = ?
+            """,
+            (normalized_email,)
+        ).fetchone()
+
+    if not user:
+        return {
+            "allowed": False,
+            "message": "Correo no autorizado."
+        }
+
+    user_dict = dict(user)
+
+    if user_dict["status"] != "active":
+        return {
+            "allowed": False,
+            "message": "Usuario no activo.",
+            "user": user_dict
+        }
+
+    return {
+        "allowed": True,
+        "message": "Acceso autorizado.",
+        "user": user_dict
+    }
