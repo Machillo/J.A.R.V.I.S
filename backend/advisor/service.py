@@ -142,29 +142,92 @@ def get_financial_advice():
 def analyze_spending_habits():
     transactions = get_transaction_analysis()
 
-    fixed_categories = [
-        "Vivienda",
-        "Casa",
-        "Servicios",
-        "Seguros"
-    ]
+    category_groups = {
+        "essential": [
+            "Vivienda",
+            "Casa",
+            "Servicios",
+            "Seguros",
+            "Salud"
+        ],
+        "growth_aligned": [
+            "Fitness",
+            "Educación",
+            "Gym"
+        ],
+        "controllable": [
+            "Alimentación",
+            "Restaurantes",
+            "Compras Personales",
+            "Videojuegos",
+            "Streaming",
+            "Apps",
+            "Entretenimiento",
+            "Transporte",
+            "Cuidado Personal"
+        ],
+        "extraordinary": [
+            "Regalos",
+            "Compras Familiares",
+            "Auto"
+        ]
+    }
 
-    variable_categories = []
-    fixed_expenses = []
+    def classify_category(category_name: str):
+        for group, categories in category_groups.items():
+            if category_name in categories:
+                return group
+
+        return "uncategorized"
 
     top_categories = transactions.get("top_expense_categories", [])
     expenses_by_month = transactions.get("expenses_by_month", [])
     category_months = transactions.get("expenses_by_category_and_month", [])
 
-    for category in top_categories:
-        if category["category"] in fixed_categories:
-            fixed_expenses.append(category)
-        else:
-            variable_categories.append(category)
+    grouped_totals = {
+        "essential": 0,
+        "growth_aligned": 0,
+        "controllable": 0,
+        "extraordinary": 0,
+        "uncategorized": 0
+    }
 
-    highest_variable_category = (
-        variable_categories[0]
-        if variable_categories
+    categorized_expenses = []
+
+    for category in top_categories:
+        group = classify_category(category["category"])
+
+        grouped_totals[group] += category["total"]
+
+        categorized_expenses.append({
+            "category": category["category"],
+            "total": category["total"],
+            "impact_group": group
+        })
+
+    controllable_categories = [
+        item for item in categorized_expenses
+        if item["impact_group"] == "controllable"
+    ]
+
+    essential_categories = [
+        item for item in categorized_expenses
+        if item["impact_group"] == "essential"
+    ]
+
+    growth_categories = [
+        item for item in categorized_expenses
+        if item["impact_group"] == "growth_aligned"
+    ]
+
+    extraordinary_categories = [
+        item for item in categorized_expenses
+        if item["impact_group"] == "extraordinary"
+    ]
+
+    highest_controllable_category = (
+        controllable_categories[0]
+        if controllable_categories
         else None
     )
 
@@ -215,19 +278,26 @@ def analyze_spending_habits():
     recurring_summary = []
 
     for category, data in recurring_categories.items():
+        months_count = len(data["months_present"])
+        impact_group = classify_category(category)
+
         recurring_summary.append({
             "category": category,
-            "months_count": len(data["months_present"]),
+            "impact_group": impact_group,
+            "months_count": months_count,
             "total": data["total"],
             "average_when_present": (
-                data["total"] / len(data["months_present"])
-                if data["months_present"]
+                data["total"] / months_count
+                if months_count
                 else 0
             )
         })
 
     recurring_summary.sort(
-        key=lambda item: item["months_count"],
+        key=lambda item: (
+            item["months_count"],
+            item["total"]
+        ),
         reverse=True
     )
 
@@ -235,19 +305,34 @@ def analyze_spending_habits():
     warnings = []
     opportunities = []
 
-    if highest_variable_category:
+    if highest_controllable_category:
         insights.append(
-            f"Tu gasto variable más alto es {highest_variable_category['category']} con ₡{highest_variable_category['total']:,.2f}."
+            f"Tu gasto controlable más alto es {highest_controllable_category['category']} con ₡{highest_controllable_category['total']:,.2f}."
+        )
+
+    if grouped_totals["growth_aligned"] > 0:
+        insights.append(
+            f"Tus gastos alineados a crecimiento personal suman ₡{grouped_totals['growth_aligned']:,.2f}."
+        )
+
+    if grouped_totals["extraordinary"] > 0:
+        insights.append(
+            f"Tus gastos extraordinarios suman ₡{grouped_totals['extraordinary']:,.2f}; conviene separarlos de tu gasto mensual normal."
         )
 
     if unusual_months:
         warnings.append(
-            "Hay meses con gasto superior al promedio. Conviene revisar qué eventos causaron esos picos."
+            "Hay meses con gasto superior al promedio. Conviene revisar si fueron gastos extraordinarios o descontrol."
         )
 
-    for category in variable_categories[:3]:
+    if highest_controllable_category:
         opportunities.append(
-            f"Revisar presupuesto de {category['category']}."
+            f"Primera oportunidad de ajuste: revisar {highest_controllable_category['category']}."
+        )
+
+    for category in controllable_categories[1:4]:
+        opportunities.append(
+            f"Seguir monitoreando {category['category']}."
         )
 
     if average_monthly_spending > 0:
@@ -257,9 +342,32 @@ def analyze_spending_habits():
 
     return {
         "average_monthly_spending": average_monthly_spending,
-        "highest_variable_category": highest_variable_category,
-        "fixed_expenses_detected": fixed_expenses,
-        "top_variable_categories": variable_categories[:5],
+        "impact_groups": {
+            "essential": {
+                "total": grouped_totals["essential"],
+                "categories": essential_categories
+            },
+            "growth_aligned": {
+                "total": grouped_totals["growth_aligned"],
+                "categories": growth_categories
+            },
+            "controllable": {
+                "total": grouped_totals["controllable"],
+                "categories": controllable_categories
+            },
+            "extraordinary": {
+                "total": grouped_totals["extraordinary"],
+                "categories": extraordinary_categories
+            },
+            "uncategorized": {
+                "total": grouped_totals["uncategorized"],
+                "categories": [
+                    item for item in categorized_expenses
+                    if item["impact_group"] == "uncategorized"
+                ]
+            }
+        },
+        "highest_controllable_category": highest_controllable_category,
         "unusual_months": unusual_months,
         "recurring_categories": recurring_summary[:10],
         "insights": insights,
