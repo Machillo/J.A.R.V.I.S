@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from backend.core.database import get_connection
+from backend.auth.current_user import get_current_user_id
 
 
 def add_financial_goal(
@@ -10,6 +11,8 @@ def add_financial_goal(
     target_date: str | None = None,
     priority: str = "medium"
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
@@ -20,16 +23,18 @@ def add_financial_goal(
                 target_date,
                 priority,
                 status,
+                user_id,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, 'active', datetime('now'))
+            VALUES (?, ?, ?, ?, ?, 'active', ?, datetime('now'))
             """,
             (
                 name,
                 target_amount,
                 current_amount,
                 target_date,
-                priority
+                priority,
+                user_id
             )
         )
 
@@ -42,32 +47,42 @@ def add_financial_goal(
         "current_amount": current_amount,
         "target_date": target_date,
         "priority": priority,
-        "status": "active"
+        "status": "active",
+        "user_id": user_id
     }
 
 
 def get_financial_goals():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, target_amount, current_amount, target_date, priority, status, created_at
+            SELECT id, name, target_amount, current_amount, target_date,
+                   priority, status, created_at, user_id
             FROM financial_goals
+            WHERE user_id = ?
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [format_goal(dict(row)) for row in rows]
 
 
 def get_financial_goal(goal_id: int):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         goal = conn.execute(
             """
-            SELECT id, name, target_amount, current_amount, target_date, priority, status, created_at
+            SELECT id, name, target_amount, current_amount, target_date,
+                   priority, status, created_at, user_id
             FROM financial_goals
             WHERE id = ?
+            AND user_id = ?
             """,
-            (goal_id,)
+            (goal_id, user_id)
         ).fetchone()
 
     if not goal:
@@ -88,23 +103,36 @@ def update_financial_goal(
     priority: str,
     status: str
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         goal = conn.execute(
-            "SELECT id FROM financial_goals WHERE id = ?",
-            (goal_id,)
+            """
+            SELECT id
+            FROM financial_goals
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (goal_id, user_id)
         ).fetchone()
 
         if not goal:
             return {
-                "message": "Meta no encontrada.",
+                "message": "Meta no encontrada o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
 
         conn.execute(
             """
             UPDATE financial_goals
-            SET name = ?, target_amount = ?, current_amount = ?, target_date = ?, priority = ?, status = ?
+            SET name = ?,
+                target_amount = ?,
+                current_amount = ?,
+                target_date = ?,
+                priority = ?,
+                status = ?
             WHERE id = ?
+            AND user_id = ?
             """,
             (
                 name,
@@ -113,7 +141,8 @@ def update_financial_goal(
                 target_date,
                 priority,
                 status,
-                goal_id
+                goal_id,
+                user_id
             )
         )
 
@@ -123,25 +152,33 @@ def update_financial_goal(
 
 
 def delete_financial_goal(goal_id: int):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         goal = conn.execute(
             """
-            SELECT id, name, target_amount, current_amount, target_date, priority, status, created_at
+            SELECT id, name, target_amount, current_amount, target_date,
+                   priority, status, created_at, user_id
             FROM financial_goals
             WHERE id = ?
+            AND user_id = ?
             """,
-            (goal_id,)
+            (goal_id, user_id)
         ).fetchone()
 
         if not goal:
             return {
-                "message": "Meta no encontrada.",
+                "message": "Meta no encontrada o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
 
         conn.execute(
-            "DELETE FROM financial_goals WHERE id = ?",
-            (goal_id,)
+            """
+            DELETE FROM financial_goals
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (goal_id, user_id)
         )
 
         conn.commit()
@@ -154,19 +191,22 @@ def delete_financial_goal(goal_id: int):
 
 
 def add_goal_contribution(goal_id: int, amount: float):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         goal = conn.execute(
             """
             SELECT id, current_amount, target_amount
             FROM financial_goals
             WHERE id = ?
+            AND user_id = ?
             """,
-            (goal_id,)
+            (goal_id, user_id)
         ).fetchone()
 
         if not goal:
             return {
-                "message": "Meta no encontrada.",
+                "message": "Meta no encontrada o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
 
@@ -180,13 +220,16 @@ def add_goal_contribution(goal_id: int, amount: float):
         conn.execute(
             """
             UPDATE financial_goals
-            SET current_amount = ?, status = ?
+            SET current_amount = ?,
+                status = ?
             WHERE id = ?
+            AND user_id = ?
             """,
             (
                 new_amount,
                 new_status,
-                goal_id
+                goal_id,
+                user_id
             )
         )
 
@@ -232,19 +275,23 @@ def format_goal(goal: dict):
 
     return goal
 
+
 def get_financial_goal_by_name(name: str):
+    user_id = get_current_user_id()
     search = f"%{name.lower()}%"
 
     with get_connection() as conn:
         goal = conn.execute(
             """
-            SELECT id, name, target_amount, current_amount, target_date, priority, status, created_at
+            SELECT id, name, target_amount, current_amount, target_date,
+                   priority, status, created_at, user_id
             FROM financial_goals
             WHERE lower(name) LIKE ?
             AND status = 'active'
+            AND user_id = ?
             LIMIT 1
             """,
-            (search,)
+            (search, user_id)
         ).fetchone()
 
     if not goal:
