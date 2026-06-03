@@ -150,65 +150,293 @@ def get_debts():
 
 
 def add_saving(name: str, amount: float):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO savings (name, amount, created_at)
-            VALUES (?, ?, datetime('now'))
+            INSERT INTO savings (
+                name,
+                amount,
+                user_id,
+                created_at
+            )
+            VALUES (?, ?, ?, datetime('now'))
             """,
-            (name, amount)
+            (
+                name,
+                amount,
+                user_id
+            )
         )
+
         conn.commit()
 
     return {
         "id": cursor.lastrowid,
         "name": name,
-        "amount": amount
+        "amount": amount,
+        "user_id": user_id
     }
 
 
 def get_savings():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, amount, created_at
+            SELECT id,
+                   name,
+                   amount,
+                   created_at,
+                   user_id
             FROM savings
+            WHERE user_id = ?
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
 
+def update_saving(
+    saving_id: int,
+    name: str,
+    amount: float
+):
+    user_id = get_current_user_id()
+
+    with get_connection() as conn:
+        saving = conn.execute(
+            """
+            SELECT id
+            FROM savings
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (saving_id, user_id)
+        ).fetchone()
+
+        if not saving:
+            return {
+                "message": "Ahorro no encontrado o no pertenece al usuario actual.",
+                "status": "ERROR"
+            }
+
+        conn.execute(
+            """
+            UPDATE savings
+            SET name = ?,
+                amount = ?
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (
+                name,
+                amount,
+                saving_id,
+                user_id
+            )
+        )
+
+        conn.commit()
+
+    return {
+        "message": "Ahorro actualizado correctamente.",
+        "id": saving_id,
+        "name": name,
+        "amount": amount,
+        "user_id": user_id,
+        "status": "OK"
+    }
+
+
+def delete_saving(saving_id: int):
+    user_id = get_current_user_id()
+
+    with get_connection() as conn:
+        saving = conn.execute(
+            """
+            SELECT id,
+                   name,
+                   amount,
+                   created_at,
+                   user_id
+            FROM savings
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (saving_id, user_id)
+        ).fetchone()
+
+        if not saving:
+            return {
+                "message": "Ahorro no encontrado o no pertenece al usuario actual.",
+                "status": "ERROR"
+            }
+
+        conn.execute(
+            """
+            DELETE FROM savings
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (saving_id, user_id)
+        )
+
+        conn.commit()
+
+    return {
+        "message": "Ahorro eliminado correctamente.",
+        "deleted_saving": dict(saving),
+        "status": "OK"
+    }
+
 
 def add_investment(name: str, amount: float):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO investments (name, amount, created_at)
-            VALUES (?, ?, datetime('now'))
+            INSERT INTO investments (
+                name,
+                amount,
+                user_id,
+                created_at
+            )
+            VALUES (?, ?, ?, datetime('now'))
             """,
-            (name, amount)
+            (
+                name,
+                amount,
+                user_id
+            )
         )
+
         conn.commit()
 
     return {
         "id": cursor.lastrowid,
         "name": name,
-        "amount": amount
+        "amount": amount,
+        "user_id": user_id
     }
 
 
 def get_investments():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, amount, created_at
+            SELECT id,
+                   name,
+                   amount,
+                   created_at,
+                   user_id
             FROM investments
+            WHERE user_id = ?
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
+
+def update_investment(
+    investment_id: int,
+    name: str,
+    amount: float
+):
+    user_id = get_current_user_id()
+
+    with get_connection() as conn:
+        investment = conn.execute(
+            """
+            SELECT id
+            FROM investments
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (investment_id, user_id)
+        ).fetchone()
+
+        if not investment:
+            return {
+                "message": "Inversión no encontrada o no pertenece al usuario actual.",
+                "status": "ERROR"
+            }
+
+        conn.execute(
+            """
+            UPDATE investments
+            SET name = ?,
+                amount = ?
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (
+                name,
+                amount,
+                investment_id,
+                user_id
+            )
+        )
+
+        conn.commit()
+
+    return {
+        "message": "Inversión actualizada correctamente.",
+        "id": investment_id,
+        "name": name,
+        "amount": amount,
+        "user_id": user_id,
+        "status": "OK"
+    }
+
+
+def delete_investment(investment_id: int):
+    user_id = get_current_user_id()
+
+    with get_connection() as conn:
+        investment = conn.execute(
+            """
+            SELECT id,
+                   name,
+                   amount,
+                   created_at,
+                   user_id
+            FROM investments
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (investment_id, user_id)
+        ).fetchone()
+
+        if not investment:
+            return {
+                "message": "Inversión no encontrada o no pertenece al usuario actual.",
+                "status": "ERROR"
+            }
+
+        conn.execute(
+            """
+            DELETE FROM investments
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (investment_id, user_id)
+        )
+
+        conn.commit()
+
+    return {
+        "message": "Inversión eliminada correctamente.",
+        "deleted_investment": dict(investment),
+        "status": "OK"
+    }
 
 
 def add_expense(
@@ -217,14 +445,30 @@ def add_expense(
     expense_type: str = "variable",
     description: str = ""
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO expenses (category, expense_type, description, amount, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
+            INSERT INTO expenses (
+                category,
+                expense_type,
+                description,
+                amount,
+                user_id,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
             """,
-            (category, expense_type, description, amount)
+            (
+                category,
+                expense_type,
+                description,
+                amount,
+                user_id
+            )
         )
+
         conn.commit()
 
     return {
@@ -232,18 +476,29 @@ def add_expense(
         "category": category,
         "expense_type": expense_type,
         "description": description,
-        "amount": amount
+        "amount": amount,
+        "user_id": user_id
     }
 
 
 def get_expenses():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, category, expense_type, description, amount, created_at
+            SELECT id,
+                   category,
+                   expense_type,
+                   description,
+                   amount,
+                   created_at,
+                   user_id
             FROM expenses
+            WHERE user_id = ?
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -685,19 +940,27 @@ def calculate_monthly_salary_projection():
     }
 
 def delete_expense(expense_id: int):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         expense = conn.execute(
             """
-            SELECT id, category, expense_type, amount, description
+            SELECT id,
+                   category,
+                   expense_type,
+                   amount,
+                   description,
+                   user_id
             FROM expenses
             WHERE id = ?
+            AND user_id = ?
             """,
-            (expense_id,)
+            (expense_id, user_id)
         ).fetchone()
 
         if not expense:
             return {
-                "message": "Gasto no encontrado.",
+                "message": "Gasto no encontrado o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
 
@@ -705,8 +968,9 @@ def delete_expense(expense_id: int):
             """
             DELETE FROM expenses
             WHERE id = ?
+            AND user_id = ?
             """,
-            (expense_id,)
+            (expense_id, user_id)
         )
 
         conn.commit()
@@ -725,29 +989,43 @@ def update_expense(
     expense_type: str,
     description: str = ""
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         expense = conn.execute(
             """
             SELECT id
             FROM expenses
             WHERE id = ?
+            AND user_id = ?
             """,
-            (expense_id,)
+            (expense_id, user_id)
         ).fetchone()
 
         if not expense:
             return {
-                "message": "Gasto no encontrado.",
+                "message": "Gasto no encontrado o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
 
         conn.execute(
             """
             UPDATE expenses
-            SET category = ?, amount = ?, expense_type = ?, description = ?
+            SET category = ?,
+                amount = ?,
+                expense_type = ?,
+                description = ?
             WHERE id = ?
+            AND user_id = ?
             """,
-            (category, amount, expense_type, description, expense_id)
+            (
+                category,
+                amount,
+                expense_type,
+                description,
+                expense_id,
+                user_id
+            )
         )
 
         conn.commit()
@@ -759,6 +1037,7 @@ def update_expense(
         "amount": amount,
         "expense_type": expense_type,
         "description": description,
+        "user_id": user_id,
         "status": "OK"
     }
 

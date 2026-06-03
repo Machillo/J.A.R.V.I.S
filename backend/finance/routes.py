@@ -56,6 +56,10 @@ from backend.finance.service import (
     get_net_worth_report,
     get_user_status,
     get_financial_dashboard,
+    update_saving,
+    delete_saving,
+    update_investment,
+    delete_investment,
 )
 
 from backend.finance.cashflow import (
@@ -192,6 +196,22 @@ def create_saving(request: SavingRequest):
 def savings():
     return get_savings()
 
+@router.put("/savings/{saving_id}")
+def edit_saving(
+    saving_id: int,
+    request: SavingRequest
+):
+    return update_saving(
+        saving_id=saving_id,
+        name=request.name,
+        amount=request.amount,
+    )
+
+
+@router.delete("/savings/{saving_id}")
+def remove_saving(saving_id: int):
+    return delete_saving(saving_id)
+
 
 @router.post("/investments")
 def create_investment(request: InvestmentRequest):
@@ -204,6 +224,22 @@ def create_investment(request: InvestmentRequest):
 @router.get("/investments")
 def investments():
     return get_investments()
+
+@router.put("/investments/{investment_id}")
+def edit_investment(
+    investment_id: int,
+    request: InvestmentRequest
+):
+    return update_investment(
+        investment_id=investment_id,
+        name=request.name,
+        amount=request.amount,
+    )
+
+
+@router.delete("/investments/{investment_id}")
+def remove_investment(investment_id: int):
+    return delete_investment(investment_id)
 
 @router.get("/expenses")
 def expenses():
