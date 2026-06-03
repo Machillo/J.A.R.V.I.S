@@ -182,3 +182,11 @@ CREATE TABLE IF NOT EXISTS transactions (
 
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS allowed_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    role TEXT NOT NULL DEFAULT 'user',
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL
+);
