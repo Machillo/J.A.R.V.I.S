@@ -1,4 +1,5 @@
 from backend.core.database import get_connection
+from backend.auth.current_user import get_current_user_id
 
 
 def add_salary(amount: float, source: str):
@@ -73,6 +74,8 @@ def add_debt(
     term_months: int | None = None,
     payment_day: int | None = None
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
@@ -85,9 +88,10 @@ def add_debt(
                 interest_rate,
                 term_months,
                 payment_day,
+                user_id,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             """,
             (
                 name,
@@ -97,9 +101,11 @@ def add_debt(
                 monthly_payment,
                 interest_rate,
                 term_months,
-                payment_day
+                payment_day,
+                user_id
             )
         )
+
         conn.commit()
 
     return {
@@ -111,19 +117,33 @@ def add_debt(
         "monthly_payment": monthly_payment,
         "interest_rate": interest_rate,
         "term_months": term_months,
-        "payment_day": payment_day
+        "payment_day": payment_day,
+        "user_id": user_id
     }
 
 
 def get_debts():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, debt_type, total_amount, remaining_amount, monthly_payment,
-                   interest_rate, term_months, payment_day, created_at
+            SELECT id,
+                   name,
+                   debt_type,
+                   total_amount,
+                   remaining_amount,
+                   monthly_payment,
+                   interest_rate,
+                   term_months,
+                   payment_day,
+                   created_at,
+                   user_id
             FROM debts
+            WHERE user_id = ?
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -711,25 +731,51 @@ def update_expense(
     }
 
 def delete_debt(debt_id: int):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         debt = conn.execute(
             """
-            SELECT id, name, debt_type, total_amount, remaining_amount,
-                   monthly_payment, interest_rate, term_months, payment_day
+            SELECT id,
+                   name,
+                   debt_type,
+                   total_amount,
+                   remaining_amount,
+                   monthly_payment,
+                   interest_rate,
+                   term_months,
+                   payment_day,
+                   user_id
             FROM debts
             WHERE id = ?
+            AND user_id = ?
             """,
-            (debt_id,)
+            (debt_id, user_id)
         ).fetchone()
 
         if not debt:
             return {
-                "message": "Deuda no encontrada.",
+                "message": "Deuda no encontrada o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
 
-        conn.execute("DELETE FROM debt_payments WHERE debt_id = ?", (debt_id,))
-        conn.execute("DELETE FROM debts WHERE id = ?", (debt_id,))
+        conn.execute(
+            """
+            DELETE FROM debt_payments
+            WHERE debt_id = ?
+            """,
+            (debt_id,)
+        )
+
+        conn.execute(
+            """
+            DELETE FROM debts
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (debt_id, user_id)
+        )
+
         conn.commit()
 
     return {
@@ -750,24 +796,38 @@ def update_debt(
     term_months: int | None = None,
     payment_day: int | None = None
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         debt = conn.execute(
-            "SELECT id FROM debts WHERE id = ?",
-            (debt_id,)
+            """
+            SELECT id
+            FROM debts
+            WHERE id = ?
+            AND user_id = ?
+            """,
+            (debt_id, user_id)
         ).fetchone()
 
         if not debt:
             return {
-                "message": "Deuda no encontrada.",
+                "message": "Deuda no encontrada o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
 
         conn.execute(
             """
             UPDATE debts
-            SET name = ?, debt_type = ?, total_amount = ?, remaining_amount = ?,
-                monthly_payment = ?, interest_rate = ?, term_months = ?, payment_day = ?
+            SET name = ?,
+                debt_type = ?,
+                total_amount = ?,
+                remaining_amount = ?,
+                monthly_payment = ?,
+                interest_rate = ?,
+                term_months = ?,
+                payment_day = ?
             WHERE id = ?
+            AND user_id = ?
             """,
             (
                 name,
@@ -778,7 +838,8 @@ def update_debt(
                 interest_rate,
                 term_months,
                 payment_day,
-                debt_id
+                debt_id,
+                user_id
             )
         )
 
@@ -795,6 +856,7 @@ def update_debt(
         "interest_rate": interest_rate,
         "term_months": term_months,
         "payment_day": payment_day,
+        "user_id": user_id,
         "status": "OK"
     }
 
@@ -894,17 +956,27 @@ def apply_extra_payment_to_debt(
     }
 
 def get_debt_by_name(name: str):
+    user_id = get_current_user_id()
+
     search = f"%{name.lower()}%"
 
     with get_connection() as conn:
         debt = conn.execute(
             """
-            SELECT id, name, total_amount, remaining_amount, monthly_payment, interest_rate, created_at
+            SELECT id,
+                   name,
+                   total_amount,
+                   remaining_amount,
+                   monthly_payment,
+                   interest_rate,
+                   created_at,
+                   user_id
             FROM debts
             WHERE lower(name) LIKE ?
+            AND user_id = ?
             LIMIT 1
             """,
-            (search,)
+            (search, user_id)
         ).fetchone()
 
     if not debt:
