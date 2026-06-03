@@ -14,6 +14,7 @@ from backend.decision_engine.routes import router as decision_router
 from backend.reports.routes import router as reports_router
 from fastapi.middleware.cors import CORSMiddleware
 from backend.transactions.routes import router as transactions_router
+from backend.importers.routes import router as importers_router
 
 app = FastAPI(title="Jarvis Core")
 
@@ -33,6 +34,7 @@ app.include_router(goals_router)
 app.include_router(decision_router)
 app.include_router(reports_router)
 app.include_router(transactions_router)
+app.include_router(importers_router)
 
 class AskRequest(BaseModel):
     text: str

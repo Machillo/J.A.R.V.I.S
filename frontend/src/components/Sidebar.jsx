@@ -1,17 +1,29 @@
-import { LayoutDashboard, Wallet, Target, Brain, Settings } from "lucide-react";
+import {
+  Brain,
+  CircleDollarSign,
+  LayoutDashboard,
+  Settings,
+  Target,
+  WalletCards,
+} from "lucide-react";
 
 const menuItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "finance", label: "Finanzas", icon: Wallet },
+  { id: "finance", label: "Finanzas", icon: CircleDollarSign },
   { id: "goals", label: "Metas", icon: Target },
-  { id: "memory", label: "Memoria", icon: Brain },
+  { id: "memory", label: "Memory Core", icon: Brain },
   { id: "settings", label: "Config", icon: Settings },
 ];
 
-export default function Sidebar({ activePage, setActivePage }) {
+export default function Sidebar({
+  activePage,
+  setActivePage,
+  sidebarOpen,
+  setSidebarOpen,
+}) {
   return (
-    <aside className="sidebar">
-      <div className="logo">J.A.R.V.I.S</div>
+    <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
+      <div className="logo">JARVIS</div>
 
       <nav>
         {menuItems.map((item) => {
@@ -21,14 +33,33 @@ export default function Sidebar({ activePage, setActivePage }) {
             <button
               key={item.id}
               className={`nav-button ${activePage === item.id ? "active" : ""}`}
-              onClick={() => setActivePage(item.id)}
+              onClick={() => {
+  setActivePage(item.id);
+
+  if (window.innerWidth <= 760) {
+    setSidebarOpen(false);
+  }
+}}
             >
-              <Icon size={20} />
-              <span>{item.label}</span>
+              <span className="nav-icon">
+                <Icon size={20} />
+              </span>
+
+              {sidebarOpen && <span>{item.label}</span>}
             </button>
           );
         })}
       </nav>
+
+      <div className="sidebar-core">
+        <WalletCards size={28} />
+        {sidebarOpen && (
+          <>
+            <strong>J.A.R.V.I.S.</strong>
+            <small>Financial Core Online</small>
+          </>
+        )}
+      </div>
     </aside>
   );
 }
