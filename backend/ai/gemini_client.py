@@ -1,12 +1,17 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 from google import genai
 
-load_dotenv()
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+ENV_PATH = BACKEND_DIR / ".env"
+
+load_dotenv(dotenv_path=ENV_PATH)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 AI_ENABLED = os.getenv("AI_ENABLED", "true").lower() == "true"
-
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 
