@@ -19,6 +19,7 @@ from backend.advisor.service import (
 
 def process_message(user_message: str):
     intent_result = detect_intent(user_message)
+    print("INTENT RESULT:", intent_result)
 
     intent = intent_result.get("intent", "unknown")
     entity = intent_result.get("entity")

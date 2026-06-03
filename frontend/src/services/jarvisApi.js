@@ -14,13 +14,15 @@ export const getStatus = () => request("/status");
 
 export const getFinanceDashboard = () => request("/finance/dashboard");
 
-export const askJarvis = async (text) => {
-  return request("/ask", {
+export const askJarvis = async (message) => {
+  return request("/jarvis/chat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({
+      message,
+    }),
   });
 };
 
