@@ -1,77 +1,72 @@
-import { Brain, Mic, Sparkles } from "lucide-react";
+import { Brain, Sparkles } from "lucide-react";
 
 function formatJarvisResponse(data) {
-  if (!data) {
-    return "Señor, estoy listo para asistirle.";
-  }
-
-  if (data.response?.reason) {
-    return `Señor, considero que la mejor estrategia es "${data.response.name}". ${data.response.reason}`;
-  }
+  if (!data) return null;
 
   if (data.message) {
     return data.message;
-  }
-
-  if (data.response?.message) {
-    return data.response.message;
   }
 
   return "Señor, análisis completado.";
 }
 
 export default function Dashboard({ jarvisResponse }) {
+  const responseText = formatJarvisResponse(jarvisResponse);
+  const hasResponse = Boolean(responseText);
+
   return (
-    <section className="jarvis-home">
-      <div className="jarvis-core-orb">
-        <div className="orb-ring"></div>
-        <div className="orb-center">
-          <Brain size={52} />
+    <section className={`jarvis-home chat-home ${hasResponse ? "has-response" : "idle"}`}>
+      <div className="jarvis-hero">
+        <div className="jarvis-core-orb">
+          <div className="orb-ring"></div>
+          <div className="orb-center">
+            <Brain size={52} />
+          </div>
         </div>
+
+        <h1>J.A.R.V.I.S.</h1>
+
+        <p className="home-subtitle">
+          Sistema personal activo. Finanzas, metas, memoria y automatización.
+        </p>
+
+        {!hasResponse && (
+          <div className="home-status-grid">
+            <div className="home-status-card">
+              <span>Sistema</span>
+              <strong>Activo</strong>
+            </div>
+
+            <div className="home-status-card">
+              <span>Modo</span>
+              <strong>Asistente</strong>
+            </div>
+
+            <div className="home-status-card">
+              <span>Entrada</span>
+              <strong>Texto / Voz</strong>
+            </div>
+          </div>
+        )}
       </div>
 
-      <h1>J.A.R.V.I.S.</h1>
+      {hasResponse && (
+        <div className="jarvis-chat-panel">
+          <div className="panel-title">
+            <div>
+              <h3>CONSOLA DE J.A.R.V.I.S.</h3>
+              <p>Respuesta generada</p>
+            </div>
 
-      <p className="home-subtitle">
-        Sistema personal activo. Finanzas, metas, memoria y automatización.
-      </p>
-
-      <div className="home-status-grid">
-        <div className="home-status-card">
-          <span>Sistema</span>
-          <strong>Activo</strong>
-        </div>
-
-        <div className="home-status-card">
-          <span>Modo</span>
-          <strong>Asistente</strong>
-        </div>
-
-        <div className="home-status-card">
-          <span>Entrada</span>
-          <strong>Texto / Voz</strong>
-        </div>
-      </div>
-
-      <div className="jarvis-home-panel">
-        <div className="panel-title">
-          <div>
-            <h3>CONSOLA DE JARVIS</h3>
-            <p>Última interacción</p>
+            <Sparkles size={20} />
           </div>
 
-          <Sparkles size={20} />
+          <div className="jarvis-message">
+            <span className="message-label">JARVIS</span>
+            <p>{responseText}</p>
+          </div>
         </div>
-
-        <div className="jarvis-response">
-          {formatJarvisResponse(jarvisResponse)}
-        </div>
-      </div>
-
-      <div className="home-hint">
-        <Mic size={18} />
-        <span>Usa el comando inferior para hablar conmigo.</span>
-      </div>
+      )}
     </section>
   );
 }

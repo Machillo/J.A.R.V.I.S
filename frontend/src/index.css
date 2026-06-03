@@ -999,3 +999,90 @@ input {
   padding: 1rem;
   min-height: 120px;
 }
+
+.chat-home {
+  min-height: calc(100vh - 190px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding-bottom: 140px;
+}
+
+.chat-home.has-response {
+  justify-content: flex-start;
+  padding-top: 28px;
+}
+
+.jarvis-hero {
+  width: min(920px, 100%);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  transition: 0.35s ease;
+}
+
+.chat-home.has-response .jarvis-hero {
+  transform: scale(0.72);
+  transform-origin: top center;
+  margin-bottom: -48px;
+}
+
+.jarvis-chat-panel {
+  width: min(820px, 100%);
+  padding: 20px;
+  background:
+    linear-gradient(145deg, rgba(5, 33, 48, 0.9), rgba(2, 12, 20, 0.96));
+  border: 1px solid rgba(41, 230, 255, 0.35);
+  box-shadow:
+    0 0 42px rgba(41, 230, 255, 0.16),
+    inset 0 0 28px rgba(41, 230, 255, 0.06);
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+}
+
+.jarvis-message {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(41, 230, 255, 0.22);
+  background: rgba(41, 230, 255, 0.07);
+  border-radius: 18px;
+  text-align: left;
+}
+
+.message-label {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--cyan);
+  font-size: 12px;
+  letter-spacing: 2px;
+  font-weight: 800;
+}
+
+.jarvis-message p {
+  margin: 0;
+  color: #dffaff;
+  font-size: 17px;
+  line-height: 1.8;
+}
+
+@media (max-width: 760px) {
+  .chat-home {
+    padding-top: 20px;
+    padding-bottom: 120px;
+  }
+
+  .chat-home.has-response .jarvis-hero {
+    transform: scale(0.82);
+    margin-bottom: -28px;
+  }
+
+  .jarvis-chat-panel {
+    width: 100%;
+    padding: 16px;
+  }
+
+  .jarvis-message p {
+    font-size: 15px;
+  }
+}
