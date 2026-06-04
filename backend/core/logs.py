@@ -1,26 +1,33 @@
+from backend.auth.current_user import get_current_user_id
 from backend.core.database import get_connection
 
 
 def add_log(action: str, detail: str = ""):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO logs (action, detail, created_at)
-            VALUES (%s, %s, NOW())
+            INSERT INTO logs (action, detail, user_id, created_at)
+            VALUES (%s, %s, %s, NOW())
             """,
-            (action, detail)
+            (action, detail, user_id),
         )
         conn.commit()
 
 
 def get_logs():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, action, detail, created_at
+            SELECT id, action, detail, user_id, created_at
             FROM logs
+            WHERE user_id = %s
             ORDER BY id DESC
-            """
+            """,
+            (user_id,),
         ).fetchall()
 
     return [dict(row) for row in rows]

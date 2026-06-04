@@ -1,15 +1,22 @@
 from datetime import date
 
+from backend.auth.current_user import get_current_user_id
 from backend.core.database import get_connection
+from backend.finance.service import get_financial_summary
 
 
 def set_credit_card_settings(
     name: str,
     cut_day: int,
-    payment_day: int
+    payment_day: int,
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
-        conn.execute("DELETE FROM credit_card_settings")
+        conn.execute(
+            "DELETE FROM credit_card_settings WHERE user_id = %s",
+            (user_id,),
+        )
 
         cursor = conn.execute(
             """
@@ -17,15 +24,12 @@ def set_credit_card_settings(
                 name,
                 cut_day,
                 payment_day,
+                user_id,
                 created_at
             )
-            VALUES (%s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, NOW())
             """,
-            (
-                name,
-                cut_day,
-                payment_day
-            )
+            (name, cut_day, payment_day, user_id),
         )
 
         conn.commit()
@@ -34,19 +38,24 @@ def set_credit_card_settings(
         "id": cursor.lastrowid,
         "name": name,
         "cut_day": cut_day,
-        "payment_day": payment_day
+        "payment_day": payment_day,
+        "user_id": user_id,
     }
 
 
 def get_credit_card_settings():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         settings = conn.execute(
             """
-            SELECT id, name, cut_day, payment_day, created_at
+            SELECT id, name, cut_day, payment_day, user_id, created_at
             FROM credit_card_settings
+            WHERE user_id = %s
             ORDER BY id DESC
             LIMIT 1
-            """
+            """,
+            (user_id,),
         ).fetchone()
 
     if not settings:
@@ -61,7 +70,7 @@ def evaluate_card_purchase_date():
     if not settings:
         return {
             "status": "ERROR",
-            "message": "No existe configuración de tarjeta."
+            "message": "No existe configuración de tarjeta.",
         }
 
     today = date.today()
@@ -91,15 +100,13 @@ def evaluate_card_purchase_date():
         "cut_day": cut_day,
         "payment_day": payment_day,
         "cycle": cycle,
-        "message": message
+        "message": message,
     }
-
-from backend.finance.service import get_financial_summary
 
 
 def evaluate_card_purchase(
     amount: float,
-    description: str = ""
+    description: str = "",
 ):
     cycle_data = evaluate_card_purchase_date()
     summary = get_financial_summary()
@@ -127,5 +134,5 @@ def evaluate_card_purchase(
         "card_cycle": cycle_data,
         "current_available_cash": available_cash,
         "projected_available_cash": projected_available_cash,
-        "recommendation": recommendation
+        "recommendation": recommendation,
     }

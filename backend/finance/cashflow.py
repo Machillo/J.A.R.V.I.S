@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from backend.auth.current_user import get_current_user_id
 from backend.core.database import get_connection
 from backend.finance.service import get_financial_summary
 
@@ -11,7 +12,7 @@ WEEKDAYS = {
     "thursday": 3,
     "friday": 4,
     "saturday": 5,
-    "sunday": 6
+    "sunday": 6,
 }
 
 
@@ -19,10 +20,15 @@ def set_pay_schedule(
     pay_frequency: str,
     pay_day: str | None = None,
     first_pay_date: str | None = None,
-    notes: str = ""
+    notes: str = "",
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
-        conn.execute("DELETE FROM pay_schedule")
+        conn.execute(
+            "DELETE FROM pay_schedule WHERE user_id = %s",
+            (user_id,),
+        )
 
         cursor = conn.execute(
             """
@@ -31,16 +37,12 @@ def set_pay_schedule(
                 pay_day,
                 first_pay_date,
                 notes,
+                user_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
-            (
-                pay_frequency,
-                pay_day,
-                first_pay_date,
-                notes
-            )
+            (pay_frequency, pay_day, first_pay_date, notes, user_id),
         )
 
         conn.commit()
@@ -50,19 +52,24 @@ def set_pay_schedule(
         "pay_frequency": pay_frequency,
         "pay_day": pay_day,
         "first_pay_date": first_pay_date,
-        "notes": notes
+        "notes": notes,
+        "user_id": user_id,
     }
 
 
 def get_pay_schedule():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         schedule = conn.execute(
             """
-            SELECT id, pay_frequency, pay_day, first_pay_date, notes, created_at
+            SELECT id, pay_frequency, pay_day, first_pay_date, notes, user_id, created_at
             FROM pay_schedule
+            WHERE user_id = %s
             ORDER BY id DESC
             LIMIT 1
-            """
+            """,
+            (user_id,),
         ).fetchone()
 
     if not schedule:
@@ -77,7 +84,7 @@ def get_next_pay_date():
     if not schedule:
         return {
             "status": "ERROR",
-            "message": "No existe calendario de pago configurado."
+            "message": "No existe calendario de pago configurado.",
         }
 
     today = datetime.now().date()
@@ -90,26 +97,22 @@ def get_next_pay_date():
         if weekday_number is None:
             return {
                 "status": "ERROR",
-                "message": "Día de pago semanal inválido."
+                "message": "Día de pago semanal inválido.",
             }
 
         days_until_pay = (weekday_number - today.weekday()) % 7
-
-        if days_until_pay == 0:
-            next_pay = today
-        else:
-            next_pay = today + timedelta(days=days_until_pay)
+        next_pay = today if days_until_pay == 0 else today + timedelta(days=days_until_pay)
 
         return {
             "status": "OK",
             "pay_frequency": pay_frequency,
             "next_pay_date": str(next_pay),
-            "days_until_pay": days_until_pay
+            "days_until_pay": days_until_pay,
         }
 
     return {
         "status": "ERROR",
-        "message": "Frecuencia de pago todavía no soportada."
+        "message": "Frecuencia de pago todavía no soportada.",
     }
 
 
@@ -121,5 +124,5 @@ def get_basic_cashflow_forecast():
         "status": "OK",
         "summary": summary,
         "next_pay": next_pay,
-        "message": "Forecast básico generado."
+        "message": "Forecast básico generado.",
     }

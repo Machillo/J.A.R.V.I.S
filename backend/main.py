@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
 from backend.core.brain import process_input
@@ -13,11 +13,14 @@ from backend.goals.routes import router as goals_router
 from backend.decision_engine.routes import router as decision_router
 from backend.reports.routes import router as reports_router
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from backend.transactions.routes import router as transactions_router
 from backend.importers.routes import router as importers_router
 from backend.advisor.routes import router as advisor_router
 from backend.auth.routes import router as auth_router
 from backend.ai.routes import router as ai_router
+from backend.auth.current_user import set_current_user, reset_current_user
+from backend.auth.service import authenticate_access_token
 
 app = FastAPI(title="Jarvis Core")
 
@@ -28,6 +31,63 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+PUBLIC_PATHS = {
+    "/",
+    "/status",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/auth/health",
+    "/auth/check-access",
+}
+
+
+def _is_public_path(path: str) -> bool:
+    if path in PUBLIC_PATHS:
+        return True
+
+    if path.startswith("/docs") or path.startswith("/redoc"):
+        return True
+
+    return False
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if request.method == "OPTIONS" or _is_public_path(request.url.path):
+        return await call_next(request)
+
+    authorization = request.headers.get("Authorization", "")
+
+    if not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Falta Authorization: Bearer <token>."},
+        )
+
+    access_token = authorization.replace("Bearer ", "", 1).strip()
+
+    try:
+        user = authenticate_access_token(access_token)
+    except Exception as exc:
+        status_code = getattr(exc, "status_code", 401)
+        detail = getattr(exc, "detail", "No se pudo autenticar el usuario.")
+        return JSONResponse(
+            status_code=status_code,
+            content={"detail": detail},
+        )
+
+    request.state.user = user
+    context_token = set_current_user(user)
+
+    try:
+        response = await call_next(request)
+    finally:
+        reset_current_user(context_token)
+
+    return response
 
 app.include_router(finance_router)
 app.include_router(goals_router)

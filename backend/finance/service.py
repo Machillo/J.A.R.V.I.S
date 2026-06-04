@@ -3,62 +3,76 @@ from backend.auth.current_user import get_current_user_id
 
 
 def add_salary(amount: float, source: str):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO salaries (amount, source, created_at)
-            VALUES (%s, %s, NOW())
+            INSERT INTO salaries (amount, source, user_id, created_at)
+            VALUES (%s, %s, %s, NOW())
             """,
-            (amount, source)
+            (amount, source, user_id)
         )
         conn.commit()
 
     return {
         "id": cursor.lastrowid,
         "amount": amount,
-        "source": source
+        "source": source,
+        "user_id": user_id
     }
 
 
 def get_salaries():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, amount, source, created_at
+            SELECT id, amount, source, user_id, created_at
             FROM salaries
+            WHERE user_id = %s
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
 
 
 def add_bonus(amount: float, description: str = ""):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO bonuses (amount, description, created_at)
-            VALUES (%s, %s, NOW())
+            INSERT INTO bonuses (amount, description, user_id, created_at)
+            VALUES (%s, %s, %s, NOW())
             """,
-            (amount, description)
+            (amount, description, user_id)
         )
         conn.commit()
 
     return {
         "id": cursor.lastrowid,
         "amount": amount,
-        "description": description
+        "description": description,
+        "user_id": user_id
     }
 
 
 def get_bonuses():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, amount, description, created_at
+            SELECT id, amount, description, user_id, created_at
             FROM bonuses
+            WHERE user_id = %s
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -523,7 +537,9 @@ def get_financial_summary():
             """
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM bonuses
-            """
+            WHERE user_id = %s
+            """,
+            (user_id,)
         ).fetchone()["total"]
 
         debt_total = conn.execute(
@@ -700,8 +716,13 @@ def set_employment_profile(
     overtime_multiplier: float = 1.5,
     holiday_multiplier: float = 2
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
-        conn.execute("DELETE FROM employment_profile")
+        conn.execute(
+            "DELETE FROM employment_profile WHERE user_id = %s",
+            (user_id,)
+        )
 
         cursor = conn.execute(
             """
@@ -710,15 +731,17 @@ def set_employment_profile(
                 regular_hours_per_week,
                 overtime_multiplier,
                 holiday_multiplier,
+                user_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
             (
                 hourly_rate,
                 regular_hours_per_week,
                 overtime_multiplier,
-                holiday_multiplier
+                holiday_multiplier,
+                user_id
             )
         )
 
@@ -729,19 +752,24 @@ def set_employment_profile(
         "hourly_rate": hourly_rate,
         "regular_hours_per_week": regular_hours_per_week,
         "overtime_multiplier": overtime_multiplier,
-        "holiday_multiplier": holiday_multiplier
+        "holiday_multiplier": holiday_multiplier,
+        "user_id": user_id
     }
 
 
 def get_employment_profile():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         profile = conn.execute(
             """
-            SELECT id, hourly_rate, regular_hours_per_week, overtime_multiplier, holiday_multiplier, created_at
+            SELECT id, hourly_rate, regular_hours_per_week, overtime_multiplier, holiday_multiplier, user_id, created_at
             FROM employment_profile
+            WHERE user_id = %s
             ORDER BY id DESC
             LIMIT 1
-            """
+            """,
+            (user_id,)
         ).fetchone()
 
     if not profile:
@@ -756,6 +784,8 @@ def add_payroll_deduction(
     amount: float,
     frequency: str
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
@@ -764,11 +794,12 @@ def add_payroll_deduction(
                 deduction_type,
                 amount,
                 frequency,
+                user_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
-            (name, deduction_type, amount, frequency)
+            (name, deduction_type, amount, frequency, user_id)
         )
 
         conn.commit()
@@ -778,18 +809,23 @@ def add_payroll_deduction(
         "name": name,
         "deduction_type": deduction_type,
         "amount": amount,
-        "frequency": frequency
+        "frequency": frequency,
+        "user_id": user_id
     }
 
 
 def get_payroll_deductions():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, deduction_type, amount, frequency, created_at
+            SELECT id, name, deduction_type, amount, frequency, user_id, created_at
             FROM payroll_deductions
+            WHERE user_id = %s
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -828,6 +864,8 @@ def add_payroll_event(
         multiplier = 1
         amount = hours * hourly_rate
 
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
@@ -837,16 +875,18 @@ def add_payroll_event(
                 multiplier,
                 amount,
                 description,
+                user_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 event_type,
                 hours,
                 multiplier,
                 amount,
-                description
+                description,
+                user_id
             )
         )
 
@@ -863,13 +903,17 @@ def add_payroll_event(
 
 
 def get_payroll_events():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, event_type, hours, multiplier, amount, description, created_at
+            SELECT id, event_type, hours, multiplier, amount, description, user_id, created_at
             FROM payroll_events
+            WHERE user_id = %s
             ORDER BY id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -890,15 +934,24 @@ def calculate_monthly_salary_projection():
     base_monthly_gross = hourly_rate * weekly_hours * 4.333
 
     with get_connection() as conn:
+        user_id = get_current_user_id()
+
         payroll_events_total = conn.execute(
-            "SELECT COALESCE(SUM(amount), 0) AS total FROM payroll_events"
+            """
+            SELECT COALESCE(SUM(amount), 0) AS total
+            FROM payroll_events
+            WHERE user_id = %s
+            """,
+            (user_id,)
         ).fetchone()["total"]
 
         deductions = conn.execute(
             """
             SELECT name, deduction_type, amount, frequency
             FROM payroll_deductions
-            """
+            WHERE user_id = %s
+            """,
+            (user_id,)
         ).fetchall()
 
     payroll_events_total = float(payroll_events_total or 0)

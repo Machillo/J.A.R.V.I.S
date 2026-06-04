@@ -1,3 +1,4 @@
+from backend.auth.current_user import get_current_user_id
 from backend.core.database import get_connection
 
 
@@ -11,8 +12,10 @@ def add_payment_schedule(
     cut_day: int | None = None,
     payment_day: int | None = None,
     auto_deducted: bool = False,
-    notes: str = ""
+    notes: str = "",
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         cursor = conn.execute(
             """
@@ -27,9 +30,10 @@ def add_payment_schedule(
                 payment_day,
                 auto_deducted,
                 notes,
+                user_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 name,
@@ -40,9 +44,10 @@ def add_payment_schedule(
                 day_of_month,
                 cut_day,
                 payment_day,
-                1 if auto_deducted else 0,
-                notes
-            )
+                auto_deducted,
+                notes,
+                user_id,
+            ),
         )
 
         conn.commit()
@@ -58,19 +63,24 @@ def add_payment_schedule(
         "cut_day": cut_day,
         "payment_day": payment_day,
         "auto_deducted": auto_deducted,
-        "notes": notes
+        "notes": notes,
+        "user_id": user_id,
     }
 
 
 def get_payment_schedules():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, name, entity_type, entity_id, payment_method, frequency,
-                   day_of_month, cut_day, payment_day, auto_deducted, notes, created_at
+                   day_of_month, cut_day, payment_day, auto_deducted, notes, user_id, created_at
             FROM payment_schedules
+            WHERE user_id = %s
             ORDER BY id DESC
-            """
+            """,
+            (user_id,),
         ).fetchall()
 
     return [dict(row) for row in rows]
