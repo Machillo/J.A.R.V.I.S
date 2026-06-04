@@ -19,7 +19,7 @@ def set_credit_card_settings(
                 payment_day,
                 created_at
             )
-            VALUES (?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, NOW())
             """,
             (
                 name,

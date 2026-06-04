@@ -1,5 +1,4 @@
 import os
-import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Iterable, Optional
@@ -15,10 +14,14 @@ class DatabaseConfigError(RuntimeError):
     pass
 
 
+class DatabaseQueryError(RuntimeError):
+    pass
+
+
 def serialize_db_value(value: Any) -> Any:
     """
-    Convierte valores que PostgreSQL/psycopg2 devuelve y que FastAPI/JSON
-    o cálculos con float no manejan bien directamente.
+    Convierte tipos que psycopg2 devuelve desde PostgreSQL a valores seguros
+    para FastAPI/JSON y para operaciones normales en el backend.
     """
     if isinstance(value, Decimal):
         return float(value)
@@ -50,11 +53,14 @@ def serialize_rows(rows: Iterable[dict]) -> list[dict]:
 
 class PostgresCursorResult:
     """
-    Pequeño wrapper para mantener compatibilidad con el código actual:
-    conn.execute(...).fetchone()
-    conn.execute(...).fetchall()
-    cursor.lastrowid
-    cursor.rowcount
+    Wrapper pequeño para mantener esta forma en los servicios:
+
+        conn.execute(...).fetchone()
+        conn.execute(...).fetchall()
+        cursor.lastrowid
+        cursor.rowcount
+
+    La diferencia es que ahora todo es PostgreSQL nativo.
     """
 
     def __init__(self, rows=None, lastrowid=None, rowcount: int = 0):
@@ -73,7 +79,7 @@ class PostgresConnection:
     def __init__(self):
         if not DATABASE_URL:
             raise DatabaseConfigError(
-                "DATABASE_URL no está configurada. J.A.R.V.I.S ahora debe usar PostgreSQL como única base de datos."
+                "DATABASE_URL no está configurada. J.A.R.V.I.S debe usar PostgreSQL/Supabase como única base de datos."
             )
 
         self.conn = psycopg2.connect(
@@ -89,47 +95,37 @@ class PostgresConnection:
             self.conn.rollback()
         self.conn.close()
 
-    def _prepare_query(self, query: str) -> str:
-        """
-        Adaptador temporal y global para que el código actual siga funcionando
-        mientras se refactorizan los servicios a SQL PostgreSQL nativo.
-
-        Importante:
-        - Esto elimina SQLite como base de datos.
-        - No abre ni lee jarvis.db.
-        - Solo traduce sintaxis vieja usada por el código actual.
-        """
+    def _validate_postgres_query(self, query: str) -> str:
         prepared = query.strip()
 
-        prepared = prepared.replace("datetime('now')", "NOW()")
-        prepared = prepared.replace('datetime("now")', "NOW()")
+        blocked_fragments = [
+            "datetime('now')",
+            'datetime("now")',
+            "INSERT OR IGNORE",
+            "AUTOINCREMENT",
+        ]
 
-        # SQLite: INSERT OR IGNORE INTO tabla (...) VALUES (...)
-        # PostgreSQL: INSERT INTO tabla (...) VALUES (...) ON CONFLICT DO NOTHING
-        prepared = re.sub(
-            r"INSERT\s+OR\s+IGNORE\s+INTO",
-            "INSERT INTO",
-            prepared,
-            flags=re.IGNORECASE,
-        )
+        upper_query = prepared.upper()
+        for fragment in blocked_fragments:
+            if fragment.upper() in upper_query:
+                raise DatabaseQueryError(
+                    f"SQL incompatible con PostgreSQL detectado: {fragment}. "
+                    "Actualiza ese query a sintaxis PostgreSQL nativa."
+                )
 
-        if re.search(r"INSERT\s+INTO", prepared, re.IGNORECASE) and "OR IGNORE" not in prepared.upper():
-            if "ON CONFLICT" not in prepared.upper() and "settings" in prepared.lower():
-                prepared = prepared.rstrip(";") + " ON CONFLICT (key) DO NOTHING"
+        if "?" in prepared:
+            raise DatabaseQueryError(
+                "Placeholder SQLite '?' detectado. Usa placeholders PostgreSQL/psycopg2: %s."
+            )
 
-        # El código viejo usa ? como placeholder. psycopg2 usa %s.
-        prepared = prepared.replace("?", "%s")
-
-        clean = prepared.strip().lower()
-
-        # Para conservar cursor.lastrowid en inserts.
+        clean = prepared.lower()
         if clean.startswith("insert") and " returning " not in clean:
             prepared = prepared.rstrip(";") + " RETURNING id"
 
         return prepared
 
     def execute(self, query: str, params=()):
-        prepared_query = self._prepare_query(query)
+        prepared_query = self._validate_postgres_query(query)
 
         with self.conn.cursor() as cursor:
             cursor.execute(prepared_query, params)
@@ -164,8 +160,8 @@ def get_connection():
 
 def init_database():
     """
-    En producción el schema se crea desde Supabase SQL Editor usando database/schema.sql.
-    Esta función queda para que main.py pueda llamarla sin romper el arranque.
+    En producción el schema se ejecuta desde Supabase SQL Editor usando database/schema.sql.
+    Esta función queda para que main.py pueda llamarla sin crear tablas automáticamente.
     """
     if not DATABASE_URL:
         raise DatabaseConfigError(

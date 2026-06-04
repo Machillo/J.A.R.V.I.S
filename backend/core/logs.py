@@ -6,7 +6,7 @@ def add_log(action: str, detail: str = ""):
         conn.execute(
             """
             INSERT INTO logs (action, detail, created_at)
-            VALUES (?, ?, datetime('now'))
+            VALUES (%s, %s, NOW())
             """,
             (action, detail)
         )

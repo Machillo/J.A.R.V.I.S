@@ -33,7 +33,7 @@ def set_pay_schedule(
                 notes,
                 created_at
             )
-            VALUES (?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, NOW())
             """,
             (
                 pay_frequency,

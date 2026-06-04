@@ -29,7 +29,7 @@ def add_payment_schedule(
                 notes,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 name,

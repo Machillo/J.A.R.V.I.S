@@ -6,7 +6,7 @@ def add_event(title: str, event_date: str, event_type: str = "general", descript
         cursor = conn.execute(
             """
             INSERT INTO events (title, description, event_type, event_date, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, NOW())
             """,
             (title, description, event_type, event_date)
         )

@@ -7,7 +7,7 @@ def add_salary(amount: float, source: str):
         cursor = conn.execute(
             """
             INSERT INTO salaries (amount, source, created_at)
-            VALUES (?, ?, datetime('now'))
+            VALUES (%s, %s, NOW())
             """,
             (amount, source)
         )
@@ -38,7 +38,7 @@ def add_bonus(amount: float, description: str = ""):
         cursor = conn.execute(
             """
             INSERT INTO bonuses (amount, description, created_at)
-            VALUES (?, ?, datetime('now'))
+            VALUES (%s, %s, NOW())
             """,
             (amount, description)
         )
@@ -91,7 +91,7 @@ def add_debt(
                 user_id,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 name,
@@ -140,7 +140,7 @@ def get_debts():
                    created_at,
                    user_id
             FROM debts
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY id DESC
             """,
             (user_id,)
@@ -161,7 +161,7 @@ def add_saving(name: str, amount: float):
                 user_id,
                 created_at
             )
-            VALUES (?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, NOW())
             """,
             (
                 name,
@@ -192,7 +192,7 @@ def get_savings():
                    created_at,
                    user_id
             FROM savings
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY id DESC
             """,
             (user_id,)
@@ -212,8 +212,8 @@ def update_saving(
             """
             SELECT id
             FROM savings
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (saving_id, user_id)
         ).fetchone()
@@ -227,10 +227,10 @@ def update_saving(
         conn.execute(
             """
             UPDATE savings
-            SET name = ?,
-                amount = ?
-            WHERE id = ?
-            AND user_id = ?
+            SET name = %s,
+                amount = %s
+            WHERE id = %s
+            AND user_id = %s
             """,
             (
                 name,
@@ -264,8 +264,8 @@ def delete_saving(saving_id: int):
                    created_at,
                    user_id
             FROM savings
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (saving_id, user_id)
         ).fetchone()
@@ -279,8 +279,8 @@ def delete_saving(saving_id: int):
         conn.execute(
             """
             DELETE FROM savings
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (saving_id, user_id)
         )
@@ -306,7 +306,7 @@ def add_investment(name: str, amount: float):
                 user_id,
                 created_at
             )
-            VALUES (?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, NOW())
             """,
             (
                 name,
@@ -337,7 +337,7 @@ def get_investments():
                    created_at,
                    user_id
             FROM investments
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY id DESC
             """,
             (user_id,)
@@ -357,8 +357,8 @@ def update_investment(
             """
             SELECT id
             FROM investments
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (investment_id, user_id)
         ).fetchone()
@@ -372,10 +372,10 @@ def update_investment(
         conn.execute(
             """
             UPDATE investments
-            SET name = ?,
-                amount = ?
-            WHERE id = ?
-            AND user_id = ?
+            SET name = %s,
+                amount = %s
+            WHERE id = %s
+            AND user_id = %s
             """,
             (
                 name,
@@ -409,8 +409,8 @@ def delete_investment(investment_id: int):
                    created_at,
                    user_id
             FROM investments
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (investment_id, user_id)
         ).fetchone()
@@ -424,8 +424,8 @@ def delete_investment(investment_id: int):
         conn.execute(
             """
             DELETE FROM investments
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (investment_id, user_id)
         )
@@ -458,7 +458,7 @@ def add_expense(
                 user_id,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
             (
                 category,
@@ -495,7 +495,7 @@ def get_expenses():
                    created_at,
                    user_id
             FROM expenses
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY id DESC
             """,
             (user_id,)
@@ -530,7 +530,7 @@ def get_financial_summary():
             """
             SELECT COALESCE(SUM(remaining_amount), 0) AS total
             FROM debts
-            WHERE user_id = ?
+            WHERE user_id = %s
             """,
             (user_id,)
         ).fetchone()["total"]
@@ -539,7 +539,7 @@ def get_financial_summary():
             """
             SELECT COALESCE(SUM(monthly_payment), 0) AS total
             FROM debts
-            WHERE user_id = ?
+            WHERE user_id = %s
             """,
             (user_id,)
         ).fetchone()["total"]
@@ -548,7 +548,7 @@ def get_financial_summary():
             """
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM savings
-            WHERE user_id = ?
+            WHERE user_id = %s
             """,
             (user_id,)
         ).fetchone()["total"]
@@ -557,7 +557,7 @@ def get_financial_summary():
             """
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM investments
-            WHERE user_id = ?
+            WHERE user_id = %s
             """,
             (user_id,)
         ).fetchone()["total"]
@@ -567,7 +567,7 @@ def get_financial_summary():
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'fixed'
-            AND user_id = ?
+            AND user_id = %s
             """,
             (user_id,)
         ).fetchone()["total"]
@@ -577,7 +577,7 @@ def get_financial_summary():
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'variable'
-            AND user_id = ?
+            AND user_id = %s
             """,
             (user_id,)
         ).fetchone()["total"]
@@ -587,7 +587,7 @@ def get_financial_summary():
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'one_time'
-            AND user_id = ?
+            AND user_id = %s
             """,
             (user_id,)
         ).fetchone()["total"]
@@ -712,7 +712,7 @@ def set_employment_profile(
                 holiday_multiplier,
                 created_at
             )
-            VALUES (?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, NOW())
             """,
             (
                 hourly_rate,
@@ -766,7 +766,7 @@ def add_payroll_deduction(
                 frequency,
                 created_at
             )
-            VALUES (?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, NOW())
             """,
             (name, deduction_type, amount, frequency)
         )
@@ -839,7 +839,7 @@ def add_payroll_event(
                 description,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
             (
                 event_type,
@@ -965,8 +965,8 @@ def delete_expense(expense_id: int):
                    description,
                    user_id
             FROM expenses
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (expense_id, user_id)
         ).fetchone()
@@ -980,8 +980,8 @@ def delete_expense(expense_id: int):
         conn.execute(
             """
             DELETE FROM expenses
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (expense_id, user_id)
         )
@@ -1009,8 +1009,8 @@ def update_expense(
             """
             SELECT id
             FROM expenses
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (expense_id, user_id)
         ).fetchone()
@@ -1024,12 +1024,12 @@ def update_expense(
         conn.execute(
             """
             UPDATE expenses
-            SET category = ?,
-                amount = ?,
-                expense_type = ?,
-                description = ?
-            WHERE id = ?
-            AND user_id = ?
+            SET category = %s,
+                amount = %s,
+                expense_type = %s,
+                description = %s
+            WHERE id = %s
+            AND user_id = %s
             """,
             (
                 category,
@@ -1071,8 +1071,8 @@ def delete_debt(debt_id: int):
                    payment_day,
                    user_id
             FROM debts
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (debt_id, user_id)
         ).fetchone()
@@ -1086,7 +1086,7 @@ def delete_debt(debt_id: int):
         conn.execute(
             """
             DELETE FROM debt_payments
-            WHERE debt_id = ?
+            WHERE debt_id = %s
             """,
             (debt_id,)
         )
@@ -1094,8 +1094,8 @@ def delete_debt(debt_id: int):
         conn.execute(
             """
             DELETE FROM debts
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (debt_id, user_id)
         )
@@ -1127,8 +1127,8 @@ def update_debt(
             """
             SELECT id
             FROM debts
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (debt_id, user_id)
         ).fetchone()
@@ -1142,16 +1142,16 @@ def update_debt(
         conn.execute(
             """
             UPDATE debts
-            SET name = ?,
-                debt_type = ?,
-                total_amount = ?,
-                remaining_amount = ?,
-                monthly_payment = ?,
-                interest_rate = ?,
-                term_months = ?,
-                payment_day = ?
-            WHERE id = ?
-            AND user_id = ?
+            SET name = %s,
+                debt_type = %s,
+                total_amount = %s,
+                remaining_amount = %s,
+                monthly_payment = %s,
+                interest_rate = %s,
+                term_months = %s,
+                payment_day = %s
+            WHERE id = %s
+            AND user_id = %s
             """,
             (
                 name,
@@ -1198,7 +1198,7 @@ def apply_extra_payment_to_debt(
             SELECT id, name, debt_type, total_amount, remaining_amount,
                    monthly_payment, interest_rate, term_months, payment_day
             FROM debts
-            WHERE id = ?
+            WHERE id = %s
             """,
             (debt_id,)
         ).fetchone()
@@ -1227,8 +1227,8 @@ def apply_extra_payment_to_debt(
         conn.execute(
             """
             UPDATE debts
-            SET remaining_amount = ?, monthly_payment = ?
-            WHERE id = ?
+            SET remaining_amount = %s, monthly_payment = %s
+            WHERE id = %s
             """,
             (
                 final_remaining_amount,
@@ -1250,7 +1250,7 @@ def apply_extra_payment_to_debt(
                 description,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 debt_id,
@@ -1296,8 +1296,8 @@ def get_debt_by_name(name: str):
                    created_at,
                    user_id
             FROM debts
-            WHERE lower(name) LIKE ?
-            AND user_id = ?
+            WHERE lower(name) LIKE %s
+            AND user_id = %s
             LIMIT 1
             """,
             (search, user_id)
@@ -1333,7 +1333,7 @@ def apply_monthly_payment_to_debt(
             SELECT id, name, debt_type, total_amount, remaining_amount,
                    monthly_payment, interest_rate, term_months, payment_day
             FROM debts
-            WHERE id = ?
+            WHERE id = %s
             """,
             (debt_id,)
         ).fetchone()
@@ -1356,8 +1356,8 @@ def apply_monthly_payment_to_debt(
         conn.execute(
             """
             UPDATE debts
-            SET remaining_amount = ?, monthly_payment = ?
-            WHERE id = ?
+            SET remaining_amount = %s, monthly_payment = %s
+            WHERE id = %s
             """,
             (
                 new_remaining_amount,
@@ -1379,7 +1379,7 @@ def apply_monthly_payment_to_debt(
                 description,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 debt_id,
@@ -1418,7 +1418,7 @@ def get_debt_payments(debt_id: int | None = None):
                        new_remaining_amount, previous_monthly_payment,
                        new_monthly_payment, description, created_at
                 FROM debt_payments
-                WHERE debt_id = ?
+                WHERE debt_id = %s
                 ORDER BY id DESC
                 """,
                 (debt_id,)
@@ -1444,7 +1444,7 @@ def get_net_worth_report():
             """
             SELECT id, name, amount, created_at, user_id
             FROM savings
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY id DESC
             """,
             (user_id,)
@@ -1454,7 +1454,7 @@ def get_net_worth_report():
             """
             SELECT id, name, amount, created_at, user_id
             FROM investments
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY id DESC
             """,
             (user_id,)
@@ -1466,7 +1466,7 @@ def get_net_worth_report():
                    monthly_payment, interest_rate, term_months,
                    payment_day, created_at, user_id
             FROM debts
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY remaining_amount DESC
             """,
             (user_id,)
@@ -1599,7 +1599,7 @@ def get_user_status():
                    priority, status, created_at, user_id
             FROM financial_goals
             WHERE status = 'active'
-            AND user_id = ?
+            AND user_id = %s
             ORDER BY
                 CASE priority
                     WHEN 'critical' THEN 1

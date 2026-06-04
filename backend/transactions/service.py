@@ -35,7 +35,7 @@ def create_transaction(
                 user_id,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 transaction_date,
@@ -70,7 +70,7 @@ def get_transactions():
             """
             SELECT *
             FROM transactions
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY transaction_date DESC, id DESC
             """,
             (user_id,)
@@ -87,8 +87,8 @@ def get_transaction(transaction_id: int):
             """
             SELECT *
             FROM transactions
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (transaction_id, user_id)
         ).fetchone()
@@ -110,8 +110,8 @@ def delete_transaction(transaction_id: int):
             """
             SELECT id
             FROM transactions
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (transaction_id, user_id)
         ).fetchone()
@@ -125,8 +125,8 @@ def delete_transaction(transaction_id: int):
         conn.execute(
             """
             DELETE FROM transactions
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (transaction_id, user_id)
         )
@@ -186,8 +186,8 @@ def update_transaction(
             """
             SELECT id
             FROM transactions
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (transaction_id, user_id)
         ).fetchone()
@@ -201,19 +201,19 @@ def update_transaction(
         conn.execute(
             """
             UPDATE transactions
-            SET transaction_date = ?,
-                description = ?,
-                amount = ?,
-                transaction_type = ?,
-                category = ?,
-                account = ?,
-                source = ?,
-                notes = ?,
-                original_amount = ?,
-                original_currency = ?,
-                exchange_rate = ?
-            WHERE id = ?
-            AND user_id = ?
+            SET transaction_date = %s,
+                description = %s,
+                amount = %s,
+                transaction_type = %s,
+                category = %s,
+                account = %s,
+                source = %s,
+                notes = %s,
+                original_amount = %s,
+                original_currency = %s,
+                exchange_rate = %s
+            WHERE id = %s
+            AND user_id = %s
             """,
             (
                 transaction_date,

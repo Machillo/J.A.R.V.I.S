@@ -8,7 +8,7 @@ def get_transaction_summary():
                 """
                 SELECT COALESCE(SUM(amount), 0) AS total
                 FROM transactions
-                WHERE transaction_type = ?
+                WHERE transaction_type = %s
                 """,
                 (transaction_type,)
             ).fetchone()["total"]
@@ -42,7 +42,7 @@ def get_top_expense_categories(limit: int = 5):
             WHERE transaction_type = 'expense'
             GROUP BY category
             ORDER BY total DESC
-            LIMIT ?
+            LIMIT %s
             """,
             (limit,)
         ).fetchall()

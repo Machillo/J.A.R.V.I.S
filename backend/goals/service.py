@@ -26,7 +26,7 @@ def add_financial_goal(
                 user_id,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, 'active', ?, datetime('now'))
+            VALUES (%s, %s, %s, %s, %s, 'active', %s, NOW())
             """,
             (
                 name,
@@ -61,7 +61,7 @@ def get_financial_goals():
             SELECT id, name, target_amount, current_amount, target_date,
                    priority, status, created_at, user_id
             FROM financial_goals
-            WHERE user_id = ?
+            WHERE user_id = %s
             ORDER BY id DESC
             """,
             (user_id,)
@@ -79,8 +79,8 @@ def get_financial_goal(goal_id: int):
             SELECT id, name, target_amount, current_amount, target_date,
                    priority, status, created_at, user_id
             FROM financial_goals
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (goal_id, user_id)
         ).fetchone()
@@ -110,8 +110,8 @@ def update_financial_goal(
             """
             SELECT id
             FROM financial_goals
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (goal_id, user_id)
         ).fetchone()
@@ -125,14 +125,14 @@ def update_financial_goal(
         conn.execute(
             """
             UPDATE financial_goals
-            SET name = ?,
-                target_amount = ?,
-                current_amount = ?,
-                target_date = ?,
-                priority = ?,
-                status = ?
-            WHERE id = ?
-            AND user_id = ?
+            SET name = %s,
+                target_amount = %s,
+                current_amount = %s,
+                target_date = %s,
+                priority = %s,
+                status = %s
+            WHERE id = %s
+            AND user_id = %s
             """,
             (
                 name,
@@ -160,8 +160,8 @@ def delete_financial_goal(goal_id: int):
             SELECT id, name, target_amount, current_amount, target_date,
                    priority, status, created_at, user_id
             FROM financial_goals
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (goal_id, user_id)
         ).fetchone()
@@ -175,8 +175,8 @@ def delete_financial_goal(goal_id: int):
         conn.execute(
             """
             DELETE FROM financial_goals
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (goal_id, user_id)
         )
@@ -198,8 +198,8 @@ def add_goal_contribution(goal_id: int, amount: float):
             """
             SELECT id, current_amount, target_amount
             FROM financial_goals
-            WHERE id = ?
-            AND user_id = ?
+            WHERE id = %s
+            AND user_id = %s
             """,
             (goal_id, user_id)
         ).fetchone()
@@ -220,10 +220,10 @@ def add_goal_contribution(goal_id: int, amount: float):
         conn.execute(
             """
             UPDATE financial_goals
-            SET current_amount = ?,
-                status = ?
-            WHERE id = ?
-            AND user_id = ?
+            SET current_amount = %s,
+                status = %s
+            WHERE id = %s
+            AND user_id = %s
             """,
             (
                 new_amount,
@@ -286,9 +286,9 @@ def get_financial_goal_by_name(name: str):
             SELECT id, name, target_amount, current_amount, target_date,
                    priority, status, created_at, user_id
             FROM financial_goals
-            WHERE lower(name) LIKE ?
+            WHERE lower(name) LIKE %s
             AND status = 'active'
-            AND user_id = ?
+            AND user_id = %s
             LIMIT 1
             """,
             (search, user_id)

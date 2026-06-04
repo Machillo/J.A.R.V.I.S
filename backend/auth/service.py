@@ -34,7 +34,7 @@ def create_allowed_user(email: str, role: str = "user", status: str = "active"):
             """
             SELECT id
             FROM allowed_users
-            WHERE email = ?
+            WHERE email = %s
             """,
             (email,)
         ).fetchone()
@@ -53,7 +53,7 @@ def create_allowed_user(email: str, role: str = "user", status: str = "active"):
                 status,
                 created_at
             )
-            VALUES (?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, NOW())
             """,
             (
                 email.lower().strip(),
@@ -76,7 +76,7 @@ def delete_allowed_user(user_id: int):
             """
             SELECT *
             FROM allowed_users
-            WHERE id = ?
+            WHERE id = %s
             """,
             (user_id,)
         ).fetchone()
@@ -96,7 +96,7 @@ def delete_allowed_user(user_id: int):
         conn.execute(
             """
             DELETE FROM allowed_users
-            WHERE id = ?
+            WHERE id = %s
             """,
             (user_id,)
         )
@@ -116,7 +116,7 @@ def check_user_access(email: str):
             """
             SELECT id, email, role, status, created_at
             FROM allowed_users
-            WHERE email = ?
+            WHERE email = %s
             """,
             (normalized_email,)
         ).fetchone()
