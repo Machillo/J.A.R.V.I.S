@@ -11,6 +11,7 @@ import Settings from "./pages/Settings";
 import { askJarvis, getFinanceDashboard, getStatus } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
 import Login from "./pages/Login";
+import { LogOut } from "lucide-react";
 
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
@@ -21,6 +22,11 @@ export default function App() {
   const [jarvisResponse, setJarvisResponse] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [session, setSession] = useState(null);
+
+  const handleLogout = async () => {
+  await supabase.auth.signOut();
+  setSession(null);
+};
 
   useEffect(() => {
     async function loadData() {
@@ -175,7 +181,12 @@ useEffect(() => {
             <span className="live-dot"></span>
             SISTEMA ACTIVO
           </div>
+          <button className="logout-button" onClick={handleLogout}>
+            <LogOut size={18} />
+            Salir
+          </button>
         </header>
+
 
         {renderPage()}
 
