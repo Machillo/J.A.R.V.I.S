@@ -871,8 +871,8 @@ def calculate_monthly_salary_projection():
             "status": "ERROR"
         }
 
-    hourly_rate = profile["hourly_rate"]
-    weekly_hours = profile["regular_hours_per_week"]
+    hourly_rate = float(profile["hourly_rate"] or 0)
+    weekly_hours = float(profile["regular_hours_per_week"] or 0)
 
     base_monthly_gross = hourly_rate * weekly_hours * 4.333
 
@@ -888,20 +888,20 @@ def calculate_monthly_salary_projection():
             """
         ).fetchall()
 
+    payroll_events_total = float(payroll_events_total or 0)
+
     projected_gross = base_monthly_gross + payroll_events_total
 
-    total_deductions = 0
-
+    total_deductions = 0.0
     deduction_details = []
 
     for deduction in deductions:
-        amount = deduction["amount"]
+        amount = float(deduction["amount"] or 0)
         frequency = deduction["frequency"]
         deduction_type = deduction["deduction_type"]
 
         if deduction_type == "percentage":
             calculated_amount = projected_gross * (amount / 100)
-
         else:
             if frequency == "weekly":
                 calculated_amount = amount * 4.333
