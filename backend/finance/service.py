@@ -1271,25 +1271,28 @@ def apply_extra_payment_to_debt(
     new_monthly_payment: float | None = None,
     description: str = ""
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         debt = conn.execute(
             """
             SELECT id, name, debt_type, total_amount, remaining_amount,
-                   monthly_payment, interest_rate, term_months, payment_day
+                   monthly_payment, interest_rate, term_months, payment_day, user_id
             FROM debts
             WHERE id = %s
+            AND user_id = %s
             """,
-            (debt_id,)
+            (debt_id, user_id)
         ).fetchone()
 
         if not debt:
             return {
-                "message": "Deuda no encontrada.",
+                "message": "Deuda no encontrada o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
 
-        previous_remaining_amount = debt["remaining_amount"]
-        previous_monthly_payment = debt["monthly_payment"]
+        previous_remaining_amount = _as_float(debt["remaining_amount"])
+        previous_monthly_payment = _as_float(debt["monthly_payment"])
 
         final_remaining_amount = (
             new_remaining_amount
@@ -1308,17 +1311,20 @@ def apply_extra_payment_to_debt(
             UPDATE debts
             SET remaining_amount = %s, monthly_payment = %s
             WHERE id = %s
+            AND user_id = %s
             """,
             (
                 final_remaining_amount,
                 final_monthly_payment,
-                debt_id
+                debt_id,
+                user_id
             )
         )
 
         cursor = conn.execute(
             """
             INSERT INTO debt_payments (
+                user_id,
                 debt_id,
                 payment_type,
                 amount,
@@ -1329,9 +1335,10 @@ def apply_extra_payment_to_debt(
                 description,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
+                user_id,
                 debt_id,
                 "extra_payment",
                 amount,
@@ -1355,6 +1362,7 @@ def apply_extra_payment_to_debt(
         "new_remaining_amount": final_remaining_amount,
         "previous_monthly_payment": previous_monthly_payment,
         "new_monthly_payment": final_monthly_payment,
+        "user_id": user_id,
         "status": "OK"
     }
 
@@ -1406,25 +1414,28 @@ def apply_monthly_payment_to_debt(
     new_monthly_payment: float | None = None,
     description: str = ""
 ):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         debt = conn.execute(
             """
             SELECT id, name, debt_type, total_amount, remaining_amount,
-                   monthly_payment, interest_rate, term_months, payment_day
+                   monthly_payment, interest_rate, term_months, payment_day, user_id
             FROM debts
             WHERE id = %s
+            AND user_id = %s
             """,
-            (debt_id,)
+            (debt_id, user_id)
         ).fetchone()
 
         if not debt:
             return {
-                "message": "Deuda no encontrada.",
+                "message": "Deuda no encontrada o no pertenece al usuario actual.",
                 "status": "ERROR"
             }
 
-        previous_remaining_amount = debt["remaining_amount"]
-        previous_monthly_payment = debt["monthly_payment"]
+        previous_remaining_amount = _as_float(debt["remaining_amount"])
+        previous_monthly_payment = _as_float(debt["monthly_payment"])
 
         final_monthly_payment = (
             new_monthly_payment
@@ -1437,17 +1448,20 @@ def apply_monthly_payment_to_debt(
             UPDATE debts
             SET remaining_amount = %s, monthly_payment = %s
             WHERE id = %s
+            AND user_id = %s
             """,
             (
                 new_remaining_amount,
                 final_monthly_payment,
-                debt_id
+                debt_id,
+                user_id
             )
         )
 
         cursor = conn.execute(
             """
             INSERT INTO debt_payments (
+                user_id,
                 debt_id,
                 payment_type,
                 amount,
@@ -1458,9 +1472,10 @@ def apply_monthly_payment_to_debt(
                 description,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
+                user_id,
                 debt_id,
                 "monthly_payment",
                 amount,
@@ -1484,33 +1499,38 @@ def apply_monthly_payment_to_debt(
         "new_remaining_amount": new_remaining_amount,
         "previous_monthly_payment": previous_monthly_payment,
         "new_monthly_payment": final_monthly_payment,
+        "user_id": user_id,
         "status": "OK"
     }
 
-
 def get_debt_payments(debt_id: int | None = None):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         if debt_id:
             rows = conn.execute(
                 """
-                SELECT id, debt_id, payment_type, amount, previous_remaining_amount,
+                SELECT id, user_id, debt_id, payment_type, amount, previous_remaining_amount,
                        new_remaining_amount, previous_monthly_payment,
                        new_monthly_payment, description, created_at
                 FROM debt_payments
                 WHERE debt_id = %s
+                AND user_id = %s
                 ORDER BY id DESC
                 """,
-                (debt_id,)
+                (debt_id, user_id)
             ).fetchall()
         else:
             rows = conn.execute(
                 """
-                SELECT id, debt_id, payment_type, amount, previous_remaining_amount,
+                SELECT id, user_id, debt_id, payment_type, amount, previous_remaining_amount,
                        new_remaining_amount, previous_monthly_payment,
                        new_monthly_payment, description, created_at
                 FROM debt_payments
+                WHERE user_id = %s
                 ORDER BY id DESC
-                """
+                """,
+                (user_id,)
             ).fetchall()
 
     return [dict(row) for row in rows]

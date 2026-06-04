@@ -18,6 +18,7 @@ const request = async (endpoint, options = {}) => {
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
+      Accept: "application/json",
       ...(options.headers || {}),
       ...authHeaders,
     },
@@ -48,3 +49,45 @@ export const askJarvis = async (message) => {
 };
 
 export const getGoals = () => request("/goals");
+
+export const createSalary = (payload) =>
+  request("/finance/salaries", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+export const createDebt = (payload) =>
+  request("/finance/debts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+export const createSaving = (payload) =>
+  request("/finance/savings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+export const createInvestment = (payload) =>
+  request("/finance/investments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+export const createExpense = (payload) =>
+  request("/finance/expenses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+export const createEmploymentProfile = (payload) =>
+  request("/finance/employment-profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });

@@ -1,7 +1,10 @@
+from backend.auth.current_user import get_current_user_id
 from backend.core.database import get_connection
 
 
 def get_transaction_summary():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         def get_total(transaction_type: str):
             return conn.execute(
@@ -9,8 +12,9 @@ def get_transaction_summary():
                 SELECT COALESCE(SUM(amount), 0) AS total
                 FROM transactions
                 WHERE transaction_type = %s
+                AND user_id = %s
                 """,
-                (transaction_type,)
+                (transaction_type, user_id)
             ).fetchone()["total"]
 
         total_income = get_total("income")
@@ -34,50 +38,61 @@ def get_transaction_summary():
 
 
 def get_top_expense_categories(limit: int = 5):
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT category, SUM(amount) AS total
             FROM transactions
             WHERE transaction_type = 'expense'
+            AND user_id = %s
             GROUP BY category
             ORDER BY total DESC
             LIMIT %s
             """,
-            (limit,)
+            (user_id, limit)
         ).fetchall()
 
     return [dict(row) for row in rows]
 
 
 def get_expenses_by_month():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT substr(transaction_date, 1, 7) AS month, SUM(amount) AS total
+            SELECT substring(transaction_date from 1 for 7) AS month, SUM(amount) AS total
             FROM transactions
             WHERE transaction_type = 'expense'
+            AND user_id = %s
             GROUP BY month
             ORDER BY month
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
 
 
 def get_expenses_by_category_and_month():
+    user_id = get_current_user_id()
+
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT 
-                substr(transaction_date, 1, 7) AS month,
+                substring(transaction_date from 1 for 7) AS month,
                 category,
                 SUM(amount) AS total
             FROM transactions
             WHERE transaction_type = 'expense'
+            AND user_id = %s
             GROUP BY month, category
             ORDER BY month, total DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]

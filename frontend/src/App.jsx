@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Menu, Mic, Send } from "lucide-react";
+import { LogOut, Menu, Mic, Send } from "lucide-react";
 
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
@@ -7,11 +7,10 @@ import Finance from "./pages/Finance";
 import Goals from "./pages/Goals";
 import Memory from "./pages/Memory";
 import Settings from "./pages/Settings";
+import Login from "./pages/Login";
 
 import { askJarvis, getFinanceDashboard, getStatus } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
-import Login from "./pages/Login";
-import { LogOut } from "lucide-react";
 
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
@@ -22,15 +21,33 @@ export default function App() {
   const [jarvisResponse, setJarvisResponse] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [session, setSession] = useState(null);
-
-  const handleLogout = async () => {
-  await supabase.auth.signOut();
-  setSession(null);
-};
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [appError, setAppError] = useState("");
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setSessionLoaded(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setFinanceDashboard(null);
+      setAppError("");
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+
     async function loadData() {
       try {
+        setAppError("");
+
         const [statusData, dashboardData] = await Promise.all([
           getStatus(),
           getFinanceDashboard(),
@@ -40,25 +57,19 @@ export default function App() {
         setFinanceDashboard(dashboardData);
       } catch (error) {
         console.error(error);
+        setAppError(error.message || "No se pudo cargar J.A.R.V.I.S.");
       }
     }
 
     loadData();
-  }, []);
+  }, [session]);
 
-useEffect(() => {
-  supabase.auth.getSession().then(({ data }) => {
-    setSession(data.session);
-  });
-
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((_event, session) => {
-    setSession(session);
-  });
-
-  return () => subscription.unsubscribe();
-}, []);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setFinanceDashboard(null);
+    setJarvisResponse(null);
+  };
 
   const speakText = (text) => {
     const utterance = new SpeechSynthesisUtterance(text);
@@ -131,12 +142,24 @@ useEffect(() => {
     };
   };
 
+  if (!sessionLoaded) {
+    return (
+      <div className="jarvis-app">
+        <main className="main-shell expanded">
+          <section className="jarvis-home chat-home idle">
+            <h1>J.A.R.V.I.S.</h1>
+            <p className="home-subtitle">Inicializando sesión...</p>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   if (!session) {
-  return <Login />;
-}
+    return <Login />;
+  }
 
   const renderPage = () => {
-    
     switch (activePage) {
       case "finance":
         return <Finance dashboard={financeDashboard} />;
@@ -151,9 +174,7 @@ useEffect(() => {
         return <Settings status={status} />;
 
       default:
-        return (
-          <Dashboard jarvisResponse={jarvisResponse} />
-        );
+        return <Dashboard jarvisResponse={jarvisResponse} />;
     }
   };
 
@@ -181,36 +202,43 @@ useEffect(() => {
             <span className="live-dot"></span>
             SISTEMA ACTIVO
           </div>
+
           <button className="logout-button" onClick={handleLogout}>
             <LogOut size={18} />
             Salir
           </button>
         </header>
 
+        {appError && (
+          <div className="hud-panel" style={{ marginBottom: "1rem" }}>
+            <strong>Error cargando datos</strong>
+            <p className="muted">{appError}</p>
+          </div>
+        )}
 
         {renderPage()}
 
-        <section className="jarvis-command-center">
+        <div className="command-bar">
+          <button
+            className={`voice-control ${isListening ? "listening" : ""}`}
+            onClick={handleVoiceInput}
+          >
+            <Mic size={20} />
+          </button>
+
           <input
             value={jarvisInput}
             onChange={(event) => setJarvisInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") handleAskJarvis();
             }}
-            placeholder="¿En qué puedo ayudarte, Kenneth?"
+            placeholder="Habla o escribe una orden para J.A.R.V.I.S."
           />
 
-          <button className="command-button" onClick={handleAskJarvis}>
+          <button onClick={handleAskJarvis}>
             <Send size={20} />
           </button>
-
-          <button
-            className={`voice-orb ${isListening ? "listening" : ""}`}
-            onClick={handleVoiceInput}
-          >
-            <Mic size={28} />
-          </button>
-        </section>
+        </div>
       </main>
     </div>
   );
