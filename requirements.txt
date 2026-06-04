@@ -6,3 +6,4 @@ python-multipart==0.0.30
 google-genai==2.7.0
 requests==2.34.2
 pypdf==6.12.2
+psycopg2-binary==2.9.9

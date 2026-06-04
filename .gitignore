@@ -1,4 +1,12 @@
+.env
+.env.local
+.env.production
+.env.development
+
 __pycache__/
 *.pyc
+
+database/*.db
+*.db
 backend/.env
 frontend/.env
