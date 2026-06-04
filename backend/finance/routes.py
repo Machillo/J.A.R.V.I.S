@@ -4,6 +4,9 @@ from backend.finance.strategy_rules import get_strategy_report, select_recommend
 from backend.finance.allocation_engine import calculate_allocation_plan
 from backend.finance.evaluators import evaluate_loan, evaluate_installment_purchase
 
+import traceback
+from fastapi import HTTPException
+
 from backend.finance.models import (
     SalaryRequest,
     BonusRequest,
@@ -408,4 +411,26 @@ def user_status():
 
 @router.get("/dashboard")
 def financial_dashboard():
-    return get_financial_dashboard()
+    try:
+        print("[DASHBOARD DEBUG] Iniciando /finance/dashboard", flush=True)
+
+        result = get_financial_dashboard()
+
+        print("[DASHBOARD DEBUG] Dashboard generado correctamente", flush=True)
+
+        return result
+
+    except Exception as error:
+        print("[DASHBOARD ERROR] Falló /finance/dashboard", flush=True)
+        print(f"[DASHBOARD ERROR] Tipo: {type(error).__name__}", flush=True)
+        print(f"[DASHBOARD ERROR] Mensaje: {str(error)}", flush=True)
+        traceback.print_exc()
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Error interno generando dashboard financiero.",
+                "error_type": type(error).__name__,
+                "error": str(error),
+            },
+        )
