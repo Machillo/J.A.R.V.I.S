@@ -592,6 +592,19 @@ def get_financial_summary():
             (user_id,)
         ).fetchone()["total"]
 
+        projected_net_income = float(projected_net_income or 0)
+        projected_gross_income = float(projected_gross_income or 0)
+        payroll_deductions_total = float(payroll_deductions_total or 0)
+
+        bonus_total = float(bonus_total or 0)
+        debt_total = float(debt_total or 0)
+        monthly_debt_payments = float(monthly_debt_payments or 0)
+        savings_total = float(savings_total or 0)
+        investments_total = float(investments_total or 0)
+        fixed_expenses_total = float(fixed_expenses_total or 0)
+        variable_expenses_total = float(variable_expenses_total or 0)
+        one_time_expenses_total = float(one_time_expenses_total or 0)
+
     total_income = projected_net_income + bonus_total
 
     expenses_total = (
