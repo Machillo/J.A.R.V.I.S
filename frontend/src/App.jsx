@@ -22,7 +22,6 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [session, setSession] = useState(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-  const [appError, setAppError] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -35,7 +34,8 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setFinanceDashboard(null);
-      setAppError("");
+      setStatus(null);
+      setJarvisResponse(null);
     });
 
     return () => subscription.unsubscribe();
@@ -46,8 +46,6 @@ export default function App() {
 
     async function loadData() {
       try {
-        setAppError("");
-
         const [statusData, dashboardData] = await Promise.all([
           getStatus(),
           getFinanceDashboard(),
@@ -57,7 +55,6 @@ export default function App() {
         setFinanceDashboard(dashboardData);
       } catch (error) {
         console.error(error);
-        setAppError(error.message || "No se pudo cargar J.A.R.V.I.S.");
       }
     }
 
@@ -68,6 +65,7 @@ export default function App() {
     await supabase.auth.signOut();
     setSession(null);
     setFinanceDashboard(null);
+    setStatus(null);
     setJarvisResponse(null);
   };
 
@@ -209,36 +207,29 @@ export default function App() {
           </button>
         </header>
 
-        {appError && (
-          <div className="hud-panel" style={{ marginBottom: "1rem" }}>
-            <strong>Error cargando datos</strong>
-            <p className="muted">{appError}</p>
-          </div>
-        )}
-
         {renderPage()}
 
-        <div className="command-bar">
-          <button
-            className={`voice-control ${isListening ? "listening" : ""}`}
-            onClick={handleVoiceInput}
-          >
-            <Mic size={20} />
-          </button>
-
+        <section className="jarvis-command-center">
           <input
             value={jarvisInput}
             onChange={(event) => setJarvisInput(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") handleAskJarvis();
             }}
-            placeholder="Habla o escribe una orden para J.A.R.V.I.S."
+            placeholder="¿En qué puedo ayudarte, Kenneth?"
           />
 
-          <button onClick={handleAskJarvis}>
+          <button className="command-button" onClick={handleAskJarvis}>
             <Send size={20} />
           </button>
-        </div>
+
+          <button
+            className={`voice-orb ${isListening ? "listening" : ""}`}
+            onClick={handleVoiceInput}
+          >
+            <Mic size={28} />
+          </button>
+        </section>
       </main>
     </div>
   );
