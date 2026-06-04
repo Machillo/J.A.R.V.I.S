@@ -2,6 +2,20 @@ from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id
 
 
+def _as_float(value, default: float = 0.0) -> float:
+    """Convierte valores de PostgreSQL NUMERIC/None a float seguro."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_sum(items: list[dict], key: str) -> float:
+    return sum(_as_float(item.get(key)) for item in items)
+
+
 def add_salary(amount: float, source: str):
     user_id = get_current_user_id()
 
@@ -519,18 +533,29 @@ def get_expenses():
 
 
 def get_financial_summary():
+    """
+    Resumen financiero tolerante a base vacía.
+    Si el usuario aún no configuró perfil laboral, ingresos, gastos o deudas,
+    devuelve ceros en vez de romper el dashboard.
+    """
     user_id = get_current_user_id()
 
     salary_projection = calculate_monthly_salary_projection()
 
     if salary_projection.get("status") == "ERROR":
-        projected_net_income = 0
-        projected_gross_income = 0
-        payroll_deductions_total = 0
+        projected_net_income = 0.0
+        projected_gross_income = 0.0
+        payroll_deductions_total = 0.0
     else:
-        projected_net_income = salary_projection["results"]["projected_net"]
-        projected_gross_income = salary_projection["adjustments"]["projected_gross"]
-        payroll_deductions_total = salary_projection["deductions"]["total_deductions"]
+        projected_net_income = _as_float(
+            salary_projection.get("results", {}).get("projected_net")
+        )
+        projected_gross_income = _as_float(
+            salary_projection.get("adjustments", {}).get("projected_gross")
+        )
+        payroll_deductions_total = _as_float(
+            salary_projection.get("deductions", {}).get("total_deductions")
+        )
 
     with get_connection() as conn:
         bonus_total = conn.execute(
@@ -608,27 +633,17 @@ def get_financial_summary():
             (user_id,)
         ).fetchone()["total"]
 
-        projected_net_income = float(projected_net_income or 0)
-        projected_gross_income = float(projected_gross_income or 0)
-        payroll_deductions_total = float(payroll_deductions_total or 0)
-
-        bonus_total = float(bonus_total or 0)
-        debt_total = float(debt_total or 0)
-        monthly_debt_payments = float(monthly_debt_payments or 0)
-        savings_total = float(savings_total or 0)
-        investments_total = float(investments_total or 0)
-        fixed_expenses_total = float(fixed_expenses_total or 0)
-        variable_expenses_total = float(variable_expenses_total or 0)
-        one_time_expenses_total = float(one_time_expenses_total or 0)
+    bonus_total = _as_float(bonus_total)
+    debt_total = _as_float(debt_total)
+    monthly_debt_payments = _as_float(monthly_debt_payments)
+    savings_total = _as_float(savings_total)
+    investments_total = _as_float(investments_total)
+    fixed_expenses_total = _as_float(fixed_expenses_total)
+    variable_expenses_total = _as_float(variable_expenses_total)
+    one_time_expenses_total = _as_float(one_time_expenses_total)
 
     total_income = projected_net_income + bonus_total
-
-    expenses_total = (
-        fixed_expenses_total
-        + variable_expenses_total
-        + one_time_expenses_total
-    )
-
+    expenses_total = fixed_expenses_total + variable_expenses_total + one_time_expenses_total
     available_cash = total_income - monthly_debt_payments - expenses_total
     net_worth = savings_total + investments_total - debt_total
 
@@ -638,27 +653,38 @@ def get_financial_summary():
             "payroll_deductions_total": payroll_deductions_total,
             "projected_net_income": projected_net_income,
             "bonus_total": bonus_total,
-            "total_income": total_income
+            "total_income": total_income,
+            "is_configured": projected_net_income > 0 or projected_gross_income > 0,
         },
         "debts": {
             "debt_total": debt_total,
-            "monthly_debt_payments": monthly_debt_payments
+            "monthly_debt_payments": monthly_debt_payments,
         },
         "assets": {
             "savings_total": savings_total,
-            "investments_total": investments_total
+            "investments_total": investments_total,
         },
         "expenses": {
             "fixed_expenses_total": fixed_expenses_total,
             "variable_expenses_total": variable_expenses_total,
             "one_time_expenses_total": one_time_expenses_total,
-            "expenses_total": expenses_total
+            "expenses_total": expenses_total,
         },
         "results": {
             "available_cash": available_cash,
-            "net_worth": net_worth
+            "net_worth": net_worth,
         },
-        "user_id": user_id
+        "setup": {
+            "has_income_profile": projected_net_income > 0 or projected_gross_income > 0,
+            "has_financial_data": any([
+                bonus_total,
+                debt_total,
+                savings_total,
+                investments_total,
+                expenses_total,
+            ]),
+        },
+        "user_id": user_id,
     }
 
 def check_spending(amount: float = 0):
@@ -1490,6 +1516,7 @@ def get_debt_payments(debt_id: int | None = None):
     return [dict(row) for row in rows]
 
 def get_net_worth_report():
+    """Reporte de patrimonio tolerante a listas vacías y NUMERIC de PostgreSQL."""
     user_id = get_current_user_id()
 
     with get_connection() as conn:
@@ -1529,83 +1556,63 @@ def get_net_worth_report():
     investments_list = [dict(row) for row in investments]
     debts_list = [dict(row) for row in debts]
 
-    savings_total = sum(item["amount"] for item in savings_list)
-    investments_total = sum(item["amount"] for item in investments_list)
+    savings_total = _safe_sum(savings_list, "amount")
+    investments_total = _safe_sum(investments_list, "amount")
     assets_total = savings_total + investments_total
 
-    debt_total = sum(item["remaining_amount"] for item in debts_list)
-    monthly_debt_payments = sum(item["monthly_payment"] for item in debts_list)
+    debt_total = _safe_sum(debts_list, "remaining_amount")
+    monthly_debt_payments = _safe_sum(debts_list, "monthly_payment")
 
     net_worth = assets_total - debt_total
 
     if net_worth < 0:
         status = "negative"
-        interpretation = (
-            "Tu patrimonio neto es negativo porque tus deudas registradas "
-            "son mayores que tus activos registrados."
-        )
+        interpretation = "Tu patrimonio neto es negativo porque tus deudas superan tus activos."
     elif net_worth == 0:
         status = "neutral"
-        interpretation = (
-            "Tu patrimonio neto está en cero. Tus activos registrados cubren "
-            "exactamente tus deudas registradas."
-        )
+        interpretation = "Todavía no hay suficiente información financiera registrada o tus activos cubren exactamente tus deudas."
     else:
         status = "positive"
-        interpretation = (
-            "Tu patrimonio neto es positivo. Tus activos registrados superan "
-            "tus deudas registradas."
-        )
+        interpretation = "Tu patrimonio neto es positivo. Tus activos registrados superan tus deudas."
 
-    if debt_total > 0 and assets_total == 0:
+    if not savings_list and not investments_list and not debts_list:
+        risk_level = "unknown"
+        priority = "Ingresar datos financieros iniciales para calcular tu estado real."
+    elif debt_total > 0 and assets_total == 0:
         risk_level = "high"
-        priority = (
-            "Registrar activos reales si existen y priorizar reducción de deuda."
-        )
+        priority = "Registrar activos reales si existen y priorizar reducción de deuda."
     elif debt_total > assets_total:
         risk_level = "medium_high"
-        priority = (
-            "Reducir deudas de mayor interés y aumentar activos líquidos."
-        )
+        priority = "Reducir deudas de mayor interés y aumentar activos líquidos."
     elif debt_total == 0:
         risk_level = "low"
-        priority = (
-            "Mantener activos, crear fondo de emergencia e invertir de forma ordenada."
-        )
+        priority = "Mantener activos, crear fondo de emergencia e invertir de forma ordenada."
     else:
         risk_level = "medium"
-        priority = (
-            "Mantener control de deuda y seguir aumentando patrimonio."
-        )
+        priority = "Mantener control de deuda y seguir aumentando patrimonio."
 
-    if assets_total > 0:
-        debt_to_asset_ratio = debt_total / assets_total
-    else:
-        debt_to_asset_ratio = None
-
+    debt_to_asset_ratio = debt_total / assets_total if assets_total > 0 else None
     highest_debt = debts_list[0] if debts_list else None
 
     recommendations = []
 
-    if assets_total == 0:
-        recommendations.append(
-            "Registrar ahorros, inversiones o saldos disponibles reales para que el patrimonio sea más preciso."
-        )
+    if not savings_list and not investments_list and not debts_list:
+        recommendations.append("Ingresar deudas, ahorros, inversiones e ingresos para activar el dashboard real.")
+    elif assets_total == 0:
+        recommendations.append("Registrar ahorros, inversiones o saldos disponibles reales para que el patrimonio sea más preciso.")
 
     if highest_debt:
         recommendations.append(
-            f"Priorizar seguimiento de la deuda más grande: {highest_debt['name']} por ₡{highest_debt['remaining_amount']:,.2f}."
+            f"Priorizar seguimiento de la deuda más grande: {highest_debt['name']} por ₡{_as_float(highest_debt.get('remaining_amount')):,.2f}."
         )
 
     high_interest_debts = [
         debt for debt in debts_list
-        if debt["interest_rate"] and debt["interest_rate"] >= 20
+        if _as_float(debt.get("interest_rate")) >= 20
     ]
 
     if high_interest_debts:
-        recommendations.append(
-            "Revisar deudas con interés alto para aplicar estrategia de avalancha o refinanciamiento."
-        )
+        recommendations.append("Revisar deudas con interés alto para aplicar avalancha o refinanciamiento.")
 
     if monthly_debt_payments > 0:
         recommendations.append(
@@ -1618,14 +1625,14 @@ def get_net_worth_report():
             "investments": investments_list,
             "savings_total": savings_total,
             "investments_total": investments_total,
-            "assets_total": assets_total
+            "assets_total": assets_total,
         },
         "liabilities": {
             "debts": debts_list,
             "debt_total": debt_total,
             "monthly_debt_payments": monthly_debt_payments,
             "highest_debt": highest_debt,
-            "high_interest_debts": high_interest_debts
+            "high_interest_debts": high_interest_debts,
         },
         "net_worth": net_worth,
         "status": status,
@@ -1634,12 +1641,18 @@ def get_net_worth_report():
         "priority": priority,
         "recommendations": recommendations,
         "ratios": {
-            "debt_to_asset_ratio": debt_to_asset_ratio
+            "debt_to_asset_ratio": debt_to_asset_ratio,
         },
-        "user_id": user_id
+        "setup": {
+            "has_assets": bool(savings_list or investments_list),
+            "has_debts": bool(debts_list),
+            "has_any_financial_data": bool(savings_list or investments_list or debts_list),
+        },
+        "user_id": user_id,
     }
 
 def get_user_status():
+    """Estado general del usuario, funcionando aunque la base esté vacía."""
     summary = get_financial_summary()
     net_worth = get_net_worth_report()
 
@@ -1669,66 +1682,66 @@ def get_user_status():
     goals_list = [dict(row) for row in goals]
 
     active_goals_count = len(goals_list)
-    critical_goals = [
-        goal for goal in goals_list
-        if goal["priority"] == "critical"
-    ]
+    critical_goals = [goal for goal in goals_list if goal.get("priority") == "critical"]
 
     total_goals_remaining = sum(
-        max(goal["target_amount"] - goal["current_amount"], 0)
+        max(_as_float(goal.get("target_amount")) - _as_float(goal.get("current_amount")), 0)
         for goal in goals_list
     )
 
     most_urgent_goal = goals_list[0] if goals_list else None
 
+    setup = {
+        "has_income_profile": summary.get("setup", {}).get("has_income_profile", False),
+        "has_financial_data": summary.get("setup", {}).get("has_financial_data", False),
+        "has_goals": bool(goals_list),
+        "is_empty": not summary.get("setup", {}).get("has_financial_data", False) and not goals_list,
+    }
+
     return {
         "income": {
             "monthly_net_income": summary["income"]["projected_net_income"],
-            "total_income": summary["income"]["total_income"]
+            "total_income": summary["income"]["total_income"],
         },
-
         "assets": {
             "savings": net_worth["assets"]["savings_total"],
             "investments": net_worth["assets"]["investments_total"],
             "assets_total": net_worth["assets"]["assets_total"],
-            "net_worth": net_worth["net_worth"]
+            "net_worth": net_worth["net_worth"],
         },
-
         "debts": {
             "total": net_worth["liabilities"]["debt_total"],
             "monthly_payments": net_worth["liabilities"]["monthly_debt_payments"],
             "highest_debt": (
                 net_worth["liabilities"]["highest_debt"]["name"]
-                if net_worth["liabilities"]["highest_debt"]
+                if net_worth["liabilities"].get("highest_debt")
                 else None
-            )
+            ),
         },
-
         "expenses": {
             "fixed_expenses": summary["expenses"]["fixed_expenses_total"],
-            "total_expenses": summary["expenses"]["expenses_total"]
+            "total_expenses": summary["expenses"]["expenses_total"],
         },
-
         "cashflow": {
-            "available_cash": summary["results"]["available_cash"]
+            "available_cash": summary["results"]["available_cash"],
         },
-
         "goals": {
             "active_goals_count": active_goals_count,
             "critical_goals_count": len(critical_goals),
             "total_goals_remaining": total_goals_remaining,
             "most_urgent_goal": most_urgent_goal,
-            "active_goals": goals_list
+            "active_goals": goals_list,
         },
-
         "financial_health": {
             "status": net_worth["status"],
-            "risk_level": net_worth["risk_level"]
+            "risk_level": net_worth["risk_level"],
         },
-        "user_id": user_id
+        "setup": setup,
+        "user_id": user_id,
     }
 
 def get_financial_dashboard():
+    """Dashboard seguro para producción y para base recién limpia."""
     user_status = get_user_status()
     net_worth = get_net_worth_report()
 
@@ -1738,86 +1751,86 @@ def get_financial_dashboard():
     cashflow = user_status["cashflow"]
     goals = user_status["goals"]
     financial_health = user_status["financial_health"]
+    setup = user_status.get("setup", {})
 
     alerts = []
     quick_recommendations = []
 
-    if financial_health["risk_level"] == "high":
+    if setup.get("is_empty"):
         alerts.append({
-            "type": "risk",
-            "level": "high",
-            "message": "Tu riesgo financiero está alto por patrimonio neto negativo y deudas activas."
+            "type": "setup",
+            "level": "info",
+            "message": "Aún no hay datos financieros registrados para este usuario. Ingresa ingresos, deudas, gastos, ahorros o inversiones para activar el dashboard."
         })
+        quick_recommendations.append("Configurar primero el perfil laboral o ingresar ingresos reales.")
+        quick_recommendations.append("Luego registrar deudas, gastos fijos, ahorros e inversiones.")
+    else:
+        if financial_health["risk_level"] in ["high", "medium_high"]:
+            alerts.append({
+                "type": "risk",
+                "level": "high" if financial_health["risk_level"] == "high" else "medium",
+                "message": "Tu riesgo financiero requiere seguimiento por deudas o patrimonio negativo."
+            })
 
-    if cashflow["available_cash"] < 100000:
-        alerts.append({
-            "type": "cashflow",
-            "level": "medium",
-            "message": "Tu efectivo disponible estimado es menor a ₡100,000."
-        })
+        if cashflow["available_cash"] < 100000:
+            alerts.append({
+                "type": "cashflow",
+                "level": "medium",
+                "message": "Tu efectivo disponible estimado es menor a ₡100,000."
+            })
 
-    if goals["critical_goals_count"] > 0:
-        alerts.append({
-            "type": "goal",
-            "level": "high",
-            "message": "Tienes una meta crítica activa que requiere seguimiento."
-        })
+        if goals["critical_goals_count"] > 0:
+            alerts.append({
+                "type": "goal",
+                "level": "high",
+                "message": "Tienes una meta crítica activa que requiere seguimiento."
+            })
 
-    if debts["monthly_payments"] > 0:
-        quick_recommendations.append(
-            "Mantener pagos mínimos y priorizar deudas con mayor interés."
-        )
+        if debts["monthly_payments"] > 0:
+            quick_recommendations.append("Mantener pagos mínimos y priorizar deudas con mayor interés.")
 
-    if goals["most_urgent_goal"]:
-        quick_recommendations.append(
-            f"Revisar progreso de la meta: {goals['most_urgent_goal']['name']}."
-        )
+        if goals["most_urgent_goal"]:
+            quick_recommendations.append(f"Revisar progreso de la meta: {goals['most_urgent_goal']['name']}.")
 
-    if cashflow["available_cash"] > 0:
-        quick_recommendations.append(
-            "Distribuir el disponible entre meta crítica, deuda e imprevistos."
-        )
+        if cashflow["available_cash"] > 0:
+            quick_recommendations.append("Distribuir el disponible entre meta crítica, deuda e imprevistos.")
 
     dashboard_cards = [
         {
             "title": "Ingreso mensual neto",
             "value": income["monthly_net_income"],
             "type": "currency",
-            "status": "info"
+            "status": "info" if setup.get("has_income_profile") else "empty"
         },
         {
             "title": "Disponible estimado",
             "value": cashflow["available_cash"],
             "type": "currency",
-            "status": "warning" if cashflow["available_cash"] < 100000 else "good"
+            "status": "empty" if setup.get("is_empty") else ("warning" if cashflow["available_cash"] < 100000 else "good")
         },
         {
             "title": "Gastos fijos",
             "value": expenses["fixed_expenses"],
             "type": "currency",
-            "status": "info"
+            "status": "empty" if expenses["fixed_expenses"] == 0 else "info"
         },
         {
             "title": "Deuda total",
             "value": debts["total"],
             "type": "currency",
-            "status": "danger"
+            "status": "empty" if debts["total"] == 0 else "danger"
         },
         {
             "title": "Patrimonio neto",
             "value": user_status["assets"]["net_worth"],
             "type": "currency",
-            "status": "danger" if user_status["assets"]["net_worth"] < 0 else "good"
+            "status": "empty" if setup.get("is_empty") else ("danger" if user_status["assets"]["net_worth"] < 0 else "good")
         },
         {
             "title": "Meta principal",
-            "value": (
-                goals["most_urgent_goal"]["name"]
-                if goals["most_urgent_goal"]
-                else "Sin meta activa"
-            ),
+            "value": goals["most_urgent_goal"]["name"] if goals["most_urgent_goal"] else "Sin meta activa",
             "type": "text",
-            "status": "warning" if goals["most_urgent_goal"] else "good"
+            "status": "warning" if goals["most_urgent_goal"] else "empty"
         }
     ]
 
@@ -1835,6 +1848,9 @@ def get_financial_dashboard():
             "debts": debts,
             "assets": user_status["assets"],
             "goals": goals,
-            "financial_health": financial_health
-        }
+            "financial_health": financial_health,
+            "setup": setup,
+        },
+        "status": "empty" if setup.get("is_empty") else "ok",
+        "user_id": user_status.get("user_id"),
     }
