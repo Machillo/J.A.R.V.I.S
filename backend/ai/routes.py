@@ -13,13 +13,3 @@ router = APIRouter(
 def jarvis_chat(request: JarvisChatRequest):
     return process_message(request.message)
 
-@router.post("/test-intent")
-def test_intent(request: JarvisChatRequest):
-    from backend.ai.intent_router import detect_intent
-
-    result = detect_intent(request.message)
-
-    return {
-        "message_received": request.message,
-        "intent_result": result
-    }
