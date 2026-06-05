@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any
 
+from backend.ai.gemini_client import ask_gemini
 from backend.ai.preferences import get_sports_preferences, update_sports_preferences
 from backend.integrations.internet_search import internet_search
 
@@ -36,12 +38,7 @@ DEFAULT_OWNER_SPORTS = {
 
 
 def ensure_owner_sports_preferences() -> dict[str, Any]:
-    """Deja guardadas las preferencias deportivas base del owner.
-
-    No consume internet. Solo asegura que el sistema conozca qué deportes/equipos seguir.
-    """
     current = get_sports_preferences() or {}
-    # Mantiene lo que ya exista, pero rellena lo faltante con tu configuración.
     merged = {
         **DEFAULT_OWNER_SPORTS,
         **current,
@@ -52,75 +49,94 @@ def ensure_owner_sports_preferences() -> dict[str, Any]:
     return update_sports_preferences(merged)
 
 
-def _result_lines(title: str, search_result: dict[str, Any]) -> list[str]:
-    status = search_result.get("status")
-    if status != "OK":
-        return [f"{title}: {search_result.get('message', 'No pude consultar esta sección.')}"]
-
-    rows = [f"{title}:"]
-    for item in (search_result.get("results") or [])[:3]:
-        item_title = item.get("title") or "Resultado"
-        snippet = item.get("snippet") or ""
-        link = item.get("link") or ""
-        rows.append(f"- {item_title}\n  {snippet}\n  {link}".rstrip())
-    return rows
+def _normalize_request(scope: str | dict[str, Any] | None) -> dict[str, Any]:
+    if isinstance(scope, dict):
+        return {
+            "scope": str(scope.get("scope") or "all").lower(),
+            "query_type": str(scope.get("query_type") or "next").lower(),
+            "query": str(scope.get("query") or "").strip(),
+        }
+    return {"scope": str(scope or "all").lower(), "query_type": "next", "query": ""}
 
 
-def get_sports_calendar_summary(scope: str = "all") -> dict[str, Any]:
-    """Busca calendario deportivo actual usando internet real.
+def _build_query(scope: str, query_type: str, user_query: str, prefs: dict[str, Any]) -> str:
+    base_suffix = "hora Costa Rica fecha próximo evento confirmado"
+    if user_query:
+        # Si el usuario preguntó algo concreto, respetamos eso y solo agregamos hora tica.
+        return f"{user_query} {base_suffix}"
 
-    Importante: no hace búsquedas cada vez que el usuario habla normal. Solo corre cuando
-    el intent es sports_schedule o cuando el owner pide actualizar/buscar deportes.
-    """
-    prefs = ensure_owner_sports_preferences().get("value") or DEFAULT_OWNER_SPORTS
-    now_cr = datetime.now(CR_TZ).strftime("%Y-%m-%d %H:%M Costa Rica")
+    if scope in {"f1", "formula1", "formula 1"}:
+        if query_type == "radar":
+            return "próxima Fórmula 1 sprint clasificación carrera horario Costa Rica"
+        return "próxima carrera Fórmula 1 fecha hora Costa Rica"
 
-    queries: list[tuple[str, str]] = []
+    if scope == "ufc":
+        return "próxima UFC cartelera principal main card fecha hora Costa Rica"
 
-    normalized_scope = (scope or "all").lower()
-
-    if normalized_scope in {"all", "f1", "formula1", "formula 1"} and (prefs.get("f1") or {}).get("enabled", True):
-        queries.append((
-            "F1",
-            "calendario Fórmula 1 próximo GP sprint clasificación carrera hora Costa Rica 2026",
-        ))
-
-    if normalized_scope in {"all", "ufc"} and (prefs.get("ufc") or {}).get("enabled", True):
-        queries.append((
-            "UFC",
-            "UFC próxima cartelera principal main card hora Costa Rica peleas",
-        ))
-
-    if normalized_scope in {"all", "football", "futbol", "fútbol"} and (prefs.get("football") or {}).get("enabled", True):
+    if scope in {"football", "futbol", "fútbol"}:
         football = prefs.get("football") or {}
         teams = ", ".join(football.get("teams") or DEFAULT_OWNER_SPORTS["football"]["teams"])
         competitions = ", ".join(football.get("competitions") or DEFAULT_OWNER_SPORTS["football"]["competitions"])
-        queries.append((
-            "Fútbol",
-            f"próximos partidos hora Costa Rica {teams} {competitions}",
-        ))
+        if query_type == "radar":
+            return f"próximos partidos {teams} {competitions} fecha hora Costa Rica"
+        return f"próximo partido {teams} {competitions} fecha hora Costa Rica"
 
-    sections = []
-    raw_results = []
-    for label, query in queries[:4]:
-        result = internet_search(query)
-        raw_results.append({"label": label, "query": query, "result": result})
-        sections.extend(_result_lines(label, result))
+    return "próximo evento deportivo F1 UFC fútbol fecha hora Costa Rica"
 
-    if not sections:
-        message = "Señor, no hay deportes activos en sus preferencias."
-    else:
-        message = (
-            f"Señor, actualicé su radar deportivo con hora tica como referencia ({now_cr}).\n\n"
-            + "\n\n".join(sections)
-            + "\n\nCuando activemos Web Push, usaré esta base para enviarle avisos aunque no tenga J.A.R.V.I.S. abierto."
-        )
+
+def _concise_sports_answer(scope: str, query_type: str, user_query: str, search_result: dict[str, Any]) -> str:
+    if search_result.get("status") != "OK":
+        return search_result.get("message", "Señor, no pude consultar el calendario deportivo.")
+
+    results = (search_result.get("results") or [])[:5]
+    if not results:
+        return "Señor, no encontré un resultado deportivo claro."
+
+    now_cr = datetime.now(CR_TZ).strftime("%Y-%m-%d %H:%M Costa Rica")
+    prompt = f"""
+Eres J.A.R.V.I.S. Responde SOLO lo que el usuario pidió sobre deportes.
+No mandes calendarios completos salvo que el usuario pida "calendario" o "radar".
+Usa hora de Costa Rica si aparece o conviértela si el resultado la trae clara.
+Si no hay fecha/hora clara, dilo.
+
+Tipo: {scope}
+Modo: {query_type}
+Pregunta del usuario: {user_query or 'próximo evento'}
+Hora actual Costa Rica: {now_cr}
+Resultados web:
+{json.dumps(results, ensure_ascii=False, indent=2)}
+
+Respuesta máxima:
+- Si preguntó por próxima carrera/pelea/partido: 1 a 3 líneas.
+- Si pidió calendario/radar: máximo 5 eventos.
+- Tono: "Señor,".
+"""
+    ai = ask_gemini(prompt, route="sports_answer")
+    if ai.get("status") == "OK" and (ai.get("text") or "").strip():
+        return ai["text"].strip()
+
+    first = results[0]
+    return f"Señor, encontré esto: {first.get('title', 'Resultado')}. {first.get('snippet', '')}".strip()
+
+
+def get_sports_calendar_summary(scope: str | dict[str, Any] = "all") -> dict[str, Any]:
+    prefs = ensure_owner_sports_preferences().get("value") or DEFAULT_OWNER_SPORTS
+    request = _normalize_request(scope)
+    normalized_scope = request["scope"]
+    query_type = request["query_type"]
+    user_query = request["query"]
+
+    query = _build_query(normalized_scope, query_type, user_query, prefs)
+    search_result = internet_search(query)
+    message = _concise_sports_answer(normalized_scope, query_type, user_query, search_result)
 
     return {
-        "status": "OK",
+        "status": search_result.get("status", "OK"),
         "scope": normalized_scope,
+        "query_type": query_type,
         "timezone": "America/Costa_Rica",
         "preferences": prefs,
-        "searches": raw_results,
+        "query": query,
+        "search": search_result,
         "message": message,
     }
