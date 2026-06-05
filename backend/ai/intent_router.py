@@ -21,6 +21,7 @@ ACTION_TYPES = [
     "import_monthly_statement",
 ]
 
+
 READ_INTENTS = [
     "highest_debt",
     "lowest_debt",
@@ -30,8 +31,12 @@ READ_INTENTS = [
     "goal_status",
     "spending_habits",
     "advisor_summary",
+    "internet_search",
+    "create_calendar_event",
+    "calendar_summary",
     "unknown",
 ]
+
 
 AVAILABLE_INTENTS = ACTION_TYPES + READ_INTENTS
 
@@ -63,6 +68,38 @@ def _contains_any(text: str, words: list[str]) -> bool:
 
 def _fallback_detect(user_message: str) -> dict[str, Any]:
     text = user_message.lower().strip()
+
+    # 1) Internet explícito: nunca debe caer al motor financiero.
+    internet_words = [
+        "busca en internet", "buscar en internet", "buscame en internet", "búscame en internet",
+        "investiga en internet", "consulta internet", "en la web", "googlea", "busca online",
+        "buscar online", "noticias", "precio actual", "calendario actual", "resultado de",
+    ]
+    if _contains_any(text, internet_words) or text.startswith(("busca ", "buscar ", "investiga ")):
+        return {
+            "intent": "internet_search",
+            "action_type": None,
+            "entity": user_message,
+            "confidence": 0.95,
+            "source": "keyword_fallback",
+        }
+
+    # 2) Calendario / recordatorios: se evalúa antes de deudas/gastos para evitar falsos positivos.
+    calendar_words = [
+        "calendario", "agenda", "agendá", "agendar", "recordame", "recuérdame",
+        "recuerdame", "recordatorio", "compromiso", "cita", "reunión", "reunion",
+        "tengo que", "tengo cita", "tengo un compromiso", "tal día", "tal dia",
+    ]
+    if _contains_any(text, calendar_words):
+        if any(word in text for word in ["qué tengo", "que tengo", "mis compromisos", "mi agenda", "próximos", "proximos"]):
+            return {"intent": "calendar_summary", "entity": None, "confidence": 0.9, "source": "keyword_fallback"}
+        return {
+            "intent": "create_calendar_event",
+            "action_type": None,
+            "entity": user_message,
+            "confidence": 0.9,
+            "source": "keyword_fallback",
+        }
 
     import_words = [
         "estado de cuenta",
@@ -152,6 +189,9 @@ Reglas:
 - Si pregunta por estado financiero general, usa user_status.
 - Si pregunta por patrimonio, usa net_worth.
 - Si pregunta por hábitos o gastos, usa spending_habits.
+- Si pide buscar en internet o información externa actual, usa internet_search.
+- Si quiere agendar, recordar o guardar un compromiso/cita, usa create_calendar_event.
+- Si pregunta por su agenda/calendario, usa calendar_summary.
 
 Formato:
 {{
