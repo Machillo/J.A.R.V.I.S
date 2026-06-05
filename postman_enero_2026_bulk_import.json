@@ -1,0 +1,324 @@
+{
+  "transactions": [
+    {
+      "transaction_date": "2026-01-08",
+      "transaction_type": "income",
+      "category": "Salario",
+      "description": "Planilla 28/12/2025 - 03/01/2026",
+      "amount": 72008.06,
+      "account": "BAC Cuenta Principal",
+      "source": "bulk_import_postman",
+      "notes": ""
+    },
+    {
+      "transaction_date": "2026-01-15",
+      "transaction_type": "income",
+      "category": "Salario",
+      "description": "Planilla 04/01/2026 - 10/01/2026",
+      "amount": 133075.69,
+      "account": "BAC Cuenta Principal",
+      "source": "bulk_import_postman",
+      "notes": ""
+    },
+    {
+      "transaction_date": "2026-01-22",
+      "transaction_type": "income",
+      "category": "Salario",
+      "description": "Planilla 11/01/2026 - 17/01/2026",
+      "amount": 95006.67,
+      "account": "BAC Cuenta Principal",
+      "source": "bulk_import_postman",
+      "notes": ""
+    },
+    {
+      "transaction_date": "2026-01-29",
+      "transaction_type": "income",
+      "category": "Salario",
+      "description": "Planilla 18/01/2026 - 24/01/2026",
+      "amount": 120002.76,
+      "account": "BAC Cuenta Principal",
+      "source": "bulk_import_postman",
+      "notes": ""
+    },
+    {
+      "transaction_date": "2026-01-31",
+      "transaction_type": "income",
+      "category": "Inversión",
+      "description": "Capitalización intereses MultiMoney",
+      "amount": 527.04,
+      "account": "MultiMoney Smart Colones",
+      "source": "bulk_import_postman",
+      "notes": "Interés capitalizado del periodo enero 2026"
+    },
+    {
+      "transaction_date": "2026-01-02",
+      "transaction_type": "expense",
+      "category": "Entretenimiento",
+      "description": "Google Gossip Harbor + IVA",
+      "amount": 1695.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Videojuegos"
+    },
+    {
+      "transaction_date": "2026-01-04",
+      "transaction_type": "expense",
+      "category": "Salud",
+      "description": "Novo Fit Club",
+      "amount": 23450.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Deporte / gimnasio"
+    },
+    {
+      "transaction_date": "2026-01-04",
+      "transaction_type": "expense",
+      "category": "Salud",
+      "description": "Uno Sport Box",
+      "amount": 32399.99,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Deporte / artículos de box"
+    },
+    {
+      "transaction_date": "2026-01-04",
+      "transaction_type": "expense",
+      "category": "Entretenimiento",
+      "description": "Google Gossip Harbor + IVA",
+      "amount": 3051.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Videojuegos"
+    },
+    {
+      "transaction_date": "2026-01-05",
+      "transaction_type": "expense",
+      "category": "Entretenimiento",
+      "description": "Google Budge Smart SP + IVA",
+      "amount": 4518.87,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Videojuegos / app"
+    },
+    {
+      "transaction_date": "2026-01-06",
+      "transaction_type": "expense",
+      "category": "Compras",
+      "description": "TEMU cuota 01/10",
+      "amount": 6715.1,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": ""
+    },
+    {
+      "transaction_date": "2026-01-08",
+      "transaction_type": "expense",
+      "category": "Entretenimiento",
+      "description": "Crunchyroll + IVA",
+      "amount": 3390.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Streaming"
+    },
+    {
+      "transaction_date": "2026-01-11",
+      "transaction_type": "expense",
+      "category": "Restaurante",
+      "description": "Granizados",
+      "amount": 1500.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": ""
+    },
+    {
+      "transaction_date": "2026-01-12",
+      "transaction_type": "expense",
+      "category": "Entretenimiento",
+      "description": "Google Gossip Harbor + IVA",
+      "amount": 2260.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Videojuegos"
+    },
+    {
+      "transaction_date": "2026-01-16",
+      "transaction_type": "expense",
+      "category": "Entretenimiento",
+      "description": "Google Gossip Harbor + IVA",
+      "amount": 2260.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Videojuegos"
+    },
+    {
+      "transaction_date": "2026-01-16",
+      "transaction_type": "expense",
+      "category": "Restaurante",
+      "description": "Uber Eats",
+      "amount": 6649.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": ""
+    },
+    {
+      "transaction_date": "2026-01-17",
+      "transaction_type": "expense",
+      "category": "Restaurante",
+      "description": "Uber Eats",
+      "amount": 6930.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": ""
+    },
+    {
+      "transaction_date": "2026-01-18",
+      "transaction_type": "expense",
+      "category": "Entretenimiento",
+      "description": "Google Gossip Harbor + IVA",
+      "amount": 2260.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Videojuegos"
+    },
+    {
+      "transaction_date": "2026-01-18",
+      "transaction_type": "expense",
+      "category": "Servicios",
+      "description": "Arreglo eléctrico / Luz",
+      "amount": 66666.0,
+      "account": "MultiMoney Smart Colones",
+      "source": "bulk_import_postman",
+      "notes": "Confirmado: arreglo en electricidad"
+    },
+    {
+      "transaction_date": "2026-01-19",
+      "transaction_type": "expense",
+      "category": "Transporte",
+      "description": "Uber Rides",
+      "amount": 7300.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": ""
+    },
+    {
+      "transaction_date": "2026-01-19",
+      "transaction_type": "expense",
+      "category": "Internet",
+      "description": "Google One + IVA",
+      "amount": 1231.7,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Suscripción almacenamiento"
+    },
+    {
+      "transaction_date": "2026-01-20",
+      "transaction_type": "expense",
+      "category": "Entretenimiento",
+      "description": "Yousician + IVA",
+      "amount": 6893.0,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Subcategoría: Suscripción / aprendizaje"
+    },
+    {
+      "transaction_date": "2026-01-21",
+      "transaction_type": "expense",
+      "category": "Otros préstamos",
+      "description": "Marchamo cuota 02/12",
+      "amount": 10938.3,
+      "account": "Tarjeta BAC 3131",
+      "source": "bulk_import_postman",
+      "notes": "Pago de cuota"
+    },
+    {
+      "transaction_date": "2026-01-28",
+      "transaction_type": "expense",
+      "category": "Vivienda",
+      "description": "Aporte mensual casa",
+      "amount": 100000.0,
+      "account": "MultiMoney Smart Colones",
+      "source": "bulk_import_postman",
+      "notes": "Gasto fijo mensual confirmado"
+    },
+    {
+      "transaction_date": "2026-01-08",
+      "transaction_type": "expense",
+      "category": "Familiar",
+      "description": "Pago préstamo papá",
+      "amount": 55575.11,
+      "account": "MultiMoney Smart Colones",
+      "source": "bulk_import_postman",
+      "notes": "Pago de deuda familiar"
+    },
+    {
+      "transaction_date": "2026-01-29",
+      "transaction_type": "expense",
+      "category": "Familiar",
+      "description": "Abono al préstamo papá",
+      "amount": 208000.0,
+      "account": "MultiMoney Smart Colones",
+      "source": "bulk_import_postman",
+      "notes": "Abono a deuda familiar"
+    },
+    {
+      "transaction_date": "2026-01-01",
+      "transaction_type": "transfer",
+      "category": "Otros",
+      "description": "Transferencia a MultiMoney inversión Smart",
+      "amount": 30215.0,
+      "account": "BAC secundaria / MultiMoney",
+      "source": "bulk_import_postman",
+      "notes": "Inversión Vista Smart"
+    },
+    {
+      "transaction_date": "2026-01-03",
+      "transaction_type": "transfer",
+      "category": "Otros",
+      "description": "Transferencia a MultiMoney inversión Smart",
+      "amount": 8083.28,
+      "account": "BAC principal / MultiMoney",
+      "source": "bulk_import_postman",
+      "notes": "Inversión Vista Smart"
+    },
+    {
+      "transaction_date": "2026-01-08",
+      "transaction_type": "transfer",
+      "category": "Otros",
+      "description": "Transferencia a MultiMoney inversión Smart",
+      "amount": 72000.0,
+      "account": "BAC principal / MultiMoney",
+      "source": "bulk_import_postman",
+      "notes": "Inversión Vista Smart"
+    },
+    {
+      "transaction_date": "2026-01-15",
+      "transaction_type": "transfer",
+      "category": "Otros",
+      "description": "Transferencia a MultiMoney inversión Smart",
+      "amount": 133105.53,
+      "account": "BAC principal / MultiMoney",
+      "source": "bulk_import_postman",
+      "notes": "Inversión Vista Smart"
+    },
+    {
+      "transaction_date": "2026-01-20",
+      "transaction_type": "transfer",
+      "category": "Otros",
+      "description": "Transferencia a MultiMoney inversión Smart",
+      "amount": 8900.18,
+      "account": "BAC secundaria / MultiMoney",
+      "source": "bulk_import_postman",
+      "notes": "Inversión Vista Smart"
+    },
+    {
+      "transaction_date": "2026-01-22",
+      "transaction_type": "transfer",
+      "category": "Otros",
+      "description": "Transferencia a MultiMoney inversión Smart",
+      "amount": 95006.67,
+      "account": "BAC principal / MultiMoney",
+      "source": "bulk_import_postman",
+      "notes": "Inversión Vista Smart"
+    }
+  ]
+}

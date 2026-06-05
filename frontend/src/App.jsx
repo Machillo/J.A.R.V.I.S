@@ -148,6 +148,13 @@ export default function App() {
     };
   };
 
+  const userName =
+    session?.user?.user_metadata?.full_name ||
+    session?.user?.user_metadata?.display_name ||
+    session?.user?.user_metadata?.name ||
+    session?.user?.email?.split("@")[0] ||
+    "usuario";
+
   if (!sessionLoaded) {
     return (
       <div className="jarvis-app">
@@ -224,7 +231,7 @@ export default function App() {
             onKeyDown={(event) => {
               if (event.key === "Enter") handleAskJarvis();
             }}
-            placeholder="¿En qué puedo ayudarte, Kenneth?"
+            placeholder={`¿En qué puedo ayudarte, ${userName}?`}
           />
 
           <button className="command-button" onClick={handleAskJarvis}>
