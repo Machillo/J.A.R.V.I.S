@@ -7,15 +7,6 @@ import {
   Target,
   Wallet,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { getTransactionAnalysis } from "../services/jarvisApi";
 
 const formatCRC = (value = 0) =>
@@ -111,6 +102,101 @@ function EmptyPanel({ title, description }) {
   );
 }
 
+const formatMonthLabel = (month = "") => {
+  const parts = String(month).split("-");
+  if (parts.length !== 2) return month || "--";
+
+  const [, monthNumber] = parts;
+  return monthNumber;
+};
+
+function MonthlyFlowChart({ data = [] }) {
+  const rows = data.slice(-6);
+  const maxValue = Math.max(
+    ...rows.flatMap((item) => [
+      Number(item.income) || 0,
+      Number(item.loans) || 0,
+      Number(item.outflow) || 0,
+    ]),
+    1
+  );
+
+  if (rows.length === 0) {
+    return (
+      <EmptyPanel
+        title="Sin movimientos"
+        description="Cuando haya transacciones, el gráfico se activará."
+      />
+    );
+  }
+
+  return (
+    <div className="jarvis-flow-chart">
+      {rows.map((item) => {
+        const incomeHeight = Math.max((Number(item.income) / maxValue) * 100, 2);
+        const loanHeight = Math.max((Number(item.loans) / maxValue) * 100, 0);
+        const outflowHeight = Math.max((Number(item.outflow) / maxValue) * 100, 2);
+
+        return (
+          <div className="flow-month" key={item.month}>
+            <div className="flow-bars">
+              <span
+                className="flow-bar income"
+                style={{ height: `${incomeHeight}%` }}
+                title={`Ingresos ${formatCRC(item.income)}`}
+              />
+              <span
+                className="flow-bar loans"
+                style={{ height: `${loanHeight}%` }}
+                title={`Préstamos ${formatCRC(item.loans)}`}
+              />
+              <span
+                className="flow-bar outflow"
+                style={{ height: `${outflowHeight}%` }}
+                title={`Gastos/deuda ${formatCRC(item.outflow)}`}
+              />
+            </div>
+            <strong>{formatMonthLabel(item.month)}</strong>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CategoryBars({ data = [] }) {
+  const maxValue = Math.max(...data.map((item) => Number(item.total) || 0), 1);
+
+  if (data.length === 0) {
+    return (
+      <EmptyPanel
+        title="Sin categorías todavía"
+        description="Cuando importemos enero a mayo, vas a ver en qué se va el dinero."
+      />
+    );
+  }
+
+  return (
+    <div className="category-bars">
+      {data.map((item) => {
+        const width = Math.max((Number(item.total) / maxValue) * 100, 4);
+
+        return (
+          <div className="category-row" key={item.category}>
+            <div className="category-row-head">
+              <span>{item.category}</span>
+              <strong>{formatCRC(item.total)}</strong>
+            </div>
+            <div className="category-track">
+              <span style={{ width: `${width}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Finance({
   dashboard,
   loading = false,
@@ -118,24 +204,17 @@ export default function Finance({
   onRefresh,
 }) {
   const [transactionAnalysis, setTransactionAnalysis] = useState(null);
-  const [transactionAnalysisError, setTransactionAnalysisError] = useState("");
 
   useEffect(() => {
     let active = true;
 
     getTransactionAnalysis()
       .then((data) => {
-        if (active) {
-          setTransactionAnalysis(data);
-          setTransactionAnalysisError("");
-        }
+        if (active) setTransactionAnalysis(data);
       })
       .catch((analysisError) => {
         console.error(analysisError);
-        if (active) {
-          setTransactionAnalysis(null);
-          setTransactionAnalysisError("No pude leer el análisis de transacciones.");
-        }
+        if (active) setTransactionAnalysis(null);
       });
 
     return () => {
@@ -152,44 +231,43 @@ export default function Finance({
   const recommendations = dashboard?.quick_recommendations || [];
   const goal = summary?.goals?.most_urgent_goal;
 
-  const txSummary = transactionAnalysis?.summary || {};
-  const latestMonth = transactionAnalysis?.latest_month || {};
-  const monthlyFlow = transactionAnalysis?.monthly_flow || [];
-
   const income = Number(summary?.income?.monthly_net_income) || 0;
-  const latestIncome = Number(latestMonth?.income) || 0;
-  const latestLoans = Number(latestMonth?.loans_received) || 0;
-  const latestExpenses = Number(latestMonth?.expenses) || 0;
-  const latestDebtPayments = Number(latestMonth?.debt_payments) || 0;
-
-  const totalIncome = latestIncome || Number(summary?.income?.total_income) || income;
-  const expensesTotal = latestExpenses || Number(summary?.expenses?.total_expenses) || 0;
+  const totalIncome = Number(summary?.income?.total_income) || income;
+  const expensesTotal = Number(summary?.expenses?.total_expenses) || 0;
   const fixedExpenses = Number(summary?.expenses?.fixed_expenses) || 0;
-  const importedCashflow = totalIncome + latestLoans - expensesTotal - latestDebtPayments;
-  const available = monthlyFlow.length > 0
-    ? importedCashflow
-    : Number(summary?.cashflow?.available_cash) || 0;
+  const available = Number(summary?.cashflow?.available_cash) || 0;
   const debtTotal = Number(summary?.debts?.total) || 0;
-  const monthlyDebtPayments = latestDebtPayments || 0;
+  const monthlyDebtPayments = Number(summary?.debts?.monthly_payments) || 0;
   const netWorth = Number(summary?.assets?.net_worth) || 0;
   const assetsTotal = Number(summary?.assets?.assets_total) || 0;
-  const historicalImported = Number(txSummary?.net_cashflow) || 0;
 
   const goalProgress = goal?.target_amount
     ? clampPercent((Number(goal.current_amount) / Number(goal.target_amount)) * 100)
     : 0;
 
-  const debtProgress =
-    totalIncome + latestLoans > 0
-      ? clampPercent((monthlyDebtPayments / (totalIncome + latestLoans)) * 100)
-      : 0;
+  const monthlyFlowData = useMemo(() => {
+    return (transactionAnalysis?.monthly_flow || []).map((item) => ({
+      ...item,
+      income: Number(item.income) || 0,
+      loans: Number(item.loans) || 0,
+      expenses: Number(item.expenses) || 0,
+      debt_payments: Number(item.debt_payments) || 0,
+      outflow: Number(item.outflow) || 0,
+      net_flow: Number(item.net_flow) || 0,
+    }));
+  }, [transactionAnalysis]);
 
-  const monthlyChartData = monthlyFlow.map((item) => ({
-    name: String(item.month || "").replace("2026-", ""),
-    ingresos: Number(item.income) || 0,
-    prestamos: Number(item.loans_received) || 0,
-    gastos: (Number(item.expenses) || 0) + (Number(item.debt_payments) || 0),
-  }));
+  const latestFlow = monthlyFlowData[monthlyFlowData.length - 1] || null;
+  const lastMonthIncome = latestFlow?.income ?? totalIncome;
+  const lastMonthLoans = latestFlow?.loans ?? 0;
+  const lastMonthExpenses = latestFlow?.expenses ?? expensesTotal;
+  const lastMonthDebtPayments = latestFlow?.debt_payments ?? monthlyDebtPayments;
+  const lastMonthAvailable = latestFlow
+    ? latestFlow.net_flow
+    : available;
+
+  const debtProgress =
+    lastMonthIncome > 0 ? clampPercent((lastMonthDebtPayments / lastMonthIncome) * 100) : 0;
 
   const categoryChartData = useMemo(() => {
     return (transactionAnalysis?.top_expense_categories || []).map((item) => ({
@@ -253,7 +331,7 @@ export default function Finance({
           <div className="ring-row">
             <ProgressRing value={debtProgress} color="red" />
             <div>
-              <h2>{formatCRC(monthlyDebtPayments)}</h2>
+              <h2>{formatCRC(lastMonthDebtPayments)}</h2>
               <p>Pagos registrados en el último mes importado</p>
             </div>
           </div>
@@ -265,97 +343,59 @@ export default function Finance({
             <Wallet size={18} />
           </div>
 
-          <h2 className={available < 0 ? "danger-text" : ""}>{formatCRC(available)}</h2>
+          <h2 className={lastMonthAvailable < 0 ? "danger-text" : ""}>{formatCRC(lastMonthAvailable)}</h2>
           <p>Ingreso + préstamos - gastos - pagos del último mes</p>
         </article>
       </div>
 
-      <div className="finance-detail-grid">
-        <article className="hud-card compact metric-card">
+      <div className="finance-kpi-strip">
+        <article className="finance-mini-kpi">
           <span>Ingreso del último mes</span>
-          <strong>{formatCRC(totalIncome)}</strong>
+          <strong>{formatCRC(lastMonthIncome)}</strong>
         </article>
-        <article className="hud-card compact metric-card">
+        <article className="finance-mini-kpi">
           <span>Préstamos recibidos</span>
-          <strong>{formatCRC(latestLoans)}</strong>
+          <strong>{formatCRC(lastMonthLoans)}</strong>
         </article>
-        <article className="hud-card compact metric-card">
+        <article className="finance-mini-kpi">
           <span>Gastos del último mes</span>
-          <strong>{formatCRC(expensesTotal)}</strong>
+          <strong>{formatCRC(lastMonthExpenses)}</strong>
         </article>
-        <article className="hud-card compact metric-card">
+        <article className="finance-mini-kpi">
           <span>Histórico importado</span>
-          <strong>{formatCRC(historicalImported)}</strong>
+          <strong>{formatCRC(transactionAnalysis?.summary?.net_from_transactions || 0)}</strong>
         </article>
       </div>
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid finance-dashboard-grid">
         <article className="hud-panel large">
           <div className="panel-title">
             <div>
-              <h3>FLUJO MENSUAL</h3>
-              <p>Ingresos, préstamos, gastos y pagos de deuda importados</p>
+              <h3>INGRESOS VS GASTOS</h3>
+              <p>Datos reales registrados actualmente</p>
             </div>
             <span>REAL</span>
           </div>
 
-          {monthlyChartData.length === 0 ? (
-            <EmptyPanel
-              title="Sin movimientos"
-              description="Cuando haya transacciones importadas, el gráfico se activará."
-            />
-          ) : (
-            <>
-              <div className="chart-shell finance-chart">
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={monthlyChartData} margin={{ top: 16, right: 8, left: -12, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" />
-                    <YAxis tickFormatter={shortCRC} width={58} />
-                    <Tooltip formatter={(value) => formatCRC(value)} />
-                    <Bar dataKey="ingresos" name="Ingresos" fill="var(--cyan)" radius={[8, 8, 0, 0]} />
-                    <Bar dataKey="prestamos" name="Préstamos" fill="#b65cff" radius={[8, 8, 0, 0]} />
-                    <Bar dataKey="gastos" name="Gastos / deuda" fill="var(--red)" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+          <MonthlyFlowChart data={monthlyFlowData} />
 
-              <div className="legend finance-legend">
-                <span className="cyan"></span> Ingresos
-                <span className="purple"></span> Préstamos
-                <span className="red"></span> Gastos / deuda
-              </div>
-            </>
-          )}
+          <div className="legend">
+            <span className="cyan"></span> Ingresos
+            <span className="purple"></span> Préstamos
+            <span className="red"></span> Gastos / deuda
+          </div>
         </article>
 
         <article className="hud-panel large">
           <div className="panel-title">
             <div>
               <h3>GASTOS POR CATEGORÍA</h3>
-              <p>Top categorías del histórico importado</p>
+              <p>Lo que registremos por chat aparecerá aquí.</p>
             </div>
             <span>REAL</span>
           </div>
 
-          {categoryChartData.length === 0 ? (
-            <EmptyPanel
-              title="Sin categorías todavía"
-              description="Cuando existan gastos importados, aparecerán aquí."
-            />
-          ) : (
-            <div className="chart-shell">
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={categoryChartData} layout="vertical" margin={{ left: 0, right: 12, top: 8, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" tickFormatter={shortCRC} />
-                  <YAxis type="category" dataKey="category" width={110} />
-                  <Tooltip formatter={(value) => formatCRC(value)} />
-                  <Bar dataKey="total" name="Gasto" fill="var(--red)" radius={[0, 8, 8, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+<CategoryBars data={categoryChartData} />
         </article>
 
         <article className="hud-panel">
@@ -400,11 +440,11 @@ export default function Finance({
             ) : (
               topDebts.map((debt) => (
                 <div className="debt-item" key={debt.id}>
-                  <div>
+                  <div className="debt-item-head">
                     <strong>{debt.name}</strong>
                     <span>{formatCRC(debt.remaining_amount)}</span>
                   </div>
-                  <small>Pago: {formatCRC(debt.monthly_payment)} · Interés: {Number(debt.interest_rate) || 0}%</small>
+                  <small>Pago: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}%</small>
 
                   <div className="debt-bar">
                     <span
