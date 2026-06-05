@@ -18,6 +18,7 @@ ACTION_TYPES = [
     "create_payroll_event",
     "create_employment_profile",
     "create_goal",
+    "import_monthly_statement",
 ]
 
 READ_INTENTS = [
@@ -46,6 +47,7 @@ START_PATTERNS = [
     ("create_payroll_event", ["ot", "hora extra", "horas extra", "vgh", "vacaciones", "feriado"]),
     ("create_employment_profile", ["perfil laboral", "hora vale", "pago por hora", "tarifa por hora"]),
     ("create_goal", ["meta", "objetivo"]),
+    ("import_monthly_statement", ["estado de cuenta", "estado financiero", "importar", "movimientos", "transacciones del mes"]),
 ]
 
 CREATE_WORDS = [
@@ -61,6 +63,32 @@ def _contains_any(text: str, words: list[str]) -> bool:
 
 def _fallback_detect(user_message: str) -> dict[str, Any]:
     text = user_message.lower().strip()
+
+    import_words = [
+        "estado de cuenta",
+        "estado financiero",
+        "voy a pasar",
+        "te voy a pasar",
+        "importar",
+        "movimientos de",
+        "transacciones de",
+        "transacciones del mes",
+    ]
+    month_words = [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "setiembre", "octubre",
+        "noviembre", "diciembre",
+    ]
+
+    if _contains_any(text, import_words) and ("estado" in text or "movimiento" in text or "transaccion" in text or "transacción" in text or _contains_any(text, month_words)):
+        return {
+            "intent": "import_monthly_statement",
+            "action_type": "import_monthly_statement",
+            "entity": None,
+            "confidence": 0.9,
+            "source": "keyword_fallback",
+        }
+
     wants_create = _contains_any(text, CREATE_WORDS)
 
     if wants_create:
@@ -116,6 +144,7 @@ Reglas:
 - No uses markdown.
 - No expliques.
 - Si el usuario quiere guardar, registrar, agregar, meter o crear datos, usa una acción create_*.
+- Si el usuario quiere importar, pasar o cargar un estado de cuenta, movimientos o transacciones de un mes, usa import_monthly_statement.
 - No inventes campos que el usuario no dijo.
 - Si falta información, igual clasifica la acción y deja entity en null.
 - Si pregunta por deuda más grande, usa highest_debt.

@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -15,6 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { getTransactionAnalysis } from "../services/jarvisApi";
 
 const formatCRC = (value = 0) =>
   new Intl.NumberFormat("es-CR", {
@@ -115,6 +117,25 @@ export default function Finance({
   error = "",
   onRefresh,
 }) {
+  const [transactionAnalysis, setTransactionAnalysis] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+
+    getTransactionAnalysis()
+      .then((data) => {
+        if (active) setTransactionAnalysis(data);
+      })
+      .catch((analysisError) => {
+        console.error(analysisError);
+        if (active) setTransactionAnalysis(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [dashboard]);
+
   if (loading) return <LoadingPanel />;
   if (error) return <ErrorPanel error={error} onRetry={onRefresh} />;
 
@@ -158,6 +179,13 @@ export default function Finance({
       gastos: debtTotal,
     },
   ];
+
+  const categoryChartData = useMemo(() => {
+    return (transactionAnalysis?.top_expense_categories || []).map((item) => ({
+      category: item.category || "Sin categoría",
+      total: Number(item.total) || 0,
+    }));
+  }, [transactionAnalysis]);
 
   return (
     <section className="dashboard-page">
@@ -258,6 +286,35 @@ export default function Finance({
             <span className="cyan"></span> Ingresos / activos
             <span className="red"></span> Gastos / deudas
           </div>
+        </article>
+
+        <article className="hud-panel large">
+          <div className="panel-title">
+            <div>
+              <h3>GASTOS POR CATEGORÍA</h3>
+              <p>Lo que registremos por chat aparecerá aquí.</p>
+            </div>
+            <span>REAL</span>
+          </div>
+
+          {categoryChartData.length === 0 ? (
+            <EmptyPanel
+              title="Sin categorías todavía"
+              description="Cuando importemos enero a mayo, vas a ver en qué se va el dinero."
+            />
+          ) : (
+            <div className="chart-shell">
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={categoryChartData} layout="vertical" margin={{ left: 20, right: 30 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" tickFormatter={shortCRC} />
+                  <YAxis type="category" dataKey="category" width={160} />
+                  <Tooltip formatter={(value) => formatCRC(value)} />
+                  <Bar dataKey="total" name="Gasto" radius={[0, 8, 8, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </article>
 
         <article className="hud-panel">

@@ -85,7 +85,7 @@ export default function App() {
       const responseText =
         response?.response?.message || response?.message || "Respuesta recibida.";
 
-      if (response?.status === "OK" && response?.action_type?.startsWith("create_")) {
+      if (response?.status === "OK" && (response?.action_type?.startsWith("create_") || response?.action_type === "import_monthly_statement")) {
         await refreshAppData();
       }
 
@@ -127,7 +127,7 @@ export default function App() {
           response?.message ||
           `Intención detectada: ${response.intent}`;
 
-        if (response?.status === "OK" && response?.action_type?.startsWith("create_")) {
+        if (response?.status === "OK" && (response?.action_type?.startsWith("create_") || response?.action_type === "import_monthly_statement")) {
           await refreshAppData();
         }
 

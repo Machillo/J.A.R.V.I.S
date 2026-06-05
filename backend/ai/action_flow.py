@@ -22,7 +22,14 @@ from backend.finance.service import (
 )
 from backend.goals.service import add_financial_goal
 from backend.transactions.service import create_transaction
-from backend.finance.category_catalog import normalize_category, expense_type_for_category
+from backend.ai.monthly_import import (
+    apply_exchange_rate_to_items,
+    extract_month_year,
+    format_import_preview,
+    parse_monthly_import,
+    save_monthly_import,
+    summarize_items,
+)
 
 
 YES_WORDS = {"si", "sí", "confirmo", "guardar", "guarda", "dale", "ok", "correcto", "acepto"}
@@ -31,25 +38,18 @@ NO_WORDS = {"no", "cancelar", "cancela", "olvida", "detener", "salir"}
 ACTION_CONFIG = {
     "create_debt": {
         "label": "deuda",
-        "required": [
-            "name",
-            "total_amount",
-            "remaining_amount",
-            "interest_rate",
-            "monthly_payment",
-            "payment_day",
-        ],
+        "required": ["name", "total_amount", "remaining_amount", "interest_rate", "monthly_payment", "payment_day"],
         "optional_defaults": {
             "debt_type": "other",
             "term_months": None,
         },
         "questions": {
-            "name": "¿Cómo se llama exactamente esta deuda? Ejemplo: Tarjeta BAC, MultiMoney, Préstamo Popular o Papá.",
-            "total_amount": "¿Cuál fue el monto total original de la deuda?",
-            "remaining_amount": "¿Cuál es el saldo pendiente actual?",
-            "interest_rate": "¿Cuál es la tasa de interés anual? Si no aplica, responde 0.",
+            "name": "¿Cómo se llama la deuda?",
+            "total_amount": "¿Cuál es el monto total?",
+            "remaining_amount": "¿Cuál es el saldo pendiente?",
+            "interest_rate": "¿Cuál es el interés?",
             "monthly_payment": "¿Cuál es la cuota mensual?",
-            "payment_day": "¿Qué día de cada mes se paga? Responde solo el número del día.",
+            "payment_day": "¿Qué día se paga?",
         },
     },
     "create_saving": {
@@ -75,7 +75,7 @@ ACTION_CONFIG = {
         "required": ["category", "amount"],
         "optional_defaults": {"expense_type": "variable", "description": ""},
         "questions": {
-            "category": "¿En qué categoría va este gasto? Ejemplo: comida, transporte, gimnasio.",
+            "category": "¿Qué categoría le pongo?",
             "amount": "¿Cuál es el monto del gasto?",
         },
     },
@@ -85,7 +85,7 @@ ACTION_CONFIG = {
         "optional_defaults": {},
         "questions": {
             "amount": "¿Cuál es el monto del ingreso?",
-            "source": "¿Cuál es la fuente del ingreso? Ejemplo: salario, OT, bono, freelance.",
+            "source": "¿Cuál es la fuente del ingreso?",
         },
     },
     "create_bonus": {
@@ -120,7 +120,7 @@ ACTION_CONFIG = {
         "required": ["event_type", "hours"],
         "optional_defaults": {"description": "Registrado por chat"},
         "questions": {
-            "event_type": "¿Qué tipo de evento es? Ejemplo: ot, vgh, holiday o regular.",
+            "event_type": "¿Qué tipo de evento es?",
             "hours": "¿Cuántas horas son?",
         },
     },
@@ -140,6 +140,16 @@ ACTION_CONFIG = {
         "questions": {
             "name": "¿Cómo se llama la meta?",
             "target_amount": "¿Cuál es el monto objetivo de la meta?",
+        },
+    },
+    "import_monthly_statement": {
+        "label": "importación mensual",
+        "required": ["month", "raw_text"],
+        "optional_defaults": {"year": None, "exchange_rate": None, "items": [], "pending_items": [], "summary": {}},
+        "questions": {
+            "month": "¿Qué mes vamos a importar?",
+            "raw_text": "Pásame los movimientos.",
+            "exchange_rate": "¿Qué tipo de cambio uso para los dólares?",
         },
     },
 }
@@ -168,12 +178,16 @@ FIELD_LABELS = {
     "current_amount": "monto actual",
     "target_date": "fecha objetivo",
     "priority": "prioridad",
+    "month": "mes",
+    "year": "año",
+    "raw_text": "movimientos",
+    "exchange_rate": "tipo de cambio",
 }
 
 NUMERIC_FIELDS = {
     "total_amount", "remaining_amount", "monthly_payment", "interest_rate",
     "amount", "hours", "hourly_rate", "regular_hours_per_week",
-    "overtime_multiplier", "holiday_multiplier", "target_amount", "current_amount",
+    "overtime_multiplier", "holiday_multiplier", "target_amount", "current_amount", "exchange_rate",
 }
 INTEGER_FIELDS = {"term_months", "payment_day"}
 TYPE_ALIASES = {
@@ -229,12 +243,15 @@ def _coerce_field(field: str, text: str):
             raise ValueError(f"Necesito un número entero válido para {FIELD_LABELS.get(field, field)}.")
         return int(number)
 
+    if field == "month":
+        month_data = extract_month_year(value)
+        if not month_data:
+            raise ValueError("Necesito el mes.")
+        return month_data["month"]
+
     if field == "transaction_type":
         normalized = _normalize_text(value)
         return TYPE_ALIASES.get(normalized, normalized)
-
-    if field == "category":
-        return normalize_category(value)
 
     if field == "event_type":
         normalized = _normalize_text(value)
@@ -268,16 +285,14 @@ def _initial_payload(action_type: str, user_message: str) -> dict[str, Any]:
     amount = _extract_number(text)
 
     if action_type == "create_debt":
-        # IMPORTANTE:
-        # El nombre de una deuda NUNCA se infiere del mensaje inicial.
-        # Aunque el usuario diga "agrega una deuda BAC", JARVIS debe preguntar
-        # primero cómo se llama exactamente la deuda para evitar guardar datos
-        # con nombres incorrectos o ambiguos.
         if amount is not None:
             payload["total_amount"] = amount
 
-        if "bac" in lower or "tarjeta" in lower:
-            payload["debt_type"] = "credit_card"
+    elif action_type == "import_monthly_statement":
+        month_data = extract_month_year(text)
+        if month_data:
+            payload["month"] = month_data["month"]
+            payload["year"] = month_data["year"]
 
     elif action_type in {"create_saving", "create_investment"}:
         if amount is not None:
@@ -338,9 +353,7 @@ def _format_payload(action_type: str, payload: dict[str, Any]) -> str:
         value = payload.get(field)
         if value not in (None, ""):
             label = FIELD_LABELS.get(field, field)
-            if field == "interest_rate":
-                lines.append(f"- {label}: {value}%")
-            elif isinstance(value, (int, float)) and field not in {"term_months", "payment_day", "hours", "regular_hours_per_week"}:
+            if isinstance(value, (int, float)) and field not in {"term_months", "payment_day", "hours", "regular_hours_per_week"}:
                 lines.append(f"- {label}: ₡{value:,.2f}")
             else:
                 lines.append(f"- {label}: {value}")
@@ -354,20 +367,8 @@ def _apply_defaults(action_type: str, payload: dict[str, Any]) -> dict[str, Any]
     final = dict(config["optional_defaults"])
     final.update(payload)
 
-    if action_type == "create_expense":
-        final["category"] = normalize_category(final.get("category"), "expense")
-        if not final.get("expense_type") or final.get("expense_type") == "variable":
-            final["expense_type"] = expense_type_for_category(final["category"])
-
-    if action_type == "create_transaction":
-        final["transaction_type"] = TYPE_ALIASES.get(
-            str(final.get("transaction_type", "")).lower(),
-            final.get("transaction_type"),
-        )
-        final["category"] = normalize_category(final.get("category"), final.get("transaction_type"))
-
-    if action_type == "create_income":
-        final["source"] = normalize_category(final.get("source"), "income")
+    if action_type == "create_debt" and final.get("remaining_amount") is None:
+        final["remaining_amount"] = final.get("total_amount", 0)
 
     if action_type == "create_transaction" and final.get("transaction_date") is None:
         final["transaction_date"] = date.today().isoformat()
@@ -462,6 +463,8 @@ def start_action(action_type: str, user_message: str) -> dict[str, Any]:
         }
 
     payload = _initial_payload(action_type, user_message)
+    if action_type == "import_monthly_statement" and payload.get("month") and not payload.get("year"):
+        payload["year"] = date.today().year
     missing = _missing_required(action_type, payload)
     current_field = missing[0] if missing else "confirm"
     action = create_pending_action(action_type, payload, missing, current_field)
@@ -499,12 +502,15 @@ def continue_pending_action(user_message: str) -> dict[str, Any] | None:
             "action_type": action_type,
         }
 
+    if action_type == "import_monthly_statement":
+        return _continue_monthly_import(action, user_message, payload, missing, current_field)
+
     if current_field == "confirm" or not missing:
         if _is_yes(user_message):
             result = _save_action(action_type, payload)
             finish_pending_action(action["id"], "completed")
             return {
-                "message": "Listo, señor. Guardé la información correctamente en Supabase.",
+                "message": "Listo. Guardé la información.",
                 "status": "OK",
                 "pending": False,
                 "action_type": action_type,
@@ -512,7 +518,7 @@ def continue_pending_action(user_message: str) -> dict[str, Any] | None:
             }
 
         return {
-            "message": "Necesito confirmación para guardar. Responde sí para guardar o no para cancelar.",
+            "message": "¿Guardar?",
             "status": "PENDING",
             "pending": True,
             "action_type": action_type,
@@ -552,4 +558,126 @@ def continue_pending_action(user_message: str) -> dict[str, Any] | None:
             "missing_fields": missing,
             "current_field": current_field,
         },
+    }
+
+
+def _continue_monthly_import(action: dict[str, Any], user_message: str, payload: dict[str, Any], missing: list[str], current_field: str | None) -> dict[str, Any]:
+    action_type = "import_monthly_statement"
+
+    if current_field == "confirm" or not missing:
+        if _is_yes(user_message):
+            result = save_monthly_import(payload.get("items", []))
+            finish_pending_action(action["id"], "completed")
+            return {
+                "message": f"Listo. Guardé {result.get('total_created', 0)} movimientos.",
+                "status": "OK",
+                "pending": False,
+                "action_type": action_type,
+                "data": result,
+            }
+
+        return {
+            "message": "¿Guardar?",
+            "status": "PENDING",
+            "pending": True,
+            "action_type": action_type,
+            "data": action,
+        }
+
+    field = missing[0]
+
+    if field == "month":
+        month_data = extract_month_year(user_message)
+        if not month_data:
+            return {
+                "message": "Necesito el mes.",
+                "status": "PENDING",
+                "pending": True,
+                "action_type": action_type,
+                "data": action,
+            }
+        payload["month"] = month_data["month"]
+        payload["year"] = month_data["year"]
+        missing = _missing_required(action_type, payload)
+        current_field = missing[0] if missing else "confirm"
+        update_pending_action(action["id"], payload, missing, current_field)
+        return {
+            "message": _next_question(action_type, missing),
+            "status": "PENDING",
+            "pending": True,
+            "action_type": action_type,
+            "data": action,
+        }
+
+    if field == "raw_text":
+        payload["raw_text"] = user_message
+        parsed = parse_monthly_import(
+            raw_text=user_message,
+            month=payload.get("month"),
+            year=payload.get("year"),
+            exchange_rate=payload.get("exchange_rate"),
+        )
+        payload["items"] = parsed["items"]
+        payload["pending_items"] = parsed["pending_items"]
+        payload["summary"] = parsed["summary"]
+
+        if parsed.get("needs_exchange_rate"):
+            missing = ["exchange_rate"]
+            current_field = "exchange_rate"
+            update_pending_action(action["id"], payload, missing, current_field)
+            return {
+                "message": ACTION_CONFIG[action_type]["questions"]["exchange_rate"],
+                "status": "PENDING",
+                "pending": True,
+                "action_type": action_type,
+                "data": action,
+            }
+
+        missing = []
+        current_field = "confirm"
+        update_pending_action(action["id"], payload, missing, current_field)
+        return {
+            "message": format_import_preview(parsed),
+            "status": "PENDING",
+            "pending": True,
+            "action_type": action_type,
+            "data": payload,
+        }
+
+    if field == "exchange_rate":
+        try:
+            exchange_rate = float(_coerce_field("exchange_rate", user_message))
+        except ValueError as error:
+            return {
+                "message": str(error),
+                "status": "PENDING",
+                "pending": True,
+                "action_type": action_type,
+                "data": action,
+            }
+
+        payload["exchange_rate"] = exchange_rate
+        payload["items"] = apply_exchange_rate_to_items(payload.get("items", []), exchange_rate)
+        payload["summary"] = summarize_items(payload.get("items", []))
+        missing = []
+        current_field = "confirm"
+        update_pending_action(action["id"], payload, missing, current_field)
+        return {
+            "message": format_import_preview({
+                "items": payload.get("items", []),
+                "pending_items": payload.get("pending_items", []),
+                "summary": payload.get("summary", {}),
+            }),
+            "status": "PENDING",
+            "pending": True,
+            "action_type": action_type,
+            "data": payload,
+        }
+
+    return {
+        "message": "Necesito los movimientos.",
+        "status": "PENDING",
+        "pending": True,
+        "action_type": action_type,
+        "data": action,
     }
