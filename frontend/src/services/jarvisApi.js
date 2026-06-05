@@ -104,3 +104,26 @@ export const createMemoryItem = (payload) => jsonRequest("/jarvis/memory", "POST
 export const deleteMemoryItem = (id) => request(`/jarvis/memory/${id}`, { method: "DELETE" });
 export const getProfilePreferences = () => request("/jarvis/preferences/profile");
 export const updateProfilePreferences = (payload) => jsonRequest("/jarvis/preferences/profile", "POST", payload);
+
+
+export const previewFinanceInput = (payload) => jsonRequest("/transactions/finance-input/preview", "POST", payload);
+export const commitFinanceInput = (payload) => jsonRequest("/transactions/finance-input/commit", "POST", payload);
+export const previewFinancePdf = async ({ file, default_year_month = "", exchange_rate = 495 }) => {
+  const authHeaders = await getAuthHeaders();
+  const formData = new FormData();
+  formData.append("file", file);
+  if (default_year_month) formData.append("default_year_month", default_year_month);
+  formData.append("exchange_rate", String(exchange_rate));
+
+  const response = await fetch(`${API_URL}/transactions/finance-input/pdf-preview`, {
+    method: "POST",
+    headers: { ...authHeaders },
+    body: formData,
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.detail || payload?.error || "No pude leer el PDF.");
+  }
+  return payload;
+};

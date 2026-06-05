@@ -6,8 +6,18 @@ import {
   CircleDollarSign,
   Target,
   Wallet,
+  PlusCircle,
+  Mic,
+  FileText,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
-import { getTransactionAnalysis } from "../services/jarvisApi";
+import {
+  commitFinanceInput,
+  getTransactionAnalysis,
+  previewFinanceInput,
+  previewFinancePdf,
+} from "../services/jarvisApi";
 
 const formatCRC = (value = 0) =>
   new Intl.NumberFormat("es-CR", {
@@ -164,6 +174,189 @@ function MonthlyFlowChart({ data = [] }) {
   );
 }
 
+
+function FinanceInputPanel({ onSaved, compact = false }) {
+  const [mode, setMode] = useState("text");
+  const [text, setText] = useState("");
+  const [month, setMonth] = useState("");
+  const [exchangeRate, setExchangeRate] = useState(495);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const runPreview = async () => {
+    if (!text.trim()) {
+      setMessage("Pegá o escribí los movimientos primero.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+    try {
+      const result = await previewFinanceInput({
+        text,
+        default_year_month: month || null,
+        exchange_rate: Number(exchangeRate) || 495,
+      });
+      setPreview(result);
+    } catch (error) {
+      setMessage(error.message || "No pude analizar los movimientos.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runPdfPreview = async (file) => {
+    if (!file) return;
+    setLoading(true);
+    setMessage("");
+    try {
+      const result = await previewFinancePdf({
+        file,
+        default_year_month: month || "",
+        exchange_rate: Number(exchangeRate) || 495,
+      });
+      setPreview(result);
+      setMode("preview");
+    } catch (error) {
+      setMessage(error.message || "No pude leer el PDF.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startVoice = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setMessage("Este navegador no soporta reconocimiento de voz.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "es-CR";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const spoken = event.results[0][0].transcript;
+      setText((current) => `${current}${current ? "\n" : ""}${spoken}`);
+      setMode("text");
+    };
+
+    recognition.onerror = () => setMessage("No pude escucharte bien.");
+    recognition.start();
+  };
+
+  const savePreview = async () => {
+    const transactions = preview?.transactions || [];
+    if (!transactions.length) {
+      setMessage("No hay movimientos listos para guardar.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+    try {
+      await commitFinanceInput({ transactions });
+      setMessage("Movimientos guardados.");
+      setText("");
+      setPreview(null);
+      await onSaved?.();
+    } catch (error) {
+      setMessage(error.message || "No pude guardar los movimientos.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rows = preview?.transactions || [];
+  const summary = preview?.summary || {};
+
+  return (
+    <article className={`hud-panel finance-input-panel ${compact ? "compact-empty" : ""}`}>
+      <div className="panel-title finance-input-title">
+        <div>
+          <h3>AÑADIR FINANZAS</h3>
+          <p>Escribí, hablá o subí un PDF. Jarvis categoriza y pregunta antes de guardar.</p>
+        </div>
+        <span>PREVIEW</span>
+      </div>
+
+      <div className="finance-input-actions">
+        <button className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}>
+          <PlusCircle size={16} /> Escribir
+        </button>
+        <button onClick={startVoice}>
+          <Mic size={16} /> Hablar
+        </button>
+        <label className="finance-file-button">
+          <FileText size={16} /> PDF
+          <input type="file" accept="application/pdf" onChange={(event) => runPdfPreview(event.target.files?.[0])} />
+        </label>
+      </div>
+
+      <div className="finance-input-grid">
+        <label>
+          Mes base
+          <input value={month} onChange={(event) => setMonth(event.target.value)} placeholder="2026-06" />
+        </label>
+        <label>
+          Dólar
+          <input type="number" value={exchangeRate} onChange={(event) => setExchangeRate(event.target.value)} />
+        </label>
+      </div>
+
+      <textarea
+        className="finance-input-textarea"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        placeholder={'Ejemplo:\n2026-06-05 | Salario | 90000\n2026-06-06 | Uber Eats | 6500\n2026-06-07 | PlayStation | $11.99'}
+      />
+
+      <div className="finance-input-footer">
+        <button className="hud-action-button" onClick={runPreview} disabled={loading}>
+          Analizar
+        </button>
+        {rows.length > 0 && (
+          <button className="hud-action-button success" onClick={savePreview} disabled={loading}>
+            <CheckCircle2 size={16} /> Guardar {rows.length}
+          </button>
+        )}
+      </div>
+
+      {message && <p className="finance-input-message">{message}</p>}
+
+      {preview && (
+        <div className="finance-preview-box">
+          <div className="finance-preview-summary">
+            <span>Ingresos: <strong>{formatCRC(summary.income)}</strong></span>
+            <span>Gastos: <strong>{formatCRC(summary.expenses)}</strong></span>
+            <span>Deudas: <strong>{formatCRC(summary.debt_payment)}</strong></span>
+            <span>Préstamos: <strong>{formatCRC(summary.loan_received)}</strong></span>
+          </div>
+
+          {preview.needs_review?.length > 0 && (
+            <div className="finance-review-warning">
+              <XCircle size={16} /> {preview.needs_review.length} línea(s) necesitan revisión.
+            </div>
+          )}
+
+          <div className="finance-preview-table">
+            {rows.slice(0, 12).map((item, index) => (
+              <div className="finance-preview-row" key={`${item.transaction_date}-${index}`}>
+                <span>{item.transaction_date}</span>
+                <strong>{item.category}</strong>
+                <em>{item.description}</em>
+                <b>{formatCRC(item.amount)}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
 function CategoryBars({ data = [] }) {
   const maxValue = Math.max(...data.map((item) => Number(item.total) || 0), 1);
 
@@ -202,6 +395,7 @@ export default function Finance({
   loading = false,
   error = "",
   onRefresh,
+  currentUser,
 }) {
   const [transactionAnalysis, setTransactionAnalysis] = useState(null);
 
@@ -275,6 +469,21 @@ export default function Finance({
       total: Number(item.total) || 0,
     }));
   }, [transactionAnalysis]);
+
+  const hasAnyTransactions = (transactionAnalysis?.summary?.total_transactions || 0) > 0;
+  const isOwner = currentUser?.role === "owner" || currentUser?.email === "gatotico99@gmail.com";
+
+  if (!isOwner && !hasAnyTransactions) {
+    return (
+      <section className="dashboard-page finance-empty-shell">
+        <EmptyPanel
+          title="Todavía no hay datos financieros"
+          description="Añadí movimientos para activar los gráficos, categorías y recomendaciones."
+        />
+        <FinanceInputPanel onSaved={onRefresh} compact />
+      </section>
+    );
+  }
 
   return (
     <section className="dashboard-page">

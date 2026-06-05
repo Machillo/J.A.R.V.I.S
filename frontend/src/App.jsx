@@ -223,7 +223,7 @@ export default function App() {
   const renderPage = () => {
     switch (activePage) {
       case "finance":
-        return <Finance dashboard={financeDashboard} />;
+        return <Finance dashboard={financeDashboard} currentUser={currentUser} onRefresh={refreshAppData} />;
 
       case "goals":
         return <Goals dashboard={financeDashboard} />;

@@ -3574,3 +3574,216 @@ body,
     justify-content: center;
   }
 }
+
+/* Phase 4 — Finance input */
+.finance-empty-shell {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.finance-input-panel {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(79, 231, 255, 0.22);
+  background: linear-gradient(135deg, rgba(5, 12, 24, 0.96), rgba(19, 11, 42, 0.9));
+  box-shadow: 0 0 32px rgba(0, 229, 255, 0.08);
+}
+
+.finance-input-panel.compact-empty {
+  max-width: 940px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.finance-input-title span {
+  border: 1px solid rgba(141, 92, 255, 0.4);
+  color: #cbb8ff;
+}
+
+.finance-input-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.finance-input-actions button,
+.finance-file-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(79, 231, 255, 0.22);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(238, 249, 255, 0.9);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.finance-input-actions button.active,
+.finance-input-actions button:hover,
+.finance-file-button:hover {
+  border-color: rgba(79, 231, 255, 0.65);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.12);
+}
+
+.finance-file-button input {
+  display: none;
+}
+
+.finance-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.finance-input-grid label {
+  display: grid;
+  gap: 6px;
+  color: rgba(238, 249, 255, 0.66);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.finance-input-grid input,
+.finance-input-textarea {
+  width: 100%;
+  border: 1px solid rgba(79, 231, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.22);
+  color: #eef9ff;
+  outline: none;
+}
+
+.finance-input-grid input {
+  padding: 11px 12px;
+}
+
+.finance-input-textarea {
+  min-height: 150px;
+  resize: vertical;
+  padding: 14px;
+  line-height: 1.45;
+}
+
+.finance-input-footer {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.hud-action-button.success {
+  background: linear-gradient(135deg, rgba(38, 255, 166, 0.18), rgba(0, 229, 255, 0.16));
+  border-color: rgba(38, 255, 166, 0.42);
+}
+
+.finance-input-message {
+  margin-top: 10px;
+  color: rgba(238, 249, 255, 0.76);
+}
+
+.finance-preview-box {
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.finance-preview-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.finance-preview-summary span {
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(0, 229, 255, 0.06);
+  color: rgba(238, 249, 255, 0.74);
+}
+
+.finance-preview-summary strong {
+  display: block;
+  color: #fff;
+  margin-top: 3px;
+}
+
+.finance-review-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #ffd166;
+}
+
+.finance-preview-table {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.finance-preview-row {
+  display: grid;
+  grid-template-columns: 92px 110px minmax(0, 1fr) 110px;
+  gap: 10px;
+  align-items: center;
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.finance-preview-row span,
+.finance-preview-row em {
+  color: rgba(238, 249, 255, 0.68);
+  font-style: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finance-preview-row strong {
+  color: #7df9ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finance-preview-row b {
+  text-align: right;
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  .finance-input-grid,
+  .finance-preview-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-input-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .finance-input-actions button,
+  .finance-file-button {
+    padding: 10px 8px;
+    font-size: 0.78rem;
+  }
+
+  .finance-preview-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .finance-preview-row b {
+    text-align: left;
+  }
+}

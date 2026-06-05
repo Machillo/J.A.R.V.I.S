@@ -35,3 +35,12 @@ class TransactionParseRequest(BaseModel):
 
 class TransactionBulkImportRequest(BaseModel):
     transactions: list[TransactionRequest]
+
+class FinanceInputPreviewRequest(BaseModel):
+    text: str
+    default_year_month: str | None = None
+    exchange_rate: float = 495.0
+
+
+class FinanceInputCommitRequest(BaseModel):
+    transactions: list[TransactionRequest]

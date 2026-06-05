@@ -38,6 +38,15 @@ def get_transaction_summary():
             (user_id,),
         ).fetchone()["total"]
 
+        total_transactions = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM transactions
+            WHERE user_id = %s
+            """,
+            (user_id,),
+        ).fetchone()["total"]
+
     return {
         "income": total_income,
         "expenses": total_expenses,
@@ -48,6 +57,7 @@ def get_transaction_summary():
         "loan_disbursements": total_loan_received,
         "loan_received": total_loan_received,
         "net_from_transactions": total_income + total_loan_received - total_expenses - total_debt_payments,
+        "total_transactions": total_transactions,
     }
 
 
