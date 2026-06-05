@@ -3184,3 +3184,121 @@ body,
     grid-template-columns: 1fr;
   }
 }
+
+/* NAV FIX - admin/token pills no longer overlap menu */
+.sidebar {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 14px;
+}
+
+.sidebar-admin-strip {
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  flex: 0 0 auto;
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.sidebar-token-pill,
+.sidebar-admin-pill {
+  width: 100%;
+  min-height: 42px;
+  justify-content: center;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+.sidebar-core {
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 76px;
+  margin-top: 0;
+  transform: none !important;
+}
+
+.sidebar.closed .sidebar-admin-strip,
+.sidebar.closed .sidebar-core small,
+.sidebar.closed .sidebar-core strong {
+  display: none;
+}
+
+.sidebar.closed .sidebar-core {
+  min-height: 58px;
+}
+
+@media (max-width: 760px) {
+  .sidebar.open,
+  .sidebar.closed {
+    height: 100dvh;
+    padding: calc(28px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar.open {
+    width: min(76vw, 330px) !important;
+    max-width: min(76vw, 330px) !important;
+    z-index: 1200;
+  }
+
+  .sidebar .logo {
+    flex: 0 0 auto;
+    margin: 8px 0 42px;
+  }
+
+  .sidebar nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+    padding-bottom: 8px;
+  }
+
+  .sidebar-admin-strip {
+    position: static !important;
+    margin: 8px 0 10px;
+    flex: 0 0 auto;
+  }
+
+  .sidebar-token-pill,
+  .sidebar-admin-pill {
+    min-height: 38px;
+    font-size: 13px;
+  }
+
+  .sidebar-core {
+    position: static !important;
+    min-height: 72px;
+    flex: 0 0 auto;
+  }
+
+  .sidebar.open + .main-shell .jarvis-command-center {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  .sidebar.open + .main-shell::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, 0.38);
+    pointer-events: none;
+  }
+}
