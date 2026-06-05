@@ -32,6 +32,7 @@ SECTION_ALIASES = {
     "deudas": "debt_payment",
     "deuda": "debt_payment",
     "pagos de deuda": "debt_payment",
+    "pago de deuda": "debt_payment",
     "inversiones": "investment",
     "inversion": "investment",
     "inversión": "investment",
@@ -75,8 +76,8 @@ CATEGORY_MAP = {
     "uber eats": "Gastos variables / Restaurante",
     "granizados": "Gastos variables / Restaurante",
     "transporte": "Gastos variables / Transporte",
-    "uber": "Gastos variables / Transporte",
     "uber rides": "Gastos variables / Transporte",
+    "uber": "Gastos variables / Transporte",
     "gasolina": "Gastos variables / Gasolina",
     "gasolinera": "Gastos variables / Gasolina",
     "videojuegos": "Gastos variables / Entretenimiento / Videojuegos",
@@ -140,18 +141,41 @@ class ParsedImportItem:
 def normalize_category(text: str, transaction_type: str = "expense") -> str:
     normalized = _normalize(text)
 
+    # Primero respeta el tipo de transacción. Esto evita errores como:
+    # "abono al préstamo" -> "bono" por contener la palabra "abono".
+    if transaction_type == "income":
+        income_keys = ["salario", "planilla", "horas extra", "ot", "bono", "reembolso"]
+        for key in income_keys:
+            if key in normalized:
+                return CATEGORY_MAP[key]
+        return "Ingresos / Otros ingresos"
+
+    if transaction_type == "debt_payment":
+        debt_keys = ["papá", "papa", "familiar", "bac", "tarjeta bac", "multimoney", "popular", "prestamo", "préstamo", "deuda"]
+        for key in debt_keys:
+            if key in normalized:
+                if key in {"prestamo", "préstamo", "deuda"}:
+                    return "Deudas / Otros préstamos"
+                return CATEGORY_MAP[key]
+        return "Deudas / Otros préstamos"
+
+    if transaction_type == "investment":
+        investment_keys = ["ibkr", "cripto", "multimoney inversion", "multimoney inversión"]
+        for key in investment_keys:
+            if key in normalized:
+                return CATEGORY_MAP[key]
+        return "Inversiones / Otros"
+
+    if transaction_type == "saving":
+        saving_keys = ["fondo emergencia", "viajes", "meta personal", "ahorro"]
+        for key in saving_keys:
+            if key in normalized and key in CATEGORY_MAP:
+                return CATEGORY_MAP[key]
+        return "Ahorro / Meta personal"
+
     for key, category in CATEGORY_MAP.items():
         if key in normalized:
             return category
-
-    if transaction_type == "income":
-        return "Ingresos / Otros ingresos"
-    if transaction_type == "debt_payment":
-        return "Deudas / Otros préstamos"
-    if transaction_type == "investment":
-        return "Inversiones / Otros"
-    if transaction_type == "saving":
-        return "Ahorro / Meta personal"
 
     return "Gastos variables / Compras"
 
@@ -173,8 +197,28 @@ def extract_month_year(text: str) -> dict[str, int] | None:
     return {"month": found_month, "year": year}
 
 
-def parse_monthly_import(raw_text: str, month: int | None = None, year: int | None = None, exchange_rate: float | None = None) -> dict[str, Any]:
-    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+def parse_monthly_import(
+    raw_text: str,
+    month: int | None = None,
+    year: int | None = None,
+    exchange_rate: float | None = None
+) -> dict[str, Any]:
+    """
+    Lee un bloque mensual línea por línea.
+
+    Formatos aceptados:
+    - 08/01/2026 | Salario | ₡72008.06 | Planilla
+    - 08/01/2026 | Salario | Planilla | ₡72,008.06
+    - 08/01 | Salario | ₡72008.06
+    - INGRESOS:
+      08/01/2026 | Salario | ₡72008.06
+
+    Regla importante:
+    - No toma números de la fecha como montos.
+    - Si una línea tiene varios números, toma el monto desde el campo con ₡, $, CRC, USD o desde el último campo.
+    """
+    normalized_text = raw_text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.strip() for line in normalized_text.split("\n") if line.strip()]
 
     current_section = None
     items: list[ParsedImportItem] = []
@@ -188,6 +232,10 @@ def parse_monthly_import(raw_text: str, month: int | None = None, year: int | No
             continue
 
         if _looks_like_metadata(line):
+            month_data = extract_month_year(line)
+            if month_data:
+                month = month or month_data["month"]
+                year = year or month_data["year"]
             continue
 
         parsed = _parse_line(line, current_section, month, year, exchange_rate)
@@ -196,11 +244,12 @@ def parse_monthly_import(raw_text: str, month: int | None = None, year: int | No
 
         if parsed.status == "pending":
             pending.append(parsed.__dict__)
-        elif parsed.original_currency == "USD" and parsed.exchange_rate is None:
+            continue
+
+        if parsed.original_currency == "USD" and parsed.exchange_rate is None:
             usd_without_rate = True
-            items.append(parsed)
-        else:
-            items.append(parsed)
+
+        items.append(parsed)
 
     summary = summarize_items(items)
 
@@ -241,9 +290,12 @@ def summarize_items(items: list[dict[str, Any]] | list[ParsedImportItem]) -> dic
         data = item.__dict__ if isinstance(item, ParsedImportItem) else item
         if data.get("status", "ready") != "ready":
             continue
+
         transaction_type = data.get("transaction_type") or "expense"
         amount = float(data.get("amount") or 0)
+
         totals[transaction_type] = totals.get(transaction_type, 0.0) + amount
+
         category = data.get("category") or "Sin categoría"
         by_category[category] = by_category.get(category, 0.0) + amount
         count += 1
@@ -257,9 +309,11 @@ def summarize_items(items: list[dict[str, Any]] | list[ParsedImportItem]) -> dic
 
 def save_monthly_import(items: list[dict[str, Any]]) -> dict[str, Any]:
     created = []
+
     for item in items:
         if item.get("status", "ready") != "ready":
             continue
+
         result = create_transaction(
             transaction_date=item["transaction_date"],
             description=item["description"],
@@ -311,7 +365,10 @@ def format_import_preview(parsed: dict[str, Any]) -> str:
 
 
 def _normalize(text: str) -> str:
-    return text.strip().lower().replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
+    normalized = text.strip().lower()
+    normalized = normalized.replace("á", "a").replace("é", "e").replace("í", "i")
+    normalized = normalized.replace("ó", "o").replace("ú", "u")
+    return normalized
 
 
 def _money(value: float | int | None) -> str:
@@ -319,7 +376,8 @@ def _money(value: float | int | None) -> str:
 
 
 def _section_from_line(line: str) -> str | None:
-    normalized = _normalize(line).strip(":")
+    normalized = _normalize(line)
+    normalized = normalized.strip().strip(":").strip()
     normalized = re.sub(r"^[#\-*\s]+", "", normalized).strip()
     return SECTION_ALIASES.get(normalized)
 
@@ -329,30 +387,36 @@ def _looks_like_metadata(line: str) -> bool:
     return normalized.startswith(("mes:", "periodo:", "tipo_cambio", "tipo cambio", "nota:", "reglas:"))
 
 
-def _parse_line(line: str, current_section: str | None, month: int | None, year: int | None, exchange_rate: float | None) -> ParsedImportItem | None:
+def _parse_line(
+    line: str,
+    current_section: str | None,
+    month: int | None,
+    year: int | None,
+    exchange_rate: float | None
+) -> ParsedImportItem | None:
     if not re.search(r"\d", line):
-        return None
-
-    transaction_type = current_section or _guess_transaction_type(line)
-    if transaction_type == "pending":
-        amount = _extract_amount(line)
-        return ParsedImportItem(
-            transaction_date=_extract_date(line, month, year) or date.today().isoformat(),
-            description=_clean_description(line),
-            amount=amount.get("amount", 0),
-            transaction_type="pending",
-            category="Pendiente",
-            notes="Pendiente de confirmar",
-            status="pending",
-        )
-
-    amount_info = _extract_amount(line)
-    if amount_info["amount"] is None:
         return None
 
     transaction_date = _extract_date(line, month, year)
     if not transaction_date:
         return None
+
+    transaction_type = current_section or _guess_transaction_type(line)
+
+    amount_info = _extract_amount(line)
+    if amount_info["amount"] is None and amount_info.get("original_amount") is None:
+        return None
+
+    if transaction_type == "pending":
+        return ParsedImportItem(
+            transaction_date=transaction_date,
+            description=_clean_description(line),
+            amount=float(amount_info.get("amount") or 0),
+            transaction_type="pending",
+            category="Pendiente",
+            notes="Pendiente de confirmar",
+            status="pending",
+        )
 
     original_currency = amount_info.get("currency")
     original_amount = amount_info.get("original_amount")
@@ -360,7 +424,7 @@ def _parse_line(line: str, current_section: str | None, month: int | None, year:
 
     if original_currency == "USD":
         if exchange_rate:
-            amount = round(original_amount * exchange_rate, 2)
+            amount = round(float(original_amount or 0) * exchange_rate, 2)
         else:
             amount = 0.0
 
@@ -369,12 +433,12 @@ def _parse_line(line: str, current_section: str | None, month: int | None, year:
 
     notes = ""
     if original_currency == "USD" and exchange_rate:
-        notes = f"Monto original: ${original_amount:,.2f}. Tipo cambio: ₡{exchange_rate:,.2f}."
+        notes = f"Monto original: ${float(original_amount or 0):,.2f}. Tipo cambio: ₡{exchange_rate:,.2f}."
 
     return ParsedImportItem(
         transaction_date=transaction_date,
         description=description,
-        amount=amount,
+        amount=float(amount or 0),
         transaction_type=transaction_type,
         category=category,
         account="",
@@ -388,14 +452,19 @@ def _parse_line(line: str, current_section: str | None, month: int | None, year:
 
 def _guess_transaction_type(line: str) -> str:
     normalized = _normalize(line)
+
     if any(word in normalized for word in ["salario", "planilla", "bono", "reembolso"]):
         return "income"
+
     if any(word in normalized for word in ["papa", "papá", "prestamo", "préstamo", "deuda", "tarjeta bac"]):
         return "debt_payment"
-    if any(word in normalized for word in ["ibkr", "cripto", "inversion", "inversión"]):
+
+    if any(word in normalized for word in ["ibkr", "cripto", "inversion", "inversión", "capitalizacion", "capitalización"]):
         return "investment"
+
     if any(word in normalized for word in ["ahorro", "fondo emergencia"]):
         return "saving"
+
     return "expense"
 
 
@@ -422,37 +491,93 @@ def _extract_date(line: str, month: int | None, year: int | None) -> str | None:
 
 
 def _extract_amount(line: str) -> dict[str, Any]:
-    currency = "USD" if "$" in line or re.search(r"\bUSD\b", line, re.I) else "CRC"
+    """
+    Extrae el monto real sin confundirlo con la fecha.
 
-    if currency == "USD":
-        usd_match = re.search(r"(?:\$|USD\s*)(-?\d+(?:[.,]\d+)*)", line, re.I)
-        if not usd_match:
-            usd_match = re.search(r"(-?\d+(?:[.,]\d+)*)\s*(?:USD|dolares|dólares)", line, re.I)
-        if usd_match:
-            original = _to_float(usd_match.group(1))
-            return {"amount": 0.0, "currency": "USD", "original_amount": original}
+    Estrategia:
+    1. Quita la fecha.
+    2. Si hay separadores |, prioriza campos con ₡, $, CRC, USD.
+    3. Si no hay símbolo, toma el último número del último campo útil.
+    """
+    text_without_date = re.sub(r"\b\d{1,2}[/-]\d{1,2}(?:[/-]20\d{2})?\b", " ", line, count=1)
+    parts = [part.strip() for part in re.split(r"\|", text_without_date) if part.strip()]
+    search_parts = parts if parts else [text_without_date]
 
-    amounts = re.findall(r"-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?|-?\d+", line)
-    if not amounts:
-        return {"amount": None, "currency": currency, "original_amount": None}
+    # Primero: campos con moneda explícita.
+    for part in reversed(search_parts):
+        if re.search(r"(₡|CRC|colones?)", part, re.I):
+            amount = _find_last_number(part)
+            if amount is not None:
+                return {"amount": amount, "currency": "CRC", "original_amount": None}
 
-    # Evita tomar la fecha como monto; normalmente el monto viene al final de la línea.
-    selected = amounts[-1]
-    return {"amount": _to_float(selected), "currency": "CRC", "original_amount": None}
+        if re.search(r"(\$|USD|dolares|dólares)", part, re.I):
+            amount = _find_last_number(part)
+            if amount is not None:
+                return {"amount": 0.0, "currency": "USD", "original_amount": amount}
+
+    # Segundo: último campo numérico. Evita tomar categorías/descripciones.
+    for part in reversed(search_parts):
+        amount = _find_last_number(part)
+        if amount is not None:
+            return {"amount": amount, "currency": "CRC", "original_amount": None}
+
+    return {"amount": None, "currency": "CRC", "original_amount": None}
+
+
+def _find_last_number(text: str) -> float | None:
+    # Soporta:
+    # 72008.06
+    # 72,008.06
+    # 72008
+    # 72.008,06 (por si algún banco usa formato latino)
+    pattern = r"-?\d+(?:[.,]\d{3})*(?:[.,]\d{1,2})?|-?\d+"
+    matches = re.findall(pattern, text)
+    if not matches:
+        return None
+
+    return _to_float(matches[-1])
 
 
 def _to_float(value: str) -> float:
-    clean = value.strip().replace("₡", "").replace("$", "").replace(" ", "")
+    clean = value.strip()
+    clean = clean.replace("₡", "").replace("$", "").replace("CRC", "").replace("USD", "")
+    clean = clean.replace("colones", "").replace("dolares", "").replace("dólares", "")
+    clean = clean.replace(" ", "")
+
     if "," in clean and "." in clean:
-        clean = clean.replace(",", "")
+        # 72,008.06 => 72008.06
+        if clean.rfind(".") > clean.rfind(","):
+            clean = clean.replace(",", "")
+        # 72.008,06 => 72008.06
+        else:
+            clean = clean.replace(".", "").replace(",", ".")
     elif "," in clean:
-        clean = clean.replace(",", "")
+        # 72008,06 => 72008.06
+        if len(clean.split(",")[-1]) in (1, 2):
+            clean = clean.replace(",", ".")
+        # 72,008 => 72008
+        else:
+            clean = clean.replace(",", "")
+
     return float(clean)
 
 
 def _clean_description(line: str) -> str:
-    text = re.sub(r"\b\d{1,2}[/-]\d{1,2}(?:[/-]20\d{2})?\b", "", line)
-    text = re.sub(r"^\s*\d{1,2}\s*[|,-]", "", text)
-    text = re.sub(r"(?:₡|\$|USD\s*)?-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*(?:USD|dolares|dólares)?\s*$", "", text, flags=re.I)
+    text = re.sub(r"\b\d{1,2}[/-]\d{1,2}(?:[/-]20\d{2})?\b", "", line, count=1)
+
+    # Si es formato con pipes, elimina el campo de monto y deja categoría/descripción.
+    parts = [part.strip() for part in text.split("|") if part.strip()]
+    if parts:
+        cleaned_parts = []
+        for part in parts:
+            if re.search(r"(₡|\$|CRC|USD|colones?|dolares|dólares)", part, re.I):
+                continue
+            # Si el campo es solamente un número, se elimina.
+            if _find_last_number(part) is not None and re.fullmatch(r"[\s₡$A-Za-z]*-?\d[\d.,\s]*(?:CRC|USD|colones?|dolares|dólares)?", part, re.I):
+                continue
+            cleaned_parts.append(part)
+        text = " ".join(cleaned_parts)
+
+    text = re.sub(r"(?:₡|\$|CRC|USD\s*)?-?\d+(?:[.,]\d{3})*(?:[.,]\d{1,2})?\s*(?:CRC|USD|colones?|dolares|dólares)?\s*$", "", text, flags=re.I)
     text = text.replace("|", " ").strip(" -—:")
     return re.sub(r"\s+", " ", text).strip() or "Movimiento importado"
