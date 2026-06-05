@@ -411,7 +411,16 @@ def user_status():
 
 @router.get("/dashboard")
 def financial_dashboard():
-    return get_financial_dashboard()
+    try:
+        return get_financial_dashboard()
+
+    except Exception as error:
+        return {
+            "status": "ERROR",
+            "endpoint": "/finance/dashboard",
+            "error_type": type(error).__name__,
+            "error": str(error),
+        }
     
 @router.get("/dashboard-debug")
 def financial_dashboard_debug():
