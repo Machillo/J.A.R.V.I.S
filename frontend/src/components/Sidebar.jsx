@@ -1,10 +1,12 @@
 import {
   Brain,
   CircleDollarSign,
+  Cpu,
   LayoutDashboard,
-  Settings,
-  Target,
   ReceiptText,
+  Settings,
+  ShieldCheck,
+  Target,
   WalletCards,
 } from "lucide-react";
 
@@ -17,12 +19,21 @@ const menuItems = [
   { id: "settings", label: "Config", icon: Settings },
 ];
 
+const formatCompact = (value) => Math.round(value || 0).toLocaleString("es-CR");
+
 export default function Sidebar({
   activePage,
   setActivePage,
   sidebarOpen,
   setSidebarOpen,
+  currentUser,
+  aiUsage,
 }) {
+  const isAdmin = currentUser?.role === "owner" || currentUser?.role === "admin";
+  const usageText = aiUsage
+    ? `${formatCompact(aiUsage.total_tokens)} / ${formatCompact(aiUsage.daily_limit)}`
+    : "0 / --";
+
   return (
     <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
       <div className="logo">JARVIS</div>
@@ -36,12 +47,12 @@ export default function Sidebar({
               key={item.id}
               className={`nav-button ${activePage === item.id ? "active" : ""}`}
               onClick={() => {
-  setActivePage(item.id);
+                setActivePage(item.id);
 
-  if (window.innerWidth <= 760) {
-    setSidebarOpen(false);
-  }
-}}
+                if (window.innerWidth <= 760) {
+                  setSidebarOpen(false);
+                }
+              }}
             >
               <span className="nav-icon">
                 <Icon size={20} />
@@ -52,6 +63,20 @@ export default function Sidebar({
           );
         })}
       </nav>
+
+      <div className="sidebar-admin-strip">
+        <div className="sidebar-token-pill" title="Tokens IA usados hoy">
+          <Cpu size={16} />
+          {sidebarOpen && <span>IA: {usageText}</span>}
+        </div>
+
+        {isAdmin && (
+          <div className="sidebar-admin-pill" title="Permisos administrativos">
+            <ShieldCheck size={16} />
+            {sidebarOpen && <span>Admin</span>}
+          </div>
+        )}
+      </div>
 
       <div className="sidebar-core">
         <WalletCards size={28} />

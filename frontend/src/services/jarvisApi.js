@@ -87,3 +87,6 @@ export const createTransaction = (payload) => jsonRequest("/transactions/", "POS
 export const askJarvis = async (message) => {
   return jsonRequest("/jarvis/chat", "POST", { message });
 };
+
+export const getJarvisUsageToday = () => request("/jarvis/usage/today");
+export const getJarvisUsageAdmin = () => request("/jarvis/usage/admin");

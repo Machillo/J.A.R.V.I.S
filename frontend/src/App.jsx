@@ -10,7 +10,7 @@ import Settings from "./pages/Settings";
 import Transactions from "./pages/Transactions";
 import Login from "./pages/Login";
 
-import { askJarvis, getFinanceDashboard, getStatus } from "./services/jarvisApi";
+import { askJarvis, getFinanceDashboard, getJarvisUsageToday, getMe, getStatus } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
 
 export default function App() {
@@ -24,6 +24,8 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [session, setSession] = useState(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [aiUsage, setAiUsage] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -39,6 +41,8 @@ export default function App() {
       setStatus(null);
       setJarvisResponse(null);
       setChatHistory([]);
+      setCurrentUser(null);
+      setAiUsage(null);
     });
 
     return () => subscription.unsubscribe();
@@ -48,13 +52,17 @@ export default function App() {
     if (!session) return;
 
     try {
-      const [statusData, dashboardData] = await Promise.all([
+      const [statusData, dashboardData, meData, usageData] = await Promise.all([
         getStatus(),
         getFinanceDashboard(),
+        getMe(),
+        getJarvisUsageToday(),
       ]);
 
       setStatus(statusData);
       setFinanceDashboard(dashboardData);
+      setCurrentUser(meData);
+      setAiUsage(usageData);
     } catch (error) {
       console.error(error);
     }
@@ -71,6 +79,8 @@ export default function App() {
     setStatus(null);
     setJarvisResponse(null);
     setChatHistory([]);
+    setCurrentUser(null);
+    setAiUsage(null);
   };
 
   const speakText = (text) => {
@@ -102,6 +112,9 @@ export default function App() {
         await refreshAppData();
       }
 
+      if (response?.usage || response?.response?.usage) {
+        setAiUsage(response?.usage || response?.response?.usage);
+      }
       speakText(responseText);
     } catch (error) {
       console.error(error);
@@ -155,6 +168,9 @@ export default function App() {
           await refreshAppData();
         }
 
+        if (response?.usage || response?.response?.usage) {
+          setAiUsage(response?.usage || response?.response?.usage);
+        }
         speakText(responseText);
       } catch (error) {
         console.error(error);
@@ -189,7 +205,7 @@ export default function App() {
 
   if (!sessionLoaded) {
     return (
-      <div className="jarvis-app">
+      <div className={`jarvis-app ${currentUser?.role === "owner" || currentUser?.role === "admin" ? "admin-user" : ""}`}>
         <main className="main-shell expanded">
           <section className="jarvis-home chat-home idle">
             <h1>J.A.R.V.I.S.</h1>
@@ -233,6 +249,8 @@ export default function App() {
         setActivePage={setActivePage}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
+        currentUser={currentUser}
+        aiUsage={aiUsage}
       />
 
       <main className={`main-shell ${sidebarOpen ? "" : "expanded"} ${activePage === "dashboard" ? "home-mode" : ""}`}>
@@ -253,7 +271,7 @@ export default function App() {
 
           <button className="logout-button" onClick={handleLogout}>
             <LogOut size={18} />
-            Salir
+            <span className="logout-text">Salir</span>
           </button>
         </header>
 

@@ -12,6 +12,7 @@ SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 VALID_ROLES = {"owner", "admin", "user", "viewer"}
 VALID_STATUSES = {"active", "blocked", "pending"}
+OWNER_EMAILS = {email.strip().lower() for email in os.getenv("OWNER_EMAILS", "gatotico99@gmail.com").split(",") if email.strip()}
 
 
 def _normalize_email(email: str) -> str:
@@ -237,22 +238,25 @@ def authenticate_access_token(access_token: str) -> dict[str, Any]:
             detail="Tu usuario no está activo.",
         )
 
+    effective_role = "owner" if app_user["email"] in OWNER_EMAILS else app_user["role"]
+
     with get_connection() as conn:
         conn.execute(
             """
             UPDATE allowed_users
             SET supabase_user_id = %s,
+                role = %s,
                 last_login_at = NOW()
             WHERE id = %s
             """,
-            (supabase_user["supabase_user_id"], app_user["id"]),
+            (supabase_user["supabase_user_id"], effective_role, app_user["id"]),
         )
         conn.commit()
 
     return {
         "id": app_user["id"],
         "email": app_user["email"],
-        "role": app_user["role"],
+        "role": effective_role,
         "status": app_user["status"],
         "supabase_user_id": supabase_user["supabase_user_id"],
     }

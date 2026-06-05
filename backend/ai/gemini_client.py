@@ -4,6 +4,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 
+from backend.ai.usage_tracker import assert_can_use_ai, estimate_tokens, record_ai_usage
+
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = BACKEND_DIR / ".env"
@@ -19,7 +21,7 @@ def is_ai_available():
     return bool(GEMINI_API_KEY) and AI_ENABLED
 
 
-def ask_gemini(prompt: str):
+def ask_gemini(prompt: str, route: str = "jarvis"):
     if not is_ai_available():
         return {
             "status": "ERROR",
@@ -27,6 +29,8 @@ def ask_gemini(prompt: str):
         }
 
     try:
+        assert_can_use_ai(estimate_tokens(prompt))
+
         client = genai.Client(api_key=GEMINI_API_KEY)
 
         response = client.models.generate_content(
@@ -34,9 +38,14 @@ def ask_gemini(prompt: str):
             contents=prompt
         )
 
+        text = response.text or ""
+        usage = record_ai_usage(prompt, text, route=route, model=GEMINI_MODEL)
+
         return {
             "status": "OK",
-            "text": response.text
+            "text": text,
+            "usage": usage,
+            "model": GEMINI_MODEL,
         }
 
     except Exception as error:
