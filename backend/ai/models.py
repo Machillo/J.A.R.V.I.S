@@ -32,3 +32,20 @@ class BrowserSubscriptionRequest(BaseModel):
     endpoint: str | None = None
     payload: dict[str, Any] | None = None
     permission: str | None = None
+
+class MemoryItemRequest(BaseModel):
+    content: str
+    category: str | None = None
+    title: str | None = None
+    importance: int = 3
+
+
+class ProfilePreferencesRequest(BaseModel):
+    display_name: str | None = None
+    response_style: str | None = None
+    notification_style: str | None = None
+    voice_gender: str | None = None
+    voice_speed: str | None = None
+    voice_tone: str | None = None
+    timezone: str | None = None
+    language: str | None = None

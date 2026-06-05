@@ -6,6 +6,7 @@ from backend.ai.action_flow import continue_pending_action, start_action
 from backend.ai.chat_memory import finish_pending_action, get_pending_action
 from backend.ai.gemini_client import ask_gemini
 from backend.ai.intent_router import ACTION_TYPES, detect_intent, is_pending_interrupt
+from backend.ai.memory_service import get_relevant_memory_context, remember_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
 from backend.integrations.internet_search import internet_search
 from backend.tasks.calendar_service import calendar_summary, create_calendar_event_from_text
@@ -40,6 +41,7 @@ def build_financial_context() -> dict:
 
 
 def _internet_answer(user_message: str, query: str) -> dict:
+    memory_context = get_relevant_memory_context(user_message, limit=5)
     search_result = internet_search(query)
     if search_result.get("status") != "OK":
         return {
@@ -61,6 +63,8 @@ Si no hay certeza, dilo.
 
 Pregunta del usuario: {user_message}
 Consulta usada: {query}
+Memoria relevante del usuario:
+{json.dumps(memory_context, ensure_ascii=False, indent=2)}
 Resultados:
 {json.dumps(results, ensure_ascii=False, indent=2)}
 
@@ -87,6 +91,7 @@ Formato recomendado: 1 a 3 frases y, si aplica, una fuente corta.
 
 def answer_with_context(user_message: str, intent_result: dict):
     context = build_financial_context()
+    memory_context = get_relevant_memory_context(user_message, limit=8)
     prompt = f"""
 Eres J.A.R.V.I.S., asistente financiero privado.
 
@@ -97,7 +102,10 @@ No inventes montos, fechas, deudas ni categorías.
 
 Pregunta: {user_message}
 Intento detectado: {json.dumps(intent_result, ensure_ascii=False)}
-Datos reales: {json.dumps(context, ensure_ascii=False, indent=2)}
+Memoria del usuario:
+{json.dumps(memory_context, ensure_ascii=False, indent=2)}
+Datos reales:
+{json.dumps(context, ensure_ascii=False, indent=2)}
 """
     ai_response = ask_gemini(prompt, route="jarvis_context_answer")
     if ai_response.get("status") != "OK":
@@ -179,14 +187,33 @@ def process_message(user_message: str):
             "data": result,
         }
 
-    if intent in {"email", "memory", "fixed_expense"}:
+    if intent == "memory":
+        text_lower = user_message.lower()
+        if any(trigger in text_lower for trigger in ["recuerda que", "recorda que", "recordá que", "acuérdate", "acuerdate", "guarda en memoria", "agrega a memoria", "memoriza"]):
+            result = remember_from_message(user_message)
+            return {
+                "message": "Listo, lo recordaré.",
+                "intent": "memory",
+                "status": result.get("status", "OK"),
+                "pending": False,
+                "data": result,
+            }
+
+        memories = search_memory_items(user_message, limit=8)
+        if not memories:
+            message = "Señor, no encontré recuerdos guardados sobre eso."
+        else:
+            lines = [f"- {item.get('content')}" for item in memories[:6]]
+            message = "Señor, esto tengo en memoria:\n" + "\n".join(lines)
+        return {"message": message, "intent": "memory", "status": "OK", "pending": False, "data": {"items": memories}}
+
+    if intent in {"email", "fixed_expense"}:
         labels = {
             "email": "lectura de correos",
-            "memory": "memoria",
             "fixed_expense": "gastos fijos",
         }
         return {
-            "message": f"Señor, detecté que esto corresponde a {labels[intent]}. Esa sección ya está identificada para la siguiente fase, pero todavía no está activa al 100%.",
+            "message": f"Señor, detecté que esto corresponde a {labels[intent]}. Esa sección está identificada, pero la activaremos en su fase dedicada.",
             "intent": intent,
             "status": "NOT_READY",
             "pending": False,

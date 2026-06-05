@@ -276,3 +276,31 @@ CREATE TABLE IF NOT EXISTS chat_pending_actions (
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_pending_actions_user_id ON chat_pending_actions(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_pending_actions_status ON chat_pending_actions(status);
+
+-- Phase 2: persistent memory per user
+CREATE TABLE IF NOT EXISTS memory_items (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+    category TEXT NOT NULL DEFAULT 'other',
+    title TEXT,
+    content TEXT NOT NULL,
+    importance INTEGER NOT NULL DEFAULT 3,
+    source TEXT NOT NULL DEFAULT 'manual',
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_items_user_active ON memory_items(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_memory_items_category ON memory_items(category);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+    preference_key TEXT NOT NULL,
+    preference_value JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, preference_key)
+);
