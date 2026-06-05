@@ -1,8 +1,3 @@
--- J.A.R.V.I.S PostgreSQL/Supabase schema
--- PostgreSQL is the only official database.
--- Supabase Auth identity is stored in allowed_users.supabase_user_id.
--- Application data is scoped by allowed_users.id through user_id BIGINT.
-
 CREATE TABLE IF NOT EXISTS allowed_users (
     id BIGSERIAL PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
@@ -304,3 +299,44 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, preference_key)
 );
+
+-- Phase 5: fixed expenses and recurring payment control
+CREATE TABLE IF NOT EXISTS fixed_expenses (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'Gastos fijos',
+    expected_amount NUMERIC(14, 2),
+    currency TEXT NOT NULL DEFAULT 'CRC',
+    frequency TEXT NOT NULL DEFAULT 'monthly',
+    interval_months INTEGER NOT NULL DEFAULT 1,
+    start_month TEXT,
+    due_day INTEGER,
+    reminder_days INTEGER NOT NULL DEFAULT 3,
+    payment_method TEXT NOT NULL DEFAULT 'manual',
+    auto_deducted BOOLEAN NOT NULL DEFAULT FALSE,
+    aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+    notes TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS fixed_expense_matches (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+    fixed_expense_id BIGINT NOT NULL REFERENCES fixed_expenses(id) ON DELETE CASCADE,
+    transaction_id BIGINT REFERENCES transactions(id) ON DELETE SET NULL,
+    period_month TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    confidence NUMERIC(5, 2) NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, fixed_expense_id, period_month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fixed_expenses_user_id ON fixed_expenses(user_id);
+CREATE INDEX IF NOT EXISTS idx_fixed_expenses_active ON fixed_expenses(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_fixed_expense_matches_user_period ON fixed_expense_matches(user_id, period_month);

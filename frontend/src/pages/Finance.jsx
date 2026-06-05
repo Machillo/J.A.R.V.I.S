@@ -14,9 +14,11 @@ import {
 } from "lucide-react";
 import {
   commitFinanceInput,
+  getFixedExpenseStatus,
   getTransactionAnalysis,
   previewFinanceInput,
   previewFinancePdf,
+  seedOwnerFixedExpenses,
 } from "../services/jarvisApi";
 
 const formatCRC = (value = 0) =>
@@ -390,6 +392,90 @@ function CategoryBars({ data = [] }) {
   );
 }
 
+
+function FixedExpensesPanel({ data, onRefresh, isOwner }) {
+  const items = data?.items || [];
+  const summary = data?.summary || {};
+  const alerts = data?.alerts || [];
+  const [seeding, setSeeding] = useState(false);
+  const statusLabels = {
+    paid: "Pagado",
+    pending: "Pendiente",
+    overdue: "Vencido",
+    doubtful: "Dudoso",
+    not_due: "No toca",
+  };
+
+  const runSeed = async () => {
+    setSeeding(true);
+    try {
+      await seedOwnerFixedExpenses();
+      await onRefresh?.();
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  return (
+    <article className="hud-panel large fixed-expenses-panel">
+      <div className="panel-title">
+        <div>
+          <h3>GASTOS FIJOS Y RECURRENTES</h3>
+          <p>Jarvis detecta pagos parecidos y evita contarlos doble.</p>
+        </div>
+        <span>{data?.month || "MES"}</span>
+      </div>
+
+      <div className="fixed-summary-strip">
+        <div><span>Esperado</span><strong>{formatCRC(summary.expected)}</strong></div>
+        <div><span>Detectado</span><strong>{formatCRC(summary.paid)}</strong></div>
+        <div><span>Pendiente</span><strong>{formatCRC(summary.pending + summary.overdue + summary.doubtful)}</strong></div>
+      </div>
+
+      {alerts.length > 0 && (
+        <div className="fixed-alerts">
+          {alerts.slice(0, 3).map((alert, index) => (
+            <div className={`fixed-alert ${alert.level}`} key={index}>
+              <AlertTriangle size={15} /> {alert.message}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {items.length === 0 ? (
+        <div className="empty-state compact-empty-state">
+          <CircleDollarSign size={24} />
+          <h3>Sin gastos fijos</h3>
+          <p>Podés agregarlos desde Jarvis o cargar los predeterminados.</p>
+          {isOwner && (
+            <button className="hud-action-button" onClick={runSeed} disabled={seeding}>
+              Cargar mis gastos fijos
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="fixed-expense-list">
+          {items.map((item) => {
+            const expense = item.fixed_expense || {};
+            return (
+              <div className={`fixed-expense-item ${item.status}`} key={expense.id}>
+                <div>
+                  <strong>{expense.name}</strong>
+                  <span>{expense.category} · {item.due_date || "sin día fijo"}</span>
+                </div>
+                <div className="fixed-expense-right">
+                  <b>{formatCRC(item.expected_amount)}</b>
+                  <em>{statusLabels[item.status] || item.status}</em>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </article>
+  );
+}
+
 export default function Finance({
   dashboard,
   loading = false,
@@ -398,6 +484,7 @@ export default function Finance({
   currentUser,
 }) {
   const [transactionAnalysis, setTransactionAnalysis] = useState(null);
+  const [fixedStatus, setFixedStatus] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -409,6 +496,15 @@ export default function Finance({
       .catch((analysisError) => {
         console.error(analysisError);
         if (active) setTransactionAnalysis(null);
+      });
+
+    getFixedExpenseStatus()
+      .then((data) => {
+        if (active) setFixedStatus(data);
+      })
+      .catch((fixedError) => {
+        console.error(fixedError);
+        if (active) setFixedStatus(null);
       });
 
     return () => {
@@ -606,6 +702,8 @@ export default function Finance({
 
 <CategoryBars data={categoryChartData} />
         </article>
+
+        <FixedExpensesPanel data={fixedStatus} onRefresh={onRefresh} isOwner={isOwner} />
 
         <article className="hud-panel">
           <div className="panel-title">

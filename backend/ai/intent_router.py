@@ -256,16 +256,23 @@ def _fallback_detect(user_message: str) -> dict[str, Any]:
             "source": "deterministic",
         }
 
-    # 4. Importador mensual antes de acciones sueltas.
+    # 4. Gastos fijos / pagos recurrentes. Debe ir antes de crear gasto normal.
+    if any(phrase in text for phrase in [
+        "gasto fijo", "gastos fijos", "pago fijo", "pagos fijos", "recurrente",
+        "pagos recurrentes", "suscripcion fija", "suscripción fija"
+    ]):
+        return {"intent": "fixed_expense", "entity": user_message.strip(), "confidence": 0.92, "source": "deterministic"}
+
+    # 5. Importador mensual antes de acciones sueltas.
     if any(phrase in text for phrase in ["estado de cuenta", "estado financiero", "transacciones del mes", "movimientos de"]):
         return {"intent": "import_monthly_statement", "action_type": "import_monthly_statement", "entity": None, "confidence": 0.9, "source": "deterministic"}
 
-    # 5. Crear datos financieros.
+    # 6. Crear datos financieros.
     create_intent = _create_action_intent(text)
     if create_intent:
         return create_intent
 
-    # 6. Consultas financieras.
+    # 7. Consultas financieras.
     finance_read = _financial_read_intent(text)
     if finance_read:
         return finance_read
@@ -279,9 +286,6 @@ def _fallback_detect(user_message: str) -> dict[str, Any]:
         "que sabes sobre", "qué sabes sobre", "guarda en memoria", "agrega a memoria", "memoriza"
     ]):
         return {"intent": "memory", "entity": user_message.strip(), "confidence": 0.88, "source": "deterministic"}
-    if any(phrase in text for phrase in ["gasto fijo", "gastos fijos", "pago fijo", "recurrente"]):
-        return {"intent": "fixed_expense", "entity": user_message.strip(), "confidence": 0.8, "source": "deterministic"}
-
     return {"intent": "general", "entity": user_message.strip(), "confidence": 0.4, "source": "deterministic"}
 
 

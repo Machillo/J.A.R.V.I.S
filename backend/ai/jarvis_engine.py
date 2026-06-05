@@ -23,6 +23,7 @@ from backend.goals.service import get_financial_goal_by_name
 from backend.advisor.service import analyze_spending_habits, get_financial_advice
 from backend.transactions.analyzer import get_transaction_analysis
 from backend.finance.strategic_engine import get_financial_engine_report, simulate_what_if
+from backend.finance.fixed_expenses import handle_fixed_expense_message
 
 
 def _safe_call(fn, fallback):
@@ -311,13 +312,19 @@ def process_message(user_message: str):
             "data": result,
         }
 
-    if intent in {"email", "fixed_expense"}:
-        labels = {
-            "email": "lectura de correos",
-            "fixed_expense": "gastos fijos",
-        }
+    if intent == "fixed_expense":
+        result = handle_fixed_expense_message(user_message)
         return {
-            "message": f"Señor, detecté que esto corresponde a {labels[intent]}. Esa sección está identificada, pero la activaremos en su fase dedicada.",
+            "message": result.get("message"),
+            "intent": "fixed_expense",
+            "status": result.get("status", "OK"),
+            "pending": False,
+            "data": result.get("data"),
+        }
+
+    if intent == "email":
+        return {
+            "message": "Señor, detecté que esto corresponde a lectura de correos. Esa sección está identificada, pero la activaremos en su fase dedicada.",
             "intent": intent,
             "status": "NOT_READY",
             "pending": False,

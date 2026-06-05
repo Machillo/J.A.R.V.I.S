@@ -3787,3 +3787,140 @@ body,
     text-align: left;
   }
 }
+
+/* Phase 5: Fixed expenses */
+.fixed-expenses-panel {
+  overflow: hidden;
+}
+
+.fixed-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.fixed-summary-strip div {
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(3, 12, 28, 0.58);
+}
+
+.fixed-summary-strip span,
+.fixed-expense-item span {
+  display: block;
+  color: var(--muted-text, rgba(231, 245, 255, 0.62));
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+}
+
+.fixed-summary-strip strong {
+  display: block;
+  margin-top: 5px;
+  color: #f4fbff;
+  font-size: 1rem;
+}
+
+.fixed-alerts {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.fixed-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 0.84rem;
+  border: 1px solid rgba(255, 202, 87, 0.28);
+  background: rgba(255, 202, 87, 0.08);
+  color: #ffe6a6;
+}
+
+.fixed-alert.danger {
+  border-color: rgba(255, 85, 128, 0.32);
+  background: rgba(255, 85, 128, 0.09);
+  color: #ffc4d2;
+}
+
+.fixed-expense-list {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.fixed-expense-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 4px solid rgba(0, 229, 255, 0.45);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(4, 13, 31, 0.72);
+}
+
+.fixed-expense-item.paid {
+  border-left-color: #32f59d;
+}
+
+.fixed-expense-item.pending {
+  border-left-color: #ffd166;
+}
+
+.fixed-expense-item.overdue {
+  border-left-color: #ff4d7d;
+}
+
+.fixed-expense-item.doubtful {
+  border-left-color: #b47cff;
+}
+
+.fixed-expense-item strong {
+  display: block;
+  color: #f7fbff;
+  margin-bottom: 4px;
+}
+
+.fixed-expense-right {
+  text-align: right;
+  min-width: 110px;
+}
+
+.fixed-expense-right b {
+  display: block;
+  color: #e9fbff;
+}
+
+.fixed-expense-right em {
+  display: inline-block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 0.72rem;
+  color: rgba(231, 245, 255, 0.72);
+}
+
+.compact-empty-state {
+  min-height: auto;
+  padding: 18px;
+}
+
+@media (max-width: 720px) {
+  .fixed-summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .fixed-expense-item {
+    align-items: flex-start;
+  }
+
+  .fixed-expense-right {
+    min-width: 92px;
+  }
+}

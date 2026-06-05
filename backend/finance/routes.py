@@ -28,6 +28,8 @@ from backend.finance.models import (
     CardPurchaseEvaluationRequest,
     WhatIfSimulationRequest,
     ReconciliationRequest,
+    FixedExpenseRequest,
+    FixedExpenseUpdateRequest,
 )
 
 from backend.finance.service import (
@@ -92,6 +94,15 @@ from backend.finance.card_cycle import (
 )
 from backend.finance.category_catalog import get_category_catalog, get_category_groups
 
+
+from backend.finance.fixed_expenses import (
+    create_fixed_expense,
+    delete_fixed_expense,
+    get_fixed_expense_status,
+    list_fixed_expenses,
+    seed_owner_fixed_expenses,
+    update_fixed_expense,
+)
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
 
@@ -475,6 +486,38 @@ def financial_engine_reconcile(request: ReconciliationRequest):
 @router.get("/user-status")
 def user_status():
     return get_user_status()
+
+
+
+@router.get("/fixed-expenses")
+def fixed_expenses():
+    return list_fixed_expenses()
+
+
+@router.post("/fixed-expenses")
+def create_fixed_expense_route(request: FixedExpenseRequest):
+    return create_fixed_expense(**request.model_dump())
+
+
+@router.put("/fixed-expenses/{fixed_expense_id}")
+def update_fixed_expense_route(fixed_expense_id: int, request: FixedExpenseUpdateRequest):
+    payload = request.model_dump(exclude_unset=True)
+    return update_fixed_expense(fixed_expense_id, **payload)
+
+
+@router.delete("/fixed-expenses/{fixed_expense_id}")
+def delete_fixed_expense_route(fixed_expense_id: int):
+    return delete_fixed_expense(fixed_expense_id)
+
+
+@router.get("/fixed-expenses/status")
+def fixed_expense_status(month: str | None = None):
+    return get_fixed_expense_status(month)
+
+
+@router.post("/fixed-expenses/seed-owner-defaults")
+def seed_fixed_expenses_route():
+    return {"status": "OK", "items": seed_owner_fixed_expenses()}
 
 @router.get("/dashboard")
 def financial_dashboard():

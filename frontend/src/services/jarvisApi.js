@@ -127,3 +127,10 @@ export const previewFinancePdf = async ({ file, default_year_month = "", exchang
   }
   return payload;
 };
+
+export const getFixedExpenses = () => request("/finance/fixed-expenses");
+export const getFixedExpenseStatus = (month = "") => request(`/finance/fixed-expenses/status${month ? `?month=${encodeURIComponent(month)}` : ""}`);
+export const createFixedExpense = (payload) => jsonRequest("/finance/fixed-expenses", "POST", payload);
+export const updateFixedExpense = (id, payload) => jsonRequest(`/finance/fixed-expenses/${id}`, "PUT", payload);
+export const deleteFixedExpense = (id) => request(`/finance/fixed-expenses/${id}`, { method: "DELETE" });
+export const seedOwnerFixedExpenses = () => request("/finance/fixed-expenses/seed-owner-defaults", { method: "POST" });

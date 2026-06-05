@@ -123,3 +123,34 @@ class WhatIfSimulationRequest(BaseModel):
 class ReconciliationRequest(BaseModel):
     opening_balance: float
     current_balance: float
+
+
+class FixedExpenseRequest(BaseModel):
+    name: str
+    category: str = "Gastos fijos"
+    expected_amount: float | None = None
+    currency: str = "CRC"
+    frequency: str = "monthly"
+    interval_months: int = 1
+    start_month: str | None = None
+    due_day: int | None = None
+    payment_method: str = "manual"
+    auto_deducted: bool = False
+    aliases: list[str] = []
+    notes: str = ""
+
+
+class FixedExpenseUpdateRequest(BaseModel):
+    name: str | None = None
+    category: str | None = None
+    expected_amount: float | None = None
+    currency: str | None = None
+    frequency: str | None = None
+    interval_months: int | None = None
+    start_month: str | None = None
+    due_day: int | None = None
+    payment_method: str | None = None
+    auto_deducted: bool | None = None
+    aliases: list[str] | None = None
+    notes: str | None = None
+    is_active: bool | None = None
