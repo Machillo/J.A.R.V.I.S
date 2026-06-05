@@ -111,3 +111,15 @@ class CreditCardSettingsRequest(BaseModel):
 class CardPurchaseEvaluationRequest(BaseModel):
     amount: float
     description: str = ""
+
+class WhatIfSimulationRequest(BaseModel):
+    amount: float
+    months: int = 1
+    description: str = ""
+    currency: str = "CRC"
+    exchange_rate: float = 1.0
+
+
+class ReconciliationRequest(BaseModel):
+    opening_balance: float
+    current_balance: float

@@ -22,6 +22,7 @@ from backend.finance.service import (
 from backend.goals.service import get_financial_goal_by_name
 from backend.advisor.service import analyze_spending_habits, get_financial_advice
 from backend.transactions.analyzer import get_transaction_analysis
+from backend.finance.strategic_engine import get_financial_engine_report, simulate_what_if
 
 
 def _safe_call(fn, fallback):
@@ -37,6 +38,7 @@ def build_financial_context() -> dict:
         "net_worth": _safe_call(get_net_worth_report, {}),
         "debts": _safe_call(get_debts, []),
         "transactions": _safe_call(get_transaction_analysis, {}),
+        "strategic_engine": _safe_call(get_financial_engine_report, {}),
     }
 
 
@@ -129,6 +131,67 @@ Datos reales:
     }
 
 
+
+def _extract_simulation_payload(user_message: str) -> dict:
+    import re
+    text = user_message.lower()
+    currency = "CRC"
+    exchange_rate = 1.0
+
+    usd_match = re.search(r"\$\s*([0-9]+(?:[.,][0-9]+)?)", user_message)
+    crc_match = re.search(r"(?:₡|crc|colones?)\s*([0-9]+(?:[.,][0-9]+)?)", text, re.I)
+    plain_match = re.search(r"\b([0-9]{4,}(?:[.,][0-9]+)?)\b", user_message)
+
+    if usd_match:
+        amount = float(usd_match.group(1).replace(",", "."))
+        currency = "USD"
+        exchange_rate = 495.0
+    elif crc_match:
+        amount = float(crc_match.group(1).replace(",", "."))
+    elif plain_match:
+        amount = float(plain_match.group(1).replace(",", "."))
+    else:
+        amount = 0.0
+
+    months_match = re.search(r"(\d+)\s*(?:cuotas|meses|mes)", text)
+    months = int(months_match.group(1)) if months_match else 1
+
+    return {
+        "amount": amount,
+        "months": months,
+        "description": user_message,
+        "currency": currency,
+        "exchange_rate": exchange_rate,
+    }
+
+
+def _format_financial_engine_message(report: dict) -> str:
+    if report.get("status") != "OK":
+        return "Señor, no pude calcular el motor financiero en este momento."
+
+    health = report.get("health", {})
+    forecast = report.get("forecast", {})
+    emergency = report.get("emergency_fund", {})
+    debts = report.get("debts", {})
+    recs = report.get("recommendations", [])
+
+    lines = [
+        "Señor, este es el diagnóstico del motor financiero:",
+        f"- Salud financiera: {health.get('score', 0)}% ({health.get('level', 'sin datos')}).",
+        f"- Saldo estimado al cierre del mes: ₡{forecast.get('projected_end_balance', 0):,.0f}.",
+        f"- Fondo de emergencia sugerido: ₡{emergency.get('recommended_3_months', 0):,.0f} a ₡{emergency.get('recommended_6_months', 0):,.0f}.",
+    ]
+
+    if debts.get("status") == "OK" and debts.get("avalanche"):
+        lines.append(f"- Deuda prioritaria por avalancha: {debts['avalanche']['priority_debt']['name']}.")
+
+    if recs:
+        lines.append("Recomendaciones:")
+        lines.extend([f"- {item}" for item in recs[:4]])
+
+    return "\n".join(lines)
+
+
 def process_message(user_message: str):
     intent_result = detect_intent(user_message)
 
@@ -206,6 +269,47 @@ def process_message(user_message: str):
             lines = [f"- {item.get('content')}" for item in memories[:6]]
             message = "Señor, esto tengo en memoria:\n" + "\n".join(lines)
         return {"message": message, "intent": "memory", "status": "OK", "pending": False, "data": {"items": memories}}
+
+
+    if intent == "financial_engine":
+        report = get_financial_engine_report()
+        return {
+            "message": _format_financial_engine_message(report),
+            "intent": "financial_engine",
+            "status": report.get("status", "OK"),
+            "pending": False,
+            "data": report,
+        }
+
+    if intent == "financial_simulation":
+        payload = _extract_simulation_payload(user_message)
+        if payload["amount"] <= 0:
+            return {
+                "message": "Señor, necesito el monto para simular ese escenario.",
+                "intent": "financial_simulation",
+                "status": "MISSING_AMOUNT",
+                "pending": False,
+                "data": payload,
+            }
+        result = simulate_what_if(**payload)
+        scenario = result.get("scenario", {})
+        projection = result.get("projection", [])
+        first_risk = next((item for item in projection if item.get("risk") == "high"), None)
+        message = (
+            f"Señor, si hace eso serían ₡{scenario.get('monthly_payment', 0):,.0f} al mes "
+            f"durante {scenario.get('months')} mes(es). "
+            f"Promedio de flujo mensual actual: ₡{result.get('baseline', {}).get('average_monthly_net_operational', 0):,.0f}. "
+            f"{result.get('recommendation')}"
+        )
+        if first_risk:
+            message += f" El primer mes con riesgo sería {first_risk.get('month')}."
+        return {
+            "message": message,
+            "intent": "financial_simulation",
+            "status": result.get("status", "OK"),
+            "pending": False,
+            "data": result,
+        }
 
     if intent in {"email", "fixed_expense"}:
         labels = {

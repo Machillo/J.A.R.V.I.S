@@ -32,6 +32,8 @@ READ_INTENTS = [
     "goal_status",
     "spending_habits",
     "advisor_summary",
+    "financial_engine",
+    "financial_simulation",
     "internet_search",
     "create_calendar_event",
     "calendar_summary",
@@ -152,6 +154,17 @@ def _financial_read_intent(text: str) -> dict[str, Any] | None:
         return {"intent": "user_status", "entity": None, "confidence": 0.9, "source": "deterministic"}
     if any(word in text for word in ["habitos", "hábitos", "categorias", "categorías", "en que se va", "en que gasto"]):
         return {"intent": "spending_habits", "entity": None, "confidence": 0.85, "source": "deterministic"}
+    if any(phrase in text for phrase in [
+        "que pasa si", "qué pasa si", "what if", "simula", "simulador", "en cuotas", "cuotas sin intereses"
+    ]):
+        return {"intent": "financial_simulation", "entity": None, "confidence": 0.9, "source": "deterministic"}
+    if any(phrase in text for phrase in [
+        "forecast", "proyeccion", "proyección", "cierre del mes", "salud financiera",
+        "fondo de emergencia", "gastos hormiga", "bola de nieve", "avalancha",
+        "conciliacion", "conciliación", "motor financiero", "dinero inteligente",
+        "estrategia de deuda", "saldo estimado"
+    ]):
+        return {"intent": "financial_engine", "entity": None, "confidence": 0.9, "source": "deterministic"}
     if any(word in text for word in ["recom", "estrategia", "consejo", "asesor"]):
         return {"intent": "advisor_summary", "entity": None, "confidence": 0.8, "source": "deterministic"}
     if "deuda" in text or "deudas" in text:
@@ -308,7 +321,9 @@ Reglas críticas:
 4. Si pregunta por agenda/calendario, usa calendar_summary.
 5. Solo usa create_expense/create_debt/create_income si claramente quiere guardar datos financieros.
 6. Chimborazo, F1, UFC, fútbol, noticias o preguntas generales NO son gastos.
-7. Responde breve JSON, sin markdown.
+7. Si el usuario pide simulación financiera o "qué pasa si", usa financial_simulation.
+8. Si pregunta por forecast, salud financiera, fondo de emergencia, estrategia de deuda, bola de nieve, avalancha, gastos hormiga o conciliación, usa financial_engine.
+9. Responde breve JSON, sin markdown.
 
 Mensaje:
 {user_message!r}

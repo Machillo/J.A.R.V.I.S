@@ -26,6 +26,8 @@ from backend.finance.models import (
     PayScheduleRequest,
     CreditCardSettingsRequest,
     CardPurchaseEvaluationRequest,
+    WhatIfSimulationRequest,
+    ReconciliationRequest,
 )
 
 from backend.finance.service import (
@@ -70,6 +72,16 @@ from backend.finance.cashflow import (
     get_pay_schedule,
     get_next_pay_date,
     get_basic_cashflow_forecast,
+)
+
+from backend.finance.strategic_engine import (
+    get_financial_engine_report,
+    simulate_what_if,
+    reconcile_bank_balance,
+    calculate_debt_strategies,
+    forecast_month_end_balance,
+    calculate_financial_health_score,
+    calculate_emergency_fund,
 )
 
 from backend.finance.card_cycle import (
@@ -414,6 +426,51 @@ def card_purchase_evaluation(request: CardPurchaseEvaluationRequest):
         amount=request.amount,
         description=request.description,
     )
+
+
+@router.get("/engine")
+def financial_engine():
+    return get_financial_engine_report()
+
+
+@router.get("/engine/forecast")
+def financial_engine_forecast():
+    return forecast_month_end_balance()
+
+
+@router.get("/engine/health")
+def financial_engine_health():
+    return calculate_financial_health_score()
+
+
+@router.get("/engine/debt-strategies")
+def financial_engine_debt_strategies():
+    return calculate_debt_strategies()
+
+
+@router.get("/engine/emergency-fund")
+def financial_engine_emergency_fund():
+    return calculate_emergency_fund()
+
+
+@router.post("/engine/simulate")
+def financial_engine_simulation(request: WhatIfSimulationRequest):
+    return simulate_what_if(
+        amount=request.amount,
+        months=request.months,
+        description=request.description,
+        currency=request.currency,
+        exchange_rate=request.exchange_rate,
+    )
+
+
+@router.post("/engine/reconcile")
+def financial_engine_reconcile(request: ReconciliationRequest):
+    return reconcile_bank_balance(
+        opening_balance=request.opening_balance,
+        current_balance=request.current_balance,
+    )
+
 
 @router.get("/user-status")
 def user_status():
