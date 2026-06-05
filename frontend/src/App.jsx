@@ -5,7 +5,6 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import Finance from "./pages/Finance";
 import Goals from "./pages/Goals";
-import Transactions from "./pages/Transactions";
 import Memory from "./pages/Memory";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
@@ -18,8 +17,6 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 760);
   const [status, setStatus] = useState(null);
   const [financeDashboard, setFinanceDashboard] = useState(null);
-  const [financeLoading, setFinanceLoading] = useState(false);
-  const [financeError, setFinanceError] = useState("");
   const [jarvisInput, setJarvisInput] = useState("");
   const [jarvisResponse, setJarvisResponse] = useState(null);
   const [isListening, setIsListening] = useState(false);
@@ -39,19 +36,15 @@ export default function App() {
       setFinanceDashboard(null);
       setStatus(null);
       setJarvisResponse(null);
-      setFinanceError("");
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const loadCoreData = async () => {
+  const refreshAppData = async () => {
     if (!session) return;
 
     try {
-      setFinanceLoading(true);
-      setFinanceError("");
-
       const [statusData, dashboardData] = await Promise.all([
         getStatus(),
         getFinanceDashboard(),
@@ -61,14 +54,11 @@ export default function App() {
       setFinanceDashboard(dashboardData);
     } catch (error) {
       console.error(error);
-      setFinanceError(error.message || "No pude cargar el dashboard financiero.");
-    } finally {
-      setFinanceLoading(false);
     }
   };
 
   useEffect(() => {
-    loadCoreData();
+    refreshAppData();
   }, [session]);
 
   const handleLogout = async () => {
@@ -77,7 +67,6 @@ export default function App() {
     setFinanceDashboard(null);
     setStatus(null);
     setJarvisResponse(null);
-    setFinanceError("");
   };
 
   const speakText = (text) => {
@@ -95,6 +84,10 @@ export default function App() {
 
       const responseText =
         response?.response?.message || response?.message || "Respuesta recibida.";
+
+      if (response?.status === "OK" && response?.action_type?.startsWith("create_")) {
+        await refreshAppData();
+      }
 
       speakText(responseText);
       setJarvisInput("");
@@ -134,6 +127,10 @@ export default function App() {
           response?.message ||
           `Intención detectada: ${response.intent}`;
 
+        if (response?.status === "OK" && response?.action_type?.startsWith("create_")) {
+          await refreshAppData();
+        }
+
         speakText(responseText);
       } catch (error) {
         console.error(error);
@@ -171,17 +168,7 @@ export default function App() {
   const renderPage = () => {
     switch (activePage) {
       case "finance":
-        return (
-          <Finance
-            dashboard={financeDashboard}
-            loading={financeLoading}
-            error={financeError}
-            onRefresh={loadCoreData}
-          />
-        );
-
-      case "transactions":
-        return <Transactions />;
+        return <Finance dashboard={financeDashboard} />;
 
       case "goals":
         return <Goals dashboard={financeDashboard} />;

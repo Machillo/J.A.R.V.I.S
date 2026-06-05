@@ -44,14 +44,15 @@ Responde solamente el texto final que verá el usuario.
 
 
 def fallback_response(intent: str, data: dict):
-    if intent == "highest_debt":
+    if intent in {"highest_debt", "lowest_debt"}:
         debt = data.get("debt")
 
         if not debt:
             return "Señor, no encontré deudas registradas."
 
+        label = "más alta" if intent == "highest_debt" else "más pequeña"
         return (
-            f"Señor, su deuda más alta actualmente es {debt['name']}, "
+            f"Señor, su deuda {label} actualmente es {debt['name']}, "
             f"con un saldo pendiente de ₡{debt['remaining_amount']:,.2f}."
         )
 
