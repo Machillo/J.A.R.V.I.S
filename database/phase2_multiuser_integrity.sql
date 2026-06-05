@@ -1,6 +1,4 @@
--- Phase 2 hardening: multi-user data isolation integrity.
--- Run this in Supabase SQL Editor.
--- It does not delete data.
+
 
 ALTER TABLE allowed_users
 ADD COLUMN IF NOT EXISTS supabase_user_id TEXT;

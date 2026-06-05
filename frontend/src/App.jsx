@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import Finance from "./pages/Finance";
 import Goals from "./pages/Goals";
+import Transactions from "./pages/Transactions";
 import Memory from "./pages/Memory";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
@@ -17,6 +18,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 760);
   const [status, setStatus] = useState(null);
   const [financeDashboard, setFinanceDashboard] = useState(null);
+  const [financeLoading, setFinanceLoading] = useState(false);
+  const [financeError, setFinanceError] = useState("");
   const [jarvisInput, setJarvisInput] = useState("");
   const [jarvisResponse, setJarvisResponse] = useState(null);
   const [isListening, setIsListening] = useState(false);
@@ -36,29 +39,36 @@ export default function App() {
       setFinanceDashboard(null);
       setStatus(null);
       setJarvisResponse(null);
+      setFinanceError("");
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
+  const loadCoreData = async () => {
     if (!session) return;
 
-    async function loadData() {
-      try {
-        const [statusData, dashboardData] = await Promise.all([
-          getStatus(),
-          getFinanceDashboard(),
-        ]);
+    try {
+      setFinanceLoading(true);
+      setFinanceError("");
 
-        setStatus(statusData);
-        setFinanceDashboard(dashboardData);
-      } catch (error) {
-        console.error(error);
-      }
+      const [statusData, dashboardData] = await Promise.all([
+        getStatus(),
+        getFinanceDashboard(),
+      ]);
+
+      setStatus(statusData);
+      setFinanceDashboard(dashboardData);
+    } catch (error) {
+      console.error(error);
+      setFinanceError(error.message || "No pude cargar el dashboard financiero.");
+    } finally {
+      setFinanceLoading(false);
     }
+  };
 
-    loadData();
+  useEffect(() => {
+    loadCoreData();
   }, [session]);
 
   const handleLogout = async () => {
@@ -67,6 +77,7 @@ export default function App() {
     setFinanceDashboard(null);
     setStatus(null);
     setJarvisResponse(null);
+    setFinanceError("");
   };
 
   const speakText = (text) => {
@@ -160,7 +171,17 @@ export default function App() {
   const renderPage = () => {
     switch (activePage) {
       case "finance":
-        return <Finance dashboard={financeDashboard} />;
+        return (
+          <Finance
+            dashboard={financeDashboard}
+            loading={financeLoading}
+            error={financeError}
+            onRefresh={loadCoreData}
+          />
+        );
+
+      case "transactions":
+        return <Transactions />;
 
       case "goals":
         return <Goals dashboard={financeDashboard} />;

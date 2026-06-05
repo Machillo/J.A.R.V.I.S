@@ -4,12 +4,14 @@ import {
   LayoutDashboard,
   Settings,
   Target,
+  ReceiptText,
   WalletCards,
 } from "lucide-react";
 
 const menuItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "finance", label: "Finanzas", icon: CircleDollarSign },
+  { id: "transactions", label: "Transacciones", icon: ReceiptText },
   { id: "goals", label: "Metas", icon: Target },
   { id: "memory", label: "Memory Core", icon: Brain },
   { id: "settings", label: "Config", icon: Settings },
