@@ -1,6 +1,7 @@
 import re
 
 from datetime import date
+from backend.finance.category_catalog import normalize_category
 from backend.transactions.service import create_transaction
 
 CATEGORY_RULES = {
@@ -172,9 +173,9 @@ def detect_category(text: str):
     for category, keywords in CATEGORY_RULES.items():
         for keyword in keywords:
             if keyword in text:
-                return category
+                return normalize_category(category, "expense")
 
-    return "Otros"
+    return normalize_category(text, "expense")
 
 
 def extract_amount(text: str):

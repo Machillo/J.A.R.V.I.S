@@ -1,5 +1,6 @@
 from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id
+from backend.finance.category_catalog import normalize_category, expense_type_for_category
 
 
 def _as_float(value, default: float = 0.0) -> float:
@@ -474,6 +475,9 @@ def add_expense(
     description: str = ""
 ):
     user_id = get_current_user_id()
+    category = normalize_category(category, "expense")
+    if not expense_type or expense_type == "variable":
+        expense_type = expense_type_for_category(category)
 
     with get_connection() as conn:
         cursor = conn.execute(
@@ -1082,6 +1086,9 @@ def update_expense(
     description: str = ""
 ):
     user_id = get_current_user_id()
+    category = normalize_category(category, "expense")
+    if not expense_type or expense_type == "variable":
+        expense_type = expense_type_for_category(category)
 
     with get_connection() as conn:
         expense = conn.execute(

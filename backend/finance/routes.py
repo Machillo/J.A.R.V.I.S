@@ -78,10 +78,20 @@ from backend.finance.card_cycle import (
     evaluate_card_purchase_date,
     evaluate_card_purchase,
 )
+from backend.finance.category_catalog import get_category_catalog, get_category_groups
 
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
 
+
+
+
+@router.get("/categories")
+def finance_categories():
+    return {
+        "categories": get_category_catalog(),
+        "groups": get_category_groups(),
+    }
 
 @router.get("/summary")
 def financial_summary():

@@ -1,5 +1,6 @@
 from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id
+from backend.finance.category_catalog import normalize_category
 
 
 def create_transaction(
@@ -16,6 +17,7 @@ def create_transaction(
     exchange_rate: float | None = None
 ):
     user_id = get_current_user_id()
+    category = normalize_category(category, transaction_type)
 
     with get_connection() as conn:
         cursor = conn.execute(
@@ -180,6 +182,7 @@ def update_transaction(
     exchange_rate: float | None = None
 ):
     user_id = get_current_user_id()
+    category = normalize_category(category, transaction_type)
 
     with get_connection() as conn:
         existing = conn.execute(

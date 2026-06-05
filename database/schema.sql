@@ -236,6 +236,22 @@ CREATE INDEX IF NOT EXISTS idx_credit_card_settings_user_id ON credit_card_setti
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);
 
+
+CREATE TABLE IF NOT EXISTS category_catalog (
+    id BIGSERIAL PRIMARY KEY,
+    group_name TEXT NOT NULL,
+    category_name TEXT NOT NULL,
+    transaction_type TEXT NOT NULL,
+    aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(group_name, category_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_category_catalog_group ON category_catalog(group_name);
+CREATE INDEX IF NOT EXISTS idx_category_catalog_active ON category_catalog(is_active);
+
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,

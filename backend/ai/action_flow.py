@@ -22,6 +22,7 @@ from backend.finance.service import (
 )
 from backend.goals.service import add_financial_goal
 from backend.transactions.service import create_transaction
+from backend.finance.category_catalog import normalize_category, expense_type_for_category
 
 
 YES_WORDS = {"si", "sí", "confirmo", "guardar", "guarda", "dale", "ok", "correcto", "acepto"}
@@ -30,18 +31,25 @@ NO_WORDS = {"no", "cancelar", "cancela", "olvida", "detener", "salir"}
 ACTION_CONFIG = {
     "create_debt": {
         "label": "deuda",
-        "required": ["name", "total_amount", "monthly_payment"],
+        "required": [
+            "name",
+            "total_amount",
+            "remaining_amount",
+            "interest_rate",
+            "monthly_payment",
+            "payment_day",
+        ],
         "optional_defaults": {
             "debt_type": "other",
-            "remaining_amount": None,
-            "interest_rate": 0,
             "term_months": None,
-            "payment_day": None,
         },
         "questions": {
             "name": "¿Cómo se llama la deuda? Ejemplo: BAC, MultiMoney o préstamo Popular.",
-            "total_amount": "¿Cuál es el monto total de la deuda?",
+            "total_amount": "¿Cuál fue el monto total original de la deuda?",
+            "remaining_amount": "¿Cuál es el saldo pendiente actual?",
+            "interest_rate": "¿Cuál es la tasa de interés anual? Si no aplica, responde 0.",
             "monthly_payment": "¿Cuál es la cuota mensual?",
+            "payment_day": "¿Qué día de cada mes se paga? Responde solo el número del día.",
         },
     },
     "create_saving": {
@@ -225,6 +233,9 @@ def _coerce_field(field: str, text: str):
         normalized = _normalize_text(value)
         return TYPE_ALIASES.get(normalized, normalized)
 
+    if field == "category":
+        return normalize_category(value)
+
     if field == "event_type":
         normalized = _normalize_text(value)
         if "extra" in normalized:
@@ -264,6 +275,11 @@ def _initial_payload(action_type: str, user_message: str) -> dict[str, Any]:
         cleaned = re.sub(r"\d+(?:[.,]\d+)*", " ", cleaned).strip()
         if cleaned and len(cleaned) <= 50:
             payload["name"] = cleaned.upper()
+        if "bac" in lower:
+            payload["debt_type"] = "credit_card"
+            payload.setdefault("payment_day", 5)
+        elif "tarjeta" in lower:
+            payload["debt_type"] = "credit_card"
 
     elif action_type in {"create_saving", "create_investment"}:
         if amount is not None:
@@ -324,7 +340,9 @@ def _format_payload(action_type: str, payload: dict[str, Any]) -> str:
         value = payload.get(field)
         if value not in (None, ""):
             label = FIELD_LABELS.get(field, field)
-            if isinstance(value, (int, float)) and field not in {"term_months", "payment_day", "hours", "regular_hours_per_week"}:
+            if field == "interest_rate":
+                lines.append(f"- {label}: {value}%")
+            elif isinstance(value, (int, float)) and field not in {"term_months", "payment_day", "hours", "regular_hours_per_week"}:
                 lines.append(f"- {label}: ₡{value:,.2f}")
             else:
                 lines.append(f"- {label}: {value}")
@@ -338,8 +356,20 @@ def _apply_defaults(action_type: str, payload: dict[str, Any]) -> dict[str, Any]
     final = dict(config["optional_defaults"])
     final.update(payload)
 
-    if action_type == "create_debt" and final.get("remaining_amount") is None:
-        final["remaining_amount"] = final.get("total_amount", 0)
+    if action_type == "create_expense":
+        final["category"] = normalize_category(final.get("category"), "expense")
+        if not final.get("expense_type") or final.get("expense_type") == "variable":
+            final["expense_type"] = expense_type_for_category(final["category"])
+
+    if action_type == "create_transaction":
+        final["transaction_type"] = TYPE_ALIASES.get(
+            str(final.get("transaction_type", "")).lower(),
+            final.get("transaction_type"),
+        )
+        final["category"] = normalize_category(final.get("category"), final.get("transaction_type"))
+
+    if action_type == "create_income":
+        final["source"] = normalize_category(final.get("source"), "income")
 
     if action_type == "create_transaction" and final.get("transaction_date") is None:
         final["transaction_date"] = date.today().isoformat()
