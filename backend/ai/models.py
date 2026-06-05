@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -12,3 +14,21 @@ class JarvisChatResponse(BaseModel):
     status: str = "OK"
     pending: bool = False
     data: dict | None = None
+
+
+class SportsFootballPreferences(BaseModel):
+    teams: list[str] | None = None
+    competitions: list[str] | None = None
+
+
+class SportsPreferencesRequest(BaseModel):
+    f1: bool | None = None
+    ufc: bool | None = None
+    football: SportsFootballPreferences | None = None
+    notification_style: str | None = None
+
+
+class BrowserSubscriptionRequest(BaseModel):
+    endpoint: str | None = None
+    payload: dict[str, Any] | None = None
+    permission: str | None = None

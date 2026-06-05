@@ -1,9 +1,11 @@
 from fastapi import APIRouter
 
-from backend.ai.models import JarvisChatRequest
+from backend.ai.models import JarvisChatRequest, SportsPreferencesRequest, BrowserSubscriptionRequest
 from backend.ai.jarvis_engine import process_message
 from backend.ai.usage_tracker import get_admin_usage_overview, get_today_usage
 from backend.auth.current_user import get_current_user
+from backend.ai.preferences import get_sports_preferences, update_sports_preferences, save_browser_subscription
+from backend.core.events import get_upcoming_events
 
 router = APIRouter(
     prefix="/jarvis",
@@ -27,3 +29,23 @@ def jarvis_usage_admin():
     if user.get("role") not in {"owner", "admin"}:
         return {"status": "FORBIDDEN", "message": "Solo admin puede ver consumo global."}
     return get_admin_usage_overview()
+
+
+@router.get("/preferences/sports")
+def jarvis_sports_preferences():
+    return get_sports_preferences()
+
+
+@router.post("/preferences/sports")
+def jarvis_update_sports_preferences(request: SportsPreferencesRequest):
+    return update_sports_preferences(request.model_dump(exclude_none=True))
+
+
+@router.post("/notifications/browser")
+def jarvis_browser_notifications(request: BrowserSubscriptionRequest):
+    return save_browser_subscription(request.model_dump(exclude_none=True))
+
+
+@router.get("/calendar/upcoming")
+def jarvis_upcoming_calendar(days: int = 30):
+    return {"events": get_upcoming_events(days)}

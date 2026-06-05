@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import datetime, timedelta
 
 from backend.ai.action_flow import continue_pending_action, start_action
 from backend.ai.gemini_client import ask_gemini
 from backend.ai.intent_router import ACTION_TYPES, detect_intent
 from backend.ai.response_formatter import format_jarvis_response
+from backend.ai.web_access import internet_search, should_use_internet
+from backend.ai.preferences import update_sports_preferences, get_sports_preferences
+from backend.core.events import add_event
 
 from backend.finance.service import (
     get_debts,
@@ -92,7 +97,118 @@ Datos reales disponibles en J.A.R.V.I.S.:
     }
 
 
+
+def _extract_simple_date(message: str) -> str | None:
+    text = message.lower()
+    today = datetime.now().date()
+
+    if "mañana" in text or "manana" in text:
+        return (today + timedelta(days=1)).isoformat()
+
+    iso = re.search(r"(20\d{2})[-/](\d{1,2})[-/](\d{1,2})", text)
+    if iso:
+        year, month, day = map(int, iso.groups())
+        return datetime(year, month, day).date().isoformat()
+
+    slash = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](20\d{2}))?\b", text)
+    if slash:
+        day, month, year = slash.groups()
+        year = int(year or today.year)
+        return datetime(year, int(month), int(day)).date().isoformat()
+
+    months = {
+        "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+        "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+        "noviembre": 11, "diciembre": 12,
+    }
+    for name, month in months.items():
+        match = re.search(rf"\b(\d{{1,2}}) de {name}(?: de (20\d{{2}}))?", text)
+        if match:
+            day = int(match.group(1))
+            year = int(match.group(2) or today.year)
+            return datetime(year, month, day).date().isoformat()
+
+    return None
+
+
+def _looks_like_calendar_request(message: str) -> bool:
+    text = message.lower()
+    return any(phrase in text for phrase in [
+        "tengo un compromiso", "tengo una cita", "recordame", "recuérdame", "agend",
+        "calendario", "notificame", "notifícame", "evento", "reunion", "reunión",
+    ])
+
+
+def _create_calendar_event_from_message(message: str) -> dict:
+    event_date = _extract_simple_date(message)
+    if not event_date:
+        return {
+            "message": "Señor, ¿para qué fecha lo agendo? Puedes decírmelo como 2026-06-15 o 15/06/2026.",
+            "intent": "create_calendar_event",
+            "status": "NEEDS_DATE",
+            "pending": False,
+        }
+
+    clean_title = message.strip()
+    clean_title = re.sub(r"(?i)jarvis|recu[eé]rdame|recordame|agend(a|e|ame)|tengo un compromiso|tengo una cita|notificame|notifícame", "", clean_title).strip(" ,.-")
+    title = clean_title[:90] or "Compromiso"
+    event = add_event(title=title, event_date=event_date, event_type="personal", description=message)
+    return {
+        "message": f"Señor, compromiso guardado para el {event_date}: {title}.",
+        "intent": "create_calendar_event",
+        "status": "OK",
+        "pending": False,
+        "data": event,
+    }
+
+
+def _looks_like_sports_preferences(message: str) -> bool:
+    text = message.lower()
+    return any(word in text for word in ["equipo favorito", "equipos favoritos", "f1", "formula 1", "fórmula 1", "ufc", "champions", "mundial de clubes"] )
+
+
+def _handle_sports_preferences(message: str) -> dict | None:
+    text = message.lower()
+    if "equipo" not in text and "f1" not in text and "ufc" not in text and "champions" not in text:
+        return None
+
+    prefs = get_sports_preferences()
+    teams = prefs.get("football", {}).get("teams", [])
+    possible_team = re.search(r"(?:mi equipo favorito es|mis equipos favoritos son|sigo a|equipo:|equipos:)(.+)", message, re.I)
+    if possible_team:
+        raw = possible_team.group(1)
+        new_teams = [item.strip(" .") for item in re.split(r",| y ", raw) if item.strip()]
+        teams = sorted(set(teams + new_teams))
+        update_sports_preferences({"football": {"teams": teams}})
+        return {
+            "message": f"Señor, guardé tus equipos favoritos: {', '.join(teams)}.",
+            "intent": "sports_preferences",
+            "status": "OK",
+            "pending": False,
+            "data": {"teams": teams},
+        }
+
+    if "f1" in text or "formula" in text or "fórmula" in text:
+        update_sports_preferences({"f1": True})
+        return {"message": "Señor, dejaré Fórmula 1 activa para recordarte prácticas importantes, clasificación, sprint y carrera cuando conectemos calendarios deportivos.", "intent": "sports_preferences", "status": "OK", "pending": False}
+
+    if "ufc" in text:
+        update_sports_preferences({"ufc": True})
+        return {"message": "Señor, dejaré UFC activo para recordarte carteleras y peleas importantes cuando conectemos el calendario deportivo.", "intent": "sports_preferences", "status": "OK", "pending": False}
+
+    return None
+
 def process_message(user_message: str):
+    if should_use_internet(user_message):
+        return internet_search(user_message)
+
+    if _looks_like_calendar_request(user_message):
+        return _create_calendar_event_from_message(user_message)
+
+    sports_result = _handle_sports_preferences(user_message)
+    if sports_result:
+        return sports_result
+
     pending_result = continue_pending_action(user_message)
     if pending_result:
         return {

@@ -90,3 +90,9 @@ export const askJarvis = async (message) => {
 
 export const getJarvisUsageToday = () => request("/jarvis/usage/today");
 export const getJarvisUsageAdmin = () => request("/jarvis/usage/admin");
+
+
+export const getSportsPreferences = () => request("/jarvis/preferences/sports");
+export const updateSportsPreferences = (payload) => jsonRequest("/jarvis/preferences/sports", "POST", payload);
+export const saveBrowserNotificationSubscription = (payload) => jsonRequest("/jarvis/notifications/browser", "POST", payload);
+export const getUpcomingCalendarEvents = (days = 30) => request(`/jarvis/calendar/upcoming?days=${days}`);

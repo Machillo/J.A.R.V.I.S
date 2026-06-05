@@ -1,34 +1,108 @@
 import { useEffect, useState } from "react";
-import { getJarvisUsageAdmin, getJarvisUsageToday, getMe } from "../services/jarvisApi";
+import {
+  getJarvisUsageAdmin,
+  getJarvisUsageToday,
+  getMe,
+  getSportsPreferences,
+  getUpcomingCalendarEvents,
+  saveBrowserNotificationSubscription,
+  updateSportsPreferences,
+} from "../services/jarvisApi";
+
+const splitTeams = (value) =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 
 export default function Settings({ status }) {
   const [me, setMe] = useState(null);
   const [usage, setUsage] = useState(null);
   const [adminUsage, setAdminUsage] = useState(null);
+  const [sports, setSports] = useState(null);
+  const [teamsText, setTeamsText] = useState("");
+  const [calendar, setCalendar] = useState([]);
+  const [notificationStatus, setNotificationStatus] = useState("default");
+
+  const isAdmin = me?.role === "owner" || me?.role === "admin";
+  const isOwner = me?.role === "owner";
+
+  const load = async () => {
+    try {
+      const [meData, usageData, sportsData, calendarData] = await Promise.all([
+        getMe(),
+        getJarvisUsageToday(),
+        getSportsPreferences(),
+        getUpcomingCalendarEvents(45),
+      ]);
+
+      setMe(meData);
+      setUsage(usageData);
+      setSports(sportsData);
+      setTeamsText((sportsData?.football?.teams || []).join(", "));
+      setCalendar(calendarData?.events || []);
+
+      if (typeof Notification !== "undefined") {
+        setNotificationStatus(Notification.permission);
+      }
+
+      if (meData?.role === "owner" || meData?.role === "admin") {
+        const adminData = await getJarvisUsageAdmin();
+        setAdminUsage(adminData);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [meData, usageData] = await Promise.all([getMe(), getJarvisUsageToday()]);
-        setMe(meData);
-        setUsage(usageData);
-
-        if (meData?.role === "owner" || meData?.role === "admin") {
-          const adminData = await getJarvisUsageAdmin();
-          setAdminUsage(adminData);
-        }
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
     load();
   }, []);
+
+  const handleSaveSports = async () => {
+    const payload = {
+      f1: Boolean(sports?.f1),
+      ufc: Boolean(sports?.ufc),
+      notification_style: sports?.notification_style || "Señor",
+      football: {
+        teams: splitTeams(teamsText),
+        competitions: sports?.football?.competitions || ["Champions League", "Mundial de Clubes", "Mundial"],
+      },
+    };
+
+    const result = await updateSportsPreferences(payload);
+    setSports(result.value || payload);
+  };
+
+  const handleEnableNotifications = async () => {
+    if (typeof Notification === "undefined") {
+      alert("Este navegador no soporta notificaciones.");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotificationStatus(permission);
+
+    await saveBrowserNotificationSubscription({
+      endpoint: "local-browser",
+      permission,
+      payload: {
+        userAgent: navigator.userAgent,
+        mode: "local-pwa",
+      },
+    });
+
+    if (permission === "granted") {
+      new Notification("J.A.R.V.I.S.", {
+        body: "Señor, notificaciones activadas en este dispositivo.",
+      });
+    }
+  };
 
   return (
     <section className="page settings-page">
       <h1>Configuración</h1>
-      <p className="subtitle">Perfil, permisos y consumo de IA.</p>
+      <p className="subtitle">Perfil, permisos, IA, notificaciones y preferencias personales.</p>
 
       <div className="settings-grid">
         <div className="jarvis-panel settings-card">
@@ -36,6 +110,7 @@ export default function Settings({ status }) {
           <p><strong>Email:</strong> {me?.email || "—"}</p>
           <p><strong>Rol:</strong> {me?.role || "—"}</p>
           <p><strong>Estado:</strong> {me?.status || "—"}</p>
+          {isOwner && <p className="owner-badge">Acceso owner: internet + administración completa</p>}
         </div>
 
         <div className="jarvis-panel settings-card">
@@ -47,6 +122,64 @@ export default function Settings({ status }) {
             <span style={{ width: `${Math.min(usage?.percent_used || 0, 100)}%` }} />
           </div>
         </div>
+      </div>
+
+      <div className="settings-grid">
+        <div className="jarvis-panel settings-card">
+          <h2>Notificaciones</h2>
+          <p>Estado: <strong>{notificationStatus}</strong></p>
+          <button className="jarvis-action-button" onClick={handleEnableNotifications}>
+            Activar notificaciones en este iPhone
+          </button>
+          <small>Las notificaciones locales funcionan cuando la PWA está instalada y el navegador las permite.</small>
+        </div>
+
+        <div className="jarvis-panel settings-card">
+          <h2>Calendario próximo</h2>
+          {calendar.length === 0 ? (
+            <p>No hay compromisos próximos.</p>
+          ) : (
+            <div className="settings-list">
+              {calendar.slice(0, 6).map((event) => (
+                <div key={event.id}>
+                  <strong>{event.event_date}</strong>
+                  <span>{event.title}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="jarvis-panel settings-card">
+        <h2>Preferencias deportivas</h2>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={Boolean(sports?.f1)}
+            onChange={(event) => setSports((current) => ({ ...(current || {}), f1: event.target.checked }))}
+          />
+          Fórmula 1: prácticas, clasificación, sprint y carrera
+        </label>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={Boolean(sports?.ufc)}
+            onChange={(event) => setSports((current) => ({ ...(current || {}), ufc: event.target.checked }))}
+          />
+          UFC: peleas y carteleras importantes
+        </label>
+        <label className="settings-label">
+          Equipos favoritos
+          <textarea
+            value={teamsText}
+            onChange={(event) => setTeamsText(event.target.value)}
+            placeholder="Real Madrid, Saprissa, Manchester City..."
+          />
+        </label>
+        <button className="jarvis-action-button" onClick={handleSaveSports}>
+          Guardar preferencias
+        </button>
       </div>
 
       {adminUsage?.users?.length > 0 && (

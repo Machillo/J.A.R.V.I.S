@@ -3302,3 +3302,85 @@ body,
     pointer-events: none;
   }
 }
+
+/* JARVIS settings: internet, calendar, notifications */
+.owner-badge {
+  margin-top: 10px;
+  color: #79ffbd;
+  border: 1px solid rgba(121, 255, 189, 0.35);
+  background: rgba(121, 255, 189, 0.08);
+  padding: 10px 12px;
+}
+
+.jarvis-action-button {
+  width: fit-content;
+  border: 1px solid rgba(38, 224, 255, 0.55);
+  background: linear-gradient(135deg, rgba(38, 224, 255, 0.15), rgba(255, 70, 220, 0.12));
+  color: #dffcff;
+  padding: 12px 18px;
+  border-radius: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(38, 224, 255, 0.18);
+}
+
+.settings-list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid rgba(38, 224, 255, 0.16);
+  padding-bottom: 10px;
+}
+
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #dffcff;
+  margin: 12px 0;
+}
+
+.settings-check input {
+  accent-color: #26e0ff;
+  width: 18px;
+  height: 18px;
+}
+
+.settings-label {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  color: #b8eaf1;
+  font-weight: 700;
+}
+
+.settings-label textarea {
+  min-height: 90px;
+  resize: vertical;
+  background: rgba(2, 12, 20, 0.78);
+  color: #e8fdff;
+  border: 1px solid rgba(38, 224, 255, 0.28);
+  border-radius: 16px;
+  padding: 14px;
+  font: inherit;
+}
+
+@media (max-width: 760px) {
+  .settings-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .jarvis-action-button {
+    width: 100%;
+  }
+
+  .settings-list > div {
+    display: grid;
+  }
+}
