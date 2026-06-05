@@ -7,6 +7,7 @@ import Finance from "./pages/Finance";
 import Goals from "./pages/Goals";
 import Memory from "./pages/Memory";
 import Settings from "./pages/Settings";
+import Transactions from "./pages/Transactions";
 import Login from "./pages/Login";
 
 import { askJarvis, getFinanceDashboard, getStatus } from "./services/jarvisApi";
@@ -19,6 +20,7 @@ export default function App() {
   const [financeDashboard, setFinanceDashboard] = useState(null);
   const [jarvisInput, setJarvisInput] = useState("");
   const [jarvisResponse, setJarvisResponse] = useState(null);
+  const [chatHistory, setChatHistory] = useState([]);
   const [isListening, setIsListening] = useState(false);
   const [session, setSession] = useState(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
@@ -36,6 +38,7 @@ export default function App() {
       setFinanceDashboard(null);
       setStatus(null);
       setJarvisResponse(null);
+      setChatHistory([]);
     });
 
     return () => subscription.unsubscribe();
@@ -67,6 +70,7 @@ export default function App() {
     setFinanceDashboard(null);
     setStatus(null);
     setJarvisResponse(null);
+    setChatHistory([]);
   };
 
   const speakText = (text) => {
@@ -76,24 +80,38 @@ export default function App() {
   };
 
   const handleAskJarvis = async () => {
-    if (!jarvisInput.trim()) return;
+    const text = jarvisInput.trim();
+    if (!text) return;
+
+    setJarvisInput("");
 
     try {
-      const response = await askJarvis(jarvisInput);
+      const response = await askJarvis(text);
       setJarvisResponse(response);
 
       const responseText =
         response?.response?.message || response?.message || "Respuesta recibida.";
+
+      setChatHistory((current) => [
+        ...current,
+        { role: "user", text },
+        { role: "jarvis", text: responseText },
+      ].slice(-8));
 
       if (response?.status === "OK" && (response?.action_type?.startsWith("create_") || response?.action_type === "import_monthly_statement")) {
         await refreshAppData();
       }
 
       speakText(responseText);
-      setJarvisInput("");
     } catch (error) {
       console.error(error);
-      speakText("No pude comunicarme con Jarvis.");
+      const errorText = "No pude comunicarme con Jarvis.";
+      setChatHistory((current) => [
+        ...current,
+        { role: "user", text },
+        { role: "jarvis", text: errorText },
+      ].slice(-8));
+      speakText(errorText);
     }
   };
 
@@ -116,7 +134,7 @@ export default function App() {
 
     recognition.onresult = async (event) => {
       const text = event.results[0][0].transcript;
-      setJarvisInput(text);
+      setJarvisInput("");
 
       try {
         const response = await askJarvis(text);
@@ -127,6 +145,12 @@ export default function App() {
           response?.message ||
           `Intención detectada: ${response.intent}`;
 
+        setChatHistory((current) => [
+          ...current,
+          { role: "user", text },
+          { role: "jarvis", text: responseText },
+        ].slice(-8));
+
         if (response?.status === "OK" && (response?.action_type?.startsWith("create_") || response?.action_type === "import_monthly_statement")) {
           await refreshAppData();
         }
@@ -134,7 +158,13 @@ export default function App() {
         speakText(responseText);
       } catch (error) {
         console.error(error);
-        speakText("Ocurrió un error al comunicarme con Jarvis.");
+        const errorText = "Ocurrió un error al comunicarme con Jarvis.";
+        setChatHistory((current) => [
+          ...current,
+          { role: "user", text },
+          { role: "jarvis", text: errorText },
+        ].slice(-8));
+        speakText(errorText);
       }
     };
 
@@ -153,7 +183,7 @@ export default function App() {
     session?.user?.user_metadata?.display_name ||
     session?.user?.user_metadata?.name ||
     session?.user?.email?.split("@")[0] ||
-    "usuario";
+    "";
 
   if (!sessionLoaded) {
     return (
@@ -180,6 +210,9 @@ export default function App() {
       case "goals":
         return <Goals dashboard={financeDashboard} />;
 
+      case "transactions":
+        return <Transactions />;
+
       case "memory":
         return <Memory />;
 
@@ -187,7 +220,7 @@ export default function App() {
         return <Settings status={status} />;
 
       default:
-        return <Dashboard jarvisResponse={jarvisResponse} />;
+        return <Dashboard jarvisResponse={jarvisResponse} chatHistory={chatHistory} />;
     }
   };
 
@@ -200,7 +233,7 @@ export default function App() {
         setSidebarOpen={setSidebarOpen}
       />
 
-      <main className={`main-shell ${sidebarOpen ? "" : "expanded"}`}>
+      <main className={`main-shell ${sidebarOpen ? "" : "expanded"} ${activePage === "dashboard" ? "home-mode" : ""}`}>
         <header className="top-bar">
           <button className="menu-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
             <Menu size={22} />
@@ -231,7 +264,7 @@ export default function App() {
             onKeyDown={(event) => {
               if (event.key === "Enter") handleAskJarvis();
             }}
-            placeholder={`¿En qué puedo ayudarte, ${userName}?`}
+            placeholder={userName ? `¿En qué puedo ayudarte, ${userName}?` : "¿En qué puedo ayudarte?"}
           />
 
           <button className="command-button" onClick={handleAskJarvis}>
