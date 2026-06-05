@@ -411,38 +411,17 @@ def user_status():
 
 @router.get("/dashboard")
 def financial_dashboard():
-    try:
-        print("[DASHBOARD DEBUG] Iniciando /finance/dashboard", flush=True)
-
-        result = get_financial_dashboard()
-
-        print("[DASHBOARD DEBUG] Dashboard generado correctamente", flush=True)
-
-        return result
-
-    except Exception as error:
-        print("[DASHBOARD ERROR] Falló /finance/dashboard", flush=True)
-        print(f"[DASHBOARD ERROR] Tipo: {type(error).__name__}", flush=True)
-        print(f"[DASHBOARD ERROR] Mensaje: {str(error)}", flush=True)
-        traceback.print_exc()
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Error interno generando dashboard financiero.",
-                "error_type": type(error).__name__,
-                "error": str(error),
-            },
-        )
+    return get_financial_dashboard()
     
-    @router.get("/dashboard-debug")
+@router.get("/dashboard-debug")
 def financial_dashboard_debug():
     steps = {}
 
     try:
-        steps["current_user"] = "OK"
+        steps["current_user"] = "START"
         from backend.auth.current_user import get_current_user
         steps["user"] = get_current_user()
+        steps["current_user"] = "OK"
 
         steps["financial_summary"] = "START"
         summary = get_financial_summary()
