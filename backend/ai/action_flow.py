@@ -44,7 +44,7 @@ ACTION_CONFIG = {
             "term_months": None,
         },
         "questions": {
-            "name": "¿Cómo se llama la deuda? Ejemplo: BAC, MultiMoney o préstamo Popular.",
+            "name": "¿Cómo se llama exactamente esta deuda? Ejemplo: Tarjeta BAC, MultiMoney, Préstamo Popular o Papá.",
             "total_amount": "¿Cuál fue el monto total original de la deuda?",
             "remaining_amount": "¿Cuál es el saldo pendiente actual?",
             "interest_rate": "¿Cuál es la tasa de interés anual? Si no aplica, responde 0.",
@@ -268,17 +268,15 @@ def _initial_payload(action_type: str, user_message: str) -> dict[str, Any]:
     amount = _extract_number(text)
 
     if action_type == "create_debt":
-        # Ejemplo: "agrega una deuda BAC de 500000"
+        # IMPORTANTE:
+        # El nombre de una deuda NUNCA se infiere del mensaje inicial.
+        # Aunque el usuario diga "agrega una deuda BAC", JARVIS debe preguntar
+        # primero cómo se llama exactamente la deuda para evitar guardar datos
+        # con nombres incorrectos o ambiguos.
         if amount is not None:
             payload["total_amount"] = amount
-        cleaned = re.sub(r"\b(agrega|agregar|registrar|registra|crear|crea|deuda|prestamo|préstamo|de|por|₡|colones)\b", " ", lower)
-        cleaned = re.sub(r"\d+(?:[.,]\d+)*", " ", cleaned).strip()
-        if cleaned and len(cleaned) <= 50:
-            payload["name"] = cleaned.upper()
-        if "bac" in lower:
-            payload["debt_type"] = "credit_card"
-            payload.setdefault("payment_day", 5)
-        elif "tarjeta" in lower:
+
+        if "bac" in lower or "tarjeta" in lower:
             payload["debt_type"] = "credit_card"
 
     elif action_type in {"create_saving", "create_investment"}:
