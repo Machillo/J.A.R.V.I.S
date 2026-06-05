@@ -8,6 +8,7 @@ from backend.ai.intent_router import ACTION_TYPES, detect_intent
 from backend.ai.response_formatter import format_jarvis_response
 from backend.integrations.internet_search import internet_search
 from backend.tasks.calendar_service import calendar_summary, create_calendar_event_from_text
+from backend.sports.service import get_sports_calendar_summary
 
 from backend.finance.service import (
     get_debts,
@@ -161,6 +162,17 @@ def process_message(user_message: str):
             "message": message,
             "intent": "calendar_summary",
             "status": "OK",
+            "pending": False,
+            "data": result,
+        }
+
+    # Deportes: usa internet real con SERPER/TAVILY, pero solo cuando se pide o se actualiza radar deportivo.
+    if intent == "sports_schedule":
+        result = get_sports_calendar_summary(entity or "all")
+        return {
+            "message": result.get("message"),
+            "intent": "sports_schedule",
+            "status": result.get("status", "OK"),
             "pending": False,
             "data": result,
         }

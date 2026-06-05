@@ -6,6 +6,7 @@ from backend.ai.usage_tracker import get_admin_usage_overview, get_today_usage
 from backend.auth.current_user import get_current_user
 from backend.ai.preferences import get_sports_preferences, update_sports_preferences, save_browser_subscription
 from backend.core.events import get_upcoming_events
+from backend.sports.service import ensure_owner_sports_preferences, get_sports_calendar_summary
 
 router = APIRouter(
     prefix="/jarvis",
@@ -49,3 +50,13 @@ def jarvis_browser_notifications(request: BrowserSubscriptionRequest):
 @router.get("/calendar/upcoming")
 def jarvis_upcoming_calendar(days: int = 30):
     return {"events": get_upcoming_events(days)}
+
+
+@router.post("/sports/defaults")
+def jarvis_set_owner_sports_defaults():
+    return ensure_owner_sports_preferences()
+
+
+@router.get("/sports/radar")
+def jarvis_sports_radar(scope: str = "all"):
+    return get_sports_calendar_summary(scope)

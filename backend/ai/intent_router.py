@@ -34,6 +34,7 @@ READ_INTENTS = [
     "internet_search",
     "create_calendar_event",
     "calendar_summary",
+    "sports_schedule",
     "unknown",
 ]
 
@@ -98,6 +99,36 @@ def _fallback_detect(user_message: str) -> dict[str, Any]:
             "action_type": None,
             "entity": user_message,
             "confidence": 0.9,
+            "source": "keyword_fallback",
+        }
+
+    # 3) Deportes actuales: debe ir antes de finanzas para que "carrera", "clasificación"
+    # o "partido" no terminen como gastos/deudas.
+    sports_words = [
+        "f1", "formula 1", "fórmula 1", "gran premio", "gp ", "sprint", "clasificación",
+        "clasificacion", "carrera", "ufc", "cartelera", "pelea", "peleas", "mma",
+        "fútbol", "futbol", "partido", "partidos", "champions", "mundial", "liga",
+        "lda", "alajuelense", "barcelona", "city", "manchester city", "arsenal",
+        "milan", "inter", "psg", "bayern", "bayer munich", "borussia", "dortmund",
+        "costa rica", "selección", "seleccion",
+    ]
+    sports_action_words = [
+        "cuando", "cuándo", "próximo", "proximo", "calendario", "recordame", "avísame",
+        "avisame", "notifica", "notificar", "seguir", "actualiza", "busca", "hora",
+    ]
+    if _contains_any(text, sports_words) and (_contains_any(text, sports_action_words) or text.startswith(("jarvis f1", "jarvis ufc"))):
+        scope = "all"
+        if any(word in text for word in ["f1", "formula 1", "fórmula 1", "gran premio", "gp ", "sprint", "clasificación", "clasificacion", "carrera"]):
+            scope = "f1"
+        elif any(word in text for word in ["ufc", "cartelera", "pelea", "peleas", "mma"]):
+            scope = "ufc"
+        elif any(word in text for word in ["fútbol", "futbol", "partido", "partidos", "champions", "mundial", "liga"]):
+            scope = "football"
+        return {
+            "intent": "sports_schedule",
+            "action_type": None,
+            "entity": scope,
+            "confidence": 0.92,
             "source": "keyword_fallback",
         }
 
@@ -190,6 +221,7 @@ Reglas:
 - Si pregunta por patrimonio, usa net_worth.
 - Si pregunta por hábitos o gastos, usa spending_habits.
 - Si pide buscar en internet o información externa actual, usa internet_search.
+- Si pregunta por F1, UFC, fútbol, partidos, carreras o quiere avisos deportivos, usa sports_schedule.
 - Si quiere agendar, recordar o guardar un compromiso/cita, usa create_calendar_event.
 - Si pregunta por su agenda/calendario, usa calendar_summary.
 
