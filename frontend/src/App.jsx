@@ -178,12 +178,14 @@ export default function App() {
     };
   };
 
-  const userName =
+  const rawUserName =
     session?.user?.user_metadata?.full_name ||
     session?.user?.user_metadata?.display_name ||
     session?.user?.user_metadata?.name ||
     session?.user?.email?.split("@")[0] ||
     "";
+
+  const userName = rawUserName.trim().split(/\s+/)[0] || "";
 
   if (!sessionLoaded) {
     return (
