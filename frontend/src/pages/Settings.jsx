@@ -5,6 +5,9 @@ import {
   getMe,
   getSportsPreferences,
   getUpcomingCalendarEvents,
+  getEmailMonitorCandidates,
+  getEmailMonitorStatus,
+  syncEmailMonitorGmail,
   saveBrowserNotificationSubscription,
   updateSportsPreferences,
 } from "../services/jarvisApi";
@@ -23,6 +26,9 @@ export default function Settings({ status }) {
   const [teamsText, setTeamsText] = useState("");
   const [calendar, setCalendar] = useState([]);
   const [notificationStatus, setNotificationStatus] = useState("default");
+  const [emailMonitor, setEmailMonitor] = useState(null);
+  const [emailCandidates, setEmailCandidates] = useState([]);
+  const [emailSyncStatus, setEmailSyncStatus] = useState("");
 
   const isAdmin = me?.role === "owner" || me?.role === "admin";
   const isOwner = me?.role === "owner";
@@ -50,6 +56,15 @@ export default function Settings({ status }) {
         const adminData = await getJarvisUsageAdmin();
         setAdminUsage(adminData);
       }
+
+      if (meData?.role === "owner") {
+        const [emailStatus, pendingEmails] = await Promise.all([
+          getEmailMonitorStatus(),
+          getEmailMonitorCandidates("pending", 5),
+        ]);
+        setEmailMonitor(emailStatus);
+        setEmailCandidates(pendingEmails?.items || []);
+      }
     } catch (error) {
       console.error(error);
     }
@@ -72,6 +87,23 @@ export default function Settings({ status }) {
 
     const result = await updateSportsPreferences(payload);
     setSports(result.value || payload);
+  };
+
+
+  const handleEmailSync = async () => {
+    setEmailSyncStatus("Sincronizando correos...");
+    try {
+      const result = await syncEmailMonitorGmail({ max_results: 10, auto_commit: true });
+      setEmailSyncStatus(`Procesados: ${result?.processed?.length || 0}`);
+      const [emailStatus, pendingEmails] = await Promise.all([
+        getEmailMonitorStatus(),
+        getEmailMonitorCandidates("pending", 5),
+      ]);
+      setEmailMonitor(emailStatus);
+      setEmailCandidates(pendingEmails?.items || []);
+    } catch (error) {
+      setEmailSyncStatus(error.message);
+    }
   };
 
   const handleEnableNotifications = async () => {
@@ -150,6 +182,44 @@ export default function Settings({ status }) {
           )}
         </div>
       </div>
+
+
+      {isOwner && (
+        <div className="settings-grid">
+          <div className="jarvis-panel settings-card">
+            <h2>Correos financieros 24/7</h2>
+            <p><strong>Gmail listo:</strong> {emailMonitor?.gmail_ready ? "Sí" : "Faltan llaves Gmail"}</p>
+            <p><strong>Pendientes:</strong> {emailMonitor?.totals?.pending || 0}</p>
+            <p><strong>Auto guardados:</strong> {emailMonitor?.totals?.auto_saved || 0}</p>
+            <button className="jarvis-action-button" onClick={handleEmailSync}>
+              Revisar correos ahora
+            </button>
+            {emailSyncStatus && <small>{emailSyncStatus}</small>}
+            {!emailMonitor?.gmail_ready && (
+              <small>
+                Para lectura real agregá GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET y GMAIL_REFRESH_TOKEN en Render.
+              </small>
+            )}
+          </div>
+
+          <div className="jarvis-panel settings-card">
+            <h2>Correos por confirmar</h2>
+            {emailCandidates.length === 0 ? (
+              <p>No hay movimientos dudosos pendientes.</p>
+            ) : (
+              <div className="settings-list">
+                {emailCandidates.map((item) => (
+                  <div key={item.id}>
+                    <strong>{item.transaction_date} · ₡{Number(item.amount || 0).toLocaleString("es-CR")}</strong>
+                    <span>{item.description}</span>
+                    <small>{item.category} · {item.review_reason}</small>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="jarvis-panel settings-card">
         <h2>Preferencias deportivas</h2>

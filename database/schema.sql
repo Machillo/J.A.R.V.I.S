@@ -340,3 +340,76 @@ CREATE TABLE IF NOT EXISTS fixed_expense_matches (
 CREATE INDEX IF NOT EXISTS idx_fixed_expenses_user_id ON fixed_expenses(user_id);
 CREATE INDEX IF NOT EXISTS idx_fixed_expenses_active ON fixed_expenses(user_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_fixed_expense_matches_user_period ON fixed_expense_matches(user_id, period_month);
+
+
+
+-- Fase 6 — Correos 24/7 / Email Monitor
+-- Ejecutar en Supabase SQL Editor.
+
+CREATE TABLE IF NOT EXISTS email_monitor_settings (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    auto_commit_confidence NUMERIC NOT NULL DEFAULT 0.90,
+    monitored_senders TEXT[] NOT NULL DEFAULT ARRAY['bac','credomatic','popular','multimoney'],
+    gmail_query TEXT NOT NULL DEFAULT '',
+    last_scan_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS email_ingested_messages (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL DEFAULT 'gmail',
+    provider_message_id TEXT,
+    fingerprint TEXT NOT NULL,
+    sender TEXT,
+    subject TEXT,
+    received_at TIMESTAMPTZ,
+    bank TEXT,
+    status TEXT NOT NULL DEFAULT 'processed',
+    raw_excerpt TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, fingerprint),
+    UNIQUE(user_id, provider, provider_message_id)
+);
+
+CREATE TABLE IF NOT EXISTS email_transaction_candidates (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    email_message_id BIGINT REFERENCES email_ingested_messages(id) ON DELETE CASCADE,
+    fingerprint TEXT NOT NULL,
+    transaction_id BIGINT REFERENCES transactions(id) ON DELETE SET NULL,
+    transaction_date DATE NOT NULL,
+    description TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    transaction_type TEXT NOT NULL,
+    category TEXT NOT NULL,
+    account TEXT DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'email_monitor',
+    notes TEXT DEFAULT '',
+    original_amount NUMERIC,
+    original_currency TEXT,
+    exchange_rate NUMERIC,
+    confidence NUMERIC NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    review_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, fingerprint)
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_candidates_user_status
+ON email_transaction_candidates(user_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_email_messages_user_created
+ON email_ingested_messages(user_id, created_at DESC);
+
+INSERT INTO email_monitor_settings (user_id, gmail_query)
+SELECT id,
+       '(from:bac OR from:credomatic OR from:popular OR from:multimoney OR "MultiMoney" OR "BAC" OR "Banco Popular") newer_than:7d'
+FROM users
+WHERE role = 'owner'
+ON CONFLICT (user_id)
+DO UPDATE SET updated_at = NOW();

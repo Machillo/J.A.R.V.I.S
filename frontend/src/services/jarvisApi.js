@@ -134,3 +134,21 @@ export const createFixedExpense = (payload) => jsonRequest("/finance/fixed-expen
 export const updateFixedExpense = (id, payload) => jsonRequest(`/finance/fixed-expenses/${id}`, "PUT", payload);
 export const deleteFixedExpense = (id) => request(`/finance/fixed-expenses/${id}`, { method: "DELETE" });
 export const seedOwnerFixedExpenses = () => request("/finance/fixed-expenses/seed-owner-defaults", { method: "POST" });
+
+
+export const getEmailMonitorStatus = () => request("/email-monitor/status");
+export const syncEmailMonitorGmail = (payload = {}) => {
+  const params = new URLSearchParams();
+  if (payload.max_results) params.set("max_results", payload.max_results);
+  if (payload.auto_commit !== undefined) params.set("auto_commit", payload.auto_commit ? "true" : "false");
+  if (payload.query) params.set("query", payload.query);
+  return request(`/email-monitor/sync-gmail${params.toString() ? `?${params.toString()}` : ""}`, { method: "POST" });
+};
+export const getEmailMonitorCandidates = (status = "", limit = 50) => {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  params.set("limit", limit);
+  return request(`/email-monitor/candidates?${params.toString()}`);
+};
+export const decideEmailCandidate = (payload) => jsonRequest("/email-monitor/candidates/decision", "POST", payload);
+export const scanEmailText = (payload) => jsonRequest("/email-monitor/scan-text", "POST", payload);
