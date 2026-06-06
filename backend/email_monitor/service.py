@@ -22,7 +22,7 @@ OWNER_EMAIL = os.getenv("OWNER_EMAIL", "gatotico99@gmail.com")
 CRON_SECRET = os.getenv("EMAIL_MONITOR_CRON_SECRET", "")
 DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
-    '(from:bac OR from:credomatic OR from:popular OR from:multimoney OR "MultiMoney" OR "BAC" OR "Banco Popular") newer_than:7d',
+    '(from:bac OR from:credomatic OR from:popular OR from:multimoney OR from:notificacionesbaccr.com OR from:estadosdecuenta@baccredomatic.cr OR "MultiMoney" OR "BAC" OR "Banco Popular") (compra OR pago OR transferencia OR SINPE OR deposito OR depósito OR retiro OR abono OR debito OR débito OR credito OR crédito OR "transacción realizada" OR "transaccion realizada" OR "movimiento entre cuentas" OR "estado de cuenta" OR "estados de cuenta")',
 )
 AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "0.90"))
 
@@ -178,6 +178,16 @@ def get_email_monitor_status() -> dict[str, Any]:
             """,
             (user_id,),
         ).fetchone()
+        ignored = conn.execute(
+            """
+            SELECT COUNT(*) AS ignored
+            FROM email_ingested_messages
+            WHERE user_id = %s AND status = 'ignored'
+            """,
+            (user_id,),
+        ).fetchone()
+        totals = dict(totals)
+        totals["ignored"] = int((ignored or {}).get("ignored") or 0)
         conn.commit()
 
     gmail_ready = all(
@@ -190,7 +200,7 @@ def get_email_monitor_status() -> dict[str, Any]:
         "owner_only": True,
         "gmail_ready": gmail_ready,
         "settings": dict(settings),
-        "totals": dict(totals),
+        "totals": totals if isinstance(totals, dict) else dict(totals),
         "required_env": [
             "GMAIL_CLIENT_ID",
             "GMAIL_CLIENT_SECRET",
@@ -205,6 +215,8 @@ def get_email_monitor_status() -> dict[str, Any]:
 
 
 def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
+    if candidate.get("transaction_type") in {"statement", "ignored"}:
+        raise ValueError("Los estados de cuenta o correos ignorados no se guardan como transacciones directas.")
     category = normalize_category(candidate["category"], candidate["transaction_type"])
     row = conn.execute(
         """
@@ -284,6 +296,59 @@ def scan_email_text(
     parsed = parse_financial_email(subject, sender, body, received_at)
     email_fp = fingerprint_email(sender, subject, body, received_at)
 
+    # Correos informativos, login, publicidad y seguros no generan candidatos.
+    # Se guardan como ingested/ignored para evitar reprocesarlos y para auditoría.
+    if parsed.get("email_kind") == "ignored":
+        with get_connection() as conn:
+            ensure_email_tables(conn)
+            existing_msg = conn.execute(
+                """
+                SELECT id
+                FROM email_ingested_messages
+                WHERE user_id = %s
+                AND fingerprint = %s
+                """,
+                (user_id, email_fp),
+            ).fetchone()
+
+            if existing_msg:
+                conn.commit()
+                return {
+                    "status": "DUPLICATE_IGNORED_EMAIL",
+                    "message": "Correo ignorado ya procesado.",
+                    "ignored": True,
+                    "reason": parsed.get("ignore_reason") or parsed.get("confidence_reason"),
+                }
+
+            conn.execute(
+                """
+                INSERT INTO email_ingested_messages (
+                    user_id, provider, provider_message_id, fingerprint, sender, subject,
+                    received_at, bank, status, raw_excerpt
+                )
+                VALUES (%s, 'gmail', %s, %s, %s, %s, %s, %s, 'ignored', %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (
+                    user_id,
+                    provider_message_id,
+                    email_fp,
+                    sender,
+                    subject,
+                    received_at,
+                    parsed["bank"],
+                    (parsed.get("ignore_reason") or body)[:1200],
+                ),
+            )
+            conn.commit()
+
+        return {
+            "status": "IGNORED_EMAIL",
+            "message": parsed.get("ignore_reason") or "Correo ignorado.",
+            "ignored": True,
+            "candidate": None,
+        }
+
     candidate_fp = fingerprint_candidate(
         user_id=user_id,
         transaction_date=parsed["transaction_date"],
@@ -345,13 +410,20 @@ def scan_email_text(
         ).fetchone()
 
         email_message_id = int(email_row["id"])
-        parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
+        if parsed.get("email_kind") == "statement":
+            parsed["category"] = "Estado de cuenta"
+        else:
+            parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
 
-        if _transaction_duplicate_exists(conn, user_id, parsed):
+        if parsed.get("email_kind") == "statement":
+            candidate_status = "pending"
+            transaction_id = None
+            review_reason = parsed["confidence_reason"]
+        elif _transaction_duplicate_exists(conn, user_id, parsed):
             candidate_status = "duplicate"
             transaction_id = None
             review_reason = "Transacción idéntica ya existe."
-        elif auto_commit and float(parsed["confidence"]) >= AUTO_COMMIT_CONFIDENCE:
+        elif auto_commit and float(parsed["confidence"]) >= AUTO_COMMIT_CONFIDENCE and float(parsed.get("amount") or 0) > 0:
             transaction_id = _insert_transaction(conn, user_id, parsed)
             candidate_status = "auto_saved"
             review_reason = "Guardada automáticamente por alta confianza."
@@ -471,6 +543,18 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
 
         if candidate.get("transaction_id"):
             return {"status": "OK", "message": "Ya estaba guardado.", "transaction_id": candidate["transaction_id"]}
+
+        if candidate.get("transaction_type") == "statement":
+            conn.execute(
+                """
+                UPDATE email_transaction_candidates
+                SET status = 'confirmed', updated_at = NOW()
+                WHERE id = %s AND user_id = %s
+                """,
+                (candidate_id, user_id),
+            )
+            conn.commit()
+            return {"status": "OK", "message": "Estado de cuenta marcado como revisado."}
 
         transaction_id = _insert_transaction(conn, user_id, candidate)
         conn.execute(
@@ -601,6 +685,7 @@ def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = True, query:
 
     auto_saved = sum(1 for item in processed if item.get("candidate_status") == "auto_saved")
     pending = sum(1 for item in processed if item.get("candidate_status") == "pending")
+    ignored = sum(1 for item in processed if item.get("status") in {"IGNORED_EMAIL", "DUPLICATE_IGNORED_EMAIL"})
     duplicates = sum(1 for item in processed if item.get("status") == "DUPLICATE_EMAIL" or item.get("candidate_status") == "duplicate")
 
     return {
@@ -612,8 +697,9 @@ def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = True, query:
             "auto_saved": auto_saved,
             "pending": pending,
             "duplicates": duplicates,
+            "ignored": ignored,
         },
-        "message": f"Escaneo completado. Encontrados: {len(messages)}, guardados: {auto_saved}, pendientes: {pending}, duplicados: {duplicates}.",
+        "message": f"Escaneo completado. Encontrados: {len(messages)}, guardados: {auto_saved}, pendientes: {pending}, duplicados: {duplicates}, ignorados: {ignored}.",
     }
 
 

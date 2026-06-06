@@ -408,8 +408,8 @@ ON email_ingested_messages(user_id, created_at DESC);
 
 INSERT INTO email_monitor_settings (user_id, gmail_query)
 SELECT id,
-       '(from:bac OR from:credomatic OR from:popular OR from:multimoney OR "MultiMoney" OR "BAC" OR "Banco Popular") newer_than:7d'
+       '(from:bac OR from:credomatic OR from:popular OR from:multimoney OR from:notificacionesbaccr.com OR from:estadosdecuenta@baccredomatic.cr OR "MultiMoney" OR "BAC" OR "Banco Popular") (compra OR pago OR transferencia OR SINPE OR deposito OR depósito OR retiro OR abono OR debito OR débito OR credito OR crédito OR "transacción realizada" OR "transaccion realizada" OR "movimiento entre cuentas" OR "estado de cuenta" OR "estados de cuenta")'
 FROM users
-WHERE role = 'owner'
+WHERE email = 'gatotico99@gmail.com'
 ON CONFLICT (user_id)
-DO UPDATE SET updated_at = NOW();
+DO UPDATE SET gmail_query = EXCLUDED.gmail_query, updated_at = NOW();
