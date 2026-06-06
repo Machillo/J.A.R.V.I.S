@@ -8,6 +8,7 @@ import {
   getEmailMonitorCandidates,
   getEmailMonitorStatus,
   getNotificationStatus,
+  sendTestNotification,
   syncEmailMonitorGmail,
   updateSportsPreferences,
 } from "../services/jarvisApi";
@@ -18,6 +19,14 @@ const splitTeams = (value) =>
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+
+const JARVIS_THEMES = [
+  { id: "classic", label: "Cian / Morado", swatches: ["#29e6ff", "#c155ff"] },
+  { id: "emerald", label: "Verde / Cian", swatches: ["#51ff9b", "#29e6ff"] },
+  { id: "violet", label: "Violeta / Rosa", swatches: ["#b25cff", "#ff4fd8"] },
+  { id: "amber", label: "Ámbar / Cian", swatches: ["#ffcc66", "#29e6ff"] },
+  { id: "ice", label: "Hielo / Azul", swatches: ["#9ff8ff", "#5b7cff"] },
+];
 
 export default function Settings({ status }) {
   const [me, setMe] = useState(null);
@@ -32,6 +41,7 @@ export default function Settings({ status }) {
   const [emailMonitor, setEmailMonitor] = useState(null);
   const [emailCandidates, setEmailCandidates] = useState([]);
   const [emailSyncStatus, setEmailSyncStatus] = useState("");
+  const [theme, setTheme] = useState(() => localStorage.getItem("jarvis-theme") || "classic");
 
   const isAdmin = me?.role === "owner" || me?.role === "admin";
   const isOwner = me?.role === "owner";
@@ -83,6 +93,12 @@ export default function Settings({ status }) {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("jarvis-theme", theme);
+    window.dispatchEvent(new Event("jarvis-theme-change"));
+  }, [theme]);
 
   const handleSaveSports = async () => {
     const payload = {
@@ -136,10 +152,44 @@ export default function Settings({ status }) {
     }
   };
 
+  const handleTestNotification = async () => {
+    setPushMessage("Enviando prueba...");
+    try {
+      const result = await sendTestNotification();
+      setPushMessage(result?.message || "Señor, prueba enviada.");
+      const notificationData = await getNotificationStatus();
+      setPushInfo(notificationData);
+    } catch (error) {
+      setPushMessage(error.message);
+    }
+  };
+
   return (
     <section className="page settings-page">
       <h1>Configuración</h1>
       <p className="subtitle">Perfil, permisos, IA, notificaciones y preferencias personales.</p>
+
+      <div className="jarvis-panel settings-card theme-card">
+        <div>
+          <h2>Estilo visual</h2>
+          <p>Elegí una combinación neón. Queda guardada en este dispositivo.</p>
+        </div>
+        <div className="theme-picker">
+          {JARVIS_THEMES.map((item) => (
+            <button
+              key={item.id}
+              className={`theme-option ${theme === item.id ? "active" : ""}`}
+              onClick={() => setTheme(item.id)}
+              aria-label={`Usar tema ${item.label}`}
+              type="button"
+            >
+              <span style={{ background: item.swatches[0] }} />
+              <span style={{ background: item.swatches[1] }} />
+              <em>{item.label}</em>
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="settings-grid">
         <div className="jarvis-panel settings-card">
@@ -170,6 +220,9 @@ export default function Settings({ status }) {
           <p>Alertas pendientes: <strong>{pushInfo?.pending_jobs ?? 0}</strong></p>
           <button className="jarvis-action-button" onClick={handleEnableNotifications} disabled={!isPushSupported()}>
             Activar Web Push en este iPhone
+          </button>
+          <button className="jarvis-action-button secondary" onClick={handleTestNotification} disabled={!pushInfo?.subscriptions}>
+            Enviar prueba
           </button>
           <small>
             En iPhone funciona cuando JARVIS está agregado a pantalla de inicio como PWA y las notificaciones están permitidas.

@@ -261,9 +261,8 @@ def _send_to_subscription(conn, subscription: dict[str, Any], title: str, body: 
 def send_test_notification() -> dict[str, Any]:
     user = get_current_user()
     user_id = int(user["id"])
-    name = _display_name(user)
     title = "J.A.R.V.I.S."
-    body = f"Señor {name}, notificaciones reales activadas en este dispositivo."
+    body = "Señor, notificaciones reales activadas en este dispositivo."
 
     with get_connection() as conn:
         ensure_notification_tables(conn)

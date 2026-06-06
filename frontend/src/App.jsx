@@ -13,6 +13,11 @@ import Login from "./pages/Login";
 import { askJarvis, getFinanceDashboard, getJarvisUsageToday, getMe, getStatus } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
 
+const sanitizeCourtesy = (text = "") =>
+  String(text || "")
+    .replace(/Señor\s+[A-ZÁÉÍÓÚÑa-záéíóúñ0-9._%+-]+(?:@[A-ZÁÉÍÓÚÑa-záéíóúñ0-9.-]+)?[,:\s]*/gi, "Señor, ")
+    .replace(/Señor,\s*Señor,\s*/gi, "Señor, ");
+
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 760);
@@ -26,6 +31,40 @@ export default function App() {
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [aiUsage, setAiUsage] = useState(null);
+
+  useEffect(() => {
+    const applyTheme = () => {
+      const savedTheme = localStorage.getItem("jarvis-theme") || "classic";
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    };
+
+    applyTheme();
+    window.addEventListener("jarvis-theme-change", applyTheme);
+    return () => window.removeEventListener("jarvis-theme-change", applyTheme);
+  }, []);
+
+  useEffect(() => {
+    const updateViewport = () => {
+      const viewport = window.visualViewport;
+      const height = viewport?.height || window.innerHeight;
+      const keyboardOffset = Math.max(0, window.innerHeight - height - (viewport?.offsetTop || 0));
+
+      document.documentElement.style.setProperty("--app-vh", `${height}px`);
+      document.documentElement.style.setProperty("--keyboard-offset", `${keyboardOffset}px`);
+    };
+
+    updateViewport();
+    window.visualViewport?.addEventListener("resize", updateViewport);
+    window.visualViewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("resize", updateViewport);
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, []);
+
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -84,8 +123,13 @@ export default function App() {
   };
 
   const speakText = (text) => {
-    const utterance = new SpeechSynthesisUtterance(text);
+    const normalized = sanitizeCourtesy(text);
+
+    const utterance = new SpeechSynthesisUtterance(normalized);
     utterance.lang = "es-CR";
+    utterance.rate = 0.86;
+    utterance.pitch = 0.92;
+    speechSynthesis.cancel();
     speechSynthesis.speak(utterance);
   };
 
@@ -99,8 +143,9 @@ export default function App() {
       const response = await askJarvis(text);
       setJarvisResponse(response);
 
-      const responseText =
-        response?.response?.message || response?.message || "Respuesta recibida.";
+      const responseText = sanitizeCourtesy(
+        response?.response?.message || response?.message || "Respuesta recibida."
+      );
 
       setChatHistory((current) => [
         ...current,
@@ -153,10 +198,11 @@ export default function App() {
         const response = await askJarvis(text);
         setJarvisResponse(response);
 
-        const responseText =
+        const responseText = sanitizeCourtesy(
           response?.response?.message ||
           response?.message ||
-          `Intención detectada: ${response.intent}`;
+          `Intención detectada: ${response.intent}`
+        );
 
         setChatHistory((current) => [
           ...current,
@@ -284,7 +330,7 @@ export default function App() {
             onKeyDown={(event) => {
               if (event.key === "Enter") handleAskJarvis();
             }}
-            placeholder={userName ? `¿En qué puedo ayudarte, ${userName}?` : "¿En qué puedo ayudarte?"}
+            placeholder="¿En qué puedo ayudarte?"
           />
 
           <button className="command-button" onClick={handleAskJarvis}>

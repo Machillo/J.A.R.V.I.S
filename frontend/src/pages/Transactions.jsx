@@ -206,7 +206,7 @@ export default function Transactions() {
           {monthlyChartData.length === 0 ? (
             <EmptyState />
           ) : (
-            <div className="chart-shell">
+            <div className="chart-shell transaction-chart-shell">
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={monthlyChartData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -263,7 +263,7 @@ export default function Transactions() {
         {transactions.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="responsive-table">
+          <div className="responsive-table transaction-history-scroll">
             <table>
               <thead>
                 <tr>

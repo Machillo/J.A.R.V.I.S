@@ -127,7 +127,6 @@ function MonthlyFlowChart({ data = [] }) {
   const maxValue = Math.max(
     ...rows.flatMap((item) => [
       Number(item.income) || 0,
-      Number(item.loans) || 0,
       Number(item.outflow) || 0,
     ]),
     1
@@ -146,7 +145,6 @@ function MonthlyFlowChart({ data = [] }) {
     <div className="jarvis-flow-chart">
       {rows.map((item) => {
         const incomeHeight = Math.max((Number(item.income) / maxValue) * 100, 2);
-        const loanHeight = Math.max((Number(item.loans) / maxValue) * 100, 0);
         const outflowHeight = Math.max((Number(item.outflow) / maxValue) * 100, 2);
 
         return (
@@ -157,11 +155,7 @@ function MonthlyFlowChart({ data = [] }) {
                 style={{ height: `${incomeHeight}%` }}
                 title={`Ingresos ${formatCRC(item.income)}`}
               />
-              <span
-                className="flow-bar loans"
-                style={{ height: `${loanHeight}%` }}
-                title={`Préstamos ${formatCRC(item.loans)}`}
-              />
+
               <span
                 className="flow-bar outflow"
                 style={{ height: `${outflowHeight}%` }}
@@ -524,7 +518,7 @@ export default function Finance({
   const income = Number(summary?.income?.monthly_net_income) || 0;
   const totalIncome = Number(summary?.income?.total_income) || income;
   const expensesTotal = Number(summary?.expenses?.total_expenses) || 0;
-  const fixedExpenses = Number(summary?.expenses?.fixed_expenses) || 0;
+  const fixedExpenses = Number(summary?.expenses?.fixed_expenses) || Number(fixedStatus?.summary?.expected) || 0;
   const available = Number(summary?.cashflow?.available_cash) || 0;
   const debtTotal = Number(summary?.debts?.total) || 0;
   const monthlyDebtPayments = Number(summary?.debts?.monthly_payments) || 0;
@@ -653,22 +647,18 @@ export default function Finance({
         </article>
       </div>
 
-      <div className="finance-kpi-strip">
+      <div className="finance-kpi-strip finance-kpi-strip-clean">
         <article className="finance-mini-kpi">
           <span>Ingreso del último mes</span>
           <strong>{formatCRC(lastMonthIncome)}</strong>
-        </article>
-        <article className="finance-mini-kpi">
-          <span>Préstamos recibidos</span>
-          <strong>{formatCRC(lastMonthLoans)}</strong>
         </article>
         <article className="finance-mini-kpi">
           <span>Gastos del último mes</span>
           <strong>{formatCRC(lastMonthExpenses)}</strong>
         </article>
         <article className="finance-mini-kpi">
-          <span>Histórico importado</span>
-          <strong>{formatCRC(transactionAnalysis?.summary?.net_from_transactions || 0)}</strong>
+          <span>Pagos de deuda del último mes</span>
+          <strong>{formatCRC(lastMonthDebtPayments)}</strong>
         </article>
       </div>
 
@@ -686,7 +676,6 @@ export default function Finance({
 
           <div className="legend">
             <span className="cyan"></span> Ingresos
-            <span className="purple"></span> Préstamos
             <span className="red"></span> Gastos / deuda
           </div>
         </article>
@@ -818,7 +807,7 @@ export default function Finance({
 
           <div className="metric-list">
             <div>
-              <span>Gastos fijos</span>
+              <span>Gastos fijos activos</span>
               <strong>{formatCRC(fixedExpenses)}</strong>
             </div>
             <div>
