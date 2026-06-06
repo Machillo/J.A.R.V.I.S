@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -22,9 +23,10 @@ OWNER_EMAIL = os.getenv("OWNER_EMAIL", "gatotico99@gmail.com")
 CRON_SECRET = os.getenv("EMAIL_MONITOR_CRON_SECRET", "")
 DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
-    '(from:bac OR from:credomatic OR from:baccredomatic OR from:notificacionesbaccr.com OR from:estadosdecuenta@baccredomatic.cr OR from:popular OR from:bancopopular OR from:multimoney OR "MultiMoney" OR "Banco Popular") ("Notificación de transacción" OR "Notificación de Transferencia" OR "Transacción realizada" OR "confirmación de transferencia" OR compra OR pago OR transferencia OR SINPE OR depósito OR deposito OR retiro OR abono OR débito OR debito OR crédito OR credito OR "estado de cuenta" OR "estados de cuenta") -promoción -promocion -newsletter -publicidad -"sesión se inició" -"sesion se inicio" -"seguro de vida" -"nuevos seguros" -"tasa cero" -"e-scooter"',
+    '(from:bac OR from:credomatic OR from:baccredomatic OR from:notificacionesbaccr.com OR from:estadosdecuenta@baccredomatic.cr OR from:popular OR from:bancopopular OR from:multimoney OR "MultiMoney" OR "Banco Popular") ("Notificación de transacción" OR "Notificación de Transferencia" OR "Transacción realizada" OR "confirmación de transferencia" OR "estado de cuenta" OR "estados de cuenta" OR SINPE OR compra OR pago OR transferencia OR depósito OR deposito OR retiro OR abono OR débito OR debito OR crédito OR credito) -promoción -promocion -newsletter -publicidad -"sesión se inició" -"sesion se inicio" -"seguro de vida" -"nuevos seguros" -"tasa cero" -"e-scooter"',
 )
-AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "0.90"))
+# Fase 6.2: no se guarda nada automático. Primero validamos lectura limpia.
+AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "999"))
 
 
 def build_current_month_gmail_query(base_query: str | None = None, today: date | None = None) -> str:
@@ -111,6 +113,26 @@ def ensure_email_tables(conn) -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(user_id, fingerprint)
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_statement_documents (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            email_message_id BIGINT REFERENCES email_ingested_messages(id) ON DELETE CASCADE,
+            bank TEXT NOT NULL,
+            subject TEXT,
+            statement_month TEXT,
+            received_at TIMESTAMPTZ,
+            attachment_names TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+            extracted_text_excerpt TEXT,
+            status TEXT NOT NULL DEFAULT 'pending_reconciliation',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(user_id, email_message_id)
         )
         """
     )
@@ -288,12 +310,14 @@ def scan_email_text(
     auto_commit: bool = False,
     user_id: int | None = None,
     provider_message_id: str | None = None,
+    attachment_names: list[str] | None = None,
 ) -> dict[str, Any]:
     if user_id is None:
         _require_owner_user()
         user_id = get_current_user_id()
 
     parsed = parse_financial_email(subject, sender, body, received_at)
+    parsed["attachment_names"] = attachment_names or []
     email_fp = fingerprint_email(sender, subject, body, received_at)
 
     # Correos informativos, login, publicidad y seguros no generan candidatos.
@@ -423,7 +447,7 @@ def scan_email_text(
             candidate_status = "duplicate"
             transaction_id = None
             review_reason = "Transacción idéntica ya existe."
-        elif auto_commit and float(parsed["confidence"]) >= AUTO_COMMIT_CONFIDENCE and float(parsed.get("amount") or 0) > 0:
+        elif False and auto_commit and float(parsed["confidence"]) >= AUTO_COMMIT_CONFIDENCE and float(parsed.get("amount") or 0) > 0:
             transaction_id = _insert_transaction(conn, user_id, parsed)
             candidate_status = "auto_saved"
             review_reason = "Guardada automáticamente por alta confianza."
@@ -466,6 +490,33 @@ def scan_email_text(
                 review_reason,
             ),
         ).fetchone()
+
+        if parsed.get("email_kind") == "statement":
+            conn.execute(
+                """
+                INSERT INTO email_statement_documents (
+                    user_id, email_message_id, bank, subject, statement_month,
+                    received_at, attachment_names, extracted_text_excerpt, status
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending_reconciliation')
+                ON CONFLICT (user_id, email_message_id)
+                DO UPDATE SET
+                    statement_month = EXCLUDED.statement_month,
+                    attachment_names = EXCLUDED.attachment_names,
+                    extracted_text_excerpt = EXCLUDED.extracted_text_excerpt,
+                    updated_at = NOW()
+                """,
+                (
+                    user_id,
+                    email_message_id,
+                    parsed["bank"],
+                    subject,
+                    parsed.get("statement_month"),
+                    received_at,
+                    parsed.get("attachment_names") or [],
+                    (body or "")[:2500],
+                ),
+            )
 
         conn.commit()
 
@@ -584,7 +635,7 @@ def _decode_gmail_body(payload: dict[str, Any]) -> str:
                 if mime == "text/html":
                     raw = re.sub(r"(?i)<\s*(br|/tr|/td|/p|/div|/li)\b[^>]*>", "\n", raw)
                     raw = re.sub(r"<[^>]+>", " ", raw)
-                raw = raw.replace("&nbsp;", " ").replace("&amp;", "&")
+                raw = raw.replace("&nbsp;", " ").replace("&amp;", "&").replace("&quot;", '"')
                 raw = re.sub(r"[ \t]+", " ", raw)
                 raw = re.sub(r"\n\s+", "\n", raw)
                 chunks.append(raw.strip())
@@ -597,6 +648,64 @@ def _decode_gmail_body(payload: dict[str, Any]) -> str:
     walk(payload or {})
     return "\n".join(chunk for chunk in chunks if chunk)
 
+
+def _collect_attachments(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    attachments: list[dict[str, Any]] = []
+
+    def walk(part: dict[str, Any]) -> None:
+        filename = part.get("filename") or ""
+        body = part.get("body") or {}
+        attachment_id = body.get("attachmentId")
+        mime = part.get("mimeType", "")
+        if filename or attachment_id:
+            attachments.append({
+                "filename": filename,
+                "attachment_id": attachment_id,
+                "mime_type": mime,
+                "size": body.get("size"),
+            })
+        for child in part.get("parts") or []:
+            walk(child)
+
+    walk(payload or {})
+    return attachments
+
+
+def _extract_pdf_attachment_text(gmail_service, message_id: str, attachments: list[dict[str, Any]]) -> tuple[str, list[str]]:
+    texts: list[str] = []
+    names: list[str] = []
+    try:
+        from pypdf import PdfReader
+    except Exception:
+        return "", [a.get("filename") or "" for a in attachments if a.get("filename")]
+
+    for attachment in attachments:
+        filename = attachment.get("filename") or ""
+        attachment_id = attachment.get("attachment_id")
+        mime_type = attachment.get("mime_type") or ""
+        if filename:
+            names.append(filename)
+        if not attachment_id:
+            continue
+        if "pdf" not in mime_type.lower() and not filename.lower().endswith(".pdf"):
+            continue
+        try:
+            data = gmail_service.users().messages().attachments().get(
+                userId="me", messageId=message_id, id=attachment_id
+            ).execute().get("data")
+            if not data:
+                continue
+            raw = base64.urlsafe_b64decode(data.encode("utf-8"))
+            reader = PdfReader(BytesIO(raw))
+            page_texts = []
+            for page in reader.pages[:8]:
+                page_texts.append(page.extract_text() or "")
+            text = "\n".join(page_texts).strip()
+            if text:
+                texts.append(f"[PDF {filename}]\n{text}")
+        except Exception:
+            continue
+    return "\n".join(texts), names
 
 def _gmail_service():
     try:
@@ -626,6 +735,8 @@ def _gmail_service():
 
 
 def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = False, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
+    # Fase 6.2: lectura y candidatos pendientes únicamente. No autoguardar.
+    auto_commit = False
     service = _gmail_service()
     gmail_query = build_current_month_gmail_query(query or DEFAULT_QUERY) if current_month_only else (query or DEFAULT_QUERY)
 
@@ -659,7 +770,12 @@ def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = False, query
             except Exception:
                 received_at = None
 
-        body = _decode_gmail_body(full.get("payload", {})) or full.get("snippet", "")
+        payload = full.get("payload", {})
+        body = _decode_gmail_body(payload) or full.get("snippet", "")
+        attachments = _collect_attachments(payload)
+        pdf_text, attachment_names = _extract_pdf_attachment_text(service, message_id, attachments)
+        if pdf_text:
+            body = f"{body}\n\n{pdf_text}"
         result = scan_email_text(
             subject=subject,
             sender=sender,
@@ -668,6 +784,7 @@ def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = False, query
             auto_commit=auto_commit,
             user_id=owner_id,
             provider_message_id=message_id,
+            attachment_names=attachment_names,
         )
         processed.append({
             "gmail_id": message_id,

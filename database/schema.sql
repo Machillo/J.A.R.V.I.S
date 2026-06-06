@@ -413,3 +413,20 @@ FROM users
 WHERE email = 'gatotico99@gmail.com'
 ON CONFLICT (user_id)
 DO UPDATE SET gmail_query = EXCLUDED.gmail_query, updated_at = NOW();
+
+-- Email statement documents for reconciliation, not direct expenses
+CREATE TABLE IF NOT EXISTS email_statement_documents (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    email_message_id BIGINT REFERENCES email_ingested_messages(id) ON DELETE CASCADE,
+    bank TEXT NOT NULL,
+    subject TEXT,
+    statement_month TEXT,
+    received_at TIMESTAMPTZ,
+    attachment_names TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    extracted_text_excerpt TEXT,
+    status TEXT NOT NULL DEFAULT 'pending_reconciliation',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, email_message_id)
+);

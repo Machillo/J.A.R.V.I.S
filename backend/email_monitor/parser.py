@@ -10,33 +10,25 @@ BANK_SENDERS = {
     "bac": [
         "bac", "credomatic", "baccredomatic", "notificacionesbaccr", "notificaciones@bac",
         "notificacion@notificacionesbaccr.com", "estadosdecuenta@baccredomatic.cr", "bac - sinpe",
+        "notificaciones@baccredomatic.cr", "notificacionesbaccr.com",
     ],
-    "popular": ["banco popular", "bancopopular.fi.cr", "notificaciones@bancopopular"],
+    "popular": ["banco popular", "bancopopular.fi.cr", "notificaciones@bancopopular", "banco popular informa"],
     "multimoney": ["multimoney", "multi money", "financiera multimoney", "multimoneycr"],
 }
 
-# Lo que sí queremos procesar como dinero real.
-MONEY_KEYWORDS = [
-    "compra", "pago", "transferencia", "sinpe", "deposito", "depósito", "retiro",
-    "abono", "debito", "débito", "credito", "crédito", "transaccion realizada",
-    "transacción realizada", "movimiento entre cuentas", "notificacion de transaccion",
-    "notificación de transacción", "notificacion de transferencia", "notificación de transferencia",
-    "confirmacion de transferencia", "confirmación de transferencia",
-]
-
 STATEMENT_KEYWORDS = [
     "estado de cuenta", "estados de cuenta", "estado de cuenta financiera",
-    "cuenta bancaria", "cuentas bancarias",
+    "cuenta bancaria", "cuentas bancarias", "tu estado de cuenta",
 ]
 
-# Si aparece esto, casi siempre NO es movimiento real. Estados de cuenta se manejan aparte.
 REJECT_KEYWORDS = [
     "tu sesion se inicio", "tu sesión se inició", "sesion se inicio", "sesión se inició",
     "inicio de sesion", "inicio de sesión", "login", "darse de baja", "dar de baja",
-    "promocion", "promoción", "participa por", "podés darte ese gusto", "llevá tu",
-    "tasa cero", "e-scooter", "newsletter", "publicidad", "nuevos seguros", "seguro de vida",
-    "conoce mas", "conocé más", "aviso legal", "actualizar tus preferencias",
-    "politicas de privacidad", "términos y condiciones", "terminos y condiciones",
+    "promocion", "promoción", "participa por", "podés darte ese gusto", "podes darte ese gusto",
+    "llevá tu", "lleva tu", "tasa cero", "e-scooter", "newsletter", "publicidad",
+    "nuevos seguros", "seguro de vida", "conoce mas", "conocé más", "aviso legal",
+    "actualizar tus preferencias", "politicas de privacidad", "políticas de privacidad",
+    "términos y condiciones", "terminos y condiciones", "participa por 5 viajes",
 ]
 
 MONTHS = {
@@ -62,19 +54,23 @@ MONTH_NAME_RE = re.compile(
     r"\b(?P<month>jan(?:uary)?|ene(?:ro)?|feb(?:ruary|rero)?|mar(?:ch|zo)?|apr(?:il)?|abr(?:il)?|may(?:o)?|jun(?:e|io)?|jul(?:y|io)?|aug(?:ust)?|ago(?:sto)?|sep(?:t|tember|tiembre)?|setiembre|oct(?:ober|ubre)?|nov(?:ember|iembre)?|dec(?:ember)?|dic(?:iembre)?)\.?\s+(?P<day>\d{1,2}),?\s+(?P<year>\d{4})\b",
     re.I,
 )
-
-# Montos permitidos SOLO en contexto claro de dinero.
-LABELED_AMOUNT_PATTERNS = [
-    re.compile(r"\bmonto\s*[:\-]?\s*(?P<currency>CRC|USD|₡|¢|\$|colones?)\s*(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\b", re.I),
-    re.compile(r"\bmonto\s*[:\-]?\s*(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\s*(?P<currency>CRC|USD|₡|¢|\$|colones?)\b", re.I),
-    re.compile(r"\bpor\s+un\s+monto\s+de\s*(?P<currency>CRC|USD|₡|¢|\$|colones?)?\s*(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\s*(?P<currency2>CRC|USD|₡|¢|\$|colones?)?\b", re.I),
-    re.compile(r"\btotal\s+(?:pagado|debitado|acreditado)?\s*[:\-]?\s*(?P<currency>CRC|USD|₡|¢|\$|colones?)\s*(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\b", re.I),
-]
-
-EXPLICIT_AMOUNT_RE = re.compile(
-    r"(?P<currency>₡|¢|CRC|USD|\$)\s*(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\b",
+SPANISH_MONTH_PERIOD_RE = re.compile(
+    r"\b(?:mes\s+de|correspondiente\s+al\s+mes\s+de|periodo\s+de|per[ií]odo\s+de)\s+"
+    r"(?P<month>enero|febrero|marzo|abril|mayo|junio|julio|agosto|setiembre|septiembre|octubre|noviembre|diciembre)\s+"
+    r"(?P<year>20\d{2})\b",
     re.I,
 )
+
+AMOUNT_VALUE = r"(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))"
+CURRENCY_VALUE = r"(?P<currency>CRC|USD|₡|¢|\$|colones?)"
+
+# Solo montos en etiquetas/contexto bancario claro. No se acepta cualquier número suelto.
+LABELED_AMOUNT_PATTERNS = [
+    re.compile(rf"\bmonto\s*[:\-]?\s*{CURRENCY_VALUE}\s*{AMOUNT_VALUE}\b", re.I),
+    re.compile(rf"\bmonto\s*[:\-]?\s*{AMOUNT_VALUE}\s*(?P<currency2>CRC|USD|₡|¢|\$|colones?)\b", re.I),
+    re.compile(rf"\bpor\s+un\s+monto\s+de\s*(?P<currency3>CRC|USD|₡|¢|\$|colones?)?\s*{AMOUNT_VALUE}\s*(?P<currency4>CRC|USD|₡|¢|\$|colones?)?\b", re.I),
+    re.compile(rf"\b(?:total|valor)\s+(?:pagado|debitado|acreditado|transferido)?\s*[:\-]?\s*(?P<currency5>CRC|USD|₡|¢|\$|colones?)\s*{AMOUNT_VALUE}\b", re.I),
+]
 
 
 def _strip_accents(value: str) -> str:
@@ -99,7 +95,7 @@ def fingerprint_candidate(user_id: int, transaction_date: str, amount: float, tr
 
 
 def detect_bank(sender: str, subject: str, body: str) -> str:
-    haystack = normalize(" ".join([sender, subject, body[:1500]]))
+    haystack = normalize(" ".join([sender or "", subject or "", (body or "")[:3000]]))
     for bank, words in BANK_SENDERS.items():
         if any(normalize(word) in haystack for word in words):
             return bank
@@ -128,12 +124,16 @@ def _is_structured_bac_purchase(text: str) -> bool:
 
 def _is_bac_sinpe(text: str) -> bool:
     clean = normalize(text)
-    return "sinpe" in clean and "monto" in clean and ("transferencia" in clean or "notificacion de transferencia" in clean)
+    return "sinpe" in clean and "monto" in clean and "transferencia" in clean
 
 
 def _is_multimoney_transfer(text: str) -> bool:
     clean = normalize(text)
-    return "multimoney" in clean and ("transaccion realizada" in clean or "confirmacion de transferencia" in clean or "confirmación de transferencia" in clean) and "monto" in clean
+    return "multimoney" in clean and "monto" in clean and (
+        "transaccion realizada" in clean
+        or "confirmacion de transferencia" in clean
+        or "confirmacion" in clean and "transferencia" in clean
+    )
 
 
 def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
@@ -144,11 +144,11 @@ def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
     if bank == "unknown":
         return "ignored", "No es un correo de BAC, Banco Popular o MultiMoney."
 
-    # Estado de cuenta se conserva, pero NO se guarda como gasto. Luego se leerá PDF/adjunto.
+    # Estados de cuenta sí interesan, pero se tratan como documento para conciliación, no como gasto.
     if _has_statement(text):
-        return "statement", "Estado de cuenta detectado; queda pendiente para leer PDF/adjunto."
+        return "statement", "Estado de cuenta detectado; se guardará como documento pendiente de conciliación."
 
-    # Promos/logins/seguros deben rechazarse aunque digan BAC o tarjeta.
+    # Promos/logins/seguros se ignoran incluso si mencionan tarjeta o BAC.
     if _has_reject(text):
         return "ignored", "Correo promocional/informativo/login/seguro; no es movimiento de dinero."
 
@@ -158,12 +158,9 @@ def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
     if bank == "multimoney" and _is_multimoney_transfer(text):
         return "movement", "Movimiento MultiMoney estructurado detectado."
 
-    # Banco Popular normalmente llega como estado de cuenta/adjunto. Si no trae monto claro, no guardar.
-    if bank == "popular" and "monto" in clean and any(word in clean for word in MONEY_KEYWORDS):
+    # Banco Popular se acepta solo si trae monto etiquetado o estado de cuenta.
+    if bank == "popular" and "monto" in clean and any(w in clean for w in ["pago", "transferencia", "deposito", "debito", "credito"]):
         return "movement", "Movimiento Banco Popular probable detectado."
-
-    if any(word in clean for word in MONEY_KEYWORDS) and "monto" in clean:
-        return "movement", "Movimiento probable con palabra clave y monto."
 
     return "ignored", "No contiene estructura confiable de movimiento bancario."
 
@@ -202,9 +199,32 @@ def parse_date(text: str, fallback: str | None = None) -> str:
     return date.today().isoformat()
 
 
-def _currency_code(raw: str | None) -> str:
-    value = (raw or "").strip().upper()
-    if value in {"USD", "$"}:
+def parse_statement_month(text: str, received_at: str | None = None) -> str | None:
+    """Return YYYY-MM for a statement period, keeping statement month separate from received date."""
+    match = SPANISH_MONTH_PERIOD_RE.search(text or "")
+    if match:
+        month = MONTHS.get(normalize(match.group("month")))
+        if month:
+            return f"{int(match.group('year')):04d}-{month:02d}"
+
+    # Banco/financiera suelen enviar estado de mayo durante junio. Fallback: mes anterior al received_at.
+    if received_at:
+        try:
+            received = datetime.fromisoformat(received_at.replace("Z", "+00:00")).date()
+            year = received.year
+            month = received.month - 1
+            if month == 0:
+                month = 12
+                year -= 1
+            return f"{year:04d}-{month:02d}"
+        except Exception:
+            pass
+    return None
+
+
+def _currency_code(*values: str | None) -> str:
+    joined = " ".join(v for v in values if v).strip().upper()
+    if "USD" in joined or "$" in joined:
         return "USD"
     return "CRC"
 
@@ -214,7 +234,7 @@ def _parse_number(raw: str) -> float | None:
     if not value:
         return None
     digits_only = re.sub(r"\D", "", value)
-    if len(digits_only) > 11:
+    if len(digits_only) > 10:
         return None
 
     if "," in value and "." in value:
@@ -241,37 +261,26 @@ def _parse_number(raw: str) -> float | None:
         return None
 
 
-def _money_context_ok(text: str, start: int, end: int) -> bool:
-    window = normalize(text[max(0, start - 90): min(len(text), end + 90)])
-    allowed = ["monto", "total", "compra", "pago", "transferencia", "sinpe", "deposito", "depósito", "retiro", "abono", "debitado", "acreditado"]
-    rejected = ["referencia", "autorizacion", "autorización", "telefono", "teléfono", "cuenta iban", "iban", "tarjeta", "master", "hora", "fecha"]
-    return any(word in window for word in allowed) and not any(word in window for word in rejected if "monto" not in window)
-
-
 def parse_amount(text: str) -> tuple[float | None, str]:
     content = text or ""
     for pattern in LABELED_AMOUNT_PATTERNS:
         for match in pattern.finditer(content):
-            raw_currency = match.groupdict().get("currency") or match.groupdict().get("currency2")
-            amount = _parse_number(match.group("amount"))
+            gd = match.groupdict()
+            raw_currency = gd.get("currency") or gd.get("currency2") or gd.get("currency3") or gd.get("currency4") or gd.get("currency5")
+            amount = _parse_number(gd.get("amount") or "")
             if amount and 0 < amount < 20_000_000:
                 return amount, _currency_code(raw_currency)
-
-    for match in EXPLICIT_AMOUNT_RE.finditer(content):
-        if not _money_context_ok(content, match.start(), match.end()):
-            continue
-        amount = _parse_number(match.group("amount"))
-        if amount and 0 < amount < 20_000_000:
-            return amount, _currency_code(match.group("currency"))
     return None, "CRC"
 
 
 def infer_transaction_type(text: str) -> str:
     clean = normalize(text)
-    if any(word in clean for word in ["salario", "planilla", "deposito recibido", "depósito recibido", "credito a su cuenta", "crédito a su cuenta", "abono recibido"]):
+    if any(word in clean for word in ["salario", "planilla", "deposito recibido", "credito a su cuenta", "abono recibido"]):
         return "income"
     if any(word in clean for word in ["pago de tarjeta", "pago tarjeta", "pago prestamo", "pago préstamo", "cuota", "minicuota"]):
         return "debt_payment"
+    if "sinpe" in clean or "transferencia" in clean or "movimiento entre cuentas" in clean:
+        return "transfer"
     return "expense"
 
 
@@ -282,8 +291,6 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
     if transaction_type == "income":
         if "planilla" in clean or "salario" in clean:
             return "Salario"
-        if "sinpe" in clean or "transferencia" in clean:
-            return "Transferencia recibida"
         return "Otros ingresos"
     if transaction_type == "debt_payment":
         if "bac" in clean or "tarjeta" in clean:
@@ -293,11 +300,13 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
         if "multimoney" in clean:
             return "MultiMoney"
         return "Deudas"
+    if transaction_type == "transfer":
+        return "Transferencias"
 
     rules = [
         ("Videojuegos", ["playstation", "supercell", "fs *supercell", "apple.com/bill", "gossip", "kingshot", "8 ball", "juego"]),
         ("Restaurante", ["uber eats", "mcdonald", "arcos dorados", "kfc", "restaurante", "pizza"]),
-        ("Comida", ["maxi pali", "maxipali", "pali", "am pm", "automercado", "auto mercado", "supermercado", "jose m.zeledon"]),
+        ("Comida", ["maxi pali", "maxipali", "pali", "am pm", "automercado", "auto mercado", "supermercado", "jose m.zeledon", "zeledon"]),
         ("Gasolina", ["gasolinera", "estacion de servicio", "combustible"]),
         ("Transporte", ["uber rides", "uber", "parqueo", "taxi"]),
         ("Salud", ["farmacia", "farmavalue", "hospital", "clinica", "nutricionista", "terapia", "medico", "médico"]),
@@ -306,7 +315,6 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
         ("Compras", ["temu", "shein", "amazon", "tienda", "ecommerce"]),
         ("Teléfono", ["liberty", "linea", "línea", "movil"]),
         ("Vivienda", ["casa", "alquiler"]),
-        ("Transferencias", ["sinpe", "transferencia", "movimiento entre cuentas"]),
     ]
     for category, words in rules:
         if any(word in clean for word in words):
@@ -318,15 +326,17 @@ def confidence_for(bank: str, amount: float | None, text: str, email_kind: str) 
     if email_kind == "ignored":
         return 0.0, "Correo ignorado: no es movimiento financiero útil."
     if email_kind == "statement":
-        return 0.80, "Estado de cuenta detectado; queda pendiente para leer PDF/adjunto."
+        return 0.85, "Estado de cuenta detectado; queda pendiente para conciliación con PDF/adjunto."
     if bank == "unknown":
         return 0.0, "Banco no identificado."
     if not amount:
-        return 0.40, "Movimiento probable, pero no se detectó monto confiable."
+        return 0.30, "Movimiento probable, pero no se detectó monto etiquetado confiable."
     clean = normalize(text)
-    if "monto" in clean and any(w in clean for w in ["comercio", "tipo de transaccion", "tipo de transacción", "sinpe", "transferencia"]):
-        return 0.94, "Banco, monto y estructura detectados."
-    return 0.70, "Movimiento probable, requiere revisión."
+    if bank == "bac" and "monto" in clean and ("comercio" in clean or "sinpe" in clean):
+        return 0.95, "Banco, monto y estructura BAC detectados."
+    if bank == "multimoney" and "monto" in clean and ("concepto" in clean or "transferencia" in clean):
+        return 0.92, "Banco, monto y estructura MultiMoney detectados."
+    return 0.75, "Movimiento probable, requiere revisión."
 
 
 def _extract_after_label(text: str, label: str) -> str | None:
@@ -334,7 +344,7 @@ def _extract_after_label(text: str, label: str) -> str | None:
     match = pattern.search(text or "")
     if match:
         value = re.sub(r"\s+", " ", match.group(1)).strip()
-        return value[:120]
+        return value[:160]
     return None
 
 
@@ -347,6 +357,8 @@ def extract_description(subject: str, body: str, bank: str) -> str:
         return concept[:240]
     subject_clean = (subject or "").strip()
     if subject_clean:
+        # Para BAC compras, el comercio viene también en el subject.
+        subject_clean = re.sub(r"(?i)^notificaci[oó]n de transacci[oó]n\s+", "", subject_clean).strip()
         return subject_clean[:240]
     body_clean = re.sub(r"\s+", " ", body or "").strip()
     return (body_clean[:180] or f"Movimiento {bank}")[:240]
@@ -356,13 +368,16 @@ def parse_financial_email(subject: str, sender: str, body: str, received_at: str
     bank = detect_bank(sender, subject, body)
     email_kind, kind_reason = classify_email(subject, sender, body)
     text = "\n".join(part for part in [subject, body] if part)
+    transaction_date = parse_date(text, received_at)
+    statement_month = parse_statement_month(text, received_at) if email_kind == "statement" else None
 
     if email_kind == "ignored":
         return {
             "bank": bank,
             "email_kind": "ignored",
+            "statement_month": None,
             "ignore_reason": kind_reason,
-            "transaction_date": parse_date(text, received_at),
+            "transaction_date": transaction_date,
             "description": extract_description(subject, body, bank),
             "amount": 0.0,
             "transaction_type": "ignored",
@@ -376,8 +391,6 @@ def parse_financial_email(subject: str, sender: str, body: str, received_at: str
             "confidence": 0.0,
             "confidence_reason": kind_reason,
         }
-
-    transaction_date = parse_date(text, received_at)
 
     if email_kind == "statement":
         amount_crc = 0.0
@@ -415,6 +428,7 @@ def parse_financial_email(subject: str, sender: str, body: str, received_at: str
     return {
         "bank": bank,
         "email_kind": email_kind,
+        "statement_month": statement_month,
         "ignore_reason": None,
         "transaction_date": transaction_date,
         "description": extract_description(subject, body, bank),
