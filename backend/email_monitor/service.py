@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import html
 import os
 import re
 from io import BytesIO
@@ -405,35 +406,48 @@ def scan_email_text(
                 """,
                 (user_id, candidate_fp),
             ).fetchone()
-            conn.commit()
-            return {
-                "status": "DUPLICATE_EMAIL",
-                "message": "Correo ya procesado.",
-                "candidate": dict(existing_candidate) if existing_candidate else None,
-            }
+            if existing_candidate:
+                conn.commit()
+                return {
+                    "status": "DUPLICATE_EMAIL",
+                    "message": "Correo ya procesado.",
+                    "candidate": dict(existing_candidate),
+                }
 
-        email_row = conn.execute(
-            """
-            INSERT INTO email_ingested_messages (
-                user_id, provider, provider_message_id, fingerprint, sender, subject,
-                received_at, bank, status, raw_excerpt
+            # Parser upgraded: a message previously marked ignored may now parse correctly.
+            # Reuse the existing ingested email row and create the missing candidate.
+            email_message_id = int(existing_msg["id"])
+            conn.execute(
+                """
+                UPDATE email_ingested_messages
+                SET status = 'processed', bank = %s, subject = %s, sender = %s,
+                    received_at = COALESCE(%s, received_at), raw_excerpt = %s
+                WHERE id = %s AND user_id = %s
+                """,
+                (parsed["bank"], subject, sender, received_at, body[:1200], email_message_id, user_id),
             )
-            VALUES (%s, 'gmail', %s, %s, %s, %s, %s, %s, 'processed', %s)
-            RETURNING id
-            """,
-            (
-                user_id,
-                provider_message_id,
-                email_fp,
-                sender,
-                subject,
-                received_at,
-                parsed["bank"],
-                body[:1200],
-            ),
-        ).fetchone()
-
-        email_message_id = int(email_row["id"])
+        else:
+            email_row = conn.execute(
+                """
+                INSERT INTO email_ingested_messages (
+                    user_id, provider, provider_message_id, fingerprint, sender, subject,
+                    received_at, bank, status, raw_excerpt
+                )
+                VALUES (%s, 'gmail', %s, %s, %s, %s, %s, %s, 'processed', %s)
+                RETURNING id
+                """,
+                (
+                    user_id,
+                    provider_message_id,
+                    email_fp,
+                    sender,
+                    subject,
+                    received_at,
+                    parsed["bank"],
+                    body[:1200],
+                ),
+            ).fetchone()
+            email_message_id = int(email_row["id"])
         if parsed.get("email_kind") == "statement":
             parsed["category"] = "Estado de cuenta"
         else:
@@ -635,7 +649,7 @@ def _decode_gmail_body(payload: dict[str, Any]) -> str:
                 if mime == "text/html":
                     raw = re.sub(r"(?i)<\s*(br|/tr|/td|/p|/div|/li)\b[^>]*>", "\n", raw)
                     raw = re.sub(r"<[^>]+>", " ", raw)
-                raw = raw.replace("&nbsp;", " ").replace("&amp;", "&").replace("&quot;", '"')
+                raw = html.unescape(raw).replace("&nbsp;", " ")
                 raw = re.sub(r"[ \t]+", " ", raw)
                 raw = re.sub(r"\n\s+", "\n", raw)
                 chunks.append(raw.strip())
@@ -821,7 +835,7 @@ def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = False, query
             "duplicates": duplicates,
             "ignored": ignored,
         },
-        "message": f"Escaneo completado. Encontrados: {len(messages)}, guardados: {auto_saved}, pendientes: {pending}, duplicados: {duplicates}, ignorados: {ignored}.",
+        "message": f"Escaneo completado. Encontrados: {len(messages)}, pendientes: {pending}, duplicados: {duplicates}, ignorados: {ignored}. Auto guardado desactivado.",
     }
 
 
