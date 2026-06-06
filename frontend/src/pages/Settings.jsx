@@ -7,10 +7,11 @@ import {
   getUpcomingCalendarEvents,
   getEmailMonitorCandidates,
   getEmailMonitorStatus,
+  getNotificationStatus,
   syncEmailMonitorGmail,
-  saveBrowserNotificationSubscription,
   updateSportsPreferences,
 } from "../services/jarvisApi";
+import { enableJarvisPushNotifications, isPushSupported } from "../pushNotifications";
 
 const splitTeams = (value) =>
   value
@@ -26,6 +27,8 @@ export default function Settings({ status }) {
   const [teamsText, setTeamsText] = useState("");
   const [calendar, setCalendar] = useState([]);
   const [notificationStatus, setNotificationStatus] = useState("default");
+  const [pushInfo, setPushInfo] = useState(null);
+  const [pushMessage, setPushMessage] = useState("");
   const [emailMonitor, setEmailMonitor] = useState(null);
   const [emailCandidates, setEmailCandidates] = useState([]);
   const [emailSyncStatus, setEmailSyncStatus] = useState("");
@@ -50,6 +53,13 @@ export default function Settings({ status }) {
 
       if (typeof Notification !== "undefined") {
         setNotificationStatus(Notification.permission);
+      }
+
+      try {
+        const notificationData = await getNotificationStatus();
+        setPushInfo(notificationData);
+      } catch (error) {
+        console.warn("No pude cargar estado Web Push", error);
       }
 
       if (meData?.role === "owner" || meData?.role === "admin") {
@@ -115,27 +125,14 @@ export default function Settings({ status }) {
   };
 
   const handleEnableNotifications = async () => {
-    if (typeof Notification === "undefined") {
-      alert("Este navegador no soporta notificaciones.");
-      return;
-    }
-
-    const permission = await Notification.requestPermission();
-    setNotificationStatus(permission);
-
-    await saveBrowserNotificationSubscription({
-      endpoint: "local-browser",
-      permission,
-      payload: {
-        userAgent: navigator.userAgent,
-        mode: "local-pwa",
-      },
-    });
-
-    if (permission === "granted") {
-      new Notification("J.A.R.V.I.S.", {
-        body: "Señor, notificaciones activadas en este dispositivo.",
-      });
+    setPushMessage("Activando Web Push...");
+    try {
+      const result = await enableJarvisPushNotifications();
+      setNotificationStatus(result.permission);
+      setPushInfo(result.status);
+      setPushMessage(result.test?.message || "Señor, notificaciones activadas en este dispositivo.");
+    } catch (error) {
+      setPushMessage(error.message);
     }
   };
 
@@ -166,12 +163,18 @@ export default function Settings({ status }) {
 
       <div className="settings-grid">
         <div className="jarvis-panel settings-card">
-          <h2>Notificaciones</h2>
-          <p>Estado: <strong>{notificationStatus}</strong></p>
-          <button className="jarvis-action-button" onClick={handleEnableNotifications}>
-            Activar notificaciones en este iPhone
+          <h2>Notificaciones reales</h2>
+          <p>Permiso navegador: <strong>{notificationStatus}</strong></p>
+          <p>Web Push: <strong>{pushInfo?.vapid_ready ? "Listo" : "Faltan llaves VAPID"}</strong></p>
+          <p>Dispositivos registrados: <strong>{pushInfo?.subscriptions ?? 0}</strong></p>
+          <p>Alertas pendientes: <strong>{pushInfo?.pending_jobs ?? 0}</strong></p>
+          <button className="jarvis-action-button" onClick={handleEnableNotifications} disabled={!isPushSupported()}>
+            Activar Web Push en este iPhone
           </button>
-          <small>Las notificaciones locales funcionan cuando la PWA está instalada y el navegador las permite.</small>
+          <small>
+            En iPhone funciona cuando JARVIS está agregado a pantalla de inicio como PWA y las notificaciones están permitidas.
+          </small>
+          {pushMessage && <small className="email-sync-status">{pushMessage}</small>}
         </div>
 
         <div className="jarvis-panel settings-card">

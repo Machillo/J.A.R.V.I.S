@@ -95,6 +95,11 @@ export const getJarvisUsageAdmin = () => request("/jarvis/usage/admin");
 export const getSportsPreferences = () => request("/jarvis/preferences/sports");
 export const updateSportsPreferences = (payload) => jsonRequest("/jarvis/preferences/sports", "POST", payload);
 export const saveBrowserNotificationSubscription = (payload) => jsonRequest("/jarvis/notifications/browser", "POST", payload);
+
+export const getNotificationStatus = () => request("/notifications/status");
+export const getVapidPublicKey = () => request("/notifications/vapid-public-key");
+export const savePushSubscription = (payload) => jsonRequest("/notifications/subscribe", "POST", payload);
+export const sendTestNotification = () => request("/notifications/test", { method: "POST" });
 export const getUpcomingCalendarEvents = (days = 30) => request(`/jarvis/calendar/upcoming?days=${days}`);
 
 export const getMemorySummary = () => request("/jarvis/memory/summary");

@@ -9,3 +9,4 @@ pypdf==6.12.2
 psycopg2-binary==2.9.9
 google-api-python-client==2.185.0
 google-auth==2.49.2
+pywebpush==2.0.3

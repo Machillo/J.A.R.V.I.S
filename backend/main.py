@@ -21,6 +21,7 @@ from backend.advisor.routes import router as advisor_router
 from backend.auth.routes import router as auth_router
 from backend.ai.routes import router as ai_router
 from backend.email_monitor.routes import router as email_monitor_router
+from backend.notifications.routes import router as notifications_router
 from backend.auth.current_user import set_current_user, reset_current_user
 from backend.auth.service import authenticate_access_token
 
@@ -48,6 +49,7 @@ PUBLIC_PATHS = {
     "/auth/health",
     "/auth/check-access",
     "/email-monitor/cron",
+    "/notifications/cron",
 }
 
 
@@ -137,6 +139,7 @@ app.include_router(advisor_router)
 app.include_router(auth_router)
 app.include_router(ai_router)
 app.include_router(email_monitor_router)
+app.include_router(notifications_router)
 
 class AskRequest(BaseModel):
     text: str
