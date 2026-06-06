@@ -57,8 +57,10 @@ def get_upcoming_events(days: int = 30):
             SELECT id, title, description, event_type, event_date, user_id, created_at
             FROM events
             WHERE user_id = %s
-            AND NULLIF(event_date, '')::date BETWEEN %s AND %s
-            ORDER BY NULLIF(event_date, '')::date ASC
+              AND NULLIF(TRIM(event_date::text), '') IS NOT NULL
+              AND TRIM(event_date::text) ~ '^\\d{4}-\\d{2}-\\d{2}'
+              AND LEFT(TRIM(event_date::text), 10)::date BETWEEN %s AND %s
+            ORDER BY LEFT(TRIM(event_date::text), 10)::date ASC
             """,
             (user_id, today.isoformat(), limit.isoformat()),
         ).fetchall()
