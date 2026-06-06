@@ -22,7 +22,7 @@ OWNER_EMAIL = os.getenv("OWNER_EMAIL", "gatotico99@gmail.com")
 CRON_SECRET = os.getenv("EMAIL_MONITOR_CRON_SECRET", "")
 DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
-    '(from:bac OR from:credomatic OR from:popular OR from:multimoney OR from:notificacionesbaccr.com OR from:estadosdecuenta@baccredomatic.cr OR "MultiMoney" OR "BAC" OR "Banco Popular") (compra OR pago OR transferencia OR SINPE OR deposito OR depósito OR retiro OR abono OR debito OR débito OR credito OR crédito OR "transacción realizada" OR "transaccion realizada" OR "movimiento entre cuentas" OR "estado de cuenta" OR "estados de cuenta")',
+    '(from:bac OR from:credomatic OR from:baccredomatic OR from:notificacionesbaccr.com OR from:estadosdecuenta@baccredomatic.cr OR from:popular OR from:bancopopular OR from:multimoney OR "MultiMoney" OR "Banco Popular") ("Notificación de transacción" OR "Notificación de Transferencia" OR "Transacción realizada" OR "confirmación de transferencia" OR compra OR pago OR transferencia OR SINPE OR depósito OR deposito OR retiro OR abono OR débito OR debito OR crédito OR credito OR "estado de cuenta" OR "estados de cuenta") -promoción -promocion -newsletter -publicidad -"sesión se inició" -"sesion se inicio" -"seguro de vida" -"nuevos seguros" -"tasa cero" -"e-scooter"',
 )
 AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "0.90"))
 
@@ -581,8 +581,13 @@ def _decode_gmail_body(payload: dict[str, Any]) -> str:
         if data and mime in {"text/plain", "text/html"}:
             try:
                 raw = base64.urlsafe_b64decode(data.encode("utf-8")).decode("utf-8", errors="ignore")
-                raw = re.sub(r"<[^>]+>", " ", raw)
-                chunks.append(re.sub(r"\s+", " ", raw).strip())
+                if mime == "text/html":
+                    raw = re.sub(r"(?i)<\s*(br|/tr|/td|/p|/div|/li)\b[^>]*>", "\n", raw)
+                    raw = re.sub(r"<[^>]+>", " ", raw)
+                raw = raw.replace("&nbsp;", " ").replace("&amp;", "&")
+                raw = re.sub(r"[ \t]+", " ", raw)
+                raw = re.sub(r"\n\s+", "\n", raw)
+                chunks.append(raw.strip())
             except Exception:
                 pass
 
@@ -620,7 +625,7 @@ def _gmail_service():
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
-def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = True, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
+def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = False, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
     service = _gmail_service()
     gmail_query = build_current_month_gmail_query(query or DEFAULT_QUERY) if current_month_only else (query or DEFAULT_QUERY)
 
@@ -709,6 +714,6 @@ def cron_sync(secret: str | None, max_results: int = 20) -> dict[str, Any]:
     if not secret or secret != CRON_SECRET:
         raise HTTPException(status_code=403, detail="Cron secret inválido.")
     try:
-        return sync_gmail_for_owner(max_results=max_results, auto_commit=True, current_month_only=True)
+        return sync_gmail_for_owner(max_results=max_results, auto_commit=False, current_month_only=True)
     except Exception as exc:
         return {"status": "ERROR", "message": str(exc)}
