@@ -91,13 +91,21 @@ export default function Settings({ status }) {
 
 
   const handleEmailSync = async () => {
-    setEmailSyncStatus("Sincronizando correos...");
+    setEmailSyncStatus("Escaneando solo correos del mes actual...");
     try {
-      const result = await syncEmailMonitorGmail({ max_results: 10, auto_commit: true });
-      setEmailSyncStatus(`Procesados: ${result?.processed?.length || 0}`);
+      const result = await syncEmailMonitorGmail({
+        max_results: 25,
+        auto_commit: true,
+        current_month_only: true,
+      });
+      const summary = result?.summary || {};
+      setEmailSyncStatus(
+        result?.message ||
+          `Encontrados: ${result?.found || 0} · Guardados: ${summary.auto_saved || 0} · Pendientes: ${summary.pending || 0}`
+      );
       const [emailStatus, pendingEmails] = await Promise.all([
         getEmailMonitorStatus(),
-        getEmailMonitorCandidates("pending", 5),
+        getEmailMonitorCandidates("pending", 10),
       ]);
       setEmailMonitor(emailStatus);
       setEmailCandidates(pendingEmails?.items || []);
@@ -189,12 +197,14 @@ export default function Settings({ status }) {
           <div className="jarvis-panel settings-card">
             <h2>Correos financieros 24/7</h2>
             <p><strong>Gmail listo:</strong> {emailMonitor?.gmail_ready ? "Sí" : "Faltan llaves Gmail"}</p>
+            <p><strong>Último escaneo:</strong> {emailMonitor?.settings?.last_scan_at ? new Date(emailMonitor.settings.last_scan_at).toLocaleString("es-CR") : "Nunca"}</p>
             <p><strong>Pendientes:</strong> {emailMonitor?.totals?.pending || 0}</p>
             <p><strong>Auto guardados:</strong> {emailMonitor?.totals?.auto_saved || 0}</p>
-            <button className="jarvis-action-button" onClick={handleEmailSync}>
-              Revisar correos ahora
+            <button className="jarvis-action-button" onClick={handleEmailSync} disabled={!emailMonitor?.gmail_ready}>
+              Escanear correos del mes actual
             </button>
-            {emailSyncStatus && <small>{emailSyncStatus}</small>}
+            <small>Busca BAC, Credomatic, Banco Popular y MultiMoney solo desde el primer día del mes actual.</small>
+            {emailSyncStatus && <small className="email-sync-status">{emailSyncStatus}</small>}
             {!emailMonitor?.gmail_ready && (
               <small>
                 Para lectura real agregá GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET y GMAIL_REFRESH_TOKEN en Render.

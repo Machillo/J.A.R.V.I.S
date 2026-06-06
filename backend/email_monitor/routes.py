@@ -42,8 +42,13 @@ def email_monitor_candidate_decision(request: EmailCandidateDecisionRequest):
 
 
 @router.post("/sync-gmail")
-def email_monitor_sync_gmail(max_results: int = 10, auto_commit: bool = True, query: str | None = None):
-    return sync_gmail_for_owner(max_results=max_results, auto_commit=auto_commit, query=query)
+def email_monitor_sync_gmail(max_results: int = 10, auto_commit: bool = True, query: str | None = None, current_month_only: bool = True):
+    return sync_gmail_for_owner(
+        max_results=max_results,
+        auto_commit=auto_commit,
+        query=query,
+        current_month_only=current_month_only,
+    )
 
 
 @router.post("/cron")

@@ -141,6 +141,7 @@ export const syncEmailMonitorGmail = (payload = {}) => {
   const params = new URLSearchParams();
   if (payload.max_results) params.set("max_results", payload.max_results);
   if (payload.auto_commit !== undefined) params.set("auto_commit", payload.auto_commit ? "true" : "false");
+  if (payload.current_month_only !== undefined) params.set("current_month_only", payload.current_month_only ? "true" : "false");
   if (payload.query) params.set("query", payload.query);
   return request(`/email-monitor/sync-gmail${params.toString() ? `?${params.toString()}` : ""}`, { method: "POST" });
 };

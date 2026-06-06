@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import os
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -25,6 +25,29 @@ DEFAULT_QUERY = os.getenv(
     '(from:bac OR from:credomatic OR from:popular OR from:multimoney OR "MultiMoney" OR "BAC" OR "Banco Popular") newer_than:7d',
 )
 AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "0.90"))
+
+
+def build_current_month_gmail_query(base_query: str | None = None, today: date | None = None) -> str:
+    """Return a Gmail query scoped to the current calendar month.
+
+    Gmail search uses after:/before: dates in YYYY/MM/DD. `before` is exclusive,
+    so we use first day of next month.
+    """
+    today = today or date.today()
+    start = today.replace(day=1)
+    if start.month == 12:
+        end = date(start.year + 1, 1, 1)
+    else:
+        end = date(start.year, start.month + 1, 1)
+
+    base = (base_query or DEFAULT_QUERY or '').strip()
+
+    # Remove broad recency filters so the month range is the source of truth.
+    base = re.sub(r"\bnewer_than:\S+", "", base).strip()
+    base = re.sub(r"\bafter:\d{4}/\d{1,2}/\d{1,2}", "", base).strip()
+    base = re.sub(r"\bbefore:\d{4}/\d{1,2}/\d{1,2}", "", base).strip()
+
+    return f"{base} after:{start:%Y/%m/%d} before:{end:%Y/%m/%d}".strip()
 
 
 def ensure_email_tables(conn) -> None:
@@ -513,9 +536,9 @@ def _gmail_service():
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
-def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = True, query: str | None = None) -> dict[str, Any]:
+def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = True, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
     service = _gmail_service()
-    gmail_query = query or DEFAULT_QUERY
+    gmail_query = build_current_month_gmail_query(query or DEFAULT_QUERY) if current_month_only else (query or DEFAULT_QUERY)
 
     with get_connection() as conn:
         ensure_email_tables(conn)
@@ -576,11 +599,21 @@ def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = True, query:
         )
         conn.commit()
 
+    auto_saved = sum(1 for item in processed if item.get("candidate_status") == "auto_saved")
+    pending = sum(1 for item in processed if item.get("candidate_status") == "pending")
+    duplicates = sum(1 for item in processed if item.get("status") == "DUPLICATE_EMAIL" or item.get("candidate_status") == "duplicate")
+
     return {
         "status": "OK",
         "query": gmail_query,
         "found": len(messages),
         "processed": processed,
+        "summary": {
+            "auto_saved": auto_saved,
+            "pending": pending,
+            "duplicates": duplicates,
+        },
+        "message": f"Escaneo completado. Encontrados: {len(messages)}, guardados: {auto_saved}, pendientes: {pending}, duplicados: {duplicates}.",
     }
 
 
@@ -590,6 +623,6 @@ def cron_sync(secret: str | None, max_results: int = 20) -> dict[str, Any]:
     if not secret or secret != CRON_SECRET:
         raise HTTPException(status_code=403, detail="Cron secret inválido.")
     try:
-        return sync_gmail_for_owner(max_results=max_results, auto_commit=True)
+        return sync_gmail_for_owner(max_results=max_results, auto_commit=True, current_month_only=True)
     except Exception as exc:
         return {"status": "ERROR", "message": str(exc)}
