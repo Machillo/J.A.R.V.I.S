@@ -4635,3 +4635,532 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   V1 FINAL MOBILE UX PATCH — clean iPhone layout + style modes
+   ========================================================= */
+:root {
+  --app-surface: rgba(6, 18, 26, 0.72);
+  --app-surface-strong: rgba(8, 22, 31, 0.92);
+  --app-border: rgba(142, 202, 230, 0.24);
+  --app-shadow: 0 18px 46px rgba(0, 0, 0, 0.34);
+  --app-radius: 28px;
+}
+
+html[data-theme="classic"] {
+  --bg: #030812;
+  --panel: rgba(5, 24, 35, 0.74);
+  --panel-strong: rgba(6, 24, 36, 0.92);
+  --cyan: #29e6ff;
+  --magenta: #a855f7;
+  --green: #78f7a4;
+  --yellow: #f6d27a;
+  --red: #ff5a67;
+  --text: #effbff;
+  --muted: #92aeb8;
+  --accent-a: #29e6ff;
+  --accent-b: #a855f7;
+}
+
+html[data-theme="elegant"] {
+  --bg: #0a0b0d;
+  --panel: rgba(22, 22, 20, 0.78);
+  --panel-strong: rgba(28, 27, 24, 0.94);
+  --cyan: #e8dcc2;
+  --magenta: #c7a968;
+  --green: #b9e6c9;
+  --yellow: #d7bc7f;
+  --red: #d06a66;
+  --text: #f5f0e6;
+  --muted: #aaa093;
+  --accent-a: #e8dcc2;
+  --accent-b: #c7a968;
+}
+
+html[data-theme="finance"] {
+  --bg: #061112;
+  --panel: rgba(7, 32, 34, 0.76);
+  --panel-strong: rgba(8, 42, 44, 0.94);
+  --cyan: #2dd4bf;
+  --magenta: #74f2a7;
+  --green: #80f4a5;
+  --yellow: #d7f7a8;
+  --red: #ff6b6b;
+  --text: #edfdf8;
+  --muted: #9fc3bd;
+  --accent-a: #2dd4bf;
+  --accent-b: #74f2a7;
+}
+
+html[data-theme="minimal"] {
+  --bg: #0c1117;
+  --panel: rgba(21, 28, 36, 0.78);
+  --panel-strong: rgba(25, 32, 42, 0.94);
+  --cyan: #e5eef4;
+  --magenta: #8ecae6;
+  --green: #a7f3d0;
+  --yellow: #e5d3a3;
+  --red: #f87171;
+  --text: #f2f7fb;
+  --muted: #9aa8b4;
+  --accent-a: #e5eef4;
+  --accent-b: #8ecae6;
+}
+
+html[data-theme="premium"] {
+  --bg: #080604;
+  --panel: rgba(28, 17, 11, 0.78);
+  --panel-strong: rgba(35, 21, 13, 0.94);
+  --cyan: #d29b6c;
+  --magenta: #f0c36a;
+  --green: #d5e7a0;
+  --yellow: #f0c36a;
+  --red: #e86a5f;
+  --text: #fff2e4;
+  --muted: #b59f8a;
+  --accent-a: #d29b6c;
+  --accent-b: #f0c36a;
+}
+
+html[data-theme="ironman"] {
+  --bg: #090303;
+  --panel: rgba(38, 8, 8, 0.78);
+  --panel-strong: rgba(47, 10, 9, 0.94);
+  --cyan: #f7c948;
+  --magenta: #ef4444;
+  --green: #f6d365;
+  --yellow: #f7c948;
+  --red: #ff4b4b;
+  --text: #fff6df;
+  --muted: #c9a99a;
+  --accent-a: #ef4444;
+  --accent-b: #f7c948;
+}
+
+/* Backward compatibility for old saved themes */
+html[data-theme="emerald"] { --accent-a:#2dd4bf; --accent-b:#74f2a7; --cyan:#2dd4bf; --magenta:#74f2a7; }
+html[data-theme="violet"] { --accent-a:#a855f7; --accent-b:#ec4899; --cyan:#a855f7; --magenta:#ec4899; }
+html[data-theme="amber"] { --accent-a:#d29b6c; --accent-b:#f0c36a; --cyan:#d29b6c; --magenta:#f0c36a; }
+html[data-theme="ice"] { --accent-a:#e5eef4; --accent-b:#8ecae6; --cyan:#e5eef4; --magenta:#8ecae6; }
+
+body {
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent-a) 14%, transparent), transparent 34%),
+    radial-gradient(circle at bottom left, color-mix(in srgb, var(--accent-b) 12%, transparent), transparent 35%),
+    linear-gradient(135deg, var(--bg), #07151a 52%, #020405);
+}
+
+.main-shell:not(.home-mode) {
+  padding-bottom: max(32px, calc(24px + var(--safe-bottom)));
+}
+
+.top-bar {
+  position: relative;
+  top: auto;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--accent-a) 24%, transparent);
+}
+
+.top-bar h1,
+.settings-page > h1,
+.page-section-header h2,
+.panel-title h3 {
+  text-wrap: balance;
+}
+
+.hud-card,
+.hud-panel,
+.jarvis-panel,
+.finance-mini-kpi,
+.home-status-card,
+.empty-state {
+  border-radius: var(--app-radius);
+  clip-path: none !important;
+  background: linear-gradient(145deg, var(--panel), rgba(3, 8, 13, 0.86));
+  border-color: color-mix(in srgb, var(--accent-a) 24%, transparent);
+  box-shadow: var(--app-shadow), inset 0 0 22px rgba(255,255,255,0.025);
+}
+
+/* Dashboard command bar: WhatsApp-like, only mounted on Dashboard from App.jsx */
+.jarvis-command-center {
+  border-radius: 999px;
+  clip-path: none !important;
+  min-height: 68px;
+  background: linear-gradient(135deg, rgba(18, 28, 35, 0.84), rgba(16, 18, 28, 0.88));
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid color-mix(in srgb, var(--accent-a) 46%, transparent);
+}
+
+.jarvis-command-center::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--accent-a);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent-a) 72%, transparent);
+  flex: 0 0 auto;
+}
+
+.jarvis-command-center input {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.jarvis-command-center input::placeholder {
+  color: color-mix(in srgb, var(--text) 54%, transparent);
+}
+
+.command-button,
+.voice-orb {
+  background: rgba(7, 12, 18, 0.72);
+  border-width: 1.5px;
+}
+
+/* Sidebar cleaned up */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 4px;
+  min-height: 0;
+}
+
+.sidebar .logo {
+  flex: 0 0 auto;
+  margin-bottom: 24px;
+}
+
+.sidebar-admin-strip {
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+  flex: 0 0 auto;
+}
+
+.sidebar-token-pill,
+.sidebar-admin-pill {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-a) 26%, transparent);
+  background: rgba(255,255,255,0.035);
+  color: var(--text);
+  border-radius: 16px;
+}
+
+.sidebar-admin-pill {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+.sidebar-core {
+  flex: 0 0 auto;
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  margin-top: 12px;
+  min-height: 74px;
+  border-radius: 18px;
+}
+
+/* Settings: compact hidden theme selector */
+.collapsed-theme-card {
+  grid-template-columns: 1fr auto;
+}
+
+.theme-toggle-button {
+  min-width: 164px;
+  margin: 0;
+}
+
+.compact-theme-picker {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+}
+
+.theme-option {
+  text-align: left;
+}
+
+.theme-option small {
+  grid-column: 1 / -1;
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+/* Charts readability */
+.chart-shell .recharts-cartesian-axis-tick-value,
+.chart-shell .recharts-text,
+.transaction-chart-shell .recharts-cartesian-axis-tick-value,
+.transaction-chart-shell .recharts-text {
+  fill: color-mix(in srgb, var(--text) 72%, transparent) !important;
+}
+
+.chart-shell .recharts-default-tooltip,
+.transaction-chart-shell .recharts-default-tooltip {
+  color: var(--text) !important;
+}
+
+.chart-shell .recharts-tooltip-label,
+.chart-shell .recharts-tooltip-item,
+.transaction-chart-shell .recharts-tooltip-label,
+.transaction-chart-shell .recharts-tooltip-item {
+  color: var(--text) !important;
+}
+
+/* Mobile final layout */
+@media (max-width: 760px) {
+  .main-shell,
+  .main-shell.expanded {
+    padding: calc(var(--safe-top) + 18px) 14px max(28px, calc(var(--safe-bottom) + 24px));
+  }
+
+  .main-shell.home-mode {
+    min-height: var(--app-vh);
+    height: auto;
+    padding-bottom: calc(104px + var(--safe-bottom));
+  }
+
+  .top-bar {
+    position: relative !important;
+    top: auto !important;
+    min-height: 82px;
+    margin: 0 0 24px;
+    padding: 12px 14px;
+    border-radius: 24px;
+    display: grid;
+    grid-template-columns: 62px 1fr 62px;
+    align-items: center;
+  }
+
+  .top-bar .menu-toggle,
+  .top-bar .logout-button {
+    width: 54px;
+    height: 54px;
+    border-radius: 18px;
+  }
+
+  .top-bar h1 {
+    font-size: clamp(23px, 7.4vw, 34px);
+    line-height: 0.98;
+    letter-spacing: 0.055em;
+  }
+
+  .top-bar p {
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .jarvis-home {
+    min-height: calc(var(--app-vh) - 132px - var(--safe-top) - var(--safe-bottom));
+    padding: 0 0 18px;
+    justify-content: flex-start;
+    gap: 16px;
+  }
+
+  .jarvis-home.idle {
+    justify-content: flex-start;
+  }
+
+  .jarvis-core-orb {
+    width: 104px;
+    height: 104px;
+    margin: 0 auto 10px;
+  }
+
+  .orb-center {
+    width: 70px;
+    height: 70px;
+  }
+
+  .orb-center svg {
+    width: 34px;
+    height: 34px;
+  }
+
+  .jarvis-home h1 {
+    font-size: clamp(48px, 12vw, 66px);
+    letter-spacing: 0.12em;
+    margin: 8px 0 8px;
+  }
+
+  .home-subtitle {
+    font-size: 14px;
+    line-height: 1.4;
+    margin: 0 auto 14px;
+  }
+
+  .home-status-grid {
+    width: 100%;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .home-status-card {
+    min-height: 86px;
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    align-items: center;
+    text-align: left;
+  }
+
+  .home-status-card .status-icon {
+    grid-row: span 2;
+  }
+
+  .home-status-card span:not(.status-icon),
+  .home-status-card strong {
+    text-align: center;
+  }
+
+  .jarvis-command-center {
+    width: calc(100vw - 28px);
+    left: 14px;
+    right: 14px;
+    bottom: calc(12px + var(--safe-bottom) + var(--keyboard-offset));
+    transform: none;
+    min-height: 64px;
+    padding: 7px 8px 7px 16px;
+    z-index: 90;
+  }
+
+  .command-button,
+  .voice-orb {
+    width: 50px;
+    height: 50px;
+  }
+
+  .sidebar {
+    width: min(78vw, 310px);
+    height: 100svh;
+    padding: calc(var(--safe-top) + 26px) 18px calc(var(--safe-bottom) + 18px);
+  }
+
+  .sidebar.open,
+  .sidebar.closed {
+    width: min(78vw, 310px);
+  }
+
+  .sidebar nav {
+    max-height: calc(100svh - 330px - var(--safe-top) - var(--safe-bottom));
+  }
+
+  .nav-button {
+    min-height: 52px;
+    margin-bottom: 0;
+    border-radius: 18px;
+    padding: 10px 12px;
+  }
+
+  .nav-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .sidebar-token-pill,
+  .sidebar-admin-pill {
+    min-height: 42px;
+    font-size: 14px;
+  }
+
+  .sidebar-core {
+    min-height: 72px;
+  }
+
+  .page,
+  .data-page,
+  .settings-page {
+    padding-top: 0;
+  }
+
+  .settings-page > h1,
+  .page-section-header h2 {
+    font-size: clamp(34px, 9vw, 50px);
+    line-height: 1.02;
+  }
+
+  .settings-page .subtitle {
+    margin: 0 0 12px;
+    line-height: 1.45;
+  }
+
+  .collapsed-theme-card {
+    grid-template-columns: 1fr;
+  }
+
+  .theme-toggle-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .compact-theme-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .theme-option {
+    min-height: 74px;
+  }
+
+  .settings-list {
+    max-height: 260px;
+  }
+
+  .data-kpi-grid,
+  .cards-grid,
+  .dashboard-grid,
+  .finance-dashboard-grid,
+  .settings-grid {
+    gap: 14px;
+  }
+
+  .hud-card,
+  .hud-panel,
+  .settings-card,
+  .admin-panel {
+    padding: 18px;
+  }
+
+  .transaction-chart-shell {
+    min-height: 250px;
+    padding: 10px 2px;
+  }
+
+  .transaction-chart-shell .recharts-wrapper,
+  .transaction-chart-shell .recharts-surface {
+    overflow: visible;
+  }
+
+  .transaction-history-scroll {
+    max-height: 48vh;
+  }
+}
+
+@media (max-width: 390px) {
+  .top-bar {
+    grid-template-columns: 56px 1fr 56px;
+  }
+
+  .top-bar h1 {
+    font-size: 25px;
+  }
+
+  .jarvis-home h1 {
+    font-size: 45px;
+  }
+
+  .home-status-card {
+    min-height: 78px;
+  }
+}

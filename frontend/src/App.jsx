@@ -323,27 +323,31 @@ export default function App() {
 
         {renderPage()}
 
-        <section className="jarvis-command-center">
-          <input
-            value={jarvisInput}
-            onChange={(event) => setJarvisInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") handleAskJarvis();
-            }}
-            placeholder="¿En qué puedo ayudarte?"
-          />
+        {activePage === "dashboard" && (
+          <section className="jarvis-command-center" aria-label="Comando principal de Jarvis">
+            <input
+              value={jarvisInput}
+              onChange={(event) => setJarvisInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleAskJarvis();
+              }}
+              placeholder="Mensaje para Jarvis"
+              inputMode="text"
+            />
 
-          <button className="command-button" onClick={handleAskJarvis}>
-            <Send size={20} />
-          </button>
+            <button className="command-button" onClick={handleAskJarvis} aria-label="Enviar mensaje">
+              <Send size={20} />
+            </button>
 
-          <button
-            className={`voice-orb ${isListening ? "listening" : ""}`}
-            onClick={handleVoiceInput}
-          >
-            <Mic size={28} />
-          </button>
-        </section>
+            <button
+              className={`voice-orb ${isListening ? "listening" : ""}`}
+              onClick={handleVoiceInput}
+              aria-label="Hablar con Jarvis"
+            >
+              <Mic size={28} />
+            </button>
+          </section>
+        )}
       </main>
     </div>
   );

@@ -21,11 +21,12 @@ const splitTeams = (value) =>
     .filter(Boolean);
 
 const JARVIS_THEMES = [
-  { id: "classic", label: "Cian / Morado", swatches: ["#29e6ff", "#c155ff"] },
-  { id: "emerald", label: "Verde / Cian", swatches: ["#51ff9b", "#29e6ff"] },
-  { id: "violet", label: "Violeta / Rosa", swatches: ["#b25cff", "#ff4fd8"] },
-  { id: "amber", label: "Ámbar / Cian", swatches: ["#ffcc66", "#29e6ff"] },
-  { id: "ice", label: "Hielo / Azul", swatches: ["#9ff8ff", "#5b7cff"] },
+  { id: "classic", label: "Jarvis Tech", description: "Cian y morado sobre negro profundo.", swatches: ["#29e6ff", "#a855f7"] },
+  { id: "elegant", label: "Elegante", description: "Carbón, marfil y dorado suave.", swatches: ["#e8dcc2", "#c7a968"] },
+  { id: "finance", label: "Finanzas", description: "Azul petróleo y verde dinero.", swatches: ["#2dd4bf", "#74f2a7"] },
+  { id: "minimal", label: "Minimal", description: "Gris oscuro, blanco y celeste limpio.", swatches: ["#e5eef4", "#8ecae6"] },
+  { id: "premium", label: "Premium", description: "Negro, cobre y ámbar.", swatches: ["#d29b6c", "#f0c36a"] },
+  { id: "ironman", label: "Iron Man", description: "Rojo profundo con dorado reactor.", swatches: ["#ef4444", "#f7c948"] },
 ];
 
 export default function Settings({ status }) {
@@ -41,7 +42,12 @@ export default function Settings({ status }) {
   const [emailMonitor, setEmailMonitor] = useState(null);
   const [emailCandidates, setEmailCandidates] = useState([]);
   const [emailSyncStatus, setEmailSyncStatus] = useState("");
-  const [theme, setTheme] = useState(() => localStorage.getItem("jarvis-theme") || "classic");
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("jarvis-theme") || "classic";
+    const legacyMap = { emerald: "finance", violet: "classic", amber: "premium", ice: "minimal" };
+    return legacyMap[saved] || saved;
+  });
+  const [showThemePicker, setShowThemePicker] = useState(false);
 
   const isAdmin = me?.role === "owner" || me?.role === "admin";
   const isOwner = me?.role === "owner";
@@ -169,26 +175,38 @@ export default function Settings({ status }) {
       <h1>Configuración</h1>
       <p className="subtitle">Perfil, permisos, IA, notificaciones y preferencias personales.</p>
 
-      <div className="jarvis-panel settings-card theme-card">
+      <div className="jarvis-panel settings-card theme-card collapsed-theme-card">
         <div>
           <h2>Estilo visual</h2>
-          <p>Elegí una combinación neón. Queda guardada en este dispositivo.</p>
+          <p>Actual: <strong>{JARVIS_THEMES.find((item) => item.id === theme)?.label || "Jarvis Tech"}</strong></p>
         </div>
-        <div className="theme-picker">
-          {JARVIS_THEMES.map((item) => (
-            <button
-              key={item.id}
-              className={`theme-option ${theme === item.id ? "active" : ""}`}
-              onClick={() => setTheme(item.id)}
-              aria-label={`Usar tema ${item.label}`}
-              type="button"
-            >
-              <span style={{ background: item.swatches[0] }} />
-              <span style={{ background: item.swatches[1] }} />
-              <em>{item.label}</em>
-            </button>
-          ))}
-        </div>
+
+        <button
+          className="jarvis-action-button theme-toggle-button"
+          type="button"
+          onClick={() => setShowThemePicker((value) => !value)}
+        >
+          Cambiar estilo
+        </button>
+
+        {showThemePicker && (
+          <div className="theme-picker compact-theme-picker">
+            {JARVIS_THEMES.map((item) => (
+              <button
+                key={item.id}
+                className={`theme-option ${theme === item.id ? "active" : ""}`}
+                onClick={() => setTheme(item.id)}
+                aria-label={`Usar tema ${item.label}`}
+                type="button"
+              >
+                <span style={{ background: item.swatches[0] }} />
+                <span style={{ background: item.swatches[1] }} />
+                <em>{item.label}</em>
+                <small>{item.description}</small>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="settings-grid">
