@@ -121,7 +121,7 @@ def _owner_user_id(conn) -> int | None:
         """
         SELECT id
         FROM users
-        WHERE role = 'owner'
+        WHERE email = 'gatotico99@gmail.com'
         ORDER BY id
         LIMIT 1
         """
