@@ -10,6 +10,8 @@ from backend.ai.preferences import get_sports_preferences, update_sports_prefere
 from backend.core.events import get_upcoming_events
 from backend.sports.service import ensure_owner_sports_preferences, get_sports_calendar_summary
 
+from backend.ai.strategy_dashboard import get_premium_strategy_dashboard, get_additional_card_report
+
 from backend.ai.memory_service import (
     create_memory_item,
     forget_memory_item,
@@ -62,6 +64,16 @@ def jarvis_premium_strategy_summary():
 @router.post("/premium/initial-strategy")
 def jarvis_premium_initial_strategy():
     return create_initial_financial_strategy()
+
+
+@router.get("/premium/strategy-dashboard")
+def jarvis_premium_strategy_dashboard():
+    return get_premium_strategy_dashboard()
+
+
+@router.get("/cards/additional-report")
+def jarvis_additional_cards_report():
+    return get_additional_card_report()
 
 
 @router.get("/preferences/sports")

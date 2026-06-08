@@ -9,6 +9,7 @@ from backend.auth.current_user import get_current_user
 from backend.finance.strategic_engine import get_financial_engine_report
 from backend.finance.service import get_debts, get_financial_summary, get_net_worth_report
 from backend.transactions.analyzer import get_transaction_analysis
+from backend.ai.strategy_dashboard import build_local_strategy_blueprint
 
 
 def _safe(fn, fallback):
@@ -42,14 +43,16 @@ Reglas estrictas:
 - No uses nombre/correo. Para respuestas futuras el prefijo permitido es solo "Señor,".
 - Distingue consulta financiera de registro de gasto. "¿Puedo comprar X?" es capacidad_de_compra, NO create_expense.
 - Si el usuario informa un cambio real ya ocurrido, clasifícalo como acción local si hay datos suficientes.
-- Si falta un dato importante, pide solo ese dato.
+- Modo director: si hay datos suficientes, decide y actúa. No preguntes permiso para crear estrategia, registrar OT, registrar bonos o recalcular.
+- Solo pide datos si es imposible ejecutar la acción sin ellos.
+- Para financial_strategy, tu trabajo es activar/actualizar la estrategia; no devuelvas preguntas consultivas.
 - No inventes números. Usa el contexto solo como resumen.
 - Para deportes/calendario/internet devuelve la intención correcta, no finanzas.
 
 Devuelve JSON con esta forma:
 {
   "status":"OK",
-  "intent":"capacity_check|financial_strategy|salary_distribution|create_debt|create_saving|create_goal|create_expense|create_income|create_bonus|create_payroll_event|fixed_expense|sports_schedule|calendar|internet_search|email|memory|direct_finance_answer|general",
+  "intent":"capacity_check|financial_strategy|salary_distribution|create_debt|create_saving|create_goal|goal_projection|create_expense|create_income|create_bonus|create_payroll_event|fixed_expense|sports_schedule|calendar|internet_search|email|memory|direct_finance_answer|general",
   "confidence":0.0,
   "should_use_local_action":true,
   "action_type":"create_payroll_event|null",
@@ -87,6 +90,8 @@ Ejemplos:
 "agarré 2 horas de vgh" => create_payroll_event payload {{"event_type":"vgh","hours":2}}
 "me llegó 48000 de bono" => create_bonus payload {{"amount":48000}}
 "puedo comprar una cerveza de 4000" => capacity_check, no action_type
+"ejecuta mi estrategia premium" => financial_strategy, no action_type, should_use_local_action true
+"viaje a ecuador es importante" => goal_projection si pregunta planificación/meta
 "cuál es mi mayor deuda" => direct_finance_answer
 "subió el gimnasio a 27000" => fixed_expense
 "cuando es la próxima carrera" => sports_schedule
@@ -146,8 +151,18 @@ def get_current_strategy_summary() -> dict[str, Any]:
             "reason": "Mantener pagos al día antes de abonar extras.",
         })
 
-    title = active_strategy.get("title") if active_strategy else "Estrategia base"
-    content = active_strategy.get("content") if active_strategy else "Señor, aún no hay una estrategia premium guardada. Ejecuta el primer análisis financiero premium."
+    blueprint = build_local_strategy_blueprint()
+    if active_strategy:
+        data = active_strategy.get("data") or {}
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                data = {}
+        blueprint = data.get("strategy_blueprint") or blueprint
+
+    title = active_strategy.get("title") if active_strategy else blueprint.get("title", "Estrategia base")
+    content = active_strategy.get("content") if active_strategy else "Señor, aún no hay una estrategia premium guardada. Ejecuta: Jarvis, ejecuta mi estrategia premium."
 
     return {
         "status": "OK",
@@ -156,5 +171,6 @@ def get_current_strategy_summary() -> dict[str, Any]:
         "allocations": allocations[:6],
         "health": (strategic.get("health") or {}),
         "forecast": (strategic.get("forecast") or {}),
+        "strategy": blueprint,
         "source": "premium_guide" if active_strategy else "local_fallback",
     }

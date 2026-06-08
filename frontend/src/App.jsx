@@ -8,6 +8,8 @@ import Goals from "./pages/Goals";
 import Memory from "./pages/Memory";
 import Settings from "./pages/Settings";
 import Transactions from "./pages/Transactions";
+import PremiumStrategy from "./pages/PremiumStrategy";
+import AdditionalCards from "./pages/AdditionalCards";
 import Login from "./pages/Login";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getStatus } from "./services/jarvisApi";
@@ -284,6 +286,12 @@ export default function App() {
 
       case "memory":
         return <Memory />;
+
+      case "strategy":
+        return <PremiumStrategy />;
+
+      case "additionalCards":
+        return <AdditionalCards />;
 
       case "settings":
         return <Settings status={status} />;

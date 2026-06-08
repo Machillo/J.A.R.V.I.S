@@ -8,12 +8,16 @@ import {
   ShieldCheck,
   Target,
   WalletCards,
+  Crown,
+  CreditCard,
 } from "lucide-react";
 
 const menuItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "finance", label: "Finanzas", icon: CircleDollarSign },
   { id: "transactions", label: "Transacciones", icon: ReceiptText },
+  { id: "strategy", label: "Estrategia Premium", icon: Crown },
+  { id: "additionalCards", label: "Tarjetas adicionales", icon: CreditCard },
   { id: "goals", label: "Metas", icon: Target },
   { id: "memory", label: "Memory Core", icon: Brain },
   { id: "settings", label: "Config", icon: Settings },
@@ -65,23 +69,6 @@ export default function Sidebar({
         })}
       </nav>
 
-
-      {sidebarOpen && strategySummary && (
-        <div className="sidebar-strategy-card">
-          <span className="strategy-kicker">Estrategia actual</span>
-          <strong>{strategySummary.title || "Estrategia financiera"}</strong>
-          <p>{(strategySummary.summary || "Sin estrategia premium guardada.").slice(0, 140)}</p>
-          {Array.isArray(strategySummary.allocations) && strategySummary.allocations.length > 0 && (
-            <div className="strategy-mini-list">
-              {strategySummary.allocations.slice(0, 3).map((item, index) => (
-                <span key={`${item.target_name || index}-${index}`}>
-                  <b>{Math.round(item.percentage || 0)}%</b> {item.target_name || "Asignación"}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="sidebar-admin-strip">
         <div className="sidebar-token-pill" title="Tokens IA usados hoy">

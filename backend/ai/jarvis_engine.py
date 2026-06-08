@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from backend.ai.action_flow import continue_pending_action, start_action
+from backend.ai.action_flow import continue_pending_action, start_action, _missing_required, _save_action
 from backend.ai.chat_memory import finish_pending_action, get_pending_action
 from backend.ai.gemini_client import ask_gemini
 from backend.ai.openai_client import ask_openai, get_active_premium_guides, save_premium_guide
@@ -26,6 +26,7 @@ from backend.advisor.service import analyze_spending_habits, get_financial_advic
 from backend.transactions.analyzer import get_transaction_analysis
 from backend.finance.strategic_engine import get_financial_engine_report, simulate_what_if
 from backend.finance.fixed_expenses import handle_fixed_expense_message
+from backend.ai.strategy_dashboard import build_local_strategy_blueprint
 
 
 def _safe_call(fn, fallback):
@@ -174,16 +175,28 @@ Datos reales:
 
 
 def create_initial_financial_strategy():
+    """Crea una estrategia premium en modo Director: decide, guarda y muestra ruta.
+
+    No pregunta si debe comenzar; si el usuario pidió estrategia, Jarvis ejecuta.
+    """
     context = build_financial_context()
     memory_context = get_relevant_memory_context("estrategia financiera principal", limit=10)
+    blueprint = build_local_strategy_blueprint()
+
     system = """
-Eres J.A.R.V.I.S., asesor financiero personal.
-Debes crear una guía estratégica que el JARVIS local pueda reutilizar después sin gastar IA premium.
-No saludes con nombres. Usa solo "Señor," si aplica.
-No inventes datos. Si falta información, indícalo como pendiente.
+Eres J.A.R.V.I.S., Director Financiero Personal.
+No eres consultor: cuando el usuario pide estrategia, decides y ejecutas una estrategia base con los datos existentes.
+No preguntes "¿desea que...?" si ya hay deudas, ingresos o gastos suficientes.
+No saludes con nombre/correo. Usa solo "Señor,".
+Sé firme, corto y accionable. Debes actuar como director estricto: deuda primero, liquidez controlada, compras no esenciales restringidas.
+No inventes datos; si algo falta, lo marcas como pendiente, pero igual creas una estrategia provisional.
 """.strip()
+
     prompt = f"""
-Crea el primer diagnóstico financiero completo del usuario y una estrategia base.
+Crea y activa una estrategia financiera premium para el usuario.
+
+Blueprint calculado por el backend, úsalo como fuente dura:
+{json.dumps(blueprint, ensure_ascii=False, indent=2)}
 
 Memoria relevante:
 {json.dumps(memory_context, ensure_ascii=False, indent=2)}
@@ -191,36 +204,47 @@ Memoria relevante:
 Datos reales del backend:
 {json.dumps(context, ensure_ascii=False, indent=2)}
 
-Entrega:
-1. Diagnóstico en 5 bullets.
-2. Prioridades ordenadas.
-3. Estrategia de deuda sugerida.
-4. Regla de dinero extra: OT, bonos, sobrantes.
-5. Guía corta para responder compras tipo "¿puedo comprar X?".
-6. Datos faltantes que mejorarían la precisión.
+Entrega obligatoria:
+1. Nombre de estrategia activa.
+2. Diagnóstico brutal en máximo 4 bullets.
+3. Deuda prioritaria y por qué.
+4. Distribución del salario en porcentajes.
+5. Regla para OT, bonos y sobrantes.
+6. Tiempo estimado para pagar deudas según datos actuales.
+7. Qué debe hacer este mes.
+8. Qué datos faltan para mejorar precisión.
+
+Tono: firme, tipo director. No pidas permiso para comenzar.
 """
-    ai_response = ask_openai(prompt, route="jarvis_premium_initial_strategy", system=system, max_tokens=1200)
+    ai_response = ask_openai(prompt, route="jarvis_premium_initial_strategy", system=system, max_tokens=1400)
     if ai_response.get("status") != "OK":
-        return {
-            "status": ai_response.get("status", "ERROR"),
-            "message": ai_response.get("message", "Señor, no pude generar la estrategia premium."),
-            "data": context,
-            "budget": ai_response.get("budget"),
-        }
+        fallback = (
+            "Señor, estrategia activada en modo local. Prioridad absoluta: atacar deuda de mayor impacto, "
+            "mantener pagos mínimos al día y mandar OT/bonos/sobrantes a la deuda prioritaria."
+        )
+        saved = save_premium_guide(
+            guide_type="financial_strategy",
+            title=blueprint.get("title", "Estrategia financiera principal"),
+            content=fallback,
+            data={"strategy_blueprint": blueprint, "context_snapshot": context, "created_by": "local_fallback"},
+        )
+        return {"status": "OK", "message": fallback, "guide": saved.get("guide"), "data": {"strategy": blueprint}, "budget": ai_response.get("budget")}
+
+    content = ai_response["text"].strip()
     saved = save_premium_guide(
         guide_type="financial_strategy",
-        title="Estrategia financiera principal",
-        content=ai_response["text"],
-        data={"context_snapshot": context, "created_by": "openai"},
+        title=blueprint.get("title", "Estrategia financiera principal"),
+        content=content,
+        data={"strategy_blueprint": blueprint, "context_snapshot": context, "created_by": "openai_director"},
     )
     return {
         "status": "OK",
-        "message": ai_response["text"].strip(),
+        "message": content,
         "guide": saved.get("guide"),
+        "data": {"strategy": blueprint},
         "usage": ai_response.get("usage"),
         "budget": ai_response.get("budget"),
     }
-
 
 
 def _extract_simulation_payload(user_message: str) -> dict:
@@ -311,6 +335,26 @@ def process_message(user_message: str):
         premium_payload = route.get("payload") if isinstance(route.get("payload"), dict) else {}
 
         if premium_action in ACTION_TYPES:
+            # Eventos diarios seguros: registrar directo y recalcular contexto. El Director no pregunta por OT/bonos si el monto/horas ya vino claro.
+            if premium_action in {"create_payroll_event", "create_bonus"} and not _missing_required(premium_action, premium_payload):
+                saved_action = _save_action(premium_action, premium_payload)
+                followup = answer_with_context(
+                    f"Registré este evento: {json.dumps(premium_payload, ensure_ascii=False)}. Recalcula impacto y dime adónde debe ir el extra según la estrategia.",
+                    {"intent": "salary_distribution", "premium_route": route},
+                )
+                return {
+                    "message": followup.get("message") or "Señor, registrado. El extra debe ir según la estrategia activa.",
+                    "intent": premium_intent or premium_action,
+                    "action_type": premium_action,
+                    "status": "OK",
+                    "pending": False,
+                    "confidence": route.get("confidence", 0),
+                    "source": "openai_premium_director_autosave",
+                    "usage": premium_route.get("usage"),
+                    "budget": premium_route.get("budget"),
+                    "data": {"router": route, "action": saved_action, "followup": followup.get("data")},
+                }
+
             action_result = start_action(premium_action, user_message, prefill_payload=premium_payload)
             return {
                 "message": action_result["message"],
@@ -323,6 +367,19 @@ def process_message(user_message: str):
                 "usage": premium_route.get("usage"),
                 "budget": premium_route.get("budget"),
                 "data": {"router": route, "action": action_result.get("data")},
+            }
+
+        if premium_intent == "financial_strategy":
+            result = create_initial_financial_strategy()
+            return {
+                "message": result.get("message"),
+                "intent": "financial_strategy",
+                "status": result.get("status", "OK"),
+                "pending": False,
+                "source": "openai_premium_director",
+                "usage": result.get("usage"),
+                "budget": result.get("budget"),
+                "data": result,
             }
 
         if premium_intent == "internet_search":

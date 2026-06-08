@@ -94,6 +94,8 @@ export const getJarvisUsageAdmin = () => request("/jarvis/usage/admin");
 export const getJarvisPremiumStatus = () => request("/jarvis/premium/status");
 export const getJarvisPremiumGuides = () => request("/jarvis/premium/guides");
 export const getJarvisPremiumStrategySummary = () => request("/jarvis/premium/strategy-summary");
+export const getJarvisPremiumStrategyDashboard = () => request("/jarvis/premium/strategy-dashboard");
+export const getAdditionalCardsReport = () => request("/jarvis/cards/additional-report");
 export const createJarvisPremiumInitialStrategy = () => request("/jarvis/premium/initial-strategy", { method: "POST" });
 
 

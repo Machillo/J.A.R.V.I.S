@@ -480,3 +480,17 @@ CREATE INDEX IF NOT EXISTS idx_notification_jobs_user ON notification_jobs(user_
 -- FROM allowed_users WHERE email = 'gatotico99@gmail.com'
 -- ON CONFLICT (user_id, dedupe_key) DO NOTHING;
 
+
+-- V1 Premium Strategy / Additional cards support
+CREATE TABLE IF NOT EXISTS card_aliases (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    card_last4 TEXT NOT NULL,
+    owner_label TEXT NOT NULL,
+    relationship TEXT,
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, card_last4)
+);
+CREATE INDEX IF NOT EXISTS idx_card_aliases_user ON card_aliases(user_id);
