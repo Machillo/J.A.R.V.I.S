@@ -38,8 +38,8 @@ def _latest_base_salary(user_id: int) -> float:
             WHERE user_id = %s
             ORDER BY
                 CASE
-                    WHEN LOWER(source) LIKE '%base%' THEN 0
-                    WHEN LOWER(source) LIKE '%mensual%' THEN 1
+                    WHEN LOWER(source) LIKE '%%base%%' THEN 0
+                    WHEN LOWER(source) LIKE '%%mensual%%' THEN 1
                     ELSE 2
                 END,
                 id DESC

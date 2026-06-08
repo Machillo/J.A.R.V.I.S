@@ -81,25 +81,28 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     summary = get_financial_summary() or {}
     engine = get_financial_engine_report() or {}
     salary_projection = calculate_monthly_salary_projection() or {}
+    # Salario mensual neto proyectado: base fija + OT/bonos/VGH del mes.
+    # No depende de movimientos bancarios importados.
     monthly_income = (
-        _summary_value(summary, "income", "total_income")
+        _f((salary_projection.get("results") or {}).get("projected_net"))
         or _summary_value(summary, "income", "projected_net_income")
-        or _f((salary_projection.get("results") or {}).get("projected_net"))
+        or _summary_value(summary, "income", "total_income")
     )
     monthly_expenses = (
         _summary_value(summary, "expenses", "expenses_total")
-        or _summary_value(summary, "expenses", "fixed_expenses_total")
-        + _summary_value(summary, "expenses", "variable_expenses_total")
-        + _summary_value(summary, "expenses", "one_time_expenses_total")
+        or (
+            _summary_value(summary, "expenses", "fixed_expenses_total")
+            + _summary_value(summary, "expenses", "variable_expenses_total")
+            + _summary_value(summary, "expenses", "one_time_expenses_total")
+        )
     )
     fixed = _summary_value(summary, "expenses", "fixed_expenses_total")
     debt_minimums = sum(_normalize_payment(d.get("monthly_payment"), d.get("remaining_amount")) for d in debts)
 
-    flow = engine.get("cashflow") or engine.get("monthly_flow") or {}
-    avg_net = _f((flow.get("averages") or {}).get("net_operational") if isinstance(flow, dict) else 0)
-    safe_extra = max(avg_net, 0)
-    if safe_extra <= 0 and monthly_income > 0:
-        safe_extra = max(monthly_income - monthly_expenses - debt_minimums, 0)
+    # En V1 la estrategia NO debe inventar excedentes desde históricos importados.
+    # El extra real sale del salario fijo + eventos del mes (OT/bonos/VGH) menos gastos y mínimos.
+    # Esto evita pagos recomendados absurdos cuando el histórico tiene préstamos o importaciones sucias.
+    safe_extra = max(monthly_income - monthly_expenses - debt_minimums, 0)
 
     strategy_type = _pick_strategy(debts)
     sorted_debts = sorted(
@@ -108,6 +111,9 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     )
 
     extra_for_debt = max(safe_extra * 0.75, 0)
+    # Límite defensivo: nunca recomendar pagos imposibles.
+    # Si no hay ingreso, no se inventa extra; si hay ingreso, se respeta el 70% máximo de ataque de deuda.
+    max_target_payment = max(monthly_income * 0.70, 0)
     allocation = {
         "ataque_de_deuda": 70 if debts else 0,
         "vida_controlada": 10 if debts else 25,
@@ -122,7 +128,15 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         balance = _f(debt.get("remaining_amount"))
         minimum = _normalize_payment(debt.get("monthly_payment"), debt.get("remaining_amount"))
         monthly_rate = _rate_to_monthly(_f(debt.get("interest_rate")))
-        payment = minimum + (rolling_extra if index == 0 else rolling_extra)
+        # Durante la ruta, solo la deuda prioritaria recibe el extra.
+        # Las demás mantienen mínimo hasta que les toque el turno.
+        if index == 0:
+            payment = minimum + rolling_extra
+        else:
+            payment = minimum
+        if max_target_payment > 0:
+            payment = min(payment, max(minimum, max_target_payment))
+        payment = min(payment, balance) if balance > 0 else payment
         months = _months_to_payoff(balance, payment, monthly_rate)
         if months is None:
             months = 999
@@ -153,6 +167,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "monthly_expenses": round(monthly_expenses, 2),
         "monthly_debt_minimums": round(debt_minimums, 2),
         "estimated_extra_cash": round(safe_extra, 2),
+        "fixed_expenses_total": round(fixed, 2),
         "allocation": allocation,
         "total_debt": round(total_debt, 2),
         "debt_progress_percent": progress,
