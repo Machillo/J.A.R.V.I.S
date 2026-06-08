@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import {
   getJarvisUsageAdmin,
   getJarvisUsageToday,
+  getJarvisPremiumStatus,
+  getJarvisPremiumGuides,
+  createJarvisPremiumInitialStrategy,
   getMe,
   getSportsPreferences,
   getUpcomingCalendarEvents,
@@ -32,6 +35,9 @@ const JARVIS_THEMES = [
 export default function Settings({ status }) {
   const [me, setMe] = useState(null);
   const [usage, setUsage] = useState(null);
+  const [premiumStatus, setPremiumStatus] = useState(null);
+  const [premiumGuides, setPremiumGuides] = useState([]);
+  const [premiumMessage, setPremiumMessage] = useState("");
   const [adminUsage, setAdminUsage] = useState(null);
   const [sports, setSports] = useState(null);
   const [teamsText, setTeamsText] = useState("");
@@ -84,6 +90,16 @@ export default function Settings({ status }) {
       }
 
       if (meData?.role === "owner") {
+        try {
+          const [premiumData, guideData] = await Promise.all([
+            getJarvisPremiumStatus(),
+            getJarvisPremiumGuides(),
+          ]);
+          setPremiumStatus(premiumData);
+          setPremiumGuides(guideData?.items || []);
+        } catch (error) {
+          console.warn("No pude cargar ChatGPT Premium", error);
+        }
         const [emailStatus, pendingEmails] = await Promise.all([
           getEmailMonitorStatus(),
           getEmailMonitorCandidates("pending", 5),
@@ -121,6 +137,20 @@ export default function Settings({ status }) {
     setSports(result.value || payload);
   };
 
+
+
+  const handleCreatePremiumStrategy = async () => {
+    setPremiumMessage("Analizando finanzas con ChatGPT...");
+    try {
+      const result = await createJarvisPremiumInitialStrategy();
+      setPremiumMessage(result?.status === "OK" ? "Señor, estrategia premium creada y guardada." : result?.message || "No pude crear la estrategia.");
+      const [premiumData, guideData] = await Promise.all([getJarvisPremiumStatus(), getJarvisPremiumGuides()]);
+      setPremiumStatus(premiumData);
+      setPremiumGuides(guideData?.items || []);
+    } catch (error) {
+      setPremiumMessage(error.message);
+    }
+  };
 
   const handleEmailSync = async () => {
     setEmailSyncStatus("Escaneando solo correos del mes actual...");
@@ -228,6 +258,35 @@ export default function Settings({ status }) {
           </div>
         </div>
       </div>
+
+
+      {isOwner && (
+        <div className="jarvis-panel settings-card premium-ai-card">
+          <h2>ChatGPT Premium</h2>
+          <p><strong>Estado:</strong> {premiumStatus?.configured ? "Conectado" : "Falta OPENAI_API_KEY"}</p>
+          <p><strong>Modelo:</strong> {premiumStatus?.model || "—"}</p>
+          <p><strong>Presupuesto mensual:</strong> ${Number(premiumStatus?.budget_usd || 10).toFixed(2)}</p>
+          <p><strong>Usado:</strong> ${Number(premiumStatus?.used_usd || 0).toFixed(4)} · {Number(premiumStatus?.percent_used || 0).toFixed(1)}%</p>
+          <div className="usage-bar premium-budget-bar">
+            <span style={{ width: `${Math.min(premiumStatus?.percent_used || 0, 100)}%` }} />
+          </div>
+          <button className="jarvis-action-button" type="button" onClick={handleCreatePremiumStrategy} disabled={!premiumStatus?.configured}>
+            Crear análisis financiero premium
+          </button>
+          <small>ChatGPT solo se usa para owner, con límite mensual. El backend sigue haciendo los cálculos exactos.</small>
+          {premiumMessage && <small className="email-sync-status">{premiumMessage}</small>}
+          {premiumGuides.length > 0 && (
+            <div className="settings-list premium-guides-list">
+              {premiumGuides.slice(0, 2).map((guide) => (
+                <div key={guide.id}>
+                  <strong>{guide.title || guide.guide_type}</strong>
+                  <span>{String(guide.content || "").slice(0, 180)}...</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="settings-grid">
         <div className="jarvis-panel settings-card">

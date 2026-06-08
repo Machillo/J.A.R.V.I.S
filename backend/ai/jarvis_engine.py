@@ -5,6 +5,7 @@ import json
 from backend.ai.action_flow import continue_pending_action, start_action
 from backend.ai.chat_memory import finish_pending_action, get_pending_action
 from backend.ai.gemini_client import ask_gemini
+from backend.ai.openai_client import ask_openai, get_active_premium_guides, save_premium_guide
 from backend.ai.intent_router import ACTION_TYPES, detect_intent, is_pending_interrupt
 from backend.ai.memory_service import get_relevant_memory_context, remember_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
@@ -95,12 +96,46 @@ Formato recomendado: 1 a 3 frases y, si aplica, una fuente corta.
 def answer_with_context(user_message: str, intent_result: dict):
     context = build_financial_context()
     memory_context = get_relevant_memory_context(user_message, limit=8)
-    prompt = f"""
-Eres J.A.R.V.I.S., asistente financiero privado.
+    premium_guides = get_active_premium_guides(limit=3)
 
+    system = """
+Eres J.A.R.V.I.S., asesor financiero personal.
+Responde en español con tono de asesor: directo, corto y accionable.
+No uses nombre ni correo en saludos. Si saludas, usa solo: "Señor, ...".
+No conviertas preguntas de capacidad de compra en registro de gastos.
+Si el usuario dice "¿puedo comprar...?", evalúa capacidad, deudas, gastos fijos y estrategia.
+Usa SOLO los datos reales recibidos. No inventes montos, fechas, deudas ni categorías.
+No muestres todo el historial: da conclusión, razón y siguiente acción.
+""".strip()
+
+    prompt = f"""
+Pregunta/comando del usuario:
+{user_message}
+
+Intento detectado:
+{json.dumps(intent_result, ensure_ascii=False)}
+
+Memoria relevante:
+{json.dumps(memory_context, ensure_ascii=False, indent=2)}
+
+Guías financieras activas creadas anteriormente:
+{json.dumps(premium_guides, ensure_ascii=False, indent=2)}
+
+Resumen real del backend financiero:
+{json.dumps(context, ensure_ascii=False, indent=2)}
+
+Instrucción final:
+Responde máximo en 5 líneas. Si hay un riesgo claro, dilo primero. Si falta un dato, pide solo ese dato.
+"""
+
+    ai_response = ask_openai(prompt, route="jarvis_premium_finance_answer", system=system, max_tokens=650)
+    source = "openai_premium_with_jarvis_context"
+
+    if ai_response.get("status") != "OK":
+        fallback_prompt = f"""
+Eres J.A.R.V.I.S., asistente financiero privado.
 Responde en español, breve, claro y útil.
 Usa SOLO los datos reales si la pregunta es financiera.
-Si no hay datos suficientes, dilo y pide el dato que falta.
 No inventes montos, fechas, deudas ni categorías.
 
 Pregunta: {user_message}
@@ -110,7 +145,9 @@ Memoria del usuario:
 Datos reales:
 {json.dumps(context, ensure_ascii=False, indent=2)}
 """
-    ai_response = ask_gemini(prompt, route="jarvis_context_answer")
+        ai_response = ask_gemini(fallback_prompt, route="jarvis_context_answer")
+        source = "gemini_fallback_with_jarvis_context"
+
     if ai_response.get("status") != "OK":
         return {
             "message": "Señor, tengo el contexto cargado, pero la IA no pudo generar respuesta en este momento.",
@@ -118,17 +155,69 @@ Datos reales:
             "status": "AI_ERROR",
             "pending": False,
             "data": context,
+            "ai_error": ai_response,
         }
+
     return {
         "message": ai_response["text"].strip(),
         "intent": intent_result.get("intent", "context_answer"),
         "entity": intent_result.get("entity"),
         "confidence": intent_result.get("confidence", 0),
-        "source": "gemini_with_jarvis_context",
+        "source": source,
         "pending": False,
         "status": "OK",
         "usage": ai_response.get("usage"),
+        "budget": ai_response.get("budget"),
         "data": context,
+    }
+
+
+def create_initial_financial_strategy():
+    context = build_financial_context()
+    memory_context = get_relevant_memory_context("estrategia financiera principal", limit=10)
+    system = """
+Eres J.A.R.V.I.S., asesor financiero personal.
+Debes crear una guía estratégica que el JARVIS local pueda reutilizar después sin gastar IA premium.
+No saludes con nombres. Usa solo "Señor," si aplica.
+No inventes datos. Si falta información, indícalo como pendiente.
+""".strip()
+    prompt = f"""
+Crea el primer diagnóstico financiero completo del usuario y una estrategia base.
+
+Memoria relevante:
+{json.dumps(memory_context, ensure_ascii=False, indent=2)}
+
+Datos reales del backend:
+{json.dumps(context, ensure_ascii=False, indent=2)}
+
+Entrega:
+1. Diagnóstico en 5 bullets.
+2. Prioridades ordenadas.
+3. Estrategia de deuda sugerida.
+4. Regla de dinero extra: OT, bonos, sobrantes.
+5. Guía corta para responder compras tipo "¿puedo comprar X?".
+6. Datos faltantes que mejorarían la precisión.
+"""
+    ai_response = ask_openai(prompt, route="jarvis_premium_initial_strategy", system=system, max_tokens=1200)
+    if ai_response.get("status") != "OK":
+        return {
+            "status": ai_response.get("status", "ERROR"),
+            "message": ai_response.get("message", "Señor, no pude generar la estrategia premium."),
+            "data": context,
+            "budget": ai_response.get("budget"),
+        }
+    saved = save_premium_guide(
+        guide_type="financial_strategy",
+        title="Estrategia financiera principal",
+        content=ai_response["text"],
+        data={"context_snapshot": context, "created_by": "openai"},
+    )
+    return {
+        "status": "OK",
+        "message": ai_response["text"].strip(),
+        "guide": saved.get("guide"),
+        "usage": ai_response.get("usage"),
+        "budget": ai_response.get("budget"),
     }
 
 
@@ -273,6 +362,17 @@ def process_message(user_message: str):
 
 
     if intent == "financial_engine":
+        lowered = (user_message or "").lower()
+        if any(phrase in lowered for phrase in ["analiza mis finanzas", "primer analisis", "primer análisis", "estrategia completa", "plan completo"]):
+            result = create_initial_financial_strategy()
+            return {
+                "message": result.get("message"),
+                "intent": "financial_engine",
+                "status": result.get("status", "OK"),
+                "pending": False,
+                "data": result,
+                "budget": result.get("budget"),
+            }
         report = get_financial_engine_report()
         return {
             "message": _format_financial_engine_message(report),

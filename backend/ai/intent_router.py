@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.ai.gemini_client import ask_gemini
+from backend.ai.openai_client import ask_openai
 
 
 ACTION_TYPES = [
@@ -154,6 +155,10 @@ def _financial_read_intent(text: str) -> dict[str, Any] | None:
         return {"intent": "user_status", "entity": None, "confidence": 0.9, "source": "deterministic"}
     if any(word in text for word in ["habitos", "hábitos", "categorias", "categorías", "en que se va", "en que gasto"]):
         return {"intent": "spending_habits", "entity": None, "confidence": 0.85, "source": "deterministic"}
+    if any(phrase in text for phrase in [
+        "puedo comprar", "me alcanza", "vale la pena comprar", "deberia comprar", "debería comprar", "puedo pagar"
+    ]):
+        return {"intent": "advisor_summary", "entity": None, "confidence": 0.92, "source": "deterministic"}
     if any(phrase in text for phrase in [
         "que pasa si", "qué pasa si", "what if", "simula", "simulador", "en cuotas", "cuotas sin intereses"
     ]):
@@ -333,7 +338,9 @@ Mensaje:
 {user_message!r}
 """
 
-    ai_response = ask_gemini(prompt, route="intent_classifier")
+    ai_response = ask_openai(prompt, route="intent_classifier_premium", max_tokens=180, temperature=0.05)
+    if ai_response.get("status") != "OK":
+        ai_response = ask_gemini(prompt, route="intent_classifier")
     if ai_response.get("status") != "OK":
         return fallback
 

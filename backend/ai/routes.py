@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 
 from backend.ai.models import JarvisChatRequest, SportsPreferencesRequest, BrowserSubscriptionRequest, MemoryItemRequest, ProfilePreferencesRequest
-from backend.ai.jarvis_engine import process_message
+from backend.ai.jarvis_engine import process_message, create_initial_financial_strategy
 from backend.ai.usage_tracker import get_admin_usage_overview, get_today_usage
+from backend.ai.openai_client import get_openai_budget_status, get_active_premium_guides
 from backend.auth.current_user import get_current_user
 from backend.ai.preferences import get_sports_preferences, update_sports_preferences, save_browser_subscription
 from backend.core.events import get_upcoming_events
@@ -40,6 +41,21 @@ def jarvis_usage_admin():
     if user.get("role") not in {"owner", "admin"}:
         return {"status": "FORBIDDEN", "message": "Solo admin puede ver consumo global."}
     return get_admin_usage_overview()
+
+
+@router.get("/premium/status")
+def jarvis_premium_status():
+    return get_openai_budget_status()
+
+
+@router.get("/premium/guides")
+def jarvis_premium_guides():
+    return {"status": "OK", "items": get_active_premium_guides(limit=10)}
+
+
+@router.post("/premium/initial-strategy")
+def jarvis_premium_initial_strategy():
+    return create_initial_financial_strategy()
 
 
 @router.get("/preferences/sports")

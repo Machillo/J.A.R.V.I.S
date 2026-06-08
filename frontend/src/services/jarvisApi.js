@@ -91,6 +91,10 @@ export const askJarvis = async (message) => {
 export const getJarvisUsageToday = () => request("/jarvis/usage/today");
 export const getJarvisUsageAdmin = () => request("/jarvis/usage/admin");
 
+export const getJarvisPremiumStatus = () => request("/jarvis/premium/status");
+export const getJarvisPremiumGuides = () => request("/jarvis/premium/guides");
+export const createJarvisPremiumInitialStrategy = () => request("/jarvis/premium/initial-strategy", { method: "POST" });
+
 
 export const getSportsPreferences = () => request("/jarvis/preferences/sports");
 export const updateSportsPreferences = (payload) => jsonRequest("/jarvis/preferences/sports", "POST", payload);
