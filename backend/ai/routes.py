@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from backend.ai.models import JarvisChatRequest, SportsPreferencesRequest, BrowserSubscriptionRequest, MemoryItemRequest, ProfilePreferencesRequest
 from backend.ai.jarvis_engine import process_message, create_initial_financial_strategy
+from backend.ai.premium_orchestrator import get_current_strategy_summary
 from backend.ai.usage_tracker import get_admin_usage_overview, get_today_usage
 from backend.ai.openai_client import get_openai_budget_status, get_active_premium_guides
 from backend.auth.current_user import get_current_user
@@ -51,6 +52,11 @@ def jarvis_premium_status():
 @router.get("/premium/guides")
 def jarvis_premium_guides():
     return {"status": "OK", "items": get_active_premium_guides(limit=10)}
+
+
+@router.get("/premium/strategy-summary")
+def jarvis_premium_strategy_summary():
+    return get_current_strategy_summary()
 
 
 @router.post("/premium/initial-strategy")

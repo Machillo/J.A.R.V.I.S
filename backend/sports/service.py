@@ -140,3 +140,81 @@ def get_sports_calendar_summary(scope: str | dict[str, Any] = "all") -> dict[str
         "search": search_result,
         "message": message,
     }
+
+
+def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
+    """Creates one daily sports digest push job for owner/admin users.
+
+    This is intentionally conservative: it schedules a single concise digest per day,
+    instead of spamming one notification per uncertain web result.
+    """
+    from datetime import time, timedelta, timezone
+    from backend.core.database import get_connection
+    from backend.notifications.service import ensure_notification_tables
+
+    now_cr = datetime.now(CR_TZ)
+    day_key = now_cr.strftime("%Y-%m-%d")
+    scheduled_cr = datetime.combine(now_cr.date(), time(7, 0), tzinfo=CR_TZ)
+    if scheduled_cr < now_cr:
+        scheduled_cr = now_cr + timedelta(minutes=2)
+    scheduled_utc = scheduled_cr.astimezone(timezone.utc)
+
+    with get_connection() as conn:
+        ensure_notification_tables(conn)
+        owners = conn.execute(
+            """
+            SELECT id
+            FROM allowed_users
+            WHERE role IN ('owner', 'admin') AND status = 'active'
+            """
+        ).fetchall()
+
+        created = 0
+        skipped = 0
+        # Fast dedupe before spending a Serper/Gemini request.
+        pending_by_user = {}
+        for owner in owners:
+            dedupe_key = f"sports-digest:{owner['id']}:{day_key}"
+            exists = conn.execute(
+                """
+                SELECT id
+                FROM notification_jobs
+                WHERE user_id = %s AND dedupe_key = %s
+                LIMIT 1
+                """,
+                (int(owner["id"]), dedupe_key),
+            ).fetchone()
+            if exists:
+                skipped += 1
+            else:
+                pending_by_user[int(owner["id"])] = dedupe_key
+
+        conn.commit()
+
+    if not pending_by_user:
+        return {"status": "OK", "created": 0, "skipped": skipped, "message": "Digest deportivo ya programado hoy."}
+
+    summary = get_sports_calendar_summary({"scope": "all", "query_type": "radar", "query": ""})
+    body = summary.get("message") or "Señor, no encontré eventos deportivos claros para hoy."
+    body = body.replace("Señor Kenneth", "Señor").replace("Señor gatotico99", "Señor")
+    if not body.lower().startswith("señor"):
+        body = f"Señor, {body}"
+    body = body[:450]
+
+    with get_connection() as conn:
+        ensure_notification_tables(conn)
+        for user_id, dedupe_key in pending_by_user.items():
+            row = conn.execute(
+                """
+                INSERT INTO notification_jobs (user_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
+                VALUES (%s, 'Radar deportivo', %s, 'sports', %s, 'sports_radar', %s, %s, %s::jsonb)
+                ON CONFLICT (user_id, dedupe_key) DO NOTHING
+                RETURNING id
+                """,
+                (user_id, body, scheduled_utc, day_key, dedupe_key, json.dumps(summary, ensure_ascii=False)),
+            ).fetchone()
+            if row:
+                created += 1
+        conn.commit()
+
+    return {"status": "OK", "created": created, "skipped": skipped, "scheduled_at": scheduled_utc.isoformat(), "summary": summary}

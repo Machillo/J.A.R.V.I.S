@@ -12,7 +12,7 @@ from backend.auth.current_user import get_current_user
 from backend.core.database import get_connection
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini").strip()
 OPENAI_MONTHLY_BUDGET_USD = float(os.getenv("OPENAI_MONTHLY_BUDGET_USD", "10") or 10)
 OPENAI_INPUT_USD_PER_1M = float(os.getenv("OPENAI_INPUT_USD_PER_1M", "0.15") or 0.15)
 OPENAI_OUTPUT_USD_PER_1M = float(os.getenv("OPENAI_OUTPUT_USD_PER_1M", "0.60") or 0.60)
@@ -79,7 +79,7 @@ def ensure_openai_tables(conn) -> None:
             warning_percent INTEGER NOT NULL DEFAULT 80,
             hard_stop_percent INTEGER NOT NULL DEFAULT 100,
             provider TEXT NOT NULL DEFAULT 'openai',
-            model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+            model TEXT NOT NULL DEFAULT 'gpt-5-mini',
             owner_only BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -254,6 +254,82 @@ def get_active_premium_guides(limit: int = 3) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def _extract_response_text(payload: dict[str, Any]) -> str:
+    if isinstance(payload.get("output_text"), str):
+        return payload["output_text"].strip()
+
+    chunks: list[str] = []
+    for item in payload.get("output") or []:
+        if item.get("type") == "message":
+            for content in item.get("content") or []:
+                if content.get("type") in {"output_text", "text"}:
+                    chunks.append(str(content.get("text") or ""))
+    if chunks:
+        return "".join(chunks).strip()
+
+    choices = payload.get("choices") or []
+    if choices:
+        return str(choices[0].get("message", {}).get("content") or "").strip()
+    return ""
+
+
+def _usage_from_payload(payload: dict[str, Any], fallback_prompt: int, text: str) -> tuple[int, int, int]:
+    usage = payload.get("usage") or {}
+    prompt_tokens = int(
+        usage.get("prompt_tokens")
+        or usage.get("input_tokens")
+        or fallback_prompt
+    )
+    completion_tokens = int(
+        usage.get("completion_tokens")
+        or usage.get("output_tokens")
+        or _estimate_tokens(text)
+    )
+    total_tokens = int(usage.get("total_tokens") or (prompt_tokens + completion_tokens))
+    return prompt_tokens, completion_tokens, total_tokens
+
+
+def _call_openai_responses(model: str, system: str | None, prompt: str, max_tokens: int, temperature: float) -> requests.Response:
+    instructions = system or ""
+    body: dict[str, Any] = {
+        "model": model,
+        "input": prompt,
+        "instructions": instructions,
+        "max_output_tokens": max_tokens,
+    }
+    # GPT-5 reasoning models can be strict with temperature; default behavior is safer.
+    if not model.startswith("gpt-5"):
+        body["temperature"] = temperature
+    return requests.post(
+        "https://api.openai.com/v1/responses",
+        headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=body,
+        timeout=OPENAI_TIMEOUT_SECONDS,
+    )
+
+
+def _call_openai_chat(model: str, messages: list[dict[str, str]], max_tokens: int, temperature: float) -> requests.Response:
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }
+    if not model.startswith("gpt-5"):
+        body["temperature"] = temperature
+    return requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=body,
+        timeout=OPENAI_TIMEOUT_SECONDS,
+    )
+
+
 def ask_openai(
     prompt: str,
     *,
@@ -275,22 +351,22 @@ def ask_openai(
     messages.append({"role": "user", "content": prompt})
 
     try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-            },
-            timeout=OPENAI_TIMEOUT_SECONDS,
-        )
+        if str(model).startswith("gpt-5"):
+            response = _call_openai_responses(model, system, prompt, max_tokens, temperature)
+        else:
+            response = _call_openai_chat(model, messages, max_tokens, temperature)
     except Exception as exc:
         return {"status": "ERROR", "message": f"No pude conectar con OpenAI: {exc}"}
+
+    if response.status_code >= 400:
+        # Compatibility fallback: if the selected model is accepted only by Chat Completions or Responses, try the other endpoint once.
+        try:
+            if str(model).startswith("gpt-5"):
+                response = _call_openai_chat(model, messages, max_tokens, temperature)
+            else:
+                response = _call_openai_responses(model, system, prompt, max_tokens, temperature)
+        except Exception:
+            pass
 
     if response.status_code >= 400:
         try:
@@ -300,11 +376,8 @@ def ask_openai(
         return {"status": "ERROR", "message": "OpenAI devolvió error.", "error": payload}
 
     payload = response.json()
-    text = (payload.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
-    usage = payload.get("usage") or {}
-    prompt_tokens = int(usage.get("prompt_tokens") or estimated_prompt)
-    completion_tokens = int(usage.get("completion_tokens") or _estimate_tokens(text))
-    total_tokens = int(usage.get("total_tokens") or (prompt_tokens + completion_tokens))
+    text = _extract_response_text(payload)
+    prompt_tokens, completion_tokens, total_tokens = _usage_from_payload(payload, estimated_prompt, text)
     cost = _estimate_cost(prompt_tokens, completion_tokens)
     updated_budget = _record_openai_usage(
         user_id=int(user["id"]),
@@ -328,3 +401,26 @@ def ask_openai(
         },
         "budget": updated_budget,
     }
+
+
+def ask_openai_json(
+    prompt: str,
+    *,
+    route: str = "jarvis_premium_json",
+    system: str | None = None,
+    max_tokens: int = 700,
+    temperature: float = 0.05,
+) -> dict[str, Any]:
+    wrapped_system = (system or "") + "\nDevuelve exclusivamente JSON válido, sin markdown."
+    result = ask_openai(prompt, route=route, system=wrapped_system.strip(), max_tokens=max_tokens, temperature=temperature)
+    if result.get("status") != "OK":
+        return result
+    raw = (result.get("text") or "").strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        raw = raw.replace("json\n", "", 1).replace("JSON\n", "", 1).strip()
+    try:
+        data = json.loads(raw)
+    except Exception as exc:
+        return {**result, "status": "JSON_ERROR", "message": f"No pude leer JSON de OpenAI: {exc}", "raw": raw}
+    return {**result, "data": data}

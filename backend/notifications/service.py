@@ -446,6 +446,11 @@ def enqueue_fixed_expense_reminders() -> int:
 def send_due_notifications(limit: int = 50) -> dict[str, Any]:
     queued_calendar = enqueue_calendar_reminders()
     queued_fixed = enqueue_fixed_expense_reminders()
+    try:
+        from backend.sports.service import enqueue_owner_sports_digest_notifications
+        queued_sports = enqueue_owner_sports_digest_notifications()
+    except Exception as exc:
+        queued_sports = {"status": "ERROR", "message": str(exc)}
 
     with get_connection() as conn:
         ensure_notification_tables(conn)
@@ -504,6 +509,7 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
         "status": "OK",
         "queued_calendar": queued_calendar,
         "queued_fixed_expenses": queued_fixed,
+        "queued_sports": queued_sports,
         "due_jobs": len(jobs),
         "sent_jobs": sent_jobs,
         "failed_jobs": failed_jobs,

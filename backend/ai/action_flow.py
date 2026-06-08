@@ -453,7 +453,7 @@ def _save_action(action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     raise ValueError(f"Acción no soportada: {action_type}")
 
 
-def start_action(action_type: str, user_message: str) -> dict[str, Any]:
+def start_action(action_type: str, user_message: str, prefill_payload: dict[str, Any] | None = None) -> dict[str, Any]:
     if action_type not in ACTION_CONFIG:
         return {
             "message": "Señor, todavía no puedo guardar ese tipo de dato desde el chat.",
@@ -463,6 +463,8 @@ def start_action(action_type: str, user_message: str) -> dict[str, Any]:
         }
 
     payload = _initial_payload(action_type, user_message)
+    if prefill_payload:
+        payload.update({key: value for key, value in prefill_payload.items() if value not in (None, "")})
     if action_type == "import_monthly_statement" and payload.get("month") and not payload.get("year"):
         payload["year"] = date.today().year
     missing = _missing_required(action_type, payload)

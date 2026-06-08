@@ -10,7 +10,7 @@ import Settings from "./pages/Settings";
 import Transactions from "./pages/Transactions";
 import Login from "./pages/Login";
 
-import { askJarvis, getFinanceDashboard, getJarvisUsageToday, getMe, getStatus } from "./services/jarvisApi";
+import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getStatus } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
 
 const sanitizeCourtesy = (text = "") =>
@@ -31,6 +31,7 @@ export default function App() {
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [aiUsage, setAiUsage] = useState(null);
+  const [strategySummary, setStrategySummary] = useState(null);
 
   useEffect(() => {
     const applyTheme = () => {
@@ -82,6 +83,7 @@ export default function App() {
       setChatHistory([]);
       setCurrentUser(null);
       setAiUsage(null);
+      setStrategySummary(null);
     });
 
     return () => subscription.unsubscribe();
@@ -91,17 +93,19 @@ export default function App() {
     if (!session) return;
 
     try {
-      const [statusData, dashboardData, meData, usageData] = await Promise.all([
+      const [statusData, dashboardData, meData, usageData, strategyData] = await Promise.all([
         getStatus(),
         getFinanceDashboard(),
         getMe(),
         getJarvisUsageToday(),
+        getJarvisPremiumStrategySummary().catch(() => null),
       ]);
 
       setStatus(statusData);
       setFinanceDashboard(dashboardData);
       setCurrentUser(meData);
       setAiUsage(usageData);
+      setStrategySummary(strategyData);
     } catch (error) {
       console.error(error);
     }
@@ -120,6 +124,7 @@ export default function App() {
     setChatHistory([]);
     setCurrentUser(null);
     setAiUsage(null);
+    setStrategySummary(null);
   };
 
   const speakText = (text) => {
@@ -297,6 +302,7 @@ export default function App() {
         setSidebarOpen={setSidebarOpen}
         currentUser={currentUser}
         aiUsage={aiUsage}
+        strategySummary={strategySummary}
       />
 
       <main className={`main-shell ${sidebarOpen ? "" : "expanded"} ${activePage === "dashboard" ? "home-mode" : ""}`}>

@@ -9,6 +9,7 @@ from backend.ai.openai_client import ask_openai, get_active_premium_guides, save
 from backend.ai.intent_router import ACTION_TYPES, detect_intent, is_pending_interrupt
 from backend.ai.memory_service import get_relevant_memory_context, remember_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
+from backend.ai.premium_orchestrator import premium_route_command, get_current_strategy_summary
 from backend.integrations.internet_search import internet_search
 from backend.tasks.calendar_service import calendar_summary, create_calendar_event_from_text
 from backend.sports.service import get_sports_calendar_summary
@@ -301,6 +302,74 @@ def process_message(user_message: str):
                 "pending": pending_result.get("pending", False),
                 "data": pending_result.get("data"),
             }
+
+    premium_route = premium_route_command(user_message, intent_result)
+    if premium_route.get("status") == "OK":
+        route = premium_route.get("route") or {}
+        premium_intent = route.get("intent")
+        premium_action = route.get("action_type") if route.get("action_type") not in {None, "", "null"} else None
+        premium_payload = route.get("payload") if isinstance(route.get("payload"), dict) else {}
+
+        if premium_action in ACTION_TYPES:
+            action_result = start_action(premium_action, user_message, prefill_payload=premium_payload)
+            return {
+                "message": action_result["message"],
+                "intent": premium_intent or premium_action,
+                "action_type": premium_action,
+                "status": action_result.get("status", "PENDING"),
+                "pending": action_result.get("pending", True),
+                "confidence": route.get("confidence", 0),
+                "source": "openai_premium_router",
+                "usage": premium_route.get("usage"),
+                "budget": premium_route.get("budget"),
+                "data": {"router": route, "action": action_result.get("data")},
+            }
+
+        if premium_intent == "internet_search":
+            query = route.get("query") or user_message
+            return _internet_answer(user_message, query)
+
+        if premium_intent == "calendar":
+            calendar_result = create_calendar_event_from_text(route.get("query") or user_message)
+            return {
+                "message": calendar_result.get("message"),
+                "intent": "create_calendar_event",
+                "status": calendar_result.get("status", "OK"),
+                "pending": calendar_result.get("pending", False),
+                "source": "openai_premium_router",
+                "data": calendar_result,
+            }
+
+        if premium_intent == "sports_schedule":
+            result = get_sports_calendar_summary({"scope": "all", "query_type": "next", "query": route.get("query") or user_message})
+            return {
+                "message": result.get("message"),
+                "intent": "sports_schedule",
+                "status": result.get("status", "OK"),
+                "pending": False,
+                "source": "openai_premium_router",
+                "data": result,
+            }
+
+        if premium_intent == "fixed_expense":
+            result = handle_fixed_expense_message(user_message)
+            if result.get("status") == "OK":
+                return {
+                    "message": result.get("message"),
+                    "intent": "fixed_expense",
+                    "status": result.get("status", "OK"),
+                    "pending": False,
+                    "source": "openai_premium_router",
+                    "data": result.get("data"),
+                }
+
+        if premium_intent in {
+            "capacity_check", "financial_strategy", "salary_distribution",
+            "direct_finance_answer", "general"
+        } or float(route.get("confidence") or 0) >= 0.72:
+            enhanced_intent = dict(intent_result)
+            enhanced_intent.update({"premium_route": route, "intent": premium_intent or intent_result.get("intent")})
+            return answer_with_context(user_message, enhanced_intent)
 
     intent = intent_result.get("intent", "unknown")
     action_type = intent_result.get("action_type")
