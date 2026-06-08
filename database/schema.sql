@@ -408,7 +408,7 @@ ON email_ingested_messages(user_id, created_at DESC);
 
 INSERT INTO email_monitor_settings (user_id, gmail_query)
 SELECT id,
-       '(from:bac OR from:credomatic OR from:popular OR from:multimoney OR from:notificacionesbaccr.com OR from:estadosdecuenta@baccredomatic.cr OR "MultiMoney" OR "BAC" OR "Banco Popular") (compra OR pago OR transferencia OR SINPE OR deposito OR depósito OR retiro OR abono OR debito OR débito OR credito OR crédito OR "transacción realizada" OR "transaccion realizada" OR "movimiento entre cuentas" OR "estado de cuenta" OR "estados de cuenta")'
+       '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular OR from:popular OR "BAC - SINPE" OR "Banco Popular") ("Notificación de transacción" OR "Notificación de Transferencia" OR "Transacción realizada" OR "Estado de cuenta" OR "Estado de Cuenta" OR "estados de cuenta" OR SINPE OR transferencia OR compra OR pago OR depósito OR deposito OR retiro OR abono)'
 FROM users
 WHERE email = 'gatotico99@gmail.com'
 ON CONFLICT (user_id)

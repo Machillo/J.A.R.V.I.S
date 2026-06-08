@@ -24,7 +24,7 @@ OWNER_EMAIL = os.getenv("OWNER_EMAIL", "gatotico99@gmail.com")
 CRON_SECRET = os.getenv("EMAIL_MONITOR_CRON_SECRET", "")
 DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
-    '(from:bac OR from:credomatic OR from:baccredomatic OR from:notificacionesbaccr.com OR from:estadosdecuenta@baccredomatic.cr OR from:popular OR from:bancopopular OR from:multimoney OR "MultiMoney" OR "Banco Popular") ("Notificación de transacción" OR "Notificación de Transferencia" OR "Transacción realizada" OR "confirmación de transferencia" OR "estado de cuenta" OR "estados de cuenta" OR SINPE OR compra OR pago OR transferencia OR depósito OR deposito OR retiro OR abono OR débito OR debito OR crédito OR credito) -promoción -promocion -newsletter -publicidad -"sesión se inició" -"sesion se inicio" -"seguro de vida" -"nuevos seguros" -"tasa cero" -"e-scooter"',
+    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular OR from:popular OR "BAC - SINPE" OR "Banco Popular") ("Notificación de transacción" OR "Notificación de Transferencia" OR "Transacción realizada" OR "Estado de cuenta" OR "Estado de Cuenta" OR "estados de cuenta" OR SINPE OR transferencia OR compra OR pago OR depósito OR deposito OR retiro OR abono)',
 )
 # Fase 6.2: no se guarda nada automático. Primero validamos lectura limpia.
 AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "999"))
@@ -135,6 +135,27 @@ def ensure_email_tables(conn) -> None:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(user_id, email_message_id)
         )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS card_aliases (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            card_last4 TEXT NOT NULL,
+            owner_label TEXT NOT NULL,
+            relationship TEXT,
+            is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(user_id, card_last4)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_card_aliases_user
+        ON card_aliases(user_id)
         """
     )
 
@@ -277,6 +298,44 @@ def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
         ),
     ).fetchone()
     return int(row["id"])
+
+
+def _extract_card_last4_from_account(account: str | None) -> str | None:
+    match = re.search(r"(\d{4})", account or "")
+    return match.group(1) if match else None
+
+
+def _enrich_candidate_with_card_alias(conn, user_id: int, candidate: dict[str, Any]) -> dict[str, Any]:
+    """Attach owner labels such as Kenneth/Emily/Sidey for additional cards.
+
+    This is only metadata in notes/category review; it never changes money values.
+    """
+    last4 = _extract_card_last4_from_account(candidate.get("account"))
+    if not last4:
+        return candidate
+    row = conn.execute(
+        """
+        SELECT owner_label, relationship, is_primary
+        FROM card_aliases
+        WHERE user_id = %s AND card_last4 = %s
+        LIMIT 1
+        """,
+        (user_id, last4),
+    ).fetchone()
+    if not row:
+        return candidate
+    owner_label = row["owner_label"]
+    relationship = row.get("relationship") if hasattr(row, "get") else row["relationship"]
+    primary = bool(row["is_primary"])
+    notes = candidate.get("notes") or ""
+    extra = f"titular tarjeta: {owner_label}"
+    if relationship:
+        extra += f" ({relationship})"
+    if primary:
+        extra += " | tarjeta principal"
+    if extra not in notes:
+        candidate["notes"] = f"{notes} | {extra}" if notes else extra
+    return candidate
 
 
 def _transaction_duplicate_exists(conn, user_id: int, candidate: dict[str, Any]) -> bool:
@@ -448,6 +507,8 @@ def scan_email_text(
                 ),
             ).fetchone()
             email_message_id = int(email_row["id"])
+        parsed = _enrich_candidate_with_card_alias(conn, user_id, parsed)
+
         if parsed.get("email_kind") == "statement":
             parsed["category"] = "Estado de cuenta"
         else:
