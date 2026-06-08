@@ -81,14 +81,14 @@ export default function PremiumStrategy() {
             <strong>{progress.toFixed(1)}%</strong>
           </div>
           <div className="progress-track"><div style={{ width: `${progress}%` }} /></div>
-          <small>Deuda total actual: {money(strategy.total_debt)} · Tiempo estimado: {strategy.estimated_total_months || "--"} meses</small>
+          <small>Deuda total actual: {money(strategy.total_debt)} · Libre de deuda estimado: {strategy.estimated_total_months >= 999 ? "sin cierre" : `${strategy.estimated_total_months || "--"} meses`}</small>
         </div>
       </div>
 
       <div className="strategy-kpi-grid">
-        <div className="hud-card"><span>Ingreso mensual</span><strong>{money(strategy.monthly_income)}</strong></div>
+        <div className="hud-card"><span>Ingreso mensual neto</span><strong>{money(strategy.monthly_income)}</strong><small>Base + OT/bonos - VGH - rebajos</small></div>
         <div className="hud-card"><span>Pagos mínimos deuda</span><strong>{money(strategy.monthly_debt_minimums)}</strong><small>Cuotas mensuales normalizadas</small></div>
-        <div className="hud-card"><span>Extra estimado</span><strong>{money(strategy.estimated_extra_cash)}</strong><small>Disponible para atacar deuda</small></div>
+        <div className="hud-card"><span>Sobrante proyectado</span><strong>{money(strategy.estimated_extra_cash)}</strong><small>Después de gastos base y mínimos</small></div>
         <div className="hud-card"><span>Estado</span><strong>{strategy.status === "critical" ? "Crítico" : "Controlado"}</strong></div>
       </div>
 
@@ -122,9 +122,9 @@ export default function PremiumStrategy() {
               <span className="timeline-rank">#{item.priority}</span>
               <div>
                 <strong>{item.name}</strong>
-                <p>Saldo {money(item.remaining_amount)} · Pago recomendado {money(item.recommended_payment)}</p>
+                <p>Saldo {money(item.remaining_amount)} · Pago objetivo {money(item.recommended_payment)} · mínimo {money(item.minimum_payment)}</p>
               </div>
-              <b>{item.estimated_months >= 999 ? "sin cierre" : `${item.estimated_months} meses`}</b>
+              <b>{item.estimated_months >= 999 ? "sin cierre" : `mes ${item.estimated_months}`}</b>
             </div>
           ))}
         </div>

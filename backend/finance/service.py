@@ -1128,13 +1128,14 @@ def calculate_monthly_salary_projection():
         weekly_hours = 0.0
         base_monthly_gross = base_salary_net
 
-    # Si existe un salario base guardado, lo tratamos como salario neto mensual fijo.
+    # Regla V1:
+    # - Si hay perfil laboral, el salario base se calcula desde hourly_rate y rebajos reales.
+    # - La tabla salaries solo se usa como respaldo si no hay perfil laboral.
     fixed_deduction_details = []
-    if base_salary_net > 0:
+    fixed_deductions_total = 0.0
+    if base_salary_net > 0 and not profile:
         base_monthly_net = base_salary_net
-        fixed_deductions_total = 0.0
     else:
-        fixed_deductions_total = 0.0
         for deduction in deductions:
             amount = _as_float(deduction.get("amount"))
             deduction_type = str(deduction.get("deduction_type") or "").lower().strip()
@@ -1153,22 +1154,27 @@ def calculate_monthly_salary_projection():
             })
         base_monthly_net = max(base_monthly_gross - fixed_deductions_total, 0)
 
-    payroll_events_gross = sum(_as_float(event.get("amount")) for event in payroll_events)
+    positive_payroll_gross = sum(max(_as_float(event.get("amount")), 0) for event in payroll_events)
+    vgh_gross = sum(min(_as_float(event.get("amount")), 0) for event in payroll_events)
     bonuses_gross = sum(_as_float(item.get("amount")) for item in current_bonuses)
 
+    extra_base = positive_payroll_gross + max(bonuses_gross, 0)
     extra_deductions_total, extra_deduction_details = _variable_payroll_deductions(
-        max(payroll_events_gross, 0) + max(bonuses_gross, 0),
+        extra_base,
         deductions,
     )
 
-    # VGH ya viene como monto negativo, por eso no se le aplica rebajo positivo.
-    payroll_events_net = payroll_events_gross - extra_deductions_total
-    bonuses_net = bonuses_gross
-    if bonuses_gross > 0 and (max(payroll_events_gross, 0) + max(bonuses_gross, 0)) > 0:
-        # Repartimos el rebajo porcentual proporcionalmente para transparencia.
-        proportion_bonus = bonuses_gross / (max(payroll_events_gross, 0) + bonuses_gross)
-        bonuses_net = bonuses_gross - (extra_deductions_total * proportion_bonus)
-        payroll_events_net = payroll_events_gross - (extra_deductions_total * (1 - proportion_bonus))
+    if extra_base > 0:
+        payroll_extra_deduction = extra_deductions_total * (positive_payroll_gross / extra_base)
+        bonus_deduction = extra_deductions_total * (max(bonuses_gross, 0) / extra_base)
+    else:
+        payroll_extra_deduction = 0.0
+        bonus_deduction = 0.0
+
+    # VGH es tiempo no trabajado: resta bruto directo y no recibe rebajo positivo.
+    payroll_events_gross = positive_payroll_gross + vgh_gross
+    payroll_events_net = (positive_payroll_gross - payroll_extra_deduction) + vgh_gross
+    bonuses_net = bonuses_gross - bonus_deduction if bonuses_gross > 0 else bonuses_gross
 
     projected_gross = base_monthly_gross + payroll_events_gross + bonuses_gross
     projected_net = base_monthly_net + payroll_events_net + bonuses_net

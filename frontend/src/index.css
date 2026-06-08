@@ -5365,6 +5365,10 @@ body {
   margin-bottom: 8px;
 }
 
+.strategy-kpi-grid .hud-card {
+  min-height: auto;
+}
+
 .strategy-kpi-grid .hud-card strong {
   font-size: clamp(20px, 3vw, 28px);
 }
@@ -5404,7 +5408,7 @@ body {
 }
 
 .allocation-row span {
-  text-transform: capitalize;
+  text-transform: none;
   color: var(--muted);
 }
 
