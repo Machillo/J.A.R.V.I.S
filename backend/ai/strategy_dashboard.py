@@ -158,11 +158,17 @@ def _sort_debts_for_director(debts: list[dict[str, Any]]) -> list[dict[str, Any]
     return sorted(debts, key=score)
 
 
-def _simulate_debt_cascade(debts: list[dict[str, Any]], monthly_extra: float) -> tuple[list[dict[str, Any]], int, float]:
-    """Simula método cascada: mínimos de todas + sobrante a una deuda.
+def _simulate_debt_cascade(
+    debts: list[dict[str, Any]],
+    recurring_monthly_extra: float,
+    first_month_extra: float = 0.0,
+) -> tuple[list[dict[str, Any]], int, float]:
+    """Simula método cascada sin convertir extras únicos en ingreso permanente.
 
-    Cuando una deuda se cancela, su mínimo se suma automáticamente al ataque mensual
-    de la siguiente. Devuelve mes de cierre acumulado por deuda.
+    Reglas:
+    - recurring_monthly_extra: sobrante base recurrente de todos los meses.
+    - first_month_extra: OT/bono/feriado del mes actual; solo se aplica en el mes 1.
+    - Cuando una deuda muere, su mínimo queda dentro del pool y acelera la siguiente.
     """
     active = []
     for index, debt in enumerate(_sort_debts_for_director(debts)):
@@ -181,10 +187,12 @@ def _simulate_debt_cascade(debts: list[dict[str, Any]], monthly_extra: float) ->
         })
 
     minimum_pool = sum(item["minimum"] for item in active)
-    payment_pool = minimum_pool + max(monthly_extra, 0)
+    recurring_pool = minimum_pool + max(recurring_monthly_extra, 0)
+    one_time_pool = max(first_month_extra, 0)
+
     if not active:
-        return [], 0, payment_pool
-    if payment_pool <= 0:
+        return [], 0, recurring_pool
+    if recurring_pool <= 0:
         return [{
             "name": item["name"],
             "remaining_amount": round(item["original_balance"], 2),
@@ -194,7 +202,7 @@ def _simulate_debt_cascade(debts: list[dict[str, Any]], monthly_extra: float) ->
             "estimated_months": 999,
             "priority": item["priority"],
             "payoff_month": None,
-        } for item in active], 999, payment_pool
+        } for item in active], 999, recurring_pool
 
     payoff: dict[str, dict[str, Any]] = {}
     month = 0
@@ -202,18 +210,18 @@ def _simulate_debt_cascade(debts: list[dict[str, Any]], monthly_extra: float) ->
     while active and guard < 600:
         month += 1
         guard += 1
-        # Interés mensual sobre saldos vivos.
         for item in active:
             item["balance"] = item["balance"] * (1 + max(item["rate"], 0))
 
-        remaining_pool = payment_pool
-        # Paga mínimos primero para todas las deudas vivas.
+        remaining_pool = recurring_pool + (one_time_pool if month == 1 else 0)
+
+        # Mínimos primero para todas las deudas vivas.
         for item in list(active):
             pay = min(item["minimum"], item["balance"], remaining_pool)
             item["balance"] -= pay
             remaining_pool -= pay
 
-        # Todo sobrante ataca la primera deuda de la cola; si muere, sigue con la siguiente.
+        # Todo excedente ataca la primera deuda en cola.
         while remaining_pool > 0 and active:
             target = active[0]
             pay = min(target["balance"], remaining_pool)
@@ -225,14 +233,12 @@ def _simulate_debt_cascade(debts: list[dict[str, Any]], monthly_extra: float) ->
             else:
                 break
 
-        # Limpieza por deudas que murieron con mínimo.
         for item in list(active):
             if item["balance"] <= 1:
                 payoff[item["name"]] = {**item, "payoff_month": month}
                 active.remove(item)
 
-        # Si ni siquiera cubre interés + mínimos, marcamos sin cierre.
-        if month > 3 and payment_pool <= sum(item["balance"] * item["rate"] for item in active):
+        if month > 3 and recurring_pool <= sum(item["balance"] * item["rate"] for item in active):
             break
 
     result = []
@@ -245,7 +251,7 @@ def _simulate_debt_cascade(debts: list[dict[str, Any]], monthly_extra: float) ->
         payoff_month = closed.get("payoff_month") if closed else None
         recommended = minimum
         if index == 0:
-            recommended = min(balance, minimum + max(monthly_extra, 0))
+            recommended = min(balance, minimum + max(recurring_monthly_extra, 0) + one_time_pool)
         result.append({
             "name": name,
             "remaining_amount": round(balance, 2),
@@ -260,7 +266,7 @@ def _simulate_debt_cascade(debts: list[dict[str, Any]], monthly_extra: float) ->
     total_months = max((item.get("payoff_month") or 0) for item in result) if result else 0
     if active and guard >= 600:
         total_months = 999
-    return result, total_months, payment_pool
+    return result, total_months, recurring_pool
 
 
 def build_local_strategy_blueprint() -> dict[str, Any]:
@@ -269,24 +275,49 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     salary_projection = calculate_monthly_salary_projection() or {}
     user_id = get_current_user_id()
 
-    monthly_income = (
-        _f((salary_projection.get("results") or {}).get("projected_net"))
+    salary_results = salary_projection.get("results") or {}
+    salary_base = salary_projection.get("base") or {}
+    salary_adjustments = salary_projection.get("adjustments") or {}
+
+    recurring_monthly_income = (
+        _f(salary_results.get("base_net"))
+        or _f(salary_base.get("base_monthly_net"))
         or _summary_value(summary, "income", "projected_net_income")
         or _summary_value(summary, "income", "total_income")
     )
+    current_month_income = (
+        _f(salary_results.get("projected_net"))
+        or recurring_monthly_income
+    )
+
+    # OT, bonos y feriados son eventos del mes actual: NO se multiplican a meses futuros.
+    current_month_extra_net = max(current_month_income - recurring_monthly_income, 0)
+    current_month_negative_adjustments = min(current_month_income - recurring_monthly_income, 0)
+
     debt_minimums = sum(_normalize_payment(d.get("monthly_payment"), d.get("remaining_amount")) for d in debts)
     living = _get_strategy_living_expenses(user_id, debts)
     fixed_living = _f(living.get("fixed_living_total"))
     variable_current = _f(living.get("variable_current_month_total"))
 
-    # V1 conservador: gastos base = fijos de vida. Variable actual queda visible,
-    # pero no bloquea toda la estrategia si el histórico está incompleto/sucio.
     monthly_expenses = fixed_living
-    safe_extra = max(monthly_income - monthly_expenses - debt_minimums, 0)
 
-    # Regla Director: no asume que TODO el sobrante es deuda; reserva una parte para buffer.
-    debt_attack_extra = max(safe_extra * 0.70, 0)
-    timeline, total_months, payment_pool = _simulate_debt_cascade(debts, debt_attack_extra)
+    # Escenario base: solo salario recurrente, Casa y mínimos de deuda.
+    base_safe_extra = max(recurring_monthly_income - monthly_expenses - debt_minimums, 0)
+    base_debt_attack_extra = max(base_safe_extra * 0.70, 0)
+    base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
+        debts,
+        recurring_monthly_extra=base_debt_attack_extra,
+        first_month_extra=0,
+    )
+
+    # Escenario mes actual: mismo futuro base, pero OT/bonos/feriados solo aceleran el mes 1.
+    # Si hubo VGH, reduce el ataque del mes 1.
+    one_time_debt_boost = max(current_month_extra_net * 0.70 + current_month_negative_adjustments, 0)
+    timeline, total_months, payment_pool = _simulate_debt_cascade(
+        debts,
+        recurring_monthly_extra=base_debt_attack_extra,
+        first_month_extra=one_time_debt_boost,
+    )
 
     total_debt = sum(_f(d.get("remaining_amount")) for d in debts)
     paid_debt = sum(max(_f(d.get("total_amount")) - _f(d.get("remaining_amount")), 0) for d in debts)
@@ -300,31 +331,44 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "metas_o_inversion": 0 if debts else 25,
     }
 
+    months_saved = 0
+    if base_total_months and total_months and base_total_months < 999 and total_months < 999:
+        months_saved = max(base_total_months - total_months, 0)
+
     return {
         "month": _month_key(),
-        "status": "critical" if (monthly_income <= 0 or total_debt > max(monthly_income * 4, 1)) else "controlled",
+        "status": "critical" if (recurring_monthly_income <= 0 or total_debt > max(recurring_monthly_income * 4, 1)) else "controlled",
         "strategy_type": "dictador_de_deuda",
         "title": "Estrategia Dictador de Deuda" if debts else "Estrategia de Estabilidad",
-        "objective": "Eliminar deudas en cascada: mínimos al día y todo excedente controlado a la deuda prioritaria.",
-        "monthly_income": round(monthly_income, 2),
+        "objective": "Eliminar deudas en cascada: mínimos al día y excedente recurrente a la deuda prioritaria.",
+        "monthly_income": round(current_month_income, 2),
+        "recurring_monthly_income": round(recurring_monthly_income, 2),
+        "current_month_extra_net": round(current_month_extra_net, 2),
+        "current_month_one_time_debt_boost": round(one_time_debt_boost, 2),
         "monthly_expenses": round(monthly_expenses, 2),
         "current_variable_expenses": round(variable_current, 2),
         "monthly_debt_minimums": round(debt_minimums, 2),
-        "estimated_extra_cash": round(safe_extra, 2),
-        "debt_attack_extra": round(debt_attack_extra, 2),
+        "estimated_extra_cash": round(max(current_month_income - monthly_expenses - debt_minimums, 0), 2),
+        "base_estimated_extra_cash": round(base_safe_extra, 2),
+        "debt_attack_extra": round(base_debt_attack_extra, 2),
         "debt_payment_pool": round(payment_pool, 2),
+        "base_debt_payment_pool": round(base_payment_pool, 2),
         "fixed_expenses_total": round(fixed_living, 2),
         "living_expense_debug": living,
+        "salary_projection_debug": salary_projection,
         "allocation": allocation,
         "total_debt": round(total_debt, 2),
         "debt_progress_percent": progress,
         "estimated_total_months": total_months if timeline else 0,
+        "base_estimated_total_months": base_total_months if base_timeline else 0,
+        "months_saved_by_current_extras": months_saved,
         "timeline": timeline,
+        "base_timeline": base_timeline,
         "rules": [
             "Pagar mínimos de todas las deudas sin fallar.",
-            "El excedente mensual ataca primero la deuda #1; al cerrarla, pasa automáticamente a la #2.",
-            "Toda OT, bono y sobrante aumenta el ataque de deuda del mes, después de rebajos obligatorios.",
-            "VGH reduce el ingreso proyectado y recalcula la estrategia.",
+            "El excedente recurrente ataca primero la deuda #1; al cerrarla, pasa automáticamente a la #2.",
+            "OT, bono y feriados solo aceleran el mes actual; no se proyectan como ingreso permanente.",
+            "VGH reduce el ingreso del mes actual y puede bajar el ataque de deuda del mes.",
             "No invertir fuerte hasta estabilizar deuda de corto plazo y pagos mínimos.",
         ],
     }

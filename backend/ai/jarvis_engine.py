@@ -246,17 +246,24 @@ def _director_strategy_message(blueprint: dict) -> str:
     timeline = blueprint.get("timeline") or []
     first = timeline[0] if timeline else {}
     months = blueprint.get("estimated_total_months") or 0
+    base_months = blueprint.get("base_estimated_total_months") or months
+    saved = blueprint.get("months_saved_by_current_extras") or 0
     income = blueprint.get("monthly_income") or 0
+    recurring_income = blueprint.get("recurring_monthly_income") or income
+    one_time = blueprint.get("current_month_one_time_debt_boost") or 0
     debt = blueprint.get("total_debt") or 0
     lines = [
         "Señor, estrategia premium activada en modo Director.",
         f"Estrategia: {blueprint.get('title') or 'Dictador de Deuda'}.",
-        f"Ingreso mensual proyectado: {_money(income)}. Deuda actual: {_money(debt)}.",
+        f"Ingreso base recurrente: {_money(recurring_income)}. Ingreso de este mes: {_money(income)}. Deuda actual: {_money(debt)}.",
     ]
     if first:
-        lines.append(f"Primera deuda a atacar: {first.get('name')} con pago recomendado de {_money(first.get('recommended_payment'))}.")
-    if months:
-        lines.append(f"Tiempo estimado para quedar libre de deudas: {months} meses, recalculable cada mes.")
+        lines.append(f"Primera deuda a atacar: {first.get('name')} con pago objetivo de este mes de {_money(first.get('recommended_payment'))}.")
+    if base_months:
+        if one_time > 0 and months and months != base_months:
+            lines.append(f"Escenario base sin extras futuros: {base_months} meses. Con extras únicos de este mes: {months} meses. Ahorro estimado: {saved} meses.")
+        else:
+            lines.append(f"Tiempo estimado para quedar libre de deudas: {base_months} meses, recalculable cada mes.")
     if allocation:
         labels = {
             "ataque_de_deuda": "Ataque de deuda",
@@ -266,8 +273,8 @@ def _director_strategy_message(blueprint: dict) -> str:
         }
         dist = ", ".join(f"{labels.get(k, k)} {v}%" for k, v in allocation.items())
         lines.append(f"Distribución obligatoria: {dist}.")
-    lines.append("Regla: toda OT, bono o sobrante va primero a la deuda prioritaria, salvo que ponga en riesgo pagos básicos.")
-    if income <= 0:
+    lines.append("Regla: OT, bono y feriados solo aceleran el mes actual; no se asumen como ingresos permanentes.")
+    if recurring_income <= 0:
         lines.append("Pendiente crítico: configurar salario base mensual para aumentar precisión.")
     return "\n".join(lines)
 

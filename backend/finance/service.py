@@ -1205,7 +1205,10 @@ def calculate_monthly_salary_projection():
             "details": fixed_deduction_details + extra_deduction_details,
         },
         "results": {
-            "projected_net": round(projected_net, 2)
+            "base_net": round(base_monthly_net, 2),
+            "projected_net": round(projected_net, 2),
+            "current_month_adjustments_net": round(projected_net - base_monthly_net, 2),
+            "current_month_adjustments_gross": round(payroll_events_gross + bonuses_gross, 2),
         }
     }
 

@@ -81,15 +81,28 @@ export default function PremiumStrategy() {
             <strong>{progress.toFixed(1)}%</strong>
           </div>
           <div className="progress-track"><div style={{ width: `${progress}%` }} /></div>
-          <small>Deuda total actual: {money(strategy.total_debt)} · Libre de deuda estimado: {strategy.estimated_total_months >= 999 ? "sin cierre" : `${strategy.estimated_total_months || "--"} meses`}</small>
+          <small>
+            Deuda total actual: {money(strategy.total_debt)} · Base sin extras futuros: {strategy.base_estimated_total_months >= 999 ? "sin cierre" : `${strategy.base_estimated_total_months || "--"} meses`} · Mes actual: {strategy.estimated_total_months >= 999 ? "sin cierre" : `${strategy.estimated_total_months || "--"} meses`}
+          </small>
         </div>
       </div>
 
       <div className="strategy-kpi-grid">
-        <div className="hud-card strategy-kpi-card"><span>Ingreso mensual neto</span><strong>{money(strategy.monthly_income)}</strong><small>Base + OT/bonos - VGH - rebajos</small></div>
+        <div className="hud-card strategy-kpi-card"><span>Ingreso base recurrente</span><strong>{money(strategy.recurring_monthly_income || strategy.monthly_income)}</strong><small>Salario fijo neto sin OT/bonos futuros</small></div>
+        <div className="hud-card strategy-kpi-card"><span>Ingreso de este mes</span><strong>{money(strategy.monthly_income)}</strong><small>Base + extras únicos del mes - VGH</small></div>
         <div className="hud-card strategy-kpi-card"><span>Pagos mínimos deuda</span><strong>{money(strategy.monthly_debt_minimums)}</strong><small>Cuotas mensuales normalizadas</small></div>
-        <div className="hud-card strategy-kpi-card"><span>Sobrante proyectado</span><strong>{money(strategy.estimated_extra_cash)}</strong><small>Después de Casa y mínimos</small></div>
+        <div className="hud-card strategy-kpi-card"><span>Sobrante base</span><strong>{money(strategy.base_estimated_extra_cash)}</strong><small>Recurrente después de Casa y mínimos</small></div>
+        <div className="hud-card strategy-kpi-card"><span>Extra único a deuda</span><strong>{money(strategy.current_month_one_time_debt_boost)}</strong><small>OT/bono de este mes aplicado una sola vez</small></div>
         <div className="hud-card strategy-kpi-card"><span>Estado</span><strong>{strategy.status === "critical" ? "Crítico" : "Controlado"}</strong></div>
+      </div>
+
+      <div className="hud-panel strategy-scenario-panel">
+        <h3>Escenario base vs mes actual</h3>
+        <div className="allocation-list">
+          <div className="allocation-row"><span>Sin OT/bonos futuros</span><strong>{strategy.base_estimated_total_months >= 999 ? "sin cierre" : `${strategy.base_estimated_total_months || "--"} meses`}</strong></div>
+          <div className="allocation-row"><span>Con extras únicos de este mes</span><strong>{strategy.estimated_total_months >= 999 ? "sin cierre" : `${strategy.estimated_total_months || "--"} meses`}</strong></div>
+          <div className="allocation-row"><span>Meses adelantados</span><strong>{strategy.months_saved_by_current_extras || 0}</strong></div>
+        </div>
       </div>
 
       <div className="strategy-grid-2">
