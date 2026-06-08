@@ -80,12 +80,14 @@ def _is_debt_like_fixed_expense(row: dict[str, Any], debt_names: set[str]) -> bo
 
 
 def _get_strategy_living_expenses(user_id: int, debts: list[dict[str, Any]]) -> dict[str, Any]:
-    """Gastos base para estrategia, sin duplicar deudas.
+    """Gastos base usados por Estrategia Premium.
 
-    fixed_expenses contiene algunos pagos que también existen en debts. Para proyectar
-    flujo mensual, la estrategia cuenta las deudas desde debts.monthly_payment y solo
-    usa aquí gastos fijos de vida/suscripciones. Si no, se duplican Bac, Minicuota,
-    Papá, Reloj y Popular, y el extra mensual sale falso.
+    Decisión V1 de Kenneth:
+    - La estrategia NO usa toda la tabla fixed_expenses, porque esa tabla sirve para
+      recordatorios/visibilidad y muchas filas duplican deudas o pagos detectables por correos.
+    - Para el cálculo duro de salida de deuda solo se descuenta Casa como gasto base fijo.
+    - Las deudas se descuentan únicamente desde debts.monthly_payment.
+    - Pagos de tarjeta, reloj, minicuotas, Popular, Papá, etc. nunca se duplican aquí.
     """
     debt_names = {str(d.get("name") or "").lower().strip() for d in debts}
     with get_connection() as conn:
@@ -101,49 +103,34 @@ def _get_strategy_living_expenses(user_id: int, debts: list[dict[str, Any]]) -> 
             """,
             (user_id,),
         ).fetchall()]
-        month_start = date.today().replace(day=1).isoformat()
-        if date.today().month == 12:
-            month_end = date(date.today().year + 1, 1, 1).isoformat()
-        else:
-            month_end = date(date.today().year, date.today().month + 1, 1).isoformat()
-        variable_row = conn.execute(
-            """
-            SELECT COALESCE(SUM(amount), 0) AS total
-            FROM transactions
-            WHERE user_id = %s
-              AND transaction_type = 'expense'
-              AND transaction_date >= %s::date
-              AND transaction_date < %s::date
-              AND LOWER(COALESCE(category, '')) NOT IN ('tarjeta bac','multiMoney','deuda','familiar','banco popular','reloj')
-              AND LOWER(COALESCE(description, '')) NOT LIKE '%%pago%%'
-            """,
-            (user_id, month_start, month_end),
-        ).fetchone()
 
-    included = []
-    excluded = []
+    included: list[dict[str, Any]] = []
+    excluded: list[dict[str, Any]] = []
     total = 0.0
+
     for row in fixed_rows:
         monthly = _monthly_amount_from_frequency(row.get("expected_amount"), row.get("frequency"), row.get("interval_months"))
+        name = str(row.get("name") or "").lower().strip()
+        is_debt_like = _is_debt_like_fixed_expense(row, debt_names)
+        is_strategy_living = name == "casa"
         item = {
             "name": row.get("name"),
             "category": row.get("category"),
             "monthly_amount": round(monthly, 2),
-            "reason": "debt_duplicate" if _is_debt_like_fixed_expense(row, debt_names) else "living_expense",
+            "reason": "strategy_base_living" if is_strategy_living else ("debt_duplicate" if is_debt_like else "ignored_until_email_or_manual_review"),
         }
-        if _is_debt_like_fixed_expense(row, debt_names):
+        if is_strategy_living:
+            included.append(item)
+            total += monthly
+        else:
             excluded.append(item)
-            continue
-        included.append(item)
-        total += monthly
 
     return {
         "fixed_living_total": round(total, 2),
-        "variable_current_month_total": round(_f(variable_row["total"] if variable_row else 0), 2),
+        "variable_current_month_total": 0.0,
         "included_fixed": included,
-        "excluded_debt_like": excluded,
+        "excluded_from_strategy": excluded,
     }
-
 
 def _rate_to_monthly(rate: float) -> float:
     if rate <= 0:

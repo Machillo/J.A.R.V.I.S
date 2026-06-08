@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from backend.ai.action_flow import continue_pending_action, start_action, _missing_required, _save_action
 from backend.ai.chat_memory import finish_pending_action, get_pending_action
@@ -180,6 +181,65 @@ def _money(value) -> str:
     except Exception:
         return "₡0"
 
+
+
+def _parse_direct_payroll_or_bonus(user_message: str) -> dict | None:
+    """Ruta local segura para OT, VGH, feriados y bonos.
+
+    No depende de GPT. Si el usuario informa algo ya ocurrido y viene claro,
+    Jarvis lo guarda directo para que la estrategia se recalculue con datos reales.
+    """
+    text = user_message.lower()
+
+    def parse_number(raw: str) -> float | None:
+        raw = raw.strip().lower()
+        is_mil = raw.endswith("mil")
+        raw = raw.replace("mil", "").strip()
+        if "," in raw and "." in raw:
+            raw = raw.replace(",", "") if raw.rfind(".") > raw.rfind(",") else raw.replace(".", "").replace(",", ".")
+        elif "," in raw:
+            after = raw.split(",")[-1]
+            raw = raw.replace(",", ".") if len(after) in {1, 2} else raw.replace(",", "")
+        elif "." in raw:
+            parts = raw.split(".")
+            if len(parts) > 2 or (len(parts[-1]) == 3 and len(parts[0]) <= 3):
+                raw = raw.replace(".", "")
+        try:
+            val = float(raw)
+        except ValueError:
+            return None
+        return val * 1000 if is_mil else val
+
+    bonus_match = re.search(r"(?:bono|bonus).*?(\d+(?:[.,]\d+)*\s*(?:mil)?)|(?:(\d+(?:[.,]\d+)*\s*(?:mil)?)\s*(?:de\s*)?(?:bono|bonus))", text)
+    if bonus_match:
+        amount_text = next((g for g in bonus_match.groups() if g), "")
+        amount = parse_number(amount_text)
+        if amount and amount > 0:
+            return {
+                "action_type": "create_bonus",
+                "payload": {"amount": amount, "description": "Bono registrado por chat"},
+            }
+
+    event_type = None
+    if re.search(r"\b(vgh|horas?\s+libres?|no\s+pagad[ao]s?)\b", text):
+        event_type = "vgh"
+    elif "feriado" in text:
+        event_type = "holiday"
+    elif re.search(r"\b(ot|extra|extras|tiempo\s+extra|horas?\s+extra)\b", text):
+        event_type = "ot"
+
+    if event_type:
+        hmatch = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|hora|horas)\b", text)
+        if not hmatch:
+            hmatch = re.search(r"\b(\d+(?:[.,]\d+)?)\b", text)
+        if hmatch:
+            hours = parse_number(hmatch.group(1))
+            if hours and 0 < hours <= 24:
+                return {
+                    "action_type": "create_payroll_event",
+                    "payload": {"event_type": event_type, "hours": hours, "description": "Evento de planilla registrado por chat"},
+                }
+    return None
 
 def _director_strategy_message(blueprint: dict) -> str:
     allocation = blueprint.get("allocation") or {}
@@ -363,6 +423,28 @@ def process_message(user_message: str):
                 "pending": pending_result.get("pending", False),
                 "data": pending_result.get("data"),
             }
+
+    direct_payroll = _parse_direct_payroll_or_bonus(user_message)
+    if direct_payroll:
+        action_type = direct_payroll["action_type"]
+        payload = direct_payroll["payload"]
+        saved_action = _save_action(action_type, payload)
+        blueprint = build_local_strategy_blueprint()
+        if action_type == "create_bonus":
+            msg = f"Señor, bono registrado por ₡{payload['amount']:,.0f}. Regla del Director: ese extra va primero a la deuda prioritaria salvo que comprometa pagos básicos. Estrategia recalculada.".replace(",", ".")
+        else:
+            labels = {"ot": "OT", "vgh": "VGH", "holiday": "feriado"}
+            event_label = labels.get(payload.get("event_type"), payload.get("event_type"))
+            msg = f"Señor, {event_label} registrado: {payload['hours']} horas. Ingreso proyectado actualizado: ₡{blueprint.get('monthly_income', 0):,.0f}. Sobrante proyectado: ₡{blueprint.get('estimated_extra_cash', 0):,.0f}.".replace(",", ".")
+        return {
+            "message": msg,
+            "intent": action_type,
+            "action_type": action_type,
+            "status": "OK",
+            "pending": False,
+            "source": "local_direct_payroll_guard",
+            "data": {"action": saved_action, "strategy": blueprint},
+        }
 
     premium_route = premium_route_command(user_message, intent_result)
     if premium_route.get("status") == "OK":

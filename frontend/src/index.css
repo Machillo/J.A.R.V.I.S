@@ -5509,3 +5509,31 @@ body {
     flex-wrap: wrap;
   }
 }
+
+
+/* V1 strategy director readability hotfix */
+.strategy-kpi-grid .strategy-kpi-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  min-height: 138px;
+}
+
+.strategy-kpi-grid .strategy-kpi-card strong,
+.strategy-kpi-grid .strategy-kpi-card small,
+.strategy-kpi-grid .strategy-kpi-card span {
+  display: block;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.strategy-kpi-grid .strategy-kpi-card small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.timeline-item b {
+  white-space: nowrap;
+}

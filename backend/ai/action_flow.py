@@ -214,18 +214,46 @@ def _is_no(text: str) -> bool:
 
 
 def _extract_number(text: str) -> float | None:
-    cleaned = text.lower()
-    cleaned = cleaned.replace("₡", "").replace("$", "").replace("colones", "")
-    cleaned = cleaned.replace("mil", "000") if re.fullmatch(r"\s*\d+\s*mil\s*", cleaned) else cleaned
-    match = re.search(r"-?\d+(?:[.,]\d+)*", cleaned)
+    """Extrae números humanos en español.
+
+    Soporta:
+    - "2.5 h" => 2.5
+    - "2,5 h" => 2.5
+    - "48 mil" => 48000
+    - "₡48.000" => 48000
+    - "104,396.54" => 104396.54
+    """
+    cleaned = text.lower().replace("₡", "").replace("$", "").replace("colones", "")
+    match = re.search(r"-?\d+(?:[.,]\d+)*\s*(?:mil)?", cleaned)
     if not match:
         return None
-    number = match.group(0)
-    if "," in number and "." in number:
-        number = number.replace(",", "")
-    elif "," in number:
-        number = number.replace(",", "")
-    return float(number)
+
+    token = match.group(0).strip()
+    is_mil = token.endswith("mil")
+    token = token.replace("mil", "").strip()
+
+    if "," in token and "." in token:
+        # El separador decimal normalmente es el último símbolo.
+        if token.rfind(".") > token.rfind(","):
+            token = token.replace(",", "")
+        else:
+            token = token.replace(".", "").replace(",", ".")
+    elif "," in token:
+        after = token.split(",")[-1]
+        if len(after) in {1, 2}:
+            token = token.replace(",", ".")
+        else:
+            token = token.replace(",", "")
+    elif "." in token:
+        parts = token.split(".")
+        if len(parts) > 2 or (len(parts[-1]) == 3 and len(parts[0]) <= 3):
+            token = token.replace(".", "")
+
+    try:
+        number = float(token)
+    except ValueError:
+        return None
+    return number * 1000 if is_mil else number
 
 
 def _coerce_field(field: str, text: str):
