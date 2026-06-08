@@ -17,6 +17,96 @@ def _safe_sum(items: list[dict], key: str) -> float:
     return sum(_as_float(item.get(key)) for item in items)
 
 
+def _current_month_bounds_sql() -> tuple[str, str]:
+    from datetime import date
+    today = date.today()
+    start = today.replace(day=1).isoformat()
+    if today.month == 12:
+        end = date(today.year + 1, 1, 1).isoformat()
+    else:
+        end = date(today.year, today.month + 1, 1).isoformat()
+    return start, end
+
+
+def _latest_base_salary(user_id: int) -> float:
+    """Base mensual fija. Preferimos un salario base guardado; no depende de que entren transacciones bancarias."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT amount, source
+            FROM salaries
+            WHERE user_id = %s
+            ORDER BY
+                CASE
+                    WHEN LOWER(source) LIKE '%base%' THEN 0
+                    WHEN LOWER(source) LIKE '%mensual%' THEN 1
+                    ELSE 2
+                END,
+                id DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+    return _as_float(row["amount"] if row else 0)
+
+
+def _normalize_debt_payment_value(value: float, remaining_amount: float = 0) -> float:
+    """Corrige montos importados sin decimales: 6547840 => 65478.40.
+
+    Nunca deja que una cuota mensual sea mayor que el saldo total salvo que realmente sea
+    un cierre de deuda pequeño. Esto evita que la estrategia muestre pagos mínimos absurdos.
+    """
+    value = _as_float(value)
+    remaining_amount = _as_float(remaining_amount)
+    if value <= 0:
+        return 0.0
+    if remaining_amount > 0 and value > remaining_amount and value >= 100000:
+        scaled = value / 100
+        if scaled <= max(remaining_amount, 1_000_000):
+            return round(scaled, 2)
+    if value >= 1_000_000:
+        return round(value / 100, 2)
+    return round(value, 2)
+
+
+def _monthly_amount_from_frequency(amount: float, frequency: str | None) -> float:
+    frequency = (frequency or 'monthly').lower().strip()
+    amount = _as_float(amount)
+    if frequency == 'weekly':
+        return amount * 4.333
+    if frequency in {'biweekly', 'cada_2_semanas', 'quincenal'}:
+        return amount * 2.166
+    if frequency == 'annual':
+        return amount / 12
+    return amount
+
+
+def _variable_payroll_deductions(gross_amount: float, deductions: list[dict]) -> tuple[float, list[dict]]:
+    """Rebajos aplicables a OT/bonos/VGH.
+
+    Si el salario base mensual ya está guardado como neto, no repetimos rebajos fijos
+    semanales sobre el salario base. Para ingresos extra aplicamos solo rebajos
+    porcentuales configurados.
+    """
+    total = 0.0
+    details = []
+    for deduction in deductions:
+        deduction_type = str(deduction.get('deduction_type') or '').lower().strip()
+        amount = _as_float(deduction.get('amount'))
+        if deduction_type == 'percentage':
+            calculated = gross_amount * (amount / 100)
+            total += calculated
+            details.append({
+                'name': deduction.get('name'),
+                'deduction_type': deduction_type,
+                'base_amount': amount,
+                'frequency': deduction.get('frequency'),
+                'calculated_monthly_amount': calculated,
+                'applies_to': 'extra_income',
+            })
+    return total, details
+
+
 def add_salary(amount: float, source: str):
     user_id = get_current_user_id()
 
@@ -175,7 +265,14 @@ def get_debts():
             (user_id,)
         ).fetchall()
 
-    return [dict(row) for row in rows]
+    debts = [dict(row) for row in rows]
+    for debt in debts:
+        debt["monthly_payment_raw"] = debt.get("monthly_payment")
+        debt["monthly_payment"] = _normalize_debt_payment_value(
+            debt.get("monthly_payment"),
+            debt.get("remaining_amount"),
+        )
+    return debts
 
 
 def add_saving(name: str, amount: float):
@@ -607,12 +704,31 @@ def get_financial_summary():
             (user_id,)
         ).fetchone()["total"]
 
-        fixed_expenses_total = conn.execute(
+        legacy_fixed_expenses_total = conn.execute(
             """
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'fixed'
             AND user_id = %s
+            """,
+            (user_id,)
+        ).fetchone()["total"]
+
+        fixed_expenses_total = conn.execute(
+            """
+            SELECT COALESCE(SUM(
+                CASE
+                    WHEN frequency = 'weekly' THEN expected_amount * 4.333
+                    WHEN frequency IN ('biweekly', 'quincenal') THEN expected_amount * 2.166
+                    WHEN frequency = 'bimonthly' THEN expected_amount / 2
+                    WHEN frequency = 'annual' THEN expected_amount / 12
+                    ELSE expected_amount
+                END
+            ), 0) AS total
+            FROM fixed_expenses
+            WHERE user_id = %s
+              AND is_active = TRUE
+              AND expected_amount IS NOT NULL
             """,
             (user_id,)
         ).fetchone()["total"]
@@ -637,16 +753,20 @@ def get_financial_summary():
             (user_id,)
         ).fetchone()["total"]
 
-    bonus_total = _as_float(bonus_total)
+    bonus_total = _as_float(salary_projection.get("adjustments", {}).get("bonuses_net", bonus_total))
     debt_total = _as_float(debt_total)
-    monthly_debt_payments = _as_float(monthly_debt_payments)
+    # Normaliza cuotas absurdas importadas sin punto decimal.
+    debts_for_minimums = get_debts()
+    monthly_debt_payments = sum(_normalize_debt_payment_value(d.get("monthly_payment"), d.get("remaining_amount")) for d in debts_for_minimums)
     savings_total = _as_float(savings_total)
     investments_total = _as_float(investments_total)
-    fixed_expenses_total = _as_float(fixed_expenses_total)
+    legacy_fixed_expenses_total = _as_float(locals().get("legacy_fixed_expenses_total", 0))
+    fixed_expenses_total = max(_as_float(fixed_expenses_total), legacy_fixed_expenses_total)
     variable_expenses_total = _as_float(variable_expenses_total)
     one_time_expenses_total = _as_float(one_time_expenses_total)
 
-    total_income = projected_net_income + bonus_total
+    # projected_net_income ya incluye salario base + OT/VGH + bonos del mes.
+    total_income = projected_net_income
     expenses_total = fixed_expenses_total + variable_expenses_total + one_time_expenses_total
     available_cash = total_income - monthly_debt_payments - expenses_total
     net_worth = savings_total + investments_total - debt_total
@@ -950,88 +1070,136 @@ def get_payroll_events():
 
 
 def calculate_monthly_salary_projection():
+    """Proyección mensual real de planilla.
+
+    Reglas V1:
+    - El salario base mensual es fijo y no depende de movimientos bancarios.
+    - OT y bonos se suman solo en el mes actual.
+    - VGH resta salario del mes actual.
+    - Los rebajos porcentuales configurados se aplican a OT/bonos; los rebajos fijos
+      semanales se usan únicamente si no hay salario base neto guardado.
+    """
+    user_id = get_current_user_id()
     profile = get_employment_profile()
-
-    if not profile:
-        return {
-            "message": "No existe perfil laboral configurado.",
-            "status": "ERROR"
-        }
-
-    hourly_rate = float(profile["hourly_rate"] or 0)
-    weekly_hours = float(profile["regular_hours_per_week"] or 0)
-
-    base_monthly_gross = hourly_rate * weekly_hours * 4.333
+    start_month, end_month = _current_month_bounds_sql()
 
     with get_connection() as conn:
-        user_id = get_current_user_id()
-
-        payroll_events_total = conn.execute(
-            """
-            SELECT COALESCE(SUM(amount), 0) AS total
-            FROM payroll_events
-            WHERE user_id = %s
-            """,
-            (user_id,)
-        ).fetchone()["total"]
-
-        deductions = conn.execute(
+        deductions = [dict(row) for row in conn.execute(
             """
             SELECT name, deduction_type, amount, frequency
             FROM payroll_deductions
             WHERE user_id = %s
             """,
-            (user_id,)
-        ).fetchall()
+            (user_id,),
+        ).fetchall()]
 
-    payroll_events_total = float(payroll_events_total or 0)
+        payroll_events = [dict(row) for row in conn.execute(
+            """
+            SELECT event_type, hours, multiplier, amount, description, created_at
+            FROM payroll_events
+            WHERE user_id = %s
+              AND created_at >= %s::date
+              AND created_at < %s::date
+            ORDER BY created_at ASC
+            """,
+            (user_id, start_month, end_month),
+        ).fetchall()]
 
-    projected_gross = base_monthly_gross + payroll_events_total
+        current_bonuses = [dict(row) for row in conn.execute(
+            """
+            SELECT amount, description, created_at
+            FROM bonuses
+            WHERE user_id = %s
+              AND created_at >= %s::date
+              AND created_at < %s::date
+            ORDER BY created_at ASC
+            """,
+            (user_id, start_month, end_month),
+        ).fetchall()]
 
-    total_deductions = 0.0
-    deduction_details = []
+    base_salary_net = _latest_base_salary(user_id)
 
-    for deduction in deductions:
-        amount = float(deduction["amount"] or 0)
-        frequency = deduction["frequency"]
-        deduction_type = deduction["deduction_type"]
+    if profile:
+        hourly_rate = float(profile["hourly_rate"] or 0)
+        weekly_hours = float(profile["regular_hours_per_week"] or 0)
+        base_monthly_gross = hourly_rate * weekly_hours * 4.333
+    else:
+        hourly_rate = 0.0
+        weekly_hours = 0.0
+        base_monthly_gross = base_salary_net
 
-        if deduction_type == "percentage":
-            calculated_amount = projected_gross * (amount / 100)
-        else:
-            if frequency == "weekly":
-                calculated_amount = amount * 4.333
+    # Si existe un salario base guardado, lo tratamos como salario neto mensual fijo.
+    fixed_deduction_details = []
+    if base_salary_net > 0:
+        base_monthly_net = base_salary_net
+        fixed_deductions_total = 0.0
+    else:
+        fixed_deductions_total = 0.0
+        for deduction in deductions:
+            amount = _as_float(deduction.get("amount"))
+            deduction_type = str(deduction.get("deduction_type") or "").lower().strip()
+            if deduction_type == "percentage":
+                calculated = base_monthly_gross * (amount / 100)
             else:
-                calculated_amount = amount
+                calculated = _monthly_amount_from_frequency(amount, deduction.get("frequency"))
+            fixed_deductions_total += calculated
+            fixed_deduction_details.append({
+                "name": deduction.get("name"),
+                "deduction_type": deduction_type or "fixed",
+                "base_amount": amount,
+                "frequency": deduction.get("frequency"),
+                "calculated_monthly_amount": calculated,
+                "applies_to": "base_salary",
+            })
+        base_monthly_net = max(base_monthly_gross - fixed_deductions_total, 0)
 
-        total_deductions += calculated_amount
+    payroll_events_gross = sum(_as_float(event.get("amount")) for event in payroll_events)
+    bonuses_gross = sum(_as_float(item.get("amount")) for item in current_bonuses)
 
-        deduction_details.append({
-            "name": deduction["name"],
-            "deduction_type": deduction_type,
-            "base_amount": amount,
-            "frequency": frequency,
-            "calculated_monthly_amount": calculated_amount
-        })
+    extra_deductions_total, extra_deduction_details = _variable_payroll_deductions(
+        max(payroll_events_gross, 0) + max(bonuses_gross, 0),
+        deductions,
+    )
 
-    projected_net = projected_gross - total_deductions
+    # VGH ya viene como monto negativo, por eso no se le aplica rebajo positivo.
+    payroll_events_net = payroll_events_gross - extra_deductions_total
+    bonuses_net = bonuses_gross
+    if bonuses_gross > 0 and (max(payroll_events_gross, 0) + max(bonuses_gross, 0)) > 0:
+        # Repartimos el rebajo porcentual proporcionalmente para transparencia.
+        proportion_bonus = bonuses_gross / (max(payroll_events_gross, 0) + bonuses_gross)
+        bonuses_net = bonuses_gross - (extra_deductions_total * proportion_bonus)
+        payroll_events_net = payroll_events_gross - (extra_deductions_total * (1 - proportion_bonus))
+
+    projected_gross = base_monthly_gross + payroll_events_gross + bonuses_gross
+    projected_net = base_monthly_net + payroll_events_net + bonuses_net
 
     return {
+        "status": "OK" if (base_monthly_net > 0 or profile) else "MISSING_BASE_SALARY",
+        "month": start_month[:7],
         "base": {
             "hourly_rate": hourly_rate,
             "regular_hours_per_week": weekly_hours,
-            "base_monthly_gross": base_monthly_gross
+            "base_monthly_gross": round(base_monthly_gross, 2),
+            "base_monthly_net": round(base_monthly_net, 2),
+            "base_salary_source": "salaries" if base_salary_net > 0 else "employment_profile",
         },
         "adjustments": {
-            "payroll_events_total": payroll_events_total,
-            "projected_gross": projected_gross
+            "payroll_events_total": round(payroll_events_gross, 2),
+            "payroll_events_net": round(payroll_events_net, 2),
+            "bonuses_gross": round(bonuses_gross, 2),
+            "bonuses_net": round(bonuses_net, 2),
+            "projected_gross": round(projected_gross, 2),
+            "events": payroll_events,
+            "bonuses": current_bonuses,
         },
         "deductions": {
-            "total_deductions": total_deductions,
-            "details": deduction_details
+            "total_deductions": round(fixed_deductions_total + extra_deductions_total, 2),
+            "fixed_deductions_total": round(fixed_deductions_total, 2),
+            "extra_deductions_total": round(extra_deductions_total, 2),
+            "details": fixed_deduction_details + extra_deduction_details,
         },
         "results": {
-            "projected_net": projected_net
+            "projected_net": round(projected_net, 2)
         }
     }
 

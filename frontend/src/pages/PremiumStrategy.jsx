@@ -4,6 +4,17 @@ import { createJarvisPremiumInitialStrategy, getJarvisPremiumStrategyDashboard }
 
 const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
 
+const allocationLabels = {
+  ataque_de_deuda: "Ataque de deuda",
+  debt_attack: "Ataque de deuda",
+  vida_controlada: "Vida controlada",
+  controlled_life: "Vida controlada",
+  fondo_de_emergencia: "Fondo de emergencia",
+  emergency_buffer: "Fondo de emergencia",
+  metas_o_inversion: "Metas o inversión",
+  goals_or_investment: "Metas o inversión",
+};
+
 export default function PremiumStrategy() {
   const [state, setState] = useState({ loading: true, data: null, error: "", running: false });
 
@@ -76,8 +87,8 @@ export default function PremiumStrategy() {
 
       <div className="strategy-kpi-grid">
         <div className="hud-card"><span>Ingreso mensual</span><strong>{money(strategy.monthly_income)}</strong></div>
-        <div className="hud-card"><span>Pagos mínimos deuda</span><strong>{money(strategy.monthly_debt_minimums)}</strong></div>
-        <div className="hud-card"><span>Extra estimado</span><strong>{money(strategy.estimated_extra_cash)}</strong></div>
+        <div className="hud-card"><span>Pagos mínimos deuda</span><strong>{money(strategy.monthly_debt_minimums)}</strong><small>Cuotas mensuales normalizadas</small></div>
+        <div className="hud-card"><span>Extra estimado</span><strong>{money(strategy.estimated_extra_cash)}</strong><small>Disponible para atacar deuda</small></div>
         <div className="hud-card"><span>Estado</span><strong>{strategy.status === "critical" ? "Crítico" : "Controlado"}</strong></div>
       </div>
 
@@ -87,7 +98,7 @@ export default function PremiumStrategy() {
           <div className="allocation-list">
             {Object.entries(allocation).map(([key, value]) => (
               <div className="allocation-row" key={key}>
-                <span>{key.replaceAll("_", " ")}</span>
+                <span>{allocationLabels[key] || key.replaceAll("_", " ")}</span>
                 <strong>{value}%</strong>
               </div>
             ))}

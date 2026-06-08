@@ -174,6 +174,44 @@ Datos reales:
     }
 
 
+def _money(value) -> str:
+    try:
+        return f"₡{float(value or 0):,.0f}".replace(",", ".")
+    except Exception:
+        return "₡0"
+
+
+def _director_strategy_message(blueprint: dict) -> str:
+    allocation = blueprint.get("allocation") or {}
+    timeline = blueprint.get("timeline") or []
+    first = timeline[0] if timeline else {}
+    months = blueprint.get("estimated_total_months") or 0
+    income = blueprint.get("monthly_income") or 0
+    debt = blueprint.get("total_debt") or 0
+    lines = [
+        "Señor, estrategia premium activada en modo Director.",
+        f"Estrategia: {blueprint.get('title') or 'Dictador de Deuda'}.",
+        f"Ingreso mensual proyectado: {_money(income)}. Deuda actual: {_money(debt)}.",
+    ]
+    if first:
+        lines.append(f"Primera deuda a atacar: {first.get('name')} con pago recomendado de {_money(first.get('recommended_payment'))}.")
+    if months:
+        lines.append(f"Tiempo estimado para quedar libre de deudas: {months} meses, recalculable cada mes.")
+    if allocation:
+        labels = {
+            "ataque_de_deuda": "Ataque de deuda",
+            "vida_controlada": "Vida controlada",
+            "fondo_de_emergencia": "Fondo de emergencia",
+            "metas_o_inversion": "Metas o inversión",
+        }
+        dist = ", ".join(f"{labels.get(k, k)} {v}%" for k, v in allocation.items())
+        lines.append(f"Distribución obligatoria: {dist}.")
+    lines.append("Regla: toda OT, bono o sobrante va primero a la deuda prioritaria, salvo que ponga en riesgo pagos básicos.")
+    if income <= 0:
+        lines.append("Pendiente crítico: configurar salario base mensual para aumentar precisión.")
+    return "\n".join(lines)
+
+
 def create_initial_financial_strategy():
     """Crea una estrategia premium en modo Director: decide, guarda y muestra ruta.
 
@@ -217,29 +255,28 @@ Entrega obligatoria:
 Tono: firme, tipo director. No pidas permiso para comenzar.
 """
     ai_response = ask_openai(prompt, route="jarvis_premium_initial_strategy", system=system, max_tokens=1400)
+    director_message = _director_strategy_message(blueprint)
+
     if ai_response.get("status") != "OK":
-        fallback = (
-            "Señor, estrategia activada en modo local. Prioridad absoluta: atacar deuda de mayor impacto, "
-            "mantener pagos mínimos al día y mandar OT/bonos/sobrantes a la deuda prioritaria."
-        )
         saved = save_premium_guide(
             guide_type="financial_strategy",
             title=blueprint.get("title", "Estrategia financiera principal"),
-            content=fallback,
+            content=director_message,
             data={"strategy_blueprint": blueprint, "context_snapshot": context, "created_by": "local_fallback"},
         )
-        return {"status": "OK", "message": fallback, "guide": saved.get("guide"), "data": {"strategy": blueprint}, "budget": ai_response.get("budget")}
+        return {"status": "OK", "message": director_message, "guide": saved.get("guide"), "data": {"strategy": blueprint}, "budget": ai_response.get("budget")}
 
-    content = ai_response["text"].strip()
+    ai_content = ai_response["text"].strip()
+    content = director_message + "\n\nGuía premium ampliada:\n" + ai_content
     saved = save_premium_guide(
         guide_type="financial_strategy",
         title=blueprint.get("title", "Estrategia financiera principal"),
         content=content,
-        data={"strategy_blueprint": blueprint, "context_snapshot": context, "created_by": "openai_director"},
+        data={"strategy_blueprint": blueprint, "context_snapshot": context, "created_by": "openai_director", "ai_notes": ai_content},
     )
     return {
         "status": "OK",
-        "message": content,
+        "message": director_message,
         "guide": saved.get("guide"),
         "data": {"strategy": blueprint},
         "usage": ai_response.get("usage"),
