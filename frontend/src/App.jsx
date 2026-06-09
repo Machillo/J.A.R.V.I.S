@@ -10,6 +10,7 @@ import Settings from "./pages/Settings";
 import Transactions from "./pages/Transactions";
 import PremiumStrategy from "./pages/PremiumStrategy";
 import AdditionalCards from "./pages/AdditionalCards";
+import Emails from "./pages/Emails";
 import Login from "./pages/Login";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getStatus } from "./services/jarvisApi";
@@ -292,6 +293,9 @@ export default function App() {
 
       case "additionalCards":
         return <AdditionalCards />;
+
+      case "emails":
+        return <Emails onFinanceChanged={refreshAppData} />;
 
       case "settings":
         return <Settings status={status} />;

@@ -14,3 +14,9 @@ class EmailTextScanRequest(BaseModel):
 class EmailCandidateDecisionRequest(BaseModel):
     candidate_id: int
     decision: str  # confirm | reject
+
+
+
+class EmailCandidateBulkDecisionRequest(BaseModel):
+    candidate_ids: list[int]
+    decision: str  # confirm | reject

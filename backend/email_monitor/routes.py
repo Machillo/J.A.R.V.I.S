@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Header, Query
 
-from backend.email_monitor.models import EmailCandidateDecisionRequest, EmailTextScanRequest
+from backend.email_monitor.models import EmailCandidateBulkDecisionRequest, EmailCandidateDecisionRequest, EmailTextScanRequest
 from backend.email_monitor.service import (
     cron_sync,
+    bulk_decide_candidates,
     decide_candidate,
     get_email_monitor_status,
     list_email_candidates,
@@ -39,6 +40,11 @@ def email_monitor_candidates(status: str | None = None, limit: int = 50):
 @router.post("/candidates/decision")
 def email_monitor_candidate_decision(request: EmailCandidateDecisionRequest):
     return decide_candidate(candidate_id=request.candidate_id, decision=request.decision)
+
+
+@router.post("/candidates/bulk-decision")
+def email_monitor_candidate_bulk_decision(request: EmailCandidateBulkDecisionRequest):
+    return bulk_decide_candidates(candidate_ids=request.candidate_ids, decision=request.decision)
 
 
 @router.post("/sync-gmail")

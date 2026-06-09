@@ -8,11 +8,8 @@ import {
   getMe,
   getSportsPreferences,
   getUpcomingCalendarEvents,
-  getEmailMonitorCandidates,
-  getEmailMonitorStatus,
   getNotificationStatus,
   sendTestNotification,
-  syncEmailMonitorGmail,
   updateSportsPreferences,
 } from "../services/jarvisApi";
 import { enableJarvisPushNotifications, isPushSupported } from "../pushNotifications";
@@ -45,9 +42,6 @@ export default function Settings({ status }) {
   const [notificationStatus, setNotificationStatus] = useState("default");
   const [pushInfo, setPushInfo] = useState(null);
   const [pushMessage, setPushMessage] = useState("");
-  const [emailMonitor, setEmailMonitor] = useState(null);
-  const [emailCandidates, setEmailCandidates] = useState([]);
-  const [emailSyncStatus, setEmailSyncStatus] = useState("");
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem("jarvis-theme") || "classic";
     const legacyMap = { emerald: "finance", violet: "classic", amber: "premium", ice: "minimal" };
@@ -100,12 +94,6 @@ export default function Settings({ status }) {
         } catch (error) {
           console.warn("No pude cargar ChatGPT Premium", error);
         }
-        const [emailStatus, pendingEmails] = await Promise.all([
-          getEmailMonitorStatus(),
-          getEmailMonitorCandidates("pending", 5),
-        ]);
-        setEmailMonitor(emailStatus);
-        setEmailCandidates(pendingEmails?.items || []);
       }
     } catch (error) {
       console.error(error);
@@ -149,30 +137,6 @@ export default function Settings({ status }) {
       setPremiumGuides(guideData?.items || []);
     } catch (error) {
       setPremiumMessage(error.message);
-    }
-  };
-
-  const handleEmailSync = async () => {
-    setEmailSyncStatus("Escaneando solo correos del mes actual...");
-    try {
-      const result = await syncEmailMonitorGmail({
-        max_results: 25,
-        auto_commit: true,
-        current_month_only: true,
-      });
-      const summary = result?.summary || {};
-      setEmailSyncStatus(
-        result?.message ||
-          `Encontrados: ${result?.found || 0} · Guardados: ${summary.auto_saved || 0} · Pendientes: ${summary.pending || 0}`
-      );
-      const [emailStatus, pendingEmails] = await Promise.all([
-        getEmailMonitorStatus(),
-        getEmailMonitorCandidates("pending", 10),
-      ]);
-      setEmailMonitor(emailStatus);
-      setEmailCandidates(pendingEmails?.items || []);
-    } catch (error) {
-      setEmailSyncStatus(error.message);
     }
   };
 
@@ -325,44 +289,7 @@ export default function Settings({ status }) {
       </div>
 
 
-      {isOwner && (
-        <div className="settings-grid">
-          <div className="jarvis-panel settings-card">
-            <h2>Correos financieros 24/7</h2>
-            <p><strong>Gmail listo:</strong> {emailMonitor?.gmail_ready ? "Sí" : "Faltan llaves Gmail"}</p>
-            <p><strong>Último escaneo:</strong> {emailMonitor?.settings?.last_scan_at ? new Date(emailMonitor.settings.last_scan_at).toLocaleString("es-CR") : "Nunca"}</p>
-            <p><strong>Pendientes:</strong> {emailMonitor?.totals?.pending || 0}</p>
-            <p><strong>Auto guardados:</strong> {emailMonitor?.totals?.auto_saved || 0}</p>
-            <button className="jarvis-action-button" onClick={handleEmailSync} disabled={!emailMonitor?.gmail_ready}>
-              Escanear correos del mes actual
-            </button>
-            <small>Busca BAC, Credomatic, Banco Popular y MultiMoney solo desde el primer día del mes actual.</small>
-            {emailSyncStatus && <small className="email-sync-status">{emailSyncStatus}</small>}
-            {!emailMonitor?.gmail_ready && (
-              <small>
-                Para lectura real agregá GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET y GMAIL_REFRESH_TOKEN en Render.
-              </small>
-            )}
-          </div>
 
-          <div className="jarvis-panel settings-card">
-            <h2>Correos por confirmar</h2>
-            {emailCandidates.length === 0 ? (
-              <p>No hay movimientos dudosos pendientes.</p>
-            ) : (
-              <div className="settings-list">
-                {emailCandidates.map((item) => (
-                  <div key={item.id}>
-                    <strong>{item.transaction_date} · ₡{Number(item.amount || 0).toLocaleString("es-CR")}</strong>
-                    <span>{item.description}</span>
-                    <small>{item.category} · {item.review_reason}</small>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       <div className="jarvis-panel settings-card">
         <h2>Preferencias deportivas</h2>

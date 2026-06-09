@@ -341,6 +341,37 @@ def _log_email_event(
     except Exception:
         pass
 
+def _seed_default_card_aliases(conn, user_id: int) -> None:
+    """Keep known BAC additional cards owner-aware.
+
+    Kenneth's cards stay in the catalog as primary cards for parsing, but the
+    Additional Cards UI filters them out. Emily and Sidey are the only default
+    additional-card owners shown there.
+    """
+    defaults = [
+        ("3131", "Kenneth", "principal", True),
+        ("5108", "Kenneth", "principal", True),
+        ("2205", "Emily", "adicional", False),
+        ("3149", "Emily", "adicional", False),
+        ("8137", "Sidey", "adicional", False),
+        ("8295", "Sidey", "adicional", False),
+        ("PEND", "Sidey", "adicional", False),
+    ]
+    for last4, owner, relationship, is_primary in defaults:
+        conn.execute(
+            """
+            INSERT INTO card_aliases (user_id, card_last4, owner_label, relationship, is_primary)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (user_id, card_last4) DO UPDATE
+            SET owner_label = EXCLUDED.owner_label,
+                relationship = EXCLUDED.relationship,
+                is_primary = EXCLUDED.is_primary,
+                updated_at = NOW()
+            """,
+            (user_id, last4, owner, relationship, is_primary),
+        )
+
+
 def _settings_query_for_owner(conn, user_id: int) -> str:
     row = conn.execute(
         """
@@ -374,6 +405,7 @@ def get_email_monitor_status() -> dict[str, Any]:
 
     with get_connection() as conn:
         ensure_email_tables(conn)
+        _seed_default_card_aliases(conn, user_id)
         settings = conn.execute(
             """
             INSERT INTO email_monitor_settings (user_id, gmail_query)
@@ -1113,33 +1145,59 @@ def scan_email_text(
         "candidate": dict(candidate_row),
     }
 
-def list_email_candidates(status_filter: str | None = None, limit: int = 50) -> dict[str, Any]:
+def list_email_candidates(status_filter: str | None = None, limit: int = 250) -> dict[str, Any]:
     _require_owner_user()
     user_id = get_current_user_id()
 
-    where = "WHERE user_id = %s"
+    safe_limit = max(1, min(int(limit or 250), 500))
+    where = "WHERE c.user_id = %s"
     params: list[Any] = [user_id]
     if status_filter:
-        where += " AND status = %s"
+        where += " AND c.status = %s"
         params.append(status_filter)
 
-    params.append(limit)
+    params.append(safe_limit)
 
     with get_connection() as conn:
         ensure_email_tables(conn)
+        _seed_default_card_aliases(conn, user_id)
         rows = conn.execute(
             f"""
-            SELECT *
-            FROM email_transaction_candidates
+            SELECT
+                c.*,
+                m.sender AS email_sender,
+                m.subject AS email_subject,
+                m.received_at AS email_received_at,
+                m.status AS email_status
+            FROM email_transaction_candidates c
+            LEFT JOIN email_ingested_messages m ON m.id = c.email_message_id
             {where}
-            ORDER BY created_at DESC
+            ORDER BY c.created_at DESC
             LIMIT %s
             """,
             tuple(params),
         ).fetchall()
+        totals = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+                COUNT(*) FILTER (WHERE status = 'duplicate') AS duplicate,
+                COUNT(*) FILTER (WHERE status = 'confirmed') AS confirmed,
+                COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
+            FROM email_transaction_candidates
+            WHERE user_id = %s
+            """,
+            (user_id,),
+        ).fetchone()
         conn.commit()
 
-    return {"status": "OK", "items": [dict(row) for row in rows]}
+    return {
+        "status": "OK",
+        "items": [dict(row) for row in rows],
+        "totals": dict(totals or {}),
+        "limit": safe_limit,
+    }
 
 
 def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
@@ -1178,6 +1236,13 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
         if decision_clean not in {"confirm", "confirmar", "guardar", "save"}:
             raise HTTPException(status_code=400, detail="Decisión inválida.")
 
+        if candidate.get("status") == "duplicate":
+            return {
+                "status": "OK",
+                "message": "Es duplicado; no se agrega a finanzas para evitar repetir el movimiento.",
+                "canonical_transaction_id": candidate.get("canonical_transaction_id") or candidate.get("duplicate_of"),
+            }
+
         if candidate.get("transaction_id"):
             return {"status": "OK", "message": "Ya estaba guardado.", "transaction_id": candidate["transaction_id"]}
 
@@ -1205,6 +1270,114 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
         conn.commit()
 
     return {"status": "OK", "message": "Movimiento guardado.", "transaction_id": transaction_id}
+
+
+def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str, Any]:
+    """Confirm or reject several review candidates.
+
+    Confirming is the exact moment where email data becomes real finance data.
+    Duplicates are intentionally skipped because their canonical movement is the
+    one that must be accepted into transactions. This keeps Gmail scans
+    idempotent: repeated scans do not create repeated finance movements.
+    """
+    _require_owner_user()
+    user_id = get_current_user_id()
+    decision_clean = (decision or "").lower().strip()
+    if decision_clean not in {"confirm", "confirmar", "guardar", "save", "reject", "rechazar", "rejected"}:
+        raise HTTPException(status_code=400, detail="Decisión inválida.")
+
+    unique_ids = []
+    seen = set()
+    for value in candidate_ids or []:
+        try:
+            cid = int(value)
+        except Exception:
+            continue
+        if cid > 0 and cid not in seen:
+            unique_ids.append(cid)
+            seen.add(cid)
+
+    if not unique_ids:
+        return {"status": "OK", "message": "No había movimientos seleccionados.", "confirmed": 0, "rejected": 0, "skipped": 0, "items": []}
+
+    confirmed = rejected = skipped = 0
+    items: list[dict[str, Any]] = []
+
+    with get_connection() as conn:
+        ensure_email_tables(conn)
+        placeholders = ",".join(["%s"] * len(unique_ids))
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM email_transaction_candidates
+            WHERE user_id = %s AND id IN ({placeholders})
+            ORDER BY created_at ASC, id ASC
+            """,
+            tuple([user_id] + unique_ids),
+        ).fetchall()
+
+        by_id = {int(row["id"]): dict(row) for row in rows}
+        for cid in unique_ids:
+            candidate = by_id.get(cid)
+            if not candidate:
+                skipped += 1
+                items.append({"id": cid, "status": "skipped", "message": "No encontrado."})
+                continue
+
+            if decision_clean in {"reject", "rechazar", "rejected"}:
+                if candidate.get("status") in {"confirmed", "auto_saved"}:
+                    skipped += 1
+                    items.append({"id": cid, "status": "skipped", "message": "Ya estaba guardado en finanzas."})
+                    continue
+                conn.execute(
+                    """
+                    UPDATE email_transaction_candidates
+                    SET status = 'rejected', updated_at = NOW()
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    (cid, user_id),
+                )
+                rejected += 1
+                items.append({"id": cid, "status": "rejected"})
+                continue
+
+            if candidate.get("status") == "duplicate":
+                skipped += 1
+                items.append({"id": cid, "status": "skipped", "message": "Duplicado: se guarda el canónico, no este registro."})
+                continue
+
+            if candidate.get("transaction_id"):
+                skipped += 1
+                items.append({"id": cid, "status": "skipped", "message": "Ya estaba guardado.", "transaction_id": candidate.get("transaction_id")})
+                continue
+
+            if candidate.get("transaction_type") in {"statement", "ignored"}:
+                skipped += 1
+                items.append({"id": cid, "status": "skipped", "message": "No es movimiento financiero directo."})
+                continue
+
+            transaction_id = _insert_transaction(conn, user_id, candidate)
+            conn.execute(
+                """
+                UPDATE email_transaction_candidates
+                SET status = 'confirmed', transaction_id = %s, updated_at = NOW()
+                WHERE id = %s AND user_id = %s
+                """,
+                (transaction_id, cid, user_id),
+            )
+            confirmed += 1
+            items.append({"id": cid, "status": "confirmed", "transaction_id": transaction_id})
+
+        conn.commit()
+
+    return {
+        "status": "OK",
+        "message": f"Confirmados: {confirmed}. Rechazados: {rejected}. Omitidos: {skipped}.",
+        "confirmed": confirmed,
+        "rejected": rejected,
+        "skipped": skipped,
+        "items": items,
+    }
 
 
 def _decode_gmail_body(payload: dict[str, Any]) -> str:
@@ -1358,6 +1531,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
         owner_id = _owner_user_id(conn)
         if not owner_id:
             raise RuntimeError("No encontré usuario owner para guardar correos.")
+        _seed_default_card_aliases(conn, owner_id)
         settings_query = _settings_query_for_owner(conn, owner_id)
         conn.commit()
 
@@ -1452,7 +1626,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
         "status": "OK",
         "query": gmail_query,
         "found": len(messages),
-        "processed": processed[:100],
+        "processed": processed,
         "summary": {
             "auto_saved": auto_saved,
             "pending": pending,

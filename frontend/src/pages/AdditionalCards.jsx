@@ -24,7 +24,7 @@ export default function AdditionalCards() {
         <div>
           <span className="eyebrow">Control familiar</span>
           <h2>Tarjetas adicionales</h2>
-          <p>Trackeo separado de gastos por tarjeta adicional. No guarda nada nuevo; solo agrupa lo existente.</p>
+          <p>Montos reales ya aceptados desde correos. Solo muestra tarjetas adicionales: Emily y Sidey.</p>
         </div>
       </div>
 
@@ -35,7 +35,7 @@ export default function AdditionalCards() {
           <article className="hud-card additional-card" key={card.owner}>
             <div className="card-owner-row">
               <UserRound size={22} />
-              <div><strong>{card.owner}</strong><span>****{card.card_last4}</span></div>
+              <div><strong>{card.owner}</strong><span>{(card.cards || [card.card_last4]).map((last4) => `****${last4}`).join(" · ")}</span></div>
             </div>
             <h3>{money(card.total)}</h3>
             <p>{card.count} movimientos detectados</p>

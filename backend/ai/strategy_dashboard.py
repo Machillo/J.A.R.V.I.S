@@ -406,6 +406,13 @@ def get_premium_strategy_dashboard() -> dict[str, Any]:
 
 
 def get_additional_card_report() -> dict[str, Any]:
+    """Report only additional-card spending, not Kenneth's primary card.
+
+    Email-confirmed movements are joined back to email_transaction_candidates so
+    the report can use card_last4/card_owner parsed from BAC notifications. This
+    avoids guessing from generic transaction notes and prevents Kenneth's primary
+    card 3131 from appearing in the additional-cards page.
+    """
     user_id = get_current_user_id()
     with get_connection() as conn:
         conn.execute(
@@ -425,43 +432,86 @@ def get_additional_card_report() -> dict[str, Any]:
         )
         aliases = conn.execute(
             """
-            SELECT * FROM card_aliases
+            SELECT *
+            FROM card_aliases
             WHERE user_id = %s
-            ORDER BY is_primary DESC, owner_label ASC
+              AND COALESCE(is_primary, FALSE) = FALSE
+              AND LOWER(owner_label) NOT IN ('kenneth', 'kenneth andres')
+            ORDER BY owner_label ASC, card_last4 ASC
             """,
             (user_id,),
         ).fetchall()
         rows = conn.execute(
             """
-            SELECT id, transaction_date, description, amount, transaction_type, category, account, notes, source
-            FROM transactions
-            WHERE user_id = %s
-              AND transaction_type IN ('expense','debt_payment')
-            ORDER BY transaction_date DESC, id DESC
-            LIMIT 500
+            SELECT
+                t.id,
+                t.transaction_date,
+                t.description,
+                t.amount,
+                t.transaction_type,
+                t.category,
+                t.account,
+                t.notes,
+                t.source,
+                c.card_last4,
+                c.card_owner,
+                c.email_message_id,
+                c.id AS candidate_id
+            FROM transactions t
+            LEFT JOIN email_transaction_candidates c
+              ON c.transaction_id = t.id AND c.user_id = t.user_id
+            WHERE t.user_id = %s
+              AND t.transaction_type IN ('expense','debt_payment')
+              AND COALESCE(c.status, '') IN ('confirmed','auto_saved')
+            ORDER BY t.transaction_date DESC, t.id DESC
+            LIMIT 1000
             """,
             (user_id,),
         ).fetchall()
         conn.commit()
 
     alias_list = [dict(a) for a in aliases]
+    additional_last4 = {str(a.get("card_last4") or ""): dict(a) for a in alias_list if a.get("card_last4")}
+    additional_owners = {str(a.get("owner_label") or "").strip().lower() for a in alias_list}
+
     grouped: dict[str, dict[str, Any]] = {}
     for alias in alias_list:
         owner = alias["owner_label"]
-        grouped.setdefault(owner, {"owner": owner, "card_last4": alias["card_last4"], "total": 0.0, "count": 0, "items": []})
+        grouped.setdefault(owner, {
+            "owner": owner,
+            "card_last4": alias["card_last4"],
+            "cards": [],
+            "total": 0.0,
+            "count": 0,
+            "items": [],
+        })
+        grouped[owner]["cards"].append(alias["card_last4"])
 
     for row in rows:
-        haystack = " ".join(str(row.get(k) or "") for k in ["description", "account", "notes", "source"]).lower()
-        for alias in alias_list:
-            last4 = str(alias.get("card_last4") or "")
-            owner = str(alias.get("owner_label") or "")
-            if last4 and last4 in haystack or owner.lower() in haystack:
-                bucket = grouped.setdefault(owner, {"owner": owner, "card_last4": last4, "total": 0.0, "count": 0, "items": []})
-                amount = _f(row.get("amount"))
-                bucket["total"] += amount
-                bucket["count"] += 1
-                if len(bucket["items"]) < 20:
-                    bucket["items"].append(dict(row))
-                break
+        item = dict(row)
+        last4 = str(item.get("card_last4") or "")
+        owner = str(item.get("card_owner") or "").strip()
+
+        alias = additional_last4.get(last4)
+        if alias:
+            owner = alias["owner_label"]
+        elif owner.lower() not in additional_owners:
+            # Primary card, no card metadata, or unknown owner: not an
+            # additional-card movement.
+            continue
+
+        bucket = grouped.setdefault(owner, {
+            "owner": owner,
+            "card_last4": last4,
+            "cards": [last4] if last4 else [],
+            "total": 0.0,
+            "count": 0,
+            "items": [],
+        })
+        amount = _f(item.get("amount"))
+        bucket["total"] += amount
+        bucket["count"] += 1
+        if len(bucket["items"]) < 50:
+            bucket["items"].append(item)
 
     return {"status": "OK", "aliases": alias_list, "cards": list(grouped.values())}

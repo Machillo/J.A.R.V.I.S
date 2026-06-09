@@ -10,6 +10,7 @@ import {
   WalletCards,
   Crown,
   CreditCard,
+  MailSearch,
 } from "lucide-react";
 
 const menuItems = [
@@ -18,6 +19,7 @@ const menuItems = [
   { id: "transactions", label: "Transacciones", icon: ReceiptText },
   { id: "strategy", label: "Estrategia Premium", icon: Crown },
   { id: "additionalCards", label: "Tarjetas adicionales", icon: CreditCard },
+  { id: "emails", label: "Correos", icon: MailSearch },
   { id: "goals", label: "Metas", icon: Target },
   { id: "memory", label: "Memory Core", icon: Brain },
   { id: "settings", label: "Config", icon: Settings },

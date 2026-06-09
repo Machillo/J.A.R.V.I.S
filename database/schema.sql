@@ -602,3 +602,13 @@ BEGIN
         ) NOT VALID;
     END IF;
 END $$;
+
+-- Fase Correos 100%: review flow indexes + known card aliases are also enforced by backend/migration.
+CREATE INDEX IF NOT EXISTS idx_email_candidates_user_status_created
+ON email_transaction_candidates(user_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_email_candidates_transaction_id
+ON email_transaction_candidates(user_id, transaction_id);
+
+CREATE INDEX IF NOT EXISTS idx_email_messages_provider_message
+ON email_ingested_messages(user_id, provider, provider_message_id);
