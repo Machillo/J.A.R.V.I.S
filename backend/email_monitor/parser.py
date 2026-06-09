@@ -113,6 +113,9 @@ def normalize(value: str) -> str:
 
 def clean_text(value: str) -> str:
     text = html.unescape(value or "")
+    text = re.sub(r"(?is)<(style|script|head|noscript)\b[^>]*>.*?</\1>", " ", text)
+    text = re.sub(r"(?i)<\s*(br|/tr|/td|/p|/div|/li|/h[1-6])\b[^>]*>", "\n", text)
+    text = re.sub(r"<[^>]+>", " ", text)
     text = text.replace("\u200c", " ").replace("\u200b", " ").replace("\ufeff", " ")
     text = text.replace("\xa0", " ")
     text = re.sub(r"\r\n?", "\n", text)
@@ -547,7 +550,7 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
     amount, currency = _parse_labeled_amount_value(amount_raw)
     if amount is None:
         amount, currency = _parse_context_amount(text)
-    if amount is None:
+    if amount is None or amount <= 0:
         return None
 
     if date_raw:
@@ -612,7 +615,7 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
     if not ("sinpe" in clean and "transferencia" in clean and "monto" in clean):
         return None
     amount, _currency = _parse_context_amount(text)
-    if amount is None:
+    if amount is None or amount <= 0:
         return None
     date_match = re.search(r"d[ií]a\s+y\s+hora\s*:??\s*([^\.\n]+)", text, re.I)
     transaction_date, time_value = _parse_datetime_text(date_match.group(1) if date_match else text, received_at)
@@ -678,7 +681,7 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
     amount, currency = _parse_labeled_amount_value(_label_value(text, "Monto"))
     if amount is None:
         amount, currency = _parse_context_amount(text)
-    if amount is None:
+    if amount is None or amount <= 0:
         return None
     date_raw = _label_value(text, "Fecha") or text
     transaction_date, time_value = _parse_datetime_text(date_raw, received_at)
@@ -897,6 +900,11 @@ def parse_financial_email(subject: str, sender: str, body: str, received_at: str
         parsed = _parse_multimoney_transfer(subject, sender, body, received_at)
         if parsed:
             return parsed
+
+    if bank == "bac" and "notificacion de transaccion" in normalize(text):
+        amount, _currency = _parse_context_amount(text)
+        if amount is not None and amount <= 0:
+            return _ignored(bank, subject, body, received_at, "Autorización BAC con monto cero; no se genera candidato financiero.")
 
     if _has_reject(text):
         return _ignored(bank, subject, body, received_at, "Correo promocional/login/seguridad/informativo; no es movimiento de dinero.")

@@ -501,3 +501,71 @@ CREATE TABLE IF NOT EXISTS card_aliases (
     UNIQUE(user_id, card_last4)
 );
 CREATE INDEX IF NOT EXISTS idx_card_aliases_user ON card_aliases(user_id);
+
+-- Email parser Fase 1 hardening: audit, card cycle and dedupe metadata
+ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS raw_body TEXT;
+ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS body_text TEXT;
+ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS attachment_names TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS attachment_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS parse_reason TEXT;
+
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS card_last4 TEXT;
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS card_owner TEXT;
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS billing_cycle_start DATE;
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS billing_cycle_end DATE;
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS dedupe_key TEXT;
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS duplicate_of BIGINT;
+
+CREATE INDEX IF NOT EXISTS idx_email_candidates_card_cycle
+ON email_transaction_candidates(user_id, card_last4, billing_cycle_start, billing_cycle_end);
+
+CREATE INDEX IF NOT EXISTS idx_email_candidates_dedupe
+ON email_transaction_candidates(user_id, transaction_date, amount, transaction_type, status);
+
+CREATE TABLE IF NOT EXISTS card_aliases (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    card_last4 TEXT NOT NULL,
+    owner_label TEXT NOT NULL,
+    relationship TEXT,
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, card_last4)
+);
+
+CREATE TABLE IF NOT EXISTS credit_card_settings (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 1,
+    name TEXT NOT NULL DEFAULT 'BAC tarjetas',
+    bank TEXT NOT NULL DEFAULT 'bac',
+    card_last4 TEXT,
+    owner_label TEXT,
+    cut_day INTEGER NOT NULL DEFAULT 21,
+    payment_day INTEGER NOT NULL DEFAULT 5,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_card_settings_user_bank_card
+ON credit_card_settings(user_id, bank, card_last4);
+
+CREATE TABLE IF NOT EXISTS email_parser_logs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    email_message_id BIGINT,
+    provider_message_id TEXT,
+    sender TEXT,
+    subject TEXT,
+    bank TEXT,
+    action TEXT NOT NULL,
+    result TEXT,
+    reason TEXT,
+    extracted_payload JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS email_message_id BIGINT;
+ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS result TEXT;
+ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS extracted_payload JSONB;

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import html
+import json
 import os
 import re
 from io import BytesIO
@@ -235,16 +236,25 @@ def ensure_email_tables(conn) -> None:
         CREATE TABLE IF NOT EXISTS email_parser_logs (
             id BIGSERIAL PRIMARY KEY,
             user_id BIGINT NOT NULL,
+            email_message_id BIGINT,
             provider_message_id TEXT,
             sender TEXT,
             subject TEXT,
             bank TEXT,
             action TEXT NOT NULL,
+            result TEXT,
             reason TEXT,
+            extracted_payload JSONB,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """
     )
+    for ddl in [
+        "ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS email_message_id BIGINT",
+        "ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS result TEXT",
+        "ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS extracted_payload JSONB",
+    ]:
+        conn.execute(ddl)
 
 
 def _owner_user_id(conn) -> int | None:
@@ -277,27 +287,47 @@ def _log_email_event(
     conn,
     *,
     user_id: int,
+    email_message_id: int | None = None,
     provider_message_id: str | None = None,
     sender: str = "",
     subject: str = "",
     bank: str = "unknown",
     action: str = "info",
+    result: str | None = None,
     reason: str = "",
+    extracted_payload: dict[str, Any] | None = None,
 ) -> None:
+    """Best-effort audit log for every parser decision.
+
+    action is the coarse route used by the scanner. result is the business
+    classification expected by JARVIS: processed, ignored, statement,
+    duplicate, or error. Logging must never break ingestion.
+    """
     try:
+        payload_json = json.dumps(extracted_payload or {}, default=str) if extracted_payload else None
         conn.execute(
             """
             INSERT INTO email_parser_logs (
-                user_id, provider_message_id, sender, subject, bank, action, reason
+                user_id, email_message_id, provider_message_id, sender, subject,
+                bank, action, result, reason, extracted_payload
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
             """,
-            (user_id, provider_message_id, sender, subject, bank, action, reason[:1000]),
+            (
+                user_id,
+                email_message_id,
+                provider_message_id,
+                sender,
+                subject,
+                bank,
+                action,
+                result or action,
+                reason[:1000],
+                payload_json,
+            ),
         )
     except Exception:
-        # Logging must never break the email scanner.
         pass
-
 
 def _settings_query_for_owner(conn, user_id: int) -> str:
     row = conn.execute(
@@ -718,7 +748,7 @@ def scan_email_text(
             subject=subject,
             received_at=received_at,
             bank=parsed.get("bank") or "unknown",
-            status="ignored" if parsed.get("email_kind") == "ignored" else "processed",
+            status=("ignored" if parsed.get("email_kind") == "ignored" else "statement" if parsed.get("email_kind") == "statement" else "processed"),
             body=body,
             reason=parsed.get("ignore_reason") or parsed.get("confidence_reason") or "",
             attachment_names=attachment_names,
@@ -728,11 +758,14 @@ def scan_email_text(
             _log_email_event(
                 conn,
                 user_id=user_id,
+                email_message_id=email_message_id,
                 provider_message_id=provider_message_id,
                 sender=sender,
                 subject=subject,
                 bank=parsed.get("bank") or "unknown",
                 action="ignored",
+                result="ignored",
+                extracted_payload=parsed,
                 reason=parsed.get("ignore_reason") or parsed.get("confidence_reason") or "Correo ignorado.",
             )
             conn.commit()
@@ -786,11 +819,14 @@ def scan_email_text(
             _log_email_event(
                 conn,
                 user_id=user_id,
+                email_message_id=email_message_id,
                 provider_message_id=provider_message_id,
                 sender=sender,
                 subject=subject,
                 bank=parsed.get("bank") or "unknown",
                 action="statement_document",
+                result="statement",
+                extracted_payload=parsed,
                 reason=parsed.get("confidence_reason") or "Estado de cuenta guardado como documento.",
             )
             conn.commit()
@@ -908,11 +944,14 @@ def scan_email_text(
         _log_email_event(
             conn,
             user_id=user_id,
+            email_message_id=email_message_id,
             provider_message_id=provider_message_id,
             sender=sender,
             subject=subject,
             bank=parsed.get("bank") or "unknown",
             action="candidate",
+            result=candidate_status,
+            extracted_payload=parsed,
             reason=review_reason,
         )
         conn.commit()
