@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import {
   commitFinanceInput,
+  getDebts,
+  getFinanceCycleReport,
   getFixedExpenseStatus,
   getTransactionAnalysis,
   previewFinanceInput,
@@ -479,28 +481,36 @@ export default function Finance({
 }) {
   const [transactionAnalysis, setTransactionAnalysis] = useState(null);
   const [fixedStatus, setFixedStatus] = useState(null);
+  const [cycleReport, setCycleReport] = useState(null);
+  const [debts, setDebts] = useState([]);
+  const [debtSort, setDebtSort] = useState("saldo");
+  const [detail, setDetail] = useState(null);
+
+  const loadSupportingData = async () => {
+    const [analysisResult, fixedResult, cycleResult, debtsResult] = await Promise.allSettled([
+      getTransactionAnalysis(),
+      getFixedExpenseStatus(),
+      getFinanceCycleReport(),
+      getDebts(),
+    ]);
+
+    setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
+    setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
+    setCycleReport(cycleResult.status === "fulfilled" ? cycleResult.value : null);
+    setDebts(debtsResult.status === "fulfilled" && Array.isArray(debtsResult.value) ? debtsResult.value : []);
+  };
 
   useEffect(() => {
     let active = true;
-
-    getTransactionAnalysis()
-      .then((data) => {
-        if (active) setTransactionAnalysis(data);
-      })
-      .catch((analysisError) => {
-        console.error(analysisError);
-        if (active) setTransactionAnalysis(null);
-      });
-
-    getFixedExpenseStatus()
-      .then((data) => {
-        if (active) setFixedStatus(data);
-      })
-      .catch((fixedError) => {
-        console.error(fixedError);
-        if (active) setFixedStatus(null);
-      });
-
+    loadSupportingData().catch((loadError) => {
+      console.error(loadError);
+      if (active) {
+        setTransactionAnalysis(null);
+        setFixedStatus(null);
+        setCycleReport(null);
+        setDebts([]);
+      }
+    });
     return () => {
       active = false;
     };
@@ -511,23 +521,24 @@ export default function Finance({
 
   const summary = dashboard?.summary || {};
   const alerts = dashboard?.alerts || [];
-  const topDebts = dashboard?.top_debts || [];
   const recommendations = dashboard?.quick_recommendations || [];
-  const goal = summary?.goals?.most_urgent_goal;
-
-  const income = Number(summary?.income?.monthly_net_income) || 0;
-  const totalIncome = Number(summary?.income?.total_income) || income;
-  const expensesTotal = Number(summary?.expenses?.total_expenses) || 0;
   const fixedExpenses = Number(summary?.expenses?.fixed_expenses) || Number(fixedStatus?.summary?.expected) || 0;
-  const available = Number(summary?.cashflow?.available_cash) || 0;
   const debtTotal = Number(summary?.debts?.total) || 0;
-  const monthlyDebtPayments = Number(summary?.debts?.monthly_payments) || 0;
   const netWorth = Number(summary?.assets?.net_worth) || 0;
   const assetsTotal = Number(summary?.assets?.assets_total) || 0;
 
-  const goalProgress = goal?.target_amount
-    ? clampPercent((Number(goal.current_amount) / Number(goal.target_amount)) * 100)
-    : 0;
+  const cycleIncome = cycleReport?.income || {};
+  const cycleExpenses = cycleReport?.expenses || {};
+  const cycleDebts = cycleReport?.debts || {};
+  const cycleCashflow = cycleReport?.cashflow || {};
+  const cycleTransactions = cycleReport?.transactions || [];
+  const fixedExpectedIncome = Number(cycleIncome.fixed_expected) || Number(summary?.income?.monthly_net_income) || 0;
+  const extraExpectedIncome = Number(cycleIncome.extra_expected) || 0;
+  const expectedIncomeTotal = Number(cycleIncome.expected_total) || fixedExpectedIncome + extraExpectedIncome;
+  const currentExpenses = Number(cycleExpenses.current_period) || 0;
+  const currentDebtPayments = Number(cycleDebts.payments_current_period) || 0;
+  const realBalance = Number(cycleCashflow.real_balance) || Number(summary?.cashflow?.available_cash) || 0;
+  const cycleLabel = cycleReport?.cycle?.label || "Ciclo 5 → 5";
 
   const monthlyFlowData = useMemo(() => {
     return (transactionAnalysis?.monthly_flow || []).map((item) => ({
@@ -541,18 +552,6 @@ export default function Finance({
     }));
   }, [transactionAnalysis]);
 
-  const latestFlow = monthlyFlowData[monthlyFlowData.length - 1] || null;
-  const lastMonthIncome = latestFlow?.income ?? totalIncome;
-  const lastMonthLoans = latestFlow?.loans ?? 0;
-  const lastMonthExpenses = latestFlow?.expenses ?? expensesTotal;
-  const lastMonthDebtPayments = latestFlow?.debt_payments ?? monthlyDebtPayments;
-  const lastMonthAvailable = latestFlow
-    ? latestFlow.net_flow
-    : available;
-
-  const debtProgress =
-    lastMonthIncome > 0 ? clampPercent((lastMonthDebtPayments / lastMonthIncome) * 100) : 0;
-
   const categoryChartData = useMemo(() => {
     return (transactionAnalysis?.top_expense_categories || []).map((item) => ({
       category: item.category || "Sin categoría",
@@ -560,8 +559,36 @@ export default function Finance({
     }));
   }, [transactionAnalysis]);
 
-  const hasAnyTransactions = (transactionAnalysis?.summary?.total_transactions || 0) > 0;
+  const sortedDebts = useMemo(() => {
+    const list = [...debts];
+    const byNumber = (key) => (a, b) => (Number(b[key]) || 0) - (Number(a[key]) || 0);
+    if (debtSort === "interes") return list.sort(byNumber("interest_rate"));
+    if (debtSort === "cuota") return list.sort(byNumber("monthly_payment"));
+    if (debtSort === "fecha") return list.sort((a, b) => (Number(a.payment_day) || 99) - (Number(b.payment_day) || 99));
+    return list.sort(byNumber("remaining_amount"));
+  }, [debts, debtSort]);
+
   const isOwner = currentUser?.role === "owner" || currentUser?.email === "gatotico99@gmail.com";
+  const hasAnyTransactions = (transactionAnalysis?.summary?.total_transactions || 0) > 0;
+
+  const openDetail = (title, items = [], empty = "No hay movimientos para mostrar.") => {
+    setDetail({ title, items, empty });
+  };
+
+  const expenseItems = cycleTransactions.filter((item) => item.transaction_type === "expense");
+  const incomeItems = [
+    ...(cycleIncome.items || []).map((item) => ({
+      ...item,
+      id: `income-${item.kind}-${item.id}`,
+      transaction_date: item.estimated_pay_date,
+      description: item.description || item.event_type || item.kind,
+      amount: item.net_amount ?? item.amount,
+      transaction_type: item.kind === "bonus" ? "bonus" : item.event_type,
+      category: "Ingreso esperado",
+    })),
+    ...cycleTransactions.filter((item) => item.transaction_type === "income"),
+  ];
+  const balanceItems = cycleTransactions;
 
   if (!isOwner && !hasAnyTransactions) {
     return (
@@ -577,90 +604,98 @@ export default function Finance({
 
   return (
     <section className="dashboard-page">
-      <div className="cards-grid">
-        <article className="hud-card glow-green">
+      <div className="finance-period-pill">Periodo financiero: {cycleLabel}</div>
+
+      <div className="cards-grid finance-main-cards">
+        <button className="hud-card finance-click-card glow-green" onClick={() => openDetail("Ingreso esperado", incomeItems, "No hay extras ni ingresos registrados en este ciclo.")}> 
           <div className="card-header">
-            <span>INGRESO NETO</span>
+            <span>INGRESO FIJO ESPERADO</span>
             <ArrowUpRight size={18} />
           </div>
-
           <MiniLine type="up" />
+          <h2>{formatCRC(fixedExpectedIncome)}</h2>
+          <p>Pago fijo conocido para el ciclo 5 → 5</p>
+        </button>
 
-          <h2>{formatCRC(income)}</h2>
-          <p>Sueldo neto proyectado</p>
-        </article>
-
-        <article className="hud-card glow-red">
+        <button className="hud-card finance-click-card glow-green" onClick={() => openDetail("Ingresos extra esperados", incomeItems, "No hay OT, bono, VGH, feriado o vacaciones en este ciclo.")}> 
           <div className="card-header">
-            <span>DEUDA TOTAL</span>
+            <span>EXTRAS ESPERADOS</span>
+            <ArrowUpRight size={18} />
+          </div>
+          <MiniLine type="up" />
+          <h2>{formatCRC(extraExpectedIncome)}</h2>
+          <p>OT, bono, VGH, feriado o vacaciones según fecha de pago</p>
+        </button>
+
+        <button className="hud-card finance-click-card glow-red" onClick={() => openDetail("Gastos del periodo", expenseItems, "No hay gastos registrados en este ciclo.")}> 
+          <div className="card-header">
+            <span>GASTOS DEL PERIODO</span>
             <ArrowDownRight size={18} />
           </div>
-
           <MiniLine type="down" />
+          <h2>{formatCRC(currentExpenses)}</h2>
+          <p>Compras y gastos aceptados desde correos o manual</p>
+        </button>
 
-          <h2>{formatCRC(debtTotal)}</h2>
-          <p>Pasivos registrados</p>
-        </article>
-
-        <article className="hud-card">
-          <div className="card-header">
-            <span>META PRINCIPAL</span>
-            <Target size={18} />
-          </div>
-
-          <div className="ring-row">
-            <ProgressRing value={goalProgress} />
-            <div>
-              <h2>{goal?.name || "Sin meta"}</h2>
-              <p>
-                {goal
-                  ? `${formatCRC(goal.current_amount)} de ${formatCRC(goal.target_amount)}`
-                  : "Sin meta activa"}
-              </p>
-            </div>
-          </div>
-        </article>
-
-        <article className="hud-card glow-red">
-          <div className="card-header">
-            <span>PAGOS DE DEUDA</span>
-            <AlertTriangle size={18} />
-          </div>
-
-          <div className="ring-row">
-            <ProgressRing value={debtProgress} color="red" />
-            <div>
-              <h2>{formatCRC(lastMonthDebtPayments)}</h2>
-              <p>Pagos registrados en el último mes importado</p>
-            </div>
-          </div>
-        </article>
-
-        <article className="hud-card wide-balance">
+        <button className="hud-card finance-click-card wide-balance" onClick={() => openDetail("Saldo real del periodo", balanceItems, "No hay movimientos reales en este ciclo.")}> 
           <div className="card-header">
             <span>SALDO REAL</span>
             <Wallet size={18} />
           </div>
+          <h2 className={realBalance < 0 ? "danger-text" : ""}>{formatCRC(realBalance)}</h2>
+          <p>Ingreso esperado + ingresos reales - gastos - pagos</p>
+        </button>
 
-          <h2 className={lastMonthAvailable < 0 ? "danger-text" : ""}>{formatCRC(lastMonthAvailable)}</h2>
-          <p>Ingreso + préstamos - gastos - pagos del último mes</p>
-        </article>
+        <button className="hud-card finance-click-card glow-red" onClick={() => setDetail({ title: "Deudas registradas", debts: sortedDebts })}> 
+          <div className="card-header">
+            <span>DEUDA TOTAL</span>
+            <ArrowDownRight size={18} />
+          </div>
+          <MiniLine type="down" />
+          <h2>{formatCRC(debtTotal)}</h2>
+          <p>{sortedDebts.length} deudas registradas</p>
+        </button>
       </div>
 
       <div className="finance-kpi-strip finance-kpi-strip-clean">
-        <article className="finance-mini-kpi">
-          <span>Ingreso del último mes</span>
-          <strong>{formatCRC(lastMonthIncome)}</strong>
-        </article>
-        <article className="finance-mini-kpi">
-          <span>Gastos del último mes</span>
-          <strong>{formatCRC(lastMonthExpenses)}</strong>
-        </article>
-        <article className="finance-mini-kpi">
-          <span>Pagos de deuda del último mes</span>
-          <strong>{formatCRC(lastMonthDebtPayments)}</strong>
-        </article>
+        <article className="finance-mini-kpi"><span>Ingreso esperado total</span><strong>{formatCRC(expectedIncomeTotal)}</strong></article>
+        <article className="finance-mini-kpi"><span>Pagos de deuda del periodo</span><strong>{formatCRC(currentDebtPayments)}</strong></article>
+        <article className="finance-mini-kpi"><span>Patrimonio neto</span><strong>{formatCRC(netWorth)}</strong></article>
       </div>
+
+      {detail && (
+        <article className="hud-panel finance-detail-panel">
+          <div className="panel-title">
+            <div>
+              <h3>{detail.title}</h3>
+              <p>Detalle calculado para el periodo actual.</p>
+            </div>
+            <button className="ghost-button" onClick={() => setDetail(null)}>Cerrar</button>
+          </div>
+
+          {detail.debts ? (
+            <div className="debt-list full-debt-list">
+              {detail.debts.map((debt) => (
+                <div className="debt-item" key={debt.id}>
+                  <div className="debt-item-head"><strong>{debt.name}</strong><span>{formatCRC(debt.remaining_amount)}</span></div>
+                  <small>Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}% · Pago: {debt.payment_day || "--"}</small>
+                </div>
+              ))}
+            </div>
+          ) : detail.items?.length ? (
+            <div className="finance-detail-list">
+              {detail.items.map((item) => (
+                <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}>
+                  <div><strong>{item.description}</strong><span>{item.transaction_date || item.estimated_pay_date || "sin fecha"} · {item.category || item.transaction_type}</span></div>
+                  <b>{formatCRC(item.amount ?? item.net_amount)}</b>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyPanel title="Sin detalle" description={detail.empty} />
+          )}
+        </article>
+      )}
 
       <div className="dashboard-grid finance-dashboard-grid">
         <article className="hud-panel large">
@@ -671,84 +706,46 @@ export default function Finance({
             </div>
             <span>REAL</span>
           </div>
-
           <MonthlyFlowChart data={monthlyFlowData} />
-
-          <div className="legend">
-            <span className="cyan"></span> Ingresos
-            <span className="red"></span> Gastos / deuda
-          </div>
+          <div className="legend"><span className="cyan"></span> Ingresos <span className="red"></span> Gastos / deuda</div>
         </article>
 
         <article className="hud-panel large">
           <div className="panel-title">
             <div>
               <h3>GASTOS POR CATEGORÍA</h3>
-              <p>Lo que registremos por chat aparecerá aquí.</p>
+              <p>Lo que registremos por chat o correo aparecerá aquí.</p>
             </div>
             <span>REAL</span>
           </div>
-
-<CategoryBars data={categoryChartData} />
+          <CategoryBars data={categoryChartData} />
         </article>
 
         <FixedExpensesPanel data={fixedStatus} onRefresh={onRefresh} isOwner={isOwner} />
 
-        <article className="hud-panel">
-          <div className="panel-title">
-            <div>
-              <h3>ALERTAS</h3>
-              <p>Prioridad actual</p>
-            </div>
-          </div>
-
-          <div className="alert-list">
-            {alerts.length === 0 ? (
-              <EmptyPanel
-                title="Sin alertas críticas"
-                description="Cuando haya riesgo de flujo, deuda o metas, aparecerá aquí."
-              />
-            ) : (
-              alerts.map((alert, index) => (
-                <div className={`alert-item ${alert.level}`} key={index}>
-                  <AlertTriangle size={18} />
-                  <span>{alert.message}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </article>
-
-        <article className="hud-panel">
-          <div className="panel-title">
+        <article className="hud-panel large">
+          <div className="panel-title debts-panel-title">
             <div>
               <h3>RESUMEN DE DEUDAS</h3>
-              <p>Top deudas</p>
+              <p>Todas las deudas, no solo el top 4.</p>
             </div>
+            <select value={debtSort} onChange={(event) => setDebtSort(event.target.value)}>
+              <option value="saldo">Saldo</option>
+              <option value="interes">Interés</option>
+              <option value="cuota">Cuota</option>
+              <option value="fecha">Fecha de pago</option>
+            </select>
           </div>
 
-          <div className="debt-list">
-            {topDebts.length === 0 ? (
-              <EmptyPanel
-                title="Sin deudas registradas"
-                description="Las deudas que agregues desde Finanzas o chat aparecerán aquí."
-              />
+          <div className="debt-list full-debt-list">
+            {sortedDebts.length === 0 ? (
+              <EmptyPanel title="Sin deudas registradas" description="Las deudas que agregues desde Finanzas o chat aparecerán aquí." />
             ) : (
-              topDebts.map((debt) => (
+              sortedDebts.map((debt) => (
                 <div className="debt-item" key={debt.id}>
-                  <div className="debt-item-head">
-                    <strong>{debt.name}</strong>
-                    <span>{formatCRC(debt.remaining_amount)}</span>
-                  </div>
-                  <small>Pago: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}%</small>
-
-                  <div className="debt-bar">
-                    <span
-                      style={{
-                        width: `${debtTotal > 0 ? Math.min((debt.remaining_amount / debtTotal) * 100, 100) : 0}%`,
-                      }}
-                    ></span>
-                  </div>
+                  <div className="debt-item-head"><strong>{debt.name}</strong><span>{formatCRC(debt.remaining_amount)}</span></div>
+                  <small>Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}% · Pago: {debt.payment_day || "--"}</small>
+                  <div className="debt-bar"><span style={{ width: `${debtTotal > 0 ? Math.min((debt.remaining_amount / debtTotal) * 100, 100) : 0}%` }} /></div>
                 </div>
               ))
             )}
@@ -756,68 +753,29 @@ export default function Finance({
         </article>
 
         <article className="hud-panel">
-          <div className="panel-title">
-            <div>
-              <h3>NET WORTH</h3>
-              <p>Patrimonio neto</p>
-            </div>
-            <CircleDollarSign size={20} />
+          <div className="panel-title"><div><h3>ALERTAS</h3><p>Prioridad actual</p></div></div>
+          <div className="alert-list">
+            {alerts.length === 0 ? <EmptyPanel title="Sin alertas críticas" description="Cuando haya riesgo de flujo, deuda o metas, aparecerá aquí." /> : alerts.map((alert, index) => <div className={`alert-item ${alert.level}`} key={index}><AlertTriangle size={18} /><span>{alert.message}</span></div>)}
           </div>
+        </article>
 
-          <h2 className={netWorth < 0 ? "danger-text" : "good-text"}>
-            {formatCRC(netWorth)}
-          </h2>
-
-          <p className="muted">
-            Activos registrados menos deudas registradas.
-          </p>
+        <article className="hud-panel">
+          <div className="panel-title"><div><h3>NET WORTH</h3><p>Patrimonio neto</p></div><CircleDollarSign size={20} /></div>
+          <h2 className={netWorth < 0 ? "danger-text" : "good-text"}>{formatCRC(netWorth)}</h2>
+          <p className="muted">Activos registrados menos deudas registradas.</p>
         </article>
 
         <article className="hud-panel large">
-          <div className="panel-title">
-            <div>
-              <h3>RECOMENDACIONES</h3>
-              <p>Acciones sugeridas por estado actual</p>
-            </div>
-          </div>
-
-          {recommendations.length === 0 ? (
-            <EmptyPanel
-              title="Sin recomendaciones todavía"
-              description="Cuando registremos ingresos, gastos, deudas y metas, Jarvis tendrá más contexto."
-            />
-          ) : (
-            <div className="recommendation-list">
-              {recommendations.map((item, index) => (
-                <div className="recommendation-item" key={index}>
-                  {item}
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="panel-title"><div><h3>RECOMENDACIONES</h3><p>Acciones sugeridas por estado actual</p></div></div>
+          {recommendations.length === 0 ? <EmptyPanel title="Sin recomendaciones todavía" description="Cuando registremos ingresos, gastos, deudas y metas, Jarvis tendrá más contexto." /> : <div className="recommendation-list">{recommendations.map((item, index) => <div className="recommendation-item" key={index}>{item}</div>)}</div>}
         </article>
 
         <article className="hud-panel">
-          <div className="panel-title">
-            <div>
-              <h3>DATOS BASE</h3>
-              <p>Estado del perfil financiero</p>
-            </div>
-          </div>
-
+          <div className="panel-title"><div><h3>DATOS BASE</h3><p>Estado del perfil financiero</p></div></div>
           <div className="metric-list">
-            <div>
-              <span>Gastos fijos activos</span>
-              <strong>{formatCRC(fixedExpenses)}</strong>
-            </div>
-            <div>
-              <span>Activos</span>
-              <strong>{formatCRC(assetsTotal)}</strong>
-            </div>
-            <div>
-              <span>Metas activas</span>
-              <strong>{summary?.goals?.active_goals_count || 0}</strong>
-            </div>
+            <div><span>Gastos fijos activos</span><strong>{formatCRC(fixedExpenses)}</strong></div>
+            <div><span>Activos</span><strong>{formatCRC(assetsTotal)}</strong></div>
+            <div><span>Metas activas</span><strong>{summary?.goals?.active_goals_count || 0}</strong></div>
           </div>
         </article>
       </div>

@@ -63,6 +63,7 @@ from backend.finance.service import (
     get_net_worth_report,
     get_user_status,
     get_financial_dashboard,
+    get_financial_cycle_report,
     update_saving,
     delete_saving,
     update_investment,
@@ -518,6 +519,11 @@ def fixed_expense_status(month: str | None = None):
 @router.post("/fixed-expenses/seed-owner-defaults")
 def seed_fixed_expenses_route():
     return {"status": "OK", "items": seed_owner_fixed_expenses()}
+
+@router.get("/cycle-report")
+def financial_cycle_report():
+    return get_financial_cycle_report()
+
 
 @router.get("/dashboard")
 def financial_dashboard():

@@ -511,7 +511,6 @@ def get_additional_card_report() -> dict[str, Any]:
         amount = _f(item.get("amount"))
         bucket["total"] += amount
         bucket["count"] += 1
-        if len(bucket["items"]) < 50:
-            bucket["items"].append(item)
+        bucket["items"].append(item)
 
     return {"status": "OK", "aliases": alias_list, "cards": list(grouped.values())}

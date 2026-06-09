@@ -38,9 +38,9 @@ export default function AdditionalCards() {
               <div><strong>{card.owner}</strong><span>{(card.cards || [card.card_last4]).map((last4) => `****${last4}`).join(" · ")}</span></div>
             </div>
             <h3>{money(card.total)}</h3>
-            <p>{card.count} movimientos detectados</p>
+            <p>{card.count} movimientos detectados · se muestran todos</p>
             <div className="mini-transaction-list">
-              {(card.items || []).slice(0, 5).map((item) => (
+              {(card.items || []).map((item) => (
                 <div key={item.id}>
                   <span>{item.description}</span>
                   <b>{money(item.amount)}</b>

@@ -49,6 +49,7 @@ export const getStatus = () => request("/status");
 export const getMe = () => request("/auth/me");
 
 export const getFinanceDashboard = () => request("/finance/dashboard");
+export const getFinanceCycleReport = () => request("/finance/cycle-report");
 export const getFinancialSummary = () => request("/finance/summary");
 export const getNetWorth = () => request("/finance/net-worth");
 
@@ -79,6 +80,7 @@ export const getPayrollEvents = () => request("/finance/payroll-events");
 
 export const getGoals = () => request("/goals/");
 export const createGoal = (payload) => jsonRequest("/goals/", "POST", payload);
+export const updateGoal = (id, payload) => jsonRequest(`/goals/${id}`, "PUT", payload);
 
 export const getTransactions = () => request("/transactions/");
 export const getTransactionAnalysis = () => request("/transactions/analysis/summary");

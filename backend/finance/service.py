@@ -1,3 +1,6 @@
+from datetime import date, datetime, timedelta
+from typing import Any
+
 from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
@@ -18,7 +21,6 @@ def _safe_sum(items: list[dict], key: str) -> float:
 
 
 def _current_month_bounds_sql() -> tuple[str, str]:
-    from datetime import date
     today = date.today()
     start = today.replace(day=1).isoformat()
     if today.month == 12:
@@ -26,6 +28,59 @@ def _current_month_bounds_sql() -> tuple[str, str]:
     else:
         end = date(today.year, today.month + 1, 1).isoformat()
     return start, end
+
+
+def _financial_cycle_bounds(today: date | None = None, closing_day: int = 5) -> tuple[date, date]:
+    """Kenneth's operating cycle is 5 -> 5, not calendar month.
+
+    The end date is exclusive. Example: Jun 5 <= date < Jul 5.
+    """
+    today = today or date.today()
+    if today.day >= closing_day:
+        start = today.replace(day=closing_day)
+        if today.month == 12:
+            end = date(today.year + 1, 1, closing_day)
+        else:
+            end = date(today.year, today.month + 1, closing_day)
+    else:
+        end = today.replace(day=closing_day)
+        if today.month == 1:
+            start = date(today.year - 1, 12, closing_day)
+        else:
+            start = date(today.year, today.month - 1, closing_day)
+    return start, end
+
+
+def _next_thursday_after_work_week(value: Any) -> date | None:
+    """Estimate payroll date for OT/VGH/holiday/vacation events.
+
+    Work events are paid the following Thursday. This keeps OT out of the current
+    cycle when the Thursday payment falls after the card payment cut (5th).
+    """
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        event_date = value.date()
+    elif isinstance(value, date):
+        event_date = value
+    else:
+        raw = str(value)
+        try:
+            event_date = datetime.fromisoformat(raw.replace('Z', '+00:00')).date()
+        except ValueError:
+            try:
+                event_date = datetime.strptime(raw[:10], '%Y-%m-%d').date()
+            except ValueError:
+                return None
+
+    # Move at least one week forward, then find Thursday. Monday=0, Thursday=3.
+    base = event_date + timedelta(days=7)
+    days_until_thursday = (3 - base.weekday()) % 7
+    return base + timedelta(days=days_until_thursday)
+
+
+def _transaction_date_expr() -> str:
+    return "to_date(NULLIF(transaction_date, ''), 'YYYY-MM-DD')"
 
 
 def _latest_base_salary(user_id: int) -> float:
@@ -810,6 +865,152 @@ def get_financial_summary():
         },
         "user_id": user_id,
     }
+
+def get_financial_cycle_report() -> dict:
+    """Finance dashboard report for the real 5->5 cycle.
+
+    Rules:
+    - Fixed expected income is the known base payroll projection.
+    - Extras include OT, bonus, VGH, holiday and vacation only when their
+      estimated/recorded payment date lands inside the current 5->5 cycle.
+    - Expenses and debt payments come from accepted real transactions in the
+      current cycle.
+    """
+    user_id = get_current_user_id()
+    cycle_start, cycle_end = _financial_cycle_bounds()
+    salary_projection = calculate_monthly_salary_projection()
+
+    base_net = _as_float(salary_projection.get("results", {}).get("base_net"))
+    deduction_details = salary_projection.get("deductions", {}) or {}
+
+    with get_connection() as conn:
+        payroll_events = [dict(row) for row in conn.execute(
+            """
+            SELECT id, event_type, hours, multiplier, amount, description, created_at
+            FROM payroll_events
+            WHERE user_id = %s
+            ORDER BY created_at ASC
+            """,
+            (user_id,),
+        ).fetchall()]
+
+        bonuses = [dict(row) for row in conn.execute(
+            """
+            SELECT id, amount, description, created_at
+            FROM bonuses
+            WHERE user_id = %s
+            ORDER BY created_at ASC
+            """,
+            (user_id,),
+        ).fetchall()]
+
+        transaction_rows = [dict(row) for row in conn.execute(
+            f"""
+            SELECT id, transaction_date, description, amount, transaction_type,
+                   category, account, source, notes, created_at
+            FROM transactions
+            WHERE user_id = %s
+              AND {_transaction_date_expr()} >= %s::date
+              AND {_transaction_date_expr()} < %s::date
+            ORDER BY {_transaction_date_expr()} DESC, id DESC
+            """,
+            (user_id, cycle_start.isoformat(), cycle_end.isoformat()),
+        ).fetchall()]
+
+    deductions_total = _as_float(deduction_details.get("extra_deductions_total"))
+    positive_events_total = sum(max(_as_float(event.get("amount")), 0) for event in payroll_events)
+    bonus_total_all = sum(max(_as_float(item.get("amount")), 0) for item in bonuses)
+    extra_gross_base = positive_events_total + bonus_total_all
+
+    extra_items: list[dict] = []
+    extra_expected = 0.0
+    for event in payroll_events:
+        pay_date = _next_thursday_after_work_week(event.get("created_at"))
+        if not pay_date or not (cycle_start <= pay_date < cycle_end):
+            continue
+        gross = _as_float(event.get("amount"))
+        proportional_deduction = 0.0
+        if gross > 0 and extra_gross_base > 0:
+            proportional_deduction = deductions_total * (gross / extra_gross_base)
+        net = gross - proportional_deduction if gross > 0 else gross
+        extra_expected += net
+        extra_items.append({
+            **event,
+            "kind": "payroll_event",
+            "estimated_pay_date": pay_date.isoformat(),
+            "gross_amount": round(gross, 2),
+            "net_amount": round(net, 2),
+        })
+
+    for bonus in bonuses:
+        created = bonus.get("created_at")
+        if isinstance(created, datetime):
+            pay_date = created.date()
+        else:
+            try:
+                pay_date = datetime.fromisoformat(str(created).replace('Z', '+00:00')).date()
+            except Exception:
+                pay_date = None
+        if not pay_date or not (cycle_start <= pay_date < cycle_end):
+            continue
+        gross = _as_float(bonus.get("amount"))
+        proportional_deduction = 0.0
+        if gross > 0 and extra_gross_base > 0:
+            proportional_deduction = deductions_total * (gross / extra_gross_base)
+        net = gross - proportional_deduction
+        extra_expected += net
+        extra_items.append({
+            **bonus,
+            "kind": "bonus",
+            "estimated_pay_date": pay_date.isoformat(),
+            "gross_amount": round(gross, 2),
+            "net_amount": round(net, 2),
+        })
+
+    expenses = [row for row in transaction_rows if row.get("transaction_type") == "expense"]
+    debt_payments = [row for row in transaction_rows if row.get("transaction_type") == "debt_payment"]
+    income_transactions = [row for row in transaction_rows if row.get("transaction_type") == "income"]
+    loan_transactions = [row for row in transaction_rows if row.get("transaction_type") in {"loan_received", "loan_disbursement"}]
+
+    expenses_total = sum(_as_float(row.get("amount")) for row in expenses)
+    debt_payments_total = sum(_as_float(row.get("amount")) for row in debt_payments)
+    income_received_total = sum(_as_float(row.get("amount")) for row in income_transactions)
+    loans_total = sum(_as_float(row.get("amount")) for row in loan_transactions)
+    expected_total = base_net + extra_expected
+    real_balance = expected_total + income_received_total + loans_total - expenses_total - debt_payments_total
+
+    return {
+        "status": "OK",
+        "cycle": {
+            "start": cycle_start.isoformat(),
+            "end": cycle_end.isoformat(),
+            "label": f"{cycle_start.isoformat()} → {cycle_end.isoformat()}",
+            "closing_day": 5,
+        },
+        "income": {
+            "fixed_expected": round(base_net, 2),
+            "extra_expected": round(extra_expected, 2),
+            "expected_total": round(expected_total, 2),
+            "received_from_transactions": round(income_received_total, 2),
+            "items": extra_items,
+        },
+        "expenses": {
+            "current_period": round(expenses_total, 2),
+            "items": expenses,
+        },
+        "debts": {
+            "payments_current_period": round(debt_payments_total, 2),
+            "items": debt_payments,
+        },
+        "cashflow": {
+            "real_balance": round(real_balance, 2),
+            "loan_received": round(loans_total, 2),
+        },
+        "transactions": transaction_rows,
+        "payroll_projection": salary_projection,
+        "user_id": user_id,
+    }
+
 
 def check_spending(amount: float = 0):
     summary = get_financial_summary()
