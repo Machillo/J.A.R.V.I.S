@@ -24,7 +24,9 @@ OWNER_EMAIL = os.getenv("OWNER_EMAIL", "gatotico99@gmail.com")
 CRON_SECRET = os.getenv("EMAIL_MONITOR_CRON_SECRET", "")
 DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
-    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular OR from:popular OR "BAC - SINPE" OR "Banco Popular") ("Notificación de transacción" OR "Notificación de Transferencia" OR "Transacción realizada" OR "Estado de cuenta" OR "Estado de Cuenta" OR "estados de cuenta" OR SINPE OR transferencia OR compra OR pago OR depósito OR deposito OR retiro OR abono)',
+    # Sender-only query on purpose. The parser decides what is financial.
+    # The old query mixed sender + keywords and Gmail returned only a tiny subset.
+    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopular OR from:popular)',
 )
 # Fase 6.2: no se guarda nada automático. Primero validamos lectura limpia.
 AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "999"))
@@ -89,6 +91,15 @@ def ensure_email_tables(conn) -> None:
         )
         """
     )
+    for ddl in [
+        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS raw_body TEXT",
+        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS body_text TEXT",
+        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS attachment_names TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]",
+        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS attachment_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS parse_reason TEXT",
+    ]:
+        conn.execute(ddl)
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS email_transaction_candidates (
@@ -158,6 +169,21 @@ def ensure_email_tables(conn) -> None:
         ON card_aliases(user_id)
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_parser_logs (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            provider_message_id TEXT,
+            sender TEXT,
+            subject TEXT,
+            bank TEXT,
+            action TEXT NOT NULL,
+            reason TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
 
 
 def _owner_user_id(conn) -> int | None:
@@ -186,6 +212,54 @@ def _owner_user_id(conn) -> int | None:
     return int(row["id"]) if row else None
 
 
+def _log_email_event(
+    conn,
+    *,
+    user_id: int,
+    provider_message_id: str | None = None,
+    sender: str = "",
+    subject: str = "",
+    bank: str = "unknown",
+    action: str = "info",
+    reason: str = "",
+) -> None:
+    try:
+        conn.execute(
+            """
+            INSERT INTO email_parser_logs (
+                user_id, provider_message_id, sender, subject, bank, action, reason
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (user_id, provider_message_id, sender, subject, bank, action, reason[:1000]),
+        )
+    except Exception:
+        # Logging must never break the email scanner.
+        pass
+
+
+def _settings_query_for_owner(conn, user_id: int) -> str:
+    row = conn.execute(
+        """
+        INSERT INTO email_monitor_settings (user_id, gmail_query, auto_commit_confidence)
+        VALUES (%s, %s, 999)
+        ON CONFLICT (user_id) DO UPDATE
+        SET gmail_query = CASE
+                WHEN email_monitor_settings.gmail_query IS NULL
+                  OR email_monitor_settings.gmail_query = ''
+                  OR email_monitor_settings.gmail_query LIKE '%%Notificación de transacción%%'
+                THEN EXCLUDED.gmail_query
+                ELSE email_monitor_settings.gmail_query
+            END,
+            auto_commit_confidence = 999,
+            updated_at = NOW()
+        RETURNING gmail_query
+        """,
+        (user_id, DEFAULT_QUERY),
+    ).fetchone()
+    return (row or {}).get("gmail_query") or DEFAULT_QUERY
+
+
 def _require_owner_user() -> dict[str, Any]:
     user = require_roles("owner")
     return user
@@ -202,7 +276,16 @@ def get_email_monitor_status() -> dict[str, Any]:
             INSERT INTO email_monitor_settings (user_id, gmail_query)
             VALUES (%s, %s)
             ON CONFLICT (user_id)
-            DO UPDATE SET updated_at = NOW()
+            DO UPDATE SET
+                gmail_query = CASE
+                    WHEN email_monitor_settings.gmail_query IS NULL
+                      OR email_monitor_settings.gmail_query = ''
+                      OR email_monitor_settings.gmail_query LIKE '%%Notificación de transacción%%'
+                    THEN EXCLUDED.gmail_query
+                    ELSE email_monitor_settings.gmail_query
+                END,
+                auto_commit_confidence = 999,
+                updated_at = NOW()
             RETURNING *
             """,
             (user_id, DEFAULT_QUERY),
@@ -361,6 +444,136 @@ def _transaction_duplicate_exists(conn, user_id: int, candidate: dict[str, Any])
     return bool(row)
 
 
+def _find_existing_ingested(conn, user_id: int, email_fp: str, provider_message_id: str | None):
+    if provider_message_id:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM email_ingested_messages
+            WHERE user_id = %s
+              AND provider = 'gmail'
+              AND provider_message_id = %s
+            LIMIT 1
+            """,
+            (user_id, provider_message_id),
+        ).fetchone()
+        if row:
+            return row
+    return conn.execute(
+        """
+        SELECT id
+        FROM email_ingested_messages
+        WHERE user_id = %s
+          AND fingerprint = %s
+        LIMIT 1
+        """,
+        (user_id, email_fp),
+    ).fetchone()
+
+
+def _upsert_ingested_message(
+    conn,
+    *,
+    user_id: int,
+    provider_message_id: str | None,
+    email_fp: str,
+    sender: str,
+    subject: str,
+    received_at: str | None,
+    bank: str,
+    status: str,
+    body: str,
+    reason: str = "",
+    attachment_names: list[str] | None = None,
+) -> int:
+    attachment_names = attachment_names or []
+    raw_excerpt = (body or reason or "")[:1200]
+    raw_body = (body or "")[:20000]
+    existing = _find_existing_ingested(conn, user_id, email_fp, provider_message_id)
+    if existing:
+        email_id = int(existing["id"])
+        conn.execute(
+            """
+            UPDATE email_ingested_messages
+            SET provider_message_id = COALESCE(%s, provider_message_id),
+                fingerprint = %s,
+                sender = %s,
+                subject = %s,
+                received_at = COALESCE(%s, received_at),
+                bank = %s,
+                status = %s,
+                raw_excerpt = %s,
+                raw_body = %s,
+                body_text = %s,
+                attachment_names = %s,
+                attachment_count = %s,
+                parse_reason = %s
+            WHERE id = %s AND user_id = %s
+            """,
+            (
+                provider_message_id,
+                email_fp,
+                sender,
+                subject,
+                received_at,
+                bank,
+                status,
+                raw_excerpt,
+                raw_body,
+                raw_body,
+                attachment_names,
+                len(attachment_names),
+                reason[:1000],
+                email_id,
+                user_id,
+            ),
+        )
+        return email_id
+
+    row = conn.execute(
+        """
+        INSERT INTO email_ingested_messages (
+            user_id, provider, provider_message_id, fingerprint, sender, subject,
+            received_at, bank, status, raw_excerpt, raw_body, body_text,
+            attachment_names, attachment_count, parse_reason
+        )
+        VALUES (%s, 'gmail', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (user_id, provider, provider_message_id)
+        DO UPDATE SET
+            fingerprint = EXCLUDED.fingerprint,
+            sender = EXCLUDED.sender,
+            subject = EXCLUDED.subject,
+            received_at = COALESCE(EXCLUDED.received_at, email_ingested_messages.received_at),
+            bank = EXCLUDED.bank,
+            status = EXCLUDED.status,
+            raw_excerpt = EXCLUDED.raw_excerpt,
+            raw_body = EXCLUDED.raw_body,
+            body_text = EXCLUDED.body_text,
+            attachment_names = EXCLUDED.attachment_names,
+            attachment_count = EXCLUDED.attachment_count,
+            parse_reason = EXCLUDED.parse_reason
+        RETURNING id
+        """,
+        (
+            user_id,
+            provider_message_id,
+            email_fp,
+            sender,
+            subject,
+            received_at,
+            bank,
+            status,
+            raw_excerpt,
+            raw_body,
+            raw_body,
+            attachment_names,
+            len(attachment_names),
+            reason[:1000],
+        ),
+    ).fetchone()
+    return int(row["id"])
+
+
 def scan_email_text(
     *,
     subject: str,
@@ -377,155 +590,120 @@ def scan_email_text(
         user_id = get_current_user_id()
 
     parsed = parse_financial_email(subject, sender, body, received_at)
-    parsed["attachment_names"] = attachment_names or []
+    attachment_names = attachment_names or []
+    parsed["attachment_names"] = attachment_names
     email_fp = fingerprint_email(sender, subject, body, received_at)
-
-    # Correos informativos, login, publicidad y seguros no generan candidatos.
-    # Se guardan como ingested/ignored para evitar reprocesarlos y para auditoría.
-    if parsed.get("email_kind") == "ignored":
-        with get_connection() as conn:
-            ensure_email_tables(conn)
-            existing_msg = conn.execute(
-                """
-                SELECT id
-                FROM email_ingested_messages
-                WHERE user_id = %s
-                AND fingerprint = %s
-                """,
-                (user_id, email_fp),
-            ).fetchone()
-
-            if existing_msg:
-                conn.commit()
-                return {
-                    "status": "DUPLICATE_IGNORED_EMAIL",
-                    "message": "Correo ignorado ya procesado.",
-                    "ignored": True,
-                    "reason": parsed.get("ignore_reason") or parsed.get("confidence_reason"),
-                }
-
-            conn.execute(
-                """
-                INSERT INTO email_ingested_messages (
-                    user_id, provider, provider_message_id, fingerprint, sender, subject,
-                    received_at, bank, status, raw_excerpt
-                )
-                VALUES (%s, 'gmail', %s, %s, %s, %s, %s, %s, 'ignored', %s)
-                ON CONFLICT DO NOTHING
-                """,
-                (
-                    user_id,
-                    provider_message_id,
-                    email_fp,
-                    sender,
-                    subject,
-                    received_at,
-                    parsed["bank"],
-                    (parsed.get("ignore_reason") or body)[:1200],
-                ),
-            )
-            conn.commit()
-
-        return {
-            "status": "IGNORED_EMAIL",
-            "message": parsed.get("ignore_reason") or "Correo ignorado.",
-            "ignored": True,
-            "candidate": None,
-        }
-
-    candidate_fp = fingerprint_candidate(
-        user_id=user_id,
-        transaction_date=parsed["transaction_date"],
-        amount=float(parsed["amount"]),
-        transaction_type=parsed["transaction_type"],
-        description=parsed["description"],
-        bank=parsed["bank"],
-    )
 
     with get_connection() as conn:
         ensure_email_tables(conn)
+        email_message_id = _upsert_ingested_message(
+            conn,
+            user_id=user_id,
+            provider_message_id=provider_message_id,
+            email_fp=email_fp,
+            sender=sender,
+            subject=subject,
+            received_at=received_at,
+            bank=parsed.get("bank") or "unknown",
+            status="ignored" if parsed.get("email_kind") == "ignored" else "processed",
+            body=body,
+            reason=parsed.get("ignore_reason") or parsed.get("confidence_reason") or "",
+            attachment_names=attachment_names,
+        )
 
-        existing_msg = conn.execute(
-            """
-            SELECT id
-            FROM email_ingested_messages
-            WHERE user_id = %s
-            AND fingerprint = %s
-            """,
-            (user_id, email_fp),
-        ).fetchone()
+        if parsed.get("email_kind") == "ignored":
+            _log_email_event(
+                conn,
+                user_id=user_id,
+                provider_message_id=provider_message_id,
+                sender=sender,
+                subject=subject,
+                bank=parsed.get("bank") or "unknown",
+                action="ignored",
+                reason=parsed.get("ignore_reason") or parsed.get("confidence_reason") or "Correo ignorado.",
+            )
+            conn.commit()
+            return {
+                "status": "IGNORED_EMAIL",
+                "message": parsed.get("ignore_reason") or "Correo ignorado.",
+                "ignored": True,
+                "candidate": None,
+            }
 
-        if existing_msg:
-            existing_candidate = conn.execute(
-                """
-                SELECT *
-                FROM email_transaction_candidates
-                WHERE user_id = %s
-                AND fingerprint = %s
-                """,
-                (user_id, candidate_fp),
-            ).fetchone()
-            if existing_candidate:
-                conn.commit()
-                return {
-                    "status": "DUPLICATE_EMAIL",
-                    "message": "Correo ya procesado.",
-                    "candidate": dict(existing_candidate),
-                }
-
-            # Parser upgraded: a message previously marked ignored may now parse correctly.
-            # Reuse the existing ingested email row and create the missing candidate.
-            email_message_id = int(existing_msg["id"])
+        if parsed.get("email_kind") == "statement":
             conn.execute(
                 """
-                UPDATE email_ingested_messages
-                SET status = 'processed', bank = %s, subject = %s, sender = %s,
-                    received_at = COALESCE(%s, received_at), raw_excerpt = %s
-                WHERE id = %s AND user_id = %s
-                """,
-                (parsed["bank"], subject, sender, received_at, body[:1200], email_message_id, user_id),
-            )
-        else:
-            email_row = conn.execute(
-                """
-                INSERT INTO email_ingested_messages (
-                    user_id, provider, provider_message_id, fingerprint, sender, subject,
-                    received_at, bank, status, raw_excerpt
+                INSERT INTO email_statement_documents (
+                    user_id, email_message_id, bank, subject, statement_month,
+                    received_at, attachment_names, extracted_text_excerpt, status
                 )
-                VALUES (%s, 'gmail', %s, %s, %s, %s, %s, %s, 'processed', %s)
-                RETURNING id
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending_reconciliation')
+                ON CONFLICT (user_id, email_message_id)
+                DO UPDATE SET
+                    bank = EXCLUDED.bank,
+                    subject = EXCLUDED.subject,
+                    statement_month = EXCLUDED.statement_month,
+                    received_at = COALESCE(EXCLUDED.received_at, email_statement_documents.received_at),
+                    attachment_names = EXCLUDED.attachment_names,
+                    extracted_text_excerpt = EXCLUDED.extracted_text_excerpt,
+                    status = 'pending_reconciliation',
+                    updated_at = NOW()
                 """,
                 (
                     user_id,
-                    provider_message_id,
-                    email_fp,
-                    sender,
-                    subject,
-                    received_at,
+                    email_message_id,
                     parsed["bank"],
-                    body[:1200],
+                    subject,
+                    parsed.get("statement_month"),
+                    received_at,
+                    attachment_names,
+                    (body or "")[:2500],
                 ),
-            ).fetchone()
-            email_message_id = int(email_row["id"])
+            )
+            # Remove old zero-amount statement candidates if this message had any.
+            conn.execute(
+                """
+                DELETE FROM email_transaction_candidates
+                WHERE user_id = %s
+                  AND email_message_id = %s
+                  AND transaction_type = 'statement'
+                """,
+                (user_id, email_message_id),
+            )
+            _log_email_event(
+                conn,
+                user_id=user_id,
+                provider_message_id=provider_message_id,
+                sender=sender,
+                subject=subject,
+                bank=parsed.get("bank") or "unknown",
+                action="statement_document",
+                reason=parsed.get("confidence_reason") or "Estado de cuenta guardado como documento.",
+            )
+            conn.commit()
+            return {
+                "status": "STATEMENT_DOCUMENT",
+                "message": "Estado de cuenta guardado como documento pendiente de conciliación.",
+                "candidate": None,
+                "statement": True,
+            }
+
+        candidate_fp = fingerprint_candidate(
+            user_id=user_id,
+            transaction_date=parsed["transaction_date"],
+            amount=float(parsed["amount"]),
+            transaction_type=parsed["transaction_type"],
+            description=parsed["description"],
+            bank=parsed["bank"],
+        )
+
         parsed = _enrich_candidate_with_card_alias(conn, user_id, parsed)
+        parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
 
-        if parsed.get("email_kind") == "statement":
-            parsed["category"] = "Estado de cuenta"
-        else:
-            parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
-
-        if parsed.get("email_kind") == "statement":
-            candidate_status = "pending"
-            transaction_id = None
-            review_reason = parsed["confidence_reason"]
-        elif _transaction_duplicate_exists(conn, user_id, parsed):
+        if _transaction_duplicate_exists(conn, user_id, parsed):
             candidate_status = "duplicate"
             transaction_id = None
             review_reason = "Transacción idéntica ya existe."
-        elif False and auto_commit and float(parsed["confidence"]) >= AUTO_COMMIT_CONFIDENCE and float(parsed.get("amount") or 0) > 0:
-            transaction_id = _insert_transaction(conn, user_id, parsed)
-            candidate_status = "auto_saved"
-            review_reason = "Guardada automáticamente por alta confianza."
         else:
             transaction_id = None
             candidate_status = "pending"
@@ -541,7 +719,26 @@ def scan_email_text(
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, fingerprint)
-            DO UPDATE SET updated_at = NOW()
+            DO UPDATE SET
+                email_message_id = EXCLUDED.email_message_id,
+                transaction_date = EXCLUDED.transaction_date,
+                description = EXCLUDED.description,
+                amount = EXCLUDED.amount,
+                transaction_type = EXCLUDED.transaction_type,
+                category = EXCLUDED.category,
+                account = EXCLUDED.account,
+                notes = EXCLUDED.notes,
+                original_amount = EXCLUDED.original_amount,
+                original_currency = EXCLUDED.original_currency,
+                exchange_rate = EXCLUDED.exchange_rate,
+                confidence = EXCLUDED.confidence,
+                status = CASE
+                    WHEN email_transaction_candidates.status IN ('confirmed','auto_saved')
+                    THEN email_transaction_candidates.status
+                    ELSE EXCLUDED.status
+                END,
+                review_reason = EXCLUDED.review_reason,
+                updated_at = NOW()
             RETURNING *
             """,
             (
@@ -565,34 +762,16 @@ def scan_email_text(
                 review_reason,
             ),
         ).fetchone()
-
-        if parsed.get("email_kind") == "statement":
-            conn.execute(
-                """
-                INSERT INTO email_statement_documents (
-                    user_id, email_message_id, bank, subject, statement_month,
-                    received_at, attachment_names, extracted_text_excerpt, status
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending_reconciliation')
-                ON CONFLICT (user_id, email_message_id)
-                DO UPDATE SET
-                    statement_month = EXCLUDED.statement_month,
-                    attachment_names = EXCLUDED.attachment_names,
-                    extracted_text_excerpt = EXCLUDED.extracted_text_excerpt,
-                    updated_at = NOW()
-                """,
-                (
-                    user_id,
-                    email_message_id,
-                    parsed["bank"],
-                    subject,
-                    parsed.get("statement_month"),
-                    received_at,
-                    parsed.get("attachment_names") or [],
-                    (body or "")[:2500],
-                ),
-            )
-
+        _log_email_event(
+            conn,
+            user_id=user_id,
+            provider_message_id=provider_message_id,
+            sender=sender,
+            subject=subject,
+            bank=parsed.get("bank") or "unknown",
+            action="candidate",
+            reason=review_reason,
+        )
         conn.commit()
 
     return {
@@ -600,7 +779,6 @@ def scan_email_text(
         "message": "Correo analizado.",
         "candidate": dict(candidate_row),
     }
-
 
 def list_email_candidates(status_filter: str | None = None, limit: int = 50) -> dict[str, Any]:
     _require_owner_user()
@@ -809,30 +987,60 @@ def _gmail_service():
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
-def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = False, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
-    # Fase 6.2: lectura y candidatos pendientes únicamente. No autoguardar.
+def _list_gmail_messages(service, *, gmail_query: str, max_results: int) -> list[dict[str, Any]]:
+    """List Gmail messages with pagination.
+
+    Gmail returns pages. The previous scanner processed only the first page and
+    the UI sent low max_results values, causing JARVIS to ingest only a handful
+    of emails while Gmail had dozens. This function keeps fetching pages until
+    the requested cap is reached.
+    """
+    max_results = max(1, min(int(max_results or 100), 500))
+    messages: list[dict[str, Any]] = []
+    page_token: str | None = None
+    while len(messages) < max_results:
+        batch_size = min(100, max_results - len(messages))
+        request: dict[str, Any] = {
+            "userId": "me",
+            "q": gmail_query,
+            "maxResults": batch_size,
+        }
+        if page_token:
+            request["pageToken"] = page_token
+        response = service.users().messages().list(**request).execute()
+        messages.extend(response.get("messages", []) or [])
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+    return messages[:max_results]
+
+
+def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
+    # Lectura y candidatos pendientes únicamente. No autoguardar.
     auto_commit = False
     service = _gmail_service()
-    gmail_query = build_current_month_gmail_query(query or DEFAULT_QUERY) if current_month_only else (query or DEFAULT_QUERY)
 
     with get_connection() as conn:
         ensure_email_tables(conn)
         owner_id = _owner_user_id(conn)
         if not owner_id:
             raise RuntimeError("No encontré usuario owner para guardar correos.")
+        settings_query = _settings_query_for_owner(conn, owner_id)
         conn.commit()
 
-    response = service.users().messages().list(
-        userId="me",
-        q=gmail_query,
-        maxResults=max_results,
-    ).execute()
+    # Do not let the UI's old max_results=25 starve the scanner. Current-month
+    # financial inboxes can easily have more than 25 BAC/SINPE/MultiMoney emails.
+    effective_max_results = max(int(max_results or 0), 150)
+    base_query = (query or settings_query or DEFAULT_QUERY).strip()
+    gmail_query = build_current_month_gmail_query(base_query) if current_month_only else base_query
 
-    messages = response.get("messages", []) or []
-    processed = []
+    messages = _list_gmail_messages(service, gmail_query=gmail_query, max_results=effective_max_results)
+    processed: list[dict[str, Any]] = []
 
     for item in messages:
         message_id = item.get("id")
+        if not message_id:
+            continue
         full = service.users().messages().get(userId="me", id=message_id, format="full").execute()
         headers = {h.get("name", "").lower(): h.get("value", "") for h in full.get("payload", {}).get("headers", [])}
         subject = headers.get("subject", "")
@@ -850,21 +1058,41 @@ def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = False, query
         attachments = _collect_attachments(payload)
         pdf_text, attachment_names = _extract_pdf_attachment_text(service, message_id, attachments)
         if pdf_text:
-            body = f"{body}\n\n{pdf_text}"
-        result = scan_email_text(
-            subject=subject,
-            sender=sender,
-            body=body,
-            received_at=received_at,
-            auto_commit=auto_commit,
-            user_id=owner_id,
-            provider_message_id=message_id,
-            attachment_names=attachment_names,
-        )
+            body = f"{body}\n\n{pdf_text}".strip()
+
+        try:
+            result = scan_email_text(
+                subject=subject,
+                sender=sender,
+                body=body,
+                received_at=received_at,
+                auto_commit=auto_commit,
+                user_id=owner_id,
+                provider_message_id=message_id,
+                attachment_names=attachment_names,
+            )
+        except Exception as exc:
+            with get_connection() as conn:
+                ensure_email_tables(conn)
+                _log_email_event(
+                    conn,
+                    user_id=owner_id,
+                    provider_message_id=message_id,
+                    sender=sender,
+                    subject=subject,
+                    bank="unknown",
+                    action="error",
+                    reason=str(exc),
+                )
+                conn.commit()
+            result = {"status": "ERROR", "message": str(exc), "candidate": None}
+
         processed.append({
             "gmail_id": message_id,
             "subject": subject,
+            "sender": sender,
             "status": result.get("status"),
+            "message": result.get("message"),
             "candidate_status": (result.get("candidate") or {}).get("status"),
         })
 
@@ -873,30 +1101,38 @@ def sync_gmail_for_owner(max_results: int = 10, auto_commit: bool = False, query
         conn.execute(
             """
             UPDATE email_monitor_settings
-            SET last_scan_at = NOW(), updated_at = NOW()
+            SET last_scan_at = NOW(), updated_at = NOW(), gmail_query = %s, auto_commit_confidence = 999
             WHERE user_id = %s
             """,
-            (owner_id,),
+            (settings_query or DEFAULT_QUERY, owner_id),
         )
         conn.commit()
 
     auto_saved = sum(1 for item in processed if item.get("candidate_status") == "auto_saved")
     pending = sum(1 for item in processed if item.get("candidate_status") == "pending")
+    statements = sum(1 for item in processed if item.get("status") == "STATEMENT_DOCUMENT")
     ignored = sum(1 for item in processed if item.get("status") in {"IGNORED_EMAIL", "DUPLICATE_IGNORED_EMAIL"})
     duplicates = sum(1 for item in processed if item.get("status") == "DUPLICATE_EMAIL" or item.get("candidate_status") == "duplicate")
+    errors = sum(1 for item in processed if item.get("status") == "ERROR")
 
     return {
         "status": "OK",
         "query": gmail_query,
         "found": len(messages),
-        "processed": processed,
+        "processed": processed[:100],
         "summary": {
             "auto_saved": auto_saved,
             "pending": pending,
+            "statements": statements,
             "duplicates": duplicates,
             "ignored": ignored,
+            "errors": errors,
         },
-        "message": f"Escaneo completado. Encontrados: {len(messages)}, pendientes: {pending}, duplicados: {duplicates}, ignorados: {ignored}. Auto guardado desactivado.",
+        "message": (
+            f"Escaneo completado. Encontrados: {len(messages)}, pendientes: {pending}, "
+            f"estados: {statements}, duplicados: {duplicates}, ignorados: {ignored}, errores: {errors}. "
+            "Auto guardado desactivado."
+        ),
     }
 
 

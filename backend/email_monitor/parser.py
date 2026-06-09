@@ -19,19 +19,29 @@ from typing import Any
 
 BANK_SENDERS = {
     "bac": [
-        "bac", "credomatic", "baccredomatic", "notificacionesbaccr",
-        "notificacion@notificacionesbaccr.com", "notificaciones@baccredomatic.cr",
-        "estadosdecuenta@baccredomatic.cr", "estadodecuenta@baccredomatic.cr",
-        "bac - sinpe",
+        "notificacion@notificacionesbaccr.com",
+        "notificaciones@baccredomatic.cr",
+        "alerta@baccredomatic.com",
+        "estadosdecuenta@baccredomatic.cr",
+        "estadodecuenta@baccredomatic.cr",
+        "info@info.baccredomatic.net",
     ],
     "popular": [
-        "banco popular", "bancopopular", "bancopopular.fi.cr",
-        "notificaciones@bancopopular", "banco popular informa",
+        "bancopopular.fi.cr",
+        "notificaciones@bancopopular",
+        "banco popular informa",
     ],
     "multimoney": [
-        "multimoney", "multi money", "financiera multimoney", "multimoneycr",
+        "multimoneycr@multimoney.com",
         "financiera@multimoney.com",
+        "@multimoney.com",
     ],
+}
+
+BANK_SUBJECT_HINTS = {
+    "bac": ["bac - sinpe", "bac san jose", "bac san josé", "credomatic"],
+    "popular": ["banco popular"],
+    "multimoney": ["multimoney", "multi money"],
 }
 
 STATEMENT_KEYWORDS = [
@@ -127,10 +137,30 @@ def fingerprint_candidate(user_id: int, transaction_date: str, amount: float, tr
 
 
 def detect_bank(sender: str, subject: str, body: str) -> str:
-    haystack = normalize(" ".join([sender or "", subject or "", (body or "")[:3500]]))
+    """Detect bank with sender-first priority.
+
+    The previous implementation searched the whole email and matched the generic
+    word "bac" before checking MultiMoney, so MultiMoney messages that mentioned
+    BAC accounts were classified as BAC. Financial email classification must be
+    based first on the From address/domain, then on subject hints as a fallback.
+    """
+    sender_clean = normalize(sender or "")
     for bank, words in BANK_SENDERS.items():
-        if any(normalize(word) in haystack for word in words):
+        if any(normalize(word) in sender_clean for word in words):
             return bank
+
+    subject_clean = normalize(subject or "")
+    for bank, words in BANK_SUBJECT_HINTS.items():
+        if any(normalize(word) in subject_clean for word in words):
+            return bank
+
+    body_head = normalize((body or "")[:800])
+    if "multimoney" in body_head or "multi money" in body_head:
+        return "multimoney"
+    if "banco popular" in body_head:
+        return "popular"
+    if "bac" in body_head and ("sinpe" in body_head or "credomatic" in body_head):
+        return "bac"
     return "unknown"
 
 
@@ -399,7 +429,12 @@ def _base_result(bank: str, kind: str, received_at: str | None) -> dict[str, Any
 def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str | None, exchange_rate: float) -> dict[str, Any] | None:
     text = clean_text("\n".join([subject or "", body or ""]))
     clean = normalize(text)
-    if not ("notificacion de transaccion" in clean and "comercio" in clean and "tipo de transaccion" in clean and "monto" in clean):
+    if not (
+        ("notificacion de transaccion" in clean or "transaccion realizada" in clean)
+        and "comercio" in clean
+        and ("tipo de transaccion" in clean or "tipo transaccion" in clean)
+        and "monto" in clean
+    ):
         return None
 
     merchant = _label_value(text, "Comercio")
@@ -511,7 +546,9 @@ def _extract_multimoney_account_block(text: str, label: str) -> str:
 def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
     text = clean_text("\n".join([sender or "", subject or "", body or ""]))
     clean = normalize(text)
-    if not ("multimoney" in clean and "resumen de operacion" in clean and "monto" in clean and "fecha" in clean):
+    if not ("multimoney" in clean and "monto" in clean and "fecha" in clean):
+        return None
+    if not ("resumen de operacion" in clean or "operacion realizada" in clean or "se aplico un debito" in clean or "se aplicó un débito" in clean or "notificacion de transferencia" in clean):
         return None
     concept = _label_value(text, "Concepto") or "Movimiento MultiMoney"
     amount, currency = _parse_labeled_amount_value(_label_value(text, "Monto"))
