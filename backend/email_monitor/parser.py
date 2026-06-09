@@ -113,6 +113,7 @@ OWN_ACCOUNT_ALIASES = {
     "6126": "MultiMoney colones",
     "2572": "BAC planilla",
     "8137": "BAC cuenta",
+    "1813": "BAC cuenta",
     "1655": "BAC débito",
     "7514": "BAC débito",
 }
@@ -128,6 +129,8 @@ REJECTED_MOVEMENT_KEYWORDS = [
 INTERNAL_CONCEPT_KEYWORDS = [
     "inversion vista smart", "inversión vista smart", "vista smart", "ahorro multimoney",
     "inversion propia", "inversión propia", "traslado entre cuentas", "movimiento entre cuentas",
+    "transferencia entre cuentas", "transferencia entre cuentas bac",
+    "debito aplicado por otra entidad financiera", "débito aplicado por otra entidad financiera",
 ]
 
 
@@ -168,8 +171,9 @@ def _extract_account_near(text: str | None, labels: list[str]) -> str:
     raw = clean_text(text or "")
     label_pattern = "|".join(re.escape(label) for label in labels)
     patterns = [
-        rf"(?:{label_pattern})\s*[:\-]?\s*([A-Z]{{2}}\s*\d(?:[\s\-]*\d){{19}})",
-        rf"(?:{label_pattern})\s*[:\-]?\s*(\*{{2,}}\d{{4}}|X{{2,}}\d{{4}}|\d{{4}})",
+        rf"(?:{label_pattern})\s*[:\-]?\s*(?:IBAN|CUENTA|CTA|N[°ºO]?)?\s*([A-Z]{{2}}\s*\d(?:[\s\-]*\d){{19}})",
+        rf"(?:{label_pattern})\s*[:\-]?\s*(?:IBAN|CUENTA|CTA|N[°ºO]?)?\s*(CR\s*\d{{0,8}}[X\*\s\-]{{2,}}\d{{4}})",
+        rf"(?:{label_pattern})\s*[:\-]?\s*(?:IBAN|CUENTA|CTA|N[°ºO]?\s*)?(\*{{2,}}\d{{4}}|X{{2,}}\d{{4}}|\d{{4}})",
     ]
     for pattern in patterns:
         match = re.search(pattern, raw, re.I)
@@ -193,39 +197,70 @@ def _is_internal_concept(value: str | None) -> bool:
     return any(token in clean_value for token in INTERNAL_CONCEPT_KEYWORDS)
 
 
+def _looks_like_account_reference(text: str | None, last4: str) -> bool:
+    """Return True only when last4 appears as a bank/card/account reference.
+
+    We intentionally avoid matching ordinary amounts. The real emails use both
+    full IBANs and masked formats such as CR74****6126, CR4201XXXXXXXX2572,
+    N°****1813 or Cuenta: ****6126.
+    """
+    raw = text or ""
+    if not raw or not last4:
+        return False
+
+    # Full/unmasked or compact IBAN somewhere in the body.
+    compact = _compact_account(raw)
+    for iban in OWN_ACCOUNT_IBANS:
+        if iban in compact and iban.endswith(last4):
+            return True
+
+    # Masked IBAN/account/card notations. Keep patterns close to account words
+    # or CR prefixes so amounts like 10,000.00 never match as account endings.
+    patterns = [
+        rf"CR\s*\d{{0,8}}[X\*\s\-]{{2,}}{re.escape(last4)}\b",
+        rf"(?:IBAN|CUENTA|CTA|N[°ºO]?|TARJETA|ACCOUNT)[^\n]{{0,80}}(?:X|\*){{2,}}[^\n]{{0,20}}{re.escape(last4)}\b",
+        rf"(?:IBAN|CUENTA|CTA|N[°ºO]?|TARJETA|ACCOUNT)[^\n]{{0,80}}CR[^\n]{{0,40}}{re.escape(last4)}\b",
+    ]
+    return any(re.search(pattern, raw, re.I) for pattern in patterns)
+
+
 def _own_account_labels_in_text(text: str | None) -> set[str]:
     labels: set[str] = set()
-    compact = _compact_account(text or "")
     for iban, label in OWN_ACCOUNT_IBANS.items():
-        if iban in compact:
+        if iban in _compact_account(text or ""):
             labels.add(label)
     for last4, label in OWN_ACCOUNT_ALIASES.items():
-        # Match explicit masked/account endings without treating any random amount as an account.
-        if re.search(rf"(?:IBAN|CUENTA|CTA|TARJETA|\*{{2,}}|X{{2,}}|CR\d{{16,}})[^\d]{{0,20}}{re.escape(last4)}\b", text or "", re.I):
+        if _looks_like_account_reference(text, last4):
             labels.add(label)
     return labels
 
 
 def _is_internal_transfer(concept: str | None = None, origin: str | None = None, destination: str | None = None, body: str | None = None, direction: str = "unknown") -> bool:
-    if _is_internal_concept(concept) or _is_internal_concept(body):
-        return True
+    concept_internal = _is_internal_concept(concept)
+    body_internal = _is_internal_concept(body)
 
     origin_own = _contains_own_account(origin)
     destination_own = _contains_own_account(destination)
+    labels = _own_account_labels_in_text(body)
+
+    # Explicit own-account concepts from BAC/MultiMoney are never expenses.
+    # Examples: INVERSION VISTA SMART, transferencia entre cuentas, debit applied
+    # by another financial entity when the account is one of Kenneth's accounts.
+    if concept_internal and (origin_own or destination_own or labels):
+        return True
+    if body_internal and len(labels) >= 1:
+        return True
 
     # Two own endpoints means this is only a money move between pockets.
     if origin_own and destination_own:
         return True
 
-    # If the known own account is the destination of an outgoing transfer, or the
-    # origin of an incoming transfer, the other side is also ours in the bank template.
-    if direction == "out" and destination_own:
-        return True
-    if direction == "in" and origin_own:
+    # If both own accounts appear anywhere in the email body, this is a mirror
+    # notification from the same transfer path and should not be reviewed.
+    if len(labels) >= 2:
         return True
 
-    labels = _own_account_labels_in_text(body)
-    return len(labels) >= 2
+    return False
 
 
 def _internal_ignored(bank: str, subject: str, body: str, received_at: str | None, reason: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -761,7 +796,14 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
 def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
     text = clean_text("\n".join([subject or "", body or ""]))
     clean = normalize(text)
-    if not ("sinpe" in clean and "transferencia" in clean and "monto" in clean):
+    is_transfer_notice = "transferencia" in clean and "monto" in clean
+    is_sinpe_notice = "sinpe" in clean and is_transfer_notice
+    is_local_transfer_notice = (
+        is_transfer_notice
+        and ("transferencia local" in clean or "transferencia electronica" in clean or "transferencia electrónica" in text.lower())
+        and "notificacion de transaccion" not in clean
+    )
+    if not (is_sinpe_notice or is_local_transfer_notice):
         return None
 
     if _has_rejected_movement(text):
@@ -775,7 +817,13 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
     transaction_date, time_value = _parse_datetime_text(date_match.group(1) if date_match else text, received_at)
 
     is_out = "debitando su cuenta" in clean or "debito" in clean or "débito" in clean
-    is_in = "se acredito" in clean or "se acredito en la cuenta" in clean or "se acreditó" in (body or "").lower() or "acreditando" in clean
+    is_in = (
+        "se acredito" in clean
+        or "se acredito en la cuenta" in clean
+        or "se acreditó" in (body or "").lower()
+        or "acreditando" in clean
+        or "a su cuenta" in clean
+    )
     direction = "out" if is_out else "in" if is_in else "unknown"
 
     concept_match = re.search(r"por\s+concepto\s+de\s+(.+?)(?:\s+Monto\b|\.?D[ií]a\s+y\s+hora|\n|$)", text, re.I | re.S)
@@ -783,7 +831,7 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
     reference_match = re.search(r"referencia\s+(\d{8,})", text, re.I)
 
     origin_account = _extract_account_near(text, ["cuenta origen", "cuenta debitada", "debitando su cuenta", "desde la cuenta", "de la cuenta"])
-    destination_account = _extract_account_near(text, ["cuenta destino", "cuenta acreditada", "acreditando la cuenta", "a la cuenta", "hacia la cuenta", "al iban", "iban destino"])
+    destination_account = _extract_account_near(text, ["cuenta destino", "cuenta acreditada", "acreditando la cuenta", "a la cuenta", "a su cuenta", "hacia la cuenta", "al iban", "iban destino"])
     ibans = _extract_ibans(text)
     if not origin_account and direction == "out" and ibans:
         # BAC often mentions the debited own account first.

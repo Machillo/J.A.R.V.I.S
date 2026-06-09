@@ -341,6 +341,79 @@ def _log_email_event(
     except Exception:
         pass
 
+
+def _candidate_reference(candidate: dict[str, Any] | None) -> str | None:
+    if not candidate:
+        return None
+    for value in [candidate.get("dedupe_key"), candidate.get("notes"), candidate.get("confidence_reason")]:
+        match = re.search(r"(?:referencia[: ]*|\|)(\d{8,})", str(value or ""), re.I)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _candidate_is_internal(candidate: dict[str, Any] | None) -> bool:
+    if not candidate:
+        return False
+    if candidate.get("transaction_type") == "internal_transfer":
+        return True
+    text = " ".join(str(candidate.get(key) or "") for key in ["description", "category", "notes", "ignore_reason", "confidence_reason"]).lower()
+    return "movimiento interno" in text or "cuentas propias" in text or "inversión propia" in text or "inversion propia" in text
+
+
+def _internal_mirror_exists(conn, user_id: int, candidate: dict[str, Any]) -> bool:
+    """Detect already-ignored counterpart emails for the same internal transfer.
+
+    BAC and MultiMoney send separate mirror notifications for one movement. If
+    the MultiMoney/BAC mirror was already ignored as internal, the later BAC
+    SINPE candidate with the same reference/amount/date must not appear for
+    manual approval.
+    """
+    reference = _candidate_reference(candidate)
+    tx_date = candidate.get("transaction_date")
+    if not reference or not tx_date:
+        return False
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM email_parser_logs
+        WHERE user_id = %s
+          AND result = 'ignored'
+          AND extracted_payload::text ILIKE %s
+          AND extracted_payload::text ILIKE %s
+          AND (reason ILIKE '%%intern%%' OR extracted_payload::text ILIKE '%%internal_transfer%%' OR extracted_payload::text ILIKE '%%Movimiento interno%%')
+        LIMIT 1
+        """,
+        (user_id, f"%{reference}%", f"%{tx_date}%"),
+    ).fetchone()
+    return row is not None
+
+
+def _delete_pending_internal_mirrors(conn, user_id: int, internal_candidate: dict[str, Any]) -> int:
+    """Remove pending candidate mirrors after an internal counterpart is found.
+
+    This keeps the review inbox clean when Gmail returns BAC before MultiMoney
+    or vice versa. Only pending candidates are removed; confirmed data is never
+    touched.
+    """
+    reference = _candidate_reference(internal_candidate)
+    tx_date = internal_candidate.get("transaction_date")
+    if not reference or not tx_date:
+        return 0
+    rows = conn.execute(
+        """
+        DELETE FROM email_transaction_candidates
+        WHERE user_id = %s
+          AND status = 'pending'
+          AND transaction_id IS NULL
+          AND transaction_date = %s
+          AND notes ILIKE %s
+        RETURNING id
+        """,
+        (user_id, tx_date, f"%{reference}%"),
+    ).fetchall()
+    return len(rows)
+
 def _seed_default_card_aliases(conn, user_id: int) -> None:
     """Keep known BAC additional cards owner-aware.
 
@@ -354,6 +427,7 @@ def _seed_default_card_aliases(conn, user_id: int) -> None:
         ("1655", "Kenneth", "principal", True),
         ("7514", "Kenneth", "principal", True),
         ("8137", "Kenneth", "principal", True),  # cuenta IBAN BAC ligada a débito 1655
+        ("1813", "Kenneth", "principal", True),  # número corto/mascarado mostrado por BAC para la misma cuenta
         ("8295", "Kenneth", "principal", True),
         ("2205", "Emily", "adicional", False),
         ("3149", "Emily", "adicional", False),
@@ -866,12 +940,14 @@ def scan_email_text(
                 extracted_payload=parsed,
                 reason=parsed.get("ignore_reason") or parsed.get("confidence_reason") or "Correo ignorado.",
             )
+            removed_mirrors = _delete_pending_internal_mirrors(conn, user_id, parsed) if _candidate_is_internal(parsed) else 0
             conn.commit()
             return {
                 "status": "IGNORED_EMAIL",
                 "message": parsed.get("ignore_reason") or "Correo ignorado.",
                 "ignored": True,
                 "candidate": None,
+                "removed_internal_mirrors": removed_mirrors if 'removed_mirrors' in locals() else 0,
             }
 
         if parsed.get("email_kind") == "statement":
@@ -965,6 +1041,36 @@ def scan_email_text(
                 bank=parsed["bank"],
             )
         parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
+
+        if _internal_mirror_exists(conn, user_id, parsed):
+            _log_email_event(
+                conn,
+                user_id=user_id,
+                email_message_id=email_message_id,
+                provider_message_id=provider_message_id,
+                sender=sender,
+                subject=subject,
+                bank=parsed.get("bank") or "unknown",
+                action="ignored",
+                result="ignored",
+                extracted_payload=parsed,
+                reason="Movimiento espejo de una transferencia interna ya detectada; no se genera candidato financiero.",
+            )
+            conn.execute(
+                """
+                UPDATE email_ingested_messages
+                SET status = 'ignored', parse_reason = %s
+                WHERE id = %s AND user_id = %s
+                """,
+                ("Movimiento espejo de transferencia interna ya detectada.", email_message_id, user_id),
+            )
+            conn.commit()
+            return {
+                "status": "IGNORED_EMAIL",
+                "message": "Movimiento espejo de transferencia interna ya detectada.",
+                "ignored": True,
+                "candidate": None,
+            }
 
         duplicate_candidate = _candidate_duplicate_match(conn, user_id, parsed, candidate_fp)
         replace_existing_duplicate = False
