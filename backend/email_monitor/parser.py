@@ -191,11 +191,26 @@ def _label_value(text: str, label: str, max_lookahead: int = 8) -> str | None:
                 if next_clean.startswith("banner promocional") or next_clean.startswith("icono "):
                     return None
                 return next_line[:260]
-    # Compact fallback, only when value is in same line.
-    pattern = re.compile(rf"(?im)^\s*{re.escape(label)}\s*[:\-]\s*(.+)$")
+    # Compact/flattened HTML fallback. Gmail sometimes returns the whole BAC or
+    # MultiMoney template as one long line: "Comercio: X Ciudad y país: ...".
+    # Capture until the next known field label instead of the end of the line.
+    field_stops = [
+        "Comercio", "Ciudad y país", "Ciudad y pais", "Fecha", "MASTER", "VISA",
+        "Autorización", "Autorizacion", "Referencia", "Tipo de Transacción",
+        "Tipo de Transaccion", "Monto", "Cuenta origen", "Cuenta destino",
+        "Titular", "Cuenta", "Recordá", "Recorda", "Resumen de operación",
+        "Resumen de operacion",
+    ]
+    stop = "|".join(re.escape(item) for item in field_stops if normalize(item) != target)
+    pattern = re.compile(
+        rf"{re.escape(label)}\s*[:\-]?\s*(.+?)(?=\s*(?:{stop})\s*[:\-]?|$)",
+        re.I | re.S,
+    )
     match = pattern.search(clean_text(text))
     if match:
-        return match.group(1).strip()[:260]
+        value = re.sub(r"\s+", " ", match.group(1)).strip(" .:-")
+        if value:
+            return value[:260]
     return None
 
 
@@ -327,6 +342,39 @@ def _parse_datetime_text(text: str, fallback: str | None = None) -> tuple[str, s
     return parse_date(raw, fallback), None
 
 
+def _parse_bac_subject_transaction(subject: str) -> tuple[str | None, str | None, str | None]:
+    """Extract merchant/date/time from BAC transaction subjects.
+
+    BAC often puts the most reliable metadata in the subject:
+    "Notificación de transacción AM PM 05-06-2026 - 17:45".
+    This fallback keeps valid purchases from being lost when Gmail HTML body
+    extraction is imperfect.
+    """
+    raw = subject or ""
+    match = re.search(
+        r"notificaci[oó]n\s+de\s+transacci[oó]n\s+(.+?)\s+(\d{1,2}[-/]\d{1,2}[-/]\d{4})\s*-\s*(\d{1,2}:\d{2}(?::\d{2})?)",
+        raw,
+        re.I,
+    )
+    if not match:
+        return None, None, None
+    merchant = re.sub(r"\s+", " ", match.group(1)).strip(" -")
+    tx_date, tx_time = _parse_datetime_text(f"{match.group(2)} {match.group(3)}")
+    return merchant[:240], tx_date, tx_time
+
+
+def _extract_reference(text: str) -> str | None:
+    for pattern in [
+        r"referencia\s*[:\-]?\s*(\d{5,})",
+        r"autorizaci[oó]n\s*[:\-]?\s*(\d{4,})",
+        r"n[uú]mero\s+de\s+referencia\s+(\d{5,})",
+    ]:
+        match = re.search(pattern, text or "", re.I)
+        if match:
+            return match.group(1)
+    return None
+
+
 
 def billing_cycle_for_date(transaction_date: str | date | None, cut_day: int = 21) -> tuple[str | None, str | None]:
     """Return BAC/card cycle window using configurable cut day.
@@ -400,15 +448,15 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
         # Reglas explícitas antes de IA. Usar solo categorías oficiales para evitar
         # que normalize_category caiga en alias raros como "Horas extra".
         ("Servicios", ["openai", "chatgpt", "render.com", "render ", "supabase", "railway", "vercel", "github", "domain", "hosting", "api"]),
-        ("Entretenimiento", ["playstation", "ps plus", "supercell", "fs *supercell", "gossip", "kingshot", "juego", "store.supercell"]),
-        ("Suscripciones", ["apple.com/bill", "apple", "icloud", "crunchyroll", "google crunchyroll", "google one", "netflix", "resume.io", "spotify"]),
-        ("Restaurante", ["taco bell", "pops", "mcdonald", "arcos dorados", "kfc", "restaurante", "pizza", "burger", "uber eats"]),
-        ("Comida", ["maxi pali", "maxipali", "pali", "palí", "am pm", "automercado", "auto mercado", "supermercado", "jose m.zeledon", "zeledon"]),
+        ("Deporte", ["gym", "gimnasio", "novo fit", "coffee bar novo fit", "uno sport", "uno sports", "box"]),
+        ("Entretenimiento", ["playstation", "ps plus", "supercell", "fs *supercell", "gossip", "kingshot", "juego", "store.supercell", "roku"]),
+        ("Suscripciones", ["apple.com/bill", "apple.com bill", "apple", "icloud", "crunchyroll", "google crunchyroll", "google one", "netflix", "resume.io", "spotify"]),
+        ("Restaurante", ["taco bell", "pops", "mcdonald", "arcos dorados", "kfc", "restaurante", "sacc restaurante", "pizza", "burger", "uber eats"]),
+        ("Comida", ["maxi pali", "maxipali", "pali", "palí", "walmart", "am pm", "automercado", "auto mercado", "supermercado", "jose m.zeledon", "zeledon"]),
         ("Gasolina", ["gasolinera", "estacion de servicio", "estación de servicio", "combustible", "servicentro"]),
         ("Transporte", ["uber rides", "uber", "parqueo", "taxi", "didi"]),
         ("Salud", ["farmacia", "farmavalue", "hospital", "clinica", "clínica", "nutricionista", "terapia", "medico", "médico"]),
-        ("Deporte", ["gym", "gimnasio", "novo fit", "uno sport", "box"]),
-        ("Compras", ["temu", "amazon", "tienda", "ecommerce", "ishop", "aliss", "city mall", "shein", "zara", "pull&bear", "bershka"]),
+        ("Compras", ["temu", "amazon", "tienda", "ecommerce", "ishop", "aliss", "city mall", "shein", "zara", "pull&bear", "bershka", "barber shop", "las vegas"]),
         ("Teléfono", ["liberty", "linea", "línea", "movil", "móvil", "kolbi", "claro"]),
         ("Vivienda", ["casa", "alquiler"]),
     ]
@@ -477,29 +525,43 @@ def _base_result(bank: str, kind: str, received_at: str | None) -> dict[str, Any
 def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str | None, exchange_rate: float) -> dict[str, Any] | None:
     text = clean_text("\n".join([subject or "", body or ""]))
     clean = normalize(text)
-    if not (
-        ("notificacion de transaccion" in clean or "transaccion realizada" in clean)
-        and "comercio" in clean
-        and ("tipo de transaccion" in clean or "tipo transaccion" in clean)
-        and "monto" in clean
-    ):
+    subject_merchant, subject_date, subject_time = _parse_bac_subject_transaction(subject or "")
+
+    is_bac_card_email = (
+        "notificacion de transaccion" in clean
+        or "notificación de transacción" in (subject or "").lower()
+        or subject_merchant is not None
+    )
+    if not is_bac_card_email:
         return None
 
-    merchant = _label_value(text, "Comercio")
+    # Strong template extraction first. Subject fallback second.
+    merchant = _label_value(text, "Comercio") or subject_merchant
     amount_raw = _label_value(text, "Monto")
     date_raw = _label_value(text, "Fecha")
-    tipo_raw = _label_value(text, "Tipo de Transacción") or "COMPRA"
-    if not merchant or not amount_raw or not date_raw:
+    tipo_raw = _label_value(text, "Tipo de Transacción") or _label_value(text, "Tipo de Transaccion") or "COMPRA"
+
+    if not merchant:
         return None
 
     amount, currency = _parse_labeled_amount_value(amount_raw)
     if amount is None:
+        amount, currency = _parse_context_amount(text)
+    if amount is None:
         return None
-    transaction_date, time_value = _parse_datetime_text(date_raw, received_at)
+
+    if date_raw:
+        transaction_date, time_value = _parse_datetime_text(date_raw, received_at)
+    elif subject_date:
+        transaction_date, time_value = subject_date, subject_time
+    else:
+        transaction_date, time_value = _parse_datetime_text(text, received_at)
+
     card_last4 = _card_last4(text)
     holder = _card_holder_from_greeting(text)
+    reference = _extract_reference(text)
     tipo_clean = normalize(tipo_raw)
-    if any(word in tipo_clean for word in ["devolucion", "reversion", "reverso", "credito"]):
+    if any(word in tipo_clean for word in ["devolucion", "reversion", "reverso", "credito", "anulacion"]):
         transaction_type = "income"
     else:
         transaction_type = "expense"
@@ -510,6 +572,8 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
         notes.append(f"tarjeta ****{card_last4}")
     if holder:
         notes.append(f"titular correo: {holder}")
+    if reference:
+        notes.append(f"referencia {reference}")
     if time_value:
         notes.append(f"hora: {time_value}")
     if currency == "USD":
@@ -518,6 +582,9 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
     if cycle_start and cycle_end:
         notes.append(f"ciclo tarjeta: {cycle_start} a {cycle_end}")
 
+    # Include time/reference in dedupe key so two real charges from the same
+    # merchant on the same day do not collapse into one candidate.
+    unique_part = reference or time_value or ""
     return {
         **_base_result("bac", "movement", received_at),
         "transaction_date": transaction_date,
@@ -534,11 +601,10 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
         "card_owner": holder,
         "billing_cycle_start": cycle_start,
         "billing_cycle_end": cycle_end,
-        "dedupe_key": f"bac_card|{transaction_date}|{card_last4 or ''}|{round(amount_crc,2)}|{normalize(merchant)}",
+        "dedupe_key": f"bac_card|{transaction_date}|{card_last4 or ''}|{round(amount_crc,2)}|{normalize(merchant)}|{unique_part}",
         "confidence": 0.99,
         "confidence_reason": "BAC compra: comercio, fecha, tipo, tarjeta, ciclo y monto extraídos por plantilla exacta.",
     }
-
 
 def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
     text = clean_text("\n".join([subject or "", body or ""]))

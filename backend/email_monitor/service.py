@@ -801,16 +801,25 @@ def scan_email_text(
                 "statement": True,
             }
 
-        candidate_fp = fingerprint_candidate(
-            user_id=user_id,
-            transaction_date=parsed["transaction_date"],
-            amount=float(parsed["amount"]),
-            transaction_type=parsed["transaction_type"],
-            description=parsed["description"],
-            bank=parsed["bank"],
-        )
-
         parsed = _enrich_candidate_with_card_alias(conn, user_id, parsed)
+
+        # One Gmail message should map to one stable candidate. The older
+        # fingerprint used only date+amount+merchant, so two real purchases from
+        # the same merchant on the same day collapsed into one row. Prefer the
+        # Gmail id + parser dedupe key; fallback keeps manual scan-text stable.
+        if provider_message_id:
+            fp_base = f"{user_id}|gmail|{provider_message_id}|{parsed.get('dedupe_key') or ''}"
+            import hashlib
+            candidate_fp = hashlib.sha256(fp_base.encode("utf-8")).hexdigest()
+        else:
+            candidate_fp = fingerprint_candidate(
+                user_id=user_id,
+                transaction_date=parsed["transaction_date"],
+                amount=float(parsed["amount"]),
+                transaction_type=parsed["transaction_type"],
+                description=parsed["description"],
+                bank=parsed["bank"],
+            )
         parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
 
         duplicate_candidate = _candidate_duplicate_match(conn, user_id, parsed, candidate_fp)

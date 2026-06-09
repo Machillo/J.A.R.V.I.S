@@ -185,11 +185,18 @@ CREATE TABLE IF NOT EXISTS pay_schedule (
 CREATE TABLE IF NOT EXISTS credit_card_settings (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL DEFAULT 1,
-    name TEXT NOT NULL,
-    cut_day INTEGER NOT NULL,
-    payment_day INTEGER NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    name TEXT NOT NULL DEFAULT 'BAC tarjetas',
+    cut_day INTEGER NOT NULL DEFAULT 21,
+    payment_day INTEGER NOT NULL DEFAULT 5,
+    bank TEXT NOT NULL DEFAULT 'bac',
+    card_last4 TEXT,
+    owner_label TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_card_settings_user_bank_card
+ON credit_card_settings(user_id, bank, card_last4);
 
 CREATE TABLE IF NOT EXISTS transactions (
     id BIGSERIAL PRIMARY KEY,
