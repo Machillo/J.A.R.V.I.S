@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
-import { CreditCard, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { UserRound } from "lucide-react";
 import { getAdditionalCardsReport } from "../services/jarvisApi";
 
 const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
+
+const OWNER_ORDER = ["Emily", "Sidey"];
 
 export default function AdditionalCards() {
   const [state, setState] = useState({ loading: true, data: null, error: "" });
@@ -13,51 +15,63 @@ export default function AdditionalCards() {
       .catch((error) => setState({ loading: false, data: null, error: error.message || "Error" }));
   }, []);
 
-  if (state.loading) return <section className="page"><div className="hud-card">Cargando tarjetas...</div></section>;
+  const cards = useMemo(() => {
+    const incoming = state.data?.cards || [];
+    return OWNER_ORDER.map((owner) => {
+      const found = incoming.find((card) => String(card.owner || "").toLowerCase() === owner.toLowerCase());
+      const items = found?.items || [];
+      return {
+        owner,
+        cards: found?.cards || [],
+        items,
+        count: items.length,
+        total: items.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      };
+    });
+  }, [state.data]);
 
-  const cards = state.data?.cards || [];
-  const aliases = state.data?.aliases || [];
+  if (state.loading) {
+    return <section className="page"><div className="hud-card">Cargando tarjetas...</div></section>;
+  }
 
   return (
-    <section className="page additional-cards-page">
+    <section className="page additional-cards-page additional-cards-clean-page">
       <div className="page-section-header">
         <div>
-          <span className="eyebrow">Control familiar</span>
           <h2>Tarjetas adicionales</h2>
-          <p>Montos reales ya aceptados desde correos. Solo muestra tarjetas adicionales: Emily y Sidey.</p>
         </div>
       </div>
 
       {state.error && <div className="alert-card">{state.error}</div>}
 
-      <div className="cards-grid">
+      <div className="cards-grid additional-owner-grid">
         {cards.map((card) => (
-          <article className="hud-card additional-card" key={card.owner}>
+          <article className="hud-card additional-card additional-card-clean" key={card.owner}>
             <div className="card-owner-row">
               <UserRound size={22} />
-              <div><strong>{card.owner}</strong><span>{(card.cards || [card.card_last4]).map((last4) => `****${last4}`).join(" · ")}</span></div>
+              <div>
+                <strong>{card.owner}</strong>
+                <span>{card.cards.length ? card.cards.map((last4) => `****${last4}`).join(" · ") : "Sin tarjetas asociadas"}</span>
+              </div>
             </div>
+
             <h3>{money(card.total)}</h3>
-            <p>{card.count} movimientos detectados · se muestran todos</p>
-            <div className="mini-transaction-list">
-              {(card.items || []).map((item) => (
-                <div key={item.id}>
-                  <span>{item.description}</span>
-                  <b>{money(item.amount)}</b>
-                </div>
-              ))}
+            <p>{card.count} compras</p>
+
+            <div className="mini-transaction-list additional-full-list">
+              {card.items.length === 0 ? (
+                <div className="additional-empty-row"><span>Sin compras aceptadas</span><b>{money(0)}</b></div>
+              ) : (
+                card.items.map((item) => (
+                  <div key={item.id}>
+                    <span>{item.transaction_date} · {item.description}</span>
+                    <b>{money(item.amount)}</b>
+                  </div>
+                ))
+              )}
             </div>
           </article>
         ))}
-      </div>
-
-      <div className="hud-panel">
-        <h3><CreditCard size={18} /> Alias configurados</h3>
-        <div className="alias-list">
-          {aliases.map((alias) => (
-            <span key={alias.id}>{alias.owner_label} · ****{alias.card_last4} · {alias.relationship || "sin relación"}</span>
-          ))}
-        </div>
       </div>
     </section>
   );

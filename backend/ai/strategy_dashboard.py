@@ -461,10 +461,10 @@ def get_additional_card_report() -> dict[str, Any]:
             LEFT JOIN email_transaction_candidates c
               ON c.transaction_id = t.id AND c.user_id = t.user_id
             WHERE t.user_id = %s
-              AND t.transaction_type IN ('expense','debt_payment')
+              AND t.transaction_type = 'expense'
               AND COALESCE(c.status, '') IN ('confirmed','auto_saved')
             ORDER BY t.transaction_date DESC, t.id DESC
-            LIMIT 1000
+            LIMIT 5000
             """,
             (user_id,),
         ).fetchall()
@@ -508,9 +508,20 @@ def get_additional_card_report() -> dict[str, Any]:
             "count": 0,
             "items": [],
         })
-        amount = _f(item.get("amount"))
-        bucket["total"] += amount
-        bucket["count"] += 1
         bucket["items"].append(item)
+
+    for bucket in grouped.values():
+        unique_cards = []
+        for last4 in bucket.get("cards") or []:
+            if last4 and last4 not in unique_cards:
+                unique_cards.append(last4)
+        bucket["cards"] = unique_cards
+        bucket["items"] = sorted(
+            bucket.get("items") or [],
+            key=lambda item: (str(item.get("transaction_date") or ""), int(item.get("id") or 0)),
+            reverse=True,
+        )
+        bucket["count"] = len(bucket["items"])
+        bucket["total"] = round(sum(_f(item.get("amount")) for item in bucket["items"]), 2)
 
     return {"status": "OK", "aliases": alias_list, "cards": list(grouped.values())}

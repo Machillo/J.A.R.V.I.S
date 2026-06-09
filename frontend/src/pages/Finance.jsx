@@ -524,7 +524,6 @@ export default function Finance({
   const recommendations = dashboard?.quick_recommendations || [];
   const fixedExpenses = Number(summary?.expenses?.fixed_expenses) || Number(fixedStatus?.summary?.expected) || 0;
   const debtTotal = Number(summary?.debts?.total) || 0;
-  const netWorth = Number(summary?.assets?.net_worth) || 0;
   const assetsTotal = Number(summary?.assets?.assets_total) || 0;
 
   const cycleIncome = cycleReport?.income || {};
@@ -534,30 +533,12 @@ export default function Finance({
   const cycleTransactions = cycleReport?.transactions || [];
   const fixedExpectedIncome = Number(cycleIncome.fixed_expected) || Number(summary?.income?.monthly_net_income) || 0;
   const extraExpectedIncome = Number(cycleIncome.extra_expected) || 0;
-  const expectedIncomeTotal = Number(cycleIncome.expected_total) || fixedExpectedIncome + extraExpectedIncome;
+  const incomeNet = Number(cycleIncome.net) || Number(cycleIncome.expected_total) || fixedExpectedIncome + extraExpectedIncome;
+  const expenseNet = Number(cycleExpenses.net) || (Number(cycleExpenses.current_period) || 0) + (Number(cycleDebts.payments_current_period) || 0);
   const currentExpenses = Number(cycleExpenses.current_period) || 0;
   const currentDebtPayments = Number(cycleDebts.payments_current_period) || 0;
   const realBalance = Number(cycleCashflow.real_balance) || Number(summary?.cashflow?.available_cash) || 0;
   const cycleLabel = cycleReport?.cycle?.label || "Ciclo 5 → 5";
-
-  const monthlyFlowData = useMemo(() => {
-    return (transactionAnalysis?.monthly_flow || []).map((item) => ({
-      ...item,
-      income: Number(item.income) || 0,
-      loans: Number(item.loans) || 0,
-      expenses: Number(item.expenses) || 0,
-      debt_payments: Number(item.debt_payments) || 0,
-      outflow: Number(item.outflow) || 0,
-      net_flow: Number(item.net_flow) || 0,
-    }));
-  }, [transactionAnalysis]);
-
-  const categoryChartData = useMemo(() => {
-    return (transactionAnalysis?.top_expense_categories || []).map((item) => ({
-      category: item.category || "Sin categoría",
-      total: Number(item.total) || 0,
-    }));
-  }, [transactionAnalysis]);
 
   const sortedDebts = useMemo(() => {
     const list = [...debts];
@@ -571,12 +552,20 @@ export default function Finance({
   const isOwner = currentUser?.role === "owner" || currentUser?.email === "gatotico99@gmail.com";
   const hasAnyTransactions = (transactionAnalysis?.summary?.total_transactions || 0) > 0;
 
-  const openDetail = (title, items = [], empty = "No hay movimientos para mostrar.") => {
-    setDetail({ title, items, empty });
-  };
+  const expenseItems = [
+    ...cycleTransactions.filter((item) => item.transaction_type === "expense"),
+    ...(cycleDebts.items || []).map((item) => ({ ...item, category: item.category || "Pago de deuda" })),
+  ];
 
-  const expenseItems = cycleTransactions.filter((item) => item.transaction_type === "expense");
   const incomeItems = [
+    {
+      id: "fixed-income-current-cycle",
+      transaction_date: cycleReport?.cycle?.start,
+      description: "Salario fijo esperado",
+      amount: fixedExpectedIncome,
+      transaction_type: "salary_base",
+      category: "Ingreso fijo",
+    },
     ...(cycleIncome.items || []).map((item) => ({
       ...item,
       id: `income-${item.kind}-${item.id}`,
@@ -584,11 +573,34 @@ export default function Finance({
       description: item.description || item.event_type || item.kind,
       amount: item.net_amount ?? item.amount,
       transaction_type: item.kind === "bonus" ? "bonus" : item.event_type,
-      category: "Ingreso esperado",
+      category: "Ingreso extra",
     })),
     ...cycleTransactions.filter((item) => item.transaction_type === "income"),
+  ].filter((item) => Number(item.amount) !== 0);
+
+  const balanceItems = [
+    ...incomeItems.map((item) => ({ ...item, balance_side: "Ingreso" })),
+    ...expenseItems.map((item) => ({ ...item, balance_side: "Salida" })),
   ];
-  const balanceItems = cycleTransactions;
+
+  const currentCycleFlow = [
+    {
+      month: "Actual",
+      income: incomeNet,
+      outflow: expenseNet,
+    },
+  ];
+
+  const categoryChartData = useMemo(() => {
+    return (transactionAnalysis?.top_expense_categories || []).map((item) => ({
+      category: item.category || "Sin categoría",
+      total: Number(item.total) || 0,
+    }));
+  }, [transactionAnalysis]);
+
+  const openDetail = (title, items = [], empty = "No hay movimientos para mostrar.") => {
+    setDetail({ title, items, empty });
+  };
 
   if (!isOwner && !hasAnyTransactions) {
     return (
@@ -606,95 +618,48 @@ export default function Finance({
     <section className="dashboard-page">
       <div className="finance-period-pill">Periodo financiero: {cycleLabel}</div>
 
-      <div className="cards-grid finance-main-cards">
-        <button className="hud-card finance-click-card glow-green" onClick={() => openDetail("Ingreso esperado", incomeItems, "No hay extras ni ingresos registrados en este ciclo.")}> 
-          <div className="card-header">
-            <span>INGRESO FIJO ESPERADO</span>
-            <ArrowUpRight size={18} />
-          </div>
-          <MiniLine type="up" />
-          <h2>{formatCRC(fixedExpectedIncome)}</h2>
-          <p>Pago fijo conocido para el ciclo 5 → 5</p>
+      <div className="cards-grid finance-main-cards finance-main-cards-clean">
+        <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Ingresos neto", incomeItems, "No hay ingresos registrados en este ciclo.")}> 
+          <span>INGRESOS NETO</span>
+          <h2>{formatCRC(incomeNet)}</h2>
         </button>
 
-        <button className="hud-card finance-click-card glow-green" onClick={() => openDetail("Ingresos extra esperados", incomeItems, "No hay OT, bono, VGH, feriado o vacaciones en este ciclo.")}> 
-          <div className="card-header">
-            <span>EXTRAS ESPERADOS</span>
-            <ArrowUpRight size={18} />
-          </div>
-          <MiniLine type="up" />
-          <h2>{formatCRC(extraExpectedIncome)}</h2>
-          <p>OT, bono, VGH, feriado o vacaciones según fecha de pago</p>
+        <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Gastos neto", expenseItems, "No hay gastos registrados en este ciclo.")}> 
+          <span>GASTOS NETO</span>
+          <h2>{formatCRC(expenseNet)}</h2>
         </button>
 
-        <button className="hud-card finance-click-card glow-red" onClick={() => openDetail("Gastos del periodo", expenseItems, "No hay gastos registrados en este ciclo.")}> 
-          <div className="card-header">
-            <span>GASTOS DEL PERIODO</span>
-            <ArrowDownRight size={18} />
-          </div>
-          <MiniLine type="down" />
-          <h2>{formatCRC(currentExpenses)}</h2>
-          <p>Compras y gastos aceptados desde correos o manual</p>
-        </button>
-
-        <button className="hud-card finance-click-card wide-balance" onClick={() => openDetail("Saldo real del periodo", balanceItems, "No hay movimientos reales en este ciclo.")}> 
-          <div className="card-header">
-            <span>SALDO REAL</span>
-            <Wallet size={18} />
-          </div>
+        <button className="hud-card finance-click-card finance-simple-kpi wide-balance" onClick={() => openDetail("Saldo real", balanceItems, "No hay movimientos reales en este ciclo.")}> 
+          <span>SALDO REAL</span>
           <h2 className={realBalance < 0 ? "danger-text" : ""}>{formatCRC(realBalance)}</h2>
-          <p>Ingreso esperado + ingresos reales - gastos - pagos</p>
         </button>
-
-        <button className="hud-card finance-click-card glow-red" onClick={() => setDetail({ title: "Deudas registradas", debts: sortedDebts })}> 
-          <div className="card-header">
-            <span>DEUDA TOTAL</span>
-            <ArrowDownRight size={18} />
-          </div>
-          <MiniLine type="down" />
-          <h2>{formatCRC(debtTotal)}</h2>
-          <p>{sortedDebts.length} deudas registradas</p>
-        </button>
-      </div>
-
-      <div className="finance-kpi-strip finance-kpi-strip-clean">
-        <article className="finance-mini-kpi"><span>Ingreso esperado total</span><strong>{formatCRC(expectedIncomeTotal)}</strong></article>
-        <article className="finance-mini-kpi"><span>Pagos de deuda del periodo</span><strong>{formatCRC(currentDebtPayments)}</strong></article>
-        <article className="finance-mini-kpi"><span>Patrimonio neto</span><strong>{formatCRC(netWorth)}</strong></article>
       </div>
 
       {detail && (
-        <article className="hud-panel finance-detail-panel">
-          <div className="panel-title">
-            <div>
-              <h3>{detail.title}</h3>
-              <p>Detalle calculado para el periodo actual.</p>
+        <div className="finance-detail-modal-backdrop" onClick={() => setDetail(null)}>
+          <article className="hud-panel finance-detail-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="panel-title">
+              <div>
+                <h3>{detail.title}</h3>
+                <p>Detalle del periodo actual.</p>
+              </div>
+              <button className="ghost-button" onClick={() => setDetail(null)}>Cerrar</button>
             </div>
-            <button className="ghost-button" onClick={() => setDetail(null)}>Cerrar</button>
-          </div>
 
-          {detail.debts ? (
-            <div className="debt-list full-debt-list">
-              {detail.debts.map((debt) => (
-                <div className="debt-item" key={debt.id}>
-                  <div className="debt-item-head"><strong>{debt.name}</strong><span>{formatCRC(debt.remaining_amount)}</span></div>
-                  <small>Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}% · Pago: {debt.payment_day || "--"}</small>
-                </div>
-              ))}
-            </div>
-          ) : detail.items?.length ? (
-            <div className="finance-detail-list">
-              {detail.items.map((item) => (
-                <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}>
-                  <div><strong>{item.description}</strong><span>{item.transaction_date || item.estimated_pay_date || "sin fecha"} · {item.category || item.transaction_type}</span></div>
-                  <b>{formatCRC(item.amount ?? item.net_amount)}</b>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyPanel title="Sin detalle" description={detail.empty} />
-          )}
-        </article>
+            {detail.items?.length ? (
+              <div className="finance-detail-list">
+                {detail.items.map((item) => (
+                  <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}>
+                    <div><strong>{item.description}</strong><span>{item.transaction_date || item.estimated_pay_date || "sin fecha"} · {item.balance_side || item.category || item.transaction_type}</span></div>
+                    <b>{formatCRC(item.amount ?? item.net_amount)}</b>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyPanel title="Sin detalle" description={detail.empty} />
+            )}
+          </article>
+        </div>
       )}
 
       <div className="dashboard-grid finance-dashboard-grid">
@@ -702,19 +667,19 @@ export default function Finance({
           <div className="panel-title">
             <div>
               <h3>INGRESOS VS GASTOS</h3>
-              <p>Datos reales registrados actualmente</p>
+              <p>Ciclo actual 5 → 5 con ingresos esperados reales.</p>
             </div>
-            <span>REAL</span>
+            <span>ACTUAL</span>
           </div>
-          <MonthlyFlowChart data={monthlyFlowData} />
-          <div className="legend"><span className="cyan"></span> Ingresos <span className="red"></span> Gastos / deuda</div>
+          <MonthlyFlowChart data={currentCycleFlow} />
+          <div className="legend"><span className="cyan"></span> Ingresos neto <span className="red"></span> Gastos neto</div>
         </article>
 
         <article className="hud-panel large">
           <div className="panel-title">
             <div>
               <h3>GASTOS POR CATEGORÍA</h3>
-              <p>Lo que registremos por chat o correo aparecerá aquí.</p>
+              <p>Compras aceptadas desde correos o agregadas manualmente.</p>
             </div>
             <span>REAL</span>
           </div>
@@ -727,7 +692,7 @@ export default function Finance({
           <div className="panel-title debts-panel-title">
             <div>
               <h3>RESUMEN DE DEUDAS</h3>
-              <p>Todas las deudas, no solo el top 4.</p>
+              <p>Todas las deudas registradas.</p>
             </div>
             <select value={debtSort} onChange={(event) => setDebtSort(event.target.value)}>
               <option value="saldo">Saldo</option>
@@ -757,12 +722,6 @@ export default function Finance({
           <div className="alert-list">
             {alerts.length === 0 ? <EmptyPanel title="Sin alertas críticas" description="Cuando haya riesgo de flujo, deuda o metas, aparecerá aquí." /> : alerts.map((alert, index) => <div className={`alert-item ${alert.level}`} key={index}><AlertTriangle size={18} /><span>{alert.message}</span></div>)}
           </div>
-        </article>
-
-        <article className="hud-panel">
-          <div className="panel-title"><div><h3>NET WORTH</h3><p>Patrimonio neto</p></div><CircleDollarSign size={20} /></div>
-          <h2 className={netWorth < 0 ? "danger-text" : "good-text"}>{formatCRC(netWorth)}</h2>
-          <p className="muted">Activos registrados menos deudas registradas.</p>
         </article>
 
         <article className="hud-panel large">
