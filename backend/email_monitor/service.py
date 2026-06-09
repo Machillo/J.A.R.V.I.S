@@ -33,26 +33,39 @@ AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "999"))
 
 
 def build_current_month_gmail_query(base_query: str | None = None, today: date | None = None) -> str:
-    """Return a Gmail query scoped to the current calendar month.
+    """Return Gmail query scoped to Kenneth's active card/bank cycle.
 
-    Gmail search uses after:/before: dates in YYYY/MM/DD. `before` is exclusive,
-    so we use first day of next month.
+    BAC card expenses must be reviewed by cut cycle, not calendar month.
+    Default cycle: 21 -> 21. On June 8 this scans May 21 through June 21,
+    so May 21-31 purchases are not lost.
     """
     today = today or date.today()
-    start = today.replace(day=1)
-    if start.month == 12:
-        end = date(start.year + 1, 1, 1)
+    cut_day = int(os.getenv("BAC_CARD_CUT_DAY", "21") or "21")
+    cut_day = max(1, min(cut_day, 28))
+
+    if today.day >= cut_day:
+        start = date(today.year, today.month, cut_day)
     else:
-        end = date(start.year, start.month + 1, 1)
+        if today.month == 1:
+            start = date(today.year - 1, 12, cut_day)
+        else:
+            start = date(today.year, today.month - 1, cut_day)
+
+    if start.month == 12:
+        end = date(start.year + 1, 1, cut_day)
+    else:
+        end = date(start.year, start.month + 1, cut_day)
 
     base = (base_query or DEFAULT_QUERY or '').strip()
 
-    # Remove broad recency filters so the month range is the source of truth.
+    # Remove broad recency filters so the cycle range is the source of truth.
     base = re.sub(r"\bnewer_than:\S+", "", base).strip()
     base = re.sub(r"\bafter:\d{4}/\d{1,2}/\d{1,2}", "", base).strip()
     base = re.sub(r"\bbefore:\d{4}/\d{1,2}/\d{1,2}", "", base).strip()
 
-    return f"{base} after:{start:%Y/%m/%d} before:{end:%Y/%m/%d}".strip()
+    # Gmail before: is exclusive. Add one day to include the cut day itself.
+    before = end + timedelta(days=1)
+    return f"{base} after:{start:%Y/%m/%d} before:{before:%Y/%m/%d}".strip()
 
 
 def ensure_email_tables(conn) -> None:
@@ -129,6 +142,28 @@ def ensure_email_tables(conn) -> None:
         """
     )
 
+    for ddl in [
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS card_last4 TEXT",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS card_owner TEXT",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS billing_cycle_start DATE",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS billing_cycle_end DATE",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS dedupe_key TEXT",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS duplicate_of BIGINT",
+    ]:
+        conn.execute(ddl)
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_email_candidates_card_cycle
+        ON email_transaction_candidates(user_id, card_last4, billing_cycle_start, billing_cycle_end)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_email_candidates_dedupe
+        ON email_transaction_candidates(user_id, transaction_date, amount, transaction_type, status)
+        """
+    )
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS email_statement_documents (
@@ -167,6 +202,32 @@ def ensure_email_tables(conn) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_card_aliases_user
         ON card_aliases(user_id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS credit_card_settings (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL DEFAULT 1,
+            name TEXT NOT NULL DEFAULT 'BAC tarjetas',
+            cut_day INTEGER NOT NULL DEFAULT 21,
+            payment_day INTEGER NOT NULL DEFAULT 5,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    for ddl in [
+        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS bank TEXT NOT NULL DEFAULT 'bac'",
+        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS card_last4 TEXT",
+        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS owner_label TEXT",
+        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ]:
+        conn.execute(ddl)
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_card_settings_user_bank_card
+        ON credit_card_settings(user_id, bank, card_last4)
         """
     )
     conn.execute(
@@ -408,7 +469,7 @@ def _enrich_candidate_with_card_alias(conn, user_id: int, candidate: dict[str, A
     if not row:
         return candidate
     owner_label = row["owner_label"]
-    relationship = row.get("relationship") if hasattr(row, "get") else row["relationship"]
+    relationship = row["relationship"]
     primary = bool(row["is_primary"])
     notes = candidate.get("notes") or ""
     extra = f"titular tarjeta: {owner_label}"
@@ -418,6 +479,8 @@ def _enrich_candidate_with_card_alias(conn, user_id: int, candidate: dict[str, A
         extra += " | tarjeta principal"
     if extra not in notes:
         candidate["notes"] = f"{notes} | {extra}" if notes else extra
+    candidate["card_owner"] = owner_label
+    candidate["card_last4"] = last4
     return candidate
 
 
@@ -442,6 +505,56 @@ def _transaction_duplicate_exists(conn, user_id: int, candidate: dict[str, Any])
         ),
     ).fetchone()
     return bool(row)
+
+
+def _candidate_duplicate_match(conn, user_id: int, candidate: dict[str, Any], current_fingerprint: str | None = None):
+    """Find already pending/confirmed candidate that likely represents same movement.
+
+    Used for cross-bank mirrors such as BAC SINPE + MultiMoney debit for the
+    same transfer, and exact card-email reprocessing. We keep the richer/first
+    candidate pending and mark the second as duplicate instead of inflating spend.
+    """
+    dedupe_key = candidate.get("dedupe_key")
+    if dedupe_key:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM email_transaction_candidates
+            WHERE user_id = %s
+              AND dedupe_key = %s
+              AND (%s IS NULL OR fingerprint <> %s)
+              AND status IN ('pending','confirmed','auto_saved')
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (user_id, dedupe_key, current_fingerprint, current_fingerprint),
+        ).fetchone()
+        if row:
+            return row
+
+    # Cross-bank mirror: same day + amount + transfer-like category.
+    if candidate.get("transaction_type") == "transfer":
+        row = conn.execute(
+            """
+            SELECT id, description, account
+            FROM email_transaction_candidates
+            WHERE user_id = %s
+              AND transaction_date = %s
+              AND ABS(amount - %s) < 0.01
+              AND transaction_type = 'transfer'
+              AND (%s IS NULL OR fingerprint <> %s)
+              AND status IN ('pending','confirmed','auto_saved')
+            ORDER BY
+              CASE WHEN LOWER(description) IN ('movimiento multimoney','débito aplicado por otra entidad financiera','debito aplicado por otra entidad financiera') THEN 1 ELSE 0 END ASC,
+              created_at ASC
+            LIMIT 1
+            """,
+            (user_id, candidate["transaction_date"], candidate["amount"], current_fingerprint, current_fingerprint),
+        ).fetchone()
+        if row:
+            return row
+
+    return None
 
 
 def _find_existing_ingested(conn, user_id: int, email_fp: str, provider_message_id: str | None):
@@ -700,12 +813,20 @@ def scan_email_text(
         parsed = _enrich_candidate_with_card_alias(conn, user_id, parsed)
         parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
 
+        duplicate_candidate = _candidate_duplicate_match(conn, user_id, parsed, candidate_fp)
         if _transaction_duplicate_exists(conn, user_id, parsed):
             candidate_status = "duplicate"
             transaction_id = None
+            duplicate_of = None
             review_reason = "Transacción idéntica ya existe."
+        elif duplicate_candidate:
+            candidate_status = "duplicate"
+            transaction_id = None
+            duplicate_of = int(duplicate_candidate["id"])
+            review_reason = "Posible duplicado del mismo movimiento ya detectado por otro correo/banco."
         else:
             transaction_id = None
+            duplicate_of = None
             candidate_status = "pending"
             review_reason = parsed["confidence_reason"]
 
@@ -715,9 +836,10 @@ def scan_email_text(
                 user_id, email_message_id, fingerprint, transaction_id,
                 transaction_date, description, amount, transaction_type,
                 category, account, source, notes, original_amount, original_currency,
-                exchange_rate, confidence, status, review_reason
+                exchange_rate, card_last4, card_owner, billing_cycle_start,
+                billing_cycle_end, dedupe_key, duplicate_of, confidence, status, review_reason
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, fingerprint)
             DO UPDATE SET
                 email_message_id = EXCLUDED.email_message_id,
@@ -731,6 +853,12 @@ def scan_email_text(
                 original_amount = EXCLUDED.original_amount,
                 original_currency = EXCLUDED.original_currency,
                 exchange_rate = EXCLUDED.exchange_rate,
+                card_last4 = EXCLUDED.card_last4,
+                card_owner = EXCLUDED.card_owner,
+                billing_cycle_start = EXCLUDED.billing_cycle_start,
+                billing_cycle_end = EXCLUDED.billing_cycle_end,
+                dedupe_key = EXCLUDED.dedupe_key,
+                duplicate_of = EXCLUDED.duplicate_of,
                 confidence = EXCLUDED.confidence,
                 status = CASE
                     WHEN email_transaction_candidates.status IN ('confirmed','auto_saved')
@@ -756,7 +884,13 @@ def scan_email_text(
                 parsed["notes"],
                 parsed["original_amount"],
                 parsed["original_currency"],
-                parsed["exchange_rate"],
+                parsed.get("exchange_rate"),
+                parsed.get("card_last4"),
+                parsed.get("card_owner"),
+                parsed.get("billing_cycle_start"),
+                parsed.get("billing_cycle_end"),
+                parsed.get("dedupe_key"),
+                duplicate_of,
                 parsed["confidence"],
                 candidate_status,
                 review_reason,

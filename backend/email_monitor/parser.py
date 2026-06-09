@@ -327,6 +327,38 @@ def _parse_datetime_text(text: str, fallback: str | None = None) -> tuple[str, s
     return parse_date(raw, fallback), None
 
 
+
+def billing_cycle_for_date(transaction_date: str | date | None, cut_day: int = 21) -> tuple[str | None, str | None]:
+    """Return BAC/card cycle window using configurable cut day.
+
+    Kenneth's BAC card is reviewed by cut cycle, not calendar month. Default:
+    21 -> 21. A transaction on June 5 belongs to 2026-05-21 / 2026-06-21.
+    """
+    if not transaction_date:
+        return None, None
+    try:
+        if isinstance(transaction_date, date):
+            d = transaction_date
+        else:
+            d = datetime.fromisoformat(str(transaction_date).replace("Z", "+00:00")).date()
+    except Exception:
+        return None, None
+
+    cut_day = max(1, min(int(cut_day or 21), 28))
+    if d.day >= cut_day:
+        start = date(d.year, d.month, cut_day)
+    else:
+        if d.month == 1:
+            start = date(d.year - 1, 12, cut_day)
+        else:
+            start = date(d.year, d.month - 1, cut_day)
+    if start.month == 12:
+        end = date(start.year + 1, 1, cut_day)
+    else:
+        end = date(start.year, start.month + 1, cut_day)
+    return start.isoformat(), end.isoformat()
+
+
 def parse_statement_month(text: str, received_at: str | None = None) -> str | None:
     match = SPANISH_MONTH_PERIOD_RE.search(text or "")
     if match:
@@ -365,17 +397,19 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
         return "Transferencias"
 
     rules = [
-        ("Videojuegos", ["playstation", "ps plus", "supercell", "fs *supercell", "apple.com/bill", "gossip", "kingshot", "juego", "store.supercell"]),
-        ("Restaurante", ["uber eats", "mcdonald", "arcos dorados", "kfc", "restaurante", "pizza", "burger"]),
-        ("Comida", ["maxi pali", "maxipali", "pali", "am pm", "automercado", "auto mercado", "supermercado", "jose m.zeledon", "zeledon"]),
-        ("Gasolina", ["gasolinera", "estacion de servicio", "combustible", "servicentro"]),
-        ("Transporte", ["uber rides", "uber", "parqueo", "taxi"]),
+        # Reglas explícitas antes de IA. Usar solo categorías oficiales para evitar
+        # que normalize_category caiga en alias raros como "Horas extra".
+        ("Servicios", ["openai", "chatgpt", "render.com", "render ", "supabase", "railway", "vercel", "github", "domain", "hosting", "api"]),
+        ("Entretenimiento", ["playstation", "ps plus", "supercell", "fs *supercell", "gossip", "kingshot", "juego", "store.supercell"]),
+        ("Suscripciones", ["apple.com/bill", "apple", "icloud", "crunchyroll", "google crunchyroll", "google one", "netflix", "resume.io", "spotify"]),
+        ("Restaurante", ["taco bell", "pops", "mcdonald", "arcos dorados", "kfc", "restaurante", "pizza", "burger", "uber eats"]),
+        ("Comida", ["maxi pali", "maxipali", "pali", "palí", "am pm", "automercado", "auto mercado", "supermercado", "jose m.zeledon", "zeledon"]),
+        ("Gasolina", ["gasolinera", "estacion de servicio", "estación de servicio", "combustible", "servicentro"]),
+        ("Transporte", ["uber rides", "uber", "parqueo", "taxi", "didi"]),
         ("Salud", ["farmacia", "farmavalue", "hospital", "clinica", "clínica", "nutricionista", "terapia", "medico", "médico"]),
-        ("Suscripciones", ["netflix", "crunchyroll", "google one", "icloud", "resume.io", "spotify", "liberty movil"]),
-        ("Deporte", ["gym", "novo fit", "uno sport", "box"]),
-        ("Ropa", ["shein", "zara", "pull&bear", "bershka"]),
-        ("Compras", ["temu", "amazon", "tienda", "ecommerce", "ishop"]),
-        ("Teléfono", ["liberty", "linea", "línea", "movil", "móvil"]),
+        ("Deporte", ["gym", "gimnasio", "novo fit", "uno sport", "box"]),
+        ("Compras", ["temu", "amazon", "tienda", "ecommerce", "ishop", "aliss", "city mall", "shein", "zara", "pull&bear", "bershka"]),
+        ("Teléfono", ["liberty", "linea", "línea", "movil", "móvil", "kolbi", "claro"]),
         ("Vivienda", ["casa", "alquiler"]),
     ]
     for category, words in rules:
@@ -400,8 +434,17 @@ def _card_holder_from_greeting(text: str) -> str | None:
 
 
 def _card_last4(text: str) -> str | None:
-    match = re.search(r"\*{4,}(\d{4})", text or "")
-    return match.group(1) if match else None
+    raw = text or ""
+    patterns = [
+        r"\*{4,}(\d{4})",
+        r"(?:tarjeta|master|visa|n[uú]mero)\D{0,40}(?:\d{4}[- ]?\d{2}\*{2}[- ]?\*{4}[- ]?|\*{4,}|x{4,})?(\d{4})",
+        r"(?:\*|x){2,}[- ]?(?:\*|x){2,}[- ]?(\d{4})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, raw, re.I)
+        if match:
+            return match.group(1)
+    return None
 
 
 def _base_result(bank: str, kind: str, received_at: str | None) -> dict[str, Any]:
@@ -421,6 +464,11 @@ def _base_result(bank: str, kind: str, received_at: str | None) -> dict[str, Any
         "original_amount": None,
         "original_currency": None,
         "exchange_rate": None,
+        "card_last4": None,
+        "card_owner": None,
+        "billing_cycle_start": None,
+        "billing_cycle_end": None,
+        "dedupe_key": None,
         "confidence": 0.0,
         "confidence_reason": "",
     }
@@ -466,6 +514,9 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
         notes.append(f"hora: {time_value}")
     if currency == "USD":
         notes.append(f"monto original USD {amount:.2f}; TC {exchange_rate}")
+    cycle_start, cycle_end = billing_cycle_for_date(transaction_date)
+    if cycle_start and cycle_end:
+        notes.append(f"ciclo tarjeta: {cycle_start} a {cycle_end}")
 
     return {
         **_base_result("bac", "movement", received_at),
@@ -479,8 +530,13 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
         "original_amount": amount if currency == "USD" else None,
         "original_currency": "USD" if currency == "USD" else None,
         "exchange_rate": exchange_rate if currency == "USD" else None,
+        "card_last4": card_last4,
+        "card_owner": holder,
+        "billing_cycle_start": cycle_start,
+        "billing_cycle_end": cycle_end,
+        "dedupe_key": f"bac_card|{transaction_date}|{card_last4 or ''}|{round(amount_crc,2)}|{normalize(merchant)}",
         "confidence": 0.99,
-        "confidence_reason": "BAC compra: comercio, fecha, tipo, tarjeta y monto extraídos por plantilla exacta.",
+        "confidence_reason": "BAC compra: comercio, fecha, tipo, tarjeta, ciclo y monto extraídos por plantilla exacta.",
     }
 
 
@@ -508,6 +564,7 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
         notes.append(f"IBAN {iban_match.group(1)}")
     if time_value:
         notes.append(f"hora: {time_value}")
+    direction = "out" if is_out else "in" if is_in else "unknown"
     return {
         **_base_result("bac", "movement", received_at),
         "transaction_date": transaction_date,
@@ -517,6 +574,7 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
         "category": infer_category(description, "transfer"),
         "account": "BAC SINPE",
         "notes": " | ".join(notes),
+        "dedupe_key": f"sinpe|{transaction_date}|{round(amount,2)}|{reference_match.group(1) if reference_match else normalize(description)}|{direction}",
         "confidence": 0.98,
         "confidence_reason": "BAC SINPE: dirección, monto, referencia y fecha extraídos por plantilla exacta.",
     }
@@ -581,8 +639,111 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
         "notes": " | ".join(notes),
         "original_amount": amount if currency == "USD" else None,
         "original_currency": "USD" if currency == "USD" else None,
+        "dedupe_key": f"multimoney|{transaction_date}|{round(amount,2)}|{reference or normalize(concept)}",
         "confidence": 0.97,
         "confidence_reason": "MultiMoney: concepto, monto, fecha y cuentas extraídos por plantilla exacta.",
+    }
+
+
+
+def _extract_named_payment_target(text: str) -> str:
+    clean_line = re.sub(r"\s+", " ", text or "").strip()
+    patterns = [
+        r"pago\s+de\s+servicio\s+de\s+(.+?)(?:\s+desde|\s+por|\s+monto|\.|$)",
+        r"servicio\s+de\s+(.+?)(?:\s+desde|\s+por|\s+monto|\.|$)",
+        r"dep[oó]sito\s+por\s+(?:CRC|USD|₡|¢|\$)?\s*[\d.,]+(?:\s+de)?\s*(.+?)(?:\.|$)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, clean_line, re.I)
+        if match:
+            value = re.sub(r"\s+", " ", match.group(1)).strip(" .:-")
+            if value:
+                return value[:120]
+    return "Movimiento BAC"
+
+
+def _parse_bac_alert_payment(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
+    """Parse alerta@baccredomatic.com messages: service payments, card payments, deposits.
+
+    These were previously ignored, but they contain important money movements.
+    """
+    text = clean_text("\n".join([subject or "", body or ""]))
+    clean = normalize(text)
+    sender_clean = normalize(sender)
+    if "alerta@baccredomatic.com" not in sender_clean:
+        return None
+
+    is_payment = "notificacion de pago" in clean or "notificación de pago" in (subject or "").lower() or "comprobante de pago" in clean
+    is_deposit = "deposito" in clean or "depósito" in (subject or "").lower() or "ha recibido un deposito" in clean or "ha recibido un depósito" in (body or "").lower()
+    if not (is_payment or is_deposit):
+        return None
+
+    amount, currency = _parse_context_amount(text)
+    if amount is None:
+        for pattern in [
+            r"monto\s+del\s+pago\s*[:\-]?\s*(?P<currency>CRC|USD|₡|¢|\$)?\s*(?P<amount>[\d.,]+)",
+            r"monto\s*[:\-]?\s*(?P<currency>CRC|USD|₡|¢|\$)?\s*(?P<amount>[\d.,]+)",
+            r"por\s+(?P<currency>CRC|USD|₡|¢|\$)\s*(?P<amount>[\d.,]+)",
+        ]:
+            match = re.search(pattern, text, re.I)
+            if match:
+                amount = _parse_number(match.group("amount"))
+                currency = _currency_code(match.groupdict().get("currency") or match.group(0))
+                break
+    if amount is None or amount <= 0:
+        return None
+
+    amount_crc = round(amount, 2)
+    card_last4 = _card_last4(text)
+    transaction_date, time_value = _parse_datetime_text(text, received_at)
+    if is_deposit:
+        transaction_type = "income"
+        description = "Depósito BAC"
+        category = "Otros ingresos"
+        account = "BAC Depósito"
+        reason = "BAC depósito: monto, fecha y remitente extraídos por plantilla alerta."
+    elif "tarjeta" in clean and card_last4:
+        transaction_type = "debt_payment"
+        description = f"Pago tarjeta BAC ****{card_last4}"
+        category = "Tarjeta BAC"
+        account = f"BAC ****{card_last4}"
+        reason = "BAC pago de tarjeta: monto, fecha y tarjeta extraídos por plantilla alerta."
+    else:
+        transaction_type = "expense"
+        target = _extract_named_payment_target(text)
+        description = target if target != "Movimiento BAC" else (subject or "Pago BAC")
+        category = infer_category(description, "expense")
+        account = f"BAC ****{card_last4}" if card_last4 else "BAC Pago"
+        reason = "BAC pago de servicio: monto, fecha y servicio extraídos por plantilla alerta."
+
+    notes = ["BAC alerta/pago por plantilla"]
+    if card_last4:
+        notes.append(f"tarjeta ****{card_last4}")
+    if time_value:
+        notes.append(f"hora: {time_value}")
+    if currency == "USD":
+        notes.append(f"monto original USD {amount:.2f}")
+    cycle_start, cycle_end = billing_cycle_for_date(transaction_date)
+    if card_last4 and cycle_start and cycle_end:
+        notes.append(f"ciclo tarjeta: {cycle_start} a {cycle_end}")
+
+    return {
+        **_base_result("bac", "movement", received_at),
+        "transaction_date": transaction_date,
+        "description": description[:240],
+        "amount": amount_crc,
+        "transaction_type": transaction_type,
+        "category": category,
+        "account": account,
+        "notes": " | ".join(notes),
+        "original_amount": amount if currency == "USD" else None,
+        "original_currency": "USD" if currency == "USD" else None,
+        "card_last4": card_last4,
+        "billing_cycle_start": cycle_start if card_last4 else None,
+        "billing_cycle_end": cycle_end if card_last4 else None,
+        "dedupe_key": f"bac_alert|{transaction_date}|{card_last4 or ''}|{round(amount_crc,2)}|{normalize(description)}",
+        "confidence": 0.97,
+        "confidence_reason": reason,
     }
 
 
@@ -633,7 +794,7 @@ def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
         return "ignored", "No es un correo de BAC, Banco Popular o MultiMoney."
     if _parse_statement(subject, sender, body, None):
         return "statement", "Estado de cuenta detectado; queda como documento pendiente."
-    if bank == "bac" and (_parse_bac_purchase(subject, sender, body, None, 495.0) or _parse_bac_sinpe(subject, sender, body, None)):
+    if bank == "bac" and (_parse_bac_purchase(subject, sender, body, None, 495.0) or _parse_bac_sinpe(subject, sender, body, None) or _parse_bac_alert_payment(subject, sender, body, None)):
         return "movement", "Movimiento BAC estructurado detectado."
     if bank == "multimoney" and _parse_multimoney_transfer(subject, sender, body, None):
         return "movement", "Movimiento MultiMoney estructurado detectado."
@@ -660,6 +821,9 @@ def parse_financial_email(subject: str, sender: str, body: str, received_at: str
         if parsed:
             return parsed
         parsed = _parse_bac_sinpe(subject, sender, body, received_at)
+        if parsed:
+            return parsed
+        parsed = _parse_bac_alert_payment(subject, sender, body, received_at)
         if parsed:
             return parsed
 
