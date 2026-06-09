@@ -351,11 +351,13 @@ def _seed_default_card_aliases(conn, user_id: int) -> None:
     defaults = [
         ("3131", "Kenneth", "principal", True),
         ("5108", "Kenneth", "principal", True),
+        ("1655", "Kenneth", "principal", True),
+        ("7514", "Kenneth", "principal", True),
+        ("8137", "Kenneth", "principal", True),  # cuenta IBAN BAC ligada a débito 1655
+        ("8295", "Kenneth", "principal", True),
         ("2205", "Emily", "adicional", False),
         ("3149", "Emily", "adicional", False),
-        ("8137", "Sidey", "adicional", False),
-        ("8295", "Sidey", "adicional", False),
-        ("PEND", "Sidey", "adicional", False),
+        ("2179", "Sidey", "adicional", False),
     ]
     for last4, owner, relationship, is_primary in defaults:
         conn.execute(
@@ -477,8 +479,8 @@ def get_email_monitor_status() -> dict[str, Any]:
 
 
 def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
-    if candidate.get("transaction_type") in {"statement", "ignored"}:
-        raise ValueError("Los estados de cuenta o correos ignorados no se guardan como transacciones directas.")
+    if candidate.get("transaction_type") in {"statement", "ignored", "internal_transfer"}:
+        raise ValueError("Los estados de cuenta, correos ignorados o movimientos internos no se guardan como transacciones directas.")
     category = normalize_category(candidate["category"], candidate["transaction_type"])
     row = conn.execute(
         """
@@ -1246,7 +1248,7 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
         if candidate.get("transaction_id"):
             return {"status": "OK", "message": "Ya estaba guardado.", "transaction_id": candidate["transaction_id"]}
 
-        if candidate.get("transaction_type") == "statement":
+        if candidate.get("transaction_type") in {"statement", "internal_transfer"}:
             conn.execute(
                 """
                 UPDATE email_transaction_candidates
@@ -1256,7 +1258,7 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
                 (candidate_id, user_id),
             )
             conn.commit()
-            return {"status": "OK", "message": "Estado de cuenta marcado como revisado."}
+            return {"status": "OK", "message": "Correo marcado como revisado; no afecta finanzas."}
 
         transaction_id = _insert_transaction(conn, user_id, candidate)
         conn.execute(
@@ -1351,7 +1353,7 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
                 items.append({"id": cid, "status": "skipped", "message": "Ya estaba guardado.", "transaction_id": candidate.get("transaction_id")})
                 continue
 
-            if candidate.get("transaction_type") in {"statement", "ignored"}:
+            if candidate.get("transaction_type") in {"statement", "ignored", "internal_transfer"}:
                 skipped += 1
                 items.append({"id": cid, "status": "skipped", "message": "No es movimiento financiero directo."})
                 continue

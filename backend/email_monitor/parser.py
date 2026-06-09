@@ -97,6 +97,94 @@ FIELD_LABELS = {
     "titular", "cuenta", "resumen de operacion",
 }
 
+# Known personal accounts. These are used only to prevent internal movements
+# from becoming expenses/income. Display/masking uses the last 4 digits.
+OWN_ACCOUNT_IBANS = {
+    "CR74031001010093646126": "MultiMoney colones",
+    "CR42010200009469042572": "BAC planilla",
+    "CR50010200009625018137": "BAC cuenta",
+}
+OWN_ACCOUNT_LAST4 = {iban[-4:]: label for iban, label in OWN_ACCOUNT_IBANS.items()}
+OWN_DEBIT_CARD_LAST4 = {"1655", "7514"}
+
+
+def _compact_account(value: str | None) -> str:
+    return re.sub(r"[^A-Z0-9]", "", (value or "").upper())
+
+
+def _own_account_label(value: str | None) -> str | None:
+    compact = _compact_account(value)
+    if not compact:
+        return None
+    for iban, label in OWN_ACCOUNT_IBANS.items():
+        if iban in compact:
+            return label
+    if len(compact) >= 4 and compact[-4:] in OWN_ACCOUNT_LAST4:
+        return OWN_ACCOUNT_LAST4[compact[-4:]]
+    return None
+
+
+def _contains_own_account(value: str | None) -> bool:
+    return _own_account_label(value) is not None
+
+
+def _extract_ibans(text: str | None) -> list[str]:
+    found: list[str] = []
+    for match in re.finditer(r"CR\s*\d(?:[\s\-]*\d){19}", text or "", re.I):
+        iban = _compact_account(match.group(0))
+        if iban and iban not in found:
+            found.append(iban)
+    return found
+
+
+def _extract_account_near(text: str | None, labels: list[str]) -> str:
+    raw = clean_text(text or "")
+    label_pattern = "|".join(re.escape(label) for label in labels)
+    patterns = [
+        rf"(?:{label_pattern})\s*[:\-]?\s*([A-Z]{{2}}\s*\d(?:[\s\-]*\d){{19}})",
+        rf"(?:{label_pattern})\s*[:\-]?\s*(\*{{2,}}\d{{4}}|X{{2,}}\d{{4}}|\d{{4}})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, raw, re.I)
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
+def _is_internal_transfer(concept: str | None = None, origin: str | None = None, destination: str | None = None, body: str | None = None, direction: str = "unknown") -> bool:
+    clean_concept = normalize(concept or "")
+    if any(token in clean_concept for token in ["inversion vista smart", "inversión vista smart", "vista smart", "ahorro multimoney"]):
+        return True
+    origin_own = _contains_own_account(origin)
+    destination_own = _contains_own_account(destination)
+    if origin_own and destination_own:
+        return True
+    if direction == "out" and destination_own:
+        return True
+    if direction == "in" and origin_own:
+        return True
+    # Conservative fallback: only if the text explicitly names two known own accounts.
+    labels = {_own_account_label(iban) for iban in _extract_ibans(body)}
+    labels.discard(None)
+    return len(labels) >= 2
+
+
+def _internal_ignored(bank: str, subject: str, body: str, received_at: str | None, reason: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    result = _ignored(bank, subject, body, received_at, reason)
+    result["transaction_type"] = "internal_transfer"
+    result["category"] = "Movimiento interno"
+    result["email_kind"] = "ignored"
+    result["confidence"] = max(float(result.get("confidence") or 0), 0.98)
+    if payload:
+        result.update({k: v for k, v in payload.items() if k not in {"email_kind", "transaction_type", "category"}})
+        result["email_kind"] = "ignored"
+        result["transaction_type"] = "internal_transfer"
+        result["category"] = "Movimiento interno"
+        result["ignore_reason"] = reason
+        result["notes"] = f"{payload.get('notes') or ''} | {reason}".strip(" |")
+        result["confidence_reason"] = reason
+    return result
+
 
 def _strip_accents(value: str) -> str:
     normalized = unicodedata.normalize("NFD", value or "")
@@ -438,9 +526,9 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
         return "Otros ingresos"
     if transaction_type == "debt_payment":
         return "Deudas"
+    if transaction_type == "internal_transfer":
+        return "Movimiento interno"
     if transaction_type == "transfer":
-        if "inversion vista smart" in clean or "vista smart" in clean:
-            return "Ahorro"
         if "terapia" in clean:
             return "Salud"
         if "papa" in clean or "papá" in clean:
@@ -450,7 +538,7 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
     rules = [
         # Reglas explícitas antes de IA. Usar solo categorías oficiales para evitar
         # que normalize_category caiga en alias raros como "Horas extra".
-        ("Servicios", ["openai", "chatgpt", "render.com", "render ", "supabase", "railway", "vercel", "github", "domain", "hosting", "api"]),
+        ("Servicios", ["openai", "chatgpt", "render.com", "render ", "supabase", "railway", "vercel", "github", "domain", "hosting", "openai api"]),
         ("Deporte", ["gym", "gimnasio", "novo fit", "coffee bar novo fit", "uno sport", "uno sports", "box"]),
         ("Entretenimiento", ["playstation", "ps plus", "supercell", "fs *supercell", "gossip", "kingshot", "juego", "store.supercell", "roku"]),
         ("Suscripciones", ["apple.com/bill", "apple.com bill", "apple", "icloud", "crunchyroll", "google crunchyroll", "google one", "netflix", "resume.io", "spotify"]),
@@ -616,41 +704,97 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
     clean = normalize(text)
     if not ("sinpe" in clean and "transferencia" in clean and "monto" in clean):
         return None
+
     amount, _currency = _parse_context_amount(text)
     if amount is None or amount <= 0:
         return None
+
     date_match = re.search(r"d[ií]a\s+y\s+hora\s*:??\s*([^\.\n]+)", text, re.I)
     transaction_date, time_value = _parse_datetime_text(date_match.group(1) if date_match else text, received_at)
-    is_out = "debitando su cuenta" in clean
-    is_in = "se acredito" in clean or "se acredito en la cuenta" in clean or "se acreditó" in (body or "").lower()
+
+    is_out = "debitando su cuenta" in clean or "debito" in clean or "débito" in clean
+    is_in = "se acredito" in clean or "se acredito en la cuenta" in clean or "se acreditó" in (body or "").lower() or "acreditando" in clean
+    direction = "out" if is_out else "in" if is_in else "unknown"
+
     concept_match = re.search(r"por\s+concepto\s+de\s+(.+?)(?:\.?D[ií]a\s+y\s+hora|\n|$)", text, re.I | re.S)
     concept = re.sub(r"[_\s]+", " ", concept_match.group(1)).strip(" .") if concept_match else ""
     reference_match = re.search(r"referencia\s+(\d{8,})", text, re.I)
-    iban_match = re.search(r"IBAN\s+([A-Z]{2}\d{4}[A-Z0-9X*]+)", text, re.I)
-    description = concept or ("SINPE enviado" if is_out else "SINPE recibido" if is_in else "Transferencia SINPE")
+
+    origin_account = _extract_account_near(text, ["cuenta origen", "cuenta debitada", "debitando su cuenta", "desde la cuenta", "de la cuenta"])
+    destination_account = _extract_account_near(text, ["cuenta destino", "cuenta acreditada", "acreditando la cuenta", "a la cuenta", "hacia la cuenta", "al iban", "iban destino"])
+    ibans = _extract_ibans(text)
+    if not origin_account and direction == "out" and ibans:
+        # BAC often mentions the debited own account first.
+        origin_account = ibans[0]
+    if not destination_account and direction == "in" and ibans:
+        # Incoming notifications usually mention the credited own account.
+        destination_account = ibans[-1]
+
+    description_base = concept or ("SINPE enviado" if is_out else "SINPE recibido" if is_in else "Transferencia SINPE")
     notes = ["BAC SINPE por plantilla", "salida" if is_out else "entrada" if is_in else "dirección por revisar"]
     if reference_match:
         notes.append(f"referencia {reference_match.group(1)}")
-    if iban_match:
-        notes.append(f"IBAN {iban_match.group(1)}")
+    if origin_account:
+        notes.append(f"origen: {origin_account}")
+    if destination_account:
+        notes.append(f"destino: {destination_account}")
+    if ibans:
+        notes.append("IBAN detectados: " + ", ".join(ibans))
     if time_value:
         notes.append(f"hora: {time_value}")
-    direction = "out" if is_out else "in" if is_in else "unknown"
+
+    if _is_internal_transfer(description_base, origin_account, destination_account, text, direction):
+        payload = {
+            **_base_result("bac", "movement", received_at),
+            "transaction_date": transaction_date,
+            "transaction_time": time_value,
+            "description": description_base[:240],
+            "amount": round(amount, 2),
+            "account": "BAC SINPE",
+            "notes": " | ".join(notes),
+            "dedupe_key": f"sinpe_internal|{transaction_date}|{round(amount,2)}|{reference_match.group(1) if reference_match else normalize(description_base)}|{direction}",
+            "confidence": 0.99,
+            "movement_direction": direction,
+            "origin_account": origin_account,
+            "destination_account": destination_account,
+        }
+        return _internal_ignored(
+            "bac",
+            subject,
+            body,
+            received_at,
+            "Movimiento interno entre cuentas propias detectado; no se genera candidato financiero.",
+            payload,
+        )
+
+    transaction_type = "expense" if is_out else "income" if is_in else "transfer"
+    category = infer_category(description_base, transaction_type)
+    if transaction_type == "income" and category == "Otros ingresos":
+        category = "Reembolsos"
+
+    description = description_base
+    if is_out and normalize(description) in {"sinpe enviado", "transferencia sinpe"}:
+        description = "SINPE enviado a tercero"
+    elif is_in and normalize(description) in {"sinpe recibido", "transferencia sinpe"}:
+        description = "SINPE recibido de tercero"
+
     return {
         **_base_result("bac", "movement", received_at),
         "transaction_date": transaction_date,
         "transaction_time": time_value,
         "description": description[:240],
         "amount": round(amount, 2),
-        "transaction_type": "transfer",
-        "category": infer_category(description, "transfer"),
+        "transaction_type": transaction_type,
+        "category": category,
         "account": "BAC SINPE",
         "notes": " | ".join(notes),
         "dedupe_key": f"sinpe|{transaction_date}|{round(amount,2)}|{reference_match.group(1) if reference_match else normalize(description)}|{direction}",
         "confidence": 0.98,
-        "confidence_reason": "BAC SINPE: dirección, monto, referencia y fecha extraídos por plantilla exacta.",
+        "confidence_reason": "BAC SINPE: dirección, monto, referencia, cuentas y fecha extraídos por plantilla exacta.",
+        "movement_direction": direction,
+        "origin_account": origin_account,
+        "destination_account": destination_account,
     }
-
 
 def _extract_multimoney_account_block(text: str, label: str) -> str:
     lines = _nonempty_lines(text)
@@ -678,19 +822,38 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
     clean = normalize(text)
     if not ("multimoney" in clean and "monto" in clean and "fecha" in clean):
         return None
-    if not ("resumen de operacion" in clean or "operacion realizada" in clean or "se aplico un debito" in clean or "se aplicó un débito" in clean or "notificacion de transferencia" in clean):
+    if not (
+        "resumen de operacion" in clean
+        or "operacion realizada" in clean
+        or "se aplico un debito" in clean
+        or "se aplicó un débito" in clean
+        or "notificacion de transferencia" in clean
+        or "recepcion de fondos" in clean
+        or "recepción de fondos" in clean
+        or "recibimos tu pago" in clean
+        or "depositamos tu credito" in clean
+        or "depositamos tu crédito" in clean
+    ):
         return None
+
     concept = _label_value(text, "Concepto") or "Movimiento MultiMoney"
     amount, currency = _parse_labeled_amount_value(_label_value(text, "Monto"))
     if amount is None:
         amount, currency = _parse_context_amount(text)
     if amount is None or amount <= 0:
         return None
+
     date_raw = _label_value(text, "Fecha") or text
     transaction_date, time_value = _parse_datetime_text(date_raw, received_at)
     origin = _extract_multimoney_account_block(text, "Cuenta origen")
     destination = _extract_multimoney_account_block(text, "Cuenta destino")
     reference = _label_value(text, "Referencia") or ""
+
+    is_debit = "se aplico un debito" in clean or "se aplicó un débito" in clean or "debito en tiempo real" in clean or "débito en tiempo real" in clean
+    is_received = "recepcion de fondos" in clean or "recepción de fondos" in clean or "depositamos tu credito" in clean or "depositamos tu crédito" in clean
+    is_payment_received = "recibimos tu pago" in clean
+    direction = "out" if is_debit else "in" if is_received else "payment" if is_payment_received else "unknown"
+
     notes = ["MultiMoney transferencia por plantilla"]
     if origin:
         notes.append(f"origen: {origin}")
@@ -700,23 +863,69 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
         notes.append(f"referencia: {reference}")
     if time_value:
         notes.append(f"hora: {time_value}")
+
+    if _is_internal_transfer(concept, origin, destination, text, direction):
+        payload = {
+            **_base_result("multimoney", "movement", received_at),
+            "transaction_date": transaction_date,
+            "transaction_time": time_value,
+            "description": concept[:240],
+            "amount": round(amount, 2),
+            "account": "MultiMoney",
+            "notes": " | ".join(notes),
+            "original_amount": amount if currency == "USD" else None,
+            "original_currency": "USD" if currency == "USD" else None,
+            "dedupe_key": f"multimoney_internal|{transaction_date}|{round(amount,2)}|{reference or normalize(concept)}",
+            "confidence": 0.99,
+            "movement_direction": direction,
+            "origin_account": origin,
+            "destination_account": destination,
+        }
+        return _internal_ignored(
+            "multimoney",
+            subject,
+            body,
+            received_at,
+            "Movimiento interno BAC/MultiMoney o inversión propia detectada; no se genera candidato financiero.",
+            payload,
+        )
+
+    if is_payment_received:
+        transaction_type = "debt_payment"
+        category = "MultiMoney"
+        description = "Pago recibido MultiMoney"
+    elif is_received:
+        transaction_type = "income"
+        category = "Otros ingresos"
+        description = concept or "Recepción de fondos MultiMoney"
+    elif is_debit:
+        transaction_type = "expense"
+        category = infer_category(concept, "expense")
+        description = concept or "Débito MultiMoney"
+    else:
+        transaction_type = "transfer"
+        category = infer_category(concept, "transfer")
+        description = concept
+
     return {
         **_base_result("multimoney", "movement", received_at),
         "transaction_date": transaction_date,
         "transaction_time": time_value,
-        "description": concept[:240],
+        "description": description[:240],
         "amount": round(amount, 2),
-        "transaction_type": "transfer",
-        "category": infer_category(concept, "transfer"),
+        "transaction_type": transaction_type,
+        "category": category,
         "account": "MultiMoney",
         "notes": " | ".join(notes),
         "original_amount": amount if currency == "USD" else None,
         "original_currency": "USD" if currency == "USD" else None,
-        "dedupe_key": f"multimoney|{transaction_date}|{round(amount,2)}|{reference or normalize(concept)}",
+        "dedupe_key": f"multimoney|{transaction_date}|{round(amount,2)}|{reference or normalize(description)}|{direction}",
         "confidence": 0.97,
-        "confidence_reason": "MultiMoney: concepto, monto, fecha y cuentas extraídos por plantilla exacta.",
+        "confidence_reason": "MultiMoney: concepto, monto, fecha, dirección y cuentas extraídos por plantilla exacta.",
+        "movement_direction": direction,
+        "origin_account": origin,
+        "destination_account": destination,
     }
-
 
 
 def _extract_named_payment_target(text: str) -> str:

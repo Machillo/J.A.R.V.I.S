@@ -19,6 +19,24 @@ const statusLabel = {
   rejected: "Rechazado",
 };
 
+const typeLabel = {
+  expense: "Gasto",
+  income: "Ingreso",
+  debt_payment: "Pago deuda",
+  transfer: "Transferencia",
+  internal_transfer: "Movimiento interno",
+};
+
+const directionText = (item) => {
+  const notes = String(item.notes || "");
+  const origin = notes.match(/origen:\s*([^|]+)/i)?.[1]?.trim();
+  const destination = notes.match(/destino:\s*([^|]+)/i)?.[1]?.trim();
+  if (origin && destination) return `De ${origin} → ${destination}`;
+  if (origin) return `Origen: ${origin}`;
+  if (destination) return `Destino: ${destination}`;
+  return "";
+};
+
 export default function Emails({ onFinanceChanged }) {
   const [monitor, setMonitor] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -223,8 +241,9 @@ export default function Emails({ onFinanceChanged }) {
                     <span className={`email-status-pill ${item.status}`}>{statusLabel[item.status] || item.status}</span>
                   </div>
                   <p>{item.email_subject || item.review_reason || "Movimiento detectado por correo"}</p>
+                  {directionText(item) && <p className="email-candidate-detail">{directionText(item)}</p>}
                   <small>
-                    {dateText(item.transaction_date)} · {item.category} · {item.transaction_type}
+                    {dateText(item.transaction_date)} · {item.category} · {typeLabel[item.transaction_type] || item.transaction_type}
                     {item.card_owner ? ` · ${item.card_owner}` : ""}
                     {item.card_last4 ? ` · ****${item.card_last4}` : ""}
                   </small>
