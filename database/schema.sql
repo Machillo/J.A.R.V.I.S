@@ -569,3 +569,15 @@ CREATE TABLE IF NOT EXISTS email_parser_logs (
 ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS email_message_id BIGINT;
 ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS result TEXT;
 ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS extracted_payload JSONB;
+
+-- Email parser Fase 1.5: merchant normalization + semantic canonical dedupe
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS canonical_transaction_id BIGINT;
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS transaction_time TIME;
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS raw_description TEXT;
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS normalized_description TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_email_candidates_semantic_dedupe
+ON email_transaction_candidates(user_id, transaction_date, amount, transaction_time, status);
+
+CREATE INDEX IF NOT EXISTS idx_email_candidates_canonical
+ON email_transaction_candidates(user_id, canonical_transaction_id);

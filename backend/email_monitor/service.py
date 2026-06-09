@@ -20,6 +20,8 @@ from backend.email_monitor.parser import (
     fingerprint_email,
     parse_financial_email,
 )
+from backend.email_monitor.deduplication import canonical_score, find_semantic_duplicate, resolve_transaction_time
+from backend.email_monitor.normalization import normalize_description
 
 OWNER_EMAIL = os.getenv("OWNER_EMAIL", "gatotico99@gmail.com")
 CRON_SECRET = os.getenv("EMAIL_MONITOR_CRON_SECRET", "")
@@ -150,6 +152,10 @@ def ensure_email_tables(conn) -> None:
         "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS billing_cycle_end DATE",
         "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS dedupe_key TEXT",
         "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS duplicate_of BIGINT",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS canonical_transaction_id BIGINT",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS transaction_time TIME",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS raw_description TEXT",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS normalized_description TEXT",
     ]:
         conn.execute(ddl)
     conn.execute(
@@ -162,6 +168,12 @@ def ensure_email_tables(conn) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_email_candidates_dedupe
         ON email_transaction_candidates(user_id, transaction_date, amount, transaction_type, status)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_email_candidates_semantic_dedupe
+        ON email_transaction_candidates(user_id, transaction_date, amount, transaction_time, status)
         """
     )
 
@@ -484,7 +496,7 @@ def _enrich_candidate_with_card_alias(conn, user_id: int, candidate: dict[str, A
 
     This is only metadata in notes/category review; it never changes money values.
     """
-    last4 = _extract_card_last4_from_account(candidate.get("account"))
+    last4 = candidate.get("card_last4") or _extract_card_last4_from_account(candidate.get("account"))
     if not last4:
         return candidate
     row = conn.execute(
@@ -538,17 +550,17 @@ def _transaction_duplicate_exists(conn, user_id: int, candidate: dict[str, Any])
 
 
 def _candidate_duplicate_match(conn, user_id: int, candidate: dict[str, Any], current_fingerprint: str | None = None):
-    """Find already pending/confirmed candidate that likely represents same movement.
+    """Find the canonical candidate for exact or semantic duplicates.
 
-    Used for cross-bank mirrors such as BAC SINPE + MultiMoney debit for the
-    same transfer, and exact card-email reprocessing. We keep the richer/first
-    candidate pending and mark the second as duplicate instead of inflating spend.
+    Rule business Fase 1.5: exact same amount + same date + ±10 minutes.
+    canonical_transaction_id points to the dominant row; duplicate_of is kept
+    for backward compatibility with the previous UI.
     """
     dedupe_key = candidate.get("dedupe_key")
     if dedupe_key:
         row = conn.execute(
             """
-            SELECT id
+            SELECT id, description, account, source, created_at
             FROM email_transaction_candidates
             WHERE user_id = %s
               AND dedupe_key = %s
@@ -562,29 +574,7 @@ def _candidate_duplicate_match(conn, user_id: int, candidate: dict[str, Any], cu
         if row:
             return row
 
-    # Cross-bank mirror: same day + amount + transfer-like category.
-    if candidate.get("transaction_type") == "transfer":
-        row = conn.execute(
-            """
-            SELECT id, description, account
-            FROM email_transaction_candidates
-            WHERE user_id = %s
-              AND transaction_date = %s
-              AND ABS(amount - %s) < 0.01
-              AND transaction_type = 'transfer'
-              AND (%s IS NULL OR fingerprint <> %s)
-              AND status IN ('pending','confirmed','auto_saved')
-            ORDER BY
-              CASE WHEN LOWER(description) IN ('movimiento multimoney','débito aplicado por otra entidad financiera','debito aplicado por otra entidad financiera') THEN 1 ELSE 0 END ASC,
-              created_at ASC
-            LIMIT 1
-            """,
-            (user_id, candidate["transaction_date"], candidate["amount"], current_fingerprint, current_fingerprint),
-        ).fetchone()
-        if row:
-            return row
-
-    return None
+    return find_semantic_duplicate(conn, user_id, candidate, current_fingerprint)
 
 
 def _find_existing_ingested(conn, user_id: int, email_fp: str, provider_message_id: str | None):
@@ -839,6 +829,16 @@ def scan_email_text(
 
         parsed = _enrich_candidate_with_card_alias(conn, user_id, parsed)
 
+        raw_description = parsed.get("description") or ""
+        normalized_description = normalize_description(raw_description)
+        parsed["raw_description"] = raw_description
+        parsed["normalized_description"] = normalized_description
+        parsed["description"] = normalized_description[:240]
+        parsed["transaction_time"] = resolve_transaction_time(parsed)
+        if raw_description and normalized_description and raw_description.strip() != normalized_description:
+            note = f"descripción original: {raw_description[:180]}"
+            parsed["notes"] = f"{parsed.get('notes') or ''} | {note}" if parsed.get("notes") else note
+
         # One Gmail message should map to one stable candidate. The older
         # fingerprint used only date+amount+merchant, so two real purchases from
         # the same merchant on the same day collapsed into one row. Prefer the
@@ -859,16 +859,25 @@ def scan_email_text(
         parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
 
         duplicate_candidate = _candidate_duplicate_match(conn, user_id, parsed, candidate_fp)
+        replace_existing_duplicate = False
         if _transaction_duplicate_exists(conn, user_id, parsed):
             candidate_status = "duplicate"
             transaction_id = None
             duplicate_of = None
             review_reason = "Transacción idéntica ya existe."
         elif duplicate_candidate:
-            candidate_status = "duplicate"
+            incoming_score = canonical_score(parsed.get("description") or "", parsed.get("account"), parsed.get("source"))
+            existing_score = canonical_score(duplicate_candidate["description"], duplicate_candidate["account"], duplicate_candidate["source"])
             transaction_id = None
-            duplicate_of = int(duplicate_candidate["id"])
-            review_reason = "Posible duplicado del mismo movimiento ya detectado por otro correo/banco."
+            if incoming_score > existing_score:
+                candidate_status = "pending"
+                duplicate_of = None
+                replace_existing_duplicate = True
+                review_reason = "Candidato canónico: versión más específica del mismo movimiento detectado por otro correo/banco."
+            else:
+                candidate_status = "duplicate"
+                duplicate_of = int(duplicate_candidate["id"])
+                review_reason = "Posible duplicado del mismo movimiento ya detectado por otro correo/banco."
         else:
             transaction_id = None
             duplicate_of = None
@@ -882,9 +891,10 @@ def scan_email_text(
                 transaction_date, description, amount, transaction_type,
                 category, account, source, notes, original_amount, original_currency,
                 exchange_rate, card_last4, card_owner, billing_cycle_start,
-                billing_cycle_end, dedupe_key, duplicate_of, confidence, status, review_reason
+                billing_cycle_end, dedupe_key, duplicate_of, canonical_transaction_id,
+                transaction_time, raw_description, normalized_description, confidence, status, review_reason
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, fingerprint)
             DO UPDATE SET
                 email_message_id = EXCLUDED.email_message_id,
@@ -904,6 +914,10 @@ def scan_email_text(
                 billing_cycle_end = EXCLUDED.billing_cycle_end,
                 dedupe_key = EXCLUDED.dedupe_key,
                 duplicate_of = EXCLUDED.duplicate_of,
+                canonical_transaction_id = EXCLUDED.canonical_transaction_id,
+                transaction_time = EXCLUDED.transaction_time,
+                raw_description = EXCLUDED.raw_description,
+                normalized_description = EXCLUDED.normalized_description,
                 confidence = EXCLUDED.confidence,
                 status = CASE
                     WHEN email_transaction_candidates.status IN ('confirmed','auto_saved')
@@ -936,11 +950,39 @@ def scan_email_text(
                 parsed.get("billing_cycle_end"),
                 parsed.get("dedupe_key"),
                 duplicate_of,
+                duplicate_of,
+                parsed.get("transaction_time"),
+                parsed.get("raw_description"),
+                parsed.get("normalized_description"),
                 parsed["confidence"],
                 candidate_status,
                 review_reason,
             ),
         ).fetchone()
+        if candidate_status != "duplicate" and candidate_row and not candidate_row.get("canonical_transaction_id"):
+            conn.execute(
+                """
+                UPDATE email_transaction_candidates
+                SET canonical_transaction_id = id, updated_at = NOW()
+                WHERE id = %s AND user_id = %s
+                """,
+                (int(candidate_row["id"]), user_id),
+            )
+            candidate_row = dict(candidate_row)
+            candidate_row["canonical_transaction_id"] = candidate_row["id"]
+        if replace_existing_duplicate and duplicate_candidate and candidate_row:
+            conn.execute(
+                """
+                UPDATE email_transaction_candidates
+                SET status = 'duplicate',
+                    duplicate_of = %s,
+                    canonical_transaction_id = %s,
+                    review_reason = 'Duplicado semántico: existe una versión canónica más específica.',
+                    updated_at = NOW()
+                WHERE id = %s AND user_id = %s
+                """,
+                (int(candidate_row["id"]), int(candidate_row["id"]), int(duplicate_candidate["id"]), user_id),
+            )
         _log_email_event(
             conn,
             user_id=user_id,

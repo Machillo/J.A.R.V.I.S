@@ -505,6 +505,7 @@ def _base_result(bank: str, kind: str, received_at: str | None) -> dict[str, Any
         "statement_month": None,
         "ignore_reason": None,
         "transaction_date": parse_date(received_at or "", received_at),
+        "transaction_time": None,
         "description": "",
         "amount": 0.0,
         "transaction_type": "ignored",
@@ -591,6 +592,7 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
     return {
         **_base_result("bac", "movement", received_at),
         "transaction_date": transaction_date,
+        "transaction_time": time_value,
         "description": merchant[:240],
         "amount": amount_crc,
         "transaction_type": transaction_type,
@@ -637,6 +639,7 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
     return {
         **_base_result("bac", "movement", received_at),
         "transaction_date": transaction_date,
+        "transaction_time": time_value,
         "description": description[:240],
         "amount": round(amount, 2),
         "transaction_type": "transfer",
@@ -700,6 +703,7 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
     return {
         **_base_result("multimoney", "movement", received_at),
         "transaction_date": transaction_date,
+        "transaction_time": time_value,
         "description": concept[:240],
         "amount": round(amount, 2),
         "transaction_type": "transfer",
@@ -799,6 +803,7 @@ def _parse_bac_alert_payment(subject: str, sender: str, body: str, received_at: 
     return {
         **_base_result("bac", "movement", received_at),
         "transaction_date": transaction_date,
+        "transaction_time": time_value,
         "description": description[:240],
         "amount": amount_crc,
         "transaction_type": transaction_type,
