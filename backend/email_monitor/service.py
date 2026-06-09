@@ -526,7 +526,8 @@ def _enrich_candidate_with_card_alias(conn, user_id: int, candidate: dict[str, A
     return candidate
 
 
-def _transaction_duplicate_exists(conn, user_id: int, candidate: dict[str, Any]) -> bool:
+def _transaction_duplicate_match(conn, user_id: int, candidate: dict[str, Any]) -> int | None:
+    """Return an existing saved transaction id for exact duplicates."""
     row = conn.execute(
         """
         SELECT id
@@ -546,7 +547,7 @@ def _transaction_duplicate_exists(conn, user_id: int, candidate: dict[str, Any])
             candidate["description"],
         ),
     ).fetchone()
-    return bool(row)
+    return int(row["id"]) if row else None
 
 
 def _candidate_duplicate_match(conn, user_id: int, candidate: dict[str, Any], current_fingerprint: str | None = None):
@@ -576,6 +577,79 @@ def _candidate_duplicate_match(conn, user_id: int, candidate: dict[str, Any], cu
 
     return find_semantic_duplicate(conn, user_id, candidate, current_fingerprint)
 
+
+
+
+def _repair_orphan_duplicate_links(conn, user_id: int) -> int:
+    """Backfill duplicate candidates that were marked without a canonical row.
+
+    A duplicate candidate must point to the dominant candidate that represents
+    the real movement. The matching rule mirrors Fase 1.5: same user, same
+    transaction date, same exact amount (with cents tolerance) and, when both
+    rows have a time, a ±10 minute window.
+
+    This repair is intentionally conservative: it only links rows already
+    marked as duplicate and only to non-duplicate candidates.
+    """
+    row = conn.execute(
+        """
+        WITH ranked_matches AS (
+            SELECT
+                duplicate_row.id AS duplicate_id,
+                canonical_row.id AS canonical_id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY duplicate_row.id
+                    ORDER BY
+                        canonical_row.created_at ASC,
+                        canonical_row.id ASC
+                ) AS match_rank
+            FROM email_transaction_candidates duplicate_row
+            JOIN email_transaction_candidates canonical_row
+              ON canonical_row.user_id = duplicate_row.user_id
+             AND canonical_row.id <> duplicate_row.id
+             AND canonical_row.transaction_date = duplicate_row.transaction_date
+             AND ABS(canonical_row.amount - duplicate_row.amount) < 0.01
+             AND canonical_row.status IN ('pending', 'confirmed', 'auto_saved')
+             AND (
+                    duplicate_row.transaction_time IS NULL
+                 OR canonical_row.transaction_time IS NULL
+                 OR ABS(EXTRACT(EPOCH FROM (
+                        (duplicate_row.transaction_date + duplicate_row.transaction_time)
+                      - (canonical_row.transaction_date + canonical_row.transaction_time)
+                    ))) <= 600
+             )
+            WHERE duplicate_row.user_id = %s
+              AND duplicate_row.status = 'duplicate'
+              AND duplicate_row.canonical_transaction_id IS NULL
+        ), repaired AS (
+            UPDATE email_transaction_candidates target
+            SET canonical_transaction_id = ranked_matches.canonical_id,
+                duplicate_of = COALESCE(target.duplicate_of, ranked_matches.canonical_id),
+                review_reason = COALESCE(NULLIF(target.review_reason, ''), 'Duplicado semántico vinculado a su transacción canónica.'),
+                updated_at = NOW()
+            FROM ranked_matches
+            WHERE target.id = ranked_matches.duplicate_id
+              AND ranked_matches.match_rank = 1
+            RETURNING target.id
+        )
+        SELECT COUNT(*) AS repaired_count
+        FROM repaired
+        """,
+        (user_id,),
+    ).fetchone()
+    return int((row or {}).get("repaired_count") or 0)
+
+
+def _assert_duplicate_has_trace(candidate: dict[str, Any]) -> None:
+    """Fail fast before committing inconsistent duplicate metadata."""
+    if candidate.get("status") != "duplicate":
+        return
+    if candidate.get("canonical_transaction_id") or candidate.get("duplicate_of") or candidate.get("transaction_id"):
+        return
+    raise RuntimeError(
+        "Duplicate candidate consistency error: status='duplicate' requires "
+        "canonical_transaction_id, duplicate_of, or transaction_id."
+    )
 
 def _find_existing_ingested(conn, user_id: int, email_fp: str, provider_message_id: str | None):
     if provider_message_id:
@@ -860,11 +934,12 @@ def scan_email_text(
 
         duplicate_candidate = _candidate_duplicate_match(conn, user_id, parsed, candidate_fp)
         replace_existing_duplicate = False
-        if _transaction_duplicate_exists(conn, user_id, parsed):
+        existing_transaction_id = _transaction_duplicate_match(conn, user_id, parsed)
+        if existing_transaction_id:
             candidate_status = "duplicate"
-            transaction_id = None
+            transaction_id = existing_transaction_id
             duplicate_of = None
-            review_reason = "Transacción idéntica ya existe."
+            review_reason = "Transacción idéntica ya existe en movimientos guardados."
         elif duplicate_candidate:
             incoming_score = canonical_score(parsed.get("description") or "", parsed.get("account"), parsed.get("source"))
             existing_score = canonical_score(duplicate_candidate["description"], duplicate_candidate["account"], duplicate_candidate["source"])
@@ -884,6 +959,7 @@ def scan_email_text(
             candidate_status = "pending"
             review_reason = parsed["confidence_reason"]
 
+        canonical_candidate_id = duplicate_of
         candidate_row = conn.execute(
             """
             INSERT INTO email_transaction_candidates (
@@ -959,6 +1035,26 @@ def scan_email_text(
                 review_reason,
             ),
         ).fetchone()
+        candidate_row = dict(candidate_row) if candidate_row else {}
+
+        # Persistencia defensiva de la relación canónica. La detección de
+        # duplicados y la escritura de la fila no pueden quedar desacopladas:
+        # status='duplicate' sin canonical_transaction_id rompe auditoría y UI.
+        if candidate_status == "duplicate" and canonical_candidate_id:
+            conn.execute(
+                """
+                UPDATE email_transaction_candidates
+                SET duplicate_of = %s,
+                    canonical_transaction_id = %s,
+                    updated_at = NOW()
+                WHERE id = %s AND user_id = %s
+                  AND status = 'duplicate'
+                """,
+                (int(canonical_candidate_id), int(canonical_candidate_id), int(candidate_row["id"]), user_id),
+            )
+            candidate_row["duplicate_of"] = int(canonical_candidate_id)
+            candidate_row["canonical_transaction_id"] = int(canonical_candidate_id)
+
         if candidate_status != "duplicate" and candidate_row and not candidate_row.get("canonical_transaction_id"):
             conn.execute(
                 """
@@ -968,8 +1064,8 @@ def scan_email_text(
                 """,
                 (int(candidate_row["id"]), user_id),
             )
-            candidate_row = dict(candidate_row)
             candidate_row["canonical_transaction_id"] = candidate_row["id"]
+
         if replace_existing_duplicate and duplicate_candidate and candidate_row:
             conn.execute(
                 """
@@ -983,6 +1079,19 @@ def scan_email_text(
                 """,
                 (int(candidate_row["id"]), int(candidate_row["id"]), int(duplicate_candidate["id"]), user_id),
             )
+
+        # Backfill histórico y defensa adicional para corridas reentrantes.
+        _repair_orphan_duplicate_links(conn, user_id)
+        refreshed_row = conn.execute(
+            """
+            SELECT *
+            FROM email_transaction_candidates
+            WHERE id = %s AND user_id = %s
+            """,
+            (int(candidate_row["id"]), user_id),
+        ).fetchone()
+        candidate_row = dict(refreshed_row) if refreshed_row else candidate_row
+        _assert_duplicate_has_trace(candidate_row)
         _log_email_event(
             conn,
             user_id=user_id,

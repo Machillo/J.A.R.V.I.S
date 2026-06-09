@@ -581,3 +581,24 @@ ON email_transaction_candidates(user_id, transaction_date, amount, transaction_t
 
 CREATE INDEX IF NOT EXISTS idx_email_candidates_canonical
 ON email_transaction_candidates(user_id, canonical_transaction_id);
+
+-- Email parser duplicate traceability hardening
+CREATE INDEX IF NOT EXISTS idx_email_candidates_canonical
+ON email_transaction_candidates(user_id, canonical_transaction_id);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_email_candidate_duplicate_trace'
+    ) THEN
+        ALTER TABLE email_transaction_candidates
+        ADD CONSTRAINT chk_email_candidate_duplicate_trace
+        CHECK (
+            status <> 'duplicate'
+            OR canonical_transaction_id IS NOT NULL
+            OR transaction_id IS NOT NULL
+        ) NOT VALID;
+    END IF;
+END $$;
