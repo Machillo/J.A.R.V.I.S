@@ -106,6 +106,29 @@ OWN_ACCOUNT_IBANS = {
 }
 OWN_ACCOUNT_LAST4 = {iban[-4:]: label for iban, label in OWN_ACCOUNT_IBANS.items()}
 OWN_DEBIT_CARD_LAST4 = {"1655", "7514"}
+OWN_ACCOUNT_ALIASES = {
+    # IBAN/account/card endings that identify Kenneth's own money routes.
+    # These must never become pending review candidates when both sides are own accounts
+    # or when the template explicitly says the movement is an own investment/smart account.
+    "6126": "MultiMoney colones",
+    "2572": "BAC planilla",
+    "8137": "BAC cuenta",
+    "1655": "BAC débito",
+    "7514": "BAC débito",
+}
+CARD_PAYMENT_KEYWORDS = [
+    "pago tarjeta bac", "pago de tarjeta", "tarjeta de credito", "tarjeta de crédito",
+    "monto del pago", "comprobante de pago de tarjeta",
+]
+REJECTED_MOVEMENT_KEYWORDS = [
+    "rechazada", "rechazado", "no fue aplicada", "no aplicada", "fondosinsuficientes",
+    "fondos insuficientes", "problemas de comunicacion", "problemas de comunicación",
+    "transaccion rechazada", "transacción rechazada",
+]
+INTERNAL_CONCEPT_KEYWORDS = [
+    "inversion vista smart", "inversión vista smart", "vista smart", "ahorro multimoney",
+    "inversion propia", "inversión propia", "traslado entre cuentas", "movimiento entre cuentas",
+]
 
 
 def _compact_account(value: str | None) -> str:
@@ -119,8 +142,12 @@ def _own_account_label(value: str | None) -> str | None:
     for iban, label in OWN_ACCOUNT_IBANS.items():
         if iban in compact:
             return label
-    if len(compact) >= 4 and compact[-4:] in OWN_ACCOUNT_LAST4:
-        return OWN_ACCOUNT_LAST4[compact[-4:]]
+    if len(compact) >= 4:
+        last4 = compact[-4:]
+        if last4 in OWN_ACCOUNT_LAST4:
+            return OWN_ACCOUNT_LAST4[last4]
+        if last4 in OWN_ACCOUNT_ALIASES:
+            return OWN_ACCOUNT_ALIASES[last4]
     return None
 
 
@@ -151,21 +178,53 @@ def _extract_account_near(text: str | None, labels: list[str]) -> str:
     return ""
 
 
+def _has_rejected_movement(text: str | None) -> bool:
+    clean = normalize(text or "")
+    return any(token in clean for token in REJECTED_MOVEMENT_KEYWORDS)
+
+
+def _is_card_payment(text: str | None) -> bool:
+    clean = normalize(text or "")
+    return any(token in clean for token in CARD_PAYMENT_KEYWORDS)
+
+
+def _is_internal_concept(value: str | None) -> bool:
+    clean_value = normalize(value or "")
+    return any(token in clean_value for token in INTERNAL_CONCEPT_KEYWORDS)
+
+
+def _own_account_labels_in_text(text: str | None) -> set[str]:
+    labels: set[str] = set()
+    compact = _compact_account(text or "")
+    for iban, label in OWN_ACCOUNT_IBANS.items():
+        if iban in compact:
+            labels.add(label)
+    for last4, label in OWN_ACCOUNT_ALIASES.items():
+        # Match explicit masked/account endings without treating any random amount as an account.
+        if re.search(rf"(?:IBAN|CUENTA|CTA|TARJETA|\*{{2,}}|X{{2,}}|CR\d{{16,}})[^\d]{{0,20}}{re.escape(last4)}\b", text or "", re.I):
+            labels.add(label)
+    return labels
+
+
 def _is_internal_transfer(concept: str | None = None, origin: str | None = None, destination: str | None = None, body: str | None = None, direction: str = "unknown") -> bool:
-    clean_concept = normalize(concept or "")
-    if any(token in clean_concept for token in ["inversion vista smart", "inversión vista smart", "vista smart", "ahorro multimoney"]):
+    if _is_internal_concept(concept) or _is_internal_concept(body):
         return True
+
     origin_own = _contains_own_account(origin)
     destination_own = _contains_own_account(destination)
+
+    # Two own endpoints means this is only a money move between pockets.
     if origin_own and destination_own:
         return True
+
+    # If the known own account is the destination of an outgoing transfer, or the
+    # origin of an incoming transfer, the other side is also ours in the bank template.
     if direction == "out" and destination_own:
         return True
     if direction == "in" and origin_own:
         return True
-    # Conservative fallback: only if the text explicitly names two known own accounts.
-    labels = {_own_account_label(iban) for iban in _extract_ibans(body)}
-    labels.discard(None)
+
+    labels = _own_account_labels_in_text(body)
     return len(labels) >= 2
 
 
@@ -705,6 +764,9 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
     if not ("sinpe" in clean and "transferencia" in clean and "monto" in clean):
         return None
 
+    if _has_rejected_movement(text):
+        return _ignored("bac", subject, body, received_at, "Transferencia SINPE rechazada/no aplicada; no afecta finanzas.")
+
     amount, _currency = _parse_context_amount(text)
     if amount is None or amount <= 0:
         return None
@@ -716,7 +778,7 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
     is_in = "se acredito" in clean or "se acredito en la cuenta" in clean or "se acreditó" in (body or "").lower() or "acreditando" in clean
     direction = "out" if is_out else "in" if is_in else "unknown"
 
-    concept_match = re.search(r"por\s+concepto\s+de\s+(.+?)(?:\.?D[ií]a\s+y\s+hora|\n|$)", text, re.I | re.S)
+    concept_match = re.search(r"por\s+concepto\s+de\s+(.+?)(?:\s+Monto\b|\.?D[ií]a\s+y\s+hora|\n|$)", text, re.I | re.S)
     concept = re.sub(r"[_\s]+", " ", concept_match.group(1)).strip(" .") if concept_match else ""
     reference_match = re.search(r"referencia\s+(\d{8,})", text, re.I)
 
@@ -769,8 +831,10 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
 
     transaction_type = "expense" if is_out else "income" if is_in else "transfer"
     category = infer_category(description_base, transaction_type)
-    if transaction_type == "income" and category == "Otros ingresos":
+    if transaction_type == "income":
         category = "Reembolsos"
+    elif transaction_type == "expense" and not destination_account:
+        notes.append("destino no visible en correo BAC; revisar categoría antes de confirmar")
 
     description = description_base
     if is_out and normalize(description) in {"sinpe enviado", "transferencia sinpe"}:
@@ -822,6 +886,9 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
     clean = normalize(text)
     if not ("multimoney" in clean and "monto" in clean and "fecha" in clean):
         return None
+    if _has_rejected_movement(text):
+        return _ignored("multimoney", subject, body, received_at, "Movimiento MultiMoney rechazado/no aplicado; no afecta finanzas.")
+
     if not (
         "resumen de operacion" in clean
         or "operacion realizada" in clean
@@ -978,18 +1045,20 @@ def _parse_bac_alert_payment(subject: str, sender: str, body: str, received_at: 
     amount_crc = round(amount, 2)
     card_last4 = _card_last4(text)
     transaction_date, time_value = _parse_datetime_text(text, received_at)
+
+    if _has_rejected_movement(text):
+        return _ignored("bac", subject, body, received_at, "Pago/depósito BAC rechazado/no aplicado; no afecta finanzas.")
+    if _is_internal_transfer(subject, body=body, direction="unknown"):
+        return _internal_ignored("bac", subject, body, received_at, "Movimiento entre cuentas propias detectado en alerta BAC; no se genera candidato financiero.")
+
     if is_deposit:
         transaction_type = "income"
         description = "Depósito BAC"
         category = "Otros ingresos"
         account = "BAC Depósito"
         reason = "BAC depósito: monto, fecha y remitente extraídos por plantilla alerta."
-    elif "tarjeta" in clean and card_last4:
-        transaction_type = "debt_payment"
-        description = f"Pago tarjeta BAC ****{card_last4}"
-        category = "Tarjeta BAC"
-        account = f"BAC ****{card_last4}"
-        reason = "BAC pago de tarjeta: monto, fecha y tarjeta extraídos por plantilla alerta."
+    elif _is_card_payment(text):
+        return _ignored("bac", subject, body, received_at, "Pago de tarjeta BAC detectado; se ignora para evitar doble conteo porque las compras individuales ya son los gastos.")
     else:
         transaction_type = "expense"
         target = _extract_named_payment_target(text)
@@ -1077,10 +1146,18 @@ def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
         return "ignored", "No es un correo de BAC, Banco Popular o MultiMoney."
     if _parse_statement(subject, sender, body, None):
         return "statement", "Estado de cuenta detectado; queda como documento pendiente."
-    if bank == "bac" and (_parse_bac_purchase(subject, sender, body, None, 495.0) or _parse_bac_sinpe(subject, sender, body, None) or _parse_bac_alert_payment(subject, sender, body, None)):
-        return "movement", "Movimiento BAC estructurado detectado."
-    if bank == "multimoney" and _parse_multimoney_transfer(subject, sender, body, None):
-        return "movement", "Movimiento MultiMoney estructurado detectado."
+    if bank == "bac":
+        parsed = _parse_bac_purchase(subject, sender, body, None, 495.0) or _parse_bac_sinpe(subject, sender, body, None) or _parse_bac_alert_payment(subject, sender, body, None)
+        if parsed:
+            if parsed.get("email_kind") == "ignored":
+                return "ignored", parsed.get("ignore_reason") or "Movimiento BAC descartado por reglas de seguridad financiera."
+            return "movement", "Movimiento BAC estructurado detectado."
+    if bank == "multimoney":
+        parsed = _parse_multimoney_transfer(subject, sender, body, None)
+        if parsed:
+            if parsed.get("email_kind") == "ignored":
+                return "ignored", parsed.get("ignore_reason") or "Movimiento MultiMoney descartado por reglas de seguridad financiera."
+            return "movement", "Movimiento MultiMoney estructurado detectado."
     if _has_reject(text):
         return "ignored", "Correo promocional, login, seguridad o informativo."
     return "ignored", "No contiene estructura confiable de movimiento bancario."
