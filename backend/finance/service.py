@@ -80,7 +80,20 @@ def _next_thursday_after_work_week(value: Any) -> date | None:
 
 
 def _transaction_date_expr() -> str:
-    return "to_date(NULLIF(transaction_date, ''), 'YYYY-MM-DD')"
+    """Safe SQL expression that converts transactions.transaction_date to DATE.
+
+    Older deployments may have transaction_date as TEXT, while newer/imported
+    tables may expose it as DATE. Casting to text first avoids PostgreSQL trying
+    to cast the empty-string literal to DATE inside NULLIF. The regex guard also
+    prevents invalid legacy values from crashing /finance/cycle-report.
+    """
+    raw = "NULLIF(BTRIM(transaction_date::text), '')"
+    return (
+        "CASE "
+        f"WHEN {raw} ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}' "
+        f"THEN SUBSTRING({raw} FROM 1 FOR 10)::date "
+        "ELSE NULL END"
+    )
 
 
 def _latest_base_salary(user_id: int) -> float:
@@ -976,14 +989,8 @@ def get_financial_cycle_report() -> dict:
     debt_payments_total = sum(_as_float(row.get("amount")) for row in debt_payments)
     income_received_total = sum(_as_float(row.get("amount")) for row in income_transactions)
     loans_total = sum(_as_float(row.get("amount")) for row in loan_transactions)
-
-    # Kenneth no maneja el mes financiero calendario: el ciclo real es 5 -> 5.
-    # Ingreso neto = salario fijo esperado + extras esperados del ciclo + ingresos reales.
-    # Gastos neto = gastos aceptados + pagos de deuda del ciclo.
     expected_total = base_net + extra_expected
-    income_net = expected_total + income_received_total
-    expenses_net = expenses_total + debt_payments_total
-    real_balance = income_net + loans_total - expenses_net
+    real_balance = expected_total + income_received_total + loans_total - expenses_total - debt_payments_total
 
     return {
         "status": "OK",
@@ -998,13 +1005,10 @@ def get_financial_cycle_report() -> dict:
             "extra_expected": round(extra_expected, 2),
             "expected_total": round(expected_total, 2),
             "received_from_transactions": round(income_received_total, 2),
-            "net": round(income_net, 2),
             "items": extra_items,
         },
         "expenses": {
             "current_period": round(expenses_total, 2),
-            "debt_payments_current_period": round(debt_payments_total, 2),
-            "net": round(expenses_net, 2),
             "items": expenses,
         },
         "debts": {
