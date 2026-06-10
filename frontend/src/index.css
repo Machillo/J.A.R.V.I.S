@@ -7109,3 +7109,45 @@ button {
     gap: 2px;
   }
 }
+
+.strategy-debt-advice-panel {
+  border: 1px solid rgba(147, 9, 198, 0.32);
+  background: linear-gradient(135deg, rgba(49, 49, 49, 0.92), rgba(12, 103, 243, 0.08));
+}
+
+.debt-advice-scenarios {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.debt-advice-scenarios > div {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 18px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.debt-advice-scenarios span {
+  color: rgba(232, 251, 255, 0.72);
+  font-size: 0.8rem;
+}
+
+.debt-advice-scenarios strong {
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+.debt-advice-scenarios small {
+  color: rgba(232, 251, 255, 0.56);
+}
+
+@media (max-width: 720px) {
+  .debt-advice-scenarios {
+    grid-template-columns: 1fr;
+  }
+}

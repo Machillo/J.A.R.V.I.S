@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, RefreshCw, Shield, TrendingUp } from "lucide-react";
-import { createJarvisPremiumInitialStrategy, getJarvisPremiumStrategyDashboard } from "../services/jarvisApi";
+import { createJarvisPremiumInitialStrategy, getDebtAdvisory, getJarvisPremiumStrategyDashboard } from "../services/jarvisApi";
 
 const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
 
@@ -16,15 +16,29 @@ const allocationLabels = {
 };
 
 export default function PremiumStrategy() {
-  const [state, setState] = useState({ loading: true, data: null, error: "", running: false });
+  const [state, setState] = useState({ loading: true, data: null, debtAdvice: null, error: "", running: false });
 
   const load = async () => {
     setState((current) => ({ ...current, loading: true, error: "" }));
     try {
-      const data = await getJarvisPremiumStrategyDashboard();
-      setState({ loading: false, data, error: "", running: false });
+      const [strategyResult, debtAdviceResult] = await Promise.allSettled([
+        getJarvisPremiumStrategyDashboard(),
+        getDebtAdvisory(),
+      ]);
+
+      if (strategyResult.status === "rejected") {
+        throw strategyResult.reason;
+      }
+
+      setState({
+        loading: false,
+        data: strategyResult.value,
+        debtAdvice: debtAdviceResult.status === "fulfilled" ? debtAdviceResult.value : null,
+        error: "",
+        running: false,
+      });
     } catch (error) {
-      setState({ loading: false, data: null, error: error.message || "No pude cargar la estrategia.", running: false });
+      setState({ loading: false, data: null, debtAdvice: null, error: error.message || "No pude cargar la estrategia.", running: false });
     }
   };
 
@@ -46,6 +60,8 @@ export default function PremiumStrategy() {
 
   const payload = state.data || {};
   const strategy = payload.strategy || {};
+  const debtAdvice = state.debtAdvice || {};
+  const debtScenarios = debtAdvice.scenarios || debtAdvice.options || {};
   const timeline = strategy.timeline || [];
   const allocation = strategy.allocation || {};
   const allocationAmounts = strategy.allocation_amounts || {};
@@ -111,6 +127,31 @@ export default function PremiumStrategy() {
           <div className="allocation-row"><span>Sin OT/bonos futuros</span><strong>{strategy.base_estimated_total_months >= 999 ? "sin cierre" : `${strategy.base_estimated_total_months || "--"} meses`}</strong></div>
           <div className="allocation-row"><span>Con extras únicos de este mes</span><strong>{strategy.estimated_total_months >= 999 ? "sin cierre" : `${strategy.estimated_total_months || "--"} meses`}</strong></div>
           <div className="allocation-row"><span>Meses adelantados</span><strong>{strategy.months_saved_by_current_extras || 0}</strong></div>
+        </div>
+      </div>
+
+
+      <div className="hud-panel strategy-debt-advice-panel">
+        <h3>Asesoría de deuda</h3>
+        <p className="strategy-advice-line">
+          {debtAdvice.message || "Señor, registre deudas activas para comparar amortización, ahorro y estrategia híbrida."}
+        </p>
+        <div className="debt-advice-scenarios">
+          <div>
+            <span>A) Abonar mensualmente</span>
+            <strong>{money(debtScenarios.monthly_amortization?.monthly_payment || debtScenarios.amortization?.monthly_payment || 0)}</strong>
+            <small>{debtScenarios.monthly_amortization?.estimated_months || debtScenarios.amortization?.estimated_months || "--"} meses</small>
+          </div>
+          <div>
+            <span>B) Ahorrar y liquidar</span>
+            <strong>{money(debtScenarios.save_then_pay?.target_amount || debtScenarios.lump_sum?.target_amount || strategy.total_debt || 0)}</strong>
+            <small>{debtScenarios.save_then_pay?.estimated_months || debtScenarios.lump_sum?.estimated_months || "--"} meses</small>
+          </div>
+          <div>
+            <span>C) Estrategia híbrida</span>
+            <strong>{money(debtScenarios.hybrid?.monthly_payment || debtScenarios.hybrid?.recommended_payment || 0)}</strong>
+            <small>{debtScenarios.hybrid?.estimated_months || "--"} meses</small>
+          </div>
         </div>
       </div>
 
