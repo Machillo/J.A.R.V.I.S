@@ -7151,3 +7151,67 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/* Auto accounts receivable from additional cards */
+.receivables-panel {
+  overflow: hidden;
+}
+
+.receivable-list {
+  display: grid;
+  gap: 12px;
+}
+
+.receivable-item {
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.receivable-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.receivable-item-head strong {
+  display: block;
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 1rem;
+}
+
+.receivable-item-head span,
+.receivable-meta span {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.78rem;
+}
+
+.receivable-item-head b {
+  color: #f3abec;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.receivable-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+}
+
+.receivable-bar {
+  height: 7px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.receivable-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #9309c6, #0c67f3);
+}

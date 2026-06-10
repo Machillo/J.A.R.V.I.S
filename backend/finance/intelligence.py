@@ -38,6 +38,202 @@ def _month_bounds(today: date | None = None) -> tuple[date, date]:
     return start, end
 
 
+
+
+def _ensure_receivable_tables(conn) -> None:
+    """Create/upgrade receivable tables used by manual and automatic IOU tracking.
+
+    Automatic receivables are generated from confirmed additional-card purchases
+    (for example Emily's BAC additional cards). Manual receivables can still be
+    created from the UI or chat.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS receivables (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL DEFAULT 1,
+            person_name TEXT NOT NULL,
+            original_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+            paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+            pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'pending',
+            notes TEXT,
+            source_type TEXT NOT NULL DEFAULT 'manual',
+            source_key TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'manual'")
+    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS source_key TEXT")
+    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS notes TEXT")
+    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
+    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS receivable_payments (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL DEFAULT 1,
+            receivable_id BIGINT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,
+            amount NUMERIC(14,2) NOT NULL,
+            source_transaction_id BIGINT,
+            notes TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_user_status ON receivables(user_id, status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_source_key ON receivables(user_id, source_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_payments_receivable ON receivable_payments(user_id, receivable_id)")
+
+
+def _ensure_card_aliases(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS card_aliases (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL DEFAULT 1,
+            card_last4 TEXT NOT NULL,
+            owner_label TEXT NOT NULL,
+            relationship TEXT,
+            is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+
+
+def _fetch_additional_card_totals(conn, user_id: int) -> list[dict[str, Any]]:
+    """Return what each additional-card owner owes from accepted card expenses.
+
+    Only confirmed/auto-saved email candidates linked to real finance
+    transactions are counted. Kenneth's primary/debit cards are excluded through
+    card_aliases.is_primary and owner_label.
+    """
+    _ensure_card_aliases(conn)
+    rows = conn.execute(
+        """
+        SELECT
+            a.owner_label AS person_name,
+            COALESCE(SUM(t.amount), 0) AS total_amount,
+            COUNT(*) AS movement_count,
+            ARRAY_AGG(DISTINCT a.card_last4 ORDER BY a.card_last4) AS cards
+        FROM card_aliases a
+        JOIN email_transaction_candidates c
+          ON c.user_id = a.user_id
+         AND c.card_last4 = a.card_last4
+        JOIN transactions t
+          ON t.user_id = c.user_id
+         AND t.id = c.transaction_id
+        WHERE a.user_id = %s
+          AND COALESCE(a.is_primary, FALSE) = FALSE
+          AND LOWER(TRIM(a.owner_label)) NOT IN ('kenneth', 'kenneth andres')
+          AND t.transaction_type = 'expense'
+          AND COALESCE(c.status, '') IN ('confirmed', 'auto_saved')
+          AND COALESCE(t.source, '') = 'email_monitor'
+        GROUP BY a.owner_label
+        ORDER BY a.owner_label
+        """,
+        (user_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
+    """Upsert automatic receivables from additional-card spending.
+
+    If Emily made ₡137.731 in confirmed additional-card purchases, an automatic
+    receivable is maintained for Emily. Existing payments are preserved and only
+    the original/pending amounts are recalculated.
+    """
+    _ensure_receivable_tables(conn)
+    totals = _fetch_additional_card_totals(conn, user_id)
+    seen_keys: set[str] = set()
+
+    for row in totals:
+        person = str(row.get("person_name") or "").strip()
+        if not person:
+            continue
+        source_key = f"additional_cards:{person.lower()}"
+        seen_keys.add(source_key)
+        original = round(max(_as_float(row.get("total_amount")), 0.0), 2)
+        notes = (
+            f"AUTO_ADDITIONAL_CARD owner={person}; "
+            f"cards={','.join(row.get('cards') or [])}; "
+            f"movements={int(row.get('movement_count') or 0)}"
+        )
+        existing = conn.execute(
+            """
+            SELECT id, paid_amount
+            FROM receivables
+            WHERE user_id = %s AND source_key = %s
+            LIMIT 1
+            """,
+            (user_id, source_key),
+        ).fetchone()
+        paid = _as_float(existing["paid_amount"]) if existing else 0.0
+        pending = round(max(original - paid, 0.0), 2)
+        status = "completed" if pending <= 0.01 and original > 0 else "partial" if paid > 0 else "pending"
+
+        if existing:
+            conn.execute(
+                """
+                UPDATE receivables
+                SET person_name = %s,
+                    original_amount = %s,
+                    pending_amount = %s,
+                    status = %s,
+                    source_type = 'additional_card_auto',
+                    notes = %s,
+                    updated_at = NOW()
+                WHERE id = %s AND user_id = %s
+                """,
+                (person, original, pending, status, notes, existing["id"], user_id),
+            )
+        elif original > 0:
+            conn.execute(
+                """
+                INSERT INTO receivables (
+                    user_id, person_name, original_amount, paid_amount,
+                    pending_amount, status, notes, source_type, source_key
+                )
+                VALUES (%s, %s, %s, 0, %s, %s, %s, 'additional_card_auto', %s)
+                """,
+                (user_id, person, original, pending, status, notes, source_key),
+            )
+
+    # If an owner no longer has confirmed purchases, keep the row but set the
+    # original to zero; manual payments/history remain intact.
+    stale_rows = conn.execute(
+        """
+        SELECT id, paid_amount
+        FROM receivables
+        WHERE user_id = %s
+          AND source_type = 'additional_card_auto'
+          AND source_key IS NOT NULL
+        """,
+        (user_id,),
+    ).fetchall()
+    for stale in stale_rows:
+        key = str(stale.get("source_key") or "")
+        if key in seen_keys:
+            continue
+        paid = _as_float(stale.get("paid_amount"))
+        conn.execute(
+            """
+            UPDATE receivables
+            SET original_amount = 0,
+                pending_amount = 0,
+                status = 'completed',
+                notes = COALESCE(notes, '') || ' | Sin compras adicionales confirmadas actualmente.',
+                updated_at = NOW()
+            WHERE id = %s AND user_id = %s
+            """,
+            (stale["id"], user_id),
+        )
+
 def _fetch_active_goals(user_id: int) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
@@ -323,12 +519,20 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
 def list_receivables() -> dict[str, Any]:
     user_id = get_current_user_id()
     with get_connection() as conn:
+        _ensure_receivable_tables(conn)
+        _sync_auto_additional_card_receivables(conn, user_id)
+        conn.commit()
         rows = conn.execute(
             """
-            SELECT id, person_name, original_amount, paid_amount, pending_amount, status, notes, created_at, updated_at
+            SELECT id, person_name, original_amount, paid_amount, pending_amount,
+                   status, notes, source_type, source_key, created_at, updated_at
             FROM receivables
             WHERE user_id = %s
-            ORDER BY CASE status WHEN 'pending' THEN 1 WHEN 'partial' THEN 2 ELSE 3 END, id DESC
+            ORDER BY
+              CASE status WHEN 'pending' THEN 1 WHEN 'partial' THEN 2 ELSE 3 END,
+              CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END,
+              person_name ASC,
+              id DESC
             """,
             (user_id,),
         ).fetchall()
@@ -345,8 +549,15 @@ def list_receivables() -> dict[str, Any]:
     items = []
     for row in rows:
         item = dict(row)
-        item["paid_amount"] = round(max(_as_float(item.get("paid_amount")), by_id.get(item.get("id"), 0)), 2)
-        item["pending_amount"] = round(max(_as_float(item.get("original_amount")) - item["paid_amount"], 0), 2)
+        paid = round(max(_as_float(item.get("paid_amount")), by_id.get(item.get("id"), 0)), 2)
+        pending = round(max(_as_float(item.get("original_amount")) - paid, 0), 2)
+        item["paid_amount"] = paid
+        item["pending_amount"] = pending
+        if pending <= 0.01 and _as_float(item.get("original_amount")) > 0:
+            item["status"] = "completed"
+        elif paid > 0:
+            item["status"] = "partial"
+        item["is_auto"] = item.get("source_type") == "additional_card_auto"
         items.append(item)
     return {
         "status": "OK",
@@ -354,7 +565,9 @@ def list_receivables() -> dict[str, Any]:
         "summary": {
             "total_pending": round(sum(_as_float(item.get("pending_amount")) for item in items), 2),
             "total_original": round(sum(_as_float(item.get("original_amount")) for item in items), 2),
+            "total_paid": round(sum(_as_float(item.get("paid_amount")) for item in items), 2),
             "count_open": sum(1 for item in items if item.get("status") != "completed"),
+            "auto_count": sum(1 for item in items if item.get("is_auto")),
         },
     }
 
@@ -365,6 +578,7 @@ def create_receivable(person_name: str, amount: float, notes: str = "") -> dict[
     if amount <= 0:
         return {"status": "ERROR", "message": "Monto inválido."}
     with get_connection() as conn:
+        _ensure_receivable_tables(conn)
         row = conn.execute(
             """
             INSERT INTO receivables (user_id, person_name, original_amount, paid_amount, pending_amount, status, notes)
@@ -381,6 +595,7 @@ def apply_receivable_payment(receivable_id: int, amount: float, source_transacti
     user_id = get_current_user_id()
     amount = max(_as_float(amount), 0.0)
     with get_connection() as conn:
+        _ensure_receivable_tables(conn)
         rec = conn.execute(
             "SELECT * FROM receivables WHERE id = %s AND user_id = %s FOR UPDATE",
             (receivable_id, user_id),

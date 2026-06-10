@@ -17,6 +17,7 @@ import {
   getDebts,
   getFinanceCycleReport,
   getFixedExpenseStatus,
+  getReceivables,
   getTransactionAnalysis,
   previewFinanceInput,
   previewFinancePdf,
@@ -403,6 +404,58 @@ function UnifiedFlowChart({ currentCycleFlow = [], yearly = [] }) {
   );
 }
 
+
+function ReceivablesPanel({ data }) {
+  const items = data?.items || [];
+  const summary = data?.summary || {};
+  const openItems = items.filter((item) => item.status !== "completed" || Number(item.pending_amount) > 0);
+
+  return (
+    <article className="hud-panel large receivables-panel">
+      <div className="panel-title">
+        <div>
+          <h3>CUENTAS POR COBRAR</h3>
+          <p>Compras de tarjetas adicionales pendientes de pago.</p>
+        </div>
+        <span>{formatCRC(summary.total_pending || 0)}</span>
+      </div>
+
+      {openItems.length === 0 ? (
+        <EmptyPanel
+          title="Sin cuentas pendientes"
+          description="Cuando Emily o Sidey tengan compras aceptadas, Jarvis las sumará automáticamente aquí."
+        />
+      ) : (
+        <div className="receivable-list">
+          {openItems.map((item) => {
+            const original = Number(item.original_amount) || 0;
+            const paid = Number(item.paid_amount) || 0;
+            const pending = Number(item.pending_amount) || 0;
+            const progress = original > 0 ? Math.min((paid / original) * 100, 100) : 0;
+            return (
+              <div className={`receivable-item ${item.status}`} key={item.id}>
+                <div className="receivable-item-head">
+                  <div>
+                    <strong>{item.person_name}</strong>
+                    <span>{item.is_auto ? "Tarjetas adicionales" : "Registro manual"}</span>
+                  </div>
+                  <b>{formatCRC(pending)}</b>
+                </div>
+                <div className="receivable-meta">
+                  <span>Total: {formatCRC(original)}</span>
+                  <span>Pagado: {formatCRC(paid)}</span>
+                  <span>{item.status === "partial" ? "Pago parcial" : "Pendiente"}</span>
+                </div>
+                <div className="receivable-bar"><span style={{ width: `${progress}%` }} /></div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </article>
+  );
+}
+
 function FixedExpensesPanel({ data, onRefresh, isOwner }) {
   const items = data?.items || [];
   const summary = data?.summary || {};
@@ -497,21 +550,24 @@ export default function Finance({
   const [fixedStatus, setFixedStatus] = useState(null);
   const [cycleReport, setCycleReport] = useState(null);
   const [debts, setDebts] = useState([]);
+  const [receivables, setReceivables] = useState(null);
   const [debtSort, setDebtSort] = useState("saldo");
   const [detail, setDetail] = useState(null);
 
   const loadSupportingData = async () => {
-    const [analysisResult, fixedResult, cycleResult, debtsResult] = await Promise.allSettled([
+    const [analysisResult, fixedResult, cycleResult, debtsResult, receivablesResult] = await Promise.allSettled([
       getTransactionAnalysis(),
       getFixedExpenseStatus(),
       getFinanceCycleReport(),
       getDebts(),
+      getReceivables(),
     ]);
 
     setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
     setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
     setCycleReport(cycleResult.status === "fulfilled" ? cycleResult.value : null);
     setDebts(debtsResult.status === "fulfilled" && Array.isArray(debtsResult.value) ? debtsResult.value : []);
+    setReceivables(receivablesResult.status === "fulfilled" ? receivablesResult.value : null);
   };
 
   useEffect(() => {
@@ -523,6 +579,7 @@ export default function Finance({
         setFixedStatus(null);
         setCycleReport(null);
         setDebts([]);
+        setReceivables(null);
       }
     });
     return () => {
@@ -725,6 +782,8 @@ export default function Finance({
           </div>
           <CategoryBars data={categoryChartData} />
         </article>
+
+        <ReceivablesPanel data={receivables} />
 
         <FixedExpensesPanel data={fixedStatus} onRefresh={onRefresh} isOwner={isOwner} />
 
