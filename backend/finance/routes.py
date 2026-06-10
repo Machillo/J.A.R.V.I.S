@@ -30,6 +30,10 @@ from backend.finance.models import (
     ReconciliationRequest,
     FixedExpenseRequest,
     FixedExpenseUpdateRequest,
+    ReceivableRequest,
+    ReceivablePaymentRequest,
+    AccountBalanceRequest,
+    GoalPlanningRequest,
 )
 
 from backend.finance.service import (
@@ -94,6 +98,18 @@ from backend.finance.card_cycle import (
     evaluate_card_purchase,
 )
 from backend.finance.category_catalog import get_category_catalog, get_category_groups
+
+from backend.finance.intelligence import (
+    get_real_availability,
+    get_debt_advisory,
+    list_receivables,
+    create_receivable,
+    apply_receivable_payment,
+    list_account_balances,
+    upsert_account_balance,
+    get_real_balance_reconciliation,
+    plan_long_term_goal,
+)
 
 
 from backend.finance.fixed_expenses import (
@@ -580,3 +596,65 @@ def financial_dashboard_debug():
             "error": str(error),
             "steps": steps,
         }
+
+@router.get("/real-availability")
+def real_availability():
+    return get_real_availability()
+
+
+@router.get("/debt-advisory")
+def debt_advisory(extra_cash: float | None = None):
+    return get_debt_advisory(extra_cash=extra_cash)
+
+
+@router.get("/receivables")
+def receivables():
+    return list_receivables()
+
+
+@router.post("/receivables")
+def create_receivable_route(request: ReceivableRequest):
+    return create_receivable(
+        person_name=request.person_name,
+        amount=request.amount,
+        notes=request.notes,
+    )
+
+
+@router.post("/receivables/{receivable_id}/payments")
+def receivable_payment(receivable_id: int, request: ReceivablePaymentRequest):
+    return apply_receivable_payment(
+        receivable_id=receivable_id,
+        amount=request.amount,
+        source_transaction_id=request.source_transaction_id,
+        notes=request.notes,
+    )
+
+
+@router.get("/account-balances")
+def account_balances():
+    return list_account_balances()
+
+
+@router.post("/account-balances")
+def save_account_balance(request: AccountBalanceRequest):
+    return upsert_account_balance(
+        account_name=request.account_name,
+        current_balance=request.current_balance,
+        bank_name=request.bank_name,
+        account_last4=request.account_last4,
+        currency=request.currency,
+    )
+
+
+@router.get("/real-balance")
+def real_balance():
+    return get_real_balance_reconciliation()
+
+
+@router.post("/plan-goal")
+def plan_goal(request: GoalPlanningRequest):
+    return plan_long_term_goal(
+        description=request.description,
+        estimated_total_cost=request.estimated_total_cost,
+    )

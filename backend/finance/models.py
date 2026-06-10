@@ -154,3 +154,28 @@ class FixedExpenseUpdateRequest(BaseModel):
     aliases: list[str] | None = None
     notes: str | None = None
     is_active: bool | None = None
+
+
+class ReceivableRequest(BaseModel):
+    person_name: str
+    amount: float
+    notes: str = ""
+
+
+class ReceivablePaymentRequest(BaseModel):
+    amount: float
+    source_transaction_id: int | None = None
+    notes: str = ""
+
+
+class AccountBalanceRequest(BaseModel):
+    account_name: str
+    current_balance: float
+    bank_name: str = ""
+    account_last4: str = ""
+    currency: str = "CRC"
+
+
+class GoalPlanningRequest(BaseModel):
+    description: str
+    estimated_total_cost: float | None = None

@@ -53,6 +53,16 @@ export const getFinanceCycleReport = () => request("/finance/cycle-report");
 export const getFinancialSummary = () => request("/finance/summary");
 export const getNetWorth = () => request("/finance/net-worth");
 
+export const getRealAvailability = () => request("/finance/real-availability");
+export const getDebtAdvisory = () => request("/finance/debt-advisory");
+export const getReceivables = () => request("/finance/receivables");
+export const createReceivable = (payload) => jsonRequest("/finance/receivables", "POST", payload);
+export const applyReceivablePayment = (id, payload) => jsonRequest(`/finance/receivables/${id}/payments`, "POST", payload);
+export const getAccountBalances = () => request("/finance/account-balances");
+export const saveAccountBalance = (payload) => jsonRequest("/finance/account-balances", "POST", payload);
+export const getRealBalance = () => request("/finance/real-balance");
+export const planGoalScenario = (payload) => jsonRequest("/finance/plan-goal", "POST", payload);
+
 export const getSalaries = () => request("/finance/salaries");
 export const createSalary = (payload) => jsonRequest("/finance/salaries", "POST", payload);
 

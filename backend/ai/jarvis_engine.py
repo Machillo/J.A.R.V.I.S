@@ -26,6 +26,7 @@ from backend.goals.service import get_financial_goal_by_name
 from backend.advisor.service import analyze_spending_habits, get_financial_advice
 from backend.transactions.analyzer import get_transaction_analysis
 from backend.finance.strategic_engine import get_financial_engine_report, simulate_what_if
+from backend.finance.intelligence import plan_long_term_goal, get_debt_advisory
 from backend.finance.fixed_expenses import handle_fixed_expense_message
 from backend.ai.strategy_dashboard import build_local_strategy_blueprint
 
@@ -430,6 +431,40 @@ def process_message(user_message: str):
                 "pending": pending_result.get("pending", False),
                 "data": pending_result.get("data"),
             }
+
+
+    lower_message = (user_message or "").lower()
+    if any(token in lower_message for token in ["quiero ir", "me gustaria ir", "me gustaría ir", "viajar", "viaje", "mónaco", "monaco", "f1", "formula 1", "fórmula 1"]):
+        if any(goal_word in lower_message for goal_word in ["quiero", "gustaria", "gustaría", "viajar", "viaje", "ir a"]):
+            plan = plan_long_term_goal(user_message)
+            scenarios = plan.get("scenarios", [])
+            scenario_lines = []
+            for item in scenarios:
+                if item.get("months"):
+                    scenario_lines.append(f"{item['name']}: ₡{item['monthly_saving']:,.0f}/mes → {item['months']} meses, aprox. {item['target_year']}".replace(",", "."))
+                else:
+                    scenario_lines.append(f"{item['name']}: sin flujo disponible suficiente")
+            message = plan.get("message", "Señor, generé una proyección de meta.")
+            message += "\n" + "\n".join(scenario_lines[:3])
+            return {
+                "message": message,
+                "intent": "goal_planning",
+                "status": plan.get("status", "OK"),
+                "pending": False,
+                "source": "local_goal_planner",
+                "data": plan,
+            }
+
+    if any(token in lower_message for token in ["abono", "abonar", "amortizar", "pagar deuda", "liquidar deuda", "ahorrar para pagar"]):
+        advice = get_debt_advisory()
+        return {
+            "message": advice.get("message", "Señor, generé una estrategia de deuda."),
+            "intent": "debt_advisory",
+            "status": advice.get("status", "OK"),
+            "pending": False,
+            "source": "local_debt_advisory",
+            "data": advice,
+        }
 
     direct_payroll = _parse_direct_payroll_or_bonus(user_message)
     if direct_payroll:

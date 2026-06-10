@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Brain,
@@ -176,6 +176,7 @@ export default function App() {
   const [aiUsage, setAiUsage] = useState(null);
   const [strategySummary, setStrategySummary] = useState(null);
   const [profilePreferences, setProfilePreferences] = useState(null);
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     // JARVIS keeps one visual identity. Theme switching was removed on purpose.
@@ -375,71 +376,93 @@ export default function App() {
     }
   };
 
-  const handleVoiceInput = () => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+  const submitJarvisText = async (text) => {
+    const cleanText = String(text || "").trim();
+    if (!cleanText) return;
+    setJarvisInput("");
 
+    try {
+      const response = await askJarvis(cleanText);
+      setJarvisResponse(response);
+      const responseText = sanitizeCourtesy(
+        response?.response?.message || response?.message || `Intención detectada: ${response.intent}`
+      );
+      setChatHistory((current) => [
+        ...current,
+        { role: "user", text: cleanText },
+        { role: "jarvis", text: responseText },
+      ].slice(-8));
+      if (response?.status === "OK" && (response?.action_type?.startsWith("create_") || response?.action_type === "import_monthly_statement")) {
+        await refreshAppData();
+      }
+      if (response?.usage || response?.response?.usage) {
+        setAiUsage(response?.usage || response?.response?.usage);
+      }
+      speakText(responseText);
+    } catch (error) {
+      console.error(error);
+      const errorText = "Ocurrió un error al comunicarme con Jarvis.";
+      setChatHistory((current) => [
+        ...current,
+        { role: "user", text: cleanText },
+        { role: "jarvis", text: errorText },
+      ].slice(-8));
+      speakText(errorText);
+    }
+  };
+
+  const handleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Tu navegador no soporta reconocimiento de voz.");
       return;
     }
 
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      return;
+    }
+
     const recognition = new SpeechRecognition();
     recognition.lang = "es-CR";
-    recognition.interimResults = false;
+    recognition.interimResults = true;
+    recognition.continuous = true;
     recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
 
+    let finalTranscript = "";
+    let currentTranscript = "";
     setIsListening(true);
-    recognition.start();
+    setJarvisInput("");
 
-    recognition.onresult = async (event) => {
-      const text = event.results[0][0].transcript;
-      setJarvisInput("");
-
-      try {
-        const response = await askJarvis(text);
-        setJarvisResponse(response);
-
-        const responseText = sanitizeCourtesy(
-          response?.response?.message ||
-          response?.message ||
-          `Intención detectada: ${response.intent}`
-        );
-
-        setChatHistory((current) => [
-          ...current,
-          { role: "user", text },
-          { role: "jarvis", text: responseText },
-        ].slice(-8));
-
-        if (response?.status === "OK" && (response?.action_type?.startsWith("create_") || response?.action_type === "import_monthly_statement")) {
-          await refreshAppData();
+    recognition.onresult = (event) => {
+      let interim = "";
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const chunk = event.results[index][0].transcript;
+        if (event.results[index].isFinal) {
+          finalTranscript += `${chunk} `;
+        } else {
+          interim += chunk;
         }
-
-        if (response?.usage || response?.response?.usage) {
-          setAiUsage(response?.usage || response?.response?.usage);
-        }
-        speakText(responseText);
-      } catch (error) {
-        console.error(error);
-        const errorText = "Ocurrió un error al comunicarme con Jarvis.";
-        setChatHistory((current) => [
-          ...current,
-          { role: "user", text },
-          { role: "jarvis", text: errorText },
-        ].slice(-8));
-        speakText(errorText);
       }
+      currentTranscript = `${finalTranscript}${interim}`.trim();
+      setJarvisInput(currentTranscript);
     };
 
     recognition.onerror = () => {
       setIsListening(false);
+      recognitionRef.current = null;
       speakText("No pude escucharte correctamente.");
     };
 
     recognition.onend = () => {
       setIsListening(false);
+      recognitionRef.current = null;
+      const text = currentTranscript.trim() || finalTranscript.trim();
+      if (text) submitJarvisText(text);
     };
+
+    recognition.start();
   };
 
   const rawUserName =
@@ -537,7 +560,7 @@ export default function App() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") handleAskJarvis();
               }}
-              placeholder="Mensaje para Jarvis"
+              placeholder={isListening ? "🎤 Escuchando..." : "Mensaje para Jarvis"}
               inputMode="text"
             />
 

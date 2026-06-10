@@ -17,6 +17,10 @@ import {
   getDebts,
   getFinanceCycleReport,
   getFixedExpenseStatus,
+  getRealAvailability,
+  getDebtAdvisory,
+  getReceivables,
+  getRealBalance,
   getTransactionAnalysis,
   previewFinanceInput,
   previewFinancePdf,
@@ -389,6 +393,59 @@ function CategoryBars({ data = [] }) {
 }
 
 
+function IntelligenceStrip({ availability, realBalance, receivables, debtAdvice }) {
+  const goalsReserved = Number(availability?.goals_reserved) || 0;
+  const available = Number(availability?.money_really_available) || 0;
+  const leak = realBalance?.leak_alert || {};
+  const pendingReceivables = Number(receivables?.summary?.total_pending) || 0;
+  const advice = debtAdvice?.message || "Señor, registre deudas activas para calcular estrategias.";
+
+  return (
+    <div className="finance-intelligence-grid">
+      <article className="hud-panel intelligence-card">
+        <div className="panel-title"><div><h3>DISPONIBLE REAL</h3><p>Ingreso - gastos - deudas - metas críticas.</p></div></div>
+        <h2 className={available < 0 ? "danger-text" : ""}>{formatCRC(available)}</h2>
+        <div className="metric-list compact-metrics">
+          <div><span>Metas críticas/reserva</span><strong>{formatCRC(goalsReserved)}</strong></div>
+          <div><span>Fórmula</span><strong>{availability?.formula || "Secuencial"}</strong></div>
+        </div>
+      </article>
+
+      <article className={`hud-panel intelligence-card leak-${leak.level || "ok"}`}>
+        <div className="panel-title"><div><h3>SALDO REAL</h3><p>BAC + MultiMoney vs cálculo teórico.</p></div></div>
+        <h2>{formatCRC(realBalance?.total_real_balance || 0)}</h2>
+        <p className="jarvis-note">{leak.message || "Agregá saldos reales para activar conciliación."}</p>
+        <small>Diferencia: {formatCRC(realBalance?.difference || 0)}</small>
+      </article>
+
+      <article className="hud-panel intelligence-card">
+        <div className="panel-title"><div><h3>CUENTAS POR COBRAR</h3><p>Dinero pendiente de terceros.</p></div></div>
+        <h2>{formatCRC(pendingReceivables)}</h2>
+        <small>{receivables?.summary?.count_open || 0} cuenta(s) abiertas</small>
+      </article>
+
+      <article className="hud-panel intelligence-card wide-intelligence">
+        <div className="panel-title"><div><h3>ESTRATEGIA DE DEUDA</h3><p>Abonar, ahorrar y liquidar o híbrida.</p></div></div>
+        <p className="strategy-advice-line">{advice}</p>
+      </article>
+    </div>
+  );
+}
+
+function UnifiedFlowChart({ currentCycleFlow = [], yearly = [] }) {
+  const [mode, setMode] = useState("month");
+  const data = mode === "month" ? currentCycleFlow : yearly;
+  return (
+    <>
+      <div className="chart-toggle">
+        <button className={mode === "month" ? "active" : ""} onClick={() => setMode("month")}>Mes</button>
+        <button className={mode === "year" ? "active" : ""} onClick={() => setMode("year")}>Año</button>
+      </div>
+      <MonthlyFlowChart data={data} />
+    </>
+  );
+}
+
 function FixedExpensesPanel({ data, onRefresh, isOwner }) {
   const items = data?.items || [];
   const summary = data?.summary || {};
@@ -483,21 +540,33 @@ export default function Finance({
   const [fixedStatus, setFixedStatus] = useState(null);
   const [cycleReport, setCycleReport] = useState(null);
   const [debts, setDebts] = useState([]);
+  const [availability, setAvailability] = useState(null);
+  const [debtAdvice, setDebtAdvice] = useState(null);
+  const [receivables, setReceivables] = useState(null);
+  const [realBalanceReport, setRealBalanceReport] = useState(null);
   const [debtSort, setDebtSort] = useState("saldo");
   const [detail, setDetail] = useState(null);
 
   const loadSupportingData = async () => {
-    const [analysisResult, fixedResult, cycleResult, debtsResult] = await Promise.allSettled([
+    const [analysisResult, fixedResult, cycleResult, debtsResult, availabilityResult, debtAdviceResult, receivablesResult, realBalanceResult] = await Promise.allSettled([
       getTransactionAnalysis(),
       getFixedExpenseStatus(),
       getFinanceCycleReport(),
       getDebts(),
+      getRealAvailability(),
+      getDebtAdvisory(),
+      getReceivables(),
+      getRealBalance(),
     ]);
 
     setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
     setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
     setCycleReport(cycleResult.status === "fulfilled" ? cycleResult.value : null);
     setDebts(debtsResult.status === "fulfilled" && Array.isArray(debtsResult.value) ? debtsResult.value : []);
+    setAvailability(availabilityResult.status === "fulfilled" ? availabilityResult.value : null);
+    setDebtAdvice(debtAdviceResult.status === "fulfilled" ? debtAdviceResult.value : null);
+    setReceivables(receivablesResult.status === "fulfilled" ? receivablesResult.value : null);
+    setRealBalanceReport(realBalanceResult.status === "fulfilled" ? realBalanceResult.value : null);
   };
 
   useEffect(() => {
@@ -509,6 +578,10 @@ export default function Finance({
         setFixedStatus(null);
         setCycleReport(null);
         setDebts([]);
+        setAvailability(null);
+        setDebtAdvice(null);
+        setReceivables(null);
+        setRealBalanceReport(null);
       }
     });
     return () => {
@@ -591,6 +664,18 @@ export default function Finance({
     },
   ];
 
+  const yearlyFlow = useMemo(() => {
+    const monthly = transactionAnalysis?.monthly_flow || transactionAnalysis?.monthly_summary || [];
+    if (Array.isArray(monthly) && monthly.length) {
+      return monthly.map((item) => ({
+        month: item.month || item.period || item.year_month || "--",
+        income: Number(item.income || item.incomes || item.total_income) || 0,
+        outflow: Number(item.outflow || item.expenses || item.total_expenses || item.expense) || 0,
+      }));
+    }
+    return currentCycleFlow;
+  }, [transactionAnalysis, incomeNet, expenseNet]);
+
   const categoryChartData = useMemo(() => {
     return (transactionAnalysis?.top_expense_categories || []).map((item) => ({
       category: item.category || "Sin categoría",
@@ -635,6 +720,8 @@ export default function Finance({
         </button>
       </div>
 
+      <IntelligenceStrip availability={availability} realBalance={realBalanceReport} receivables={receivables} debtAdvice={debtAdvice} />
+
       {detail && (
         <div className="finance-detail-modal-backdrop" onClick={() => setDetail(null)}>
           <article className="hud-panel finance-detail-modal" onClick={(event) => event.stopPropagation()}>
@@ -671,7 +758,7 @@ export default function Finance({
             </div>
             <span>ACTUAL</span>
           </div>
-          <MonthlyFlowChart data={currentCycleFlow} />
+          <UnifiedFlowChart currentCycleFlow={currentCycleFlow} yearly={yearlyFlow} />
           <div className="legend"><span className="cyan"></span> Ingresos neto <span className="red"></span> Gastos neto</div>
         </article>
 

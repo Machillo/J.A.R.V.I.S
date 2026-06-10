@@ -990,7 +990,22 @@ def get_financial_cycle_report() -> dict:
     income_received_total = sum(_as_float(row.get("amount")) for row in income_transactions)
     loans_total = sum(_as_float(row.get("amount")) for row in loan_transactions)
     expected_total = base_net + extra_expected
-    real_balance = expected_total + income_received_total + loans_total - expenses_total - debt_payments_total
+    try:
+        from backend.finance.intelligence import calculate_goal_reserves, _fetch_active_goals
+        goal_reserves = calculate_goal_reserves(_fetch_active_goals(user_id))
+    except Exception:
+        goal_reserves = {
+            "items": [],
+            "monthly_required_all_goals": 0,
+            "monthly_auto_reserve": 0,
+            "critical_monthly_required": 0,
+        }
+
+    goals_reserved = max(
+        _as_float(goal_reserves.get("critical_monthly_required")),
+        _as_float(goal_reserves.get("monthly_auto_reserve")),
+    )
+    real_balance = expected_total + income_received_total + loans_total - expenses_total - debt_payments_total - goals_reserved
 
     return {
         "status": "OK",
@@ -1015,9 +1030,14 @@ def get_financial_cycle_report() -> dict:
             "payments_current_period": round(debt_payments_total, 2),
             "items": debt_payments,
         },
+        "goals": {
+            "reserved_current_period": round(goals_reserved, 2),
+            "reserves": goal_reserves,
+        },
         "cashflow": {
             "real_balance": round(real_balance, 2),
             "loan_received": round(loans_total, 2),
+            "formula": "Ingreso Neto - Gastos Fijos/Variables - Deudas - Metas Críticas",
         },
         "transactions": transaction_rows,
         "payroll_projection": salary_projection,
