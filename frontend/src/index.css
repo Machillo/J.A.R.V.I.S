@@ -6763,3 +6763,127 @@ body {
     height: 118px;
   }
 }
+
+/* Mobile app shell polish: keyboard, back button, profile photo */
+.app-top-bar {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  justify-content: initial;
+  gap: 12px;
+}
+
+.app-back-button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.app-back-button:active {
+  transform: scale(0.94);
+}
+
+.profile-photo-picker {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.profile-photo-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.profile-camera-badge {
+  position: absolute;
+  right: 3px;
+  bottom: 17px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: white;
+  background: linear-gradient(145deg, var(--app-purple), var(--app-blue));
+  border: 3px solid rgba(5, 5, 6, 0.92);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
+}
+
+.keyboard-open .bottom-app-nav {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 22px) scale(0.96);
+}
+
+.keyboard-open .main-shell.app-main-v2.home-mode {
+  padding-bottom: calc(92px + var(--safe-bottom));
+}
+
+.keyboard-open .jarvis-command-center {
+  bottom: calc(10px + var(--safe-bottom) + var(--keyboard-offset));
+}
+
+.keyboard-open .jarvis-home.chat-home {
+  min-height: calc(var(--app-vh, 100vh) - 92px);
+  justify-content: flex-start;
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+}
+
+.keyboard-open .clean-chat-hero {
+  transform: scale(0.72);
+  transform-origin: top center;
+  opacity: 0.78;
+}
+
+.keyboard-open .jarvis-core-orb {
+  width: 104px;
+  height: 104px;
+  margin-bottom: 8px;
+}
+
+.keyboard-open .orb-center {
+  width: 68px;
+  height: 68px;
+}
+
+.keyboard-open .jarvis-home h1 {
+  font-size: clamp(36px, 9vw, 54px);
+}
+
+.keyboard-open .home-subtitle {
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+@media (max-width: 760px) {
+  .app-top-bar {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .app-back-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .bottom-app-nav {
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+
+  .profile-camera-badge {
+    right: 0;
+    bottom: 12px;
+  }
+}

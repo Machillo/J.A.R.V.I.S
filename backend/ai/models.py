@@ -49,3 +49,4 @@ class ProfilePreferencesRequest(BaseModel):
     voice_tone: str | None = None
     timezone: str | None = None
     language: str | None = None
+    avatar_data_url: str | None = None

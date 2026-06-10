@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  ArrowLeft,
   Brain,
+  Camera,
   ChevronRight,
   CreditCard,
   Crown,
@@ -27,7 +29,7 @@ import AdditionalCards from "./pages/AdditionalCards";
 import Emails from "./pages/Emails";
 import Login from "./pages/Login";
 
-import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getStatus } from "./services/jarvisApi";
+import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getProfilePreferences, getStatus, updateProfilePreferences } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
 
 const sanitizeCourtesy = (text = "") =>
@@ -39,14 +41,14 @@ const appSections = {
   dashboard: { title: "J.A.R.V.I.S.", eyebrow: "Novedades" },
   strategy: { title: "Premium", eyebrow: "Estrategia" },
   finance: { title: "Finanzas", eyebrow: "Comunidades" },
-  chats: { title: "Chats", eyebrow: "Correos y movimientos" },
+  chats: { title: "Movimientos", eyebrow: "Correos y tarjetas" },
   emails: { title: "Correos", eyebrow: "Chats" },
   transactions: { title: "Transacciones", eyebrow: "Chats" },
   additionalCards: { title: "Tarjetas", eyebrow: "Chats" },
-  profile: { title: "Kenneth", eyebrow: "Tú" },
-  memory: { title: "Memory Core", eyebrow: "Tú" },
-  settings: { title: "Configuración", eyebrow: "Tú" },
-  goals: { title: "Metas", eyebrow: "Tú" },
+  profile: { title: "Config", eyebrow: "Perfil" },
+  memory: { title: "Memory Core", eyebrow: "Config" },
+  settings: { title: "Configuración", eyebrow: "Config" },
+  goals: { title: "Metas", eyebrow: "Config" },
 };
 
 const getBottomGroup = (page) => {
@@ -68,35 +70,39 @@ function AppListItem({ icon: Icon, title, subtitle, onClick }) {
   );
 }
 
-function ChatsHub({ setActivePage }) {
+function ChatsHub({ navigatePage }) {
   return (
     <section className="app-hub-page">
       <div className="app-section-card">
-        <AppListItem icon={MailSearch} title="Correos" subtitle="Escanear, revisar y agregar a finanzas" onClick={() => setActivePage("emails")} />
-        <AppListItem icon={ReceiptText} title="Transacciones" subtitle="Movimientos guardados" onClick={() => setActivePage("transactions")} />
-        <AppListItem icon={CreditCard} title="Tarjetas adicionales" subtitle="Emily y Sidey" onClick={() => setActivePage("additionalCards")} />
+        <AppListItem icon={MailSearch} title="Correos" subtitle="Escanear, revisar y agregar a finanzas" onClick={() => navigatePage("emails")} />
+        <AppListItem icon={ReceiptText} title="Transacciones" subtitle="Movimientos guardados" onClick={() => navigatePage("transactions")} />
+        <AppListItem icon={CreditCard} title="Tarjetas adicionales" subtitle="Emily y Sidey" onClick={() => navigatePage("additionalCards")} />
       </div>
     </section>
   );
 }
 
-function ProfileHub({ setActivePage, userName, currentUser, aiUsage, onLogout }) {
-  const avatarUrl = currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
+function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, profilePreferences, onProfilePhotoChange }) {
+  const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
 
   return (
     <section className="app-profile-page">
       <div className="profile-hero">
-        <div className="profile-avatar large">
-          {avatarUrl ? <img src={avatarUrl} alt="Kenneth" /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
-        </div>
-        <h1>{userName || "Kenneth"}</h1>
-        <p>Memory Core y preferencias de JARVIS</p>
+        <label className="profile-photo-picker" aria-label="Cambiar foto de perfil">
+          <input type="file" accept="image/*" onChange={onProfilePhotoChange} />
+          <span className="profile-avatar large">
+            {avatarUrl ? <img src={avatarUrl} alt="Kenneth" /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
+          </span>
+          <span className="profile-camera-badge"><Camera size={18} /></span>
+        </label>
+        <h1>{profilePreferences?.display_name || userName || "Kenneth"}</h1>
+        <p>Memory Core y configuración de JARVIS</p>
       </div>
 
       <div className="app-section-card">
-        <AppListItem icon={Brain} title="Memory Core" subtitle="Memoria y contexto personal" onClick={() => setActivePage("memory")} />
-        <AppListItem icon={Target} title="Metas" subtitle="Objetivos y prioridades" onClick={() => setActivePage("goals")} />
-        <AppListItem icon={SettingsIcon} title="Configuración" subtitle="Preferencias del sistema" onClick={() => setActivePage("settings")} />
+        <AppListItem icon={Brain} title="Memory Core" subtitle="Memoria y contexto personal" onClick={() => navigatePage("memory")} />
+        <AppListItem icon={Target} title="Metas" subtitle="Objetivos y prioridades" onClick={() => navigatePage("goals")} />
+        <AppListItem icon={SettingsIcon} title="Configuración" subtitle="Preferencias del sistema" onClick={() => navigatePage("settings")} />
       </div>
 
       <div className="app-section-card compact">
@@ -113,15 +119,15 @@ function ProfileHub({ setActivePage, userName, currentUser, aiUsage, onLogout })
   );
 }
 
-function BottomNavigation({ activePage, setActivePage, currentUser, userName }) {
+function BottomNavigation({ activePage, navigatePage, currentUser, userName, profilePreferences }) {
   const activeGroup = getBottomGroup(activePage);
-  const avatarUrl = currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
+  const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
   const items = [
     { id: "dashboard", label: "Novedades", icon: Newspaper },
     { id: "strategy", label: "Premium", icon: Crown },
     { id: "finance", label: "Finanzas", icon: Users },
-    { id: "chats", label: "Chats", icon: MessageCircle, badge: activeGroup === "chats" ? null : null },
-    { id: "profile", label: "Tú", icon: UserRound, avatar: true },
+    { id: "chats", label: "Moves", icon: MessageCircle, badge: activeGroup === "chats" ? null : null },
+    { id: "profile", label: "Config", icon: UserRound, avatar: true },
   ];
 
   return (
@@ -134,7 +140,7 @@ function BottomNavigation({ activePage, setActivePage, currentUser, userName }) 
           <button
             key={item.id}
             className={`bottom-nav-item ${isActive ? "active" : ""}`}
-            onClick={() => setActivePage(item.id)}
+            onClick={() => navigatePage(item.id)}
           >
             <span className="bottom-nav-icon">
               {item.avatar ? (
@@ -155,6 +161,8 @@ function BottomNavigation({ activePage, setActivePage, currentUser, userName }) 
 
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
+  const [pageStack, setPageStack] = useState([]);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [status, setStatus] = useState(null);
   const [financeDashboard, setFinanceDashboard] = useState(null);
   const [jarvisInput, setJarvisInput] = useState("");
@@ -166,6 +174,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [aiUsage, setAiUsage] = useState(null);
   const [strategySummary, setStrategySummary] = useState(null);
+  const [profilePreferences, setProfilePreferences] = useState(null);
 
   useEffect(() => {
     const applyTheme = () => {
@@ -186,6 +195,7 @@ export default function App() {
 
       document.documentElement.style.setProperty("--app-vh", `${height}px`);
       document.documentElement.style.setProperty("--keyboard-offset", `${keyboardOffset}px`);
+      setKeyboardOpen(keyboardOffset > 80);
     };
 
     updateViewport();
@@ -218,6 +228,7 @@ export default function App() {
       setCurrentUser(null);
       setAiUsage(null);
       setStrategySummary(null);
+      setProfilePreferences(null);
     });
 
     return () => subscription.unsubscribe();
@@ -227,12 +238,13 @@ export default function App() {
     if (!session) return;
 
     try {
-      const [statusData, dashboardData, meData, usageData, strategyData] = await Promise.all([
+      const [statusData, dashboardData, meData, usageData, strategyData, profileData] = await Promise.all([
         getStatus(),
         getFinanceDashboard(),
         getMe(),
         getJarvisUsageToday(),
         getJarvisPremiumStrategySummary().catch(() => null),
+        getProfilePreferences().catch(() => null),
       ]);
 
       setStatus(statusData);
@@ -240,6 +252,7 @@ export default function App() {
       setCurrentUser(meData);
       setAiUsage(usageData);
       setStrategySummary(strategyData);
+      setProfilePreferences(profileData?.value || profileData || null);
     } catch (error) {
       console.error(error);
     }
@@ -259,6 +272,60 @@ export default function App() {
     setCurrentUser(null);
     setAiUsage(null);
     setStrategySummary(null);
+    setProfilePreferences(null);
+  };
+
+  const navigatePage = (nextPage) => {
+    if (!nextPage || nextPage === activePage) return;
+    setPageStack((stack) => [...stack, activePage].slice(-12));
+    setActivePage(nextPage);
+  };
+
+  const handleBack = () => {
+    setPageStack((stack) => {
+      const nextStack = [...stack];
+      const previous = nextStack.pop();
+      const parentGroup = getBottomGroup(activePage);
+      const fallback = parentGroup !== activePage ? parentGroup : "dashboard";
+      setActivePage(previous || fallback);
+      return nextStack;
+    });
+  };
+
+  const resizeImageToDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("No pude leer la imagen."));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("La imagen no es válida."));
+      image.onload = () => {
+        const maxSize = 512;
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const handleProfilePhotoChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      const avatarDataUrl = await resizeImageToDataUrl(file);
+      const result = await updateProfilePreferences({ avatar_data_url: avatarDataUrl });
+      setProfilePreferences(result?.value || { ...(profilePreferences || {}), avatar_data_url: avatarDataUrl });
+    } catch (error) {
+      console.error(error);
+      alert("No pude guardar la foto de perfil.");
+    }
   };
 
   const speakText = (text) => {
@@ -432,10 +499,10 @@ export default function App() {
         return <Settings status={status} />;
 
       case "chats":
-        return <ChatsHub setActivePage={setActivePage} />;
+        return <ChatsHub navigatePage={navigatePage} />;
 
       case "profile":
-        return <ProfileHub setActivePage={setActivePage} userName={userName} currentUser={currentUser} aiUsage={aiUsage} onLogout={handleLogout} />;
+        return <ProfileHub navigatePage={navigatePage} userName={userName} currentUser={currentUser} aiUsage={aiUsage} onLogout={handleLogout} profilePreferences={profilePreferences} onProfilePhotoChange={handleProfilePhotoChange} />;
 
       default:
         return <Dashboard jarvisResponse={jarvisResponse} chatHistory={chatHistory} userName={userName} />;
@@ -446,10 +513,13 @@ export default function App() {
   const showHeader = activePage !== "dashboard";
 
   return (
-    <div className="jarvis-app app-shell-v2">
+    <div className={`jarvis-app app-shell-v2 ${keyboardOpen ? "keyboard-open" : ""}`}>
       <main className={`main-shell app-main-v2 ${activePage === "dashboard" ? "home-mode" : ""}`}>
         {showHeader && (
           <header className="app-top-bar">
+            <button className="app-back-button" type="button" onClick={handleBack} aria-label="Volver">
+              <ArrowLeft size={24} />
+            </button>
             <div>
               <span>{currentSection.eyebrow}</span>
               <h1>{currentSection.title}</h1>
@@ -486,7 +556,7 @@ export default function App() {
         )}
       </main>
 
-      <BottomNavigation activePage={activePage} setActivePage={setActivePage} currentUser={currentUser} userName={userName} />
+      <BottomNavigation activePage={activePage} navigatePage={navigatePage} currentUser={currentUser} userName={userName} profilePreferences={profilePreferences} />
     </div>
   );
 }

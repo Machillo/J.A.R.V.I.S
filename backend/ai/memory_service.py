@@ -311,7 +311,7 @@ def get_profile_preferences() -> dict[str, Any]:
 def update_profile_preferences(payload: dict[str, Any]) -> dict[str, Any]:
     user_id = get_current_user_id()
     current = get_profile_preferences()
-    allowed = set(DEFAULT_PROFILE_PREFERENCES.keys()) | {"display_name", "timezone", "language"}
+    allowed = set(DEFAULT_PROFILE_PREFERENCES.keys()) | {"display_name", "timezone", "language", "avatar_data_url"}
     clean_payload = {key: value for key, value in (payload or {}).items() if key in allowed}
     merged = {**current, **clean_payload}
 
