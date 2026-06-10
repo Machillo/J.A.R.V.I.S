@@ -793,6 +793,95 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
         "confidence_reason": "BAC compra: comercio, fecha, tipo, tarjeta, ciclo y monto extraídos por plantilla exacta.",
     }
 
+def _normalize_person_name_from_text(value: str | None) -> str:
+    raw = re.sub(r"[_\s]+", " ", (value or "")).strip()
+    clean = normalize(raw)
+    if "emily" in clean:
+        return "Emily"
+    if "sidey" in clean:
+        return "Sidey"
+    if "kenneth" in clean:
+        return "Kenneth"
+    return raw.title() if raw else ""
+
+
+def _parse_bac_sinpe_movil(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
+    """Parse BAC SINPE Móvil receipts like Emily -> Kenneth.
+
+    These emails do not always include an IBAN. They identify payer, recipient,
+    phone, amount and detail. Incoming payments from Emily/Sidey are used later
+    to reconcile cuentas por cobrar.
+    """
+    text = clean_text("\n".join([subject or "", body or ""]))
+    clean = normalize(text)
+    if "sinpe movil" not in clean and "sinpe móvil" not in (text or "").lower():
+        return None
+    if "transferencia" not in clean or "monto" not in clean:
+        return None
+    if _has_rejected_movement(text):
+        return _ignored("bac", subject, body, received_at, "Transferencia SINPE Móvil rechazada/no aplicada; no afecta finanzas.")
+
+    amount, _currency = _parse_context_amount(text)
+    if amount is None or amount <= 0:
+        return None
+    transaction_date, time_value = _parse_datetime_text(text, received_at)
+
+    payer_match = re.search(
+        r"le\s+informamos\s+que\s+(.+?)\s+realiz[oó]\s+una\s+transferencia\s+por\s+medio\s+de\s+SINPE\s+M[oó]vil",
+        text,
+        re.I | re.S,
+    )
+    recipient_match = re.search(r"a\s+nombre\s+de\s+([A-ZÁÉÍÓÚÑ_\s\.]+?)(?:\.|\n|Referencia|Fecha|Hora|Monto|Detalle|$)", text, re.I | re.S)
+    phone_match = re.search(r"tel[eé]fono\s+N?[°ºO]?\s*(\d{8})", text, re.I)
+    reference_match = re.search(r"Referencia\s+(\d{8,})", text, re.I)
+    detail_match = re.search(r"Detalle\s+([^\n]+)", text, re.I)
+
+    payer = _normalize_person_name_from_text(payer_match.group(1) if payer_match else "")
+    recipient = _normalize_person_name_from_text(recipient_match.group(1) if recipient_match else "")
+    detail = re.sub(r"[_\s]+", " ", detail_match.group(1)).strip(" .") if detail_match else "SINPE Móvil recibido"
+
+    is_to_owner = recipient.lower().startswith("kenneth") or "kenneth" in normalize(recipient)
+    if not is_to_owner:
+        # Not enough context to say it is money entering Kenneth's finances.
+        return None
+
+    description = f"SINPE recibido de {payer}" if payer and payer != "Kenneth" else "SINPE Móvil recibido"
+    notes = ["BAC SINPE Móvil", "entrada"]
+    if payer:
+        notes.append(f"payer: {payer}")
+    if recipient:
+        notes.append(f"recipient: {recipient}")
+    if phone_match:
+        notes.append(f"telefono destino: {phone_match.group(1)}")
+    if detail:
+        notes.append(f"detalle: {detail}")
+    if reference_match:
+        notes.append(f"referencia {reference_match.group(1)}")
+    if time_value:
+        notes.append(f"hora: {time_value}")
+
+    category = "Reembolsos"
+    if payer in {"Emily", "Sidey"}:
+        category = "Cuentas por cobrar"
+
+    return {
+        **_base_result("bac", "movement", received_at),
+        "transaction_date": transaction_date,
+        "transaction_time": time_value,
+        "description": description[:240],
+        "amount": round(amount, 2),
+        "transaction_type": "income",
+        "category": category,
+        "account": "BAC SINPE Móvil",
+        "notes": " | ".join(notes),
+        "dedupe_key": f"sinpe_movil_in|{transaction_date}|{round(amount,2)}|{reference_match.group(1) if reference_match else normalize(description)}",
+        "confidence": 0.99,
+        "confidence_reason": "BAC SINPE Móvil: ingreso, pagador, monto, fecha y referencia extraídos por plantilla exacta.",
+        "movement_direction": "in",
+        "payer_name": payer,
+        "recipient_name": recipient,
+    }
+
 def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
     text = clean_text("\n".join([subject or "", body or ""]))
     clean = normalize(text)
@@ -1195,7 +1284,7 @@ def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
     if _parse_statement(subject, sender, body, None):
         return "statement", "Estado de cuenta detectado; queda como documento pendiente."
     if bank == "bac":
-        parsed = _parse_bac_purchase(subject, sender, body, None, 495.0) or _parse_bac_sinpe(subject, sender, body, None) or _parse_bac_alert_payment(subject, sender, body, None)
+        parsed = _parse_bac_purchase(subject, sender, body, None, 495.0) or _parse_bac_sinpe_movil(subject, sender, body, None) or _parse_bac_sinpe(subject, sender, body, None) or _parse_bac_alert_payment(subject, sender, body, None)
         if parsed:
             if parsed.get("email_kind") == "ignored":
                 return "ignored", parsed.get("ignore_reason") or "Movimiento BAC descartado por reglas de seguridad financiera."
@@ -1228,7 +1317,7 @@ def parse_financial_email(subject: str, sender: str, body: str, received_at: str
         parsed = _parse_bac_purchase(subject, sender, body, received_at, exchange_rate)
         if parsed:
             return parsed
-        parsed = _parse_bac_sinpe(subject, sender, body, received_at)
+        parsed = _parse_bac_sinpe_movil(subject, sender, body, received_at) or _parse_bac_sinpe(subject, sender, body, received_at)
         if parsed:
             return parsed
         parsed = _parse_bac_alert_payment(subject, sender, body, received_at)

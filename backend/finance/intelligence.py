@@ -106,14 +106,15 @@ def _ensure_card_aliases(conn) -> None:
 
 
 def _fetch_additional_card_totals(conn, user_id: int) -> list[dict[str, Any]]:
-    """Return current additional-card receivables from accepted transactions.
+    """Return automatic receivable totals from additional-card spending.
 
-    Source of truth mirrors the Additional Cards screen:
-    transactions -> email_transaction_candidates -> card_aliases.
-
-    This is intentionally transaction-first.  The previous implementation was
-    candidate-first and could return ₡0 when the finance transaction already
-    existed but candidate linkage/status was not in the exact expected shape.
+    Source of truth must match the Additional Cards screen, but be more robust:
+    - Use email_transaction_candidates metadata (card_owner/card_last4) because
+      transactions does not store card_owner.
+    - Include confirmed/auto_saved/imported candidates whether or not they are
+      already linked to a transaction_id.
+    - Exclude primary Kenneth aliases, duplicates and rejected rows.
+    - Deduplicate by transaction_id when available; otherwise by candidate id.
     """
     _ensure_card_aliases(conn)
     rows = conn.execute(
@@ -124,37 +125,131 @@ def _fetch_additional_card_totals(conn, user_id: int) -> list[dict[str, Any]]:
             WHERE user_id = %s
               AND COALESCE(is_primary, FALSE) = FALSE
               AND LOWER(TRIM(owner_label)) NOT IN ('kenneth', 'kenneth andres')
-        ), additional_movements AS (
+        ), candidate_movements AS (
             SELECT
-                a.owner_label AS person_name,
-                a.card_last4,
-                t.id AS transaction_id,
-                t.amount
-            FROM transactions t
-            JOIN email_transaction_candidates c
-              ON c.transaction_id = t.id
-             AND c.user_id = t.user_id
-            JOIN additional_aliases a
+                COALESCE(a.owner_label, c.card_owner) AS person_name,
+                COALESCE(a.card_last4, c.card_last4) AS card_last4,
+                COALESCE(c.transaction_id, c.id * -1) AS movement_key,
+                c.amount
+            FROM email_transaction_candidates c
+            LEFT JOIN additional_aliases a
               ON a.user_id = c.user_id
              AND a.card_last4 = c.card_last4
-            WHERE t.user_id = %s
-              AND t.transaction_type = 'expense'
-              AND COALESCE(t.amount, 0) > 0
+            WHERE c.user_id = %s
+              AND c.transaction_type = 'expense'
+              AND COALESCE(c.amount, 0) > 0
               AND COALESCE(c.status, '') IN ('confirmed', 'auto_saved', 'imported')
               AND COALESCE(c.status, '') NOT IN ('duplicate', 'rejected')
+              AND (
+                    a.card_last4 IS NOT NULL
+                 OR LOWER(TRIM(COALESCE(c.card_owner,''))) IN (
+                        SELECT LOWER(TRIM(owner_label)) FROM additional_aliases
+                    )
+              )
         )
         SELECT
             person_name,
             COALESCE(SUM(amount), 0) AS total_amount,
-            COUNT(DISTINCT transaction_id) AS movement_count,
-            ARRAY_AGG(DISTINCT card_last4 ORDER BY card_last4) AS cards
-        FROM additional_movements
+            COUNT(DISTINCT movement_key) AS movement_count,
+            ARRAY_AGG(DISTINCT card_last4 ORDER BY card_last4) FILTER (WHERE card_last4 IS NOT NULL AND card_last4 <> '') AS cards
+        FROM candidate_movements
+        WHERE COALESCE(person_name, '') <> ''
         GROUP BY person_name
         ORDER BY person_name
         """,
         (user_id, user_id),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def _detect_receivable_payer_from_transaction(row: dict[str, Any]) -> str | None:
+    text = " ".join([
+        str(row.get("description") or ""),
+        str(row.get("category") or ""),
+        str(row.get("account") or ""),
+        str(row.get("notes") or ""),
+    ]).lower()
+    if "emily" in text or "emily andrea" in text:
+        return "Emily"
+    if "sidey" in text:
+        return "Sidey"
+    return None
+
+
+def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
+    """Apply incoming SINPE/reimbursement payments to matching receivables.
+
+    Example: Emily sends a SINPE Móvil payment. The transaction is income and
+    notes contain payer: Emily. We record it once in receivable_payments so the
+    pending balance decreases automatically without manual double entry.
+    """
+    rows = conn.execute(
+        """
+        SELECT id, description, amount, transaction_type, category, account, source, notes
+        FROM transactions
+        WHERE user_id = %s
+          AND transaction_type IN ('income', 'reimbursement')
+          AND COALESCE(amount, 0) > 0
+          AND COALESCE(source, '') IN ('email_monitor', 'manual', 'jarvis')
+        ORDER BY transaction_date ASC, id ASC
+        """,
+        (user_id,),
+    ).fetchall()
+    for raw in rows:
+        tx = dict(raw)
+        payer = _detect_receivable_payer_from_transaction(tx)
+        if not payer:
+            continue
+        rec = conn.execute(
+            """
+            SELECT id, original_amount, paid_amount, pending_amount
+            FROM receivables
+            WHERE user_id = %s
+              AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
+              AND source_type = 'additional_card_auto'
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (user_id, payer),
+        ).fetchone()
+        if not rec:
+            continue
+        already = conn.execute(
+            """
+            SELECT id FROM receivable_payments
+            WHERE user_id = %s AND source_transaction_id = %s
+            LIMIT 1
+            """,
+            (user_id, tx["id"]),
+        ).fetchone()
+        if already:
+            continue
+        pending = _as_float(rec.get("pending_amount"))
+        payment = min(_as_float(tx.get("amount")), max(pending, 0.0))
+        if payment <= 0:
+            continue
+        new_paid = _as_float(rec.get("paid_amount")) + payment
+        new_pending = max(_as_float(rec.get("original_amount")) - new_paid, 0.0)
+        status = "completed" if new_pending <= 0.01 else "partial"
+        conn.execute(
+            """
+            INSERT INTO receivable_payments (user_id, receivable_id, amount, source_transaction_id, notes)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (user_id, rec["id"], payment, tx["id"], f"Pago detectado automáticamente desde ingreso: {tx.get('description') or ''}"),
+        )
+        conn.execute(
+            """
+            UPDATE receivables
+            SET paid_amount = %s,
+                pending_amount = %s,
+                status = %s,
+                updated_at = NOW()
+            WHERE id = %s AND user_id = %s
+            """,
+            (new_paid, new_pending, status, rec["id"], user_id),
+        )
+
 
 def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
     """Upsert automatic receivables from additional-card spending.
@@ -466,11 +561,9 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
         try:
             from backend.finance.service import get_financial_cycle_report
             cycle = get_financial_cycle_report() or {}
-            income = _as_float(cycle.get("income", {}).get("expected_total"))
-            expenses = _as_float(cycle.get("expenses", {}).get("current_period"))
-            debt_payments = _as_float(cycle.get("debts", {}).get("payments_current_period"))
-            goals = _as_float(cycle.get("goals", {}).get("reserved_current_period"))
-            surplus = income - expenses - debt_payments - goals
+            # Use the same real cycle balance shown in Finanzas. If the cycle is
+            # negative, there is no extra money for debt attack or lump-sum saving.
+            surplus = _as_float(cycle.get("cashflow", {}).get("real_balance"))
         except Exception:
             surplus = _as_float(availability.get("money_really_available"))
     else:
@@ -535,11 +628,17 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
             "recommendation": recommendation,
         })
 
+    if max(surplus, 0.0) <= 0:
+        message = "Señor, este ciclo no tiene excedente libre; mantenga pagos mínimos y no simule abonos extra hasta corregir el flujo."
+    else:
+        message = scenarios[0]["recommendation"] if scenarios else "Señor, no hay escenario disponible."
+
     return {
         "status": "OK",
         "availability": availability,
+        "available_extra_cash": round(max(surplus, 0.0), 2),
         "scenarios": scenarios,
-        "message": scenarios[0]["recommendation"] if scenarios else "Señor, no hay escenario disponible.",
+        "message": message,
     }
 
 
@@ -548,6 +647,7 @@ def list_receivables() -> dict[str, Any]:
     with get_connection() as conn:
         _ensure_receivable_tables(conn)
         _sync_auto_additional_card_receivables(conn, user_id)
+        _sync_receivable_payments_from_income(conn, user_id)
         conn.commit()
         rows = conn.execute(
             """

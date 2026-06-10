@@ -552,6 +552,106 @@ def get_email_monitor_status() -> dict[str, Any]:
     }
 
 
+def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transaction_id: int, candidate: dict[str, Any]) -> None:
+    """When an accepted email is an income from Emily/Sidey, reduce IOU balance.
+
+    This keeps Cuentas por cobrar in sync immediately after the user confirms a
+    SINPE Móvil payment instead of waiting for a later refresh job.
+    """
+    if candidate.get("transaction_type") not in {"income", "reimbursement"}:
+        return
+    text = " ".join([
+        str(candidate.get("description") or ""),
+        str(candidate.get("category") or ""),
+        str(candidate.get("account") or ""),
+        str(candidate.get("notes") or ""),
+    ]).lower()
+    payer = "Emily" if "emily" in text else "Sidey" if "sidey" in text else None
+    if not payer:
+        return
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS receivables (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL DEFAULT 1,
+                person_name TEXT NOT NULL,
+                original_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+                paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+                pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'pending',
+                notes TEXT,
+                source_type TEXT NOT NULL DEFAULT 'manual',
+                source_key TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS receivable_payments (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL DEFAULT 1,
+                receivable_id BIGINT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,
+                amount NUMERIC(14,2) NOT NULL,
+                source_transaction_id BIGINT,
+                notes TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+        rec = conn.execute(
+            """
+            SELECT id, original_amount, paid_amount, pending_amount
+            FROM receivables
+            WHERE user_id = %s
+              AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
+              AND source_type = 'additional_card_auto'
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (user_id, payer),
+        ).fetchone()
+        if not rec:
+            return
+        already = conn.execute(
+            """
+            SELECT id FROM receivable_payments
+            WHERE user_id = %s AND source_transaction_id = %s
+            LIMIT 1
+            """,
+            (user_id, transaction_id),
+        ).fetchone()
+        if already:
+            return
+        pending = float(rec.get("pending_amount") or 0)
+        amount = min(float(candidate.get("amount") or 0), max(pending, 0))
+        if amount <= 0:
+            return
+        new_paid = float(rec.get("paid_amount") or 0) + amount
+        new_pending = max(float(rec.get("original_amount") or 0) - new_paid, 0)
+        status = "completed" if new_pending <= 0.01 else "partial"
+        conn.execute(
+            """
+            INSERT INTO receivable_payments (user_id, receivable_id, amount, source_transaction_id, notes)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (user_id, rec["id"], amount, transaction_id, f"Pago detectado automáticamente desde correo: {candidate.get('description') or ''}"),
+        )
+        conn.execute(
+            """
+            UPDATE receivables
+            SET paid_amount = %s, pending_amount = %s, status = %s, updated_at = NOW()
+            WHERE id = %s AND user_id = %s
+            """,
+            (new_paid, new_pending, status, rec["id"], user_id),
+        )
+    except Exception:
+        # Never block saving the financial transaction because IOU sync failed.
+        return
+
+
 def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
     if candidate.get("transaction_type") in {"statement", "ignored", "internal_transfer"}:
         raise ValueError("Los estados de cuenta, correos ignorados o movimientos internos no se guardan como transacciones directas.")
@@ -591,7 +691,9 @@ def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
             candidate.get("exchange_rate"),
         ),
     ).fetchone()
-    return int(row["id"])
+    transaction_id = int(row["id"])
+    _auto_apply_receivable_payment_from_candidate(conn, user_id, transaction_id, candidate)
+    return transaction_id
 
 
 def _extract_card_last4_from_account(account: str | None) -> str | None:
