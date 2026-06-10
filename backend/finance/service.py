@@ -51,6 +51,29 @@ def _financial_cycle_bounds(today: date | None = None, closing_day: int = 5) -> 
     return start, end
 
 
+
+def _card_billing_cycle_bounds(today: date | None = None, cut_day: int = 21) -> tuple[date, date]:
+    """BAC card expense cycle: 21 -> 21, end exclusive.
+
+    Kenneth reviews card spending by statement cut, not by the operating cash
+    cycle used for payroll/card payment planning. Example on Jun 10: May 21 <=
+    expense_date < Jun 21.
+    """
+    today = today or date.today()
+    if today.day >= cut_day:
+        start = today.replace(day=cut_day)
+        if today.month == 12:
+            end = date(today.year + 1, 1, cut_day)
+        else:
+            end = date(today.year, today.month + 1, cut_day)
+    else:
+        end = today.replace(day=cut_day)
+        if today.month == 1:
+            start = date(today.year - 1, 12, cut_day)
+        else:
+            start = date(today.year, today.month - 1, cut_day)
+    return start, end
+
 def _next_thursday_after_work_week(value: Any) -> date | None:
     """Estimate payroll date for OT/VGH/holiday/vacation events.
 
@@ -891,6 +914,9 @@ def get_financial_cycle_report() -> dict:
     """
     user_id = get_current_user_id()
     cycle_start, cycle_end = _financial_cycle_bounds()
+    expense_cycle_start, expense_cycle_end = _card_billing_cycle_bounds()
+    query_start = min(cycle_start, expense_cycle_start)
+    query_end = max(cycle_end, expense_cycle_end)
     salary_projection = calculate_monthly_salary_projection()
 
     base_net = _as_float(salary_projection.get("results", {}).get("base_net"))
@@ -927,7 +953,7 @@ def get_financial_cycle_report() -> dict:
               AND {_transaction_date_expr()} < %s::date
             ORDER BY {_transaction_date_expr()} DESC, id DESC
             """,
-            (user_id, cycle_start.isoformat(), cycle_end.isoformat()),
+            (user_id, query_start.isoformat(), query_end.isoformat()),
         ).fetchall()]
 
     deductions_total = _as_float(deduction_details.get("extra_deductions_total"))
@@ -980,10 +1006,41 @@ def get_financial_cycle_report() -> dict:
             "net_amount": round(net, 2),
         })
 
-    expenses = [row for row in transaction_rows if row.get("transaction_type") == "expense"]
-    debt_payments = [row for row in transaction_rows if row.get("transaction_type") == "debt_payment"]
-    income_transactions = [row for row in transaction_rows if row.get("transaction_type") == "income"]
-    loan_transactions = [row for row in transaction_rows if row.get("transaction_type") in {"loan_received", "loan_disbursement"}]
+    def _row_date(row: dict) -> date | None:
+        raw = row.get("transaction_date")
+        if isinstance(raw, datetime):
+            return raw.date()
+        if isinstance(raw, date):
+            return raw
+        try:
+            return datetime.fromisoformat(str(raw)[:10]).date()
+        except Exception:
+            return None
+
+    def _inside(row: dict, start: date, end: date) -> bool:
+        row_date = _row_date(row)
+        return bool(row_date and start <= row_date < end)
+
+    expenses = [
+        row for row in transaction_rows
+        if row.get("transaction_type") == "expense"
+        and _inside(row, expense_cycle_start, expense_cycle_end)
+    ]
+    debt_payments = [
+        row for row in transaction_rows
+        if row.get("transaction_type") == "debt_payment"
+        and _inside(row, cycle_start, cycle_end)
+    ]
+    income_transactions = [
+        row for row in transaction_rows
+        if row.get("transaction_type") == "income"
+        and _inside(row, cycle_start, cycle_end)
+    ]
+    loan_transactions = [
+        row for row in transaction_rows
+        if row.get("transaction_type") in {"loan_received", "loan_disbursement"}
+        and _inside(row, cycle_start, cycle_end)
+    ]
 
     expenses_total = sum(_as_float(row.get("amount")) for row in expenses)
     debt_payments_total = sum(_as_float(row.get("amount")) for row in debt_payments)
@@ -1015,6 +1072,12 @@ def get_financial_cycle_report() -> dict:
             "label": f"{cycle_start.isoformat()} → {cycle_end.isoformat()}",
             "closing_day": 5,
         },
+        "expense_cycle": {
+            "start": expense_cycle_start.isoformat(),
+            "end": expense_cycle_end.isoformat(),
+            "label": f"{expense_cycle_start.isoformat()} → {expense_cycle_end.isoformat()}",
+            "cut_day": 21,
+        },
         "income": {
             "fixed_expected": round(base_net, 2),
             "extra_expected": round(extra_expected, 2),
@@ -1039,7 +1102,7 @@ def get_financial_cycle_report() -> dict:
             "loan_received": round(loans_total, 2),
             "formula": "Ingreso Neto - Gastos Fijos/Variables - Deudas - Metas Críticas",
         },
-        "transactions": transaction_rows,
+        "transactions": expenses + debt_payments + income_transactions + loan_transactions,
         "payroll_projection": salary_projection,
         "user_id": user_id,
     }

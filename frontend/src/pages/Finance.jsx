@@ -605,11 +605,12 @@ export default function Finance({
   const fixedExpectedIncome = Number(cycleIncome.fixed_expected) || Number(summary?.income?.monthly_net_income) || 0;
   const extraExpectedIncome = Number(cycleIncome.extra_expected) || 0;
   const incomeNet = Number(cycleIncome.net) || Number(cycleIncome.expected_total) || fixedExpectedIncome + extraExpectedIncome;
-  const expenseNet = Number(cycleExpenses.net) || (Number(cycleExpenses.current_period) || 0) + (Number(cycleDebts.payments_current_period) || 0);
   const currentExpenses = Number(cycleExpenses.current_period) || 0;
+  const expenseNet = currentExpenses;
   const currentDebtPayments = Number(cycleDebts.payments_current_period) || 0;
   const realBalance = Number(cycleCashflow.real_balance) || Number(summary?.cashflow?.available_cash) || 0;
   const cycleLabel = cycleReport?.cycle?.label || "Ciclo 5 → 5";
+  const expenseCycleLabel = cycleReport?.expense_cycle?.label || "Ciclo 21 → 21";
 
   const sortedDebts = useMemo(() => {
     const list = [...debts];
@@ -623,10 +624,7 @@ export default function Finance({
   const isOwner = currentUser?.role === "owner" || currentUser?.email === "gatotico99@gmail.com";
   const hasAnyTransactions = (transactionAnalysis?.summary?.total_transactions || 0) > 0;
 
-  const expenseItems = [
-    ...cycleTransactions.filter((item) => item.transaction_type === "expense"),
-    ...(cycleDebts.items || []).map((item) => ({ ...item, category: item.category || "Pago de deuda" })),
-  ];
+  const expenseItems = cycleTransactions.filter((item) => item.transaction_type === "expense");
 
   const incomeItems = [
     {
@@ -708,7 +706,7 @@ export default function Finance({
 
   return (
     <section className="dashboard-page">
-      <div className="finance-period-pill">Periodo financiero: {cycleLabel}</div>
+      <div className="finance-period-pill">Ingresos: {cycleLabel} · Gastos: {expenseCycleLabel}</div>
 
       <div className="cards-grid finance-main-cards finance-main-cards-clean">
         <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Ingresos netos", incomeItems, "No hay ingresos registrados en este ciclo.")}> 

@@ -108,31 +108,39 @@ def _ensure_card_aliases(conn) -> None:
 def _fetch_additional_card_totals(conn, user_id: int) -> list[dict[str, Any]]:
     """Return what each additional-card owner owes from accepted card expenses.
 
-    Only confirmed/auto-saved email candidates linked to real finance
-    transactions are counted. Kenneth's primary/debit cards are excluded through
-    card_aliases.is_primary and owner_label.
+    The canonical source of additional-card ownership is card_aliases + the
+    parsed email candidates, because the final transactions table intentionally
+    does not store card_owner/card_last4.  Earlier versions required a candidate
+    to be linked to a transaction_id and this made receivables fall back to ₡0
+    even while the Additional Cards page correctly showed Emily's purchases.
+
+    Count only accepted, non-duplicate card expenses from additional cards.  If
+    the transaction row exists we prefer t.amount; otherwise we fall back to the
+    candidate amount so the receivable can still be calculated during review or
+    after partial imports.
     """
     _ensure_card_aliases(conn)
     rows = conn.execute(
         """
         SELECT
             a.owner_label AS person_name,
-            COALESCE(SUM(t.amount), 0) AS total_amount,
+            COALESCE(SUM(COALESCE(t.amount, c.amount)), 0) AS total_amount,
             COUNT(*) AS movement_count,
             ARRAY_AGG(DISTINCT a.card_last4 ORDER BY a.card_last4) AS cards
         FROM card_aliases a
         JOIN email_transaction_candidates c
           ON c.user_id = a.user_id
          AND c.card_last4 = a.card_last4
-        JOIN transactions t
+        LEFT JOIN transactions t
           ON t.user_id = c.user_id
          AND t.id = c.transaction_id
         WHERE a.user_id = %s
           AND COALESCE(a.is_primary, FALSE) = FALSE
           AND LOWER(TRIM(a.owner_label)) NOT IN ('kenneth', 'kenneth andres')
-          AND t.transaction_type = 'expense'
-          AND COALESCE(c.status, '') IN ('confirmed', 'auto_saved')
-          AND COALESCE(t.source, '') = 'email_monitor'
+          AND COALESCE(c.transaction_type, t.transaction_type, '') = 'expense'
+          AND COALESCE(c.status, '') IN ('confirmed', 'auto_saved', 'imported')
+          AND COALESCE(c.status, '') NOT IN ('duplicate', 'rejected')
+          AND COALESCE(COALESCE(t.amount, c.amount), 0) > 0
         GROUP BY a.owner_label
         ORDER BY a.owner_label
         """,
