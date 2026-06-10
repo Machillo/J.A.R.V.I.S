@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from backend.auth.current_user import get_current_user, get_current_user_id
 from backend.core.database import get_connection
-from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection
+from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.strategic_engine import get_financial_engine_report
 from backend.ai.openai_client import get_active_premium_guides
 
@@ -78,6 +78,103 @@ def _build_allocation_breakdown(allocation: dict[str, Any], base_amount: float) 
 
 def _month_key() -> str:
     return date.today().strftime("%Y-%m")
+
+
+def _months_until(target_date: Any) -> int:
+    if not target_date:
+        return 12
+    try:
+        target = datetime.fromisoformat(str(target_date)[:10]).date()
+    except Exception:
+        return 12
+    today = date.today()
+    months = (target.year - today.year) * 12 + (target.month - today.month)
+    if target.day > today.day:
+        months += 1
+    return max(months, 1)
+
+
+def _priority_weight(priority: Any) -> float:
+    value = str(priority or "medium").lower().strip()
+    if value in {"critical", "critica", "crítica"}:
+        return 1.0
+    if value in {"high", "alta"}:
+        return 0.75
+    if value in {"medium", "media"}:
+        return 0.45
+    return 0.2
+
+
+def _fetch_active_financial_goals(user_id: int) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, target_amount, current_amount, target_date,
+                   priority, status, created_at
+            FROM financial_goals
+            WHERE user_id = %s
+              AND COALESCE(status, 'active') = 'active'
+            ORDER BY
+              CASE LOWER(COALESCE(priority, 'medium'))
+                WHEN 'critical' THEN 1
+                WHEN 'critica' THEN 1
+                WHEN 'crítica' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'alta' THEN 2
+                WHEN 'medium' THEN 3
+                WHEN 'media' THEN 3
+                ELSE 4
+              END,
+              target_date ASC NULLS LAST,
+              id ASC
+            """,
+            (user_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _calculate_goal_reserves(goals: list[dict[str, Any]]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    weighted_total = 0.0
+    required_total = 0.0
+    critical_total = 0.0
+    for goal in goals:
+        target = _f(goal.get("target_amount"))
+        current = _f(goal.get("current_amount"))
+        remaining = max(target - current, 0.0)
+        months = _months_until(goal.get("target_date"))
+        monthly_required = remaining / months if months else remaining
+        weight = _priority_weight(goal.get("priority"))
+        auto_reserve = monthly_required * weight
+        required_total += monthly_required
+        weighted_total += auto_reserve
+        if weight >= 1.0:
+            critical_total += monthly_required
+        items.append({
+            "id": goal.get("id"),
+            "name": goal.get("name"),
+            "priority": goal.get("priority") or "medium",
+            "target_amount": round(target, 2),
+            "current_amount": round(current, 2),
+            "remaining_amount": round(remaining, 2),
+            "target_date": goal.get("target_date"),
+            "months_left": months,
+            "monthly_required": round(monthly_required, 2),
+            "auto_reserve": round(auto_reserve, 2),
+        })
+    return {
+        "items": items,
+        "monthly_required_all_goals": round(required_total, 2),
+        "monthly_auto_reserve": round(weighted_total, 2),
+        "critical_monthly_required": round(critical_total, 2),
+    }
+
+
+def _safe_cycle_report() -> dict[str, Any]:
+    try:
+        return get_financial_cycle_report() or {}
+    except Exception:
+        return {}
 
 
 def _monthly_amount_from_frequency(amount: Any, frequency: str | None, interval_months: Any = 1) -> float:
@@ -309,10 +406,10 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     summary = get_financial_summary() or {}
     salary_projection = calculate_monthly_salary_projection() or {}
     user_id = get_current_user_id()
+    cycle_report = _safe_cycle_report()
 
     salary_results = salary_projection.get("results") or {}
     salary_base = salary_projection.get("base") or {}
-    salary_adjustments = salary_projection.get("adjustments") or {}
 
     recurring_monthly_income = (
         _f(salary_results.get("base_net"))
@@ -321,79 +418,139 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         or _summary_value(summary, "income", "total_income")
     )
     current_month_income = (
-        _f(salary_results.get("projected_net"))
+        _f(cycle_report.get("income", {}).get("expected_total"))
+        or _f(salary_results.get("projected_net"))
         or recurring_monthly_income
     )
 
-    # OT, bonos y feriados son eventos del mes actual: NO se multiplican a meses futuros.
     current_month_extra_net = max(current_month_income - recurring_monthly_income, 0)
     current_month_negative_adjustments = min(current_month_income - recurring_monthly_income, 0)
 
     debt_minimums = sum(_normalize_payment(d.get("monthly_payment"), d.get("remaining_amount")) for d in debts)
-    living = _get_strategy_living_expenses(user_id, debts)
-    fixed_living = _f(living.get("fixed_living_total"))
-    variable_current = _f(living.get("variable_current_month_total"))
-
-    monthly_expenses = fixed_living
-
-    # Escenario base: solo salario recurrente, Casa y mínimos de deuda.
-    base_safe_extra = max(recurring_monthly_income - monthly_expenses - debt_minimums, 0)
-    base_debt_attack_extra = max(base_safe_extra * 0.70, 0)
-    base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
-        debts,
-        recurring_monthly_extra=base_debt_attack_extra,
-        first_month_extra=0,
-    )
-
-    # Escenario mes actual: mismo futuro base, pero OT/bonos/feriados solo aceleran el mes 1.
-    # Si hubo VGH, reduce el ataque del mes 1.
-    one_time_debt_boost = max(current_month_extra_net * 0.70 + current_month_negative_adjustments, 0)
-    timeline, total_months, payment_pool = _simulate_debt_cascade(
-        debts,
-        recurring_monthly_extra=base_debt_attack_extra,
-        first_month_extra=one_time_debt_boost,
-    )
-
     total_debt = sum(_f(d.get("remaining_amount")) for d in debts)
     paid_debt = sum(max(_f(d.get("total_amount")) - _f(d.get("remaining_amount")), 0) for d in debts)
     original_debt = total_debt + paid_debt
     progress = round((paid_debt / original_debt) * 100, 2) if original_debt > 0 else 0
 
-    allocation = {
-        "ataque_de_deuda": 70 if debts else 0,
-        "vida_controlada": 10 if debts else 25,
-        "fondo_de_emergencia": 20 if debts else 50,
-        "metas_o_inversion": 0 if debts else 25,
-    }
-    allocation_breakdown = _build_allocation_breakdown(allocation, current_month_income)
+    goals = _fetch_active_financial_goals(user_id)
+    goal_reserves = _calculate_goal_reserves(goals)
+    critical_goal_required = _f(goal_reserves.get("critical_monthly_required"))
+    weighted_goal_required = _f(goal_reserves.get("monthly_auto_reserve"))
+    goal_required = max(critical_goal_required, weighted_goal_required)
+
+    cycle_expenses = _f(cycle_report.get("expenses", {}).get("current_period"))
+    cycle_debt_payments = _f(cycle_report.get("debts", {}).get("payments_current_period"))
+    if cycle_debt_payments <= 0:
+        # Si aún no hay pagos reales registrados en el ciclo, al menos reserve los mínimos.
+        cycle_debt_payments = debt_minimums
+
+    available_before_goals = current_month_income - cycle_expenses - cycle_debt_payments
+    goals_allocation_amount = max(min(goal_required, max(available_before_goals, 0.0)), 0.0)
+    strategic_available = max(available_before_goals - goals_allocation_amount, 0.0)
+
+    if strategic_available <= 0.01:
+        allocation = {
+            "ataque_de_deuda": 0,
+            "vida_controlada": 0,
+            "fondo_de_emergencia": 0,
+            "metas_o_inversion": 100 if goals_allocation_amount > 0 else 0,
+        }
+        allocation_amounts = {
+            "ataque_de_deuda": 0.0,
+            "vida_controlada": 0.0,
+            "fondo_de_emergencia": 0.0,
+            "metas_o_inversion": round(goals_allocation_amount, 2),
+        }
+    else:
+        debt_percent = 70 if debts else 0
+        living_percent = 10 if debts else 25
+        emergency_percent = 20 if debts else 50
+        goal_percent = 0 if goals_allocation_amount <= 0 else round((goals_allocation_amount / max(available_before_goals, 1)) * 100, 2)
+        allocation = {
+            "ataque_de_deuda": debt_percent,
+            "vida_controlada": living_percent,
+            "fondo_de_emergencia": emergency_percent,
+            "metas_o_inversion": goal_percent,
+        }
+        allocation_amounts = {
+            "ataque_de_deuda": round(strategic_available * debt_percent / 100, 2),
+            "vida_controlada": round(strategic_available * living_percent / 100, 2),
+            "fondo_de_emergencia": round(strategic_available * emergency_percent / 100, 2),
+            "metas_o_inversion": round(goals_allocation_amount, 2),
+        }
+
+    allocation_items = [
+        {"key": key, "percentage": allocation.get(key, 0), "amount": allocation_amounts.get(key, 0)}
+        for key in ["ataque_de_deuda", "vida_controlada", "fondo_de_emergencia", "metas_o_inversion"]
+    ]
+
+    debt_attack_extra = _f(allocation_amounts.get("ataque_de_deuda"))
+    base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
+        debts,
+        recurring_monthly_extra=0,
+        first_month_extra=0,
+    )
+    one_time_debt_boost = max(debt_attack_extra + current_month_negative_adjustments, 0)
+    timeline, total_months, payment_pool = _simulate_debt_cascade(
+        debts,
+        recurring_monthly_extra=0,
+        first_month_extra=one_time_debt_boost,
+    )
 
     months_saved = 0
     if base_total_months and total_months and base_total_months < 999 and total_months < 999:
         months_saved = max(base_total_months - total_months, 0)
 
+    deficit_after_goals = available_before_goals - goal_required
+    no_free_cash = deficit_after_goals <= 0
+    status = "critical" if no_free_cash or (recurring_monthly_income <= 0 or total_debt > max(recurring_monthly_income * 4, 1)) else "controlled"
+    objective = (
+        "Cubrir el déficit del ciclo y proteger metas críticas antes de atacar deuda."
+        if no_free_cash else
+        "Proteger metas críticas y dirigir solo el excedente real a la deuda prioritaria."
+    )
+
+    rules = [
+        "No distribuir dinero inexistente: la estrategia usa ingreso menos gastos reales, deudas y metas críticas.",
+        "Las metas críticas tienen prioridad sobre ataque extra de deuda, emergencia e inversión.",
+        "Pagar mínimos de todas las deudas sin fallar.",
+        "Solo el excedente real del ciclo puede ir a ataque de deuda.",
+        "OT, bono y feriados solo aceleran el mes actual; no se proyectan como ingreso permanente.",
+    ]
+    if no_free_cash:
+        rules.insert(0, "Señor, el ciclo no tiene flujo libre: primero se cubre el faltante.")
+
     return {
         "month": _month_key(),
-        "status": "critical" if (recurring_monthly_income <= 0 or total_debt > max(recurring_monthly_income * 4, 1)) else "controlled",
-        "strategy_type": "dictador_de_deuda",
-        "title": "Estrategia Dictador de Deuda" if debts else "Estrategia de Estabilidad",
-        "objective": "Eliminar deudas en cascada: mínimos al día y excedente recurrente a la deuda prioritaria.",
+        "status": status,
+        "strategy_type": "flujo_real_con_metas_criticas",
+        "title": "Estrategia de Flujo Real" if no_free_cash else "Estrategia Dictador de Deuda",
+        "objective": objective,
         "monthly_income": round(current_month_income, 2),
         "recurring_monthly_income": round(recurring_monthly_income, 2),
         "current_month_extra_net": round(current_month_extra_net, 2),
         "current_month_one_time_debt_boost": round(one_time_debt_boost, 2),
-        "monthly_expenses": round(monthly_expenses, 2),
-        "current_variable_expenses": round(variable_current, 2),
+        "monthly_expenses": round(cycle_expenses, 2),
+        "current_variable_expenses": round(cycle_expenses, 2),
         "monthly_debt_minimums": round(debt_minimums, 2),
-        "estimated_extra_cash": round(max(current_month_income - monthly_expenses - debt_minimums, 0), 2),
-        "base_estimated_extra_cash": round(base_safe_extra, 2),
-        "debt_attack_extra": round(base_debt_attack_extra, 2),
+        "debt_payments_reserved": round(cycle_debt_payments, 2),
+        "critical_goals_reserved": round(goal_required, 2),
+        "available_before_goals": round(available_before_goals, 2),
+        "strategic_available_cash": round(strategic_available, 2),
+        "estimated_extra_cash": round(strategic_available, 2),
+        "base_estimated_extra_cash": round(max(available_before_goals, 0), 2),
+        "debt_attack_extra": round(debt_attack_extra, 2),
         "debt_payment_pool": round(payment_pool, 2),
         "base_debt_payment_pool": round(base_payment_pool, 2),
-        "fixed_expenses_total": round(fixed_living, 2),
-        "living_expense_debug": living,
+        "fixed_expenses_total": round(cycle_expenses, 2),
         "salary_projection_debug": salary_projection,
+        "cycle_report_debug": cycle_report,
+        "goals": goals,
+        "goal_reserves": goal_reserves,
         "allocation": allocation,
-        **allocation_breakdown,
+        "allocation_base_amount": round(max(available_before_goals, 0), 2),
+        "allocation_amounts": allocation_amounts,
+        "allocation_items": allocation_items,
         "total_debt": round(total_debt, 2),
         "debt_progress_percent": progress,
         "estimated_total_months": total_months if timeline else 0,
@@ -401,15 +558,8 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "months_saved_by_current_extras": months_saved,
         "timeline": timeline,
         "base_timeline": base_timeline,
-        "rules": [
-            "Pagar mínimos de todas las deudas sin fallar.",
-            "El excedente recurrente ataca primero la deuda #1; al cerrarla, pasa automáticamente a la #2.",
-            "OT, bono y feriados solo aceleran el mes actual; no se proyectan como ingreso permanente.",
-            "VGH reduce el ingreso del mes actual y puede bajar el ataque de deuda del mes.",
-            "No invertir fuerte hasta estabilizar deuda de corto plazo y pagos mínimos.",
-        ],
+        "rules": rules,
     }
-
 
 def get_premium_strategy_dashboard() -> dict[str, Any]:
     user = get_current_user()
@@ -423,14 +573,15 @@ def get_premium_strategy_dashboard() -> dict[str, Any]:
                 data = json.loads(data)
             except Exception:
                 data = {}
-        strategy = data.get("strategy_blueprint") or blueprint
-        if isinstance(strategy, dict):
-            # Compatibilidad con guías guardadas antes de que existieran montos.
-            strategy = {**blueprint, **strategy}
-            if not strategy.get("allocation_amounts") or not strategy.get("allocation_items"):
-                strategy.update(_build_allocation_breakdown(strategy.get("allocation") or {}, _f(strategy.get("monthly_income"))))
+        saved_strategy = data.get("strategy_blueprint") or {}
+        if isinstance(saved_strategy, dict):
+            # La guía guardada puede contener porcentajes viejos.  La matemática
+            # del tablero siempre debe venir del blueprint recalculado contra BD.
+            strategy = {**saved_strategy, **blueprint}
+        else:
+            strategy = blueprint
         content = active.get("content") or ""
-        title = active.get("title") or strategy.get("title") or "Estrategia premium"
+        title = strategy.get("title") or active.get("title") or "Estrategia premium"
     else:
         strategy = blueprint
         content = "Señor, aún no hay una estrategia premium guardada. Ejecute la estrategia premium para activar el modo Director."

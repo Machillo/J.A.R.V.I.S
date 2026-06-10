@@ -61,7 +61,11 @@ export default function PremiumStrategy() {
   const payload = state.data || {};
   const strategy = payload.strategy || {};
   const debtAdvice = state.debtAdvice || {};
-  const debtScenarios = debtAdvice.scenarios || debtAdvice.options || {};
+  const debtScenarioList = Array.isArray(debtAdvice.scenarios) ? debtAdvice.scenarios : [];
+  const primaryDebtScenario = debtScenarioList[0] || {};
+  const debtScenarios = Array.isArray(debtAdvice.scenarios)
+    ? primaryDebtScenario
+    : (debtAdvice.scenarios || debtAdvice.options || {});
   const timeline = strategy.timeline || [];
   const allocation = strategy.allocation || {};
   const allocationAmounts = strategy.allocation_amounts || {};
@@ -139,18 +143,18 @@ export default function PremiumStrategy() {
         <div className="debt-advice-scenarios">
           <div>
             <span>A) Abonar mensualmente</span>
-            <strong>{money(debtScenarios.monthly_amortization?.monthly_payment || debtScenarios.amortization?.monthly_payment || 0)}</strong>
-            <small>{debtScenarios.monthly_amortization?.estimated_months || debtScenarios.amortization?.estimated_months || "--"} meses</small>
+            <strong>{money(debtScenarios.A_monthly_amortization?.payment || debtScenarios.monthly_amortization?.monthly_payment || debtScenarios.amortization?.monthly_payment || 0)}</strong>
+            <small>{debtScenarios.A_monthly_amortization?.months || debtScenarios.monthly_amortization?.estimated_months || debtScenarios.amortization?.estimated_months || "--"} meses</small>
           </div>
           <div>
             <span>B) Ahorrar y liquidar</span>
-            <strong>{money(debtScenarios.save_then_pay?.target_amount || debtScenarios.lump_sum?.target_amount || strategy.total_debt || 0)}</strong>
-            <small>{debtScenarios.save_then_pay?.estimated_months || debtScenarios.lump_sum?.estimated_months || "--"} meses</small>
+            <strong>{money(debtScenarios.B_save_and_liquidate?.monthly_saving || debtScenarios.save_then_pay?.target_amount || debtScenarios.lump_sum?.target_amount || 0)}</strong>
+            <small>{debtScenarios.B_save_and_liquidate?.estimated_months_to_lump_sum || debtScenarios.save_then_pay?.estimated_months || debtScenarios.lump_sum?.estimated_months || "--"} meses</small>
           </div>
           <div>
             <span>C) Estrategia híbrida</span>
-            <strong>{money(debtScenarios.hybrid?.monthly_payment || debtScenarios.hybrid?.recommended_payment || 0)}</strong>
-            <small>{debtScenarios.hybrid?.estimated_months || "--"} meses</small>
+            <strong>{money(debtScenarios.C_hybrid?.payment || debtScenarios.hybrid?.monthly_payment || debtScenarios.hybrid?.recommended_payment || 0)}</strong>
+            <small>{debtScenarios.C_hybrid?.months || debtScenarios.hybrid?.estimated_months || "--"} meses</small>
           </div>
         </div>
       </div>

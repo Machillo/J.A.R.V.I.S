@@ -106,48 +106,55 @@ def _ensure_card_aliases(conn) -> None:
 
 
 def _fetch_additional_card_totals(conn, user_id: int) -> list[dict[str, Any]]:
-    """Return what each additional-card owner owes from accepted card expenses.
+    """Return current additional-card receivables from accepted transactions.
 
-    The canonical source of additional-card ownership is card_aliases + the
-    parsed email candidates, because the final transactions table intentionally
-    does not store card_owner/card_last4.  Earlier versions required a candidate
-    to be linked to a transaction_id and this made receivables fall back to ₡0
-    even while the Additional Cards page correctly showed Emily's purchases.
+    Source of truth mirrors the Additional Cards screen:
+    transactions -> email_transaction_candidates -> card_aliases.
 
-    Count only accepted, non-duplicate card expenses from additional cards.  If
-    the transaction row exists we prefer t.amount; otherwise we fall back to the
-    candidate amount so the receivable can still be calculated during review or
-    after partial imports.
+    This is intentionally transaction-first.  The previous implementation was
+    candidate-first and could return ₡0 when the finance transaction already
+    existed but candidate linkage/status was not in the exact expected shape.
     """
     _ensure_card_aliases(conn)
     rows = conn.execute(
         """
+        WITH additional_aliases AS (
+            SELECT user_id, card_last4, owner_label
+            FROM card_aliases
+            WHERE user_id = %s
+              AND COALESCE(is_primary, FALSE) = FALSE
+              AND LOWER(TRIM(owner_label)) NOT IN ('kenneth', 'kenneth andres')
+        ), additional_movements AS (
+            SELECT
+                a.owner_label AS person_name,
+                a.card_last4,
+                t.id AS transaction_id,
+                t.amount
+            FROM transactions t
+            JOIN email_transaction_candidates c
+              ON c.transaction_id = t.id
+             AND c.user_id = t.user_id
+            JOIN additional_aliases a
+              ON a.user_id = c.user_id
+             AND a.card_last4 = c.card_last4
+            WHERE t.user_id = %s
+              AND t.transaction_type = 'expense'
+              AND COALESCE(t.amount, 0) > 0
+              AND COALESCE(c.status, '') IN ('confirmed', 'auto_saved', 'imported')
+              AND COALESCE(c.status, '') NOT IN ('duplicate', 'rejected')
+        )
         SELECT
-            a.owner_label AS person_name,
-            COALESCE(SUM(COALESCE(t.amount, c.amount)), 0) AS total_amount,
-            COUNT(*) AS movement_count,
-            ARRAY_AGG(DISTINCT a.card_last4 ORDER BY a.card_last4) AS cards
-        FROM card_aliases a
-        JOIN email_transaction_candidates c
-          ON c.user_id = a.user_id
-         AND c.card_last4 = a.card_last4
-        LEFT JOIN transactions t
-          ON t.user_id = c.user_id
-         AND t.id = c.transaction_id
-        WHERE a.user_id = %s
-          AND COALESCE(a.is_primary, FALSE) = FALSE
-          AND LOWER(TRIM(a.owner_label)) NOT IN ('kenneth', 'kenneth andres')
-          AND COALESCE(c.transaction_type, t.transaction_type, '') = 'expense'
-          AND COALESCE(c.status, '') IN ('confirmed', 'auto_saved', 'imported')
-          AND COALESCE(c.status, '') NOT IN ('duplicate', 'rejected')
-          AND COALESCE(COALESCE(t.amount, c.amount), 0) > 0
-        GROUP BY a.owner_label
-        ORDER BY a.owner_label
+            person_name,
+            COALESCE(SUM(amount), 0) AS total_amount,
+            COUNT(DISTINCT transaction_id) AS movement_count,
+            ARRAY_AGG(DISTINCT card_last4 ORDER BY card_last4) AS cards
+        FROM additional_movements
+        GROUP BY person_name
+        ORDER BY person_name
         """,
-        (user_id,),
+        (user_id, user_id),
     ).fetchall()
     return [dict(row) for row in rows]
-
 
 def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
     """Upsert automatic receivables from additional-card spending.
@@ -455,7 +462,19 @@ def _monthly_rate(rate: float) -> float:
 def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
     user_id = get_current_user_id()
     availability = get_real_availability()
-    surplus = _as_float(extra_cash, _as_float(availability.get("money_really_available")))
+    if extra_cash is None:
+        try:
+            from backend.finance.service import get_financial_cycle_report
+            cycle = get_financial_cycle_report() or {}
+            income = _as_float(cycle.get("income", {}).get("expected_total"))
+            expenses = _as_float(cycle.get("expenses", {}).get("current_period"))
+            debt_payments = _as_float(cycle.get("debts", {}).get("payments_current_period"))
+            goals = _as_float(cycle.get("goals", {}).get("reserved_current_period"))
+            surplus = income - expenses - debt_payments - goals
+        except Exception:
+            surplus = _as_float(availability.get("money_really_available"))
+    else:
+        surplus = _as_float(extra_cash)
     with get_connection() as conn:
         rows = conn.execute(
             """
