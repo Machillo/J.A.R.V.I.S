@@ -272,8 +272,12 @@ def _director_strategy_message(blueprint: dict) -> str:
             "fondo_de_emergencia": "Fondo de emergencia",
             "metas_o_inversion": "Metas o inversión",
         }
-        dist = ", ".join(f"{labels.get(k, k)} {v}%" for k, v in allocation.items())
-        lines.append(f"Distribución obligatoria: {dist}.")
+        amounts = blueprint.get("allocation_amounts") or {}
+        dist = ", ".join(
+            f"{labels.get(k, k)} {v}% ({_money(amounts.get(k, 0))})"
+            for k, v in allocation.items()
+        )
+        lines.append(f"Distribución obligatoria del ingreso de este mes: {dist}.")
     lines.append("Regla: OT, bono y feriados solo aceleran el mes actual; no se asumen como ingresos permanentes.")
     if recurring_income <= 0:
         lines.append("Pendiente crítico: configurar salario base mensual para aumentar precisión.")

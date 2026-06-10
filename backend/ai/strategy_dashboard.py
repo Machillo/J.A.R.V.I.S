@@ -41,6 +41,41 @@ def _normalize_payment(value: Any, remaining_amount: Any = 0) -> float:
     return round(value, 2)
 
 
+
+def _build_allocation_breakdown(allocation: dict[str, Any], base_amount: float) -> dict[str, Any]:
+    """Convierte porcentajes de estrategia en montos reales del ciclo actual.
+
+    Fuente de verdad: ingreso neto del ciclo actual. No descuenta aquí gastos o
+    deudas porque este bloque representa la distribución directiva del ingreso,
+    exactamente como se muestra en Estrategia Premium.
+    """
+    base = max(_f(base_amount), 0.0)
+    items: list[dict[str, Any]] = []
+    amounts: dict[str, float] = {}
+    running_total = 0.0
+    entries = list((allocation or {}).items())
+
+    for index, (key, raw_percent) in enumerate(entries):
+        percent = max(_f(raw_percent), 0.0)
+        if index == len(entries) - 1:
+            # Ajuste de redondeo para que la suma de montos cierre con el ingreso.
+            amount = max(base - running_total, 0.0) if sum(_f(v) for _, v in entries) >= 99.99 else round(base * percent / 100, 2)
+        else:
+            amount = round(base * percent / 100, 2)
+            running_total += amount
+        amounts[key] = round(amount, 2)
+        items.append({
+            "key": key,
+            "percentage": round(percent, 2),
+            "amount": round(amount, 2),
+        })
+
+    return {
+        "allocation_base_amount": round(base, 2),
+        "allocation_amounts": amounts,
+        "allocation_items": items,
+    }
+
 def _month_key() -> str:
     return date.today().strftime("%Y-%m")
 
@@ -330,6 +365,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "fondo_de_emergencia": 20 if debts else 50,
         "metas_o_inversion": 0 if debts else 25,
     }
+    allocation_breakdown = _build_allocation_breakdown(allocation, current_month_income)
 
     months_saved = 0
     if base_total_months and total_months and base_total_months < 999 and total_months < 999:
@@ -357,6 +393,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "living_expense_debug": living,
         "salary_projection_debug": salary_projection,
         "allocation": allocation,
+        **allocation_breakdown,
         "total_debt": round(total_debt, 2),
         "debt_progress_percent": progress,
         "estimated_total_months": total_months if timeline else 0,
@@ -387,6 +424,11 @@ def get_premium_strategy_dashboard() -> dict[str, Any]:
             except Exception:
                 data = {}
         strategy = data.get("strategy_blueprint") or blueprint
+        if isinstance(strategy, dict):
+            # Compatibilidad con guías guardadas antes de que existieran montos.
+            strategy = {**blueprint, **strategy}
+            if not strategy.get("allocation_amounts") or not strategy.get("allocation_items"):
+                strategy.update(_build_allocation_breakdown(strategy.get("allocation") or {}, _f(strategy.get("monthly_income"))))
         content = active.get("content") or ""
         title = active.get("title") or strategy.get("title") or "Estrategia premium"
     else:

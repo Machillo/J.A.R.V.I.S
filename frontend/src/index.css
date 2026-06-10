@@ -7078,3 +7078,34 @@ button {
   border-color: rgba(147, 9, 198, 0.36);
   box-shadow: 0 20px 55px rgba(147, 9, 198, 0.16);
 }
+
+
+.panel-subtitle {
+  margin: -2px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.allocation-row-amount strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.allocation-row-amount strong b {
+  color: var(--text);
+  font-weight: 800;
+}
+
+@media (max-width: 520px) {
+  .allocation-row-amount {
+    align-items: flex-start;
+  }
+
+  .allocation-row-amount strong {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+}

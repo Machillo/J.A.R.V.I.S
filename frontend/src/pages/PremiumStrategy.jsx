@@ -48,6 +48,15 @@ export default function PremiumStrategy() {
   const strategy = payload.strategy || {};
   const timeline = strategy.timeline || [];
   const allocation = strategy.allocation || {};
+  const allocationAmounts = strategy.allocation_amounts || {};
+  const allocationItems = Array.isArray(strategy.allocation_items)
+    ? strategy.allocation_items
+    : Object.entries(allocation).map(([key, percentage]) => ({
+        key,
+        percentage,
+        amount: allocationAmounts[key] || 0,
+      }));
+  const allocationBase = Number(strategy.allocation_base_amount || strategy.monthly_income || 0);
   const progress = Math.max(0, Math.min(100, Number(strategy.debt_progress_percent || 0)));
 
   return (
@@ -108,13 +117,19 @@ export default function PremiumStrategy() {
       <div className="strategy-grid-2">
         <div className="hud-panel">
           <h3><TrendingUp size={18} /> Distribución del dinero</h3>
+          <p className="panel-subtitle">Base del ciclo actual: {money(allocationBase)}</p>
           <div className="allocation-list">
-            {Object.entries(allocation).map(([key, value]) => (
-              <div className="allocation-row" key={key}>
-                <span>{allocationLabels[key] || key.replaceAll("_", " ")}</span>
-                <strong>{value}%</strong>
-              </div>
-            ))}
+            {allocationItems.map((item) => {
+              const key = item.key;
+              const percent = Number(item.percentage ?? allocation[key] ?? 0);
+              const amount = Number(item.amount ?? allocationAmounts[key] ?? 0);
+              return (
+                <div className="allocation-row allocation-row-amount" key={key}>
+                  <span>{allocationLabels[key] || key.replaceAll("_", " ")}</span>
+                  <strong>{percent}% <b>{money(amount)}</b></strong>
+                </div>
+              );
+            })}
           </div>
         </div>
 
