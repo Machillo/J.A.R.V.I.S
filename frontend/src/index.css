@@ -6887,3 +6887,94 @@ body {
     bottom: 12px;
   }
 }
+
+/* =========================================================
+   J.A.R.V.I.S. MOBILE STABILITY FIX
+   - No theme picker: keep the current Jarvis visual identity
+   - Keyboard: hide bottom navigation and keep command input above keyboard
+   - Fixed app scale: avoid Safari/iOS zoom and horizontal resizing
+   ========================================================= */
+html {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+body,
+#root {
+  width: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  position: relative;
+}
+
+input,
+textarea,
+select,
+button {
+  font-size: 16px;
+}
+
+.app-shell-v2 {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.main-shell.app-main-v2 {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.app-shell-v2.keyboard-open .bottom-app-nav {
+  display: none !important;
+}
+
+.app-shell-v2.keyboard-open .jarvis-command-center {
+  bottom: calc(8px + var(--safe-bottom) + var(--keyboard-offset, 0px)) !important;
+  z-index: 120;
+}
+
+.app-shell-v2.keyboard-open .main-shell.app-main-v2.home-mode {
+  padding-bottom: calc(88px + var(--safe-bottom)) !important;
+}
+
+.app-shell-v2.keyboard-open .jarvis-home.chat-home {
+  min-height: calc(var(--app-vh, 100dvh) - 86px) !important;
+  justify-content: flex-start !important;
+  padding-top: max(6px, var(--safe-top)) !important;
+}
+
+.app-shell-v2.keyboard-open .clean-chat-hero {
+  transform: scale(0.68) !important;
+  transform-origin: top center !important;
+  opacity: 0.72 !important;
+}
+
+.app-shell-v2.keyboard-open .jarvis-home h1 {
+  font-size: clamp(34px, 8vw, 50px) !important;
+}
+
+.app-shell-v2.keyboard-open .home-subtitle {
+  opacity: 0.66;
+}
+
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  .jarvis-command-center input {
+    font-size: 16px !important;
+  }
+}

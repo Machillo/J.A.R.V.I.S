@@ -38,7 +38,7 @@ const sanitizeCourtesy = (text = "") =>
     .replace(/Señor,\s*Señor,\s*/gi, "Señor, ");
 
 const appSections = {
-  dashboard: { title: "J.A.R.V.I.S.", eyebrow: "Novedades" },
+  dashboard: { title: "J.A.R.V.I.S.", eyebrow: "Dashboard" },
   strategy: { title: "Premium", eyebrow: "Estrategia" },
   finance: { title: "Finanzas", eyebrow: "Comunidades" },
   chats: { title: "Movimientos", eyebrow: "Correos y tarjetas" },
@@ -123,7 +123,7 @@ function BottomNavigation({ activePage, navigatePage, currentUser, userName, pro
   const activeGroup = getBottomGroup(activePage);
   const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
   const items = [
-    { id: "dashboard", label: "Novedades", icon: Newspaper },
+    { id: "dashboard", label: "Dashboard", icon: Newspaper },
     { id: "strategy", label: "Premium", icon: Crown },
     { id: "finance", label: "Finanzas", icon: Users },
     { id: "chats", label: "Moves", icon: MessageCircle, badge: activeGroup === "chats" ? null : null },
@@ -163,6 +163,7 @@ export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
   const [pageStack, setPageStack] = useState([]);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [commandInputFocused, setCommandInputFocused] = useState(false);
   const [status, setStatus] = useState(null);
   const [financeDashboard, setFinanceDashboard] = useState(null);
   const [jarvisInput, setJarvisInput] = useState("");
@@ -177,14 +178,9 @@ export default function App() {
   const [profilePreferences, setProfilePreferences] = useState(null);
 
   useEffect(() => {
-    const applyTheme = () => {
-      const savedTheme = localStorage.getItem("jarvis-theme") || "classic";
-      document.documentElement.setAttribute("data-theme", savedTheme);
-    };
-
-    applyTheme();
-    window.addEventListener("jarvis-theme-change", applyTheme);
-    return () => window.removeEventListener("jarvis-theme-change", applyTheme);
+    // JARVIS keeps one visual identity. Theme switching was removed on purpose.
+    localStorage.removeItem("jarvis-theme");
+    document.documentElement.setAttribute("data-theme", "classic");
   }, []);
 
   useEffect(() => {
@@ -513,7 +509,7 @@ export default function App() {
   const showHeader = activePage !== "dashboard";
 
   return (
-    <div className={`jarvis-app app-shell-v2 ${keyboardOpen ? "keyboard-open" : ""}`}>
+    <div className={`jarvis-app app-shell-v2 ${(keyboardOpen || commandInputFocused) ? "keyboard-open" : ""}`}>
       <main className={`main-shell app-main-v2 ${activePage === "dashboard" ? "home-mode" : ""}`}>
         {showHeader && (
           <header className="app-top-bar">
@@ -534,6 +530,10 @@ export default function App() {
             <input
               value={jarvisInput}
               onChange={(event) => setJarvisInput(event.target.value)}
+              onFocus={() => setCommandInputFocused(true)}
+              onBlur={() => {
+                window.setTimeout(() => setCommandInputFocused(false), 120);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") handleAskJarvis();
               }}
