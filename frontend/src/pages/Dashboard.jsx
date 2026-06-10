@@ -1,4 +1,4 @@
-import { Brain, Keyboard, Mic, Plug, Send, Sparkles } from "lucide-react";
+import { Brain, Send, Sparkles } from "lucide-react";
 
 function formatJarvisResponse(data) {
   if (!data) return null;
@@ -10,13 +10,13 @@ function formatJarvisResponse(data) {
   return "Señor, análisis completado.";
 }
 
-export default function Dashboard({ jarvisResponse, chatHistory = [] }) {
+export default function Dashboard({ jarvisResponse, chatHistory = [], userName = "Kenneth" }) {
   const responseText = formatJarvisResponse(jarvisResponse);
   const hasResponse = Boolean(responseText) || chatHistory.length > 0;
 
   return (
     <section className={`jarvis-home chat-home ${hasResponse ? "has-response" : "idle"}`}>
-      <div className="jarvis-hero">
+      <div className="jarvis-hero clean-chat-hero">
         <div className="jarvis-core-orb">
           <div className="orb-ring"></div>
           <div className="orb-center">
@@ -24,39 +24,15 @@ export default function Dashboard({ jarvisResponse, chatHistory = [] }) {
           </div>
         </div>
 
+        <p className="jarvis-greeting">Hola {userName || "Kenneth"}</p>
         <h1>J.A.R.V.I.S.</h1>
-
-        <p className="home-subtitle">
-          Sistema personal activo. Finanzas, metas, memoria y automatización.
-        </p>
-
-        {!hasResponse && (
-          <div className="home-status-grid">
-            <div className="home-status-card accent-cyan">
-              <span className="status-icon"><Plug size={30} /></span>
-              <span>Sistema</span>
-              <strong>Activo</strong>
-            </div>
-
-            <div className="home-status-card accent-magenta">
-              <span className="status-icon"><Brain size={30} /></span>
-              <span>Modo</span>
-              <strong>Asistente</strong>
-            </div>
-
-            <div className="home-status-card accent-cyan">
-              <span className="status-icon"><Keyboard size={30} /></span>
-              <span>Entrada</span>
-              <strong>Texto / Voz</strong>
-            </div>
-          </div>
-        )}
+        <p className="home-subtitle">¿Qué hacemos ahora?</p>
       </div>
 
       {hasResponse && (
         <div className="jarvis-mini-chat">
           <div className="mini-chat-title">
-            <span>Conversación activa</span>
+            <span>Sesión actual</span>
             <Sparkles size={16} />
           </div>
 

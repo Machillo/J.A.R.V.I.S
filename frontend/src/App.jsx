@@ -1,7 +1,21 @@
 import { useEffect, useState } from "react";
-import { LogOut, Menu, Mic, Send } from "lucide-react";
-
-import Sidebar from "./components/Sidebar";
+import {
+  Brain,
+  ChevronRight,
+  CreditCard,
+  Crown,
+  LogOut,
+  MailSearch,
+  MessageCircle,
+  Mic,
+  Newspaper,
+  ReceiptText,
+  Send,
+  Settings as SettingsIcon,
+  Target,
+  UserRound,
+  Users,
+} from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Finance from "./pages/Finance";
 import Goals from "./pages/Goals";
@@ -21,9 +35,126 @@ const sanitizeCourtesy = (text = "") =>
     .replace(/Señor\s+[A-ZÁÉÍÓÚÑa-záéíóúñ0-9._%+-]+(?:@[A-ZÁÉÍÓÚÑa-záéíóúñ0-9.-]+)?[,:\s]*/gi, "Señor, ")
     .replace(/Señor,\s*Señor,\s*/gi, "Señor, ");
 
+const appSections = {
+  dashboard: { title: "J.A.R.V.I.S.", eyebrow: "Novedades" },
+  strategy: { title: "Premium", eyebrow: "Estrategia" },
+  finance: { title: "Finanzas", eyebrow: "Comunidades" },
+  chats: { title: "Chats", eyebrow: "Correos y movimientos" },
+  emails: { title: "Correos", eyebrow: "Chats" },
+  transactions: { title: "Transacciones", eyebrow: "Chats" },
+  additionalCards: { title: "Tarjetas", eyebrow: "Chats" },
+  profile: { title: "Kenneth", eyebrow: "Tú" },
+  memory: { title: "Memory Core", eyebrow: "Tú" },
+  settings: { title: "Configuración", eyebrow: "Tú" },
+  goals: { title: "Metas", eyebrow: "Tú" },
+};
+
+const getBottomGroup = (page) => {
+  if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "chats";
+  if (["memory", "settings", "goals", "profile"].includes(page)) return "profile";
+  return page;
+};
+
+function AppListItem({ icon: Icon, title, subtitle, onClick }) {
+  return (
+    <button className="app-list-item" onClick={onClick}>
+      <span className="app-list-icon"><Icon size={24} /></span>
+      <span className="app-list-copy">
+        <strong>{title}</strong>
+        {subtitle && <small>{subtitle}</small>}
+      </span>
+      <ChevronRight size={22} className="app-list-chevron" />
+    </button>
+  );
+}
+
+function ChatsHub({ setActivePage }) {
+  return (
+    <section className="app-hub-page">
+      <div className="app-section-card">
+        <AppListItem icon={MailSearch} title="Correos" subtitle="Escanear, revisar y agregar a finanzas" onClick={() => setActivePage("emails")} />
+        <AppListItem icon={ReceiptText} title="Transacciones" subtitle="Movimientos guardados" onClick={() => setActivePage("transactions")} />
+        <AppListItem icon={CreditCard} title="Tarjetas adicionales" subtitle="Emily y Sidey" onClick={() => setActivePage("additionalCards")} />
+      </div>
+    </section>
+  );
+}
+
+function ProfileHub({ setActivePage, userName, currentUser, aiUsage, onLogout }) {
+  const avatarUrl = currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
+
+  return (
+    <section className="app-profile-page">
+      <div className="profile-hero">
+        <div className="profile-avatar large">
+          {avatarUrl ? <img src={avatarUrl} alt="Kenneth" /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
+        </div>
+        <h1>{userName || "Kenneth"}</h1>
+        <p>Memory Core y preferencias de JARVIS</p>
+      </div>
+
+      <div className="app-section-card">
+        <AppListItem icon={Brain} title="Memory Core" subtitle="Memoria y contexto personal" onClick={() => setActivePage("memory")} />
+        <AppListItem icon={Target} title="Metas" subtitle="Objetivos y prioridades" onClick={() => setActivePage("goals")} />
+        <AppListItem icon={SettingsIcon} title="Configuración" subtitle="Preferencias del sistema" onClick={() => setActivePage("settings")} />
+      </div>
+
+      <div className="app-section-card compact">
+        <div className="app-info-row">
+          <span>Uso IA hoy</span>
+          <strong>{aiUsage ? `${Math.round(aiUsage.total_tokens || 0).toLocaleString("es-CR")} tokens` : "--"}</strong>
+        </div>
+        <button className="app-list-item danger" onClick={onLogout}>
+          <span className="app-list-icon"><LogOut size={22} /></span>
+          <span className="app-list-copy"><strong>Salir</strong></span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function BottomNavigation({ activePage, setActivePage, currentUser, userName }) {
+  const activeGroup = getBottomGroup(activePage);
+  const avatarUrl = currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
+  const items = [
+    { id: "dashboard", label: "Novedades", icon: Newspaper },
+    { id: "strategy", label: "Premium", icon: Crown },
+    { id: "finance", label: "Finanzas", icon: Users },
+    { id: "chats", label: "Chats", icon: MessageCircle, badge: activeGroup === "chats" ? null : null },
+    { id: "profile", label: "Tú", icon: UserRound, avatar: true },
+  ];
+
+  return (
+    <nav className="bottom-app-nav" aria-label="Navegación principal">
+      {items.map((item) => {
+        const Icon = item.icon;
+        const isActive = activeGroup === item.id;
+
+        return (
+          <button
+            key={item.id}
+            className={`bottom-nav-item ${isActive ? "active" : ""}`}
+            onClick={() => setActivePage(item.id)}
+          >
+            <span className="bottom-nav-icon">
+              {item.avatar ? (
+                <span className="profile-avatar small">
+                  {avatarUrl ? <img src={avatarUrl} alt="Perfil" /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
+                </span>
+              ) : (
+                <Icon size={27} />
+              )}
+            </span>
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 760);
   const [status, setStatus] = useState(null);
   const [financeDashboard, setFinanceDashboard] = useState(null);
   const [jarvisInput, setJarvisInput] = useState("");
@@ -260,7 +391,7 @@ export default function App() {
   if (!sessionLoaded) {
     return (
       <div className={`jarvis-app ${currentUser?.role === "owner" || currentUser?.role === "admin" ? "admin-user" : ""}`}>
-        <main className="main-shell expanded">
+        <main className="main-shell home-mode">
           <section className="jarvis-home chat-home idle">
             <h1>J.A.R.V.I.S.</h1>
             <p className="home-subtitle">Inicializando sesión...</p>
@@ -300,44 +431,31 @@ export default function App() {
       case "settings":
         return <Settings status={status} />;
 
+      case "chats":
+        return <ChatsHub setActivePage={setActivePage} />;
+
+      case "profile":
+        return <ProfileHub setActivePage={setActivePage} userName={userName} currentUser={currentUser} aiUsage={aiUsage} onLogout={handleLogout} />;
+
       default:
-        return <Dashboard jarvisResponse={jarvisResponse} chatHistory={chatHistory} />;
+        return <Dashboard jarvisResponse={jarvisResponse} chatHistory={chatHistory} userName={userName} />;
     }
   };
 
+  const currentSection = appSections[activePage] || appSections[getBottomGroup(activePage)] || appSections.dashboard;
+  const showHeader = activePage !== "dashboard";
+
   return (
-    <div className="jarvis-app">
-      <Sidebar
-        activePage={activePage}
-        setActivePage={setActivePage}
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        currentUser={currentUser}
-        aiUsage={aiUsage}
-        strategySummary={strategySummary}
-      />
-
-      <main className={`main-shell ${sidebarOpen ? "" : "expanded"} ${activePage === "dashboard" ? "home-mode" : ""}`}>
-        <header className="top-bar">
-          <button className="menu-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            <Menu size={22} />
-          </button>
-
-          <div>
-            <h1>RESUMEN GENERAL</h1>
-            <p>Panorama financiero actual</p>
-          </div>
-
-          <div className="system-status">
-            <span className="live-dot"></span>
-            SISTEMA ACTIVO
-          </div>
-
-          <button className="logout-button" onClick={handleLogout}>
-            <LogOut size={18} />
-            <span className="logout-text">Salir</span>
-          </button>
-        </header>
+    <div className="jarvis-app app-shell-v2">
+      <main className={`main-shell app-main-v2 ${activePage === "dashboard" ? "home-mode" : ""}`}>
+        {showHeader && (
+          <header className="app-top-bar">
+            <div>
+              <span>{currentSection.eyebrow}</span>
+              <h1>{currentSection.title}</h1>
+            </div>
+          </header>
+        )}
 
         {renderPage()}
 
@@ -367,6 +485,8 @@ export default function App() {
           </section>
         )}
       </main>
+
+      <BottomNavigation activePage={activePage} setActivePage={setActivePage} currentUser={currentUser} userName={userName} />
     </div>
   );
 }
