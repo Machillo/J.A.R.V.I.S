@@ -6120,7 +6120,8 @@ body {
 
 /* Finance closeout polish: simple top KPIs + real modal details */
 .finance-main-cards-clean {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
 }
 
 .finance-simple-kpi {
@@ -7071,4 +7072,9 @@ button {
 @keyframes jarvisPulse {
   0%, 100% { transform: scale(1); box-shadow: 0 0 18px rgba(240, 3, 251, 0.25); }
   50% { transform: scale(1.05); box-shadow: 0 0 32px rgba(240, 3, 251, 0.55); }
+}
+
+.glow-purple {
+  border-color: rgba(147, 9, 198, 0.36);
+  box-shadow: 0 20px 55px rgba(147, 9, 198, 0.16);
 }

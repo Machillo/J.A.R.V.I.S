@@ -656,6 +656,15 @@ export default function Finance({
     ...expenseItems.map((item) => ({ ...item, balance_side: "Salida" })),
   ];
 
+  const debtItems = sortedDebts.map((debt) => ({
+    id: `debt-${debt.id}`,
+    description: debt.name || "Deuda",
+    amount: Number(debt.remaining_amount) || 0,
+    transaction_type: "debt",
+    category: `Cuota ${formatCRC(debt.monthly_payment || 0)} · Interés ${Number(debt.interest_rate || 0)}%`,
+    transaction_date: debt.payment_day ? `Día ${debt.payment_day}` : "sin fecha",
+  }));
+
   const currentCycleFlow = [
     {
       month: "Actual",
@@ -704,23 +713,26 @@ export default function Finance({
       <div className="finance-period-pill">Periodo financiero: {cycleLabel}</div>
 
       <div className="cards-grid finance-main-cards finance-main-cards-clean">
-        <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Ingresos neto", incomeItems, "No hay ingresos registrados en este ciclo.")}> 
-          <span>INGRESOS NETO</span>
+        <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Ingresos netos", incomeItems, "No hay ingresos registrados en este ciclo.")}> 
+          <span>INGRESOS NETOS</span>
           <h2>{formatCRC(incomeNet)}</h2>
         </button>
 
-        <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Gastos neto", expenseItems, "No hay gastos registrados en este ciclo.")}> 
-          <span>GASTOS NETO</span>
+        <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Gastos netos", expenseItems, "No hay gastos registrados en este ciclo.")}> 
+          <span>GASTOS NETOS</span>
           <h2>{formatCRC(expenseNet)}</h2>
         </button>
 
-        <button className="hud-card finance-click-card finance-simple-kpi wide-balance" onClick={() => openDetail("Saldo real", balanceItems, "No hay movimientos reales en este ciclo.")}> 
+        <button className="hud-card finance-click-card finance-simple-kpi" onClick={() => openDetail("Saldo real", balanceItems, "No hay movimientos reales en este ciclo.")}> 
           <span>SALDO REAL</span>
           <h2 className={realBalance < 0 ? "danger-text" : ""}>{formatCRC(realBalance)}</h2>
         </button>
-      </div>
 
-      <IntelligenceStrip availability={availability} realBalance={realBalanceReport} receivables={receivables} debtAdvice={debtAdvice} />
+        <button className="hud-card finance-click-card finance-simple-kpi glow-purple" onClick={() => openDetail("Deuda total", debtItems, "No hay deudas registradas.")}> 
+          <span>DEUDA TOTAL</span>
+          <h2>{formatCRC(debtTotal)}</h2>
+        </button>
+      </div>
 
       {detail && (
         <div className="finance-detail-modal-backdrop" onClick={() => setDetail(null)}>
