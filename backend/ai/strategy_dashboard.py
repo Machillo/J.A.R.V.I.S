@@ -432,7 +432,8 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     )
     current_month_extra_net = max(current_month_income - recurring_monthly_income, 0.0)
 
-    debt_minimums = sum(_normalize_payment(d.get("monthly_payment"), d.get("remaining_amount")) for d in debts)
+    configured_debt_payments = sum(_normalize_payment(d.get("monthly_payment"), d.get("remaining_amount")) for d in debts)
+    current_debt_payments = _f(cycle_report.get("debts", {}).get("payments_current_period"))
     total_debt = sum(_f(d.get("remaining_amount")) for d in debts)
     paid_debt = sum(max(_f(d.get("total_amount")) - _f(d.get("remaining_amount")), 0) for d in debts)
     original_debt = total_debt + paid_debt
@@ -448,16 +449,18 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     recurring_living_expenses = _f(living.get("fixed_living_total"))
     cycle_expenses = _f(cycle_report.get("expenses", {}).get("current_period"))
 
-    # Current cycle: what can actually be distributed today.
-    # Debt minimums are mandatory commitments. They are not the same as extra debt attack.
-    current_before_goals = current_month_income - cycle_expenses - debt_minimums
+    # Current-cycle strategic surplus, exactly as Kenneth defined it:
+    # income cycle - variable/current expenses - debt payments already due/paid.
+    # Fixed expenses are not subtracted here because they are represented by
+    # actual expenses imported/registered in the cycle.
+    current_before_goals = current_month_income - cycle_expenses - current_debt_payments
     current_goal_allocation = min(max(current_before_goals, 0.0), required_goal_reserve)
-    current_available_after_goals = current_before_goals - current_goal_allocation
-    distribution_base = max(current_available_after_goals, 0.0)
+    distribution_base = max(current_before_goals - current_goal_allocation, 0.0)
 
-    # Recurring strategy: future months must not assume current OT/bonus, but can use
-    # known salary, known fixed living, debt minimums and goal reserves.
-    recurring_before_goals = recurring_monthly_income - recurring_living_expenses - debt_minimums
+    # Recurring projection for debt payoff: use the fixed salary baseline and
+    # the configured monthly debt payment as the normal debt-payment capacity.
+    # OT/bonus from the current month never repeats into future months.
+    recurring_before_goals = recurring_monthly_income - recurring_living_expenses - configured_debt_payments
     recurring_goal_allocation = min(max(recurring_before_goals, 0.0), required_goal_reserve)
     recurring_available_after_goals = max(recurring_before_goals - recurring_goal_allocation, 0.0)
 
@@ -476,11 +479,12 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
             "metas_o_inversion": round(current_goal_allocation, 2),
         }
     else:
-        # If a critical goal is active and close, it must compete above emergency/investment.
-        debt_percent = 50 if has_critical_goals and debts else 70 if debts else 0
+        # Ecuador/critical goals are funded first through current_goal_allocation.
+        # Only the remaining surplus is distributed.
+        debt_percent = 70 if debts else 0
         living_percent = 10
-        emergency_percent = 10 if has_critical_goals else 20
-        goal_percent = 30 if has_critical_goals else 0
+        emergency_percent = 20 if debts else 50
+        goal_percent = 0
         allocation = {
             "ataque_de_deuda": debt_percent,
             "vida_controlada": living_percent,
@@ -491,7 +495,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
             "ataque_de_deuda": round(distribution_base * debt_percent / 100, 2),
             "vida_controlada": round(distribution_base * living_percent / 100, 2),
             "fondo_de_emergencia": round(distribution_base * emergency_percent / 100, 2),
-            "metas_o_inversion": round(current_goal_allocation + (distribution_base * goal_percent / 100), 2),
+            "metas_o_inversion": round(current_goal_allocation, 2),
         }
 
     allocation_items = [
@@ -500,7 +504,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     ]
 
     current_debt_attack_extra = _f(allocation_amounts.get("ataque_de_deuda"))
-    recurring_debt_attack_extra = recurring_available_after_goals * (0.50 if has_critical_goals else 0.70)
+    recurring_debt_attack_extra = recurring_available_after_goals * 0.70
 
     base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
         debts,
@@ -517,21 +521,21 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     if base_total_months and total_months and base_total_months < 999 and total_months < 999:
         months_saved = max(base_total_months - total_months, 0)
 
-    deficit_after_mandatory = current_month_income - cycle_expenses - debt_minimums - required_goal_reserve
+    deficit_after_mandatory = current_month_income - cycle_expenses - current_debt_payments - required_goal_reserve
     no_free_cash = deficit_after_mandatory <= 0
     status = "critical" if no_free_cash or (recurring_monthly_income <= 0 or total_debt > max(recurring_monthly_income * 4, 1)) else "controlled"
     objective = (
-        "Señor, este ciclo no tiene flujo libre: proteger mínimos y la meta crítica antes de abonos extra."
+        "Señor, este ciclo no tiene flujo libre: proteger pagos de deuda ya comprometidos y la meta crítica antes de abonos extra."
         if no_free_cash else
         "Señor, proteger meta crítica y enviar solo el excedente real a la deuda prioritaria."
     )
 
     rules = [
-        "La distribución usa flujo real: ingreso del ciclo menos gastos, mínimos de deuda y metas críticas.",
+        "La distribución usa flujo real: ingreso del ciclo menos gastos variables, pagos de deuda del ciclo y metas críticas.",
         "OT, bono, feriados y vacaciones solo aceleran el mes donde caen; no se repiten en otros meses.",
         "Las compras de Emily/Sidey son cuentas por cobrar, no dinero libre hasta que paguen.",
         "La meta crítica Ecuador se reserva antes de emergencia, inversión o ataque extra de deuda.",
-        "Los pagos mínimos de deuda se mantienen siempre; el ataque extra solo existe si hay excedente real.",
+        "Los pagos de deuda del ciclo se respetan; el ataque extra solo existe si hay excedente real.",
     ]
     if no_free_cash:
         rules.insert(0, "Señor, no hay dinero libre para repartir este ciclo; no se fabrica ataque de deuda.")
@@ -549,8 +553,10 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "monthly_expenses": round(cycle_expenses, 2),
         "recurring_living_expenses": round(recurring_living_expenses, 2),
         "current_variable_expenses": round(cycle_expenses, 2),
-        "monthly_debt_minimums": round(debt_minimums, 2),
-        "debt_payments_reserved": round(debt_minimums, 2),
+        "monthly_debt_minimums": round(configured_debt_payments, 2),
+        "configured_debt_payments": round(configured_debt_payments, 2),
+        "current_debt_payments": round(current_debt_payments, 2),
+        "debt_payments_reserved": round(current_debt_payments, 2),
         "critical_goals_reserved": round(required_goal_reserve, 2),
         "current_goal_allocation": round(current_goal_allocation, 2),
         "available_before_goals": round(current_before_goals, 2),

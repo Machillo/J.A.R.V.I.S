@@ -119,9 +119,9 @@ export default function PremiumStrategy() {
       <div className="strategy-kpi-grid">
         <div className="hud-card strategy-kpi-card"><span>Ingreso base recurrente</span><strong>{money(strategy.recurring_monthly_income || strategy.monthly_income)}</strong><small>Salario fijo neto sin OT/bonos futuros</small></div>
         <div className="hud-card strategy-kpi-card"><span>Ingreso de este mes</span><strong>{money(strategy.monthly_income)}</strong><small>Base + extras únicos del mes - VGH</small></div>
-        <div className="hud-card strategy-kpi-card"><span>Pagos mínimos deuda</span><strong>{money(strategy.monthly_debt_minimums)}</strong><small>Cuotas mensuales normalizadas</small></div>
-        <div className="hud-card strategy-kpi-card"><span>Sobrante base</span><strong>{money(strategy.base_estimated_extra_cash)}</strong><small>Recurrente después de Casa y mínimos</small></div>
-        <div className="hud-card strategy-kpi-card"><span>Extra único a deuda</span><strong>{money(strategy.current_month_one_time_debt_boost)}</strong><small>OT/bono de este mes aplicado una sola vez</small></div>
+        <div className="hud-card strategy-kpi-card"><span>Pago mensual deuda</span><strong>{money(strategy.configured_debt_payments || strategy.monthly_debt_minimums)}</strong><small>Capacidad configurada para deuda</small></div>
+        <div className="hud-card strategy-kpi-card"><span>Sobrante base</span><strong>{money(strategy.base_estimated_extra_cash)}</strong><small>Recurrente después de meta crítica y deuda</small></div>
+        <div className="hud-card strategy-kpi-card"><span>Extra a deuda</span><strong>{money(strategy.current_month_one_time_debt_boost)}</strong><small>Solo si sobra después de Ecuador</small></div>
         <div className="hud-card strategy-kpi-card"><span>Estado</span><strong>{strategy.status === "critical" ? "Crítico" : "Controlado"}</strong></div>
       </div>
 
@@ -195,7 +195,7 @@ export default function PremiumStrategy() {
               <span className="timeline-rank">#{item.priority}</span>
               <div>
                 <strong>{item.name}</strong>
-                <p>Saldo {money(item.remaining_amount)} · Pago objetivo {money(item.recommended_payment)} · mínimo {money(item.minimum_payment)}</p>
+                <p>Saldo {money(item.remaining_amount)} · Pago objetivo {money(item.recommended_payment)} · pago base {money(item.minimum_payment)}</p>
               </div>
               <b>{item.estimated_months >= 999 ? "sin cierre" : `mes ${item.estimated_months}`}</b>
             </div>

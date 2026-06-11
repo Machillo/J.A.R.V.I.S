@@ -163,13 +163,26 @@ def _fetch_additional_card_totals(conn, user_id: int) -> list[dict[str, Any]]:
 
 
 def _detect_receivable_payer_from_transaction(row: dict[str, Any]) -> str | None:
+    """Detect a receivable payment only from explicit payer evidence.
+
+    A generic income must never reduce Emily/Sidey automatically.  The email
+    parser or the user must leave a clear payer trace in description/notes, and
+    the movement must look like a SINPE/transfer/payment.  This prevents false
+    matches such as the previous ₡577.20 income that was applied to Emily.
+    """
     text = " ".join([
         str(row.get("description") or ""),
         str(row.get("category") or ""),
         str(row.get("account") or ""),
         str(row.get("notes") or ""),
     ]).lower()
-    if "emily" in text or "emily andrea" in text:
+    has_payment_context = any(token in text for token in (
+        "sinpe", "sinpe movil", "sinpe móvil", "transferencia",
+        "abono", "pago", "reembolso", "payer=", "remitente", "origen",
+    ))
+    if not has_payment_context:
+        return None
+    if "emily" in text or "emily andrea" in text or "emily andrea alvarado" in text:
         return "Emily"
     if "sidey" in text:
         return "Sidey"
@@ -314,35 +327,10 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
                 (user_id, person, original, pending, status, notes, source_key),
             )
 
-    # If an owner no longer has confirmed purchases, keep the row but set the
-    # original to zero; manual payments/history remain intact.
-    stale_rows = conn.execute(
-        """
-        SELECT id, paid_amount
-        FROM receivables
-        WHERE user_id = %s
-          AND source_type = 'additional_card_auto'
-          AND source_key IS NOT NULL
-        """,
-        (user_id,),
-    ).fetchall()
-    for stale in stale_rows:
-        key = str(stale.get("source_key") or "")
-        if key in seen_keys:
-            continue
-        paid = _as_float(stale.get("paid_amount"))
-        conn.execute(
-            """
-            UPDATE receivables
-            SET original_amount = 0,
-                pending_amount = 0,
-                status = 'completed',
-                notes = COALESCE(notes, '') || ' | Sin compras adicionales confirmadas actualmente.',
-                updated_at = NOW()
-            WHERE id = %s AND user_id = %s
-            """,
-            (stale["id"], user_id),
-        )
+    # Do not zero automatic receivables just because one scan did not return
+    # movements.  Candidates can be temporarily empty during cleanup/reprocess,
+    # and setting the row to completed=0 destroys the real amount owed.
+    # Rows are only updated when a fresh confirmed additional-card total exists.
 
 def _fetch_active_goals(user_id: int) -> list[dict[str, Any]]:
     with get_connection() as conn:
@@ -442,79 +430,44 @@ def get_real_availability() -> dict[str, Any]:
     start, end = _month_bounds()
     date_sql = _date_expr("transaction_date")
 
-    with get_connection() as conn:
-        salary = conn.execute(
-            "SELECT amount FROM salaries WHERE user_id = %s ORDER BY id DESC LIMIT 1",
-            (user_id,),
-        ).fetchone()
-        income_extra = conn.execute(
-            """
-            SELECT COALESCE(SUM(amount),0) AS total
-            FROM bonuses
-            WHERE user_id = %s AND created_at >= %s::date AND created_at < %s::date
-            """,
-            (user_id, start.isoformat(), end.isoformat()),
-        ).fetchone()["total"]
-        payroll_extra = conn.execute(
-            """
-            SELECT COALESCE(SUM(amount),0) AS total
-            FROM payroll_events
-            WHERE user_id = %s AND created_at >= %s::date AND created_at < %s::date
-            """,
-            (user_id, start.isoformat(), end.isoformat()),
-        ).fetchone()["total"]
-        fixed_expenses = conn.execute(
-            """
-            SELECT COALESCE(SUM(expected_amount), 0) AS total
-            FROM fixed_expenses
-            WHERE user_id = %s AND COALESCE(is_active, true) = true
-            """,
-            (user_id,),
-        ).fetchone()["total"]
-        debt_minimums = conn.execute(
-            "SELECT COALESCE(SUM(monthly_payment),0) AS total FROM debts WHERE user_id = %s",
-            (user_id,),
-        ).fetchone()["total"]
-        current_expenses = conn.execute(
-            f"""
-            SELECT COALESCE(SUM(amount),0) AS total
-            FROM transactions
-            WHERE user_id = %s
-              AND transaction_type = 'expense'
-              AND {date_sql} >= %s::date
-              AND {date_sql} < %s::date
-            """,
-            (user_id, start.isoformat(), end.isoformat()),
-        ).fetchone()["total"]
+    try:
+        from backend.finance.service import get_financial_cycle_report
+        cycle = get_financial_cycle_report() or {}
+    except Exception:
+        cycle = {}
 
     goals = _fetch_active_goals(user_id)
     goal_reserves = calculate_goal_reserves(goals)
 
-    net_income = _as_float(salary["amount"] if salary else 0) + _as_float(income_extra) + _as_float(payroll_extra)
-    fixed = _as_float(fixed_expenses)
-    debts = _as_float(debt_minimums)
+    net_income = _as_float(cycle.get("income", {}).get("expected_total"))
+    current_expenses = _as_float(cycle.get("expenses", {}).get("current_period"))
+    debt_payments = _as_float(cycle.get("debts", {}).get("payments_current_period"))
     critical_goals = _as_float(goal_reserves["critical_monthly_required"])
     weighted_goals = _as_float(goal_reserves["monthly_auto_reserve"])
     goal_deduction = max(critical_goals, weighted_goals)
-    available = net_income - fixed - debts - goal_deduction
+    available_before_goals = net_income - current_expenses - debt_payments
+    goal_allocation = min(max(available_before_goals, 0.0), goal_deduction)
+    available = available_before_goals - goal_allocation
 
     return {
         "status": "OK",
-        "formula": "Ingreso Neto - Gastos Fijos - Deudas - Metas Críticas = Dinero Realmente Disponible",
-        "period": {"start": start.isoformat(), "end": end.isoformat()},
+        "formula": "Ingreso ciclo - gastos variables del ciclo - pagos de deuda - metas críticas = excedente estratégico",
+        "period": cycle.get("cycle") or {"start": start.isoformat(), "end": end.isoformat()},
         "income_net": round(net_income, 2),
-        "fixed_expenses": round(fixed, 2),
-        "debt_minimums": round(debts, 2),
+        "fixed_expenses": 0.0,
+        "debt_minimums": round(debt_payments, 2),
+        "debt_payments_current_period": round(debt_payments, 2),
         "critical_goals_reserve": round(critical_goals, 2),
         "weighted_goals_reserve": round(weighted_goals, 2),
-        "goals_reserved": round(goal_deduction, 2),
+        "goals_reserved": round(goal_allocation, 2),
         "money_really_available": round(available, 2),
-        "current_expenses_registered": round(_as_float(current_expenses), 2),
+        "available_before_goals": round(available_before_goals, 2),
+        "current_expenses_registered": round(current_expenses, 2),
         "goal_reserves": goal_reserves,
         "alerts": [
-            "Las metas críticas ya reducen la disponibilidad real."
+            "Las metas críticas reciben prioridad sobre el excedente estratégico."
             if critical_goals > 0 else
-            "No hay metas críticas activas afectando el presupuesto."
+            "No hay metas críticas activas afectando el excedente."
         ],
     }
 
