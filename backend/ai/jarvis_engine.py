@@ -29,6 +29,7 @@ from backend.finance.strategic_engine import get_financial_engine_report, simula
 from backend.finance.intelligence import plan_long_term_goal, get_debt_advisory
 from backend.finance.fixed_expenses import handle_fixed_expense_message
 from backend.ai.strategy_dashboard import build_local_strategy_blueprint
+from backend.ai.decision_engine import handle_decision_pending_action, handle_personal_decision_request
 
 
 def _safe_call(fn, fallback):
@@ -417,11 +418,23 @@ def _format_financial_engine_message(report: dict) -> str:
 
 
 def process_message(user_message: str):
+    # Decisiones personales claras (compras/viajes) se resuelven localmente antes
+    # del clasificador IA para ahorrar tokens y evitar respuestas genéricas.
+    pending_action = get_pending_action()
+    if pending_action and str(pending_action.get("action_type") or "").startswith("decision_"):
+        pending_result = handle_decision_pending_action(pending_action, user_message)
+        if pending_result:
+            return pending_result
+
+    if not pending_action:
+        decision_result = handle_personal_decision_request(user_message)
+        if decision_result:
+            return decision_result
+
     intent_result = detect_intent(user_message)
 
     # Si hay una acción pendiente, primero verificamos si el usuario está cambiando de tema.
     # Esto evita que "busca Chimborazo" termine guardado como categoría o gasto.
-    pending_action = get_pending_action()
     if pending_action and is_pending_interrupt(intent_result, user_message):
         finish_pending_action(pending_action["id"], "cancelled")
     elif pending_action:
@@ -435,7 +448,6 @@ def process_message(user_message: str):
                 "pending": pending_result.get("pending", False),
                 "data": pending_result.get("data"),
             }
-
 
     lower_message = (user_message or "").lower()
     if any(token in lower_message for token in ["quiero ir", "me gustaria ir", "me gustaría ir", "viajar", "viaje", "mónaco", "monaco", "f1", "formula 1", "fórmula 1"]):
