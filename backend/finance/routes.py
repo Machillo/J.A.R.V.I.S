@@ -628,6 +628,8 @@ def receivable_payment(receivable_id: int, request: ReceivablePaymentRequest):
         amount=request.amount,
         source_transaction_id=request.source_transaction_id,
         notes=request.notes,
+        payment_date=request.payment_date,
+        method=request.method,
     )
 
 

@@ -671,9 +671,28 @@ def create_receivable(person_name: str, amount: float, notes: str = "") -> dict[
     return {"status": "OK", "item": dict(row)}
 
 
-def apply_receivable_payment(receivable_id: int, amount: float, source_transaction_id: int | None = None, notes: str = "") -> dict[str, Any]:
+def apply_receivable_payment(
+    receivable_id: int,
+    amount: float,
+    source_transaction_id: int | None = None,
+    notes: str = "",
+    payment_date: str | None = None,
+    method: str = "manual",
+) -> dict[str, Any]:
+    """Register a receivable payment and mirror it as income.
+
+    Important business rule:
+    - Additional-card purchases are counted as expenses.
+    - When Emily/Sidey pays back, that payment must also enter transactions as
+      income so the monthly cashflow is not understated.
+    - Only explicit manual payments or transactions with explicit payer evidence
+      should reduce receivables. Generic income must never be auto-applied.
+    """
     user_id = get_current_user_id()
     amount = max(_as_float(amount), 0.0)
+    if amount <= 0:
+        return {"status": "ERROR", "message": "Monto inválido."}
+
     with get_connection() as conn:
         _ensure_receivable_tables(conn)
         rec = conn.execute(
@@ -682,17 +701,86 @@ def apply_receivable_payment(receivable_id: int, amount: float, source_transacti
         ).fetchone()
         if not rec:
             return {"status": "NOT_FOUND", "message": "Cuenta por cobrar no encontrada."}
-        pending = _as_float(rec["pending_amount"])
-        payment = min(amount, pending)
-        new_paid = _as_float(rec["paid_amount"]) + payment
-        new_pending = max(_as_float(rec["original_amount"]) - new_paid, 0)
+
+        pending = max(_as_float(rec["pending_amount"]), 0.0)
+        if pending <= 0:
+            return {"status": "ERROR", "message": "Esta cuenta por cobrar ya está completa."}
+
+        payment = round(min(amount, pending), 2)
+        person_name = str(rec["person_name"] or "Cuenta por cobrar").strip()
+        clean_method = (method or "manual").strip() or "manual"
+        clean_notes = (notes or "").strip()
+        safe_payment_date = None
+        if payment_date:
+            try:
+                safe_payment_date = datetime.fromisoformat(str(payment_date)[:10]).date().isoformat()
+            except Exception:
+                safe_payment_date = date.today().isoformat()
+        else:
+            safe_payment_date = date.today().isoformat()
+
+        linked_transaction_id = source_transaction_id
+        if linked_transaction_id is None:
+            tx_row = conn.execute(
+                """
+                INSERT INTO transactions (
+                    user_id,
+                    transaction_date,
+                    description,
+                    amount,
+                    transaction_type,
+                    category,
+                    account,
+                    source,
+                    notes,
+                    original_amount,
+                    original_currency,
+                    exchange_rate,
+                    created_at
+                )
+                VALUES (%s, %s, %s, %s, 'income', 'Cuentas por cobrar', %s, 'receivable_manual', %s, %s, 'CRC', 1, NOW())
+                RETURNING id
+                """,
+                (
+                    user_id,
+                    safe_payment_date,
+                    f"Pago de {person_name}",
+                    payment,
+                    clean_method,
+                    f"Pago manual aplicado a cuenta por cobrar #{receivable_id}. {clean_notes}".strip(),
+                    payment,
+                ),
+            ).fetchone()
+            linked_transaction_id = int(tx_row["id"])
+
+        already = conn.execute(
+            """
+            SELECT id FROM receivable_payments
+            WHERE user_id = %s
+              AND source_transaction_id = %s
+            LIMIT 1
+            """,
+            (user_id, linked_transaction_id),
+        ).fetchone()
+        if already:
+            return {"status": "DUPLICATE", "message": "Ese pago ya fue aplicado.", "source_transaction_id": linked_transaction_id}
+
+        new_paid = round(_as_float(rec["paid_amount"]) + payment, 2)
+        new_pending = round(max(_as_float(rec["original_amount"]) - new_paid, 0), 2)
         status = "completed" if new_pending <= 0.01 else "partial"
+
         conn.execute(
             """
             INSERT INTO receivable_payments (user_id, receivable_id, amount, source_transaction_id, notes)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (user_id, receivable_id, payment, source_transaction_id, notes),
+            (
+                user_id,
+                receivable_id,
+                payment,
+                linked_transaction_id,
+                f"Pago registrado manualmente. Método: {clean_method}. {clean_notes}".strip(),
+            ),
         )
         updated = conn.execute(
             """
@@ -704,7 +792,13 @@ def apply_receivable_payment(receivable_id: int, amount: float, source_transacti
             (new_paid, new_pending, status, receivable_id, user_id),
         ).fetchone()
         conn.commit()
-    return {"status": "OK", "item": dict(updated), "applied_amount": round(payment, 2)}
+
+    return {
+        "status": "OK",
+        "item": dict(updated),
+        "applied_amount": round(payment, 2),
+        "source_transaction_id": linked_transaction_id,
+    }
 
 
 def list_account_balances() -> dict[str, Any]:

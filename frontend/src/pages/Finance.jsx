@@ -18,6 +18,7 @@ import {
   getFinanceCycleReport,
   getFixedExpenseStatus,
   getReceivables,
+  applyReceivablePayment,
   getTransactionAnalysis,
   previewFinanceInput,
   previewFinancePdf,
@@ -112,7 +113,7 @@ function EmptyPanel({ title, description }) {
     <div className="empty-state">
       <CircleDollarSign size={28} />
       <h3>{title}</h3>
-      <p>{description}</p>
+      {description ? <p>{description}</p> : null}
     </div>
   );
 }
@@ -276,7 +277,7 @@ function FinanceInputPanel({ onSaved, compact = false }) {
       <div className="panel-title finance-input-title">
         <div>
           <h3>AÑADIR FINANZAS</h3>
-          <p>Escribí, hablá o subí un PDF. Jarvis categoriza y pregunta antes de guardar.</p>
+          
         </div>
         <span>PREVIEW</span>
       </div>
@@ -405,26 +406,67 @@ function UnifiedFlowChart({ currentCycleFlow = [], yearly = [] }) {
 }
 
 
-function ReceivablesPanel({ data }) {
+function ReceivablesPanel({ data, onPaymentSaved }) {
   const items = data?.items || [];
   const summary = data?.summary || {};
   const openItems = items.filter((item) => item.status !== "completed" || Number(item.pending_amount) > 0);
+  const [activeId, setActiveId] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paymentMethod, setPaymentMethod] = useState("SINPE");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const activeItem = openItems.find((item) => item.id === activeId) || null;
+
+  const resetForm = () => {
+    setActiveId(null);
+    setPaymentAmount("");
+    setPaymentDate(new Date().toISOString().slice(0, 10));
+    setPaymentMethod("SINPE");
+    setPaymentNotes("");
+    setMessage("");
+  };
+
+  const submitPayment = async (event) => {
+    event.preventDefault();
+    if (!activeItem) return;
+    const amount = Number(String(paymentAmount).replace(",", "."));
+    if (!amount || amount <= 0) {
+      setMessage("Ingresá un monto válido.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+    try {
+      await applyReceivablePayment(activeItem.id, {
+        amount,
+        payment_date: paymentDate,
+        method: paymentMethod,
+        notes: paymentNotes,
+      });
+      resetForm();
+      await onPaymentSaved?.();
+    } catch (error) {
+      setMessage(error.message || "No pude registrar el pago.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <article className="hud-panel large receivables-panel">
       <div className="panel-title">
         <div>
           <h3>CUENTAS POR COBRAR</h3>
-          <p>Compras de tarjetas adicionales pendientes de pago.</p>
         </div>
         <span>{formatCRC(summary.total_pending || 0)}</span>
       </div>
 
       {openItems.length === 0 ? (
-        <EmptyPanel
-          title="Sin cuentas pendientes"
-          description="Cuando Emily o Sidey tengan compras aceptadas, Jarvis las sumará automáticamente aquí."
-        />
+        <EmptyPanel title="Sin cuentas pendientes" description="" />
       ) : (
         <div className="receivable-list">
           {openItems.map((item) => {
@@ -432,8 +474,10 @@ function ReceivablesPanel({ data }) {
             const paid = Number(item.paid_amount) || 0;
             const pending = Number(item.pending_amount) || 0;
             const progress = original > 0 ? Math.min((paid / original) * 100, 100) : 0;
+            const isActive = activeId === item.id;
+
             return (
-              <div className={`receivable-item ${item.status}`} key={item.id}>
+              <div className={`receivable-item ${item.status} ${isActive ? "active" : ""}`} key={item.id}>
                 <div className="receivable-item-head">
                   <div>
                     <strong>{item.person_name}</strong>
@@ -441,12 +485,86 @@ function ReceivablesPanel({ data }) {
                   </div>
                   <b>{formatCRC(pending)}</b>
                 </div>
+
                 <div className="receivable-meta">
                   <span>Total: {formatCRC(original)}</span>
                   <span>Pagado: {formatCRC(paid)}</span>
                   <span>{item.status === "partial" ? "Pago parcial" : "Pendiente"}</span>
                 </div>
+
                 <div className="receivable-bar"><span style={{ width: `${progress}%` }} /></div>
+
+                <div className="receivable-actions">
+                  <button
+                    type="button"
+                    className="ghost-button receivable-payment-toggle"
+                    onClick={() => {
+                      if (isActive) {
+                        resetForm();
+                      } else {
+                        setActiveId(item.id);
+                        setPaymentAmount("");
+                        setPaymentDate(new Date().toISOString().slice(0, 10));
+                        setPaymentMethod("SINPE");
+                        setPaymentNotes("");
+                        setMessage("");
+                      }
+                    }}
+                  >
+                    {isActive ? "Cancelar" : "Registrar pago"}
+                  </button>
+                </div>
+
+                {isActive && (
+                  <form className="receivable-payment-form" onSubmit={submitPayment}>
+                    <label>
+                      Monto recibido
+                      <input
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={paymentAmount}
+                        onChange={(event) => setPaymentAmount(event.target.value)}
+                        placeholder="Ej: 22464"
+                      />
+                    </label>
+
+                    <label>
+                      Fecha
+                      <input
+                        type="date"
+                        value={paymentDate}
+                        onChange={(event) => setPaymentDate(event.target.value)}
+                      />
+                    </label>
+
+                    <label>
+                      Método
+                      <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
+                        <option value="SINPE">SINPE</option>
+                        <option value="Transferencia">Transferencia</option>
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Otro">Otro</option>
+                      </select>
+                    </label>
+
+                    <label className="receivable-payment-notes">
+                      Nota
+                      <input
+                        value={paymentNotes}
+                        onChange={(event) => setPaymentNotes(event.target.value)}
+                        placeholder="Opcional"
+                      />
+                    </label>
+
+                    {message && <p className="form-message error">{message}</p>}
+
+                    <button className="hud-action-button" type="submit" disabled={saving}>
+                      {saving ? "Guardando..." : "Guardar pago"}
+                    </button>
+                  </form>
+                )}
               </div>
             );
           })}
@@ -484,7 +602,7 @@ function FixedExpensesPanel({ data, onRefresh, isOwner }) {
       <div className="panel-title">
         <div>
           <h3>GASTOS FIJOS Y RECURRENTES</h3>
-          <p>Jarvis detecta pagos parecidos y evita contarlos doble.</p>
+          
         </div>
         <span>{data?.month || "MES"}</span>
       </div>
@@ -509,7 +627,7 @@ function FixedExpensesPanel({ data, onRefresh, isOwner }) {
         <div className="empty-state compact-empty-state">
           <CircleDollarSign size={24} />
           <h3>Sin gastos fijos</h3>
-          <p>Podés agregarlos desde Jarvis o cargar los predeterminados.</p>
+          
           {isOwner && (
             <button className="hud-action-button" onClick={runSeed} disabled={seeding}>
               Cargar mis gastos fijos
@@ -736,7 +854,7 @@ export default function Finance({
             <div className="panel-title">
               <div>
                 <h3>{detail.title}</h3>
-                <p>Detalle del periodo actual.</p>
+                
               </div>
               <button className="ghost-button" onClick={() => setDetail(null)}>Cerrar</button>
             </div>
@@ -758,11 +876,12 @@ export default function Finance({
       )}
 
       <div className="dashboard-grid finance-dashboard-grid">
+        <ReceivablesPanel data={receivables} onPaymentSaved={async () => { await loadSupportingData(); await onRefresh?.(); }} />
+
         <article className="hud-panel large">
           <div className="panel-title">
             <div>
               <h3>INGRESOS VS GASTOS</h3>
-              <p>Ciclo actual 5 → 5 con ingresos esperados reales.</p>
             </div>
             <span>ACTUAL</span>
           </div>
@@ -774,14 +893,11 @@ export default function Finance({
           <div className="panel-title">
             <div>
               <h3>GASTOS POR CATEGORÍA</h3>
-              <p>Compras aceptadas desde correos o agregadas manualmente.</p>
             </div>
             <span>REAL</span>
           </div>
           <CategoryBars data={categoryChartData} />
         </article>
-
-        <ReceivablesPanel data={receivables} />
 
         <FixedExpensesPanel data={fixedStatus} onRefresh={onRefresh} isOwner={isOwner} />
 
@@ -789,7 +905,7 @@ export default function Finance({
           <div className="panel-title debts-panel-title">
             <div>
               <h3>RESUMEN DE DEUDAS</h3>
-              <p>Todas las deudas registradas.</p>
+              
             </div>
             <select value={debtSort} onChange={(event) => setDebtSort(event.target.value)}>
               <option value="saldo">Saldo</option>
@@ -815,19 +931,19 @@ export default function Finance({
         </article>
 
         <article className="hud-panel">
-          <div className="panel-title"><div><h3>ALERTAS</h3><p>Prioridad actual</p></div></div>
+          <div className="panel-title"><div><h3>ALERTAS</h3></div></div>
           <div className="alert-list">
             {alerts.length === 0 ? <EmptyPanel title="Sin alertas críticas" description="Cuando haya riesgo de flujo, deuda o metas, aparecerá aquí." /> : alerts.map((alert, index) => <div className={`alert-item ${alert.level}`} key={index}><AlertTriangle size={18} /><span>{alert.message}</span></div>)}
           </div>
         </article>
 
         <article className="hud-panel large">
-          <div className="panel-title"><div><h3>RECOMENDACIONES</h3><p>Acciones sugeridas por estado actual</p></div></div>
+          <div className="panel-title"><div><h3>RECOMENDACIONES</h3></div></div>
           {recommendations.length === 0 ? <EmptyPanel title="Sin recomendaciones todavía" description="Cuando registremos ingresos, gastos, deudas y metas, Jarvis tendrá más contexto." /> : <div className="recommendation-list">{recommendations.map((item, index) => <div className="recommendation-item" key={index}>{item}</div>)}</div>}
         </article>
 
         <article className="hud-panel">
-          <div className="panel-title"><div><h3>DATOS BASE</h3><p>Estado del perfil financiero</p></div></div>
+          <div className="panel-title"><div><h3>DATOS BASE</h3></div></div>
           <div className="metric-list">
             <div><span>Gastos fijos activos</span><strong>{formatCRC(fixedExpenses)}</strong></div>
             <div><span>Activos</span><strong>{formatCRC(assetsTotal)}</strong></div>

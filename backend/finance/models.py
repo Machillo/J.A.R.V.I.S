@@ -166,6 +166,8 @@ class ReceivablePaymentRequest(BaseModel):
     amount: float
     source_transaction_id: int | None = None
     notes: str = ""
+    payment_date: str | None = None
+    method: str = "manual"
 
 
 class AccountBalanceRequest(BaseModel):
