@@ -7401,3 +7401,58 @@ button {
     flex: 1;
   }
 }
+
+
+/* Debt editor mobile fix: form must be savable even on small iPhone screens */
+.debt-editor-modal {
+  width: min(720px, 100%);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  display: block;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
+}
+
+.debt-editor-modal .panel-title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: -2px -2px 14px;
+  padding: 2px 2px 14px;
+  background: linear-gradient(180deg, rgba(17,19,24,.98), rgba(17,19,24,.88));
+  backdrop-filter: blur(14px);
+}
+
+.debt-editor-modal .debt-form-submit {
+  position: sticky;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 2;
+  min-height: 52px;
+  box-shadow: 0 -14px 34px rgba(0,0,0,.38), 0 0 22px rgba(124,255,170,.14);
+}
+
+@media (max-width: 720px) {
+  .finance-detail-modal-backdrop {
+    align-items: end;
+    place-items: end center;
+    padding: 10px;
+  }
+
+  .debt-editor-modal {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    border-radius: 28px 28px 0 0;
+  }
+
+  .debt-editor-modal .panel-title h3 {
+    font-size: clamp(1.9rem, 10vw, 3rem);
+    line-height: .95;
+  }
+
+  .debt-form-grid input,
+  .debt-form-grid select {
+    min-height: 54px;
+    font-size: 1rem;
+    border-radius: 18px;
+  }
+}

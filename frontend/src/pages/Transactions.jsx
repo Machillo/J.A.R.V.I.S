@@ -156,6 +156,7 @@ export default function Transactions() {
     0
   );
   const estimatedNetExpenses = estimatedFixedExpenses + estimatedDebtPayments;
+  const estimatedNetBalance = estimatedNetIncome - estimatedNetExpenses;
 
   if (loading) return <LoadingState />;
 
@@ -194,6 +195,14 @@ export default function Transactions() {
             <ArrowDownRight size={18} />
           </div>
           <h2>{formatCRC(estimatedNetExpenses)}</h2>
+        </article>
+
+        <article className={`hud-card compact ${estimatedNetBalance < 0 ? "glow-red" : "glow-green"}`}>
+          <div className="card-header">
+            <span>Neto estimado</span>
+            <CircleDollarSign size={18} />
+          </div>
+          <h2>{formatCRC(estimatedNetBalance)}</h2>
         </article>
 
         <article className="hud-card compact glow-green">
