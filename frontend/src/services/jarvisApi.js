@@ -71,6 +71,8 @@ export const createBonus = (payload) => jsonRequest("/finance/bonuses", "POST", 
 
 export const getDebts = () => request("/finance/debts");
 export const createDebt = (payload) => jsonRequest("/finance/debts", "POST", payload);
+export const updateDebt = (id, payload) => jsonRequest(`/finance/debts/${id}`, "PUT", payload);
+export const deleteDebt = (id) => request(`/finance/debts/${id}`, { method: "DELETE" });
 
 export const getSavings = () => request("/finance/savings");
 export const createSaving = (payload) => jsonRequest("/finance/savings", "POST", payload);

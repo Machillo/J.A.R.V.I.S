@@ -302,6 +302,7 @@ def add_debt(
                 created_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id
             """,
             (
                 name,
@@ -315,11 +316,13 @@ def add_debt(
                 user_id
             )
         )
+        inserted = cursor.fetchone()
+        inserted_id = inserted["id"] if inserted else None
 
         conn.commit()
 
     return {
-        "id": cursor.lastrowid,
+        "id": inserted_id,
         "name": name,
         "debt_type": debt_type,
         "total_amount": total_amount,

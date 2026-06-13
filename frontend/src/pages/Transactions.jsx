@@ -17,6 +17,9 @@ import {
   YAxis,
 } from "recharts";
 import {
+  getDebts,
+  getFinanceCycleReport,
+  getFixedExpenseStatus,
   getTransactionAnalysis,
   getTransactions,
 } from "../services/jarvisApi";
@@ -79,6 +82,9 @@ function EmptyState() {
 export default function Transactions() {
   const [transactions, setTransactions] = useState([]);
   const [analysis, setAnalysis] = useState(null);
+  const [cycleReport, setCycleReport] = useState(null);
+  const [fixedStatus, setFixedStatus] = useState(null);
+  const [debts, setDebts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -88,13 +94,19 @@ export default function Transactions() {
       setLoading(true);
       setError("");
 
-      const [transactionData, analysisData] = await Promise.all([
+      const [transactionData, analysisData, cycleData, fixedData, debtData] = await Promise.all([
         getTransactions(),
         getTransactionAnalysis(),
+        getFinanceCycleReport().catch(() => null),
+        getFixedExpenseStatus().catch(() => null),
+        getDebts().catch(() => []),
       ]);
 
       setTransactions(Array.isArray(transactionData) ? transactionData : []);
       setAnalysis(analysisData || null);
+      setCycleReport(cycleData || null);
+      setFixedStatus(fixedData || null);
+      setDebts(Array.isArray(debtData) ? debtData : []);
     } catch (loadError) {
       console.error(loadError);
       setError(loadError.message || "No pude cargar transacciones.");
@@ -133,6 +145,17 @@ export default function Transactions() {
   }));
 
   const summary = analysis?.summary || {};
+  const estimatedNetIncome =
+    Number(cycleReport?.income?.fixed_expected) ||
+    Number(cycleReport?.payroll_projection?.net_income) ||
+    Number(summary.income) ||
+    0;
+  const estimatedFixedExpenses = Number(fixedStatus?.summary?.expected) || 0;
+  const estimatedDebtPayments = debts.reduce(
+    (total, debt) => total + (Number(debt.monthly_payment) || 0),
+    0
+  );
+  const estimatedNetExpenses = estimatedFixedExpenses + estimatedDebtPayments;
 
   if (loading) return <LoadingState />;
 
@@ -159,20 +182,34 @@ export default function Transactions() {
       <div className="data-kpi-grid">
         <article className="hud-card compact glow-green">
           <div className="card-header">
-            <span>Ingresos</span>
+            <span>Ingreso neto estimado</span>
             <ArrowUpRight size={18} />
           </div>
-          <h2>{formatCRC(summary.income)}</h2>
-          <p>Total en transacciones</p>
+          <h2>{formatCRC(estimatedNetIncome)}</h2>
         </article>
 
         <article className="hud-card compact glow-red">
           <div className="card-header">
-            <span>Gastos</span>
+            <span>Gasto neto estimado</span>
+            <ArrowDownRight size={18} />
+          </div>
+          <h2>{formatCRC(estimatedNetExpenses)}</h2>
+        </article>
+
+        <article className="hud-card compact glow-green">
+          <div className="card-header">
+            <span>Ingresos reales</span>
+            <ArrowUpRight size={18} />
+          </div>
+          <h2>{formatCRC(summary.income)}</h2>
+        </article>
+
+        <article className="hud-card compact glow-red">
+          <div className="card-header">
+            <span>Gastos reales</span>
             <ArrowDownRight size={18} />
           </div>
           <h2>{formatCRC(summary.expenses)}</h2>
-          <p>Gastos registrados</p>
         </article>
 
         <article className="hud-card compact">

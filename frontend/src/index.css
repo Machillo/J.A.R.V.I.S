@@ -7293,3 +7293,111 @@ button {
     grid-column: auto;
   }
 }
+
+.debt-panel-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.hud-action-button.small {
+  min-height: 38px;
+  padding: 9px 14px;
+  font-size: 0.82rem;
+}
+
+.debt-row-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.ghost-button.danger {
+  border-color: rgba(255, 96, 118, 0.35);
+  color: #ff9aa8;
+}
+
+.debt-editor-modal {
+  max-width: 720px;
+}
+
+.debt-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.debt-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: rgba(229, 255, 255, 0.72);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.debt-form-grid input,
+.debt-form-grid select {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border-radius: 16px;
+  padding: 14px 15px;
+  font-size: 1rem;
+  outline: none;
+}
+
+.debt-form-grid select option {
+  background: #111318;
+  color: #fff;
+}
+
+.debt-form-preview {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid rgba(37, 229, 255, 0.22);
+  background: rgba(37, 229, 255, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.debt-form-preview strong {
+  color: rgba(229, 255, 255, 0.75);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.debt-form-preview span {
+  color: #7cffaa;
+  font-weight: 950;
+  font-size: 1.35rem;
+}
+
+.debt-form-submit,
+.debt-form-grid .finance-input-message {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .debt-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .debt-panel-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .debt-panel-actions > * {
+    flex: 1;
+  }
+}

@@ -15,6 +15,9 @@ import {
 import {
   commitFinanceInput,
   getDebts,
+  createDebt,
+  updateDebt,
+  deleteDebt,
   getFinanceCycleReport,
   getFixedExpenseStatus,
   getReceivables,
@@ -657,6 +660,216 @@ function FixedExpensesPanel({ data, onRefresh, isOwner }) {
   );
 }
 
+
+const emptyDebtForm = {
+  name: "",
+  debt_type: "tasa_cero",
+  total_amount: "",
+  remaining_amount: "",
+  monthly_payment: "",
+  interest_rate: "0",
+  term_months: "3",
+  payment_day: "5",
+};
+
+function DebtFormModal({ debt, onClose, onSaved }) {
+  const [form, setForm] = useState(() => {
+    if (!debt) return emptyDebtForm;
+    return {
+      name: debt.name || "",
+      debt_type: debt.debt_type || "other",
+      total_amount: debt.total_amount ?? "",
+      remaining_amount: debt.remaining_amount ?? "",
+      monthly_payment: debt.monthly_payment_raw ?? debt.monthly_payment ?? "",
+      interest_rate: debt.interest_rate ?? 0,
+      term_months: debt.term_months ?? "",
+      payment_day: debt.payment_day ?? "5",
+    };
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const setValue = (key, value) => {
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      if ((key === "total_amount" || key === "remaining_amount" || key === "term_months") && !debt) {
+        const remaining = Number(String(next.remaining_amount || next.total_amount).replace(",", ".")) || 0;
+        const months = Number(next.term_months) || 0;
+        if (remaining > 0 && months > 0 && ["tasa_cero", "minicuotas", "compra_financiada"].includes(next.debt_type)) {
+          next.monthly_payment = String(Math.round((remaining / months) * 100) / 100);
+        }
+      }
+      if (key === "debt_type" && value === "tasa_cero") next.interest_rate = "0";
+      return next;
+    });
+  };
+
+  const buildPayload = () => {
+    const total = Number(String(form.total_amount).replace(",", ".")) || 0;
+    const remaining = Number(String(form.remaining_amount || form.total_amount).replace(",", ".")) || total;
+    const months = form.term_months === "" ? null : Number(form.term_months) || null;
+    let monthly = Number(String(form.monthly_payment).replace(",", ".")) || 0;
+    if (!monthly && remaining > 0 && months) monthly = Math.round((remaining / months) * 100) / 100;
+    return {
+      name: form.name.trim(),
+      debt_type: form.debt_type,
+      total_amount: total,
+      remaining_amount: remaining,
+      monthly_payment: monthly,
+      interest_rate: Number(String(form.interest_rate).replace(",", ".")) || 0,
+      term_months: months,
+      payment_day: form.payment_day === "" ? null : Number(form.payment_day) || null,
+    };
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const payload = buildPayload();
+    if (!payload.name || payload.total_amount <= 0 || payload.remaining_amount <= 0) {
+      setMessage("Nombre, monto total y saldo son obligatorios.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    try {
+      if (debt?.id) await updateDebt(debt.id, payload);
+      else await createDebt(payload);
+      await onSaved?.();
+      onClose();
+    } catch (error) {
+      setMessage(error.message || "No pude guardar la deuda.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="finance-detail-modal-backdrop" onClick={onClose}>
+      <article className="hud-panel finance-detail-modal debt-editor-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="panel-title">
+          <div><h3>{debt ? "EDITAR DEUDA" : "AGREGAR DEUDA"}</h3></div>
+          <button className="ghost-button" onClick={onClose}>Cerrar</button>
+        </div>
+
+        <form className="debt-form-grid" onSubmit={submit}>
+          <label>
+            Nombre
+            <input value={form.name} onChange={(event) => setValue("name", event.target.value)} placeholder="Mochila Chimborazo" />
+          </label>
+          <label>
+            Tipo
+            <select value={form.debt_type} onChange={(event) => setValue("debt_type", event.target.value)}>
+              <option value="tasa_cero">Tasa cero</option>
+              <option value="minicuotas">Minicuotas</option>
+              <option value="compra_financiada">Compra financiada</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="prestamo">Préstamo</option>
+              <option value="other">Otro</option>
+            </select>
+          </label>
+          <label>
+            Monto total
+            <input type="number" value={form.total_amount} onChange={(event) => setValue("total_amount", event.target.value)} placeholder="107400" />
+          </label>
+          <label>
+            Saldo pendiente
+            <input type="number" value={form.remaining_amount} onChange={(event) => setValue("remaining_amount", event.target.value)} placeholder="107400" />
+          </label>
+          <label>
+            Meses
+            <input type="number" value={form.term_months} onChange={(event) => setValue("term_months", event.target.value)} placeholder="3" />
+          </label>
+          <label>
+            Cuota mensual
+            <input type="number" value={form.monthly_payment} onChange={(event) => setValue("monthly_payment", event.target.value)} placeholder="35800" />
+          </label>
+          <label>
+            Interés %
+            <input type="number" step="0.01" value={form.interest_rate} onChange={(event) => setValue("interest_rate", event.target.value)} />
+          </label>
+          <label>
+            Día de pago
+            <input type="number" value={form.payment_day} onChange={(event) => setValue("payment_day", event.target.value)} placeholder="5" />
+          </label>
+
+          <div className="debt-form-preview">
+            <strong>Cuota estimada</strong>
+            <span>{formatCRC(buildPayload().monthly_payment)}</span>
+          </div>
+
+          {message && <p className="finance-input-message">{message}</p>}
+
+          <button className="hud-action-button success debt-form-submit" disabled={saving}>
+            {saving ? "Guardando..." : debt ? "Guardar cambios" : "Agregar deuda"}
+          </button>
+        </form>
+      </article>
+    </div>
+  );
+}
+
+function DebtsPanel({ sortedDebts, debtSort, setDebtSort, debtTotal, onChanged }) {
+  const [editingDebt, setEditingDebt] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const removeDebt = async (debt) => {
+    if (!window.confirm(`¿Eliminar ${debt.name}?`)) return;
+    setMessage("");
+    try {
+      await deleteDebt(debt.id);
+      await onChanged?.();
+    } catch (error) {
+      setMessage(error.message || "No pude eliminar la deuda.");
+    }
+  };
+
+  return (
+    <article className="hud-panel large">
+      <div className="panel-title debts-panel-title">
+        <div><h3>RESUMEN DE DEUDAS</h3></div>
+        <div className="debt-panel-actions">
+          <button className="hud-action-button small" onClick={() => setAdding(true)}>+ Agregar</button>
+          <select value={debtSort} onChange={(event) => setDebtSort(event.target.value)}>
+            <option value="saldo">Saldo</option>
+            <option value="interes">Interés</option>
+            <option value="cuota">Cuota</option>
+            <option value="fecha">Fecha de pago</option>
+          </select>
+        </div>
+      </div>
+
+      {message && <p className="finance-input-message">{message}</p>}
+
+      <div className="debt-list full-debt-list">
+        {sortedDebts.length === 0 ? (
+          <EmptyPanel title="Sin deudas registradas" description="" />
+        ) : (
+          sortedDebts.map((debt) => (
+            <div className="debt-item" key={debt.id}>
+              <div className="debt-item-head"><strong>{debt.name}</strong><span>{formatCRC(debt.remaining_amount)}</span></div>
+              <small>{debt.debt_type || "other"} · Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}% · Pago: {debt.payment_day || "--"}</small>
+              <div className="debt-bar"><span style={{ width: `${debtTotal > 0 ? Math.min((debt.remaining_amount / debtTotal) * 100, 100) : 0}%` }} /></div>
+              <div className="debt-row-actions">
+                <button className="ghost-button" onClick={() => setEditingDebt(debt)}>Editar</button>
+                <button className="ghost-button danger" onClick={() => removeDebt(debt)}>Eliminar</button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {(adding || editingDebt) && (
+        <DebtFormModal
+          debt={editingDebt}
+          onClose={() => { setAdding(false); setEditingDebt(null); }}
+          onSaved={onChanged}
+        />
+      )}
+    </article>
+  );
+}
+
 export default function Finance({
   dashboard,
   loading = false,
@@ -901,34 +1114,13 @@ export default function Finance({
 
         <FixedExpensesPanel data={fixedStatus} onRefresh={onRefresh} isOwner={isOwner} />
 
-        <article className="hud-panel large">
-          <div className="panel-title debts-panel-title">
-            <div>
-              <h3>RESUMEN DE DEUDAS</h3>
-              
-            </div>
-            <select value={debtSort} onChange={(event) => setDebtSort(event.target.value)}>
-              <option value="saldo">Saldo</option>
-              <option value="interes">Interés</option>
-              <option value="cuota">Cuota</option>
-              <option value="fecha">Fecha de pago</option>
-            </select>
-          </div>
-
-          <div className="debt-list full-debt-list">
-            {sortedDebts.length === 0 ? (
-              <EmptyPanel title="Sin deudas registradas" description="Las deudas que agregues desde Finanzas o chat aparecerán aquí." />
-            ) : (
-              sortedDebts.map((debt) => (
-                <div className="debt-item" key={debt.id}>
-                  <div className="debt-item-head"><strong>{debt.name}</strong><span>{formatCRC(debt.remaining_amount)}</span></div>
-                  <small>Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}% · Pago: {debt.payment_day || "--"}</small>
-                  <div className="debt-bar"><span style={{ width: `${debtTotal > 0 ? Math.min((debt.remaining_amount / debtTotal) * 100, 100) : 0}%` }} /></div>
-                </div>
-              ))
-            )}
-          </div>
-        </article>
+        <DebtsPanel
+          sortedDebts={sortedDebts}
+          debtSort={debtSort}
+          setDebtSort={setDebtSort}
+          debtTotal={debtTotal}
+          onChanged={async () => { await loadSupportingData(); await onRefresh?.(); }}
+        />
 
         <article className="hud-panel">
           <div className="panel-title"><div><h3>ALERTAS</h3></div></div>
