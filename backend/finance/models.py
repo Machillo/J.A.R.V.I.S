@@ -20,6 +20,8 @@ class DebtRequest(BaseModel):
     interest_rate: float = 0
     term_months: int | None = None
     payment_day: int | None = None
+    first_payment_date: str | None = None
+    auto_update_monthly: bool = True
 
 
 class SavingRequest(BaseModel):
@@ -72,6 +74,8 @@ class DebtUpdateRequest(BaseModel):
     interest_rate: float = 0
     term_months: int | None = None
     payment_day: int | None = None
+    first_payment_date: str | None = None
+    auto_update_monthly: bool = True
 
 
 class DebtExtraPaymentRequest(BaseModel):

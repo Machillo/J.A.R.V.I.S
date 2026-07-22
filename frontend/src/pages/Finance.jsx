@@ -670,6 +670,8 @@ const emptyDebtForm = {
   interest_rate: "0",
   term_months: "3",
   payment_day: "5",
+  first_payment_date: "",
+  auto_update_monthly: true,
 };
 
 function DebtFormModal({ debt, onClose, onSaved }) {
@@ -682,8 +684,10 @@ function DebtFormModal({ debt, onClose, onSaved }) {
       remaining_amount: debt.remaining_amount ?? "",
       monthly_payment: debt.monthly_payment_raw ?? debt.monthly_payment ?? "",
       interest_rate: debt.interest_rate ?? 0,
-      term_months: debt.term_months ?? "",
+      term_months: debt.term_months ?? debt.total_installments ?? "",
       payment_day: debt.payment_day ?? "5",
+      first_payment_date: debt.first_payment_date ?? "",
+      auto_update_monthly: debt.auto_update_monthly !== false,
     };
   });
   const [saving, setSaving] = useState(false);
@@ -719,6 +723,8 @@ function DebtFormModal({ debt, onClose, onSaved }) {
       interest_rate: Number(String(form.interest_rate).replace(",", ".")) || 0,
       term_months: months,
       payment_day: form.payment_day === "" ? null : Number(form.payment_day) || null,
+      first_payment_date: form.first_payment_date || null,
+      auto_update_monthly: Boolean(form.auto_update_monthly),
     };
   };
 
@@ -789,7 +795,15 @@ function DebtFormModal({ debt, onClose, onSaved }) {
           </label>
           <label>
             Día de pago
-            <input type="number" value={form.payment_day} onChange={(event) => setValue("payment_day", event.target.value)} placeholder="5" />
+            <input type="number" min="1" max="31" value={form.payment_day} onChange={(event) => setValue("payment_day", event.target.value)} placeholder="5" />
+          </label>
+          <label>
+            Primera cuota
+            <input type="date" value={form.first_payment_date} onChange={(event) => setValue("first_payment_date", event.target.value)} />
+          </label>
+          <label className="debt-auto-update-toggle">
+            <span>Actualización automática</span>
+            <input type="checkbox" checked={Boolean(form.auto_update_monthly)} onChange={(event) => setValue("auto_update_monthly", event.target.checked)} />
           </label>
 
           <div className="debt-form-preview">
@@ -808,7 +822,7 @@ function DebtFormModal({ debt, onClose, onSaved }) {
   );
 }
 
-function DebtsPanel({ sortedDebts, debtSort, setDebtSort, debtTotal, onChanged }) {
+function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
   const [editingDebt, setEditingDebt] = useState(null);
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState("");
@@ -848,8 +862,12 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, debtTotal, onChanged }
           sortedDebts.map((debt) => (
             <div className="debt-item" key={debt.id}>
               <div className="debt-item-head"><strong>{debt.name}</strong><span>{formatCRC(debt.remaining_amount)}</span></div>
-              <small>{debt.debt_type || "other"} · Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}% · Pago: {debt.payment_day || "--"}</small>
-              <div className="debt-bar"><span style={{ width: `${debtTotal > 0 ? Math.min((debt.remaining_amount / debtTotal) * 100, 100) : 0}%` }} /></div>
+              <div className="debt-installment-line">
+                <strong>{debt.paid_installments || 0}/{debt.total_installments || debt.term_months || "?"}</strong>
+                <span>{debt.remaining_installments != null ? `${debt.remaining_installments} cuotas restantes` : "plazo por calcular"}</span>
+              </div>
+              <small>{debt.debt_type || "other"} · Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}% · Próximo pago: {debt.next_payment_date || "--"}</small>
+              <div className="debt-bar debt-progress-bar"><span style={{ width: `${Math.min(Number(debt.progress_percent || 0), 100)}%` }} /></div>
               <div className="debt-row-actions">
                 <button className="ghost-button" onClick={() => setEditingDebt(debt)}>Editar</button>
                 <button className="ghost-button danger" onClick={() => removeDebt(debt)}>Eliminar</button>
@@ -1118,7 +1136,6 @@ export default function Finance({
           sortedDebts={sortedDebts}
           debtSort={debtSort}
           setDebtSort={setDebtSort}
-          debtTotal={debtTotal}
           onChanged={async () => { await loadSupportingData(); await onRefresh?.(); }}
         />
 

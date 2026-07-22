@@ -179,6 +179,8 @@ def create_debt(request: DebtRequest):
         interest_rate=request.interest_rate,
         term_months=request.term_months,
         payment_day=request.payment_day,
+        first_payment_date=request.first_payment_date,
+        auto_update_monthly=request.auto_update_monthly,
     )
 
 
@@ -203,6 +205,8 @@ def edit_debt(debt_id: int, request: DebtUpdateRequest):
         interest_rate=request.interest_rate,
         term_months=request.term_months,
         payment_day=request.payment_day,
+        first_payment_date=request.first_payment_date,
+        auto_update_monthly=request.auto_update_monthly,
     )
 
 

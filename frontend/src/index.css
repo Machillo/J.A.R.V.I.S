@@ -7456,3 +7456,42 @@ button {
     border-radius: 18px;
   }
 }
+
+.debt-installment-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 8px;
+}
+
+.debt-installment-line strong {
+  font-size: 1.05rem;
+  letter-spacing: .04em;
+}
+
+.debt-installment-line span {
+  color: var(--muted, #9aa5ac);
+  font-size: .86rem;
+}
+
+.debt-progress-bar span {
+  min-width: 0;
+}
+
+.debt-auto-update-toggle {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: 0 16px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 18px;
+  background: rgba(255,255,255,.045);
+}
+
+.debt-auto-update-toggle input {
+  width: 24px !important;
+  height: 24px;
+  margin: 0;
+}

@@ -160,6 +160,206 @@ def _normalize_debt_payment_value(value: float, remaining_amount: float = 0) -> 
     return round(value, 2)
 
 
+def _days_in_month(year: int, month: int) -> int:
+    if month == 12:
+        next_month = date(year + 1, 1, 1)
+    else:
+        next_month = date(year, month + 1, 1)
+    return (next_month - timedelta(days=1)).day
+
+
+def _month_date(year: int, month: int, day: int) -> date:
+    return date(year, month, min(max(int(day or 1), 1), _days_in_month(year, month)))
+
+
+def _add_months(value: date, months: int, day: int | None = None) -> date:
+    total = value.year * 12 + (value.month - 1) + months
+    year, month_index = divmod(total, 12)
+    month = month_index + 1
+    return _month_date(year, month, day or value.day)
+
+
+def _parse_date(value: Any) -> date | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    raw = str(value).strip()
+    try:
+        return datetime.fromisoformat(raw.replace('Z', '+00:00')).date()
+    except ValueError:
+        try:
+            return datetime.strptime(raw[:10], '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+
+def _default_first_payment_date(created_at: Any, payment_day: int | None) -> date:
+    created = _parse_date(created_at) or date.today()
+    day = int(payment_day or created.day)
+    candidate = _month_date(created.year, created.month, day)
+    if candidate < created:
+        candidate = _add_months(candidate, 1, day)
+    return candidate
+
+
+def _estimate_installments(total_amount: float, monthly_payment: float, annual_rate: float = 0) -> int | None:
+    total = max(_as_float(total_amount), 0)
+    payment = max(_as_float(monthly_payment), 0)
+    if total <= 0 or payment <= 0:
+        return None
+    monthly_rate = max(_as_float(annual_rate), 0) / 100 / 12
+    if monthly_rate <= 0:
+        return max(int((total + payment - 0.01) // payment), 1)
+    if payment <= total * monthly_rate:
+        return None
+    import math
+    months = -math.log(1 - (monthly_rate * total / payment)) / math.log(1 + monthly_rate)
+    return max(int(math.ceil(months)), 1)
+
+
+def _estimate_paid_installments(total_amount: float, remaining_amount: float, monthly_payment: float, annual_rate: float = 0, term_months: int | None = None) -> int:
+    total_term = int(term_months or 0) or _estimate_installments(total_amount, monthly_payment, annual_rate)
+    remaining_term = _estimate_installments(remaining_amount, monthly_payment, annual_rate)
+    if not total_term or remaining_term is None:
+        principal_paid = max(_as_float(total_amount) - _as_float(remaining_amount), 0)
+        return max(int(principal_paid // max(_as_float(monthly_payment), 1)), 0)
+    return max(min(total_term - remaining_term, total_term), 0)
+
+
+def _scheduled_payment_breakdown(balance: float, payment: float, annual_rate: float) -> tuple[float, float, float]:
+    balance = max(_as_float(balance), 0)
+    payment = min(max(_as_float(payment), 0), balance + max(balance * max(_as_float(annual_rate), 0) / 100 / 12, 0))
+    interest = round(balance * max(_as_float(annual_rate), 0) / 100 / 12, 2)
+    principal = round(max(payment - interest, 0), 2)
+    if principal > balance:
+        principal = balance
+        payment = round(principal + interest, 2)
+    return round(payment, 2), round(principal, 2), round(interest, 2)
+
+
+def _sync_automatic_debt_payments(user_id: int) -> None:
+    """Aplica cuotas vencidas una sola vez por mes para deudas con actualización automática.
+
+    La cuota se divide entre interés y capital. Tasa Cero reduce el saldo por la cuota completa.
+    Cada aplicación queda auditada en debt_payments y transactions, evitando dobles descuentos.
+    """
+    today = date.today()
+    with get_connection() as conn:
+        debts = conn.execute(
+            """
+            SELECT id, name, debt_type, total_amount, remaining_amount, monthly_payment,
+                   interest_rate, term_months, payment_day, first_payment_date,
+                   auto_update_monthly, installments_paid, created_at
+            FROM debts
+            WHERE user_id = %s
+              AND COALESCE(auto_update_monthly, TRUE) = TRUE
+              AND remaining_amount > 0
+            ORDER BY id
+            """,
+            (user_id,),
+        ).fetchall()
+
+        changed = False
+        for debt in debts:
+            debt_changed = False
+            payment_day = int(debt.get('payment_day') or 1)
+            first_due = _parse_date(debt.get('first_payment_date')) or _default_first_payment_date(debt.get('created_at'), payment_day)
+            paid_count = int(debt.get('installments_paid') or 0)
+            term = int(debt.get('term_months') or 0) or _estimate_installments(
+                debt.get('total_amount'), debt.get('monthly_payment'), debt.get('interest_rate')
+            )
+            balance = _as_float(debt.get('remaining_amount'))
+            monthly_payment = _normalize_debt_payment_value(debt.get('monthly_payment'), balance)
+            if monthly_payment <= 0:
+                continue
+
+            due = _add_months(first_due, paid_count, payment_day)
+            while due <= today and balance > 0 and (not term or paid_count < term):
+                existing = conn.execute(
+                    """
+                    SELECT id
+                    FROM debt_payments
+                    WHERE user_id = %s AND debt_id = %s
+                      AND payment_type = 'monthly_payment'
+                      AND payment_date = %s
+                    LIMIT 1
+                    """,
+                    (user_id, debt['id'], due.isoformat()),
+                ).fetchone()
+                if existing:
+                    paid_count += 1
+                    due = _add_months(first_due, paid_count, payment_day)
+                    continue
+
+                previous_balance = balance
+                actual_payment, principal, interest = _scheduled_payment_breakdown(
+                    balance, monthly_payment, debt.get('interest_rate')
+                )
+                if principal <= 0:
+                    break
+                balance = round(max(balance - principal, 0), 2)
+                paid_count += 1
+
+                conn.execute(
+                    """
+                    INSERT INTO debt_payments (
+                        user_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                        previous_remaining_amount, new_remaining_amount,
+                        previous_monthly_payment, new_monthly_payment, description,
+                        payment_date, installment_number, source, created_at
+                    )
+                    VALUES (%s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto_schedule', NOW())
+                    """,
+                    (
+                        user_id, debt['id'], actual_payment, principal, interest, previous_balance, balance,
+                        monthly_payment, monthly_payment,
+                        f"Cuota automática {paid_count}/{term or '?'} de {debt.get('name') or 'deuda'}",
+                        due.isoformat(), paid_count,
+                    ),
+                )
+
+                conn.execute(
+                    """
+                    INSERT INTO transactions (
+                        user_id, transaction_date, description, amount, transaction_type,
+                        category, account, source, notes, created_at
+                    )
+                    SELECT %s, %s, %s, %s, 'debt_payment', %s, NULL, 'auto_debt_schedule', %s, NOW()
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM transactions
+                        WHERE user_id = %s
+                          AND source = 'auto_debt_schedule'
+                          AND notes = %s
+                    )
+                    """,
+                    (
+                        user_id, due.isoformat(), f"Cuota {debt.get('name') or 'deuda'}", actual_payment,
+                        debt.get('name') or 'Deudas', f"debt_id:{debt['id']};installment:{paid_count}",
+                        user_id, f"debt_id:{debt['id']};installment:{paid_count}",
+                    ),
+                )
+                changed = True
+                debt_changed = True
+                due = _add_months(first_due, paid_count, payment_day)
+
+            if debt_changed:
+                conn.execute(
+                    """
+                    UPDATE debts
+                    SET remaining_amount = %s, installments_paid = %s,
+                        first_payment_date = COALESCE(first_payment_date, %s), updated_at = NOW()
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    (balance, paid_count, first_due.isoformat(), debt['id'], user_id),
+                )
+
+        if changed:
+            conn.commit()
+
+
 def _monthly_amount_from_frequency(amount: float, frequency: str | None) -> float:
     frequency = (frequency or 'monthly').lower().strip()
     amount = _as_float(amount)
@@ -282,7 +482,9 @@ def add_debt(
     monthly_payment: float,
     interest_rate: float = 0,
     term_months: int | None = None,
-    payment_day: int | None = None
+    payment_day: int | None = None,
+    first_payment_date: str | None = None,
+    auto_update_monthly: bool = True,
 ):
     user_id = get_current_user_id()
 
@@ -298,10 +500,14 @@ def add_debt(
                 interest_rate,
                 term_months,
                 payment_day,
+                first_payment_date,
+                auto_update_monthly,
+                installments_paid,
                 user_id,
-                created_at
+                created_at,
+                updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             RETURNING id
             """,
             (
@@ -313,6 +519,9 @@ def add_debt(
                 interest_rate,
                 term_months,
                 payment_day,
+                first_payment_date,
+                auto_update_monthly,
+                _estimate_paid_installments(total_amount, remaining_amount, monthly_payment, interest_rate, term_months),
                 user_id
             )
         )
@@ -331,12 +540,15 @@ def add_debt(
         "interest_rate": interest_rate,
         "term_months": term_months,
         "payment_day": payment_day,
+        "first_payment_date": first_payment_date,
+        "auto_update_monthly": auto_update_monthly,
         "user_id": user_id
     }
 
 
 def get_debts():
     user_id = get_current_user_id()
+    _sync_automatic_debt_payments(user_id)
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -350,6 +562,10 @@ def get_debts():
                    interest_rate,
                    term_months,
                    payment_day,
+                   first_payment_date,
+                   auto_update_monthly,
+                   installments_paid,
+                   updated_at,
                    created_at,
                    user_id
             FROM debts
@@ -366,6 +582,25 @@ def get_debts():
             debt.get("monthly_payment"),
             debt.get("remaining_amount"),
         )
+        total_installments = int(debt.get("term_months") or 0) or _estimate_installments(
+            debt.get("total_amount"), debt.get("monthly_payment"), debt.get("interest_rate")
+        )
+        paid_installments = int(debt.get("installments_paid") or 0)
+        if total_installments:
+            paid_installments = min(paid_installments, total_installments)
+        debt["total_installments"] = total_installments
+        debt["paid_installments"] = paid_installments
+        debt["remaining_installments"] = max(total_installments - paid_installments, 0) if total_installments else None
+        first_due = _parse_date(debt.get("first_payment_date")) or _default_first_payment_date(
+            debt.get("created_at"), debt.get("payment_day")
+        )
+        debt["first_payment_date"] = first_due.isoformat()
+        debt["next_payment_date"] = (
+            _add_months(first_due, paid_installments, debt.get("payment_day") or first_due.day).isoformat()
+            if _as_float(debt.get("remaining_amount")) > 0 and (not total_installments or paid_installments < total_installments)
+            else None
+        )
+        debt["progress_percent"] = round((paid_installments / total_installments) * 100, 2) if total_installments else 0
     return debts
 
 
@@ -1681,7 +1916,9 @@ def update_debt(
     monthly_payment: float,
     interest_rate: float = 0,
     term_months: int | None = None,
-    payment_day: int | None = None
+    payment_day: int | None = None,
+    first_payment_date: str | None = None,
+    auto_update_monthly: bool = True,
 ):
     user_id = get_current_user_id()
 
@@ -1712,7 +1949,11 @@ def update_debt(
                 monthly_payment = %s,
                 interest_rate = %s,
                 term_months = %s,
-                payment_day = %s
+                payment_day = %s,
+                first_payment_date = %s,
+                auto_update_monthly = %s,
+                installments_paid = %s,
+                updated_at = NOW()
             WHERE id = %s
             AND user_id = %s
             """,
@@ -1725,6 +1966,9 @@ def update_debt(
                 interest_rate,
                 term_months,
                 payment_day,
+                first_payment_date,
+                auto_update_monthly,
+                _estimate_paid_installments(total_amount, remaining_amount, monthly_payment, interest_rate, term_months),
                 debt_id,
                 user_id
             )
@@ -1743,6 +1987,8 @@ def update_debt(
         "interest_rate": interest_rate,
         "term_months": term_months,
         "payment_day": payment_day,
+        "first_payment_date": first_payment_date,
+        "auto_update_monthly": auto_update_monthly,
         "user_id": user_id,
         "status": "OK"
     }
@@ -1793,7 +2039,7 @@ def apply_extra_payment_to_debt(
         conn.execute(
             """
             UPDATE debts
-            SET remaining_amount = %s, monthly_payment = %s
+            SET remaining_amount = %s, monthly_payment = %s, updated_at = NOW()
             WHERE id = %s
             AND user_id = %s
             """,
@@ -1930,7 +2176,9 @@ def apply_monthly_payment_to_debt(
         conn.execute(
             """
             UPDATE debts
-            SET remaining_amount = %s, monthly_payment = %s
+            SET remaining_amount = %s, monthly_payment = %s,
+                installments_paid = COALESCE(installments_paid, 0) + 1,
+                updated_at = NOW()
             WHERE id = %s
             AND user_id = %s
             """,
@@ -1954,9 +2202,14 @@ def apply_monthly_payment_to_debt(
                 previous_monthly_payment,
                 new_monthly_payment,
                 description,
+                payment_date,
+                installment_number,
+                source,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    COALESCE((SELECT installments_paid FROM debts WHERE id = %s), 1),
+                    'manual', NOW())
             """,
             (
                 user_id,
@@ -1967,7 +2220,9 @@ def apply_monthly_payment_to_debt(
                 new_remaining_amount,
                 previous_monthly_payment,
                 final_monthly_payment,
-                description
+                description,
+                date.today().isoformat(),
+                debt_id,
             )
         )
 
@@ -1996,7 +2251,8 @@ def get_debt_payments(debt_id: int | None = None):
                 """
                 SELECT id, user_id, debt_id, payment_type, amount, previous_remaining_amount,
                        new_remaining_amount, previous_monthly_payment,
-                       new_monthly_payment, description, created_at
+                       new_monthly_payment, principal_amount, interest_amount,
+                       description, payment_date, installment_number, source, created_at
                 FROM debt_payments
                 WHERE debt_id = %s
                 AND user_id = %s
@@ -2009,7 +2265,8 @@ def get_debt_payments(debt_id: int | None = None):
                 """
                 SELECT id, user_id, debt_id, payment_type, amount, previous_remaining_amount,
                        new_remaining_amount, previous_monthly_payment,
-                       new_monthly_payment, description, created_at
+                       new_monthly_payment, principal_amount, interest_amount,
+                       description, payment_date, installment_number, source, created_at
                 FROM debt_payments
                 WHERE user_id = %s
                 ORDER BY id DESC
