@@ -670,7 +670,9 @@ const emptyDebtForm = {
   interest_rate: "0",
   term_months: "3",
   payment_day: "5",
+  start_date: new Date().toISOString().slice(0, 10),
   first_payment_date: "",
+  installments_paid: "0",
   auto_update_monthly: true,
 };
 
@@ -686,7 +688,9 @@ function DebtFormModal({ debt, onClose, onSaved }) {
       interest_rate: debt.interest_rate ?? 0,
       term_months: debt.term_months ?? debt.total_installments ?? "",
       payment_day: debt.payment_day ?? "5",
+      start_date: debt.start_date ?? debt.registered_date ?? "",
       first_payment_date: debt.first_payment_date ?? "",
+      installments_paid: debt.paid_installments ?? debt.installments_paid ?? 0,
       auto_update_monthly: debt.auto_update_monthly !== false,
     };
   });
@@ -723,7 +727,9 @@ function DebtFormModal({ debt, onClose, onSaved }) {
       interest_rate: Number(String(form.interest_rate).replace(",", ".")) || 0,
       term_months: months,
       payment_day: form.payment_day === "" ? null : Number(form.payment_day) || null,
+      start_date: form.start_date || null,
       first_payment_date: form.first_payment_date || null,
+      installments_paid: Math.max(Number(form.installments_paid) || 0, 0),
       auto_update_monthly: Boolean(form.auto_update_monthly),
     };
   };
@@ -731,8 +737,8 @@ function DebtFormModal({ debt, onClose, onSaved }) {
   const submit = async (event) => {
     event.preventDefault();
     const payload = buildPayload();
-    if (!payload.name || payload.total_amount <= 0 || payload.remaining_amount <= 0) {
-      setMessage("Nombre, monto total y saldo son obligatorios.");
+    if (!payload.name || payload.total_amount <= 0 || payload.remaining_amount <= 0 || !payload.start_date || !payload.first_payment_date) {
+      setMessage("Nombre, montos, fecha de inicio y primera cuota son obligatorios.");
       return;
     }
     setSaving(true);
@@ -798,8 +804,16 @@ function DebtFormModal({ debt, onClose, onSaved }) {
             <input type="number" min="1" max="31" value={form.payment_day} onChange={(event) => setValue("payment_day", event.target.value)} placeholder="5" />
           </label>
           <label>
+            Fecha de compra o inicio
+            <input type="date" value={form.start_date} onChange={(event) => setValue("start_date", event.target.value)} />
+          </label>
+          <label>
             Primera cuota
             <input type="date" value={form.first_payment_date} onChange={(event) => setValue("first_payment_date", event.target.value)} />
+          </label>
+          <label>
+            Cuotas ya pagadas
+            <input type="number" min="0" max={form.term_months || undefined} value={form.installments_paid} onChange={(event) => setValue("installments_paid", event.target.value)} />
           </label>
           <label className="debt-auto-update-toggle">
             <span>Actualización automática</span>
@@ -863,11 +877,19 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
             <div className="debt-item" key={debt.id}>
               <div className="debt-item-head"><strong>{debt.name}</strong><span>{formatCRC(debt.remaining_amount)}</span></div>
               <div className="debt-installment-line">
-                <strong>{debt.paid_installments || 0}/{debt.total_installments || debt.term_months || "?"}</strong>
-                <span>{debt.remaining_installments != null ? `${debt.remaining_installments} cuotas restantes` : "plazo por calcular"}</span>
+                <strong>{debt.paid_installments || 0} / {debt.total_installments || debt.term_months || "?"} cuotas</strong>
+                <span>{debt.remaining_installments != null ? `${debt.remaining_installments} restantes` : "plazo por calcular"}</span>
               </div>
-              <small>{debt.debt_type || "other"} · Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}% · Próximo pago: {debt.next_payment_date || "--"}</small>
-              <div className="debt-bar debt-progress-bar"><span style={{ width: `${Math.min(Number(debt.progress_percent || 0), 100)}%` }} /></div>
+              <small>{debt.debt_type || "other"} · Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}%</small>
+              <div className="debt-date-grid">
+                <span><b>Registrada</b>{debt.registered_date || debt.start_date || "--"}</span>
+                <span><b>Inicio</b>{debt.start_date || "--"}</span>
+                <span><b>Primera cuota</b>{debt.first_payment_date || "--"}</span>
+                <span><b>Hoy</b>{debt.current_date || "--"}</span>
+                <span><b>Último pago</b>{debt.last_payment_date || "--"}</span>
+                <span><b>Próximo pago</b>{debt.next_payment_date || "Pagada"}</span>
+              </div>
+              <div className="debt-bar debt-progress-bar" aria-label={`${debt.progress_percent || 0}% pagado`}><span style={{ width: `${Math.min(Number(debt.progress_percent || 0), 100)}%` }} /></div>
               <div className="debt-row-actions">
                 <button className="ghost-button" onClick={() => setEditingDebt(debt)}>Editar</button>
                 <button className="ghost-button danger" onClick={() => removeDebt(debt)}>Eliminar</button>

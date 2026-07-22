@@ -20,7 +20,9 @@ class DebtRequest(BaseModel):
     interest_rate: float = 0
     term_months: int | None = None
     payment_day: int | None = None
+    start_date: str | None = None
     first_payment_date: str | None = None
+    installments_paid: int = 0
     auto_update_monthly: bool = True
 
 
@@ -74,7 +76,9 @@ class DebtUpdateRequest(BaseModel):
     interest_rate: float = 0
     term_months: int | None = None
     payment_day: int | None = None
+    start_date: str | None = None
     first_payment_date: str | None = None
+    installments_paid: int = 0
     auto_update_monthly: bool = True
 
 

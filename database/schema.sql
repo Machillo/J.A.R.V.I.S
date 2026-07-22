@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS debts (
     interest_rate NUMERIC(8, 4),
     term_months INTEGER,
     payment_day INTEGER,
+    start_date DATE,
     first_payment_date DATE,
     auto_update_monthly BOOLEAN NOT NULL DEFAULT TRUE,
     installments_paid INTEGER NOT NULL DEFAULT 0,
@@ -651,3 +652,8 @@ ON email_transaction_candidates(user_id, transaction_id);
 
 CREATE INDEX IF NOT EXISTS idx_email_messages_provider_message
 ON email_ingested_messages(user_id, provider, provider_message_id);
+
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_debt_payments_unique_monthly_due
+ON debt_payments(user_id, debt_id, payment_date)
+WHERE payment_type = 'monthly_payment' AND payment_date IS NOT NULL;

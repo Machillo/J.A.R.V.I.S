@@ -7495,3 +7495,36 @@ button {
   height: 24px;
   margin: 0;
 }
+
+
+.debt-date-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.debt-date-grid span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  color: var(--text, #f4f6f7);
+  font-size: .78rem;
+}
+
+.debt-date-grid b {
+  color: var(--muted, #9aa5ac);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 680px) {
+  .debt-date-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
