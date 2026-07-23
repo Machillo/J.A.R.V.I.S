@@ -873,29 +873,58 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
         {sortedDebts.length === 0 ? (
           <EmptyPanel title="Sin deudas registradas" description="" />
         ) : (
-          sortedDebts.map((debt) => (
-            <div className="debt-item" key={debt.id}>
-              <div className="debt-item-head"><strong>{debt.name}</strong><span>{formatCRC(debt.remaining_amount)}</span></div>
-              <div className="debt-installment-line">
-                <strong>{debt.paid_installments || 0} / {debt.total_installments || debt.term_months || "?"} cuotas</strong>
-                <span>{debt.remaining_installments != null ? `${debt.remaining_installments} restantes` : "plazo por calcular"}</span>
+          sortedDebts.map((debt) => {
+            const paid = Number(debt.installments_paid ?? debt.paid_installments ?? 0);
+            const total = Number(debt.term_months ?? debt.total_installments ?? 0);
+            const remaining = total > 0 ? Math.max(total - paid, 0) : null;
+            const progress = total > 0 ? Math.min((paid / total) * 100, 100) : 0;
+            const isPaid = Number(debt.remaining_amount || 0) <= 0 || (total > 0 && paid >= total);
+            const scheduleLabel = total > 0 ? `${paid}/${total}` : "Pago libre";
+            return (
+              <div className={`debt-item debt-card-v2 ${isPaid ? "is-paid" : ""}`} key={debt.id}>
+                <div className="debt-card-top">
+                  <div>
+                    <strong className="debt-card-name">{debt.name}</strong>
+                    <span className="debt-card-type">{String(debt.debt_type || "other").replaceAll("_", " ")}</span>
+                  </div>
+                  <div className="debt-card-balance">
+                    <small>Saldo</small>
+                    <b>{formatCRC(debt.remaining_amount)}</b>
+                  </div>
+                </div>
+
+                <div className="debt-progress-copy">
+                  <strong>{scheduleLabel}{total > 0 ? " cuotas" : ""}</strong>
+                  <span>{isPaid ? "Pagada" : remaining == null ? "Sin calendario automático" : remaining === 1 ? "Resta 1 cuota" : `Restan ${remaining} cuotas`}</span>
+                </div>
+                <div className="debt-bar debt-progress-bar" aria-label={`${Math.round(progress)}% pagado`}>
+                  <span style={{ width: `${progress}%` }} />
+                </div>
+
+                <div className="debt-metrics-grid">
+                  <span><small>Cuota mensual</small><b>{formatCRC(debt.monthly_payment || 0)}</b></span>
+                  <span><small>Interés</small><b>{Number(debt.interest_rate || 0)}%</b></span>
+                  <span><small>Próximo pago</small><b>{isPaid ? "Finalizada" : debt.next_payment_date || "Sin fecha"}</b></span>
+                  <span><small>Último pago</small><b>{debt.last_payment_date || "Sin registrar"}</b></span>
+                </div>
+
+                <details className="debt-schedule-details">
+                  <summary>Ver calendario</summary>
+                  <div className="debt-date-grid">
+                    <span><b>Registrada</b>{debt.registered_date || debt.start_date || "--"}</span>
+                    <span><b>Inicio</b>{debt.start_date || "--"}</span>
+                    <span><b>Primera cuota</b>{debt.first_payment_date || "--"}</span>
+                    <span><b>Hoy</b>{debt.current_date || "--"}</span>
+                  </div>
+                </details>
+
+                <div className="debt-row-actions">
+                  <button className="ghost-button" onClick={() => setEditingDebt(debt)}>Editar</button>
+                  <button className="ghost-button danger" onClick={() => removeDebt(debt)}>Eliminar</button>
+                </div>
               </div>
-              <small>{debt.debt_type || "other"} · Cuota: {formatCRC(debt.monthly_payment || 0)} · Interés: {Number(debt.interest_rate || 0)}%</small>
-              <div className="debt-date-grid">
-                <span><b>Registrada</b>{debt.registered_date || debt.start_date || "--"}</span>
-                <span><b>Inicio</b>{debt.start_date || "--"}</span>
-                <span><b>Primera cuota</b>{debt.first_payment_date || "--"}</span>
-                <span><b>Hoy</b>{debt.current_date || "--"}</span>
-                <span><b>Último pago</b>{debt.last_payment_date || "--"}</span>
-                <span><b>Próximo pago</b>{debt.next_payment_date || "Pagada"}</span>
-              </div>
-              <div className="debt-bar debt-progress-bar" aria-label={`${debt.progress_percent || 0}% pagado`}><span style={{ width: `${Math.min(Number(debt.progress_percent || 0), 100)}%` }} /></div>
-              <div className="debt-row-actions">
-                <button className="ghost-button" onClick={() => setEditingDebt(debt)}>Editar</button>
-                <button className="ghost-button danger" onClick={() => removeDebt(debt)}>Eliminar</button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

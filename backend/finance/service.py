@@ -591,6 +591,8 @@ def get_debts():
                    payment_day,
                    start_date,
                    first_payment_date,
+                   next_payment_date,
+                   last_payment_date,
                    auto_update_monthly,
                    installments_paid,
                    updated_at,
@@ -646,8 +648,11 @@ def get_debts():
         debt["registered_date"] = (_parse_date(debt.get("created_at")) or start).isoformat()
         debt["current_date"] = today.isoformat()
         debt["first_payment_date"] = first_due.isoformat()
-        debt["last_payment_date"] = str(stat.get("last_payment_date"))[:10] if stat.get("last_payment_date") else None
-        debt["next_payment_date"] = next_due.isoformat() if next_due else None
+        stored_last = _parse_date(debt.get("last_payment_date"))
+        stored_next = _parse_date(debt.get("next_payment_date"))
+        ledger_last = _parse_date(stat.get("last_payment_date"))
+        debt["last_payment_date"] = (ledger_last or stored_last).isoformat() if (ledger_last or stored_last) else None
+        debt["next_payment_date"] = (stored_next or next_due).isoformat() if (stored_next or next_due) else None
         debt["total_installments"] = total_installments
         debt["paid_installments"] = paid_installments
         debt["remaining_installments"] = max(total_installments - paid_installments, 0) if total_installments else None

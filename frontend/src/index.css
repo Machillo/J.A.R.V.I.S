@@ -7528,3 +7528,38 @@ button {
 @media (max-width: 680px) {
   .debt-date-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Debt cards v2: real installment progress */
+.debt-card-v2 {
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.018));
+}
+.debt-card-v2 + .debt-card-v2 { margin-top: 14px; }
+.debt-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+.debt-card-name { display:block; font-size:1.22rem; line-height:1.15; }
+.debt-card-type { display:block; margin-top:5px; color:var(--muted,#9aa5ac); font-size:.8rem; text-transform:capitalize; }
+.debt-card-balance { text-align:right; flex:0 0 auto; }
+.debt-card-balance small, .debt-metrics-grid small { display:block; color:var(--muted,#9aa5ac); font-size:.68rem; text-transform:uppercase; letter-spacing:.08em; }
+.debt-card-balance b { display:block; margin-top:3px; color:#ff6174; font-size:1.28rem; }
+.debt-progress-copy { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:18px 0 8px; }
+.debt-progress-copy strong { font-size:1rem; }
+.debt-progress-copy span { color:var(--muted,#9aa5ac); font-size:.84rem; text-align:right; }
+.debt-card-v2 .debt-progress-bar { height:10px; border-radius:999px; overflow:hidden; background:rgba(255,255,255,.09); }
+.debt-card-v2 .debt-progress-bar span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#1fd9ef,#7b2cff); box-shadow:0 0 14px rgba(31,217,239,.35); }
+.debt-metrics-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin-top:15px; }
+.debt-metrics-grid span { padding:11px 12px; border:1px solid rgba(255,255,255,.075); border-radius:14px; background:rgba(255,255,255,.025); min-width:0; }
+.debt-metrics-grid b { display:block; margin-top:4px; font-size:.88rem; overflow-wrap:anywhere; }
+.debt-schedule-details { margin-top:12px; }
+.debt-schedule-details summary { color:#76e8f2; cursor:pointer; font-size:.82rem; font-weight:700; }
+.debt-card-v2.is-paid { border-color:rgba(75,235,155,.35); }
+.debt-card-v2.is-paid .debt-card-balance b { color:#59ef9d; }
+@media (max-width:680px) {
+  .debt-card-v2 { padding:17px; border-radius:21px; }
+  .debt-card-top { align-items:flex-start; }
+  .debt-card-name { font-size:1.08rem; }
+  .debt-card-balance b { font-size:1.12rem; }
+  .debt-progress-copy { align-items:flex-start; }
+  .debt-metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
