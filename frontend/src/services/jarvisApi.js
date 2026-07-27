@@ -57,7 +57,19 @@ export const getRealAvailability = () => request("/finance/real-availability");
 export const getDebtAdvisory = () => request("/finance/debt-advisory");
 export const getReceivables = () => request("/finance/receivables");
 export const createReceivable = (payload) => jsonRequest("/finance/receivables", "POST", payload);
-export const addReceivableEntry = (payload) => jsonRequest("/finance/receivables/entries", "POST", payload);
+export const addReceivableEntry = async (payload) => {
+  try {
+    return await jsonRequest("/finance/receivables/entries", "POST", payload);
+  } catch (error) {
+    // Compatibility fallback while an older backend deployment is still live.
+    if (!String(error?.message || "").includes("404")) throw error;
+    return jsonRequest("/finance/receivables", "POST", {
+      person_name: payload.person_name,
+      amount: payload.amount,
+      notes: payload.description || `Cuenta manual (${payload.entry_kind || "other"})`,
+    });
+  }
+};
 export const applyReceivablePayment = (id, payload) => jsonRequest(`/finance/receivables/${id}/payments`, "POST", payload);
 export const getAccountBalances = () => request("/finance/account-balances");
 export const saveAccountBalance = (payload) => jsonRequest("/finance/account-balances", "POST", payload);

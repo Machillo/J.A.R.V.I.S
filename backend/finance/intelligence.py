@@ -38,6 +38,27 @@ def _month_bounds(today: date | None = None) -> tuple[date, date]:
     return start, end
 
 
+def _card_cycle_bounds(today: date | None = None, cutoff_day: int = 21) -> tuple[date, date]:
+    """Return the active BAC-style card cycle [start, end).
+
+    The configured personal cycle closes on day 21. On/after the 21st the
+    current cycle starts that same day; before it, the cycle started on the
+    21st of the previous month.
+    """
+    today = today or date.today()
+    cutoff_day = min(max(int(cutoff_day or 21), 1), 28)
+    if today.day >= cutoff_day:
+        start = today.replace(day=cutoff_day)
+    else:
+        if today.month == 1:
+            start = date(today.year - 1, 12, cutoff_day)
+        else:
+            start = date(today.year, today.month - 1, cutoff_day)
+    if start.month == 12:
+        end = date(start.year + 1, 1, cutoff_day)
+    else:
+        end = date(start.year, start.month + 1, cutoff_day)
+    return start, end
 
 
 def _ensure_receivable_tables(conn) -> None:
@@ -103,7 +124,11 @@ def _ensure_receivable_tables(conn) -> None:
         )
         """
     )
+    conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS cycle_start DATE")
+    conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS cycle_end DATE")
+    conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_account ON receivable_entries(user_id, receivable_id, entry_date DESC, id DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_active_cycle ON receivable_entries(user_id, receivable_id, is_archived, cycle_start, cycle_end)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_receivable_entries_source_key ON receivable_entries(user_id, source_key) WHERE source_key IS NOT NULL")
 
 
@@ -226,6 +251,7 @@ def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str,
             COALESCE(SUM(amount) FILTER (WHERE entry_type = 'payment'), 0) AS paid
         FROM receivable_entries
         WHERE user_id = %s AND receivable_id = %s
+          AND COALESCE(is_archived, FALSE) = FALSE
         """,
         (user_id, receivable_id),
     ).fetchone()
@@ -265,16 +291,14 @@ def _ensure_card_aliases(conn) -> None:
     )
 
 
-def _fetch_additional_card_totals(conn, user_id: int) -> list[dict[str, Any]]:
-    """Return automatic receivable totals from additional-card spending.
+def _fetch_additional_card_totals(
+    conn, user_id: int, cycle_start: date, cycle_end: date
+) -> list[dict[str, Any]]:
+    """Return additional-card spending only for the active card cycle.
 
-    Source of truth must match the Additional Cards screen, but be more robust:
-    - Use email_transaction_candidates metadata (card_owner/card_last4) because
-      transactions does not store card_owner.
-    - Include confirmed/auto_saved/imported candidates whether or not they are
-      already linked to a transaction_id.
-    - Exclude primary Kenneth aliases, duplicates and rejected rows.
-    - Deduplicate by transaction_id when available; otherwise by candidate id.
+    Historical purchases stay in prior cycles and are carried only when an
+    unpaid balance remains. This prevents old payments from cancelling a new
+    manual charge entered this month.
     """
     _ensure_card_aliases(conn)
     rows = conn.execute(
@@ -298,6 +322,8 @@ def _fetch_additional_card_totals(conn, user_id: int) -> list[dict[str, Any]]:
             WHERE c.user_id = %s
               AND c.transaction_type = 'expense'
               AND COALESCE(c.amount, 0) > 0
+              AND c.transaction_date >= %s
+              AND c.transaction_date < %s
               AND COALESCE(c.status, '') IN ('confirmed', 'auto_saved', 'imported')
               AND COALESCE(c.status, '') NOT IN ('duplicate', 'rejected')
               AND (
@@ -311,13 +337,14 @@ def _fetch_additional_card_totals(conn, user_id: int) -> list[dict[str, Any]]:
             person_name,
             COALESCE(SUM(amount), 0) AS total_amount,
             COUNT(DISTINCT movement_key) AS movement_count,
-            ARRAY_AGG(DISTINCT card_last4 ORDER BY card_last4) FILTER (WHERE card_last4 IS NOT NULL AND card_last4 <> '') AS cards
+            ARRAY_AGG(DISTINCT card_last4 ORDER BY card_last4)
+              FILTER (WHERE card_last4 IS NOT NULL AND card_last4 <> '') AS cards
         FROM candidate_movements
         WHERE COALESCE(person_name, '') <> ''
         GROUP BY person_name
         ORDER BY person_name
         """,
-        (user_id, user_id),
+        (user_id, user_id, cycle_start, cycle_end),
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -358,7 +385,7 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
     """
     rows = conn.execute(
         """
-        SELECT id, description, amount, transaction_type, category, account, source, notes
+        SELECT id, transaction_date, description, amount, transaction_type, category, account, source, notes
         FROM transactions
         WHERE user_id = %s
           AND transaction_type IN ('income', 'reimbursement')
@@ -410,13 +437,18 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
             """,
             (user_id, rec["id"], payment, tx["id"], f"Pago detectado automáticamente desde ingreso: {tx.get('description') or ''}"),
         )
+        payment_date = tx.get("transaction_date") or date.today()
+        if isinstance(payment_date, str):
+            payment_date = datetime.fromisoformat(payment_date[:10]).date()
+        cycle_start, cycle_end = _card_cycle_bounds(payment_date)
         conn.execute(
             """
             INSERT INTO receivable_entries (
                 user_id, receivable_id, entry_type, amount, description,
-                entry_date, source_type, source_key, source_transaction_id
+                entry_date, source_type, source_key, source_transaction_id,
+                cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, 'payment', %s, %s, CURRENT_DATE, 'income_auto', %s, %s)
+            VALUES (%s, %s, 'payment', %s, %s, %s, 'income_auto', %s, %s, %s, %s, FALSE)
             ON CONFLICT DO NOTHING
             """,
             (
@@ -424,28 +456,33 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
                 rec["id"],
                 payment,
                 f"Pago detectado: {tx.get('description') or payer}",
+                payment_date,
                 f"income_transaction:{tx['id']}",
                 tx["id"],
+                cycle_start,
+                cycle_end,
             ),
         )
         _recalculate_receivable(conn, user_id, int(rec["id"]))
 
 
 def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
-    """Mirror confirmed additional-card totals into each person's ledger."""
+    """Mirror only the active cycle's additional-card purchases."""
     _ensure_receivable_tables(conn)
     _backfill_receivable_entries(conn, user_id)
-    totals = _fetch_additional_card_totals(conn, user_id)
+    cycle_start, cycle_end = _card_cycle_bounds()
+    totals = _fetch_additional_card_totals(conn, user_id, cycle_start, cycle_end)
 
     for row in totals:
         person = str(row.get("person_name") or "").strip()
         if not person:
             continue
         account = _get_or_create_person_receivable(conn, user_id, person)
-        source_key = f"additional_cards:{_person_key(person)}"
+        source_key = f"additional_cards:{_person_key(person)}:{cycle_start.isoformat()}"
         amount = round(max(_as_float(row.get("total_amount")), 0.0), 2)
         description = (
-            f"Compras confirmadas en tarjetas adicionales "
+            f"Compras de tarjetas adicionales del ciclo "
+            f"{cycle_start.isoformat()} a {cycle_end.isoformat()} "
             f"({', '.join(row.get('cards') or []) or 'sin tarjeta'})"
         )
         if amount > 0:
@@ -453,17 +490,23 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
                 """
                 INSERT INTO receivable_entries (
                     user_id, receivable_id, entry_type, amount, description,
-                    entry_date, source_type, source_key
+                    entry_date, source_type, source_key, cycle_start, cycle_end, is_archived
                 )
-                VALUES (%s, %s, 'charge', %s, %s, CURRENT_DATE, 'additional_card_auto', %s)
+                VALUES (%s, %s, 'charge', %s, %s, %s, 'additional_card_auto', %s, %s, %s, FALSE)
                 ON CONFLICT (user_id, source_key) WHERE source_key IS NOT NULL
                 DO UPDATE SET
                     receivable_id = EXCLUDED.receivable_id,
                     amount = EXCLUDED.amount,
                     description = EXCLUDED.description,
-                    entry_date = EXCLUDED.entry_date
+                    entry_date = EXCLUDED.entry_date,
+                    cycle_start = EXCLUDED.cycle_start,
+                    cycle_end = EXCLUDED.cycle_end,
+                    is_archived = FALSE
                 """,
-                (user_id, account["id"], amount, description, source_key),
+                (
+                    user_id, account["id"], amount, description, cycle_start,
+                    source_key, cycle_start, cycle_end,
+                ),
             )
             conn.execute(
                 """
@@ -475,6 +518,7 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
                 (account["id"], user_id),
             )
             _recalculate_receivable(conn, user_id, int(account["id"]))
+
 
 def _fetch_active_goals(user_id: int) -> list[dict[str, Any]]:
     with get_connection() as conn:
@@ -741,6 +785,7 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
 
 def list_receivables() -> dict[str, Any]:
     user_id = get_current_user_id()
+    cycle_start, cycle_end = _card_cycle_bounds()
     with get_connection() as conn:
         _ensure_receivable_tables(conn)
         _backfill_receivable_entries(conn, user_id)
@@ -769,29 +814,82 @@ def list_receivables() -> dict[str, Any]:
                 continue
             seen_people.add(person_key)
             item = _recalculate_receivable(conn, user_id, int(row["id"]))
+
+            cycle_totals = conn.execute(
+                """
+                SELECT
+                    COALESCE(SUM(amount) FILTER (
+                        WHERE entry_type = 'charge' AND entry_date < %s
+                    ), 0) AS prior_charges,
+                    COALESCE(SUM(amount) FILTER (
+                        WHERE entry_type = 'payment' AND entry_date < %s
+                    ), 0) AS prior_payments,
+                    COALESCE(SUM(amount) FILTER (
+                        WHERE entry_type = 'charge' AND entry_date >= %s AND entry_date < %s
+                    ), 0) AS cycle_charges,
+                    COALESCE(SUM(amount) FILTER (
+                        WHERE entry_type = 'payment' AND entry_date >= %s AND entry_date < %s
+                    ), 0) AS cycle_payments
+                FROM receivable_entries
+                WHERE user_id = %s AND receivable_id = %s
+                  AND COALESCE(is_archived, FALSE) = FALSE
+                """,
+                (
+                    cycle_start, cycle_start, cycle_start, cycle_end,
+                    cycle_start, cycle_end, user_id, row["id"],
+                ),
+            ).fetchone()
+            prior_pending = max(
+                _as_float(cycle_totals.get("prior_charges"))
+                - _as_float(cycle_totals.get("prior_payments")),
+                0.0,
+            )
+            cycle_charges = max(_as_float(cycle_totals.get("cycle_charges")), 0.0)
+            cycle_payments = max(_as_float(cycle_totals.get("cycle_payments")), 0.0)
+            current_due = max(prior_pending + cycle_charges - cycle_payments, 0.0)
+
             history_rows = conn.execute(
                 """
                 SELECT id, entry_type, amount, description, entry_date,
-                       source_type, source_key, source_transaction_id, created_at
+                       source_type, source_key, source_transaction_id, created_at,
+                       cycle_start, cycle_end
                 FROM receivable_entries
                 WHERE user_id = %s AND receivable_id = %s
+                  AND COALESCE(is_archived, FALSE) = FALSE
+                  AND (entry_date >= %s OR %s > 0)
                 ORDER BY entry_date DESC, id DESC
                 """,
-                (user_id, row["id"]),
+                (user_id, row["id"], cycle_start, prior_pending),
             ).fetchall()
             item["history"] = [dict(entry) for entry in history_rows]
-            item["is_auto"] = any(entry.get("source_type") == "additional_card_auto" for entry in item["history"])
+            item["is_auto"] = any(
+                entry.get("source_type") == "additional_card_auto"
+                for entry in item["history"]
+            )
+            item["cycle_start"] = cycle_start.isoformat()
+            item["cycle_end"] = cycle_end.isoformat()
+            item["carried_pending"] = round(prior_pending, 2)
+            item["cycle_charges"] = round(cycle_charges, 2)
+            item["cycle_payments"] = round(cycle_payments, 2)
+            item["current_amount_due"] = round(current_due, 2)
+            # Keep compatibility for existing consumers, but expose only current debt.
+            item["pending_amount"] = round(current_due, 2)
+            item["original_amount"] = round(prior_pending + cycle_charges, 2)
+            item["paid_amount"] = round(min(cycle_payments, prior_pending + cycle_charges), 2)
+            item["status"] = "completed" if current_due <= 0.01 else "partial" if cycle_payments > 0 else "pending"
             items.append(item)
         conn.commit()
 
     return {
         "status": "OK",
+        "cycle": {"start": cycle_start.isoformat(), "end": cycle_end.isoformat()},
         "items": items,
         "summary": {
-            "total_pending": round(sum(_as_float(item.get("pending_amount")) for item in items), 2),
-            "total_original": round(sum(_as_float(item.get("original_amount")) for item in items), 2),
-            "total_paid": round(sum(_as_float(item.get("paid_amount")) for item in items), 2),
-            "count_open": sum(1 for item in items if item.get("status") != "completed"),
+            "total_pending": round(sum(_as_float(item.get("current_amount_due")) for item in items), 2),
+            "carried_pending": round(sum(_as_float(item.get("carried_pending")) for item in items), 2),
+            "cycle_charges": round(sum(_as_float(item.get("cycle_charges")) for item in items), 2),
+            "cycle_payments": round(sum(_as_float(item.get("cycle_payments")) for item in items), 2),
+            "count_open": sum(1 for item in items if _as_float(item.get("current_amount_due")) > 0.01),
             "people_count": len(items),
         },
     }
@@ -834,16 +932,21 @@ def add_receivable_entry(
         _ensure_receivable_tables(conn)
         _backfill_receivable_entries(conn, user_id)
         account = _get_or_create_person_receivable(conn, user_id, clean_name)
+        entry_day = datetime.fromisoformat(safe_date).date()
+        cycle_start, cycle_end = _card_cycle_bounds(entry_day)
         entry = conn.execute(
             """
             INSERT INTO receivable_entries (
                 user_id, receivable_id, entry_type, amount, description,
-                entry_date, source_type
+                entry_date, source_type, cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, 'charge', %s, %s, %s, %s)
+            VALUES (%s, %s, 'charge', %s, %s, %s, %s, %s, %s, FALSE)
             RETURNING *
             """,
-            (user_id, account["id"], numeric_amount, final_description, safe_date, f"manual_{clean_kind}"),
+            (
+                user_id, account["id"], numeric_amount, final_description,
+                safe_date, f"manual_{clean_kind}", cycle_start, cycle_end,
+            ),
         ).fetchone()
         updated = _recalculate_receivable(conn, user_id, int(account["id"]))
         conn.commit()
@@ -970,13 +1073,16 @@ def apply_receivable_payment(
                 f"Pago registrado manualmente. Método: {clean_method}. {clean_notes}".strip(),
             ),
         )
+        payment_day = datetime.fromisoformat(safe_payment_date).date()
+        cycle_start, cycle_end = _card_cycle_bounds(payment_day)
         conn.execute(
             """
             INSERT INTO receivable_entries (
                 user_id, receivable_id, entry_type, amount, description,
-                entry_date, source_type, source_key, source_transaction_id
+                entry_date, source_type, source_key, source_transaction_id,
+                cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, 'payment', %s, %s, %s, 'manual_payment', %s, %s)
+            VALUES (%s, %s, 'payment', %s, %s, %s, 'manual_payment', %s, %s, %s, %s, FALSE)
             ON CONFLICT DO NOTHING
             """,
             (
@@ -987,6 +1093,8 @@ def apply_receivable_payment(
                 safe_payment_date,
                 f"payment_transaction:{linked_transaction_id}",
                 linked_transaction_id,
+                cycle_start,
+                cycle_end,
             ),
         )
         updated = _recalculate_receivable(conn, user_id, receivable_id)

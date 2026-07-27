@@ -289,6 +289,9 @@ CREATE TABLE IF NOT EXISTS receivable_entries (
     source_type TEXT NOT NULL DEFAULT 'manual',
     source_key TEXT,
     source_transaction_id BIGINT,
+    cycle_start DATE,
+    cycle_end DATE,
+    is_archived BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_receivable_entries_account ON receivable_entries(user_id, receivable_id, entry_date DESC, id DESC);

@@ -538,16 +538,23 @@ function ReceivablesPanel({ data, onPaymentSaved }) {
       ) : (
         <div className="receivable-list">
           {items.map((item) => {
-            const original = Number(item.original_amount) || 0;
-            const paid = Number(item.paid_amount) || 0;
-            const pending = Number(item.pending_amount) || 0;
-            const progress = original > 0 ? Math.min((paid / original) * 100, 100) : 0;
+            const carried = Number(item.carried_pending) || 0;
+            const cycleCharges = Number(item.cycle_charges) || 0;
+            const cyclePayments = Number(item.cycle_payments) || 0;
+            const pending = Number(item.current_amount_due ?? item.pending_amount) || 0;
+            const cycleBase = carried + cycleCharges;
+            const progress = cycleBase > 0 ? Math.min((cyclePayments / cycleBase) * 100, 100) : 0;
             const isActive = activeId === item.id;
             const showHistory = historyId === item.id;
             return (
               <div className={`receivable-item ${item.status} ${isActive ? "active" : ""}`} key={item.id}>
                 <div className="receivable-item-head"><strong>{item.person_name}</strong><b>{formatCRC(pending)}</b></div>
-                <div className="receivable-meta"><span>Total: {formatCRC(original)}</span><span>Pagado: {formatCRC(paid)}</span><span>Pendiente: {formatCRC(pending)}</span></div>
+                <div className="receivable-meta current-cycle">
+                  {carried > 0 && <span>Saldo anterior: {formatCRC(carried)}</span>}
+                  <span>Cargos del ciclo: {formatCRC(cycleCharges)}</span>
+                  {cyclePayments > 0 && <span>Pagos del ciclo: {formatCRC(cyclePayments)}</span>}
+                  <span className="receivable-current-total">Debe ahora: {formatCRC(pending)}</span>
+                </div>
                 <div className="receivable-bar"><span style={{ width: `${progress}%` }} /></div>
                 <div className="receivable-actions">
                   <button type="button" className="ghost-button" onClick={() => setHistoryId(showHistory ? null : item.id)}>{showHistory ? "Ocultar historial" : "Historial"}</button>

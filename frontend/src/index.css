@@ -7606,3 +7606,13 @@ button {
   .receivable-actions { justify-content: stretch; }
   .receivable-actions button { flex: 1; }
 }
+
+.receivable-meta.current-cycle {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.receivable-meta.current-cycle .receivable-current-total {
+  font-weight: 800;
+  color: var(--text-primary, #f5f7fa);
+}
