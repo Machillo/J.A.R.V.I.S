@@ -7563,3 +7563,46 @@ button {
   .debt-progress-copy { align-items:flex-start; }
   .debt-metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+
+
+/* Person-based receivables ledger */
+.receivables-title-row,
+.receivables-title-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.receivables-title-actions { justify-content: flex-end; }
+.receivables-title-actions .hud-action-button { display: inline-flex; align-items: center; gap: 7px; }
+.receivable-entry-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid rgba(12, 103, 243, 0.28);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(147, 9, 198, 0.09), rgba(12, 103, 243, 0.07));
+}
+.receivable-entry-form label { display: grid; gap: 6px; color: rgba(232,251,255,.72); font-size: .76rem; font-weight: 700; text-transform: uppercase; }
+.receivable-entry-form input,
+.receivable-entry-form select { width: 100%; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: rgba(255,255,255,.06); color: #fff; padding: 11px 12px; outline: none; }
+.receivable-entry-description { grid-column: span 3; }
+.receivable-entry-form .hud-action-button { align-self: end; min-height: 43px; }
+.receivable-actions { gap: 8px; }
+.receivable-history { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
+.receivable-history-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 13px; background: rgba(255,255,255,.035); }
+.receivable-history-row div { min-width: 0; }
+.receivable-history-row strong { display: block; color: rgba(255,255,255,.9); font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.receivable-history-row span { color: rgba(255,255,255,.48); font-size: .72rem; }
+.receivable-history-row b { white-space: nowrap; color: #f3abec; }
+.receivable-history-row.payment b { color: #66e6ba; }
+@media (max-width: 760px) {
+  .receivables-title-row { align-items: flex-start; }
+  .receivables-title-actions { flex-direction: column; align-items: flex-end; }
+  .receivable-entry-form { grid-template-columns: 1fr; }
+  .receivable-entry-description { grid-column: auto; }
+  .receivable-actions { justify-content: stretch; }
+  .receivable-actions button { flex: 1; }
+}

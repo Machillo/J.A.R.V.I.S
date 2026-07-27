@@ -278,6 +278,22 @@ CREATE INDEX IF NOT EXISTS idx_receivables_user_status ON receivables(user_id, s
 CREATE INDEX IF NOT EXISTS idx_receivables_source_key ON receivables(user_id, source_key);
 CREATE INDEX IF NOT EXISTS idx_receivable_payments_receivable ON receivable_payments(user_id, receivable_id);
 
+CREATE TABLE IF NOT EXISTS receivable_entries (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 1,
+    receivable_id BIGINT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,
+    entry_type TEXT NOT NULL,
+    amount NUMERIC(14,2) NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    source_type TEXT NOT NULL DEFAULT 'manual',
+    source_key TEXT,
+    source_transaction_id BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_receivable_entries_account ON receivable_entries(user_id, receivable_id, entry_date DESC, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_receivable_entries_source_key ON receivable_entries(user_id, source_key) WHERE source_key IS NOT NULL;
+
 
 CREATE TABLE IF NOT EXISTS category_catalog (
     id BIGSERIAL PRIMARY KEY,

@@ -31,7 +31,7 @@ from backend.finance.models import (
     FixedExpenseRequest,
     FixedExpenseUpdateRequest,
     ReceivableRequest,
-    ReceivablePaymentRequest,
+    ReceivablePaymentRequest, ReceivableEntryRequest,
     AccountBalanceRequest,
     GoalPlanningRequest,
 )
@@ -104,6 +104,7 @@ from backend.finance.intelligence import (
     get_debt_advisory,
     list_receivables,
     create_receivable,
+    add_receivable_entry,
     apply_receivable_payment,
     list_account_balances,
     upsert_account_balance,
@@ -626,6 +627,17 @@ def create_receivable_route(request: ReceivableRequest):
         person_name=request.person_name,
         amount=request.amount,
         notes=request.notes,
+    )
+
+
+@router.post("/receivables/entries")
+def add_receivable_entry_route(request: ReceivableEntryRequest):
+    return add_receivable_entry(
+        person_name=request.person_name,
+        amount=request.amount,
+        description=request.description,
+        entry_kind=request.entry_kind,
+        entry_date=request.entry_date,
     )
 
 

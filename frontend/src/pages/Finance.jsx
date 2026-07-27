@@ -21,6 +21,7 @@ import {
   getFinanceCycleReport,
   getFixedExpenseStatus,
   getReceivables,
+  addReceivableEntry,
   applyReceivablePayment,
   getTransactionAnalysis,
   previewFinanceInput,
@@ -412,24 +413,66 @@ function UnifiedFlowChart({ currentCycleFlow = [], yearly = [] }) {
 function ReceivablesPanel({ data, onPaymentSaved }) {
   const items = data?.items || [];
   const summary = data?.summary || {};
-  const openItems = items.filter((item) => item.status !== "completed" || Number(item.pending_amount) > 0);
   const [activeId, setActiveId] = useState(null);
+  const [historyId, setHistoryId] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState("SINPE");
   const [paymentNotes, setPaymentNotes] = useState("");
+  const [entryPerson, setEntryPerson] = useState("");
+  const [entryAmount, setEntryAmount] = useState("");
+  const [entryKind, setEntryKind] = useState("purchase");
+  const [entryDescription, setEntryDescription] = useState("");
+  const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  const activeItem = openItems.find((item) => item.id === activeId) || null;
+  const activeItem = items.find((item) => item.id === activeId) || null;
 
-  const resetForm = () => {
+  const resetPayment = () => {
     setActiveId(null);
     setPaymentAmount("");
     setPaymentDate(new Date().toISOString().slice(0, 10));
     setPaymentMethod("SINPE");
     setPaymentNotes("");
     setMessage("");
+  };
+
+  const resetEntry = () => {
+    setShowAdd(false);
+    setEntryPerson("");
+    setEntryAmount("");
+    setEntryKind("purchase");
+    setEntryDescription("");
+    setEntryDate(new Date().toISOString().slice(0, 10));
+    setMessage("");
+  };
+
+  const submitEntry = async (event) => {
+    event.preventDefault();
+    const amount = Number(String(entryAmount).replace(",", "."));
+    if (!entryPerson.trim() || !amount || amount <= 0) {
+      setMessage("Ingresá la persona y un monto válido.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    try {
+      await addReceivableEntry({
+        person_name: entryPerson.trim(),
+        amount,
+        description: entryDescription.trim(),
+        entry_kind: entryKind,
+        entry_date: entryDate,
+      });
+      resetEntry();
+      await onPaymentSaved?.();
+    } catch (error) {
+      setMessage(error.message || "No pude guardar la cuenta por cobrar.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const submitPayment = async (event) => {
@@ -440,7 +483,6 @@ function ReceivablesPanel({ data, onPaymentSaved }) {
       setMessage("Ingresá un monto válido.");
       return;
     }
-
     setSaving(true);
     setMessage("");
     try {
@@ -450,7 +492,7 @@ function ReceivablesPanel({ data, onPaymentSaved }) {
         method: paymentMethod,
         notes: paymentNotes,
       });
-      resetForm();
+      resetPayment();
       await onPaymentSaved?.();
     } catch (error) {
       setMessage(error.message || "No pude registrar el pago.");
@@ -459,113 +501,78 @@ function ReceivablesPanel({ data, onPaymentSaved }) {
     }
   };
 
+  const kindLabels = {
+    purchase: "Compra",
+    loan: "Préstamo",
+    transfer: "Transferencia",
+    cash: "Efectivo",
+    other: "Otro",
+  };
+
   return (
     <article className="hud-panel large receivables-panel">
-      <div className="panel-title">
-        <div>
-          <h3>CUENTAS POR COBRAR</h3>
+      <div className="panel-title receivables-title-row">
+        <h3>CUENTAS POR COBRAR</h3>
+        <div className="receivables-title-actions">
+          <span>{formatCRC(summary.total_pending || 0)}</span>
+          <button type="button" className="hud-action-button small" onClick={() => { setShowAdd((value) => !value); resetPayment(); }}>
+            <PlusCircle size={16} /> {showAdd ? "Cerrar" : "Agregar"}
+          </button>
         </div>
-        <span>{formatCRC(summary.total_pending || 0)}</span>
       </div>
 
-      {openItems.length === 0 ? (
-        <EmptyPanel title="Sin cuentas pendientes" description="" />
+      {showAdd && (
+        <form className="receivable-entry-form" onSubmit={submitEntry}>
+          <label>Persona<input value={entryPerson} onChange={(e) => setEntryPerson(e.target.value)} placeholder="Emily, Mamá, Sidey..." /></label>
+          <label>Monto<input type="number" min="1" step="0.01" inputMode="decimal" value={entryAmount} onChange={(e) => setEntryAmount(e.target.value)} /></label>
+          <label>Tipo<select value={entryKind} onChange={(e) => setEntryKind(e.target.value)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>Fecha<input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /></label>
+          <label className="receivable-entry-description">Detalle<input value={entryDescription} onChange={(e) => setEntryDescription(e.target.value)} placeholder="Ej: gasolina, compra con mi tarjeta..." /></label>
+          {message && <p className="form-message error">{message}</p>}
+          <button className="hud-action-button" type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
+        </form>
+      )}
+
+      {items.length === 0 ? (
+        <EmptyPanel title="Sin cuentas registradas" description="" />
       ) : (
         <div className="receivable-list">
-          {openItems.map((item) => {
+          {items.map((item) => {
             const original = Number(item.original_amount) || 0;
             const paid = Number(item.paid_amount) || 0;
             const pending = Number(item.pending_amount) || 0;
             const progress = original > 0 ? Math.min((paid / original) * 100, 100) : 0;
             const isActive = activeId === item.id;
-
+            const showHistory = historyId === item.id;
             return (
               <div className={`receivable-item ${item.status} ${isActive ? "active" : ""}`} key={item.id}>
-                <div className="receivable-item-head">
-                  <div>
-                    <strong>{item.person_name}</strong>
-                    <span>{item.is_auto ? "Tarjetas adicionales" : "Registro manual"}</span>
-                  </div>
-                  <b>{formatCRC(pending)}</b>
-                </div>
-
-                <div className="receivable-meta">
-                  <span>Total: {formatCRC(original)}</span>
-                  <span>Pagado: {formatCRC(paid)}</span>
-                  <span>{item.status === "partial" ? "Pago parcial" : "Pendiente"}</span>
-                </div>
-
+                <div className="receivable-item-head"><strong>{item.person_name}</strong><b>{formatCRC(pending)}</b></div>
+                <div className="receivable-meta"><span>Total: {formatCRC(original)}</span><span>Pagado: {formatCRC(paid)}</span><span>Pendiente: {formatCRC(pending)}</span></div>
                 <div className="receivable-bar"><span style={{ width: `${progress}%` }} /></div>
-
                 <div className="receivable-actions">
-                  <button
-                    type="button"
-                    className="ghost-button receivable-payment-toggle"
-                    onClick={() => {
-                      if (isActive) {
-                        resetForm();
-                      } else {
-                        setActiveId(item.id);
-                        setPaymentAmount("");
-                        setPaymentDate(new Date().toISOString().slice(0, 10));
-                        setPaymentMethod("SINPE");
-                        setPaymentNotes("");
-                        setMessage("");
-                      }
-                    }}
-                  >
-                    {isActive ? "Cancelar" : "Registrar pago"}
-                  </button>
+                  <button type="button" className="ghost-button" onClick={() => setHistoryId(showHistory ? null : item.id)}>{showHistory ? "Ocultar historial" : "Historial"}</button>
+                  {pending > 0 && <button type="button" className="ghost-button receivable-payment-toggle" onClick={() => { if (isActive) resetPayment(); else { setActiveId(item.id); setPaymentAmount(""); setPaymentDate(new Date().toISOString().slice(0, 10)); setMessage(""); setShowAdd(false); } }}>{isActive ? "Cancelar" : "Registrar pago"}</button>}
                 </div>
+
+                {showHistory && (
+                  <div className="receivable-history">
+                    {(item.history || []).length === 0 ? <span>Sin movimientos.</span> : (item.history || []).map((entry) => (
+                      <div className={`receivable-history-row ${entry.entry_type}`} key={entry.id}>
+                        <div><strong>{entry.description || (entry.entry_type === "payment" ? "Pago" : "Cargo")}</strong><span>{String(entry.entry_date || "").slice(0, 10)}</span></div>
+                        <b>{entry.entry_type === "payment" ? "−" : "+"}{formatCRC(entry.amount)}</b>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {isActive && (
                   <form className="receivable-payment-form" onSubmit={submitPayment}>
-                    <label>
-                      Monto recibido
-                      <input
-                        type="number"
-                        min="1"
-                        step="0.01"
-                        inputMode="decimal"
-                        value={paymentAmount}
-                        onChange={(event) => setPaymentAmount(event.target.value)}
-                        placeholder="Ej: 22464"
-                      />
-                    </label>
-
-                    <label>
-                      Fecha
-                      <input
-                        type="date"
-                        value={paymentDate}
-                        onChange={(event) => setPaymentDate(event.target.value)}
-                      />
-                    </label>
-
-                    <label>
-                      Método
-                      <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
-                        <option value="SINPE">SINPE</option>
-                        <option value="Transferencia">Transferencia</option>
-                        <option value="Efectivo">Efectivo</option>
-                        <option value="Otro">Otro</option>
-                      </select>
-                    </label>
-
-                    <label className="receivable-payment-notes">
-                      Nota
-                      <input
-                        value={paymentNotes}
-                        onChange={(event) => setPaymentNotes(event.target.value)}
-                        placeholder="Opcional"
-                      />
-                    </label>
-
+                    <label>Monto recibido<input type="number" min="1" step="0.01" inputMode="decimal" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} /></label>
+                    <label>Fecha<input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></label>
+                    <label>Método<select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}><option>SINPE</option><option>Transferencia</option><option>Efectivo</option><option>Otro</option></select></label>
+                    <label className="receivable-payment-notes">Nota<input value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} placeholder="Opcional" /></label>
                     {message && <p className="form-message error">{message}</p>}
-
-                    <button className="hud-action-button" type="submit" disabled={saving}>
-                      {saving ? "Guardando..." : "Guardar pago"}
-                    </button>
+                    <button className="hud-action-button" type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar pago"}</button>
                   </form>
                 )}
               </div>

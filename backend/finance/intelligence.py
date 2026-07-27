@@ -86,7 +86,167 @@ def _ensure_receivable_tables(conn) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_user_status ON receivables(user_id, status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_source_key ON receivables(user_id, source_key)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_payments_receivable ON receivable_payments(user_id, receivable_id)")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS receivable_entries (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL DEFAULT 1,
+            receivable_id BIGINT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,
+            entry_type TEXT NOT NULL,
+            amount NUMERIC(14,2) NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            source_type TEXT NOT NULL DEFAULT 'manual',
+            source_key TEXT,
+            source_transaction_id BIGINT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_account ON receivable_entries(user_id, receivable_id, entry_date DESC, id DESC)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_receivable_entries_source_key ON receivable_entries(user_id, source_key) WHERE source_key IS NOT NULL")
 
+
+
+def _person_key(person_name: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", str(person_name or "").strip().lower())
+    return normalized.strip("-") or "persona"
+
+
+def _get_or_create_person_receivable(conn, user_id: int, person_name: str) -> dict[str, Any]:
+    clean_name = str(person_name or "").strip()
+    if not clean_name:
+        raise ValueError("La persona es obligatoria.")
+    row = conn.execute(
+        """
+        SELECT *
+        FROM receivables
+        WHERE user_id = %s
+          AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
+        ORDER BY CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END, id ASC
+        LIMIT 1
+        """,
+        (user_id, clean_name),
+    ).fetchone()
+    if row:
+        return dict(row)
+    created = conn.execute(
+        """
+        INSERT INTO receivables (
+            user_id, person_name, original_amount, paid_amount, pending_amount,
+            status, notes, source_type, source_key
+        )
+        VALUES (%s, %s, 0, 0, 0, 'completed', '', 'person_account', %s)
+        RETURNING *
+        """,
+        (user_id, clean_name, f"person:{_person_key(clean_name)}"),
+    ).fetchone()
+    return dict(created)
+
+
+def _backfill_receivable_entries(conn, user_id: int) -> None:
+    """Move legacy manual balances/payments into the person ledger idempotently."""
+    legacy_rows = conn.execute(
+        """
+        SELECT id, source_type, original_amount, person_name, notes, created_at
+        FROM receivables
+        WHERE user_id = %s
+          AND source_type = 'manual'
+          AND COALESCE(original_amount, 0) > 0
+        """,
+        (user_id,),
+    ).fetchall()
+    for row in legacy_rows:
+        conn.execute(
+            """
+            INSERT INTO receivable_entries (
+                user_id, receivable_id, entry_type, amount, description,
+                entry_date, source_type, source_key
+            )
+            VALUES (%s, %s, 'charge', %s, %s, %s, 'legacy', %s)
+            ON CONFLICT DO NOTHING
+            """,
+            (
+                user_id,
+                row["id"],
+                row["original_amount"],
+                row.get("notes") or f"Saldo inicial de {row.get('person_name') or 'persona'}",
+                str(row.get("created_at") or date.today())[:10],
+                f"legacy_receivable:{row['id']}",
+            ),
+        )
+    payment_rows = conn.execute(
+        """
+        SELECT id, receivable_id, amount, source_transaction_id, notes, created_at
+        FROM receivable_payments
+        WHERE user_id = %s
+        """,
+        (user_id,),
+    ).fetchall()
+    for row in payment_rows:
+        conn.execute(
+            """
+            INSERT INTO receivable_entries (
+                user_id, receivable_id, entry_type, amount, description,
+                entry_date, source_type, source_key, source_transaction_id
+            )
+            SELECT %s, %s, 'payment', %s, %s, %s, 'legacy_payment', %s, %s
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM receivable_entries existing
+                WHERE existing.user_id = %s
+                  AND (
+                        existing.source_key = %s
+                     OR (%s IS NOT NULL AND existing.source_transaction_id = %s)
+                  )
+            )
+            ON CONFLICT DO NOTHING
+            """,
+            (
+                user_id,
+                row["receivable_id"],
+                row["amount"],
+                row.get("notes") or "Pago registrado",
+                str(row.get("created_at") or date.today())[:10],
+                f"legacy_receivable_payment:{row['id']}",
+                row.get("source_transaction_id"),
+                user_id,
+                f"legacy_receivable_payment:{row['id']}",
+                row.get("source_transaction_id"),
+                row.get("source_transaction_id"),
+            ),
+        )
+
+
+def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str, Any]:
+    totals = conn.execute(
+        """
+        SELECT
+            COALESCE(SUM(amount) FILTER (WHERE entry_type = 'charge'), 0) AS charged,
+            COALESCE(SUM(amount) FILTER (WHERE entry_type = 'payment'), 0) AS paid
+        FROM receivable_entries
+        WHERE user_id = %s AND receivable_id = %s
+        """,
+        (user_id, receivable_id),
+    ).fetchone()
+    charged = round(max(_as_float(totals.get("charged")), 0.0), 2)
+    paid = round(max(_as_float(totals.get("paid")), 0.0), 2)
+    pending = round(max(charged - paid, 0.0), 2)
+    status = "completed" if pending <= 0.01 else "partial" if paid > 0 else "pending"
+    updated = conn.execute(
+        """
+        UPDATE receivables
+        SET original_amount = %s,
+            paid_amount = %s,
+            pending_amount = %s,
+            status = %s,
+            updated_at = NOW()
+        WHERE id = %s AND user_id = %s
+        RETURNING *
+        """,
+        (charged, paid, pending, status, receivable_id, user_id),
+    ).fetchone()
+    return dict(updated)
 
 def _ensure_card_aliases(conn) -> None:
     conn.execute(
@@ -219,8 +379,7 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
             FROM receivables
             WHERE user_id = %s
               AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
-              AND source_type = 'additional_card_auto'
-            ORDER BY id ASC
+            ORDER BY CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END, id ASC
             LIMIT 1
             """,
             (user_id, payer),
@@ -253,84 +412,69 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
         )
         conn.execute(
             """
-            UPDATE receivables
-            SET paid_amount = %s,
-                pending_amount = %s,
-                status = %s,
-                updated_at = NOW()
-            WHERE id = %s AND user_id = %s
+            INSERT INTO receivable_entries (
+                user_id, receivable_id, entry_type, amount, description,
+                entry_date, source_type, source_key, source_transaction_id
+            )
+            VALUES (%s, %s, 'payment', %s, %s, CURRENT_DATE, 'income_auto', %s, %s)
+            ON CONFLICT DO NOTHING
             """,
-            (new_paid, new_pending, status, rec["id"], user_id),
+            (
+                user_id,
+                rec["id"],
+                payment,
+                f"Pago detectado: {tx.get('description') or payer}",
+                f"income_transaction:{tx['id']}",
+                tx["id"],
+            ),
         )
+        _recalculate_receivable(conn, user_id, int(rec["id"]))
 
 
 def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
-    """Upsert automatic receivables from additional-card spending.
-
-    If Emily made ₡137.731 in confirmed additional-card purchases, an automatic
-    receivable is maintained for Emily. Existing payments are preserved and only
-    the original/pending amounts are recalculated.
-    """
+    """Mirror confirmed additional-card totals into each person's ledger."""
     _ensure_receivable_tables(conn)
+    _backfill_receivable_entries(conn, user_id)
     totals = _fetch_additional_card_totals(conn, user_id)
-    seen_keys: set[str] = set()
 
     for row in totals:
         person = str(row.get("person_name") or "").strip()
         if not person:
             continue
-        source_key = f"additional_cards:{person.lower()}"
-        seen_keys.add(source_key)
-        original = round(max(_as_float(row.get("total_amount")), 0.0), 2)
-        notes = (
-            f"AUTO_ADDITIONAL_CARD owner={person}; "
-            f"cards={','.join(row.get('cards') or [])}; "
-            f"movements={int(row.get('movement_count') or 0)}"
+        account = _get_or_create_person_receivable(conn, user_id, person)
+        source_key = f"additional_cards:{_person_key(person)}"
+        amount = round(max(_as_float(row.get("total_amount")), 0.0), 2)
+        description = (
+            f"Compras confirmadas en tarjetas adicionales "
+            f"({', '.join(row.get('cards') or []) or 'sin tarjeta'})"
         )
-        existing = conn.execute(
-            """
-            SELECT id, paid_amount
-            FROM receivables
-            WHERE user_id = %s AND source_key = %s
-            LIMIT 1
-            """,
-            (user_id, source_key),
-        ).fetchone()
-        paid = _as_float(existing["paid_amount"]) if existing else 0.0
-        pending = round(max(original - paid, 0.0), 2)
-        status = "completed" if pending <= 0.01 and original > 0 else "partial" if paid > 0 else "pending"
-
-        if existing:
+        if amount > 0:
+            conn.execute(
+                """
+                INSERT INTO receivable_entries (
+                    user_id, receivable_id, entry_type, amount, description,
+                    entry_date, source_type, source_key
+                )
+                VALUES (%s, %s, 'charge', %s, %s, CURRENT_DATE, 'additional_card_auto', %s)
+                ON CONFLICT (user_id, source_key) WHERE source_key IS NOT NULL
+                DO UPDATE SET
+                    receivable_id = EXCLUDED.receivable_id,
+                    amount = EXCLUDED.amount,
+                    description = EXCLUDED.description,
+                    entry_date = EXCLUDED.entry_date
+                """,
+                (user_id, account["id"], amount, description, source_key),
+            )
             conn.execute(
                 """
                 UPDATE receivables
-                SET person_name = %s,
-                    original_amount = %s,
-                    pending_amount = %s,
-                    status = %s,
-                    source_type = 'additional_card_auto',
-                    notes = %s,
+                SET source_type = CASE WHEN source_type = 'manual' THEN 'person_account' ELSE source_type END,
                     updated_at = NOW()
                 WHERE id = %s AND user_id = %s
                 """,
-                (person, original, pending, status, notes, existing["id"], user_id),
+                (account["id"], user_id),
             )
-        elif original > 0:
-            conn.execute(
-                """
-                INSERT INTO receivables (
-                    user_id, person_name, original_amount, paid_amount,
-                    pending_amount, status, notes, source_type, source_key
-                )
-                VALUES (%s, %s, %s, 0, %s, %s, %s, 'additional_card_auto', %s)
-                """,
-                (user_id, person, original, pending, status, notes, source_key),
-            )
-
-    # Do not zero automatic receivables just because one scan did not return
-    # movements.  Candidates can be temporarily empty during cleanup/reprocess,
-    # and setting the row to completed=0 destroys the real amount owed.
-    # Rows are only updated when a fresh confirmed additional-card total exists.
+            _recalculate_receivable(conn, user_id, int(account["id"]))
 
 def _fetch_active_goals(user_id: int) -> list[dict[str, Any]]:
     with get_connection() as conn:
@@ -599,10 +743,11 @@ def list_receivables() -> dict[str, Any]:
     user_id = get_current_user_id()
     with get_connection() as conn:
         _ensure_receivable_tables(conn)
+        _backfill_receivable_entries(conn, user_id)
         _sync_auto_additional_card_receivables(conn, user_id)
         _sync_receivable_payments_from_income(conn, user_id)
-        conn.commit()
-        rows = conn.execute(
+
+        account_rows = conn.execute(
             """
             SELECT id, person_name, original_amount, paid_amount, pending_amount,
                    status, notes, source_type, source_key, created_at, updated_at
@@ -610,35 +755,35 @@ def list_receivables() -> dict[str, Any]:
             WHERE user_id = %s
             ORDER BY
               CASE status WHEN 'pending' THEN 1 WHEN 'partial' THEN 2 ELSE 3 END,
-              CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END,
               person_name ASC,
-              id DESC
+              id ASC
             """,
             (user_id,),
         ).fetchall()
-        payments = conn.execute(
-            """
-            SELECT receivable_id, COALESCE(SUM(amount),0) AS total
-            FROM receivable_payments
-            WHERE user_id = %s
-            GROUP BY receivable_id
-            """,
-            (user_id,),
-        ).fetchall()
-    by_id = {row["receivable_id"]: _as_float(row["total"]) for row in payments}
-    items = []
-    for row in rows:
-        item = dict(row)
-        paid = round(max(_as_float(item.get("paid_amount")), by_id.get(item.get("id"), 0)), 2)
-        pending = round(max(_as_float(item.get("original_amount")) - paid, 0), 2)
-        item["paid_amount"] = paid
-        item["pending_amount"] = pending
-        if pending <= 0.01 and _as_float(item.get("original_amount")) > 0:
-            item["status"] = "completed"
-        elif paid > 0:
-            item["status"] = "partial"
-        item["is_auto"] = item.get("source_type") == "additional_card_auto"
-        items.append(item)
+        items: list[dict[str, Any]] = []
+        seen_people: set[str] = set()
+        for raw in account_rows:
+            row = dict(raw)
+            person_key = str(row.get("person_name") or "").strip().lower()
+            if not person_key or person_key in seen_people:
+                continue
+            seen_people.add(person_key)
+            item = _recalculate_receivable(conn, user_id, int(row["id"]))
+            history_rows = conn.execute(
+                """
+                SELECT id, entry_type, amount, description, entry_date,
+                       source_type, source_key, source_transaction_id, created_at
+                FROM receivable_entries
+                WHERE user_id = %s AND receivable_id = %s
+                ORDER BY entry_date DESC, id DESC
+                """,
+                (user_id, row["id"]),
+            ).fetchall()
+            item["history"] = [dict(entry) for entry in history_rows]
+            item["is_auto"] = any(entry.get("source_type") == "additional_card_auto" for entry in item["history"])
+            items.append(item)
+        conn.commit()
+
     return {
         "status": "OK",
         "items": items,
@@ -647,28 +792,71 @@ def list_receivables() -> dict[str, Any]:
             "total_original": round(sum(_as_float(item.get("original_amount")) for item in items), 2),
             "total_paid": round(sum(_as_float(item.get("paid_amount")) for item in items), 2),
             "count_open": sum(1 for item in items if item.get("status") != "completed"),
-            "auto_count": sum(1 for item in items if item.get("is_auto")),
+            "people_count": len(items),
         },
     }
 
 
-def create_receivable(person_name: str, amount: float, notes: str = "") -> dict[str, Any]:
+def add_receivable_entry(
+    person_name: str,
+    amount: float,
+    description: str,
+    entry_kind: str = "purchase",
+    entry_date: str | None = None,
+) -> dict[str, Any]:
+    """Add a manual purchase/loan/transfer owed by any person."""
     user_id = get_current_user_id()
-    amount = max(_as_float(amount), 0.0)
-    if amount <= 0:
+    clean_name = str(person_name or "").strip()
+    clean_description = str(description or "").strip()
+    clean_kind = str(entry_kind or "purchase").strip().lower()
+    valid_kinds = {"purchase", "loan", "transfer", "cash", "other"}
+    if clean_kind not in valid_kinds:
+        clean_kind = "other"
+    numeric_amount = round(max(_as_float(amount), 0.0), 2)
+    if not clean_name:
+        return {"status": "ERROR", "message": "La persona es obligatoria."}
+    if numeric_amount <= 0:
         return {"status": "ERROR", "message": "Monto inválido."}
+    try:
+        safe_date = datetime.fromisoformat(str(entry_date)[:10]).date().isoformat() if entry_date else date.today().isoformat()
+    except Exception:
+        safe_date = date.today().isoformat()
+
+    labels = {
+        "purchase": "Compra pagada por Kenneth",
+        "loan": "Dinero prestado",
+        "transfer": "Transferencia prestada",
+        "cash": "Efectivo prestado",
+        "other": "Cuenta por cobrar manual",
+    }
+    final_description = clean_description or labels[clean_kind]
     with get_connection() as conn:
         _ensure_receivable_tables(conn)
-        row = conn.execute(
+        _backfill_receivable_entries(conn, user_id)
+        account = _get_or_create_person_receivable(conn, user_id, clean_name)
+        entry = conn.execute(
             """
-            INSERT INTO receivables (user_id, person_name, original_amount, paid_amount, pending_amount, status, notes)
-            VALUES (%s, %s, %s, 0, %s, 'pending', %s)
+            INSERT INTO receivable_entries (
+                user_id, receivable_id, entry_type, amount, description,
+                entry_date, source_type
+            )
+            VALUES (%s, %s, 'charge', %s, %s, %s, %s)
             RETURNING *
             """,
-            (user_id, person_name, amount, amount, notes),
+            (user_id, account["id"], numeric_amount, final_description, safe_date, f"manual_{clean_kind}"),
         ).fetchone()
+        updated = _recalculate_receivable(conn, user_id, int(account["id"]))
         conn.commit()
-    return {"status": "OK", "item": dict(row)}
+    return {"status": "OK", "item": updated, "entry": dict(entry)}
+
+
+def create_receivable(person_name: str, amount: float, notes: str = "") -> dict[str, Any]:
+    return add_receivable_entry(
+        person_name=person_name,
+        amount=amount,
+        description=notes or "Cuenta por cobrar manual",
+        entry_kind="other",
+    )
 
 
 def apply_receivable_payment(
@@ -782,15 +970,26 @@ def apply_receivable_payment(
                 f"Pago registrado manualmente. Método: {clean_method}. {clean_notes}".strip(),
             ),
         )
-        updated = conn.execute(
+        conn.execute(
             """
-            UPDATE receivables
-            SET paid_amount = %s, pending_amount = %s, status = %s, updated_at = NOW()
-            WHERE id = %s AND user_id = %s
-            RETURNING *
+            INSERT INTO receivable_entries (
+                user_id, receivable_id, entry_type, amount, description,
+                entry_date, source_type, source_key, source_transaction_id
+            )
+            VALUES (%s, %s, 'payment', %s, %s, %s, 'manual_payment', %s, %s)
+            ON CONFLICT DO NOTHING
             """,
-            (new_paid, new_pending, status, receivable_id, user_id),
-        ).fetchone()
+            (
+                user_id,
+                receivable_id,
+                payment,
+                f"Pago recibido por {clean_method}. {clean_notes}".strip(),
+                safe_payment_date,
+                f"payment_transaction:{linked_transaction_id}",
+                linked_transaction_id,
+            ),
+        )
+        updated = _recalculate_receivable(conn, user_id, receivable_id)
         conn.commit()
 
     return {

@@ -178,6 +178,14 @@ class ReceivablePaymentRequest(BaseModel):
     method: str = "manual"
 
 
+class ReceivableEntryRequest(BaseModel):
+    person_name: str
+    amount: float
+    description: str = ""
+    entry_kind: str = "purchase"
+    entry_date: str | None = None
+
+
 class AccountBalanceRequest(BaseModel):
     account_name: str
     current_balance: float
