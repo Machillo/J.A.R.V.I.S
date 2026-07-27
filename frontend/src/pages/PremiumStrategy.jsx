@@ -84,7 +84,7 @@ export default function PremiumStrategy() {
       <div className="page-section-header strategy-hero">
         <div>
           <span className="eyebrow">Director Financiero</span>
-          <h2>Estrategia Premium</h2>
+          <h2>Strategy</h2>
           <p>Plan activo, progreso de deuda y distribución recomendada. Este panel es el tablero de mando.</p>
         </div>
         <button className="primary-action-button" onClick={runStrategy} disabled={state.running}>
@@ -203,10 +203,6 @@ export default function PremiumStrategy() {
         </div>
       </div>
 
-      <div className="hud-panel strategy-content-panel">
-        <h3>Guía guardada</h3>
-        <pre>{payload.content || "Señor, ejecuta la estrategia premium para guardar una guía."}</pre>
-      </div>
     </section>
   );
 }

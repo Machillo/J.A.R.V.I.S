@@ -5,18 +5,18 @@ import {
   Camera,
   ChevronRight,
   CreditCard,
-  Crown,
+  ChartNoAxesCombined,
   LogOut,
   MailSearch,
-  MessageCircle,
+  HandCoins,
   Mic,
-  Newspaper,
+  Bot,
   ReceiptText,
   Send,
   Settings as SettingsIcon,
   Target,
   UserRound,
-  Users,
+  Landmark,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Finance from "./pages/Finance";
@@ -27,6 +27,7 @@ import Transactions from "./pages/Transactions";
 import PremiumStrategy from "./pages/PremiumStrategy";
 import AdditionalCards from "./pages/AdditionalCards";
 import Emails from "./pages/Emails";
+import Receivables from "./pages/Receivables";
 import Login from "./pages/Login";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getProfilePreferences, getStatus, updateProfilePreferences } from "./services/jarvisApi";
@@ -38,21 +39,22 @@ const sanitizeCourtesy = (text = "") =>
     .replace(/Señor,\s*Señor,\s*/gi, "Señor, ");
 
 const appSections = {
-  dashboard: { title: "J.A.R.V.I.S.", eyebrow: "Dashboard" },
-  strategy: { title: "Premium", eyebrow: "Estrategia" },
-  finance: { title: "Finanzas", eyebrow: "Comunidades" },
-  chats: { title: "Movimientos", eyebrow: "Correos y tarjetas" },
+  dashboard: { title: "J.A.R.V.I.S.", eyebrow: "Assistant" },
+  strategy: { title: "Strategy", eyebrow: "Financial Director" },
+  finance: { title: "Finance", eyebrow: "Financial Center" },
+  receivables: { title: "Receivables", eyebrow: "People & Payments" },
+  chats: { title: "Data Tools", eyebrow: "Imports & Movements" },
   emails: { title: "Correos", eyebrow: "Chats" },
   transactions: { title: "Transacciones", eyebrow: "Chats" },
   additionalCards: { title: "Tarjetas", eyebrow: "Chats" },
-  profile: { title: "Config", eyebrow: "Perfil" },
+  profile: { title: "Settings", eyebrow: "Profile" },
   memory: { title: "Memory Core", eyebrow: "Config" },
   settings: { title: "Configuración", eyebrow: "Config" },
   goals: { title: "Metas", eyebrow: "Config" },
 };
 
 const getBottomGroup = (page) => {
-  if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "chats";
+  if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "profile";
   if (["memory", "settings", "goals", "profile"].includes(page)) return "profile";
   return page;
 };
@@ -101,8 +103,14 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
 
       <div className="app-section-card">
         <AppListItem icon={Brain} title="Memory Core" subtitle="Memoria y contexto personal" onClick={() => navigatePage("memory")} />
-        <AppListItem icon={Target} title="Metas" subtitle="Objetivos y prioridades" onClick={() => navigatePage("goals")} />
-        <AppListItem icon={SettingsIcon} title="Configuración" subtitle="Preferencias del sistema" onClick={() => navigatePage("settings")} />
+        <AppListItem icon={Target} title="Goals" subtitle="Objetivos y prioridades" onClick={() => navigatePage("goals")} />
+        <AppListItem icon={SettingsIcon} title="System Settings" subtitle="Preferencias de JARVIS" onClick={() => navigatePage("settings")} />
+      </div>
+
+      <div className="app-section-card">
+        <AppListItem icon={MailSearch} title="Email Monitor" subtitle="Correos bancarios detectados" onClick={() => navigatePage("emails")} />
+        <AppListItem icon={ReceiptText} title="Transactions" subtitle="Historial completo e importaciones" onClick={() => navigatePage("transactions")} />
+        <AppListItem icon={CreditCard} title="Additional Cards" subtitle="Tarjetas asociadas por persona" onClick={() => navigatePage("additionalCards")} />
       </div>
 
       <div className="app-section-card compact">
@@ -123,11 +131,11 @@ function BottomNavigation({ activePage, navigatePage, currentUser, userName, pro
   const activeGroup = getBottomGroup(activePage);
   const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
   const items = [
-    { id: "dashboard", label: "Dashboard", icon: Newspaper },
-    { id: "strategy", label: "Premium", icon: Crown },
-    { id: "finance", label: "Finanzas", icon: Users },
-    { id: "chats", label: "Moves", icon: MessageCircle, badge: activeGroup === "chats" ? null : null },
-    { id: "profile", label: "Config", icon: UserRound, avatar: true },
+    { id: "dashboard", label: "JARVIS", icon: Bot },
+    { id: "strategy", label: "Strategy", icon: ChartNoAxesCombined },
+    { id: "finance", label: "Finance", icon: Landmark },
+    { id: "receivables", label: "Receivables", icon: HandCoins },
+    { id: "profile", label: "Settings", icon: UserRound, avatar: true },
   ];
 
   return (
@@ -495,6 +503,9 @@ export default function App() {
     switch (activePage) {
       case "finance":
         return <Finance dashboard={financeDashboard} currentUser={currentUser} onRefresh={refreshAppData} />;
+
+      case "receivables":
+        return <Receivables onRefresh={refreshAppData} />;
 
       case "goals":
         return <Goals dashboard={financeDashboard} />;

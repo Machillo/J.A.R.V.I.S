@@ -1,11 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
-  ArrowDownRight,
-  ArrowUpRight,
   CircleDollarSign,
-  Target,
-  Wallet,
   PlusCircle,
   Mic,
   FileText,
@@ -20,7 +16,6 @@ import {
   deleteDebt,
   getFinanceCycleReport,
   getFixedExpenseStatus,
-  getReceivables,
   addReceivableEntry,
   applyReceivablePayment,
   getTransactionAnalysis,
@@ -52,36 +47,6 @@ const shortCRC = (value = 0) => {
 
 const clampPercent = (value) =>
   Math.min(Math.max(Math.round(Number(value) || 0), 0), 100);
-
-function MiniLine({ type = "up" }) {
-  const points =
-    type === "up"
-      ? "0,35 18,28 33,32 50,20 70,24 90,10"
-      : "0,18 18,12 33,20 50,17 70,28 90,35";
-
-  return (
-    <svg className={`mini-line ${type}`} viewBox="0 0 90 45">
-      <polyline points={points} fill="none" strokeWidth="2" />
-    </svg>
-  );
-}
-
-function ProgressRing({ value = 0, color = "cyan" }) {
-  const safeValue = clampPercent(value);
-
-  return (
-    <div className={`progress-ring ${color}`}>
-      <div
-        className="progress-ring-inner"
-        style={{
-          background: `conic-gradient(var(--ring-color) ${safeValue}%, rgba(255,255,255,.08) 0)`,
-        }}
-      >
-        <div className="progress-ring-center">{safeValue}%</div>
-      </div>
-    </div>
-  );
-}
 
 function LoadingPanel({ message = "Cargando núcleo financiero..." }) {
   return (
@@ -395,22 +360,59 @@ function CategoryBars({ data = [] }) {
 }
 
 
-function UnifiedFlowChart({ currentCycleFlow = [], yearly = [] }) {
-  const [mode, setMode] = useState("month");
-  const data = mode === "month" ? currentCycleFlow : yearly;
+function CapitalDebtTrendChart({ monthly = [], currentDebt = 0 }) {
+  const rows = (Array.isArray(monthly) ? monthly : []).slice(-12);
+  if (!rows.length) return <EmptyPanel title="No trend data yet" description="The chart will grow as monthly movements are recorded." />;
+
+  const totalDebtPayments = rows.reduce((sum, item) => sum + (Number(item.debt_payments) || 0), 0);
+  const initial = { capital: 0, debt: Math.max(Number(currentDebt) || 0, 0) + totalDebtPayments, points: [] };
+  const calculated = rows.reduce((state, item) => {
+    const capital = state.capital + (Number(item.net_flow) || 0);
+    const debt = Math.max(state.debt - (Number(item.debt_payments) || 0), 0);
+    return { capital, debt, points: [...state.points, { month: item.month, capital, debt }] };
+  }, initial);
+  const points = calculated.points;
+
+  const values = points.flatMap((item) => [item.capital, item.debt]);
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, 1);
+  const range = Math.max(max - min, 1);
+  const width = 760;
+  const height = 290;
+  const padX = 38;
+  const padY = 28;
+  const x = (index) => padX + (index * (width - padX * 2)) / Math.max(points.length - 1, 1);
+  const y = (value) => padY + ((max - value) / range) * (height - padY * 2);
+  const capitalPath = points.map((item, index) => `${index ? "L" : "M"}${x(index)},${y(item.capital)}`).join(" ");
+  const debtPath = points.map((item, index) => `${index ? "L" : "M"}${x(index)},${y(item.debt)}`).join(" ");
+
   return (
-    <>
-      <div className="chart-toggle">
-        <button className={mode === "month" ? "active" : ""} onClick={() => setMode("month")}>Mes</button>
-        <button className={mode === "year" ? "active" : ""} onClick={() => setMode("year")}>Año</button>
+    <div className="finance-trend-chart">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Capital and debt trend by month">
+        {[0, 1, 2, 3, 4].map((line) => {
+          const lineY = padY + (line * (height - padY * 2)) / 4;
+          return <line key={line} x1={padX} x2={width - padX} y1={lineY} y2={lineY} className="trend-grid-line" />;
+        })}
+        <path d={capitalPath} className="trend-path capital" />
+        <path d={debtPath} className="trend-path debt" />
+        {points.map((item, index) => (
+          <g key={item.month}>
+            <circle cx={x(index)} cy={y(item.capital)} r="6" className="trend-dot capital" />
+            <circle cx={x(index)} cy={y(item.debt)} r="6" className="trend-dot debt" />
+            <text x={x(index)} y={height - 6} textAnchor="middle" className="trend-month-label">{formatMonthLabel(item.month)}</text>
+          </g>
+        ))}
+      </svg>
+      <div className="trend-summary-grid">
+        <div><span>Capital trend</span><strong>{formatCRC(points.at(-1)?.capital || 0)}</strong><small>Accumulated net flow</small></div>
+        <div><span>Current debt</span><strong>{formatCRC(points.at(-1)?.debt || currentDebt)}</strong><small>Debt payments reduce the line</small></div>
       </div>
-      <MonthlyFlowChart data={data} />
-    </>
+      <div className="legend trend-legend"><span className="cyan"></span> Capital <span className="red"></span> Debt</div>
+    </div>
   );
 }
 
-
-function ReceivablesPanel({ data, onPaymentSaved }) {
+export function ReceivablesPanel({ data, onPaymentSaved }) {
   const items = data?.items || [];
   const summary = data?.summary || {};
   const [activeId, setActiveId] = useState(null);
@@ -960,271 +962,101 @@ export default function Finance({
   onRefresh,
   currentUser,
 }) {
+  const [activeTab, setActiveTab] = useState("overview");
   const [transactionAnalysis, setTransactionAnalysis] = useState(null);
   const [fixedStatus, setFixedStatus] = useState(null);
   const [cycleReport, setCycleReport] = useState(null);
   const [debts, setDebts] = useState([]);
-  const [receivables, setReceivables] = useState(null);
   const [debtSort, setDebtSort] = useState("saldo");
   const [detail, setDetail] = useState(null);
 
   const loadSupportingData = async () => {
-    const [analysisResult, fixedResult, cycleResult, debtsResult, receivablesResult] = await Promise.allSettled([
-      getTransactionAnalysis(),
-      getFixedExpenseStatus(),
-      getFinanceCycleReport(),
-      getDebts(),
-      getReceivables(),
+    const [analysisResult, fixedResult, cycleResult, debtsResult] = await Promise.allSettled([
+      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(), getDebts(),
     ]);
-
     setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
     setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
     setCycleReport(cycleResult.status === "fulfilled" ? cycleResult.value : null);
     setDebts(debtsResult.status === "fulfilled" && Array.isArray(debtsResult.value) ? debtsResult.value : []);
-    setReceivables(receivablesResult.status === "fulfilled" ? receivablesResult.value : null);
   };
 
-  useEffect(() => {
-    let active = true;
-    loadSupportingData().catch((loadError) => {
-      console.error(loadError);
-      if (active) {
-        setTransactionAnalysis(null);
-        setFixedStatus(null);
-        setCycleReport(null);
-        setDebts([]);
-        setReceivables(null);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [dashboard]);
-
+  useEffect(() => { loadSupportingData().catch(console.error); }, [dashboard]);
   if (loading) return <LoadingPanel />;
   if (error) return <ErrorPanel error={error} onRetry={onRefresh} />;
 
   const summary = dashboard?.summary || {};
   const alerts = dashboard?.alerts || [];
-  const recommendations = dashboard?.quick_recommendations || [];
-  const fixedExpenses = Number(summary?.expenses?.fixed_expenses) || Number(fixedStatus?.summary?.expected) || 0;
-  const debtTotal = Number(summary?.debts?.total) || 0;
-  const assetsTotal = Number(summary?.assets?.assets_total) || 0;
-
+  const debtTotal = Number(summary?.debts?.total) || debts.reduce((sum, debt) => sum + (Number(debt.remaining_amount) || 0), 0);
   const cycleIncome = cycleReport?.income || {};
   const cycleExpenses = cycleReport?.expenses || {};
-  const cycleDebts = cycleReport?.debts || {};
   const cycleCashflow = cycleReport?.cashflow || {};
   const cycleTransactions = cycleReport?.transactions || [];
   const fixedExpectedIncome = Number(cycleIncome.fixed_expected) || Number(summary?.income?.monthly_net_income) || 0;
   const extraExpectedIncome = Number(cycleIncome.extra_expected) || 0;
   const incomeNet = Number(cycleIncome.net) || Number(cycleIncome.expected_total) || fixedExpectedIncome + extraExpectedIncome;
-  const currentExpenses = Number(cycleExpenses.current_period) || 0;
-  const expenseNet = currentExpenses;
-  const currentDebtPayments = Number(cycleDebts.payments_current_period) || 0;
+  const expenseNet = Number(cycleExpenses.current_period) || 0;
   const realBalance = Number(cycleCashflow.real_balance) || Number(summary?.cashflow?.available_cash) || 0;
-  const cycleLabel = cycleReport?.cycle?.label || "Ciclo 5 → 5";
-  const expenseCycleLabel = cycleReport?.expense_cycle?.label || "Ciclo 21 → 21";
+  const cycleLabel = cycleReport?.cycle?.label || "Cycle 5 → 5";
+  const expenseCycleLabel = cycleReport?.expense_cycle?.label || "Cycle 21 → 21";
 
-  const sortedDebts = useMemo(() => {
+  const sortedDebts = (() => {
     const list = [...debts];
     const byNumber = (key) => (a, b) => (Number(b[key]) || 0) - (Number(a[key]) || 0);
     if (debtSort === "interes") return list.sort(byNumber("interest_rate"));
     if (debtSort === "cuota") return list.sort(byNumber("monthly_payment"));
     if (debtSort === "fecha") return list.sort((a, b) => (Number(a.payment_day) || 99) - (Number(b.payment_day) || 99));
     return list.sort(byNumber("remaining_amount"));
-  }, [debts, debtSort]);
-
-  const isOwner = currentUser?.role === "owner" || currentUser?.email === "gatotico99@gmail.com";
-  const hasAnyTransactions = (transactionAnalysis?.summary?.total_transactions || 0) > 0;
+  })();
 
   const expenseItems = cycleTransactions.filter((item) => item.transaction_type === "expense");
-
+  const recentExpenses = [...expenseItems].sort((a, b) => String(b.transaction_date).localeCompare(String(a.transaction_date))).slice(0, 12);
   const incomeItems = [
-    {
-      id: "fixed-income-current-cycle",
-      transaction_date: cycleReport?.cycle?.start,
-      description: "Salario fijo esperado",
-      amount: fixedExpectedIncome,
-      transaction_type: "salary_base",
-      category: "Ingreso fijo",
-    },
-    ...(cycleIncome.items || []).map((item) => ({
-      ...item,
-      id: `income-${item.kind}-${item.id}`,
-      transaction_date: item.estimated_pay_date,
-      description: item.description || item.event_type || item.kind,
-      amount: item.net_amount ?? item.amount,
-      transaction_type: item.kind === "bonus" ? "bonus" : item.event_type,
-      category: "Ingreso extra",
-    })),
+    { id: "fixed-income-current-cycle", transaction_date: cycleReport?.cycle?.start, description: "Expected fixed salary", amount: fixedExpectedIncome, transaction_type: "salary_base", category: "Fixed income" },
+    ...(cycleIncome.items || []).map((item) => ({ ...item, id: `income-${item.kind}-${item.id}`, transaction_date: item.estimated_pay_date, description: item.description || item.event_type || item.kind, amount: item.net_amount ?? item.amount, category: "Extra income" })),
     ...cycleTransactions.filter((item) => item.transaction_type === "income"),
   ].filter((item) => Number(item.amount) !== 0);
-
-  const balanceItems = [
-    ...incomeItems.map((item) => ({ ...item, balance_side: "Ingreso" })),
-    ...expenseItems.map((item) => ({ ...item, balance_side: "Salida" })),
-  ];
-
-  const debtItems = sortedDebts.map((debt) => ({
-    id: `debt-${debt.id}`,
-    description: debt.name || "Deuda",
-    amount: Number(debt.remaining_amount) || 0,
-    transaction_type: "debt",
-    category: `Cuota ${formatCRC(debt.monthly_payment || 0)} · Interés ${Number(debt.interest_rate || 0)}%`,
-    transaction_date: debt.payment_day ? `Día ${debt.payment_day}` : "sin fecha",
-  }));
-
-  const currentCycleFlow = [
-    {
-      month: "Actual",
-      income: incomeNet,
-      outflow: expenseNet,
-    },
-  ];
-
-  const yearlyFlow = useMemo(() => {
-    const monthly = transactionAnalysis?.monthly_flow || transactionAnalysis?.monthly_summary || [];
-    if (Array.isArray(monthly) && monthly.length) {
-      return monthly.map((item) => ({
-        month: item.month || item.period || item.year_month || "--",
-        income: Number(item.income || item.incomes || item.total_income) || 0,
-        outflow: Number(item.outflow || item.expenses || item.total_expenses || item.expense) || 0,
-      }));
-    }
-    return currentCycleFlow;
-  }, [transactionAnalysis, incomeNet, expenseNet]);
-
-  const categoryChartData = useMemo(() => {
-    return (transactionAnalysis?.top_expense_categories || []).map((item) => ({
-      category: item.category || "Sin categoría",
-      total: Number(item.total) || 0,
-    }));
-  }, [transactionAnalysis]);
-
-  const openDetail = (title, items = [], empty = "No hay movimientos para mostrar.") => {
-    setDetail({ title, items, empty });
-  };
-
-  if (!isOwner && !hasAnyTransactions) {
-    return (
-      <section className="dashboard-page finance-empty-shell">
-        <EmptyPanel
-          title="Todavía no hay datos financieros"
-          description="Añadí movimientos para activar los gráficos, categorías y recomendaciones."
-        />
-        <FinanceInputPanel onSaved={onRefresh} compact />
-      </section>
-    );
-  }
+  const balanceItems = [...incomeItems.map((item) => ({ ...item, balance_side: "Income" })), ...expenseItems.map((item) => ({ ...item, balance_side: "Outflow" }))];
+  const debtItems = sortedDebts.map((debt) => ({ id: `debt-${debt.id}`, description: debt.name || "Debt", amount: Number(debt.remaining_amount) || 0, category: `Payment ${formatCRC(debt.monthly_payment || 0)} · Interest ${Number(debt.interest_rate || 0)}%`, transaction_date: debt.payment_day ? `Day ${debt.payment_day}` : "No fixed date" }));
+  const monthlyFlow = transactionAnalysis?.monthly_flow || [];
+  const categoryChartData = (transactionAnalysis?.top_expense_categories || []).map((item) => ({ category: item.category || "Uncategorized", total: Number(item.total) || 0 }));
+  const isOwner = currentUser?.role === "owner" || currentUser?.email === "gatotico99@gmail.com";
+  const openDetail = (title, items = [], empty = "No movements to display.") => setDetail({ title, items, empty });
 
   return (
-    <section className="dashboard-page">
-      <div className="finance-period-pill">Ingresos: {cycleLabel} · Gastos: {expenseCycleLabel}</div>
-
-      <div className="cards-grid finance-main-cards finance-main-cards-clean">
-        <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Ingresos netos", incomeItems, "No hay ingresos registrados en este ciclo.")}> 
-          <span>INGRESOS NETOS</span>
-          <h2>{formatCRC(incomeNet)}</h2>
-        </button>
-
-        <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Gastos netos", expenseItems, "No hay gastos registrados en este ciclo.")}> 
-          <span>GASTOS NETOS</span>
-          <h2>{formatCRC(expenseNet)}</h2>
-        </button>
-
-        <button className="hud-card finance-click-card finance-simple-kpi" onClick={() => openDetail("Saldo real", balanceItems, "No hay movimientos reales en este ciclo.")}> 
-          <span>SALDO REAL</span>
-          <h2 className={realBalance < 0 ? "danger-text" : ""}>{formatCRC(realBalance)}</h2>
-        </button>
-
-        <button className="hud-card finance-click-card finance-simple-kpi glow-purple" onClick={() => openDetail("Deuda total", debtItems, "No hay deudas registradas.")}> 
-          <span>DEUDA TOTAL</span>
-          <h2>{formatCRC(debtTotal)}</h2>
-        </button>
+    <section className="dashboard-page finance-workspace">
+      <div className="finance-tab-bar" role="tablist" aria-label="Finance sections">
+        <button className={activeTab === "overview" ? "active" : ""} onClick={() => setActiveTab("overview")}>Overview</button>
+        <button className={activeTab === "analytics" ? "active" : ""} onClick={() => setActiveTab("analytics")}>Analytics</button>
+        <button className={activeTab === "spending" ? "active" : ""} onClick={() => setActiveTab("spending")}>Spending</button>
       </div>
 
-      {detail && (
-        <div className="finance-detail-modal-backdrop" onClick={() => setDetail(null)}>
-          <article className="hud-panel finance-detail-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="panel-title">
-              <div>
-                <h3>{detail.title}</h3>
-                
-              </div>
-              <button className="ghost-button" onClick={() => setDetail(null)}>Cerrar</button>
-            </div>
-
-            {detail.items?.length ? (
-              <div className="finance-detail-list">
-                {detail.items.map((item) => (
-                  <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}>
-                    <div><strong>{item.description}</strong><span>{item.transaction_date || item.estimated_pay_date || "sin fecha"} · {item.balance_side || item.category || item.transaction_type}</span></div>
-                    <b>{formatCRC(item.amount ?? item.net_amount)}</b>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyPanel title="Sin detalle" description={detail.empty} />
-            )}
-          </article>
+      {activeTab === "overview" && <>
+        <div className="finance-period-pill">Income: {cycleLabel} · Expenses: {expenseCycleLabel}</div>
+        <div className="cards-grid finance-main-cards finance-main-cards-clean">
+          <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Net income", incomeItems)}><span>NET INCOME</span><h2>{formatCRC(incomeNet)}</h2></button>
+          <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Net expenses", expenseItems)}><span>NET EXPENSES</span><h2>{formatCRC(expenseNet)}</h2></button>
+          <button className="hud-card finance-click-card finance-simple-kpi" onClick={() => openDetail("Real balance", balanceItems)}><span>REAL BALANCE</span><h2 className={realBalance < 0 ? "danger-text" : ""}>{formatCRC(realBalance)}</h2></button>
+          <button className="hud-card finance-click-card finance-simple-kpi glow-purple" onClick={() => openDetail("Total debt", debtItems)}><span>TOTAL DEBT</span><h2>{formatCRC(debtTotal)}</h2></button>
         </div>
-      )}
+        <div className="dashboard-grid finance-dashboard-grid finance-overview-grid">
+          <DebtsPanel sortedDebts={sortedDebts} debtSort={debtSort} setDebtSort={setDebtSort} onChanged={async () => { await loadSupportingData(); await onRefresh?.(); }} />
+          <article className="hud-panel"><div className="panel-title"><div><h3>ALERTS</h3></div></div><div className="alert-list">{alerts.length === 0 ? <EmptyPanel title="No critical alerts" description="JARVIS will flag cash-flow and debt risks here." /> : alerts.map((alert, index) => <div className={`alert-item ${alert.level}`} key={index}><AlertTriangle size={18} /><span>{alert.message}</span></div>)}</div></article>
+        </div>
+      </>}
 
-      <div className="dashboard-grid finance-dashboard-grid">
-        <ReceivablesPanel data={receivables} onPaymentSaved={async () => { await loadSupportingData(); await onRefresh?.(); }} />
+      {activeTab === "analytics" && <div className="dashboard-grid finance-dashboard-grid finance-analytics-grid">
+        <article className="hud-panel large finance-trend-panel"><div className="panel-title"><div><h3>CAPITAL & DEBT TREND</h3></div><span>MONTHLY</span></div><CapitalDebtTrendChart monthly={monthlyFlow} currentDebt={debtTotal} /></article>
+        <article className="hud-panel large"><div className="panel-title"><div><h3>INCOME VS EXPENSES</h3></div><span>HISTORY</span></div><MonthlyFlowChart data={monthlyFlow.map((item) => ({ month: item.month, income: item.income, outflow: item.outflow }))} /><div className="legend"><span className="cyan"></span> Income <span className="red"></span> Expenses + debt payments</div></article>
+      </div>}
 
-        <article className="hud-panel large">
-          <div className="panel-title">
-            <div>
-              <h3>INGRESOS VS GASTOS</h3>
-            </div>
-            <span>ACTUAL</span>
-          </div>
-          <UnifiedFlowChart currentCycleFlow={currentCycleFlow} yearly={yearlyFlow} />
-          <div className="legend"><span className="cyan"></span> Ingresos neto <span className="red"></span> Gastos neto</div>
-        </article>
-
-        <article className="hud-panel large">
-          <div className="panel-title">
-            <div>
-              <h3>GASTOS POR CATEGORÍA</h3>
-            </div>
-            <span>REAL</span>
-          </div>
-          <CategoryBars data={categoryChartData} />
-        </article>
-
+      {activeTab === "spending" && <div className="dashboard-grid finance-dashboard-grid finance-spending-grid">
+        <article className="hud-panel large"><div className="panel-title"><div><h3>EXPENSES BY CATEGORY</h3></div><span>CURRENT</span></div><CategoryBars data={categoryChartData} /></article>
         <FixedExpensesPanel data={fixedStatus} onRefresh={onRefresh} isOwner={isOwner} />
+        <article className="hud-panel large"><div className="panel-title"><div><h3>RECENT EXPENSES</h3></div><span>{recentExpenses.length}</span></div>{recentExpenses.length ? <div className="finance-detail-list recent-expense-list">{recentExpenses.map((item) => <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}><div><strong>{item.description}</strong><span>{item.transaction_date} · {item.category}</span></div><b>{formatCRC(item.amount)}</b></div>)}</div> : <EmptyPanel title="No recent expenses" description="New expenses will appear here." />}</article>
+        <FinanceInputPanel onSaved={async () => { await loadSupportingData(); await onRefresh?.(); }} />
+      </div>}
 
-        <DebtsPanel
-          sortedDebts={sortedDebts}
-          debtSort={debtSort}
-          setDebtSort={setDebtSort}
-          onChanged={async () => { await loadSupportingData(); await onRefresh?.(); }}
-        />
-
-        <article className="hud-panel">
-          <div className="panel-title"><div><h3>ALERTAS</h3></div></div>
-          <div className="alert-list">
-            {alerts.length === 0 ? <EmptyPanel title="Sin alertas críticas" description="Cuando haya riesgo de flujo, deuda o metas, aparecerá aquí." /> : alerts.map((alert, index) => <div className={`alert-item ${alert.level}`} key={index}><AlertTriangle size={18} /><span>{alert.message}</span></div>)}
-          </div>
-        </article>
-
-        <article className="hud-panel large">
-          <div className="panel-title"><div><h3>RECOMENDACIONES</h3></div></div>
-          {recommendations.length === 0 ? <EmptyPanel title="Sin recomendaciones todavía" description="Cuando registremos ingresos, gastos, deudas y metas, Jarvis tendrá más contexto." /> : <div className="recommendation-list">{recommendations.map((item, index) => <div className="recommendation-item" key={index}>{item}</div>)}</div>}
-        </article>
-
-        <article className="hud-panel">
-          <div className="panel-title"><div><h3>DATOS BASE</h3></div></div>
-          <div className="metric-list">
-            <div><span>Gastos fijos activos</span><strong>{formatCRC(fixedExpenses)}</strong></div>
-            <div><span>Activos</span><strong>{formatCRC(assetsTotal)}</strong></div>
-            <div><span>Metas activas</span><strong>{summary?.goals?.active_goals_count || 0}</strong></div>
-          </div>
-        </article>
-      </div>
+      {detail && <div className="finance-detail-modal-backdrop" onClick={() => setDetail(null)}><article className="hud-panel finance-detail-modal" onClick={(event) => event.stopPropagation()}><div className="panel-title"><div><h3>{detail.title}</h3></div><button className="ghost-button" onClick={() => setDetail(null)}>Close</button></div>{detail.items?.length ? <div className="finance-detail-list">{detail.items.map((item) => <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}><div><strong>{item.description}</strong><span>{item.transaction_date || "No date"} · {item.balance_side || item.category || item.transaction_type}</span></div><b>{formatCRC(item.amount ?? item.net_amount)}</b></div>)}</div> : <EmptyPanel title="No details" description={detail.empty} />}</article></div>}
     </section>
   );
 }

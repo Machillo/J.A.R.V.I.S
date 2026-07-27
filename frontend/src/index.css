@@ -7616,3 +7616,16 @@ button {
   font-weight: 800;
   color: var(--text-primary, #f5f7fa);
 }
+
+
+/* 2026 Finance workspace navigation */
+.finance-tab-bar{position:sticky;top:0;z-index:12;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px;margin:0 0 18px;border:1px solid rgba(255,255,255,.1);border-radius:22px;background:rgba(18,20,23,.88);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+.finance-tab-bar button{min-height:46px;border:0;border-radius:16px;background:transparent;color:var(--muted,#9eb1b7);font-weight:800;letter-spacing:.02em}
+.finance-tab-bar button.active{color:#fff;background:linear-gradient(135deg,rgba(147,9,198,.42),rgba(12,103,243,.34));box-shadow:inset 0 0 0 1px rgba(124,225,255,.2)}
+.finance-workspace .finance-dashboard-grid{align-items:start}.finance-overview-grid,.finance-analytics-grid,.finance-spending-grid{margin-top:18px}
+.finance-trend-panel{overflow:hidden}.finance-trend-chart{width:100%;overflow:hidden}.finance-trend-chart svg{display:block;width:100%;min-height:260px;overflow:visible}
+.trend-grid-line{stroke:rgba(255,255,255,.08);stroke-width:1}.trend-path{fill:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 7px currentColor)}
+.trend-path.capital{stroke:#2fd7e8;color:#2fd7e8}.trend-path.debt{stroke:#ff5d73;color:#ff5d73}.trend-dot{stroke:#111418;stroke-width:3}.trend-dot.capital{fill:#2fd7e8}.trend-dot.debt{fill:#ff5d73}.trend-month-label{fill:#899aa1;font-size:13px;font-weight:700}
+.trend-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}.trend-summary-grid>div{padding:16px;border:1px solid rgba(255,255,255,.08);border-radius:18px;background:rgba(255,255,255,.025);display:grid;gap:4px}.trend-summary-grid span,.trend-summary-grid small{color:#94aab2}.trend-summary-grid strong{font-size:clamp(1.25rem,4vw,2rem)}.trend-legend{justify-content:center}
+.recent-expense-list{max-height:560px;overflow:auto}.receivables-page>.hud-panel{margin-top:0}
+@media(max-width:720px){.finance-tab-bar{top:0;margin-inline:-2px}.finance-tab-bar button{font-size:.86rem}.trend-summary-grid{grid-template-columns:1fr}.finance-trend-chart svg{min-width:620px}.finance-trend-chart{overflow-x:auto}.bottom-nav-item>span:last-child{font-size:.72rem}}
