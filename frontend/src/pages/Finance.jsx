@@ -22,6 +22,8 @@ import {
   previewFinanceInput,
   previewFinancePdf,
   seedOwnerFixedExpenses,
+  getCurrencyAlerts,
+  setCurrencyRate,
 } from "../services/jarvisApi";
 
 const formatCRC = (value = 0) =>
@@ -955,6 +957,89 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
   );
 }
 
+function CurrencyAlertsPanel({ alerts, onApplied }) {
+  const dates = alerts?.dates || [];
+  const [rateByDate, setRateByDate] = useState({});
+  const [savingDate, setSavingDate] = useState(null);
+  const [message, setMessage] = useState("");
+
+  const applyRate = async (date) => {
+    const rate = Number(rateByDate[date]);
+    if (!rate || rate <= 0) {
+      setMessage("Ingresá un tipo de cambio válido.");
+      return;
+    }
+    setSavingDate(date);
+    setMessage("");
+    try {
+      await setCurrencyRate(date, rate);
+      setRateByDate((current) => ({ ...current, [date]: "" }));
+      await onApplied?.();
+    } catch (error) {
+      setMessage(error.message || "No pude guardar el tipo de cambio.");
+    } finally {
+      setSavingDate(null);
+    }
+  };
+
+  return (
+    <article className="hud-panel large currency-alert-panel">
+      <div className="panel-title">
+        <div><h3>USD CONVERSION</h3></div>
+        <span>{alerts?.total || 0} PENDING</span>
+      </div>
+      {dates.length === 0 ? (
+        <EmptyPanel title="All USD transactions converted" description="No hay compras en dólares pendientes de tipo de cambio." />
+      ) : (
+        <div className="currency-alert-list">
+          {dates.map((group) => (
+            <div className="currency-alert-row" key={group.date}>
+              <div>
+                <strong>{group.date}</strong>
+                <span>{group.count} movimiento{group.count === 1 ? "" : "s"} · ${Number(group.total_usd || 0).toFixed(2)} USD</span>
+              </div>
+              <div className="currency-rate-editor">
+                <label>USD → CRC<input type="number" min="0.01" step="0.01" placeholder="Ej. 505.25" value={rateByDate[group.date] || ""} onChange={(e) => setRateByDate((current) => ({ ...current, [group.date]: e.target.value }))} /></label>
+                <button className="hud-action-button small" onClick={() => applyRate(group.date)} disabled={savingDate === group.date}>
+                  {savingDate === group.date ? "Guardando..." : "Aplicar"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {message && <p className="finance-input-message">{message}</p>}
+      <small className="currency-alert-note">Una tasa se aplica a todas las transacciones USD pendientes de esa misma fecha y queda guardada en cada movimiento.</small>
+    </article>
+  );
+}
+
+function IncomePanel({ cycleIncome, cycleTransactions, fixedExpectedIncome, extraExpectedIncome }) {
+  const actualItems = (cycleTransactions || []).filter((item) => item.transaction_type === "income");
+  const actual = actualItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const expected = (Number(fixedExpectedIncome) || 0) + (Number(extraExpectedIncome) || 0);
+  const variance = actual - expected;
+  const items = [
+    { id: "expected-salary", description: "Expected fixed salary", amount: fixedExpectedIncome, category: "Expected", transaction_date: cycleIncome?.cycle?.start },
+    ...(cycleIncome?.items || []).map((item) => ({ id: `expected-${item.kind}-${item.id}`, description: item.description || item.event_type || item.kind, amount: item.net_amount ?? item.amount, category: "Expected extra", transaction_date: item.estimated_pay_date })),
+    ...actualItems.map((item) => ({ ...item, category: item.category || "Income" })),
+  ].filter((item) => Number(item.amount) !== 0);
+
+  return (
+    <div className="finance-income-workspace">
+      <div className="cards-grid finance-main-cards finance-income-cards">
+        <article className="hud-card finance-simple-kpi glow-green"><span>EXPECTED INCOME</span><h2>{formatCRC(expected)}</h2></article>
+        <article className="hud-card finance-simple-kpi glow-green"><span>ACTUAL INCOME</span><h2>{formatCRC(actual)}</h2></article>
+        <article className="hud-card finance-simple-kpi"><span>VARIANCE</span><h2 className={variance < 0 ? "danger-text" : ""}>{formatCRC(variance)}</h2></article>
+      </div>
+      <article className="hud-panel large">
+        <div className="panel-title"><div><h3>INCOME HISTORY</h3></div><span>CURRENT CYCLE</span></div>
+        {items.length ? <div className="finance-detail-list">{items.map((item) => <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}`}><div><strong>{item.description}</strong><span>{item.transaction_date || "No date"} · {item.category}</span></div><b>{formatCRC(item.amount)}</b></div>)}</div> : <EmptyPanel title="No income recorded" description="Registered income will appear here." />}
+      </article>
+    </div>
+  );
+}
+
 export default function Finance({
   dashboard,
   loading = false,
@@ -969,15 +1054,17 @@ export default function Finance({
   const [debts, setDebts] = useState([]);
   const [debtSort, setDebtSort] = useState("saldo");
   const [detail, setDetail] = useState(null);
+  const [currencyAlerts, setCurrencyAlerts] = useState(null);
 
   const loadSupportingData = async () => {
-    const [analysisResult, fixedResult, cycleResult, debtsResult] = await Promise.allSettled([
-      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(), getDebts(),
+    const [analysisResult, fixedResult, cycleResult, debtsResult, currencyResult] = await Promise.allSettled([
+      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(), getDebts(), getCurrencyAlerts(),
     ]);
     setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
     setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
     setCycleReport(cycleResult.status === "fulfilled" ? cycleResult.value : null);
     setDebts(debtsResult.status === "fulfilled" && Array.isArray(debtsResult.value) ? debtsResult.value : []);
+    setCurrencyAlerts(currencyResult.status === "fulfilled" ? currencyResult.value : null);
   };
 
   useEffect(() => { loadSupportingData().catch(console.error); }, [dashboard]);
@@ -1028,6 +1115,7 @@ export default function Finance({
         <button className={activeTab === "overview" ? "active" : ""} onClick={() => setActiveTab("overview")}>Overview</button>
         <button className={activeTab === "analytics" ? "active" : ""} onClick={() => setActiveTab("analytics")}>Analytics</button>
         <button className={activeTab === "spending" ? "active" : ""} onClick={() => setActiveTab("spending")}>Spending</button>
+        <button className={activeTab === "income" ? "active" : ""} onClick={() => setActiveTab("income")}>Income</button>
       </div>
 
       {activeTab === "overview" && <>
@@ -1053,8 +1141,11 @@ export default function Finance({
         <article className="hud-panel large"><div className="panel-title"><div><h3>EXPENSES BY CATEGORY</h3></div><span>CURRENT</span></div><CategoryBars data={categoryChartData} /></article>
         <FixedExpensesPanel data={fixedStatus} onRefresh={onRefresh} isOwner={isOwner} />
         <article className="hud-panel large"><div className="panel-title"><div><h3>RECENT EXPENSES</h3></div><span>{recentExpenses.length}</span></div>{recentExpenses.length ? <div className="finance-detail-list recent-expense-list">{recentExpenses.map((item) => <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}><div><strong>{item.description}</strong><span>{item.transaction_date} · {item.category}</span></div><b>{formatCRC(item.amount)}</b></div>)}</div> : <EmptyPanel title="No recent expenses" description="New expenses will appear here." />}</article>
+        <CurrencyAlertsPanel alerts={currencyAlerts} onApplied={async () => { await loadSupportingData(); await onRefresh?.(); }} />
         <FinanceInputPanel onSaved={async () => { await loadSupportingData(); await onRefresh?.(); }} />
       </div>}
+
+      {activeTab === "income" && <IncomePanel cycleIncome={cycleIncome} cycleTransactions={cycleTransactions} fixedExpectedIncome={fixedExpectedIncome} extraExpectedIncome={extraExpectedIncome} />}
 
       {detail && <div className="finance-detail-modal-backdrop" onClick={() => setDetail(null)}><article className="hud-panel finance-detail-modal" onClick={(event) => event.stopPropagation()}><div className="panel-title"><div><h3>{detail.title}</h3></div><button className="ghost-button" onClick={() => setDetail(null)}>Close</button></div>{detail.items?.length ? <div className="finance-detail-list">{detail.items.map((item) => <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}><div><strong>{item.description}</strong><span>{item.transaction_date || "No date"} · {item.balance_side || item.category || item.transaction_type}</span></div><b>{formatCRC(item.amount ?? item.net_amount)}</b></div>)}</div> : <EmptyPanel title="No details" description={detail.empty} />}</article></div>}
     </section>

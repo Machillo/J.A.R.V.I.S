@@ -109,6 +109,8 @@ export const updateGoal = (id, payload) => jsonRequest(`/goals/${id}`, "PUT", pa
 
 export const getTransactions = () => request("/transactions/");
 export const getTransactionAnalysis = () => request("/transactions/analysis/summary");
+export const getCurrencyAlerts = () => request("/transactions/currency/alerts");
+export const setCurrencyRate = (transactionDate, rate) => request(`/transactions/currency/rate?transaction_date=${encodeURIComponent(transactionDate)}&rate=${encodeURIComponent(rate)}`, { method: "POST" });
 export const createTransaction = (payload) => jsonRequest("/transactions/", "POST", payload);
 
 export const askJarvis = async (message) => {

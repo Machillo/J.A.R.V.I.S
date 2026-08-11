@@ -16,6 +16,8 @@ from backend.transactions.models import (
 )
 from backend.transactions.parser import parse_and_save_transaction_text, parse_transaction_text
 from backend.transactions.service import (
+    get_currency_alerts,
+    apply_currency_rate,
     bulk_create_transactions,
     create_transaction,
     delete_transaction,
@@ -52,6 +54,22 @@ def add_transaction(request: TransactionRequest):
 @router.get("/analysis/summary")
 def transaction_analysis():
     return get_transaction_analysis()
+
+
+@router.get("/currency/alerts")
+def currency_alerts():
+    return get_currency_alerts()
+
+
+@router.post("/currency/rate")
+def set_currency_rate(transaction_date: str, rate: float):
+    try:
+        return apply_currency_rate(transaction_date, rate)
+    except ValueError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 
 
 @router.post("/bulk-import")
