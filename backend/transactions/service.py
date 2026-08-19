@@ -3,6 +3,77 @@ from backend.auth.current_user import get_current_user_id
 from backend.finance.category_catalog import normalize_category
 
 
+def _ensure_exchange_rates_table(conn):
+    """Keep currency-rate persistence available even before schema migrations run."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS exchange_rates (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL DEFAULT 1,
+            rate_date DATE NOT NULL,
+            currency TEXT NOT NULL,
+            exchange_rate NUMERIC(14, 6) NOT NULL,
+            source TEXT NOT NULL DEFAULT 'manual',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (user_id, rate_date, currency)
+        )
+        """
+    )
+
+
+def _saved_exchange_rate(conn, user_id: int, transaction_date: str, currency: str = "USD"):
+    _ensure_exchange_rates_table(conn)
+    row = conn.execute(
+        """
+        SELECT exchange_rate
+        FROM exchange_rates
+        WHERE user_id = %s
+          AND rate_date = %s::date
+          AND UPPER(currency) = UPPER(%s)
+        LIMIT 1
+        """,
+        (user_id, transaction_date, currency),
+    ).fetchone()
+    return float(row["exchange_rate"]) if row else None
+
+
+def _save_exchange_rate(conn, user_id: int, transaction_date: str, rate: float, currency: str = "USD", source: str = "manual"):
+    _ensure_exchange_rates_table(conn)
+    conn.execute(
+        """
+        INSERT INTO exchange_rates (user_id, rate_date, currency, exchange_rate, source)
+        VALUES (%s, %s::date, UPPER(%s), %s, %s)
+        ON CONFLICT (user_id, rate_date, currency)
+        DO UPDATE SET exchange_rate = EXCLUDED.exchange_rate,
+                      source = EXCLUDED.source,
+                      updated_at = NOW()
+        """,
+        (user_id, transaction_date, currency, rate, source),
+    )
+
+
+def _reuse_saved_rates(conn, user_id: int):
+    """Apply already-known daily USD rates to old or newly inserted pending rows."""
+    _ensure_exchange_rates_table(conn)
+    conn.execute(
+        """
+        UPDATE transactions t
+        SET exchange_rate = er.exchange_rate,
+            amount = ROUND(t.original_amount * er.exchange_rate, 2)
+        FROM exchange_rates er
+        WHERE t.user_id = %s
+          AND er.user_id = t.user_id
+          AND er.rate_date = t.transaction_date::date
+          AND UPPER(er.currency) = 'USD'
+          AND UPPER(COALESCE(t.original_currency, '')) = 'USD'
+          AND t.original_amount IS NOT NULL
+          AND t.exchange_rate IS NULL
+        """,
+        (user_id,),
+    )
+
+
 def create_transaction(
     transaction_date: str,
     description: str,
@@ -18,8 +89,17 @@ def create_transaction(
 ):
     user_id = get_current_user_id()
     category = normalize_category(category, transaction_type)
+    currency = (original_currency or "").upper()
 
     with get_connection() as conn:
+        if currency == "USD" and original_amount is not None:
+            if exchange_rate is None:
+                exchange_rate = _saved_exchange_rate(conn, user_id, transaction_date, currency)
+            if exchange_rate is not None:
+                exchange_rate = float(exchange_rate)
+                amount = round(float(original_amount) * exchange_rate, 2)
+                _save_exchange_rate(conn, user_id, transaction_date, exchange_rate, currency, source="transaction")
+
         cursor = conn.execute(
             """
             INSERT INTO transactions (
@@ -240,9 +320,14 @@ def update_transaction(
     return get_transaction(transaction_id)
 
 def get_currency_alerts():
-    """Return USD transactions that still need a conversion rate."""
+    """Return every old/new USD transaction still missing a daily conversion rate."""
     user_id = get_current_user_id()
     with get_connection() as conn:
+        # First reuse any rate that was already saved for that date. This makes
+        # historical imports and future inserts self-healing.
+        _reuse_saved_rates(conn, user_id)
+        conn.commit()
+
         rows = conn.execute(
             """
             SELECT id, transaction_date, description, amount, transaction_type,
@@ -250,8 +335,19 @@ def get_currency_alerts():
             FROM transactions
             WHERE user_id = %s
               AND UPPER(COALESCE(original_currency, '')) = 'USD'
+              AND original_amount IS NOT NULL
               AND exchange_rate IS NULL
-            ORDER BY transaction_date ASC, id ASC
+            ORDER BY transaction_date::date ASC, id ASC
+            """,
+            (user_id,),
+        ).fetchall()
+
+        saved_rows = conn.execute(
+            """
+            SELECT rate_date, currency, exchange_rate, source, updated_at
+            FROM exchange_rates
+            WHERE user_id = %s AND UPPER(currency) = 'USD'
+            ORDER BY rate_date DESC
             """,
             (user_id,),
         ).fetchall()
@@ -259,7 +355,7 @@ def get_currency_alerts():
     items = [dict(row) for row in rows]
     grouped = {}
     for item in items:
-        day = str(item.get('transaction_date'))[:10]
+        day = str(item.get("transaction_date"))[:10]
         grouped.setdefault(day, []).append(item)
 
     return {
@@ -273,17 +369,20 @@ def get_currency_alerts():
             }
             for day, day_items in grouped.items()
         ],
+        "saved_rates": [dict(row) for row in saved_rows],
     }
 
 
 def apply_currency_rate(transaction_date: str, rate: float):
-    """Apply one manual USD->CRC rate to every pending USD transaction on a date."""
+    """Persist one USD->CRC daily rate and apply it to all pending rows for that date."""
     rate = float(rate or 0)
     if rate <= 0:
         raise ValueError("El tipo de cambio debe ser mayor que cero.")
 
     user_id = get_current_user_id()
     with get_connection() as conn:
+        _save_exchange_rate(conn, user_id, transaction_date, rate, "USD", source="manual")
+
         rows = conn.execute(
             """
             SELECT id, original_amount
@@ -291,6 +390,7 @@ def apply_currency_rate(transaction_date: str, rate: float):
             WHERE user_id = %s
               AND transaction_date::date = %s::date
               AND UPPER(COALESCE(original_currency, '')) = 'USD'
+              AND original_amount IS NOT NULL
               AND exchange_rate IS NULL
             ORDER BY id
             """,
@@ -315,4 +415,6 @@ def apply_currency_rate(transaction_date: str, rate: float):
         "date": str(transaction_date)[:10],
         "exchange_rate": rate,
         "updated": len(rows),
+        "saved": True,
     }
+

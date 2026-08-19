@@ -225,6 +225,22 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+
+CREATE TABLE IF NOT EXISTS exchange_rates (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 1,
+    rate_date DATE NOT NULL,
+    currency TEXT NOT NULL,
+    exchange_rate NUMERIC(14, 6) NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, rate_date, currency)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exchange_rates_user_date_currency
+ON exchange_rates(user_id, rate_date, currency);
+
 CREATE INDEX IF NOT EXISTS idx_allowed_users_email ON allowed_users(email);
 CREATE INDEX IF NOT EXISTS idx_allowed_users_supabase_user_id ON allowed_users(supabase_user_id);
 
