@@ -31,7 +31,7 @@ from backend.finance.models import (
     FixedExpenseRequest,
     FixedExpenseUpdateRequest,
     ReceivableRequest,
-    ReceivablePaymentRequest, ReceivableEntryRequest,
+    ReceivablePaymentRequest, ReceivableEntryRequest, ReceivableEntryUpdateRequest,
     AccountBalanceRequest,
     GoalPlanningRequest,
 )
@@ -105,6 +105,7 @@ from backend.finance.intelligence import (
     list_receivables,
     create_receivable,
     add_receivable_entry,
+    update_receivable_entry,
     apply_receivable_payment,
     list_account_balances,
     upsert_account_balance,
@@ -546,8 +547,14 @@ def seed_fixed_expenses_route():
     return {"status": "OK", "items": seed_owner_fixed_expenses()}
 
 @router.get("/cycle-report")
-def financial_cycle_report():
-    return get_financial_cycle_report()
+def financial_cycle_report(as_of: str | None = None):
+    parsed = None
+    if as_of:
+        try:
+            parsed = datetime.fromisoformat(as_of[:10]).date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="as_of debe usar YYYY-MM-DD")
+    return get_financial_cycle_report(as_of=parsed)
 
 
 @router.get("/dashboard")
@@ -637,6 +644,17 @@ def add_receivable_entry_route(request: ReceivableEntryRequest):
         amount=request.amount,
         description=request.description,
         entry_kind=request.entry_kind,
+        entry_date=request.entry_date,
+    )
+
+
+@router.put("/receivables/{receivable_id}/entries/{entry_id}")
+def update_receivable_entry_route(receivable_id: int, entry_id: int, request: ReceivableEntryUpdateRequest):
+    return update_receivable_entry(
+        receivable_id=receivable_id,
+        entry_id=entry_id,
+        amount=request.amount,
+        description=request.description,
         entry_date=request.entry_date,
     )
 

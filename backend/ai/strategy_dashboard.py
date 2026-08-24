@@ -588,39 +588,23 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     }
 
 def get_premium_strategy_dashboard() -> dict[str, Any]:
-    user = get_current_user()
-    guides = get_active_premium_guides(limit=8)
-    active = next((g for g in guides if g.get("guide_type") == "financial_strategy"), None)
-    blueprint = build_local_strategy_blueprint()
-    if active:
-        data = active.get("data") or {}
-        if isinstance(data, str):
-            try:
-                data = json.loads(data)
-            except Exception:
-                data = {}
-        saved_strategy = data.get("strategy_blueprint") or {}
-        if isinstance(saved_strategy, dict):
-            # La guía guardada puede contener porcentajes viejos.  La matemática
-            # del tablero siempre debe venir del blueprint recalculado contra BD.
-            strategy = {**saved_strategy, **blueprint}
-        else:
-            strategy = blueprint
-        content = active.get("content") or ""
-        title = strategy.get("title") or active.get("title") or "Estrategia premium"
-    else:
-        strategy = blueprint
-        content = "Señor, aún no hay una estrategia premium guardada. Ejecute la estrategia premium para activar el modo Director."
-        title = strategy.get("title") or "Estrategia base"
+    """Return a live strategy calculated from the current database state.
 
+    Saved premium guides are intentionally not used as the source of truth: they
+    are historical artifacts and made the dashboard appear frozen after finance
+    data changed.
+    """
+    user = get_current_user()
+    strategy = build_local_strategy_blueprint()
     return {
         "status": "OK",
         "user_role": user.get("role"),
-        "title": title,
-        "content": content,
+        "title": strategy.get("title") or "Estrategia activa",
+        "content": strategy.get("objective") or "",
         "strategy": strategy,
-        "updated_at": active.get("created_at") if active else None,
-        "has_premium_strategy": bool(active),
+        "updated_at": datetime.now().isoformat(),
+        "has_premium_strategy": True,
+        "source": "live_database",
     }
 
 

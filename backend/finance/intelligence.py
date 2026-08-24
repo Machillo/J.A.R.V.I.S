@@ -257,8 +257,8 @@ def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str,
     ).fetchone()
     charged = round(max(_as_float(totals.get("charged")), 0.0), 2)
     paid = round(max(_as_float(totals.get("paid")), 0.0), 2)
-    pending = round(max(charged - paid, 0.0), 2)
-    status = "completed" if pending <= 0.01 else "partial" if paid > 0 else "pending"
+    pending = round(charged - paid, 2)
+    status = "credit" if pending < -0.01 else "completed" if abs(pending) <= 0.01 else "partial" if paid > 0 else "pending"
     updated = conn.execute(
         """
         UPDATE receivables
@@ -839,14 +839,13 @@ def list_receivables() -> dict[str, Any]:
                     cycle_start, cycle_end, user_id, row["id"],
                 ),
             ).fetchone()
-            prior_pending = max(
+            prior_pending = round(
                 _as_float(cycle_totals.get("prior_charges"))
-                - _as_float(cycle_totals.get("prior_payments")),
-                0.0,
+                - _as_float(cycle_totals.get("prior_payments")), 2
             )
             cycle_charges = max(_as_float(cycle_totals.get("cycle_charges")), 0.0)
             cycle_payments = max(_as_float(cycle_totals.get("cycle_payments")), 0.0)
-            current_due = max(prior_pending + cycle_charges - cycle_payments, 0.0)
+            current_due = round(prior_pending + cycle_charges - cycle_payments, 2)
 
             history_rows = conn.execute(
                 """
@@ -875,8 +874,8 @@ def list_receivables() -> dict[str, Any]:
             # Keep compatibility for existing consumers, but expose only current debt.
             item["pending_amount"] = round(current_due, 2)
             item["original_amount"] = round(prior_pending + cycle_charges, 2)
-            item["paid_amount"] = round(min(cycle_payments, prior_pending + cycle_charges), 2)
-            item["status"] = "completed" if current_due <= 0.01 else "partial" if cycle_payments > 0 else "pending"
+            item["paid_amount"] = round(cycle_payments, 2)
+            item["status"] = "credit" if current_due < -0.01 else "completed" if abs(current_due) <= 0.01 else "partial" if cycle_payments > 0 else "pending"
             items.append(item)
         conn.commit()
 
@@ -889,7 +888,7 @@ def list_receivables() -> dict[str, Any]:
             "carried_pending": round(sum(_as_float(item.get("carried_pending")) for item in items), 2),
             "cycle_charges": round(sum(_as_float(item.get("cycle_charges")) for item in items), 2),
             "cycle_payments": round(sum(_as_float(item.get("cycle_payments")) for item in items), 2),
-            "count_open": sum(1 for item in items if _as_float(item.get("current_amount_due")) > 0.01),
+            "count_open": sum(1 for item in items if abs(_as_float(item.get("current_amount_due"))) > 0.01),
             "people_count": len(items),
         },
     }
@@ -953,6 +952,32 @@ def add_receivable_entry(
     return {"status": "OK", "item": updated, "entry": dict(entry)}
 
 
+def update_receivable_entry(receivable_id: int, entry_id: int, amount: float | None = None, description: str | None = None, entry_date: str | None = None) -> dict[str, Any]:
+    user_id = get_current_user_id()
+    with get_connection() as conn:
+        _ensure_receivable_tables(conn)
+        entry = conn.execute("SELECT * FROM receivable_entries WHERE id=%s AND receivable_id=%s AND user_id=%s FOR UPDATE", (entry_id, receivable_id, user_id)).fetchone()
+        if not entry:
+            return {"status": "NOT_FOUND", "message": "Movimiento no encontrado."}
+        new_amount = round(_as_float(amount if amount is not None else entry["amount"]), 2)
+        if new_amount <= 0:
+            return {"status": "ERROR", "message": "Monto inválido."}
+        new_description = str(description if description is not None else entry.get("description") or "").strip()
+        new_date = str(entry_date or entry.get("entry_date") or date.today())[:10]
+        parsed_day = datetime.fromisoformat(new_date).date()
+        cycle_start, cycle_end = _card_cycle_bounds(parsed_day)
+        updated_entry = conn.execute("""
+            UPDATE receivable_entries SET amount=%s, description=%s, entry_date=%s, cycle_start=%s, cycle_end=%s
+            WHERE id=%s AND receivable_id=%s AND user_id=%s RETURNING *
+        """, (new_amount, new_description, new_date, cycle_start, cycle_end, entry_id, receivable_id, user_id)).fetchone()
+        linked_id = entry.get("source_transaction_id")
+        if linked_id and entry.get("entry_type") == "payment":
+            conn.execute("UPDATE transactions SET amount=%s, original_amount=%s, transaction_date=%s, notes=%s WHERE id=%s AND user_id=%s", (new_amount, new_amount, new_date, f"Pago corregido de cuenta por cobrar #{receivable_id}. {new_description}".strip(), linked_id, user_id))
+            conn.execute("UPDATE receivable_payments SET amount=%s, notes=%s WHERE source_transaction_id=%s AND user_id=%s", (new_amount, new_description, linked_id, user_id))
+        account = _recalculate_receivable(conn, user_id, receivable_id)
+        conn.commit()
+    return {"status": "OK", "item": account, "entry": dict(updated_entry)}
+
 def create_receivable(person_name: str, amount: float, notes: str = "") -> dict[str, Any]:
     return add_receivable_entry(
         person_name=person_name,
@@ -993,11 +1018,10 @@ def apply_receivable_payment(
         if not rec:
             return {"status": "NOT_FOUND", "message": "Cuenta por cobrar no encontrada."}
 
-        pending = max(_as_float(rec["pending_amount"]), 0.0)
-        if pending <= 0:
-            return {"status": "ERROR", "message": "Esta cuenta por cobrar ya está completa."}
-
-        payment = round(min(amount, pending), 2)
+        pending = _as_float(rec["pending_amount"])
+        # Overpayments are valid: a negative balance means the person has credit
+        # in their favor and must remain visible instead of being clipped to zero.
+        payment = round(amount, 2)
         person_name = str(rec["person_name"] or "Cuenta por cobrar").strip()
         clean_method = (method or "manual").strip() or "manual"
         clean_notes = (notes or "").strip()
@@ -1057,8 +1081,8 @@ def apply_receivable_payment(
             return {"status": "DUPLICATE", "message": "Ese pago ya fue aplicado.", "source_transaction_id": linked_transaction_id}
 
         new_paid = round(_as_float(rec["paid_amount"]) + payment, 2)
-        new_pending = round(max(_as_float(rec["original_amount"]) - new_paid, 0), 2)
-        status = "completed" if new_pending <= 0.01 else "partial"
+        new_pending = round(_as_float(rec["original_amount"]) - new_paid, 2)
+        status = "credit" if new_pending < -0.01 else "completed" if abs(new_pending) <= 0.01 else "partial"
 
         conn.execute(
             """

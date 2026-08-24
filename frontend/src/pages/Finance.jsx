@@ -18,6 +18,7 @@ import {
   getFixedExpenseStatus,
   addReceivableEntry,
   applyReceivablePayment,
+  updateReceivableEntry,
   getTransactionAnalysis,
   previewFinanceInput,
   previewFinancePdf,
@@ -431,6 +432,7 @@ export function ReceivablesPanel({ data, onPaymentSaved }) {
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [editingEntry, setEditingEntry] = useState(null);
 
   const activeItem = items.find((item) => item.id === activeId) || null;
 
@@ -505,6 +507,20 @@ export function ReceivablesPanel({ data, onPaymentSaved }) {
     }
   };
 
+  const saveEntryEdit = async (event) => {
+    event.preventDefault();
+    if (!editingEntry) return;
+    const amount = Number(String(editingEntry.amount).replace(",", "."));
+    if (!amount || amount <= 0) { setMessage("Ingresá un monto válido."); return; }
+    setSaving(true); setMessage("");
+    try {
+      await updateReceivableEntry(editingEntry.receivable_id, editingEntry.id, { amount, description: editingEntry.description || "", entry_date: editingEntry.entry_date });
+      setEditingEntry(null);
+      await onPaymentSaved?.();
+    } catch (error) { setMessage(error.message || "No pude editar el movimiento."); }
+    finally { setSaving(false); }
+  };
+
   const kindLabels = {
     purchase: "Compra",
     loan: "Préstamo",
@@ -554,7 +570,7 @@ export function ReceivablesPanel({ data, onPaymentSaved }) {
               <div className={`receivable-item ${item.status} ${isActive ? "active" : ""}`} key={item.id}>
                 <div className="receivable-item-head"><strong>{item.person_name}</strong><b>{formatCRC(pending)}</b></div>
                 <div className="receivable-meta current-cycle">
-                  {carried > 0 && <span>Saldo anterior: {formatCRC(carried)}</span>}
+                  {carried !== 0 && <span>Saldo anterior: {formatCRC(carried)}</span>}
                   <span>Cargos del ciclo: {formatCRC(cycleCharges)}</span>
                   {cyclePayments > 0 && <span>Pagos del ciclo: {formatCRC(cyclePayments)}</span>}
                   <span className="receivable-current-total">Debe ahora: {formatCRC(pending)}</span>
@@ -562,7 +578,7 @@ export function ReceivablesPanel({ data, onPaymentSaved }) {
                 <div className="receivable-bar"><span style={{ width: `${progress}%` }} /></div>
                 <div className="receivable-actions">
                   <button type="button" className="ghost-button" onClick={() => setHistoryId(showHistory ? null : item.id)}>{showHistory ? "Ocultar historial" : "Historial"}</button>
-                  {pending > 0 && <button type="button" className="ghost-button receivable-payment-toggle" onClick={() => { if (isActive) resetPayment(); else { setActiveId(item.id); setPaymentAmount(""); setPaymentDate(new Date().toISOString().slice(0, 10)); setMessage(""); setShowAdd(false); } }}>{isActive ? "Cancelar" : "Registrar pago"}</button>}
+                  <button type="button" className="ghost-button receivable-payment-toggle" onClick={() => { if (isActive) resetPayment(); else { setActiveId(item.id); setPaymentAmount(""); setPaymentDate(new Date().toISOString().slice(0, 10)); setMessage(""); setShowAdd(false); } }}>{isActive ? "Cancelar" : "Registrar pago"}</button>
                 </div>
 
                 {showHistory && (
@@ -570,10 +586,20 @@ export function ReceivablesPanel({ data, onPaymentSaved }) {
                     {(item.history || []).length === 0 ? <span>Sin movimientos.</span> : (item.history || []).map((entry) => (
                       <div className={`receivable-history-row ${entry.entry_type}`} key={entry.id}>
                         <div><strong>{entry.description || (entry.entry_type === "payment" ? "Pago" : "Cargo")}</strong><span>{String(entry.entry_date || "").slice(0, 10)}</span></div>
-                        <b>{entry.entry_type === "payment" ? "−" : "+"}{formatCRC(entry.amount)}</b>
+                        <div className="receivable-history-actions"><b>{entry.entry_type === "payment" ? "−" : "+"}{formatCRC(entry.amount)}</b>{entry.source_type !== "additional_card_auto" && <button type="button" className="ghost-button small" onClick={() => setEditingEntry({ ...entry, receivable_id: item.id, entry_date: String(entry.entry_date || "").slice(0,10) })}>Editar</button>}</div>
                       </div>
                     ))}
                   </div>
+                )}
+
+                {editingEntry?.receivable_id === item.id && (
+                  <form className="receivable-payment-form receivable-edit-form" onSubmit={saveEntryEdit}>
+                    <label>Monto<input type="number" min="0.01" step="0.01" value={editingEntry.amount} onChange={(e) => setEditingEntry({ ...editingEntry, amount: e.target.value })} /></label>
+                    <label>Fecha<input type="date" value={editingEntry.entry_date} onChange={(e) => setEditingEntry({ ...editingEntry, entry_date: e.target.value })} /></label>
+                    <label className="receivable-payment-notes">Detalle<input value={editingEntry.description || ""} onChange={(e) => setEditingEntry({ ...editingEntry, description: e.target.value })} /></label>
+                    <button className="hud-action-button" type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar cambios"}</button>
+                    <button className="ghost-button" type="button" onClick={() => setEditingEntry(null)}>Cancelar</button>
+                  </form>
                 )}
 
                 {isActive && (
@@ -1055,10 +1081,11 @@ export default function Finance({
   const [debtSort, setDebtSort] = useState("saldo");
   const [detail, setDetail] = useState(null);
   const [currencyAlerts, setCurrencyAlerts] = useState(null);
+  const [financeAsOf, setFinanceAsOf] = useState(() => new Date().toISOString().slice(0, 10));
 
   const loadSupportingData = async () => {
     const [analysisResult, fixedResult, cycleResult, debtsResult, currencyResult] = await Promise.allSettled([
-      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(), getDebts(), getCurrencyAlerts(),
+      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(financeAsOf), getDebts(), getCurrencyAlerts(),
     ]);
     setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
     setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
@@ -1067,7 +1094,7 @@ export default function Finance({
     setCurrencyAlerts(currencyResult.status === "fulfilled" ? currencyResult.value : null);
   };
 
-  useEffect(() => { loadSupportingData().catch(console.error); }, [dashboard]);
+  useEffect(() => { loadSupportingData().catch(console.error); }, [dashboard, financeAsOf]);
   if (loading) return <LoadingPanel />;
   if (error) return <ErrorPanel error={error} onRetry={onRefresh} />;
 
@@ -1119,7 +1146,10 @@ export default function Finance({
       </div>
 
       {activeTab === "overview" && <>
-        <div className="finance-period-pill">Income: {cycleLabel} · Expenses: {expenseCycleLabel}</div>
+        <div className="finance-period-controls">
+          <div className="finance-period-pill">Income: {cycleLabel} · Expenses: {expenseCycleLabel}</div>
+          <label className="finance-asof-picker">View as of <input type="date" value={financeAsOf} onChange={(e) => setFinanceAsOf(e.target.value)} /></label>
+        </div>
         <div className="cards-grid finance-main-cards finance-main-cards-clean">
           <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Net income", incomeItems)}><span>NET INCOME</span><h2>{formatCRC(incomeNet)}</h2></button>
           <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Net expenses", expenseItems)}><span>NET EXPENSES</span><h2>{formatCRC(expenseNet)}</h2></button>

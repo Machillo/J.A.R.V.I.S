@@ -31,23 +31,25 @@ def _current_month_bounds_sql() -> tuple[str, str]:
 
 
 def _financial_cycle_bounds(today: date | None = None, closing_day: int = 5) -> tuple[date, date]:
-    """Kenneth's operating cycle is 5 -> 5, not calendar month.
+    """Operating view closes *through* day 5 and rolls on day 6.
 
-    The end date is exclusive. Example: Jun 5 <= date < Jul 5.
+    Returned end is exclusive. Example: Jul 6 <= date < Aug 6 represents the
+    view that remains active through Aug 5. On Aug 6 the next cycle begins.
     """
     today = today or date.today()
-    if today.day >= closing_day:
-        start = today.replace(day=closing_day)
+    start_day = closing_day + 1
+    if today.day >= start_day:
+        start = today.replace(day=start_day)
         if today.month == 12:
-            end = date(today.year + 1, 1, closing_day)
+            end = date(today.year + 1, 1, start_day)
         else:
-            end = date(today.year, today.month + 1, closing_day)
+            end = date(today.year, today.month + 1, start_day)
     else:
-        end = today.replace(day=closing_day)
+        end = today.replace(day=start_day)
         if today.month == 1:
-            start = date(today.year - 1, 12, closing_day)
+            start = date(today.year - 1, 12, start_day)
         else:
-            start = date(today.year, today.month - 1, closing_day)
+            start = date(today.year, today.month - 1, start_day)
     return start, end
 
 
@@ -1197,7 +1199,7 @@ def get_financial_summary():
         "user_id": user_id,
     }
 
-def get_financial_cycle_report() -> dict:
+def get_financial_cycle_report(as_of: date | None = None) -> dict:
     """Finance dashboard report for the real 5->5 cycle.
 
     Rules:
@@ -1208,8 +1210,19 @@ def get_financial_cycle_report() -> dict:
       current cycle.
     """
     user_id = get_current_user_id()
-    cycle_start, cycle_end = _financial_cycle_bounds()
-    expense_cycle_start, expense_cycle_end = _card_billing_cycle_bounds()
+    as_of = as_of or date.today()
+    cycle_start, cycle_end = _financial_cycle_bounds(as_of)
+    # The card statement attached to this operating view is the statement paid
+    # by day 5. It closes on the 21st before the operating cycle ends.
+    statement_anchor = cycle_end - timedelta(days=1)
+    if statement_anchor.month == 1:
+        expense_cycle_end = date(statement_anchor.year - 1, 12, 21)
+    else:
+        expense_cycle_end = date(statement_anchor.year, statement_anchor.month - 1, 21)
+    if expense_cycle_end.month == 1:
+        expense_cycle_start = date(expense_cycle_end.year - 1, 12, 21)
+    else:
+        expense_cycle_start = date(expense_cycle_end.year, expense_cycle_end.month - 1, 21)
     query_start = min(cycle_start, expense_cycle_start)
     query_end = max(cycle_end, expense_cycle_end)
     salary_projection = calculate_monthly_salary_projection()

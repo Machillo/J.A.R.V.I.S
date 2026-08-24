@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, RefreshCw, Shield, TrendingUp } from "lucide-react";
-import { createJarvisPremiumInitialStrategy, getDebtAdvisory, getJarvisPremiumStrategyDashboard } from "../services/jarvisApi";
+import { getDebtAdvisory, getJarvisPremiumStrategyDashboard } from "../services/jarvisApi";
 
 const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
 
@@ -45,7 +45,6 @@ export default function PremiumStrategy() {
   const runStrategy = async () => {
     setState((current) => ({ ...current, running: true, error: "" }));
     try {
-      await createJarvisPremiumInitialStrategy();
       await load();
     } catch (error) {
       setState((current) => ({ ...current, running: false, error: error.message || "No pude ejecutar la estrategia." }));

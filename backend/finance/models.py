@@ -186,6 +186,12 @@ class ReceivableEntryRequest(BaseModel):
     entry_date: str | None = None
 
 
+class ReceivableEntryUpdateRequest(BaseModel):
+    amount: float | None = None
+    description: str | None = None
+    entry_date: str | None = None
+
+
 class AccountBalanceRequest(BaseModel):
     account_name: str
     current_balance: float

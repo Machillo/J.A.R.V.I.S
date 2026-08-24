@@ -13,6 +13,7 @@ const request = async (endpoint, options = {}) => {
   const authHeaders = await getAuthHeaders();
 
   const response = await fetch(`${API_URL}${endpoint}`, {
+    cache: "no-store",
     ...options,
     headers: {
       Accept: "application/json",
@@ -49,7 +50,7 @@ export const getStatus = () => request("/status");
 export const getMe = () => request("/auth/me");
 
 export const getFinanceDashboard = () => request("/finance/dashboard");
-export const getFinanceCycleReport = () => request("/finance/cycle-report");
+export const getFinanceCycleReport = (asOf = "") => request(`/finance/cycle-report${asOf ? `?as_of=${encodeURIComponent(asOf)}` : ""}`);
 export const getFinancialSummary = () => request("/finance/summary");
 export const getNetWorth = () => request("/finance/net-worth");
 
@@ -71,6 +72,7 @@ export const addReceivableEntry = async (payload) => {
   }
 };
 export const applyReceivablePayment = (id, payload) => jsonRequest(`/finance/receivables/${id}/payments`, "POST", payload);
+export const updateReceivableEntry = (receivableId, entryId, payload) => jsonRequest(`/finance/receivables/${receivableId}/entries/${entryId}`, "PUT", payload);
 export const getAccountBalances = () => request("/finance/account-balances");
 export const saveAccountBalance = (payload) => jsonRequest("/finance/account-balances", "POST", payload);
 export const getRealBalance = () => request("/finance/real-balance");

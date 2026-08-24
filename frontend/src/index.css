@@ -7645,3 +7645,43 @@ button {
 .currency-rate-editor input:focus{border-color:rgba(124,225,255,.45);box-shadow:0 0 0 3px rgba(124,225,255,.08)}
 .currency-alert-note{display:block;margin-top:12px;color:var(--muted,#9eb1b7);font-size:.74rem;line-height:1.45}
 @media(max-width:720px){.finance-tab-bar{grid-template-columns:repeat(2,1fr)}.currency-alert-row{align-items:stretch;flex-direction:column}.currency-rate-editor{width:100%;align-items:end}.currency-rate-editor label{flex:1}.currency-rate-editor input{min-width:0;width:100%}}
+
+/* Finance cycle selector: the operating view stays open through payment day 5. */
+.finance-period-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.finance-asof-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  opacity: 0.9;
+}
+.finance-asof-picker input {
+  background: rgba(5, 13, 20, 0.88);
+  border: 1px solid rgba(89, 214, 255, 0.28);
+  border-radius: 8px;
+  color: inherit;
+  padding: 7px 9px;
+}
+.receivable-history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.receivable-item.credit .receivable-current-total,
+.receivable-item.credit .receivable-item-head b {
+  color: #7ee7ff;
+}
+.receivable-edit-form {
+  margin-top: 10px;
+}
+@media (max-width: 640px) {
+  .finance-period-controls { align-items: stretch; }
+  .finance-asof-picker { justify-content: space-between; width: 100%; }
+}
