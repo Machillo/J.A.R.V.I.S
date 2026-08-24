@@ -1212,8 +1212,10 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     user_id = get_current_user_id()
     as_of = as_of or date.today()
     cycle_start, cycle_end = _financial_cycle_bounds(as_of)
-    # The card statement attached to this operating view is the statement paid
-    # by day 5. It closes on the 21st before the operating cycle ends.
+    # Card spending shown in this operating view is the statement that will be
+    # paid on the upcoming/just-passed day 5.  For an Aug 6 -> Sep 6 operating
+    # view that means Jul 21 <= expense < Aug 21.  The previous implementation
+    # moved this window one month too far back, which could make Net Expense 0.
     statement_anchor = cycle_end - timedelta(days=1)
     if statement_anchor.month == 1:
         expense_cycle_end = date(statement_anchor.year - 1, 12, 21)
@@ -1223,6 +1225,10 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
         expense_cycle_start = date(expense_cycle_end.year - 1, 12, 21)
     else:
         expense_cycle_start = date(expense_cycle_end.year, expense_cycle_end.month - 1, 21)
+
+    # Make scheduled debt installments real before building the report. This is
+    # idempotent: _sync_automatic_debt_payments only creates missing due rows.
+    _sync_automatic_debt_payments(user_id)
     query_start = min(cycle_start, expense_cycle_start)
     query_end = max(cycle_end, expense_cycle_end)
     salary_projection = calculate_monthly_salary_projection()
@@ -1331,12 +1337,12 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
 
     expenses = [
         row for row in transaction_rows
-        if row.get("transaction_type") == "expense"
+        if str(row.get("transaction_type") or "").strip().lower() == "expense"
         and _inside(row, expense_cycle_start, expense_cycle_end)
     ]
     debt_payments = [
         row for row in transaction_rows
-        if row.get("transaction_type") == "debt_payment"
+        if str(row.get("transaction_type") or "").strip().lower() == "debt_payment"
         and _inside(row, cycle_start, cycle_end)
     ]
     income_transactions = [
@@ -1352,6 +1358,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
 
     expenses_total = sum(_as_float(row.get("amount")) for row in expenses)
     debt_payments_total = sum(_as_float(row.get("amount")) for row in debt_payments)
+    total_outflow = expenses_total + debt_payments_total
     income_received_total = sum(_as_float(row.get("amount")) for row in income_transactions)
     loans_total = sum(_as_float(row.get("amount")) for row in loan_transactions)
     expected_total = base_net + extra_expected
@@ -1394,8 +1401,12 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             "items": extra_items,
         },
         "expenses": {
-            "current_period": round(expenses_total, 2),
-            "items": expenses,
+            # Net Expense is every real outflow visible in the selected view:
+            # normal/fixed expenses plus debt installments that have become due.
+            "current_period": round(total_outflow, 2),
+            "spending_only": round(expenses_total, 2),
+            "debt_payments": round(debt_payments_total, 2),
+            "items": expenses + debt_payments,
         },
         "debts": {
             "payments_current_period": round(debt_payments_total, 2),
