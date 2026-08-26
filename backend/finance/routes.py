@@ -3,6 +3,7 @@ from backend.finance.strategies import get_all_strategies
 from backend.finance.strategy_rules import get_strategy_report, select_recommended_strategy
 from backend.finance.allocation_engine import calculate_allocation_plan
 from backend.finance.evaluators import evaluate_loan, evaluate_installment_purchase
+from datetime import datetime
 
 import traceback
 from fastapi import APIRouter, HTTPException
