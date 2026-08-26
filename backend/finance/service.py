@@ -1242,27 +1242,11 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     base_net = _as_float(salary_projection.get("results", {}).get("base_net"))
     deduction_details = salary_projection.get("deductions", {}) or {}
 
+    # Transactions are the only mandatory source for the cycle report. Optional
+    # ledgers (payroll, bonuses, fixed expenses, debts) are deliberately queried
+    # independently so that an older production schema cannot make the whole
+    # endpoint fail and silently render Net Expenses as 0 in the frontend.
     with get_connection() as conn:
-        payroll_events = [dict(row) for row in conn.execute(
-            """
-            SELECT id, event_type, hours, multiplier, amount, description, created_at
-            FROM payroll_events
-            WHERE user_id = %s
-            ORDER BY created_at ASC
-            """,
-            (user_id,),
-        ).fetchall()]
-
-        bonuses = [dict(row) for row in conn.execute(
-            """
-            SELECT id, amount, description, created_at
-            FROM bonuses
-            WHERE user_id = %s
-            ORDER BY created_at ASC
-            """,
-            (user_id,),
-        ).fetchall()]
-
         transaction_rows = [dict(row) for row in conn.execute(
             f"""
             SELECT id, transaction_date, description, amount, transaction_type,
@@ -1276,25 +1260,52 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             (user_id, query_start.isoformat(), query_end.isoformat()),
         ).fetchall()]
 
-        # Read scheduled obligations directly as a fallback/source of truth for
-        # the selected date. They are projected into the report only after their
-        # due date arrives and only when no real matching outflow exists.
-        fixed_rows = [dict(row) for row in conn.execute(
-            """
-            SELECT id, name, category, expected_amount, due_day, aliases, frequency,
-                   interval_months, start_month, is_active
-            FROM fixed_expenses
-            WHERE user_id = %s AND is_active = TRUE AND expected_amount IS NOT NULL
-            """, (user_id,)
-        ).fetchall()]
-        debt_rows = [dict(row) for row in conn.execute(
-            """
-            SELECT id, name, monthly_payment, payment_day, remaining_amount,
-                   auto_update_monthly, term_months, installments_paid
-            FROM debts
-            WHERE user_id = %s AND remaining_amount > 0
-            """, (user_id,)
-        ).fetchall()]
+    def _optional_rows(sql: str, params: tuple) -> list[dict]:
+        try:
+            with get_connection() as optional_conn:
+                return [dict(row) for row in optional_conn.execute(sql, params).fetchall()]
+        except Exception as optional_error:
+            print(f"[finance] optional cycle source skipped: {optional_error}")
+            return []
+
+    payroll_events = _optional_rows(
+        """
+        SELECT id, event_type, hours, multiplier, amount, description, created_at
+        FROM payroll_events
+        WHERE user_id = %s
+        ORDER BY created_at ASC
+        """,
+        (user_id,),
+    )
+    bonuses = _optional_rows(
+        """
+        SELECT id, amount, description, created_at
+        FROM bonuses
+        WHERE user_id = %s
+        ORDER BY created_at ASC
+        """,
+        (user_id,),
+    )
+
+    # SELECT * is intentional here. Several production databases predate fields
+    # such as aliases/interval_months/start_month. The calculation only reads
+    # fields that actually exist via dict.get(), so legacy schemas remain valid.
+    fixed_rows = _optional_rows(
+        """
+        SELECT *
+        FROM fixed_expenses
+        WHERE user_id = %s AND is_active = TRUE
+        """,
+        (user_id,),
+    )
+    debt_rows = _optional_rows(
+        """
+        SELECT *
+        FROM debts
+        WHERE user_id = %s AND remaining_amount > 0
+        """,
+        (user_id,),
+    )
 
     deductions_total = _as_float(deduction_details.get("extra_deductions_total"))
     positive_events_total = sum(max(_as_float(event.get("amount")), 0) for event in payroll_events)
