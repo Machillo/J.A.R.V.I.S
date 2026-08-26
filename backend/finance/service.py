@@ -1200,288 +1200,192 @@ def get_financial_summary():
     }
 
 def get_financial_cycle_report(as_of: date | None = None) -> dict:
-    """Finance dashboard report for the real 5->5 cycle.
+    """Finance Overview anchored to the payment cycle (5 -> 5).
 
-    Rules:
-    - Fixed expected income is the known base payroll projection.
-    - Extras include OT, bonus, VGH, holiday and vacation only when their
-      estimated/recorded payment date lands inside the current 5->5 cycle.
-    - Expenses and debt payments come from accepted real transactions in the
-      current cycle.
+    The Overview has ONE active financial cycle. It only rolls on day 6.
+
+    Example for 2026-08-26:
+      - Financial/income cycle: 2026-08-05 through 2026-09-05 (inclusive).
+      - Card expense statement: 2026-07-21 through 2026-08-21 (inclusive).
+
+    The card cut on day 21 never changes the Overview by itself. Once the cut
+    closes, that expense total is frozen until the financial cycle rolls on the
+    6th. This mirrors the real workflow: the statement closes on the 21st and is
+    paid with income accumulated through the following 5th.
     """
     user_id = get_current_user_id()
     as_of = as_of or date.today()
-    cycle_start, cycle_end = _financial_cycle_bounds(as_of)
-    # Card spending shown in this operating view is the statement that will be
-    # paid on the upcoming/just-passed day 5.  For an Aug 6 -> Sep 6 operating
-    # view that means Jul 21 <= expense < Aug 21.  The previous implementation
-    # moved this window one month too far back, which could make Net Expense 0.
-    statement_anchor = cycle_end - timedelta(days=1)
-    if statement_anchor.month == 1:
-        expense_cycle_end = date(statement_anchor.year - 1, 12, 21)
-    else:
-        expense_cycle_end = date(statement_anchor.year, statement_anchor.month - 1, 21)
-    if expense_cycle_end.month == 1:
-        expense_cycle_start = date(expense_cycle_end.year - 1, 12, 21)
-    else:
-        expense_cycle_start = date(expense_cycle_end.year, expense_cycle_end.month - 1, 21)
 
-    # Keep the debt ledger synchronized, but Finance must never disappear just
-    # because a legacy deployment is missing a debt-ledger column/migration.
-    # The report below can still calculate due installments from debts directly.
+    # Active Overview cycle. Day 5 belongs to the previous/open cycle; the
+    # next cycle starts only on day 6.
+    if as_of.day >= 6:
+        cycle_start = date(as_of.year, as_of.month, 5)
+        if as_of.month == 12:
+            cycle_end_display = date(as_of.year + 1, 1, 5)
+        else:
+            cycle_end_display = date(as_of.year, as_of.month + 1, 5)
+    else:
+        cycle_end_display = date(as_of.year, as_of.month, 5)
+        if as_of.month == 1:
+            cycle_start = date(as_of.year - 1, 12, 5)
+        else:
+            cycle_start = date(as_of.year, as_of.month - 1, 5)
+
+    # SQL end is exclusive so income on the 5th is included.
+    cycle_end_exclusive = cycle_end_display + timedelta(days=1)
+
+    # Expenses shown in this financial cycle are the BAC statement paid at its
+    # ending day 5. For Aug 5 -> Sep 5, keep Jul 21 -> Aug 21 even after Aug 21.
+    expense_end_display = date(cycle_start.year, cycle_start.month, 21)
+    if expense_end_display.month == 1:
+        expense_start = date(expense_end_display.year - 1, 12, 21)
+    else:
+        expense_start = date(expense_end_display.year, expense_end_display.month - 1, 21)
+    expense_end_exclusive = expense_end_display + timedelta(days=1)
+    expense_closed = as_of >= expense_end_exclusive
+
+    # Debt synchronization is useful, but Finance must never collapse to zero
+    # because a legacy debt row cannot be synchronized.
     try:
         _sync_automatic_debt_payments(user_id)
-    except Exception as sync_error:
-        # Do not make /finance/cycle-report fail (the frontend previously hid
-        # that failure and showed Net Expenses = 0).
-        print(f"[finance] debt schedule sync skipped: {sync_error}")
-    query_start = min(cycle_start, expense_cycle_start)
-    query_end = max(cycle_end, expense_cycle_end)
-    salary_projection = calculate_monthly_salary_projection()
+    except Exception:
+        pass
 
-    base_net = _as_float(salary_projection.get("results", {}).get("base_net"))
-    deduction_details = salary_projection.get("deductions", {}) or {}
+    # Salary projection is optional infrastructure. A failure here must not hide
+    # real transaction expenses already present in the database.
+    try:
+        salary_projection = calculate_monthly_salary_projection() or {}
+    except Exception:
+        salary_projection = {}
+    projection_results = salary_projection.get("results", {}) or {}
+    base_net = _as_float(projection_results.get("base_net"))
+    if base_net <= 0:
+        try:
+            base_net = _latest_base_salary(user_id)
+        except Exception:
+            base_net = 0.0
 
-    # Transactions are the only mandatory source for the cycle report. Optional
-    # ledgers (payroll, bonuses, fixed expenses, debts) are deliberately queried
-    # independently so that an older production schema cannot make the whole
-    # endpoint fail and silently render Net Expenses as 0 in the frontend.
+    # Query each window directly. Do not fetch a broad range and then infer the
+    # statement in Python; that was the source of the zero-expense regressions.
     with get_connection() as conn:
-        transaction_rows = [dict(row) for row in conn.execute(
+        expenses = [dict(row) for row in conn.execute(
             f"""
             SELECT id, transaction_date, description, amount, transaction_type,
                    category, account, source, notes, created_at
             FROM transactions
             WHERE user_id = %s
+              AND LOWER(BTRIM(COALESCE(transaction_type, ''))) = 'expense'
               AND {_transaction_date_expr()} >= %s::date
               AND {_transaction_date_expr()} < %s::date
             ORDER BY {_transaction_date_expr()} DESC, id DESC
             """,
-            (user_id, query_start.isoformat(), query_end.isoformat()),
+            (user_id, expense_start.isoformat(), expense_end_exclusive.isoformat()),
         ).fetchall()]
 
-    def _optional_rows(sql: str, params: tuple) -> list[dict]:
-        try:
-            with get_connection() as optional_conn:
-                return [dict(row) for row in optional_conn.execute(sql, params).fetchall()]
-        except Exception as optional_error:
-            print(f"[finance] optional cycle source skipped: {optional_error}")
-            return []
+        debt_payments = [dict(row) for row in conn.execute(
+            f"""
+            SELECT id, transaction_date, description, amount, transaction_type,
+                   category, account, source, notes, created_at
+            FROM transactions
+            WHERE user_id = %s
+              AND LOWER(BTRIM(COALESCE(transaction_type, ''))) = 'debt_payment'
+              AND {_transaction_date_expr()} >= %s::date
+              AND {_transaction_date_expr()} < %s::date
+            ORDER BY {_transaction_date_expr()} DESC, id DESC
+            """,
+            (user_id, cycle_start.isoformat(), cycle_end_exclusive.isoformat()),
+        ).fetchall()]
 
-    payroll_events = _optional_rows(
-        """
-        SELECT id, event_type, hours, multiplier, amount, description, created_at
-        FROM payroll_events
-        WHERE user_id = %s
-        ORDER BY created_at ASC
-        """,
-        (user_id,),
-    )
-    bonuses = _optional_rows(
-        """
-        SELECT id, amount, description, created_at
-        FROM bonuses
-        WHERE user_id = %s
-        ORDER BY created_at ASC
-        """,
-        (user_id,),
-    )
+        income_transactions = [dict(row) for row in conn.execute(
+            f"""
+            SELECT id, transaction_date, description, amount, transaction_type,
+                   category, account, source, notes, created_at
+            FROM transactions
+            WHERE user_id = %s
+              AND LOWER(BTRIM(COALESCE(transaction_type, ''))) = 'income'
+              AND {_transaction_date_expr()} >= %s::date
+              AND {_transaction_date_expr()} < %s::date
+            ORDER BY {_transaction_date_expr()} DESC, id DESC
+            """,
+            (user_id, cycle_start.isoformat(), cycle_end_exclusive.isoformat()),
+        ).fetchall()]
 
-    # SELECT * is intentional here. Several production databases predate fields
-    # such as aliases/interval_months/start_month. The calculation only reads
-    # fields that actually exist via dict.get(), so legacy schemas remain valid.
-    fixed_rows = _optional_rows(
-        """
-        SELECT *
-        FROM fixed_expenses
-        WHERE user_id = %s AND is_active = TRUE
-        """,
-        (user_id,),
-    )
-    debt_rows = _optional_rows(
-        """
-        SELECT *
-        FROM debts
-        WHERE user_id = %s AND remaining_amount > 0
-        """,
-        (user_id,),
-    )
+        loan_transactions = [dict(row) for row in conn.execute(
+            f"""
+            SELECT id, transaction_date, description, amount, transaction_type,
+                   category, account, source, notes, created_at
+            FROM transactions
+            WHERE user_id = %s
+              AND LOWER(BTRIM(COALESCE(transaction_type, ''))) IN ('loan_received', 'loan_disbursement')
+              AND {_transaction_date_expr()} >= %s::date
+              AND {_transaction_date_expr()} < %s::date
+            ORDER BY {_transaction_date_expr()} DESC, id DESC
+            """,
+            (user_id, cycle_start.isoformat(), cycle_end_exclusive.isoformat()),
+        ).fetchall()]
 
-    deductions_total = _as_float(deduction_details.get("extra_deductions_total"))
-    positive_events_total = sum(max(_as_float(event.get("amount")), 0) for event in payroll_events)
-    bonus_total_all = sum(max(_as_float(item.get("amount")), 0) for item in bonuses)
-    extra_gross_base = positive_events_total + bonus_total_all
-
+    # Extras are intentionally best-effort. They augment Net Income, but missing
+    # payroll metadata cannot invalidate the Overview.
     extra_items: list[dict] = []
     extra_expected = 0.0
-    for event in payroll_events:
-        pay_date = _next_thursday_after_work_week(event.get("created_at"))
-        if not pay_date or not (cycle_start <= pay_date < cycle_end):
-            continue
-        gross = _as_float(event.get("amount"))
-        proportional_deduction = 0.0
-        if gross > 0 and extra_gross_base > 0:
-            proportional_deduction = deductions_total * (gross / extra_gross_base)
-        net = gross - proportional_deduction if gross > 0 else gross
-        extra_expected += net
-        extra_items.append({
-            **event,
-            "kind": "payroll_event",
-            "estimated_pay_date": pay_date.isoformat(),
-            "gross_amount": round(gross, 2),
-            "net_amount": round(net, 2),
-        })
+    try:
+        with get_connection() as conn:
+            payroll_events = [dict(row) for row in conn.execute(
+                """
+                SELECT id, event_type, hours, multiplier, amount, description, created_at
+                FROM payroll_events
+                WHERE user_id = %s
+                ORDER BY created_at ASC
+                """,
+                (user_id,),
+            ).fetchall()]
+            bonuses = [dict(row) for row in conn.execute(
+                """
+                SELECT id, amount, description, created_at
+                FROM bonuses
+                WHERE user_id = %s
+                ORDER BY created_at ASC
+                """,
+                (user_id,),
+            ).fetchall()]
 
-    for bonus in bonuses:
-        created = bonus.get("created_at")
-        if isinstance(created, datetime):
-            pay_date = created.date()
-        else:
-            try:
-                pay_date = datetime.fromisoformat(str(created).replace('Z', '+00:00')).date()
-            except Exception:
-                pay_date = None
-        if not pay_date or not (cycle_start <= pay_date < cycle_end):
-            continue
-        gross = _as_float(bonus.get("amount"))
-        proportional_deduction = 0.0
-        if gross > 0 and extra_gross_base > 0:
-            proportional_deduction = deductions_total * (gross / extra_gross_base)
-        net = gross - proportional_deduction
-        extra_expected += net
-        extra_items.append({
-            **bonus,
-            "kind": "bonus",
-            "estimated_pay_date": pay_date.isoformat(),
-            "gross_amount": round(gross, 2),
-            "net_amount": round(net, 2),
-        })
-
-    def _row_date(row: dict) -> date | None:
-        raw = row.get("transaction_date")
-        if isinstance(raw, datetime):
-            return raw.date()
-        if isinstance(raw, date):
-            return raw
-        try:
-            return datetime.fromisoformat(str(raw)[:10]).date()
-        except Exception:
-            return None
-
-    def _inside(row: dict, start: date, end: date) -> bool:
-        row_date = _row_date(row)
-        return bool(row_date and start <= row_date < end)
-
-    expenses = [
-        row for row in transaction_rows
-        if str(row.get("transaction_type") or "").strip().lower() == "expense"
-        and _inside(row, expense_cycle_start, expense_cycle_end)
-    ]
-    debt_payments = [
-        row for row in transaction_rows
-        if str(row.get("transaction_type") or "").strip().lower() == "debt_payment"
-        and _inside(row, cycle_start, cycle_end)
-    ]
-    income_transactions = [
-        row for row in transaction_rows
-        if row.get("transaction_type") == "income"
-        and _inside(row, cycle_start, cycle_end)
-    ]
-    loan_transactions = [
-        row for row in transaction_rows
-        if row.get("transaction_type") in {"loan_received", "loan_disbursement"}
-        and _inside(row, cycle_start, cycle_end)
-    ]
-
-    def _norm_text(value: Any) -> str:
-        import unicodedata
-        raw = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
-        return " ".join(raw.lower().split())
-
-    def _month_iter(start: date, end: date):
-        cursor = date(start.year, start.month, 1)
-        while cursor < end:
-            yield cursor
-            cursor = date(cursor.year + (cursor.month == 12), 1 if cursor.month == 12 else cursor.month + 1, 1)
-
-    # Fixed expenses become visible on their calendar due date. This is a
-    # projection only: it does not create a transaction and therefore cannot
-    # duplicate a later bank import. If a matching real expense exists, the
-    # scheduled row is suppressed.
-    scheduled_fixed: list[dict] = []
-    real_expense_text = [(_norm_text(r.get("description")), _row_date(r), _as_float(r.get("amount"))) for r in expenses]
-    for fixed in fixed_rows:
-        due_day = int(fixed.get("due_day") or 0)
-        expected = _as_float(fixed.get("expected_amount"))
-        if due_day <= 0 or expected <= 0:
-            continue
-        aliases = fixed.get("aliases") or []
-        if isinstance(aliases, str):
-            try:
-                import json
-                aliases = json.loads(aliases)
-            except Exception:
-                aliases = [aliases]
-        needles = [_norm_text(fixed.get("name"))] + [_norm_text(a) for a in aliases]
-        for month_start in _month_iter(expense_cycle_start, expense_cycle_end):
-            try:
-                due_date = date(month_start.year, month_start.month, min(due_day, 28 if month_start.month == 2 else 30 if month_start.month in {4,6,9,11} else 31))
-            except ValueError:
+        for event in payroll_events:
+            pay_date = _next_thursday_after_work_week(event.get("created_at"))
+            if not pay_date or not (cycle_start <= pay_date < cycle_end_exclusive):
                 continue
-            if not (expense_cycle_start <= due_date < expense_cycle_end) or due_date > as_of:
-                continue
-            matched = any(
-                d is not None and abs((d - due_date).days) <= 7 and
-                (any(n and n in desc for n in needles) or abs(amount - expected) <= 1.0)
-                for desc, d, amount in real_expense_text
-            )
-            if not matched:
-                scheduled_fixed.append({
-                    "id": f"fixed-{fixed['id']}-{due_date.isoformat()}",
-                    "transaction_date": due_date.isoformat(),
-                    "description": f"{fixed.get('name')} (scheduled)",
-                    "amount": expected,
-                    "transaction_type": "expense",
-                    "category": fixed.get("category") or "Gastos fijos",
-                    "source": "fixed_expense_schedule",
-                    "notes": "Projected automatically when the configured due date arrived.",
-                })
+            net = _as_float(event.get("amount"))
+            extra_expected += net
+            extra_items.append({
+                **event,
+                "kind": "payroll_event",
+                "estimated_pay_date": pay_date.isoformat(),
+                "gross_amount": round(net, 2),
+                "net_amount": round(net, 2),
+            })
 
-    # Debt installments follow the operating 6->5 view and appear only once the
-    # configured payment day has actually arrived. If the automatic ledger row
-    # exists, it wins; otherwise Finance still shows the scheduled obligation.
-    scheduled_debts: list[dict] = []
-    for debt in debt_rows:
-        due_day = int(debt.get("payment_day") or 0)
-        payment = min(_as_float(debt.get("monthly_payment")), _as_float(debt.get("remaining_amount")))
-        if due_day <= 0 or payment <= 0:
-            continue
-        for month_start in _month_iter(cycle_start, cycle_end):
-            max_day = 28 if month_start.month == 2 else 30 if month_start.month in {4,6,9,11} else 31
-            due_date = date(month_start.year, month_start.month, min(due_day, max_day))
-            if not (cycle_start <= due_date < cycle_end) or due_date > as_of:
+        for bonus in bonuses:
+            created = bonus.get("created_at")
+            if isinstance(created, datetime):
+                pay_date = created.date()
+            else:
+                try:
+                    pay_date = datetime.fromisoformat(str(created).replace('Z', '+00:00')).date()
+                except Exception:
+                    pay_date = None
+            if not pay_date or not (cycle_start <= pay_date < cycle_end_exclusive):
                 continue
-            exists = any(
-                _row_date(row) == due_date and (
-                    str(row.get("source") or "") == "auto_debt_schedule" or
-                    _norm_text(debt.get("name")) in _norm_text(row.get("description"))
-                )
-                for row in debt_payments
-            )
-            if not exists:
-                scheduled_debts.append({
-                    "id": f"debt-{debt['id']}-{due_date.isoformat()}",
-                    "transaction_date": due_date.isoformat(),
-                    "description": f"Cuota {debt.get('name')} (scheduled)",
-                    "amount": payment,
-                    "transaction_type": "debt_payment",
-                    "category": debt.get("name") or "Deudas",
-                    "source": "debt_schedule_projection",
-                    "notes": "Projected because the configured payment date has arrived.",
-                })
-
-    expenses = expenses + scheduled_fixed
-    debt_payments = debt_payments + scheduled_debts
+            net = _as_float(bonus.get("amount"))
+            extra_expected += net
+            extra_items.append({
+                **bonus,
+                "kind": "bonus",
+                "estimated_pay_date": pay_date.isoformat(),
+                "gross_amount": round(net, 2),
+                "net_amount": round(net, 2),
+            })
+    except Exception:
+        extra_items = []
+        extra_expected = 0.0
 
     expenses_total = sum(_as_float(row.get("amount")) for row in expenses)
     debt_payments_total = sum(_as_float(row.get("amount")) for row in debt_payments)
@@ -1489,36 +1393,43 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     income_received_total = sum(_as_float(row.get("amount")) for row in income_transactions)
     loans_total = sum(_as_float(row.get("amount")) for row in loan_transactions)
     expected_total = base_net + extra_expected
+
     try:
         from backend.finance.intelligence import calculate_goal_reserves, _fetch_active_goals
-        goal_reserves = calculate_goal_reserves(_fetch_active_goals(user_id))
+        goal_reserves = calculate_goal_reserves(_fetch_active_goals(user_id)) or {}
     except Exception:
-        goal_reserves = {
-            "items": [],
-            "monthly_required_all_goals": 0,
-            "monthly_auto_reserve": 0,
-            "critical_monthly_required": 0,
-        }
-
+        goal_reserves = {}
     goals_reserved = max(
         _as_float(goal_reserves.get("critical_monthly_required")),
         _as_float(goal_reserves.get("monthly_auto_reserve")),
     )
-    real_balance = expected_total + income_received_total + loans_total - expenses_total - debt_payments_total - goals_reserved
+
+    real_balance = (
+        expected_total
+        + income_received_total
+        + loans_total
+        - total_outflow
+        - goals_reserved
+    )
 
     return {
         "status": "OK",
+        "as_of": as_of.isoformat(),
         "cycle": {
             "start": cycle_start.isoformat(),
-            "end": cycle_end.isoformat(),
-            "label": f"{cycle_start.isoformat()} → {cycle_end.isoformat()}",
+            "end": cycle_end_display.isoformat(),
+            "end_exclusive": cycle_end_exclusive.isoformat(),
+            "label": f"{cycle_start.isoformat()} → {cycle_end_display.isoformat()}",
             "closing_day": 5,
+            "rolls_on_day": 6,
         },
         "expense_cycle": {
-            "start": expense_cycle_start.isoformat(),
-            "end": expense_cycle_end.isoformat(),
-            "label": f"{expense_cycle_start.isoformat()} → {expense_cycle_end.isoformat()}",
+            "start": expense_start.isoformat(),
+            "end": expense_end_display.isoformat(),
+            "end_exclusive": expense_end_exclusive.isoformat(),
+            "label": f"{expense_start.isoformat()} → {expense_end_display.isoformat()}",
             "cut_day": 21,
+            "closed": expense_closed,
         },
         "income": {
             "fixed_expected": round(base_net, 2),
@@ -1528,12 +1439,11 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             "items": extra_items,
         },
         "expenses": {
-            # Net Expense is every real outflow visible in the selected view:
-            # normal/fixed expenses plus debt installments that have become due.
             "current_period": round(total_outflow, 2),
             "spending_only": round(expenses_total, 2),
             "debt_payments": round(debt_payments_total, 2),
             "items": expenses + debt_payments,
+            "transaction_count": len(expenses),
         },
         "debts": {
             "payments_current_period": round(debt_payments_total, 2),
@@ -1546,13 +1456,20 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
         "cashflow": {
             "real_balance": round(real_balance, 2),
             "loan_received": round(loans_total, 2),
-            "formula": "Ingreso Neto - Gastos Fijos/Variables - Deudas - Metas Críticas",
+            "formula": "Income 5→5 - statement expenses 21→21 - debt payments - critical reserves",
         },
         "transactions": expenses + debt_payments + income_transactions + loan_transactions,
         "payroll_projection": salary_projection,
+        "debug": {
+            "expense_rows": len(expenses),
+            "expense_sum": round(expenses_total, 2),
+            "debt_payment_rows": len(debt_payments),
+            "debt_payment_sum": round(debt_payments_total, 2),
+            "income_rows": len(income_transactions),
+            "income_sum": round(income_received_total, 2),
+        },
         "user_id": user_id,
     }
-
 
 def check_spending(amount: float = 0):
     summary = get_financial_summary()

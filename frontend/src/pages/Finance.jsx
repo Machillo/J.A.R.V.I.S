@@ -1077,6 +1077,7 @@ export default function Finance({
   const [transactionAnalysis, setTransactionAnalysis] = useState(null);
   const [fixedStatus, setFixedStatus] = useState(null);
   const [cycleReport, setCycleReport] = useState(null);
+  const [cycleReportError, setCycleReportError] = useState("");
   const [debts, setDebts] = useState([]);
   const [debtSort, setDebtSort] = useState("saldo");
   const [detail, setDetail] = useState(null);
@@ -1089,7 +1090,13 @@ export default function Finance({
     ]);
     setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
     setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
-    setCycleReport(cycleResult.status === "fulfilled" ? cycleResult.value : null);
+    if (cycleResult.status === "fulfilled") {
+      setCycleReport(cycleResult.value);
+      setCycleReportError("");
+    } else {
+      setCycleReport(null);
+      setCycleReportError(cycleResult.reason?.message || "Finance cycle could not be loaded.");
+    }
     setDebts(debtsResult.status === "fulfilled" && Array.isArray(debtsResult.value) ? debtsResult.value : []);
     setCurrencyAlerts(currencyResult.status === "fulfilled" ? currencyResult.value : null);
   };
@@ -1108,7 +1115,7 @@ export default function Finance({
   const fixedExpectedIncome = Number(cycleIncome.fixed_expected) || Number(summary?.income?.monthly_net_income) || 0;
   const extraExpectedIncome = Number(cycleIncome.extra_expected) || 0;
   const incomeNet = Number(cycleIncome.net) || Number(cycleIncome.expected_total) || fixedExpectedIncome + extraExpectedIncome;
-  const expenseNet = Number(cycleExpenses.current_period) || 0;
+  const expenseNet = cycleReport ? (Number(cycleExpenses.current_period) || 0) : null;
   const realBalance = Number(cycleCashflow.real_balance) || Number(summary?.cashflow?.available_cash) || 0;
   const cycleLabel = cycleReport?.cycle?.label || "Cycle 5 → 5";
   const expenseCycleLabel = cycleReport?.expense_cycle?.label || "Cycle 21 → 21";
@@ -1122,9 +1129,7 @@ export default function Finance({
     return list.sort(byNumber("remaining_amount"));
   })();
 
-  const expenseItems = Array.isArray(cycleExpenses.items)
-    ? cycleExpenses.items
-    : cycleTransactions.filter((item) => ["expense", "debt_payment"].includes(item.transaction_type));
+  const expenseItems = cycleTransactions.filter((item) => ["expense", "debt_payment"].includes(item.transaction_type));
   const recentExpenses = [...expenseItems].sort((a, b) => String(b.transaction_date).localeCompare(String(a.transaction_date))).slice(0, 12);
   const incomeItems = [
     { id: "fixed-income-current-cycle", transaction_date: cycleReport?.cycle?.start, description: "Expected fixed salary", amount: fixedExpectedIncome, transaction_type: "salary_base", category: "Fixed income" },
@@ -1149,12 +1154,12 @@ export default function Finance({
 
       {activeTab === "overview" && <>
         <div className="finance-period-controls">
-          <div className="finance-period-pill">Income: {cycleLabel} · Expenses: {expenseCycleLabel}</div>
+          <div className="finance-period-pill">Financial cycle: {cycleLabel} · Expense cutoff: {expenseCycleLabel}{cycleReport?.expense_cycle?.closed ? " · Closed" : " · Open"}</div>
           <label className="finance-asof-picker">View as of <input type="date" value={financeAsOf} onChange={(e) => setFinanceAsOf(e.target.value)} /></label>
         </div>
         <div className="cards-grid finance-main-cards finance-main-cards-clean">
           <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Net income", incomeItems)}><span>NET INCOME</span><h2>{formatCRC(incomeNet)}</h2></button>
-          <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Net expenses", expenseItems)}><span>NET EXPENSES</span><h2>{formatCRC(expenseNet)}</h2></button>
+          <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Net expenses", expenseItems)}><span>NET EXPENSES</span><h2>{expenseNet === null ? "—" : formatCRC(expenseNet)}</h2>{cycleReportError ? <small className="danger-text">Cycle report unavailable</small> : null}</button>
           <button className="hud-card finance-click-card finance-simple-kpi" onClick={() => openDetail("Real balance", balanceItems)}><span>REAL BALANCE</span><h2 className={realBalance < 0 ? "danger-text" : ""}>{formatCRC(realBalance)}</h2></button>
           <button className="hud-card finance-click-card finance-simple-kpi glow-purple" onClick={() => openDetail("Total debt", debtItems)}><span>TOTAL DEBT</span><h2>{formatCRC(debtTotal)}</h2></button>
         </div>
