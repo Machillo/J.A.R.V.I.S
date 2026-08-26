@@ -1122,7 +1122,9 @@ export default function Finance({
     return list.sort(byNumber("remaining_amount"));
   })();
 
-  const expenseItems = cycleTransactions.filter((item) => item.transaction_type === "expense");
+  const expenseItems = Array.isArray(cycleExpenses.items)
+    ? cycleExpenses.items
+    : cycleTransactions.filter((item) => ["expense", "debt_payment"].includes(item.transaction_type));
   const recentExpenses = [...expenseItems].sort((a, b) => String(b.transaction_date).localeCompare(String(a.transaction_date))).slice(0, 12);
   const incomeItems = [
     { id: "fixed-income-current-cycle", transaction_date: cycleReport?.cycle?.start, description: "Expected fixed salary", amount: fixedExpectedIncome, transaction_type: "salary_base", category: "Fixed income" },

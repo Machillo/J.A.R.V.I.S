@@ -1226,9 +1226,15 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     else:
         expense_cycle_start = date(expense_cycle_end.year, expense_cycle_end.month - 1, 21)
 
-    # Make scheduled debt installments real before building the report. This is
-    # idempotent: _sync_automatic_debt_payments only creates missing due rows.
-    _sync_automatic_debt_payments(user_id)
+    # Keep the debt ledger synchronized, but Finance must never disappear just
+    # because a legacy deployment is missing a debt-ledger column/migration.
+    # The report below can still calculate due installments from debts directly.
+    try:
+        _sync_automatic_debt_payments(user_id)
+    except Exception as sync_error:
+        # Do not make /finance/cycle-report fail (the frontend previously hid
+        # that failure and showed Net Expenses = 0).
+        print(f"[finance] debt schedule sync skipped: {sync_error}")
     query_start = min(cycle_start, expense_cycle_start)
     query_end = max(cycle_end, expense_cycle_end)
     salary_projection = calculate_monthly_salary_projection()
@@ -1268,6 +1274,26 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             ORDER BY {_transaction_date_expr()} DESC, id DESC
             """,
             (user_id, query_start.isoformat(), query_end.isoformat()),
+        ).fetchall()]
+
+        # Read scheduled obligations directly as a fallback/source of truth for
+        # the selected date. They are projected into the report only after their
+        # due date arrives and only when no real matching outflow exists.
+        fixed_rows = [dict(row) for row in conn.execute(
+            """
+            SELECT id, name, category, expected_amount, due_day, aliases, frequency,
+                   interval_months, start_month, is_active
+            FROM fixed_expenses
+            WHERE user_id = %s AND is_active = TRUE AND expected_amount IS NOT NULL
+            """, (user_id,)
+        ).fetchall()]
+        debt_rows = [dict(row) for row in conn.execute(
+            """
+            SELECT id, name, monthly_payment, payment_day, remaining_amount,
+                   auto_update_monthly, term_months, installments_paid
+            FROM debts
+            WHERE user_id = %s AND remaining_amount > 0
+            """, (user_id,)
         ).fetchall()]
 
     deductions_total = _as_float(deduction_details.get("extra_deductions_total"))
@@ -1355,6 +1381,96 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
         if row.get("transaction_type") in {"loan_received", "loan_disbursement"}
         and _inside(row, cycle_start, cycle_end)
     ]
+
+    def _norm_text(value: Any) -> str:
+        import unicodedata
+        raw = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+        return " ".join(raw.lower().split())
+
+    def _month_iter(start: date, end: date):
+        cursor = date(start.year, start.month, 1)
+        while cursor < end:
+            yield cursor
+            cursor = date(cursor.year + (cursor.month == 12), 1 if cursor.month == 12 else cursor.month + 1, 1)
+
+    # Fixed expenses become visible on their calendar due date. This is a
+    # projection only: it does not create a transaction and therefore cannot
+    # duplicate a later bank import. If a matching real expense exists, the
+    # scheduled row is suppressed.
+    scheduled_fixed: list[dict] = []
+    real_expense_text = [(_norm_text(r.get("description")), _row_date(r), _as_float(r.get("amount"))) for r in expenses]
+    for fixed in fixed_rows:
+        due_day = int(fixed.get("due_day") or 0)
+        expected = _as_float(fixed.get("expected_amount"))
+        if due_day <= 0 or expected <= 0:
+            continue
+        aliases = fixed.get("aliases") or []
+        if isinstance(aliases, str):
+            try:
+                import json
+                aliases = json.loads(aliases)
+            except Exception:
+                aliases = [aliases]
+        needles = [_norm_text(fixed.get("name"))] + [_norm_text(a) for a in aliases]
+        for month_start in _month_iter(expense_cycle_start, expense_cycle_end):
+            try:
+                due_date = date(month_start.year, month_start.month, min(due_day, 28 if month_start.month == 2 else 30 if month_start.month in {4,6,9,11} else 31))
+            except ValueError:
+                continue
+            if not (expense_cycle_start <= due_date < expense_cycle_end) or due_date > as_of:
+                continue
+            matched = any(
+                d is not None and abs((d - due_date).days) <= 7 and
+                (any(n and n in desc for n in needles) or abs(amount - expected) <= 1.0)
+                for desc, d, amount in real_expense_text
+            )
+            if not matched:
+                scheduled_fixed.append({
+                    "id": f"fixed-{fixed['id']}-{due_date.isoformat()}",
+                    "transaction_date": due_date.isoformat(),
+                    "description": f"{fixed.get('name')} (scheduled)",
+                    "amount": expected,
+                    "transaction_type": "expense",
+                    "category": fixed.get("category") or "Gastos fijos",
+                    "source": "fixed_expense_schedule",
+                    "notes": "Projected automatically when the configured due date arrived.",
+                })
+
+    # Debt installments follow the operating 6->5 view and appear only once the
+    # configured payment day has actually arrived. If the automatic ledger row
+    # exists, it wins; otherwise Finance still shows the scheduled obligation.
+    scheduled_debts: list[dict] = []
+    for debt in debt_rows:
+        due_day = int(debt.get("payment_day") or 0)
+        payment = min(_as_float(debt.get("monthly_payment")), _as_float(debt.get("remaining_amount")))
+        if due_day <= 0 or payment <= 0:
+            continue
+        for month_start in _month_iter(cycle_start, cycle_end):
+            max_day = 28 if month_start.month == 2 else 30 if month_start.month in {4,6,9,11} else 31
+            due_date = date(month_start.year, month_start.month, min(due_day, max_day))
+            if not (cycle_start <= due_date < cycle_end) or due_date > as_of:
+                continue
+            exists = any(
+                _row_date(row) == due_date and (
+                    str(row.get("source") or "") == "auto_debt_schedule" or
+                    _norm_text(debt.get("name")) in _norm_text(row.get("description"))
+                )
+                for row in debt_payments
+            )
+            if not exists:
+                scheduled_debts.append({
+                    "id": f"debt-{debt['id']}-{due_date.isoformat()}",
+                    "transaction_date": due_date.isoformat(),
+                    "description": f"Cuota {debt.get('name')} (scheduled)",
+                    "amount": payment,
+                    "transaction_type": "debt_payment",
+                    "category": debt.get("name") or "Deudas",
+                    "source": "debt_schedule_projection",
+                    "notes": "Projected because the configured payment date has arrived.",
+                })
+
+    expenses = expenses + scheduled_fixed
+    debt_payments = debt_payments + scheduled_debts
 
     expenses_total = sum(_as_float(row.get("amount")) for row in expenses)
     debt_payments_total = sum(_as_float(row.get("amount")) for row in debt_payments)
