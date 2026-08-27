@@ -126,16 +126,23 @@ def get_expenses_by_category_and_month():
 
 
 def get_monthly_flow():
-    """Return the monthly Analytics series.
+    """Return the monthly Analytics cash-flow series.
 
-    This chart measures financial performance, not cash movements or debt service:
-    - income: only transactions explicitly classified as ``income``;
-    - expenses: only ``expense`` transactions, net of ``refund`` transactions;
-    - debt payments, transfers and loan disbursements stay outside the chart;
-    - cumulative_balance carries only each month's income-minus-expenses result.
+    Analytics answers a cash-flow question: how much money actually entered and
+    left during each month.
 
-    Debt balances and debt payments remain available elsewhere in Finance, but they
-    must never inflate the monthly expense line in Analytics.
+    Inflows:
+    - income (salary, bonuses, investment interest, etc.);
+    - loan_received / loan_disbursement (cash received from financing);
+    - receivable_payment (money paid back by people who owed the user).
+
+    Outflows:
+    - expense (actual consumption/spending), net of refunds;
+    - debt_payment (only installments/amounts actually paid that month).
+
+    The outstanding balance of a debt is intentionally NOT charged as a monthly
+    expense. It remains a liability in Overview and only its actual payments
+    affect this chart.
     """
     user_id = get_current_user_id()
 
@@ -144,7 +151,12 @@ def get_monthly_flow():
             """
             SELECT
                 to_char(transaction_date, 'YYYY-MM') AS month,
-                COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END), 0) AS income,
+                COALESCE(SUM(CASE
+                    WHEN transaction_type IN ('income', 'loan_received', 'loan_disbursement', 'receivable_payment')
+                    THEN amount ELSE 0 END), 0) AS income,
+                COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END), 0) AS earned_income,
+                COALESCE(SUM(CASE WHEN transaction_type IN ('loan_received', 'loan_disbursement') THEN amount ELSE 0 END), 0) AS loan_received,
+                COALESCE(SUM(CASE WHEN transaction_type = 'receivable_payment' THEN amount ELSE 0 END), 0) AS receivable_payments,
                 COALESCE(SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END), 0) AS gross_expenses,
                 COALESCE(SUM(CASE WHEN transaction_type = 'refund' THEN amount ELSE 0 END), 0) AS refunds,
                 COALESCE(SUM(CASE WHEN transaction_type = 'debt_payment' THEN amount ELSE 0 END), 0) AS debt_payments
@@ -160,15 +172,17 @@ def get_monthly_flow():
     cumulative = 0.0
     for row in rows:
         item = dict(row)
-        item["income"] = round(float(item.get("income") or 0), 2)
-        item["gross_expenses"] = round(float(item.get("gross_expenses") or 0), 2)
-        item["refunds"] = round(float(item.get("refunds") or 0), 2)
-        item["debt_payments"] = round(float(item.get("debt_payments") or 0), 2)
+        for key in (
+            "income", "earned_income", "loan_received", "receivable_payments",
+            "gross_expenses", "refunds", "debt_payments",
+        ):
+            item[key] = round(float(item.get(key) or 0), 2)
 
-        # Analytics expense is consumption/spending for the month. A refund reverses
-        # part of that spending; debt service is intentionally not added here.
-        item["expenses"] = round(item["gross_expenses"] - item["refunds"], 2)
-        item["outflow"] = item["expenses"]  # Backward-compatible alias for older clients.
+        # Refunds reverse consumption. Debt payments are real cash outflows for
+        # the month, but the full outstanding debt balance is never added here.
+        item["spending"] = round(item["gross_expenses"] - item["refunds"], 2)
+        item["expenses"] = round(item["spending"] + item["debt_payments"], 2)
+        item["outflow"] = item["expenses"]  # Backward-compatible alias.
         item["monthly_balance"] = round(item["income"] - item["expenses"], 2)
         cumulative = round(cumulative + item["monthly_balance"], 2)
         item["cumulative_balance"] = cumulative
