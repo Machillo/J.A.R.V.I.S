@@ -18,6 +18,7 @@ import {
   UserRound,
   Landmark,
   PiggyBank,
+  Gem,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Finance from "./pages/Finance";
@@ -30,6 +31,8 @@ import AdditionalCards from "./pages/AdditionalCards";
 import Emails from "./pages/Emails";
 import Receivables from "./pages/Receivables";
 import Investments from "./pages/Investments";
+import Wealth from "./pages/Wealth";
+import Businesses from "./pages/Businesses";
 import Login from "./pages/Login";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getProfilePreferences, getStatus, updateProfilePreferences } from "./services/jarvisApi";
@@ -45,7 +48,9 @@ const appSections = {
   strategy: { title: "Strategy", eyebrow: "Financial Director" },
   finance: { title: "Finance", eyebrow: "Financial Center" },
   receivables: { title: "Receivables", eyebrow: "People & Payments" },
+  wealth: { title: "Patrimonio", eyebrow: "Wealth Center" },
   investments: { title: "Inversiones", eyebrow: "Wealth Building" },
+  businesses: { title: "Negocios", eyebrow: "Wealth Building" },
   chats: { title: "Data Tools", eyebrow: "Imports & Movements" },
   emails: { title: "Correos", eyebrow: "Chats" },
   transactions: { title: "Transacciones", eyebrow: "Chats" },
@@ -59,6 +64,7 @@ const appSections = {
 const getBottomGroup = (page) => {
   if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "profile";
   if (["memory", "settings", "goals", "profile"].includes(page)) return "profile";
+  if (["investments", "businesses", "wealth"].includes(page)) return "wealth";
   return page;
 };
 
@@ -138,7 +144,7 @@ function BottomNavigation({ activePage, navigatePage, currentUser, userName, pro
     { id: "strategy", label: "Strategy", icon: ChartNoAxesCombined },
     { id: "finance", label: "Finance", icon: Landmark },
     { id: "receivables", label: "Receivables", icon: HandCoins },
-    { id: "investments", label: "Inversiones", icon: PiggyBank },
+    { id: "wealth", label: "Patrimonio", icon: Gem },
     { id: "profile", label: "Settings", icon: UserRound, avatar: true },
   ];
 
@@ -511,8 +517,14 @@ export default function App() {
       case "receivables":
         return <Receivables onRefresh={refreshAppData} />;
 
+      case "wealth":
+        return <Wealth navigatePage={navigatePage} />;
+
       case "investments":
         return <Investments />;
+
+      case "businesses":
+        return <Businesses />;
 
       case "goals":
         return <Goals dashboard={financeDashboard} />;

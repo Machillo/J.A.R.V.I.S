@@ -203,3 +203,7 @@ export const scanEmailText = (payload) => jsonRequest("/email-monitor/scan-text"
 export const getInvestmentCenter = () => request("/finance/investment-center");
 export const createInvestmentCashflow = (payload) => jsonRequest("/finance/investment-center/cashflows", "POST", payload);
 export const createInvestmentSnapshot = (payload) => jsonRequest("/finance/investment-center/snapshots", "POST", payload);
+
+export const getBusinessCenter = () => request("/finance/business-center");
+export const createBusiness = (payload) => jsonRequest("/finance/business-center/businesses", "POST", payload);
+export const createBusinessMovement = (payload) => jsonRequest("/finance/business-center/movements", "POST", payload);
