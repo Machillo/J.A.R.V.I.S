@@ -7783,3 +7783,14 @@ button {
 .strategy-goal-focus strong {
   color: #ffd27a;
 }
+
+
+/* Strategy V3 · Investments */
+.strategy-investments-panel { margin-top: 18px; }
+.investment-metrics-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:16px 0; }
+.investment-metrics-grid > div { padding:14px; border:1px solid rgba(148,163,184,.16); border-radius:14px; background:rgba(15,23,42,.28); }
+.investment-metrics-grid span { display:block; font-size:.78rem; opacity:.72; margin-bottom:6px; }
+.investment-metrics-grid strong { font-size:1.05rem; }
+.strategy-investment-costs { margin-bottom:12px; }
+@media (max-width: 900px) { .investment-metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width: 560px) { .investment-metrics-grid { grid-template-columns:1fr; } }

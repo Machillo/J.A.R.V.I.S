@@ -219,6 +219,7 @@ def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[di
         "ataque_de_deuda",
         "fondo_de_emergencia",
         "vida_controlada",
+        "inversion",
         "metas_o_inversion",
     ]
     clean = {key: round(max(_f(amounts.get(key)), 0.0), 2) for key in order}
@@ -269,6 +270,7 @@ def _build_dynamic_director_allocation(
         "ataque_de_deuda": 0.0,
         "fondo_de_emergencia": 0.0,
         "vida_controlada": 0.0,
+        "inversion": 0.0,
         "metas_o_inversion": 0.0,
     }
 
@@ -277,6 +279,13 @@ def _build_dynamic_director_allocation(
     goal_now = min(base, max(urgent_required, 0.0))
     amounts["meta_prioritaria"] = goal_now
     remaining = max(base - goal_now, 0.0)
+
+    # Quinta capa: inversión. Arranca pequeña y nunca se financia con deuda ni
+    # desplaza una meta urgente. ₡5.000 es la meta base cuando el flujo lo permite.
+    investment_target = 5_000.0
+    investment_amount = investment_target if remaining >= investment_target else 0.0
+    amounts["inversion"] = investment_amount
+    remaining = max(remaining - investment_amount, 0.0)
 
     debt_exists = total_debt > 1
     safety_gap_mini = max(mini_fund_target - savings_total, 0.0)
@@ -391,6 +400,70 @@ def _build_dynamic_director_allocation(
         },
         "urgent_goals": urgent_goals,
         "urgent_goal_reserved": round(goal_now, 2),
+        "investment_recommended": round(investment_amount, 2),
+        "investment_target": round(investment_target, 2),
+    }
+
+
+def _fetch_investment_portfolio(user_id: int) -> dict[str, Any]:
+    """Resumen local de inversiones, listo para una futura sincronización IBKR read-only."""
+    legacy_value = 0.0
+    contributed = 0.0
+    realized = unrealized = dividends = taxes = commissions = funding_fees = 0.0
+    reserved = 0.0
+    try:
+        with get_connection() as conn:
+            legacy = conn.execute(
+                "SELECT COALESCE(SUM(amount),0) AS total FROM investments WHERE user_id = %s",
+                (user_id,),
+            ).fetchone()
+            legacy_value = _f(legacy["total"] if legacy else 0)
+            # Las tablas nuevas son aditivas y no rompen instalaciones existentes.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS investment_cashflows (
+                    id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
+                    flow_date DATE NOT NULL DEFAULT CURRENT_DATE, flow_type TEXT NOT NULL,
+                    amount NUMERIC(14,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
+                    source TEXT NOT NULL DEFAULT 'manual', description TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS investment_portfolio_snapshots (
+                    id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
+                    snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE, market_value NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    contributed_capital NUMERIC(14,2) NOT NULL DEFAULT 0, realized_pnl NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    unrealized_pnl NUMERIC(14,2) NOT NULL DEFAULT 0, dividends NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    taxes NUMERIC(14,2) NOT NULL DEFAULT 0, commissions NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    funding_fees NUMERIC(14,2) NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'USD',
+                    source TEXT NOT NULL DEFAULT 'manual', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+            snap = conn.execute("""
+                SELECT * FROM investment_portfolio_snapshots WHERE user_id=%s
+                ORDER BY snapshot_date DESC, id DESC LIMIT 1
+            """, (user_id,)).fetchone()
+            reserve = conn.execute("""
+                SELECT COALESCE(SUM(CASE WHEN flow_type='reserve' THEN amount WHEN flow_type='reserve_release' THEN -amount ELSE 0 END),0) AS total
+                FROM investment_cashflows WHERE user_id=%s AND currency='CRC'
+            """, (user_id,)).fetchone()
+            reserved = _f(reserve["total"] if reserve else 0)
+            if snap:
+                d=dict(snap); legacy_value=_f(d.get('market_value')); contributed=_f(d.get('contributed_capital'))
+                realized=_f(d.get('realized_pnl')); unrealized=_f(d.get('unrealized_pnl')); dividends=_f(d.get('dividends'))
+                taxes=_f(d.get('taxes')); commissions=_f(d.get('commissions')); funding_fees=_f(d.get('funding_fees'))
+            else:
+                contributed = legacy_value
+    except Exception:
+        contributed = legacy_value
+    net_pnl = realized + unrealized + dividends - taxes - commissions - funding_fees
+    return {
+        "market_value": round(legacy_value,2), "contributed_capital": round(contributed,2),
+        "realized_pnl": round(realized,2), "unrealized_pnl": round(unrealized,2), "dividends": round(dividends,2),
+        "taxes": round(taxes,2), "commissions": round(commissions,2), "funding_fees": round(funding_fees,2),
+        "net_pnl": round(net_pnl,2), "reserved_to_invest_crc": round(reserved,2),
+        "funding_model": {"wise_percent_estimate": 1.23, "wise_to_ibkr_fixed_usd": 1.13},
+        "currency": "USD",
+        "sync_status": "manual_ready_for_ibkr",
     }
 
 
@@ -691,6 +764,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
 
     emergency_report = _safe_emergency_report()
     savings_total = _fetch_savings_total(user_id)
+    investment_portfolio = _fetch_investment_portfolio(user_id)
     emergency_monthly_base = _f(emergency_report.get("monthly_base"))
     if emergency_monthly_base <= 0:
         emergency_monthly_base = recurring_living_expenses + configured_debt_payments
@@ -763,7 +837,8 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "Una meta urgente con fecha se reserva antes de repartir el resto del excedente.",
         "El fondo de emergencia se construye por etapas: mini-colchón, 1 mes, 3 meses y luego 6 meses esenciales.",
         "La deuda recibe más peso conforme mejora el colchón; los porcentajes cambian con la situación y no son una regla fija.",
-        "Vida controlada es dinero que sí puede gastarse sin tocar obligaciones, meta prioritaria ni seguridad.",
+        "Vida controlada es dinero que sí puede gastarse sin tocar obligaciones, meta prioritaria, seguridad ni inversión.",
+        "Inversión empieza con una meta base de ₡5.000 solo cuando existe flujo; se acumula antes de fondear IBKR para reducir costos.",
         "OT, bonos, feriados y vacaciones aceleran únicamente el ciclo donde realmente ocurren.",
     ]
     if no_free_cash:
@@ -797,6 +872,9 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "estimated_extra_cash": round(distribution_base, 2),
         "base_estimated_extra_cash": round(_f(recurring_director.get("allocation_base_amount")), 2),
         "safe_to_spend": round(_f(director.get("safe_to_spend")), 2),
+        "investment_recommended": round(_f(director.get("investment_recommended")), 2),
+        "investment_target": round(_f(director.get("investment_target")), 2),
+        "investment_portfolio": investment_portfolio,
         "emergency_fund": director.get("emergency") or {},
         "urgent_goals": director.get("urgent_goals") or [],
         "debt_attack_extra": round(current_debt_attack_extra, 2),

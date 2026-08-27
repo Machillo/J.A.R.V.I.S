@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, CheckCircle2, RefreshCw, Shield, TrendingUp } 
 import { getDebtAdvisory, getJarvisPremiumStrategyDashboard } from "../services/jarvisApi";
 
 const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
+const usd = (value) => `$${Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const allocationLabels = {
   ataque_de_deuda: "Ataque de deuda",
@@ -14,6 +15,7 @@ const allocationLabels = {
   metas_o_inversion: "Metas o inversión",
   goals_or_investment: "Metas o inversión",
   meta_prioritaria: "Meta prioritaria",
+  inversion: "Inversión",
 };
 
 export default function PremiumStrategy() {
@@ -80,6 +82,7 @@ export default function PremiumStrategy() {
   const progress = Math.max(0, Math.min(100, Number(strategy.debt_progress_percent || 0)));
   const emergency = strategy.emergency_fund || {};
   const urgentGoals = Array.isArray(strategy.urgent_goals) ? strategy.urgent_goals : [];
+  const investments = strategy.investment_portfolio || {};
   const emergencyProgress = Math.max(
     0,
     Math.min(
@@ -156,6 +159,11 @@ export default function PremiumStrategy() {
           <strong>{money(strategy.current_goal_allocation)}</strong>
           <small>{urgentGoals[0]?.name ? `${urgentGoals[0].name} · reserva de este ciclo` : "Sin meta urgente este ciclo"}</small>
         </div>
+        <div className="hud-card strategy-kpi-card strategy-investment-card">
+          <span>Inversión recomendada</span>
+          <strong>{money(strategy.investment_recommended)}</strong>
+          <small>Meta base: {money(strategy.investment_target || 5000)} · solo si el flujo lo permite</small>
+        </div>
         <div className="hud-card strategy-kpi-card">
           <span>Ataque extra a deuda</span>
           <strong>{money(strategy.current_month_one_time_debt_boost)}</strong>
@@ -201,6 +209,24 @@ export default function PremiumStrategy() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="hud-panel strategy-investments-panel">
+        <h3><TrendingUp size={18} /> Inversiones · quinta capa</h3>
+        <p className="panel-subtitle">JARVIS separa inversión de ahorro y de dinero libre. Por ahora el registro es local; queda preparado para sincronización IBKR solo lectura.</p>
+        <div className="investment-metrics-grid">
+          <div><span>Valor de cartera</span><strong>{usd(investments.market_value)}</strong></div>
+          <div><span>Capital aportado</span><strong>{usd(investments.contributed_capital)}</strong></div>
+          <div><span>P&L neto</span><strong>{usd(investments.net_pnl)}</strong></div>
+          <div><span>Reservado para invertir</span><strong>{money(investments.reserved_to_invest_crc)}</strong></div>
+        </div>
+        <div className="allocation-list strategy-investment-costs">
+          <div className="allocation-row"><span>Dividendos</span><strong>{usd(investments.dividends)}</strong></div>
+          <div className="allocation-row"><span>Comisiones</span><strong>-{usd(investments.commissions)}</strong></div>
+          <div className="allocation-row"><span>Impuestos</span><strong>-{usd(investments.taxes)}</strong></div>
+          <div className="allocation-row"><span>Costos de fondeo</span><strong>-{usd(investments.funding_fees)}</strong></div>
+        </div>
+        <small className="muted-text">Modelo de fondeo inicial: Wise ≈ {investments.funding_model?.wise_percent_estimate || 1.23}% + ${investments.funding_model?.wise_to_ibkr_fixed_usd || 1.13} hacia IBKR. JARVIS puede acumular aportes pequeños antes de transferir.</small>
       </div>
 
       <div className="hud-panel strategy-scenario-panel">
