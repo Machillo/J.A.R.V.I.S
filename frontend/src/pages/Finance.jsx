@@ -14,6 +14,7 @@ import {
   createDebt,
   updateDebt,
   deleteDebt,
+  registerDebtPayment,
   getFinanceCycleReport,
   getFixedExpenseStatus,
   addReceivableEntry,
@@ -718,6 +719,8 @@ const emptyDebtForm = {
   first_payment_date: "",
   installments_paid: "0",
   auto_update_monthly: true,
+  interest_method: "monthly",
+  fixed_fee_amount: "0",
 };
 
 function DebtFormModal({ debt, onClose, onSaved }) {
@@ -736,6 +739,8 @@ function DebtFormModal({ debt, onClose, onSaved }) {
       first_payment_date: debt.first_payment_date ?? "",
       installments_paid: debt.paid_installments ?? debt.installments_paid ?? 0,
       auto_update_monthly: debt.auto_update_monthly !== false,
+      interest_method: debt.interest_method || "monthly",
+      fixed_fee_amount: debt.fixed_fee_amount ?? 0,
     };
   });
   const [saving, setSaving] = useState(false);
@@ -775,6 +780,8 @@ function DebtFormModal({ debt, onClose, onSaved }) {
       first_payment_date: form.first_payment_date || null,
       installments_paid: Math.max(Number(form.installments_paid) || 0, 0),
       auto_update_monthly: Boolean(form.auto_update_monthly),
+      interest_method: form.interest_method || "monthly",
+      fixed_fee_amount: Number(String(form.fixed_fee_amount).replace(",", ".")) || 0,
     };
   };
 
@@ -844,6 +851,17 @@ function DebtFormModal({ debt, onClose, onSaved }) {
             <input type="number" step="0.01" value={form.interest_rate} onChange={(event) => setValue("interest_rate", event.target.value)} />
           </label>
           <label>
+            Cálculo de interés
+            <select value={form.interest_method} onChange={(event) => setValue("interest_method", event.target.value)}>
+              <option value="monthly">Mensual sobre saldo</option>
+              <option value="daily_365">Diario / 365 sobre saldo</option>
+            </select>
+          </label>
+          <label>
+            Seguro / cargo fijo mensual
+            <input type="number" step="0.01" value={form.fixed_fee_amount} onChange={(event) => setValue("fixed_fee_amount", event.target.value)} placeholder="0" />
+          </label>
+          <label>
             Día de pago
             <input type="number" min="1" max="31" value={form.payment_day} onChange={(event) => setValue("payment_day", event.target.value)} placeholder="5" />
           </label>
@@ -880,9 +898,93 @@ function DebtFormModal({ debt, onClose, onSaved }) {
   );
 }
 
+function DebtPaymentModal({ debt, onClose, onSaved }) {
+  const [amount, setAmount] = useState(String(debt?.monthly_payment || ""));
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState(null);
+  const [message, setMessage] = useState("");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const value = Number(String(amount).replace(",", ".")) || 0;
+    if (value <= 0) {
+      setMessage("Ingresá un pago mayor que cero.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    setResult(null);
+    try {
+      const response = await registerDebtPayment(debt.id, {
+        amount: value,
+        payment_date: paymentDate || null,
+        description,
+      });
+      if (response?.status === "ERROR") throw new Error(response.message || "No pude registrar el pago.");
+      setResult(response);
+      await onSaved?.();
+    } catch (error) {
+      setMessage(error.message || "No pude registrar el pago.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="finance-detail-modal-backdrop" onClick={onClose}>
+      <article className="hud-panel finance-detail-modal debt-editor-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="panel-title">
+          <div><h3>REGISTRAR PAGO · {debt.name}</h3></div>
+          <button className="ghost-button" onClick={onClose}>Cerrar</button>
+        </div>
+        <form className="debt-form-grid" onSubmit={submit}>
+          <label>
+            Pago realizado
+            <input type="number" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
+          </label>
+          <label>
+            Fecha del pago
+            <input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} />
+          </label>
+          <label>
+            Nota
+            <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Opcional" />
+          </label>
+
+          <div className="debt-form-preview">
+            <strong>Cuota normal</strong>
+            <span>{formatCRC(debt.monthly_payment || 0)}</span>
+          </div>
+          <div className="debt-form-preview">
+            <strong>Saldo antes del pago</strong>
+            <span>{formatCRC(debt.remaining_amount || 0)}</span>
+          </div>
+
+          {result && (
+            <div className="finance-input-message success">
+              <strong>Pago aplicado</strong><br />
+              Interés: {formatCRC(result.interest_amount)} · Cargos: {formatCRC(result.fee_amount)}<br />
+              Principal: {formatCRC(result.principal_amount)}
+              {Number(result.extra_principal_amount || 0) > 0 ? <> · Extra a principal: {formatCRC(result.extra_principal_amount)}</> : null}<br />
+              Nuevo saldo: <strong>{formatCRC(result.new_remaining_amount)}</strong>
+            </div>
+          )}
+          {message && <p className="finance-input-message">{message}</p>}
+          <button className="hud-action-button success debt-form-submit" disabled={saving}>
+            {saving ? "Calculando..." : "Registrar pago"}
+          </button>
+        </form>
+      </article>
+    </div>
+  );
+}
+
 function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
   const [editingDebt, setEditingDebt] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [payingDebt, setPayingDebt] = useState(null);
   const [message, setMessage] = useState("");
 
   const removeDebt = async (debt) => {
@@ -948,6 +1050,8 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
                 <div className="debt-metrics-grid">
                   <span><small>Cuota mensual</small><b>{formatCRC(debt.monthly_payment || 0)}</b></span>
                   <span><small>Interés</small><b>{Number(debt.interest_rate || 0)}%</b></span>
+                  <span><small>Cargo fijo</small><b>{formatCRC(debt.fixed_fee_amount || 0)}</b></span>
+                  <span><small>Método</small><b>{debt.interest_method === "daily_365" ? "Diario / 365" : "Mensual"}</b></span>
                   <span><small>Próximo pago</small><b>{isPaid ? "Finalizada" : debt.next_payment_date || "Sin fecha"}</b></span>
                   <span><small>Último pago</small><b>{debt.last_payment_date || "Sin registrar"}</b></span>
                 </div>
@@ -963,6 +1067,7 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
                 </details>
 
                 <div className="debt-row-actions">
+                  {!isPaid && <button className="ghost-button" onClick={() => setPayingDebt(debt)}>Registrar pago</button>}
                   <button className="ghost-button" onClick={() => setEditingDebt(debt)}>Editar</button>
                   <button className="ghost-button danger" onClick={() => removeDebt(debt)}>Eliminar</button>
                 </div>
@@ -971,6 +1076,14 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
           })
         )}
       </div>
+
+      {payingDebt && (
+        <DebtPaymentModal
+          debt={payingDebt}
+          onClose={() => setPayingDebt(null)}
+          onSaved={onChanged}
+        />
+      )}
 
       {(adding || editingDebt) && (
         <DebtFormModal

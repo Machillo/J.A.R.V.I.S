@@ -242,15 +242,84 @@ def _estimate_paid_installments(total_amount: float, remaining_amount: float, mo
     return max(min(total_term - remaining_term, total_term), 0)
 
 
-def _scheduled_payment_breakdown(balance: float, payment: float, annual_rate: float) -> tuple[float, float, float]:
+def _interest_for_period(
+    balance: float,
+    annual_rate: float,
+    interest_method: str = "monthly",
+    previous_date: date | None = None,
+    payment_date: date | None = None,
+) -> float:
     balance = max(_as_float(balance), 0)
-    payment = min(max(_as_float(payment), 0), balance + max(balance * max(_as_float(annual_rate), 0) / 100 / 12, 0))
-    interest = round(balance * max(_as_float(annual_rate), 0) / 100 / 12, 2)
-    principal = round(max(payment - interest, 0), 2)
-    if principal > balance:
-        principal = balance
-        payment = round(principal + interest, 2)
-    return round(payment, 2), round(principal, 2), round(interest, 2)
+    annual_rate = max(_as_float(annual_rate), 0)
+    if balance <= 0 or annual_rate <= 0:
+        return 0.0
+
+    method = str(interest_method or "monthly").strip().lower()
+    if method == "daily_365":
+        end = payment_date or date.today()
+        start = previous_date or (end - timedelta(days=30))
+        days = max((end - start).days, 1)
+        return round(balance * (annual_rate / 100) * days / 365, 2)
+
+    return round(balance * (annual_rate / 100) / 12, 2)
+
+
+def _scheduled_payment_breakdown(
+    balance: float,
+    payment: float,
+    annual_rate: float,
+    fixed_fee_amount: float = 0,
+    interest_method: str = "monthly",
+    previous_date: date | None = None,
+    payment_date: date | None = None,
+) -> tuple[float, float, float, float, float]:
+    """Return (actual_payment, principal, interest, fee, extra_principal).
+
+    `monthly_payment` is treated as the normal total cash payment. Interest and
+    fixed fees are paid first; anything above the normal payment goes 100% to
+    principal. This makes extraordinary payments reduce the debt immediately.
+    """
+    balance = max(_as_float(balance), 0)
+    requested_payment = max(_as_float(payment), 0)
+    fee = min(max(_as_float(fixed_fee_amount), 0), requested_payment)
+    interest = _interest_for_period(
+        balance, annual_rate, interest_method, previous_date, payment_date
+    )
+
+    normal_payment = requested_payment
+    principal_budget = max(normal_payment - fee - interest, 0)
+    principal = min(round(principal_budget, 2), balance)
+    actual_payment = round(min(normal_payment, fee + interest + balance), 2)
+    return actual_payment, round(principal, 2), round(interest, 2), round(fee, 2), 0.0
+
+
+def _payment_breakdown_with_extra(
+    balance: float,
+    amount_paid: float,
+    scheduled_payment: float,
+    annual_rate: float,
+    fixed_fee_amount: float = 0,
+    interest_method: str = "monthly",
+    previous_date: date | None = None,
+    payment_date: date | None = None,
+) -> tuple[float, float, float, float, float]:
+    amount_paid = max(_as_float(amount_paid), 0)
+    scheduled_payment = max(_as_float(scheduled_payment), 0)
+    fee = min(max(_as_float(fixed_fee_amount), 0), amount_paid)
+    interest = _interest_for_period(
+        balance, annual_rate, interest_method, previous_date, payment_date
+    )
+
+    normal_cash = min(amount_paid, scheduled_payment or amount_paid)
+    normal_principal = max(normal_cash - fee - interest, 0)
+    normal_principal = min(round(normal_principal, 2), max(_as_float(balance), 0))
+
+    extra_cash = max(amount_paid - normal_cash, 0)
+    remaining_after_normal = max(_as_float(balance) - normal_principal, 0)
+    extra_principal = min(round(extra_cash, 2), remaining_after_normal)
+    principal = round(normal_principal + extra_principal, 2)
+    actual_payment = round(min(amount_paid, fee + interest + principal), 2)
+    return actual_payment, principal, round(interest, 2), round(fee, 2), round(extra_principal, 2)
 
 
 def _sync_automatic_debt_payments(user_id: int) -> None:
@@ -265,7 +334,8 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
             """
             SELECT id, name, debt_type, total_amount, remaining_amount, monthly_payment,
                    interest_rate, term_months, payment_day, start_date, first_payment_date,
-                   auto_update_monthly, installments_paid, created_at
+                   auto_update_monthly, installments_paid, created_at, last_payment_date,
+                   interest_method, fixed_fee_amount
             FROM debts
             WHERE user_id = %s
               AND COALESCE(auto_update_monthly, TRUE) = TRUE
@@ -303,6 +373,7 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                 continue
 
             # El valor histórico guardado actúa como ancla; solo creamos cuotas posteriores.
+            previous_payment_date = _parse_date(debt.get("last_payment_date"))
             for installment_number in range(paid_count + 1, target_paid + 1):
                 due = _add_months(first_due, installment_number - 1, payment_day)
                 if due.isoformat() in existing_dates:
@@ -310,8 +381,15 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                     continue
 
                 previous_balance = balance
-                actual_payment, principal, interest = _scheduled_payment_breakdown(
-                    balance, monthly_payment, debt.get("interest_rate")
+                previous_due = previous_payment_date or _add_months(due, -1, payment_day)
+                actual_payment, principal, interest, fee, extra_principal = _scheduled_payment_breakdown(
+                    balance,
+                    monthly_payment,
+                    debt.get("interest_rate"),
+                    debt.get("fixed_fee_amount"),
+                    debt.get("interest_method") or "monthly",
+                    previous_due,
+                    due,
                 )
                 if principal <= 0:
                     break
@@ -321,11 +399,11 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                     """
                     INSERT INTO debt_payments (
                         user_id, debt_id, payment_type, amount, principal_amount, interest_amount,
-                        previous_remaining_amount, new_remaining_amount,
+                        fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
                         previous_monthly_payment, new_monthly_payment, description,
                         payment_date, installment_number, source, created_at
                     )
-                    SELECT %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto_schedule', NOW()
+                    SELECT %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto_schedule', NOW()
                     WHERE NOT EXISTS (
                         SELECT 1 FROM debt_payments
                         WHERE user_id = %s AND debt_id = %s
@@ -333,7 +411,7 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                     )
                     """,
                     (
-                        user_id, debt["id"], actual_payment, principal, interest, previous_balance, balance,
+                        user_id, debt["id"], actual_payment, principal, interest, fee, extra_principal, previous_balance, balance,
                         monthly_payment, monthly_payment,
                         f"Cuota automática {installment_number}/{term or '?'} de {debt.get('name') or 'deuda'}",
                         due.isoformat(), installment_number,
@@ -359,10 +437,15 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                     ),
                 )
                 paid_count = installment_number
+                previous_payment_date = due
                 existing_dates.add(due.isoformat())
                 changed = True
 
-            # Siempre normalizamos las fechas y el contador, aunque no haya una cuota nueva.
+            # Siempre normalizamos fechas, saldo y contador. El saldo solo avanza
+            # mediante cuotas registradas en este libro, por lo que es idempotente.
+            last_due = previous_payment_date or _parse_date(debt.get("last_payment_date"))
+            finished = balance <= 0 or (term and paid_count >= term)
+            next_due = None if finished else _add_months(first_due, paid_count, payment_day)
             conn.execute(
                 """
                 UPDATE debts
@@ -370,12 +453,17 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                     first_payment_date = COALESCE(first_payment_date, %s),
                     remaining_amount = %s,
                     installments_paid = %s,
-                    updated_at = CASE WHEN remaining_amount <> %s OR installments_paid <> %s THEN NOW() ELSE updated_at END
+                    last_payment_date = %s,
+                    next_payment_date = %s,
+                    auto_update_monthly = CASE WHEN %s THEN FALSE ELSE auto_update_monthly END,
+                    updated_at = NOW()
                 WHERE id = %s AND user_id = %s
                 """,
                 (
                     start_date.isoformat(), first_due.isoformat(), balance, paid_count,
-                    balance, paid_count, debt["id"], user_id,
+                    last_due.isoformat() if last_due else None,
+                    next_due.isoformat() if next_due else None,
+                    bool(finished), debt["id"], user_id,
                 ),
             )
 
@@ -508,6 +596,8 @@ def add_debt(
     first_payment_date: str | None = None,
     installments_paid: int = 0,
     auto_update_monthly: bool = True,
+    interest_method: str = "monthly",
+    fixed_fee_amount: float = 0,
 ):
     user_id = get_current_user_id()
     normalized_start = _parse_date(start_date) or date.today()
@@ -529,11 +619,13 @@ def add_debt(
                 first_payment_date,
                 auto_update_monthly,
                 installments_paid,
+                interest_method,
+                fixed_fee_amount,
                 user_id,
                 created_at,
                 updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             RETURNING id
             """,
             (
@@ -549,6 +641,8 @@ def add_debt(
                 normalized_first.isoformat(),
                 auto_update_monthly,
                 max(int(installments_paid or 0), 0),
+                str(interest_method or "monthly"),
+                max(_as_float(fixed_fee_amount), 0),
                 user_id
             )
         )
@@ -571,6 +665,8 @@ def add_debt(
         "first_payment_date": normalized_first.isoformat(),
         "installments_paid": max(int(installments_paid or 0), 0),
         "auto_update_monthly": auto_update_monthly,
+        "interest_method": str(interest_method or "monthly"),
+        "fixed_fee_amount": max(_as_float(fixed_fee_amount), 0),
         "user_id": user_id
     }
 
@@ -597,6 +693,8 @@ def get_debts():
                    last_payment_date,
                    auto_update_monthly,
                    installments_paid,
+                   interest_method,
+                   fixed_fee_amount,
                    updated_at,
                    created_at,
                    user_id
@@ -2046,6 +2144,8 @@ def update_debt(
     first_payment_date: str | None = None,
     installments_paid: int = 0,
     auto_update_monthly: bool = True,
+    interest_method: str = "monthly",
+    fixed_fee_amount: float = 0,
 ):
     user_id = get_current_user_id()
 
@@ -2081,6 +2181,8 @@ def update_debt(
                 first_payment_date = %s,
                 auto_update_monthly = %s,
                 installments_paid = %s,
+                interest_method = %s,
+                fixed_fee_amount = %s,
                 updated_at = NOW()
             WHERE id = %s
             AND user_id = %s
@@ -2098,6 +2200,8 @@ def update_debt(
                 (_parse_date(first_payment_date) or _parse_date(debt.get("first_payment_date")) or _default_first_payment_date(_parse_date(start_date) or _parse_date(debt.get("start_date")) or date.today(), payment_day)).isoformat(),
                 auto_update_monthly,
                 max(int(installments_paid or 0), 0),
+                str(interest_method or "monthly"),
+                max(_as_float(fixed_fee_amount), 0),
                 debt_id,
                 user_id
             )
@@ -2120,6 +2224,8 @@ def update_debt(
         "first_payment_date": (_parse_date(first_payment_date) or _parse_date(debt.get("first_payment_date")) or _default_first_payment_date(_parse_date(start_date) or _parse_date(debt.get("start_date")) or date.today(), payment_day)).isoformat(),
         "installments_paid": max(int(installments_paid or 0), 0),
         "auto_update_monthly": auto_update_monthly,
+        "interest_method": str(interest_method or "monthly"),
+        "fixed_fee_amount": max(_as_float(fixed_fee_amount), 0),
         "user_id": user_id,
         "status": "OK"
     }
@@ -2132,99 +2238,66 @@ def apply_extra_payment_to_debt(
     new_monthly_payment: float | None = None,
     description: str = ""
 ):
+    """Apply a pure extraordinary payment directly to principal."""
     user_id = get_current_user_id()
+    amount = max(_as_float(amount), 0)
+    if amount <= 0:
+        return {"message": "El abono debe ser mayor que cero.", "status": "ERROR"}
 
     with get_connection() as conn:
         debt = conn.execute(
             """
-            SELECT id, name, debt_type, total_amount, remaining_amount,
-                   monthly_payment, interest_rate, term_months, payment_day, user_id
-            FROM debts
-            WHERE id = %s
-            AND user_id = %s
-            """,
-            (debt_id, user_id)
+            SELECT id, name, remaining_amount, monthly_payment, installments_paid
+            FROM debts WHERE id = %s AND user_id = %s
+            """, (debt_id, user_id)
         ).fetchone()
-
         if not debt:
-            return {
-                "message": "Deuda no encontrada o no pertenece al usuario actual.",
-                "status": "ERROR"
-            }
+            return {"message": "Deuda no encontrada o no pertenece al usuario actual.", "status": "ERROR"}
 
-        previous_remaining_amount = _as_float(debt["remaining_amount"])
-        previous_monthly_payment = _as_float(debt["monthly_payment"])
-
-        final_remaining_amount = (
-            new_remaining_amount
-            if new_remaining_amount is not None
-            else max(previous_remaining_amount - amount, 0)
-        )
-
-        final_monthly_payment = (
-            new_monthly_payment
-            if new_monthly_payment is not None
-            else previous_monthly_payment
-        )
+        previous_balance = _as_float(debt["remaining_amount"])
+        previous_payment = _as_float(debt["monthly_payment"])
+        principal = min(amount, previous_balance)
+        final_balance = max(previous_balance - principal, 0)
+        final_payment = _as_float(new_monthly_payment) if new_monthly_payment is not None else previous_payment
 
         conn.execute(
-            """
-            UPDATE debts
-            SET remaining_amount = %s, monthly_payment = %s, updated_at = NOW()
-            WHERE id = %s
-            AND user_id = %s
-            """,
-            (
-                final_remaining_amount,
-                final_monthly_payment,
-                debt_id,
-                user_id
-            )
+            """UPDATE debts
+               SET remaining_amount = %s, monthly_payment = %s,
+                   auto_update_monthly = CASE WHEN %s <= 0 THEN FALSE ELSE auto_update_monthly END,
+                   next_payment_date = CASE WHEN %s <= 0 THEN NULL ELSE next_payment_date END,
+                   updated_at = NOW()
+               WHERE id = %s AND user_id = %s""",
+            (final_balance, final_payment, final_balance, final_balance, debt_id, user_id),
         )
-
         cursor = conn.execute(
             """
             INSERT INTO debt_payments (
-                user_id,
-                debt_id,
-                payment_type,
-                amount,
-                previous_remaining_amount,
-                new_remaining_amount,
-                previous_monthly_payment,
-                new_monthly_payment,
-                description,
-                created_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                user_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
+                previous_monthly_payment, new_monthly_payment, description, payment_date,
+                installment_number, source, created_at
+            ) VALUES (%s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra', NOW())
             """,
-            (
-                user_id,
-                debt_id,
-                "extra_payment",
-                amount,
-                previous_remaining_amount,
-                final_remaining_amount,
-                previous_monthly_payment,
-                final_monthly_payment,
-                description
-            )
+            (user_id, debt_id, principal, principal, principal, previous_balance, final_balance,
+             previous_payment, final_payment, description or "Abono extraordinario a principal",
+             date.today().isoformat(), int(debt.get("installments_paid") or 0)),
         )
-
+        conn.execute(
+            """INSERT INTO transactions (user_id, transaction_date, description, amount, transaction_type,
+                                      category, account, source, notes, created_at)
+               VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
+            (user_id, date.today().isoformat(), f"Abono extra {debt['name']}", principal, debt['name'],
+             f"debt_id:{debt_id};extra_payment_id:{cursor.lastrowid}"),
+        )
         conn.commit()
 
     return {
-        "message": "Abono extraordinario aplicado correctamente.",
-        "payment_id": cursor.lastrowid,
-        "debt_id": debt_id,
-        "debt_name": debt["name"],
-        "payment_amount": amount,
-        "previous_remaining_amount": previous_remaining_amount,
-        "new_remaining_amount": final_remaining_amount,
-        "previous_monthly_payment": previous_monthly_payment,
-        "new_monthly_payment": final_monthly_payment,
-        "user_id": user_id,
-        "status": "OK"
+        "message": "Abono extraordinario aplicado 100% a principal.",
+        "payment_id": cursor.lastrowid, "debt_id": debt_id, "debt_name": debt["name"],
+        "payment_amount": round(principal, 2), "principal_amount": round(principal, 2),
+        "extra_principal_amount": round(principal, 2), "interest_amount": 0, "fee_amount": 0,
+        "previous_remaining_amount": round(previous_balance, 2),
+        "new_remaining_amount": round(final_balance, 2), "status": "OK"
     }
 
 def get_debt_by_name(name: str):
@@ -2271,105 +2344,183 @@ def get_debt_by_name(name: str):
 def apply_monthly_payment_to_debt(
     debt_id: int,
     amount: float,
-    new_remaining_amount: float,
+    payment_date: str | None = None,
+    new_remaining_amount: float | None = None,
     new_monthly_payment: float | None = None,
     description: str = ""
 ):
+    """Register a real payment and calculate interest/principal automatically.
+
+    Any amount above the scheduled monthly payment is applied entirely to principal.
+    `new_remaining_amount` is kept only for backwards API compatibility and is ignored
+    when the amortization engine has the required debt data.
+    """
     user_id = get_current_user_id()
+    amount = max(_as_float(amount), 0)
+    paid_on = _parse_date(payment_date) or date.today()
+    if amount <= 0:
+        return {"message": "El pago debe ser mayor que cero.", "status": "ERROR"}
 
     with get_connection() as conn:
         debt = conn.execute(
             """
-            SELECT id, name, debt_type, total_amount, remaining_amount,
-                   monthly_payment, interest_rate, term_months, payment_day, user_id
-            FROM debts
-            WHERE id = %s
-            AND user_id = %s
-            """,
-            (debt_id, user_id)
+            SELECT id, name, debt_type, total_amount, remaining_amount, monthly_payment,
+                   interest_rate, term_months, payment_day, user_id, installments_paid,
+                   last_payment_date, first_payment_date, interest_method, fixed_fee_amount
+            FROM debts WHERE id = %s AND user_id = %s
+            """, (debt_id, user_id)
         ).fetchone()
-
         if not debt:
+            return {"message": "Deuda no encontrada o no pertenece al usuario actual.", "status": "ERROR"}
+
+        previous_balance = _as_float(debt["remaining_amount"])
+        scheduled = _normalize_debt_payment_value(debt["monthly_payment"], previous_balance)
+
+        # If the calendar engine already applied this installment automatically,
+        # registering the real payment must NOT charge the base installment twice.
+        # Only the amount above the scheduled payment is an extraordinary principal payment.
+        latest_auto = conn.execute(
+            """
+            SELECT id, amount, principal_amount, interest_amount, fee_amount,
+                   new_remaining_amount, payment_date, installment_number
+            FROM debt_payments
+            WHERE user_id = %s AND debt_id = %s
+              AND payment_type = 'monthly_payment' AND source = 'auto_schedule'
+            ORDER BY installment_number DESC, payment_date DESC
+            LIMIT 1
+            """,
+            (user_id, debt_id),
+        ).fetchone()
+        if latest_auto and int(latest_auto.get("installment_number") or 0) == int(debt.get("installments_paid") or 0):
+            auto_date = _parse_date(latest_auto.get("payment_date"))
+            if auto_date and paid_on >= auto_date and (paid_on.year, paid_on.month) == (auto_date.year, auto_date.month):
+                extra_cash = round(max(amount - scheduled, 0), 2)
+                if extra_cash <= 0:
+                    return {
+                        "message": "La cuota base ya fue aplicada automáticamente por calendario; no se duplicó el pago.",
+                        "payment_amount": round(_as_float(latest_auto.get("amount")), 2),
+                        "scheduled_payment": round(scheduled, 2),
+                        "interest_amount": round(_as_float(latest_auto.get("interest_amount")), 2),
+                        "fee_amount": round(_as_float(latest_auto.get("fee_amount")), 2),
+                        "principal_amount": round(_as_float(latest_auto.get("principal_amount")), 2),
+                        "extra_principal_amount": 0,
+                        "new_remaining_amount": round(previous_balance, 2),
+                        "installment_number": int(latest_auto.get("installment_number") or 0),
+                        "status": "OK",
+                    }
+
+                extra_principal = min(extra_cash, previous_balance)
+                final_balance = round(max(previous_balance - extra_principal, 0), 2)
+                conn.execute(
+                    """UPDATE debts SET remaining_amount = %s,
+                           auto_update_monthly = CASE WHEN %s <= 0 THEN FALSE ELSE auto_update_monthly END,
+                           next_payment_date = CASE WHEN %s <= 0 THEN NULL ELSE next_payment_date END,
+                           updated_at = NOW()
+                       WHERE id = %s AND user_id = %s""",
+                    (final_balance, final_balance, final_balance, debt_id, user_id),
+                )
+                cursor = conn.execute(
+                    """
+                    INSERT INTO debt_payments (
+                        user_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                        fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
+                        previous_monthly_payment, new_monthly_payment, description, payment_date,
+                        installment_number, source, created_at
+                    ) VALUES (%s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra_after_auto', NOW())
+                    """,
+                    (user_id, debt_id, extra_principal, extra_principal, extra_principal, previous_balance,
+                     final_balance, scheduled, scheduled, description or "Excedente de cuota a principal",
+                     paid_on.isoformat(), int(latest_auto.get("installment_number") or 0)),
+                )
+                conn.execute(
+                    """INSERT INTO transactions (user_id, transaction_date, description, amount, transaction_type,
+                                              category, account, source, notes, created_at)
+                       VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
+                    (user_id, paid_on.isoformat(), f"Abono extra {debt['name']}", extra_principal, debt['name'],
+                     f"debt_id:{debt_id};extra_payment_id:{cursor.lastrowid}"),
+                )
+                conn.commit()
+                return {
+                    "message": "La cuota base ya estaba aplicada; el excedente fue 100% a principal.",
+                    "payment_id": cursor.lastrowid, "debt_id": debt_id, "debt_name": debt["name"],
+                    "payment_amount": round(amount, 2), "scheduled_payment": round(scheduled, 2),
+                    "interest_amount": round(_as_float(latest_auto.get("interest_amount")), 2),
+                    "fee_amount": round(_as_float(latest_auto.get("fee_amount")), 2),
+                    "principal_amount": round(_as_float(latest_auto.get("principal_amount")) + extra_principal, 2),
+                    "extra_principal_amount": round(extra_principal, 2),
+                    "previous_remaining_amount": round(previous_balance, 2),
+                    "new_remaining_amount": final_balance,
+                    "installment_number": int(latest_auto.get("installment_number") or 0),
+                    "status": "OK",
+                }
+        previous_monthly = scheduled
+        final_monthly = _as_float(new_monthly_payment) if new_monthly_payment is not None else scheduled
+        last_paid = _parse_date(debt.get("last_payment_date"))
+        if not last_paid:
+            first_due = _parse_date(debt.get("first_payment_date"))
+            last_paid = _add_months(first_due, -1, debt.get("payment_day") or first_due.day) if first_due else paid_on - timedelta(days=30)
+
+        actual_payment, principal, interest, fee, extra_principal = _payment_breakdown_with_extra(
+            previous_balance, amount, scheduled, debt.get("interest_rate"),
+            debt.get("fixed_fee_amount"), debt.get("interest_method") or "monthly",
+            last_paid, paid_on,
+        )
+        if principal <= 0 and previous_balance > 0:
             return {
-                "message": "Deuda no encontrada o no pertenece al usuario actual.",
-                "status": "ERROR"
+                "message": "El pago no cubre intereses/cargos suficientes para reducir principal.",
+                "interest_amount": interest, "fee_amount": fee, "status": "ERROR"
             }
 
-        previous_remaining_amount = _as_float(debt["remaining_amount"])
-        previous_monthly_payment = _as_float(debt["monthly_payment"])
-
-        final_monthly_payment = (
-            new_monthly_payment
-            if new_monthly_payment is not None
-            else previous_monthly_payment
-        )
+        final_balance = round(max(previous_balance - principal, 0), 2)
+        installment_number = int(debt.get("installments_paid") or 0) + 1
+        term = int(debt.get("term_months") or 0)
+        finished = final_balance <= 0 or (term > 0 and installment_number >= term)
+        next_due = None if finished else _add_months(paid_on, 1, debt.get("payment_day") or paid_on.day)
 
         conn.execute(
             """
-            UPDATE debts
-            SET remaining_amount = %s, monthly_payment = %s,
-                installments_paid = COALESCE(installments_paid, 0) + 1,
-                updated_at = NOW()
-            WHERE id = %s
-            AND user_id = %s
+            UPDATE debts SET remaining_amount = %s, monthly_payment = %s,
+                installments_paid = %s, last_payment_date = %s, next_payment_date = %s,
+                auto_update_monthly = CASE WHEN %s THEN FALSE ELSE auto_update_monthly END, updated_at = NOW()
+            WHERE id = %s AND user_id = %s
             """,
-            (
-                new_remaining_amount,
-                final_monthly_payment,
-                debt_id,
-                user_id
-            )
+            (final_balance, final_monthly, installment_number, paid_on.isoformat(),
+             next_due.isoformat() if next_due else None, bool(finished), debt_id, user_id),
         )
 
         cursor = conn.execute(
             """
             INSERT INTO debt_payments (
-                user_id,
-                debt_id,
-                payment_type,
-                amount,
-                previous_remaining_amount,
-                new_remaining_amount,
-                previous_monthly_payment,
-                new_monthly_payment,
-                description,
-                payment_date,
-                installment_number,
-                source,
-                created_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    COALESCE((SELECT installments_paid FROM debts WHERE id = %s), 1),
-                    'manual', NOW())
+                user_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
+                previous_monthly_payment, new_monthly_payment, description, payment_date,
+                installment_number, source, created_at
+            ) VALUES (%s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual', NOW())
             """,
-            (
-                user_id,
-                debt_id,
-                "monthly_payment",
-                amount,
-                previous_remaining_amount,
-                new_remaining_amount,
-                previous_monthly_payment,
-                final_monthly_payment,
-                description,
-                date.today().isoformat(),
-                debt_id,
-            )
+            (user_id, debt_id, actual_payment, principal, interest, fee, extra_principal,
+             previous_balance, final_balance, previous_monthly, final_monthly,
+             description or f"Pago cuota {installment_number}", paid_on.isoformat(), installment_number),
         )
 
+        note = f"debt_id:{debt_id};payment_id:{cursor.lastrowid}"
+        conn.execute(
+            """
+            INSERT INTO transactions (user_id, transaction_date, description, amount, transaction_type,
+                                      category, account, source, notes, created_at)
+            VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_payment', %s, NOW())
+            """,
+            (user_id, paid_on.isoformat(), f"Pago {debt['name']}", actual_payment, debt['name'], note),
+        )
         conn.commit()
 
     return {
-        "message": "Pago mensual registrado correctamente.",
-        "payment_id": cursor.lastrowid,
-        "debt_id": debt_id,
-        "debt_name": debt["name"],
-        "payment_amount": amount,
-        "previous_remaining_amount": previous_remaining_amount,
-        "new_remaining_amount": new_remaining_amount,
-        "previous_monthly_payment": previous_monthly_payment,
-        "new_monthly_payment": final_monthly_payment,
-        "user_id": user_id,
+        "message": "Pago registrado y amortización calculada correctamente.",
+        "payment_id": cursor.lastrowid, "debt_id": debt_id, "debt_name": debt["name"],
+        "payment_amount": round(actual_payment, 2), "scheduled_payment": round(scheduled, 2),
+        "interest_amount": round(interest, 2), "fee_amount": round(fee, 2),
+        "principal_amount": round(principal, 2), "extra_principal_amount": round(extra_principal, 2),
+        "previous_remaining_amount": round(previous_balance, 2), "new_remaining_amount": final_balance,
+        "installment_number": installment_number, "next_payment_date": next_due.isoformat() if next_due else None,
         "status": "OK"
     }
 
@@ -2382,7 +2533,7 @@ def get_debt_payments(debt_id: int | None = None):
                 """
                 SELECT id, user_id, debt_id, payment_type, amount, previous_remaining_amount,
                        new_remaining_amount, previous_monthly_payment,
-                       new_monthly_payment, principal_amount, interest_amount,
+                       new_monthly_payment, principal_amount, interest_amount, fee_amount, extra_principal_amount,
                        description, payment_date, installment_number, source, created_at
                 FROM debt_payments
                 WHERE debt_id = %s
@@ -2396,7 +2547,7 @@ def get_debt_payments(debt_id: int | None = None):
                 """
                 SELECT id, user_id, debt_id, payment_type, amount, previous_remaining_amount,
                        new_remaining_amount, previous_monthly_payment,
-                       new_monthly_payment, principal_amount, interest_amount,
+                       new_monthly_payment, principal_amount, interest_amount, fee_amount, extra_principal_amount,
                        description, payment_date, installment_number, source, created_at
                 FROM debt_payments
                 WHERE user_id = %s

@@ -72,8 +72,12 @@ CREATE TABLE IF NOT EXISTS debts (
     payment_day INTEGER,
     start_date DATE,
     first_payment_date DATE,
+    next_payment_date DATE,
+    last_payment_date DATE,
     auto_update_monthly BOOLEAN NOT NULL DEFAULT TRUE,
     installments_paid INTEGER NOT NULL DEFAULT 0,
+    interest_method TEXT NOT NULL DEFAULT 'monthly',
+    fixed_fee_amount NUMERIC(14, 2) NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -90,6 +94,8 @@ CREATE TABLE IF NOT EXISTS debt_payments (
     new_monthly_payment NUMERIC(14, 2) NOT NULL,
     principal_amount NUMERIC(14, 2),
     interest_amount NUMERIC(14, 2),
+    fee_amount NUMERIC(14, 2) NOT NULL DEFAULT 0,
+    extra_principal_amount NUMERIC(14, 2) NOT NULL DEFAULT 0,
     description TEXT,
     payment_date DATE,
     installment_number INTEGER,

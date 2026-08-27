@@ -186,6 +186,8 @@ def create_debt(request: DebtRequest):
         first_payment_date=request.first_payment_date,
         installments_paid=request.installments_paid,
         auto_update_monthly=request.auto_update_monthly,
+        interest_method=request.interest_method,
+        fixed_fee_amount=request.fixed_fee_amount,
     )
 
 
@@ -214,6 +216,8 @@ def edit_debt(debt_id: int, request: DebtUpdateRequest):
         first_payment_date=request.first_payment_date,
         installments_paid=request.installments_paid,
         auto_update_monthly=request.auto_update_monthly,
+        interest_method=request.interest_method,
+        fixed_fee_amount=request.fixed_fee_amount,
     )
 
 
@@ -232,6 +236,7 @@ def monthly_payment_to_debt(debt_id: int, request: DebtMonthlyPaymentRequest):
     return apply_monthly_payment_to_debt(
         debt_id=debt_id,
         amount=request.amount,
+        payment_date=request.payment_date,
         new_remaining_amount=request.new_remaining_amount,
         new_monthly_payment=request.new_monthly_payment,
         description=request.description,

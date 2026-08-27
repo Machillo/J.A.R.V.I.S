@@ -24,6 +24,8 @@ class DebtRequest(BaseModel):
     first_payment_date: str | None = None
     installments_paid: int = 0
     auto_update_monthly: bool = True
+    interest_method: str = "monthly"
+    fixed_fee_amount: float = 0
 
 
 class SavingRequest(BaseModel):
@@ -80,6 +82,8 @@ class DebtUpdateRequest(BaseModel):
     first_payment_date: str | None = None
     installments_paid: int = 0
     auto_update_monthly: bool = True
+    interest_method: str = "monthly"
+    fixed_fee_amount: float = 0
 
 
 class DebtExtraPaymentRequest(BaseModel):
@@ -90,7 +94,8 @@ class DebtExtraPaymentRequest(BaseModel):
 
 class DebtMonthlyPaymentRequest(BaseModel):
     amount: float
-    new_remaining_amount: float
+    payment_date: str | None = None
+    new_remaining_amount: float | None = None
     new_monthly_payment: float | None = None
     description: str = ""
 
