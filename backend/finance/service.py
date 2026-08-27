@@ -1183,11 +1183,14 @@ def get_financial_summary():
 
         investments_total = conn.execute(
             """
-            SELECT COALESCE(SUM(amount), 0) AS total
-            FROM investments
-            WHERE user_id = %s
+            SELECT COALESCE(
+                (SELECT market_value FROM investment_portfolio_snapshots
+                 WHERE user_id = %s ORDER BY snapshot_date DESC, id DESC LIMIT 1),
+                (SELECT COALESCE(SUM(amount), 0) FROM investments WHERE user_id = %s),
+                0
+            ) AS total
             """,
-            (user_id,)
+            (user_id, user_id)
         ).fetchone()["total"]
 
         legacy_fixed_expenses_total = conn.execute(

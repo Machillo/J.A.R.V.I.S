@@ -17,6 +17,7 @@ import {
   Target,
   UserRound,
   Landmark,
+  PiggyBank,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Finance from "./pages/Finance";
@@ -28,6 +29,7 @@ import PremiumStrategy from "./pages/PremiumStrategy";
 import AdditionalCards from "./pages/AdditionalCards";
 import Emails from "./pages/Emails";
 import Receivables from "./pages/Receivables";
+import Investments from "./pages/Investments";
 import Login from "./pages/Login";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getProfilePreferences, getStatus, updateProfilePreferences } from "./services/jarvisApi";
@@ -43,6 +45,7 @@ const appSections = {
   strategy: { title: "Strategy", eyebrow: "Financial Director" },
   finance: { title: "Finance", eyebrow: "Financial Center" },
   receivables: { title: "Receivables", eyebrow: "People & Payments" },
+  investments: { title: "Inversiones", eyebrow: "Wealth Building" },
   chats: { title: "Data Tools", eyebrow: "Imports & Movements" },
   emails: { title: "Correos", eyebrow: "Chats" },
   transactions: { title: "Transacciones", eyebrow: "Chats" },
@@ -135,6 +138,7 @@ function BottomNavigation({ activePage, navigatePage, currentUser, userName, pro
     { id: "strategy", label: "Strategy", icon: ChartNoAxesCombined },
     { id: "finance", label: "Finance", icon: Landmark },
     { id: "receivables", label: "Receivables", icon: HandCoins },
+    { id: "investments", label: "Inversiones", icon: PiggyBank },
     { id: "profile", label: "Settings", icon: UserRound, avatar: true },
   ];
 
@@ -506,6 +510,9 @@ export default function App() {
 
       case "receivables":
         return <Receivables onRefresh={refreshAppData} />;
+
+      case "investments":
+        return <Investments />;
 
       case "goals":
         return <Goals dashboard={financeDashboard} />;

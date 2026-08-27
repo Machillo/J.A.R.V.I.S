@@ -6442,7 +6442,7 @@ body {
   width: min(700px, calc(100vw - 28px));
   min-height: 76px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 4px;
   padding: 8px;
   border-radius: 999px;
@@ -7794,3 +7794,6 @@ button {
 .strategy-investment-costs { margin-bottom:12px; }
 @media (max-width: 900px) { .investment-metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width: 560px) { .investment-metrics-grid { grid-template-columns:1fr; } }
+
+/* Investment Center */
+.investments-page{display:flex;flex-direction:column;gap:18px;padding-bottom:24px}.investment-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.investment-hero h2{margin:4px 0 6px}.investment-hero p{margin:0;max-width:720px}.investment-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.investment-kpi-grid .hud-card{display:flex;flex-direction:column;gap:7px}.investment-kpi-grid .hud-card>svg{opacity:.8}.investment-kpi-grid strong{font-size:1.45rem}.investment-kpi-grid small,.investment-kpi-grid span{opacity:.72}.investment-kpi-grid .negative strong{color:#ff6b6b}.investment-kpi-grid .positive strong{color:#75e6a4}.investment-two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}.investment-recommendation{font-size:1.65rem}.investment-progress{height:8px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:14px}.investment-progress span{display:block;height:100%;background:currentColor;border-radius:inherit}.panel-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.investments-page .hud-panel h3{margin-top:4px}@media(max-width:900px){.investment-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.investment-kpi-grid,.investment-two-col{grid-template-columns:1fr}.investment-hero{flex-direction:column}.bottom-app-nav{gap:1px}.bottom-nav-item{min-width:0;padding-inline:2px}.bottom-nav-item>span:last-child{font-size:.62rem}}
