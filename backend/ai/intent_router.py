@@ -52,6 +52,8 @@ CREATE_WORDS = {
     "agrega", "agregar", "añade", "anade", "registrar", "registra",
     "crear", "crea", "guardar", "guarda", "meter", "mete", "ingresar",
     "ingresa", "pon", "poner", "sumar", "suma", "cargar", "carga",
+    # Frases naturales que implican que el gasto ya ocurrió.
+    "pagué", "pague", "gasté", "gaste", "compré", "compre",
 }
 
 YES_NO_WORDS = {"si", "sí", "no", "ok", "dale", "confirmo", "cancelar", "cancela"}

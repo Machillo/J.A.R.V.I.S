@@ -30,6 +30,8 @@ OFFICIAL_CATEGORIES: list[dict[str, Any]] = [
     {"group_name": "GASTOS VARIABLES", "category_name": "Entretenimiento", "transaction_type": "expense", "sort_order": 250, "aliases": ["cine", "netflix", "spotify", "playstation", "psn", "juego", "videojuego", "entretenimiento", "salida", "anime"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Compras", "transaction_type": "expense", "sort_order": 260, "aliases": ["compra", "compras", "amazon", "temu", "shein", "ropa", "zapatos", "tienda", "mall"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Salud", "transaction_type": "expense", "sort_order": 270, "aliases": ["salud", "farmacia", "medicina", "doctor", "medico", "médico", "clinica", "clínica", "dentista", "hospital"]},
+    {"group_name": "GASTOS VARIABLES", "category_name": "Deporte", "transaction_type": "expense", "sort_order": 275, "aliases": ["deporte", "muay thai", "muaythai", "boxeo", "box", "artes marciales"]},
+    {"group_name": "GASTOS VARIABLES", "category_name": "Servicios personales", "transaction_type": "expense", "sort_order": 278, "aliases": ["servicio personal", "servicios personales", "lavado de ropa", "lavar ropa", "lavanderia", "lavandería"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Mascotas", "transaction_type": "expense", "sort_order": 280, "aliases": ["mascota", "mascotas", "hamster", "hámster", "veterinaria", "vet", "alimento mascota"]},
 
     # Deudas

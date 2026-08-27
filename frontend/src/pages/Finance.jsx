@@ -36,6 +36,14 @@ const formatCRC = (value = 0) =>
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
 
+// Real Balance must never hide its sign.  Formatting the absolute value and
+// adding the sign ourselves makes a deficit unambiguous in every browser.
+const formatSignedCRC = (value = 0) => {
+  const number = Number(value) || 0;
+  if (number < 0) return `-${formatCRC(Math.abs(number))}`;
+  return formatCRC(number);
+};
+
 const shortCRC = (value = 0) => {
   const number = Number(value) || 0;
 
@@ -1409,7 +1417,7 @@ export default function Finance({
         <div className="cards-grid finance-main-cards finance-main-cards-clean">
           <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Net income", incomeItems)}><span>NET INCOME</span><h2>{formatCRC(incomeNet)}</h2></button>
           <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Net expenses", expenseItems)}><span>NET EXPENSES</span><h2>{expenseNet === null ? "—" : formatCRC(expenseNet)}</h2>{cycleReportError ? <small className="danger-text">Cycle report unavailable</small> : null}</button>
-          <button className="hud-card finance-click-card finance-simple-kpi" onClick={() => openDetail("Real balance", balanceItems)}><span>REAL BALANCE</span><h2 className={realBalance < 0 ? "danger-text" : ""}>{formatCRC(realBalance)}</h2></button>
+          <button className="hud-card finance-click-card finance-simple-kpi" onClick={() => openDetail("Real balance", balanceItems)}><span>REAL BALANCE</span><h2 className={realBalance < 0 ? "danger-text" : realBalance > 0 ? "good-text" : ""}>{formatSignedCRC(realBalance)}</h2></button>
           <button className="hud-card finance-click-card finance-simple-kpi glow-purple" onClick={() => openDetail("Total debt", debtItems)}><span>TOTAL DEBT</span><h2>{formatCRC(debtTotal)}</h2></button>
         </div>
         <div className="dashboard-grid finance-dashboard-grid finance-overview-grid">

@@ -13,7 +13,6 @@ from backend.ai.chat_memory import (
 from backend.finance.service import (
     add_bonus,
     add_debt,
-    add_expense,
     add_investment,
     add_payroll_event,
     add_salary,
@@ -329,6 +328,17 @@ def _initial_payload(action_type: str, user_message: str) -> dict[str, Any]:
     elif action_type == "create_expense":
         if amount is not None:
             payload["amount"] = amount
+
+        # Gastos cotidianos conocidos por JARVIS.  Se guardan con una categoría
+        # útil sin obligar al usuario a responder otra pregunta cada vez.
+        if "muay thai" in lower or "muaythai" in lower or "thai" in lower:
+            payload["category"] = "Deporte"
+            payload["description"] = "Clases de Muay Thai"
+        elif "mamá" in lower or "mama" in lower:
+            # Este pago es un servicio personal, no un gasto de vivienda/hogar.
+            payload["category"] = "Servicios personales"
+            payload["description"] = "Pago a mamá - lavado de ropa"
+
         if "fijo" in lower:
             payload["expense_type"] = "fixed"
         elif "único" in lower or "unico" in lower:
@@ -426,11 +436,18 @@ def _save_action(action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         return add_investment(name=final["name"], amount=final["amount"])
 
     if action_type == "create_expense":
-        return add_expense(
-            category=final["category"],
+        # Transactions es la fuente de verdad de Analytics/Spending.
+        # Evitamos guardar el gasto solo en la tabla legacy `expenses`, porque
+        # entonces el chat confirmaría el gasto pero los gráficos no lo verían.
+        return create_transaction(
+            transaction_date=date.today().isoformat(),
+            description=final.get("description") or f"Gasto - {final['category']}",
             amount=final["amount"],
-            expense_type=final.get("expense_type", "variable"),
-            description=final.get("description", ""),
+            transaction_type="expense",
+            category=final["category"],
+            account="",
+            source="jarvis_chat",
+            notes="Gasto registrado manualmente por JARVIS Chat",
         )
 
     if action_type == "create_income":
