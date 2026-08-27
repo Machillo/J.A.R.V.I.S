@@ -7,7 +7,7 @@ from typing import Any
 from backend.auth.current_user import get_current_user, get_current_user_id
 from backend.core.database import get_connection
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
-from backend.finance.strategic_engine import get_financial_engine_report
+from backend.finance.strategic_engine import get_financial_engine_report, calculate_emergency_fund
 from backend.ai.openai_client import get_active_premium_guides
 
 
@@ -175,6 +175,223 @@ def _safe_cycle_report() -> dict[str, Any]:
         return get_financial_cycle_report() or {}
     except Exception:
         return {}
+
+
+def _safe_emergency_report() -> dict[str, Any]:
+    try:
+        return calculate_emergency_fund() or {}
+    except Exception:
+        return {}
+
+
+def _fetch_savings_total(user_id: int) -> float:
+    """Dinero reservado explícitamente como ahorro.
+
+    No usamos el balance completo de la cuenta como fondo de emergencia porque
+    ese dinero puede estar comprometido con tarjeta, casa, viajes u otras metas.
+    """
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(amount), 0) AS total FROM savings WHERE user_id = %s",
+                (user_id,),
+            ).fetchone()
+        return _f(row["total"] if row else 0)
+    except Exception:
+        return 0.0
+
+
+def _goal_is_urgent(goal: dict[str, Any]) -> bool:
+    remaining = _f(goal.get("remaining_amount"))
+    months_left = int(_f(goal.get("months_left")) or 12)
+    priority = str(goal.get("priority") or "").lower().strip()
+    return (
+        remaining > 0
+        and months_left <= 2
+        and priority in {"critical", "critica", "crítica", "high", "alta"}
+    )
+
+
+def _allocation_from_amounts(amounts: dict[str, float], base: float) -> tuple[dict[str, float], list[dict[str, Any]]]:
+    base = max(_f(base), 0.0)
+    order = [
+        "meta_prioritaria",
+        "ataque_de_deuda",
+        "fondo_de_emergencia",
+        "vida_controlada",
+        "metas_o_inversion",
+    ]
+    clean = {key: round(max(_f(amounts.get(key)), 0.0), 2) for key in order}
+    percentages = {
+        key: round((value / base) * 100, 2) if base > 0 else 0.0
+        for key, value in clean.items()
+    }
+    items = [
+        {"key": key, "percentage": percentages[key], "amount": clean[key]}
+        for key in order
+        if clean[key] > 0.01
+    ]
+    return percentages, items
+
+
+def _build_dynamic_director_allocation(
+    *,
+    available_before_allocation: float,
+    debts: list[dict[str, Any]],
+    goal_reserves: dict[str, Any],
+    savings_total: float,
+    emergency_monthly_base: float,
+) -> dict[str, Any]:
+    """Motor de prioridades dinámicas del Director Financiero.
+
+    El porcentaje no es una regla rígida. Primero protege una meta con fecha,
+    luego ajusta deuda/seguridad/vida según el tamaño real del colchón.
+    """
+    base = max(_f(available_before_allocation), 0.0)
+    total_debt = sum(max(_f(d.get("remaining_amount")), 0.0) for d in debts)
+
+    monthly_base = max(_f(emergency_monthly_base), 0.0)
+    # Con deuda alta no intentamos construir 3-6 meses de golpe. Primero un
+    # mini-colchón que evite volver a la tarjeta ante un imprevisto.
+    mini_fund_target = min(max(monthly_base * 0.50, 150_000.0), 250_000.0)
+    one_month_target = max(monthly_base, mini_fund_target)
+    three_month_target = one_month_target * 3
+    six_month_target = one_month_target * 6
+
+    goal_items = list(goal_reserves.get("items") or [])
+    urgent_goals = [g for g in goal_items if _goal_is_urgent(g)]
+    urgent_required = sum(_f(g.get("monthly_required")) for g in urgent_goals)
+    if urgent_required <= 0:
+        urgent_required = _f(goal_reserves.get("critical_monthly_required"))
+
+    amounts = {
+        "meta_prioritaria": 0.0,
+        "ataque_de_deuda": 0.0,
+        "fondo_de_emergencia": 0.0,
+        "vida_controlada": 0.0,
+        "metas_o_inversion": 0.0,
+    }
+
+    # Capa 1: meta con fecha límite. Se reserva el monto necesario de este ciclo,
+    # no un porcentaje inventado.
+    goal_now = min(base, max(urgent_required, 0.0))
+    amounts["meta_prioritaria"] = goal_now
+    remaining = max(base - goal_now, 0.0)
+
+    debt_exists = total_debt > 1
+    safety_gap_mini = max(mini_fund_target - savings_total, 0.0)
+    safety_gap_month = max(one_month_target - savings_total, 0.0)
+
+    if base <= 0.01:
+        mode = "cash_protection"
+        mode_label = "PROTECCIÓN DE CAJA"
+        mode_reason = "No hay excedente real disponible después de obligaciones."
+        remaining_weights = {"debt": 0.0, "emergency": 0.0, "life": 0.0, "goals": 0.0}
+    elif urgent_goals or goal_now > 0.01:
+        mode = "goal_protection"
+        mode_label = "GOAL PROTECTION"
+        mode_reason = "Hay una meta prioritaria con fecha cercana; se protege antes de acelerar deuda."
+        if debt_exists and safety_gap_mini > 0:
+            remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "goals": 0.0}
+        elif debt_exists:
+            remaining_weights = {"debt": 0.65, "emergency": 0.20, "life": 0.15, "goals": 0.0}
+        else:
+            remaining_weights = {"debt": 0.0, "emergency": 0.35, "life": 0.15, "goals": 0.50}
+    elif debt_exists and safety_gap_mini > 0:
+        mode = "debt_safety"
+        mode_label = "DEBT + SAFETY"
+        mode_reason = "La deuda importa, pero el fondo mínimo todavía es insuficiente para absorber un imprevisto."
+        remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "goals": 0.0}
+    elif debt_exists and safety_gap_month > 0:
+        mode = "debt_attack"
+        mode_label = "DEBT ATTACK"
+        mode_reason = "El mini-colchón ya existe; se acelera deuda sin dejar de construir un mes de seguridad."
+        remaining_weights = {"debt": 0.65, "emergency": 0.20, "life": 0.15, "goals": 0.0}
+    elif debt_exists:
+        mode = "debt_attack"
+        mode_label = "DEBT ATTACK"
+        mode_reason = "Hay al menos un mes de seguridad; la mayor parte del excedente puede atacar deuda."
+        remaining_weights = {"debt": 0.75, "emergency": 0.10, "life": 0.15, "goals": 0.0}
+    else:
+        mode = "wealth_building"
+        mode_label = "WEALTH BUILDING"
+        mode_reason = "Sin deuda prioritaria, el excedente puede construir seguridad, metas e inversión."
+        remaining_weights = {"debt": 0.0, "emergency": 0.30, "life": 0.15, "goals": 0.55}
+
+    emergency_raw = remaining * remaining_weights["emergency"]
+    # No mandar más al fondo mini de lo necesario cuando el modo está intentando
+    # completar ese primer colchón; lo liberado se reasigna a deuda/metas.
+    if debt_exists and savings_total < mini_fund_target:
+        emergency_amount = min(emergency_raw, safety_gap_mini)
+    else:
+        emergency_amount = emergency_raw
+
+    freed = max(emergency_raw - emergency_amount, 0.0)
+    debt_amount = remaining * remaining_weights["debt"]
+    goals_amount = remaining * remaining_weights["goals"]
+    life_amount = remaining * remaining_weights["life"]
+
+    if freed > 0:
+        if debt_exists:
+            debt_amount += freed
+        else:
+            goals_amount += freed
+
+    amounts["ataque_de_deuda"] = debt_amount
+    amounts["fondo_de_emergencia"] = emergency_amount
+    amounts["vida_controlada"] = life_amount
+    amounts["metas_o_inversion"] = goals_amount
+
+    # Ajuste de redondeo / pesos: cualquier sobrante no asignado se protege.
+    assigned = sum(amounts.values())
+    remainder = max(base - assigned, 0.0)
+    if remainder > 0.01:
+        if urgent_goals:
+            amounts["meta_prioritaria"] += remainder
+        elif debt_exists:
+            amounts["ataque_de_deuda"] += remainder
+        else:
+            amounts["metas_o_inversion"] += remainder
+
+    allocation, items = _allocation_from_amounts(amounts, base)
+    safe_to_spend = round(amounts["vida_controlada"], 2)
+
+    if savings_total < mini_fund_target:
+        emergency_level = "mini_fund_building"
+        emergency_next_target = mini_fund_target
+    elif savings_total < one_month_target:
+        emergency_level = "one_month_building"
+        emergency_next_target = one_month_target
+    elif savings_total < three_month_target:
+        emergency_level = "three_month_building"
+        emergency_next_target = three_month_target
+    else:
+        emergency_level = "strong"
+        emergency_next_target = six_month_target
+
+    return {
+        "mode": mode,
+        "mode_label": mode_label,
+        "mode_reason": mode_reason,
+        "allocation": allocation,
+        "allocation_amounts": {k: round(v, 2) for k, v in amounts.items()},
+        "allocation_items": items,
+        "allocation_base_amount": round(base, 2),
+        "safe_to_spend": safe_to_spend,
+        "emergency": {
+            "current": round(savings_total, 2),
+            "monthly_base": round(monthly_base, 2),
+            "mini_target": round(mini_fund_target, 2),
+            "one_month_target": round(one_month_target, 2),
+            "three_month_target": round(three_month_target, 2),
+            "six_month_target": round(six_month_target, 2),
+            "next_target": round(emergency_next_target, 2),
+            "gap_to_next_target": round(max(emergency_next_target - savings_total, 0.0), 2),
+            "level": emergency_level,
+        },
+        "urgent_goals": urgent_goals,
+        "urgent_goal_reserved": round(goal_now, 2),
+    }
 
 
 def _monthly_amount_from_frequency(amount: Any, frequency: str | None, interval_months: Any = 1) -> float:
@@ -447,7 +664,15 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
 
     living = _get_strategy_living_expenses(user_id, debts)
     recurring_living_expenses = _f(living.get("fixed_living_total"))
-    cycle_expenses = _f(cycle_report.get("expenses", {}).get("current_period"))
+    # current_period incluye debt_payment en Finance Overview. Para Strategy
+    # usamos spending_only y restamos deuda una sola vez por separado.
+    cycle_expenses = _f(cycle_report.get("expenses", {}).get("spending_only"))
+    if cycle_expenses <= 0:
+        cycle_expenses = max(
+            _f(cycle_report.get("expenses", {}).get("current_period"))
+            - _f(cycle_report.get("debts", {}).get("payments_current_period")),
+            0.0,
+        )
 
     # Current-cycle strategic surplus, exactly as Kenneth defined it:
     # income cycle - variable/current expenses - debt payments already due/paid.
@@ -464,47 +689,48 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     recurring_goal_allocation = min(max(recurring_before_goals, 0.0), required_goal_reserve)
     recurring_available_after_goals = max(recurring_before_goals - recurring_goal_allocation, 0.0)
 
-    has_critical_goals = critical_goal_required > 0
-    if distribution_base <= 0.01:
-        allocation = {
-            "ataque_de_deuda": 0,
-            "vida_controlada": 0,
-            "fondo_de_emergencia": 0,
-            "metas_o_inversion": 100 if current_goal_allocation > 0 else 0,
-        }
-        allocation_amounts = {
-            "ataque_de_deuda": 0.0,
-            "vida_controlada": 0.0,
-            "fondo_de_emergencia": 0.0,
-            "metas_o_inversion": round(current_goal_allocation, 2),
-        }
-    else:
-        # Ecuador/critical goals are funded first through current_goal_allocation.
-        # Only the remaining surplus is distributed.
-        debt_percent = 70 if debts else 0
-        living_percent = 10
-        emergency_percent = 20 if debts else 50
-        goal_percent = 0
-        allocation = {
-            "ataque_de_deuda": debt_percent,
-            "vida_controlada": living_percent,
-            "fondo_de_emergencia": emergency_percent,
-            "metas_o_inversion": goal_percent,
-        }
-        allocation_amounts = {
-            "ataque_de_deuda": round(distribution_base * debt_percent / 100, 2),
-            "vida_controlada": round(distribution_base * living_percent / 100, 2),
-            "fondo_de_emergencia": round(distribution_base * emergency_percent / 100, 2),
-            "metas_o_inversion": round(current_goal_allocation, 2),
-        }
+    emergency_report = _safe_emergency_report()
+    savings_total = _fetch_savings_total(user_id)
+    emergency_monthly_base = _f(emergency_report.get("monthly_base"))
+    if emergency_monthly_base <= 0:
+        emergency_monthly_base = recurring_living_expenses + configured_debt_payments
 
-    allocation_items = [
-        {"key": key, "percentage": allocation.get(key, 0), "amount": allocation_amounts.get(key, 0)}
-        for key in ["ataque_de_deuda", "vida_controlada", "fondo_de_emergencia", "metas_o_inversion"]
-    ]
-
+    # Director V2: la base a repartir es el excedente real antes de asignaciones.
+    # La meta crítica deja de estar "por fuera" de los porcentajes: ahora aparece
+    # explícitamente como la primera capa del plan.
+    director = _build_dynamic_director_allocation(
+        available_before_allocation=max(current_before_goals, 0.0),
+        debts=debts,
+        goal_reserves=goal_reserves,
+        savings_total=savings_total,
+        emergency_monthly_base=emergency_monthly_base,
+    )
+    allocation = director["allocation"]
+    allocation_amounts = director["allocation_amounts"]
+    allocation_items = director["allocation_items"]
+    allocation_base_amount = _f(director.get("allocation_base_amount"))
+    current_goal_allocation = _f(director.get("urgent_goal_reserved"))
+    distribution_base = allocation_base_amount
     current_debt_attack_extra = _f(allocation_amounts.get("ataque_de_deuda"))
-    recurring_debt_attack_extra = recurring_available_after_goals * 0.70
+
+    # Proyección recurrente: recalcula el mismo criterio usando ingreso base,
+    # sin asumir que OT/bonos futuros se repetirán.
+    recurring_non_debt_essentials = max(
+        emergency_monthly_base - configured_debt_payments,
+        recurring_living_expenses,
+        0.0,
+    )
+    recurring_director = _build_dynamic_director_allocation(
+        available_before_allocation=max(
+            recurring_monthly_income - recurring_non_debt_essentials - configured_debt_payments,
+            0.0,
+        ),
+        debts=debts,
+        goal_reserves=goal_reserves,
+        savings_total=savings_total,
+        emergency_monthly_base=emergency_monthly_base,
+    )
+    recurring_debt_attack_extra = _f(recurring_director.get("allocation_amounts", {}).get("ataque_de_deuda"))
 
     base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
         debts,
@@ -521,21 +747,24 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     if base_total_months and total_months and base_total_months < 999 and total_months < 999:
         months_saved = max(base_total_months - total_months, 0)
 
-    deficit_after_mandatory = current_month_income - cycle_expenses - current_debt_payments - required_goal_reserve
+    deficit_after_mandatory = current_month_income - cycle_expenses - current_debt_payments
     no_free_cash = deficit_after_mandatory <= 0
-    status = "critical" if no_free_cash or (recurring_monthly_income <= 0 or total_debt > max(recurring_monthly_income * 4, 1)) else "controlled"
+    mode = director.get("mode") or "cash_protection"
+    mode_label = director.get("mode_label") or "PROTECCIÓN DE CAJA"
+    status = "critical" if no_free_cash else ("controlled" if total_debt > 0 else "strong")
     objective = (
-        "Señor, este ciclo no tiene flujo libre: proteger pagos de deuda ya comprometidos y la meta crítica antes de abonos extra."
+        "Señor, este ciclo no tiene flujo libre. Primero cubra obligaciones; no hay dinero seguro para gastar o abonar extra."
         if no_free_cash else
-        "Señor, proteger meta crítica y enviar solo el excedente real a la deuda prioritaria."
+        f"Señor, modo {mode_label}: {director.get('mode_reason')}"
     )
 
     rules = [
-        "La distribución usa flujo real: ingreso del ciclo menos gastos variables, pagos de deuda del ciclo y metas críticas.",
-        "OT, bono, feriados y vacaciones solo aceleran el mes donde caen; no se repiten en otros meses.",
-        "Las compras de Emily/Sidey son cuentas por cobrar, no dinero libre hasta que paguen.",
-        "La meta crítica Ecuador se reserva antes de emergencia, inversión o ataque extra de deuda.",
-        "Los pagos de deuda del ciclo se respetan; el ataque extra solo existe si hay excedente real.",
+        "Primero se cubren gastos reales y pagos mínimos; nunca se usa el saldo total de una deuda como gasto mensual.",
+        "Una meta urgente con fecha se reserva antes de repartir el resto del excedente.",
+        "El fondo de emergencia se construye por etapas: mini-colchón, 1 mes, 3 meses y luego 6 meses esenciales.",
+        "La deuda recibe más peso conforme mejora el colchón; los porcentajes cambian con la situación y no son una regla fija.",
+        "Vida controlada es dinero que sí puede gastarse sin tocar obligaciones, meta prioritaria ni seguridad.",
+        "OT, bonos, feriados y vacaciones aceleran únicamente el ciclo donde realmente ocurren.",
     ]
     if no_free_cash:
         rules.insert(0, "Señor, no hay dinero libre para repartir este ciclo; no se fabrica ataque de deuda.")
@@ -543,8 +772,11 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     return {
         "month": _month_key(),
         "status": status,
-        "strategy_type": "flujo_real_con_metas_criticas",
-        "title": "Estrategia de Protección de Flujo" if no_free_cash else "Estrategia Dictador de Deuda",
+        "strategy_type": "director_financiero_dinamico_v2",
+        "title": "Estrategia de Protección de Flujo" if no_free_cash else f"Director Financiero · {mode_label}",
+        "mode": mode,
+        "mode_label": mode_label,
+        "mode_reason": director.get("mode_reason"),
         "objective": objective,
         "monthly_income": round(current_month_income, 2),
         "recurring_monthly_income": round(recurring_monthly_income, 2),
@@ -552,17 +784,21 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "current_month_one_time_debt_boost": round(current_debt_attack_extra, 2),
         "monthly_expenses": round(cycle_expenses, 2),
         "recurring_living_expenses": round(recurring_living_expenses, 2),
+        "recurring_essential_living_base": round(recurring_non_debt_essentials, 2),
         "current_variable_expenses": round(cycle_expenses, 2),
         "monthly_debt_minimums": round(configured_debt_payments, 2),
         "configured_debt_payments": round(configured_debt_payments, 2),
         "current_debt_payments": round(current_debt_payments, 2),
         "debt_payments_reserved": round(current_debt_payments, 2),
-        "critical_goals_reserved": round(required_goal_reserve, 2),
+        "critical_goals_reserved": round(current_goal_allocation, 2),
         "current_goal_allocation": round(current_goal_allocation, 2),
         "available_before_goals": round(current_before_goals, 2),
         "strategic_available_cash": round(distribution_base, 2),
         "estimated_extra_cash": round(distribution_base, 2),
-        "base_estimated_extra_cash": round(recurring_available_after_goals, 2),
+        "base_estimated_extra_cash": round(_f(recurring_director.get("allocation_base_amount")), 2),
+        "safe_to_spend": round(_f(director.get("safe_to_spend")), 2),
+        "emergency_fund": director.get("emergency") or {},
+        "urgent_goals": director.get("urgent_goals") or [],
         "debt_attack_extra": round(current_debt_attack_extra, 2),
         "recurring_debt_attack_extra": round(recurring_debt_attack_extra, 2),
         "debt_payment_pool": round(payment_pool, 2),
@@ -574,7 +810,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "goals": goals,
         "goal_reserves": goal_reserves,
         "allocation": allocation,
-        "allocation_base_amount": round(distribution_base, 2),
+        "allocation_base_amount": round(allocation_base_amount, 2),
         "allocation_amounts": allocation_amounts,
         "allocation_items": allocation_items,
         "total_debt": round(total_debt, 2),

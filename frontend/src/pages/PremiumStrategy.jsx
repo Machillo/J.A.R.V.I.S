@@ -13,6 +13,7 @@ const allocationLabels = {
   emergency_buffer: "Fondo de emergencia",
   metas_o_inversion: "Metas o inversión",
   goals_or_investment: "Metas o inversión",
+  meta_prioritaria: "Meta prioritaria",
 };
 
 export default function PremiumStrategy() {
@@ -77,6 +78,17 @@ export default function PremiumStrategy() {
       }));
   const allocationBase = Number(strategy.allocation_base_amount || strategy.monthly_income || 0);
   const progress = Math.max(0, Math.min(100, Number(strategy.debt_progress_percent || 0)));
+  const emergency = strategy.emergency_fund || {};
+  const urgentGoals = Array.isArray(strategy.urgent_goals) ? strategy.urgent_goals : [];
+  const emergencyProgress = Math.max(
+    0,
+    Math.min(
+      100,
+      Number(emergency.next_target || 0) > 0
+        ? (Number(emergency.current || 0) / Number(emergency.next_target || 1)) * 100
+        : 0
+    )
+  );
 
   return (
     <section className="page premium-strategy-page">
@@ -84,7 +96,7 @@ export default function PremiumStrategy() {
         <div>
           <span className="eyebrow">Director Financiero</span>
           <h2>Strategy</h2>
-          <p>Plan activo, progreso de deuda y distribución recomendada. Este panel es el tablero de mando.</p>
+          <p>Prioridades dinámicas: obligaciones, metas con fecha, seguridad, deuda y dinero libre para vivir.</p>
         </div>
         <button className="primary-action-button" onClick={runStrategy} disabled={state.running}>
           <RefreshCw size={18} />
@@ -98,7 +110,10 @@ export default function PremiumStrategy() {
         <div className="strategy-title-row">
           <Shield size={24} />
           <div>
-            <h3>{payload.title || strategy.title || "Estrategia activa"}</h3>
+            <div className="strategy-mode-line">
+              <h3>{payload.title || strategy.title || "Estrategia activa"}</h3>
+              {strategy.mode_label && <span className={`strategy-mode-badge mode-${strategy.mode || "default"}`}>{strategy.mode_label}</span>}
+            </div>
             <p>{strategy.objective || "Aún no hay objetivo calculado."}</p>
           </div>
         </div>
@@ -116,12 +131,76 @@ export default function PremiumStrategy() {
       </div>
 
       <div className="strategy-kpi-grid">
-        <div className="hud-card strategy-kpi-card"><span>Ingreso base recurrente</span><strong>{money(strategy.recurring_monthly_income || strategy.monthly_income)}</strong><small>Salario fijo neto sin OT/bonos futuros</small></div>
-        <div className="hud-card strategy-kpi-card"><span>Ingreso de este mes</span><strong>{money(strategy.monthly_income)}</strong><small>Base + extras únicos del mes - VGH</small></div>
-        <div className="hud-card strategy-kpi-card"><span>Pago mensual deuda</span><strong>{money(strategy.configured_debt_payments || strategy.monthly_debt_minimums)}</strong><small>Capacidad configurada para deuda</small></div>
-        <div className="hud-card strategy-kpi-card"><span>Sobrante base</span><strong>{money(strategy.base_estimated_extra_cash)}</strong><small>Recurrente después de meta crítica y deuda</small></div>
-        <div className="hud-card strategy-kpi-card"><span>Extra a deuda</span><strong>{money(strategy.current_month_one_time_debt_boost)}</strong><small>Solo si sobra después de Ecuador</small></div>
-        <div className="hud-card strategy-kpi-card"><span>Estado</span><strong>{strategy.status === "critical" ? "Crítico" : "Controlado"}</strong></div>
+        <div className="hud-card strategy-kpi-card">
+          <span>Ingreso del ciclo</span>
+          <strong>{money(strategy.monthly_income)}</strong>
+          <small>Ingreso real esperado del ciclo actual</small>
+        </div>
+        <div className="hud-card strategy-kpi-card">
+          <span>Disponible para repartir</span>
+          <strong>{money(strategy.allocation_base_amount)}</strong>
+          <small>Después de gastos y pagos del ciclo</small>
+        </div>
+        <div className="hud-card strategy-kpi-card strategy-safe-card">
+          <span>Seguro para gastar</span>
+          <strong>{money(strategy.safe_to_spend)}</strong>
+          <small>Vida controlada sin tocar metas, seguridad o deuda</small>
+        </div>
+        <div className="hud-card strategy-kpi-card">
+          <span>Fondo de emergencia</span>
+          <strong>{money(emergency.current)}</strong>
+          <small>Siguiente objetivo: {money(emergency.next_target)}</small>
+        </div>
+        <div className="hud-card strategy-kpi-card">
+          <span>Meta prioritaria</span>
+          <strong>{money(strategy.current_goal_allocation)}</strong>
+          <small>{urgentGoals[0]?.name ? `${urgentGoals[0].name} · reserva de este ciclo` : "Sin meta urgente este ciclo"}</small>
+        </div>
+        <div className="hud-card strategy-kpi-card">
+          <span>Ataque extra a deuda</span>
+          <strong>{money(strategy.current_month_one_time_debt_boost)}</strong>
+          <small>Solo excedente; no sustituye cuotas normales</small>
+        </div>
+        <div className="hud-card strategy-kpi-card">
+          <span>Deuda total</span>
+          <strong>{money(strategy.total_debt)}</strong>
+          <small>Progreso pagado: {progress.toFixed(1)}%</small>
+        </div>
+        <div className="hud-card strategy-kpi-card">
+          <span>Estado</span>
+          <strong>{strategy.status === "critical" ? "Crítico" : strategy.status === "strong" ? "Fuerte" : "Controlado"}</strong>
+          <small>{strategy.mode_label || "Director dinámico"}</small>
+        </div>
+      </div>
+
+      <div className="strategy-grid-2">
+        <div className="hud-panel strategy-safety-panel">
+          <h3><Shield size={18} /> Seguridad financiera</h3>
+          <div className="progress-label-row">
+            <span>Fondo actual → siguiente nivel</span>
+            <strong>{emergencyProgress.toFixed(0)}%</strong>
+          </div>
+          <div className="progress-track"><div style={{ width: `${emergencyProgress}%` }} /></div>
+          <div className="allocation-list strategy-safety-list">
+            <div className="allocation-row"><span>Mini-colchón</span><strong>{money(emergency.mini_target)}</strong></div>
+            <div className="allocation-row"><span>1 mes esencial</span><strong>{money(emergency.one_month_target)}</strong></div>
+            <div className="allocation-row"><span>3 meses esenciales</span><strong>{money(emergency.three_month_target)}</strong></div>
+          </div>
+          <p className="panel-subtitle">Faltan {money(emergency.gap_to_next_target)} para el siguiente nivel de seguridad.</p>
+        </div>
+
+        <div className="hud-panel strategy-priority-panel">
+          <h3><Activity size={18} /> Prioridad actual</h3>
+          <strong className="strategy-priority-mode">{strategy.mode_label || "DIRECTOR DINÁMICO"}</strong>
+          <p>{strategy.mode_reason || strategy.objective}</p>
+          {urgentGoals.length > 0 && (
+            <div className="strategy-goal-focus">
+              <span>Meta protegida</span>
+              <strong>{urgentGoals[0].name}</strong>
+              <small>Faltan {money(urgentGoals[0].remaining_amount)} · {urgentGoals[0].months_left} mes(es)</small>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="hud-panel strategy-scenario-panel">
@@ -161,7 +240,7 @@ export default function PremiumStrategy() {
       <div className="strategy-grid-2">
         <div className="hud-panel">
           <h3><TrendingUp size={18} /> Distribución del dinero</h3>
-          <p className="panel-subtitle">Base del ciclo actual: {money(allocationBase)}</p>
+          <p className="panel-subtitle">Excedente real del ciclo: {money(allocationBase)}. Los porcentajes cambian automáticamente según prioridad y seguridad.</p>
           <div className="allocation-list">
             {allocationItems.map((item) => {
               const key = item.key;

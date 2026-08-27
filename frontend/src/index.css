@@ -7698,3 +7698,88 @@ button {
 /* Interactive Spending donut */
 .spending-donut-workspace{display:grid;gap:18px;margin-top:12px}.spending-donut-main{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(300px,1.1fr);gap:22px;align-items:center}.spending-donut-chart{position:relative;height:330px;min-width:0}.spending-donut-slice{cursor:pointer;transition:opacity .18s ease,filter .18s ease}.spending-donut-slice:hover{filter:brightness(1.18) drop-shadow(0 0 7px rgba(83,229,255,.35))}.spending-donut-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:132px;height:132px;border-radius:50%;border:1px solid rgba(90,229,255,.22);background:radial-gradient(circle,rgba(13,35,48,.98),rgba(5,15,25,.96));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#e9fbff;box-shadow:0 0 30px rgba(35,211,238,.08);cursor:pointer}.spending-donut-center span,.spending-donut-center small{font-size:10px;letter-spacing:.12em;color:#7fa8b6}.spending-donut-center strong{font-size:22px;color:#fff}.spending-donut-legend{display:grid;gap:7px;max-height:330px;overflow:auto;padding-right:4px}.spending-donut-legend button{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;border:1px solid rgba(255,255,255,.07);border-radius:10px;background:rgba(255,255,255,.025);padding:9px 10px;color:#dffcff;text-align:left;cursor:pointer;transition:border-color .18s ease,background .18s ease,transform .18s ease}.spending-donut-legend button:hover,.spending-donut-legend button.active{border-color:rgba(65,224,255,.35);background:rgba(41,230,255,.07);transform:translateX(2px)}.spending-donut-legend i{width:9px;height:9px;border-radius:50%;box-shadow:0 0 8px currentColor}.spending-donut-legend span{display:grid;min-width:0}.spending-donut-legend span strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.spending-donut-legend span small{color:#7195a3;font-size:10px;margin-top:2px}.spending-donut-legend b{font-size:12px;color:#fff;white-space:nowrap}.spending-donut-tooltip{display:grid;gap:3px;min-width:170px;padding:10px 12px;border:1px solid rgba(64,220,255,.26);border-radius:9px;background:rgba(4,14,24,.96);box-shadow:0 12px 30px rgba(0,0,0,.35);color:#eaffff}.spending-donut-tooltip span{font-weight:800;color:#fff}.spending-donut-tooltip small{color:#7fa8b6}.spending-category-detail{border-top:1px solid rgba(255,255,255,.07);padding-top:14px}.spending-category-detail-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:10px}.spending-category-detail-head span{font-size:10px;letter-spacing:.14em;color:#6e96a5}.spending-category-detail-head h4{margin:3px 0 0;font-size:18px;color:#eaffff}.spending-category-detail-head>b{color:#fff}.spending-drilldown-list{max-height:310px;overflow:auto;padding-right:4px}
 @media (max-width:900px){.spending-donut-main{grid-template-columns:1fr}.spending-donut-chart{height:300px}.spending-donut-legend{max-height:260px}}
+
+
+/* Director Financiero V2 */
+.strategy-mode-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.strategy-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 34%, transparent);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.strategy-mode-badge.mode-goal_protection {
+  border-color: rgba(255, 190, 80, .36);
+  background: rgba(255, 190, 80, .09);
+  color: #ffd27a;
+}
+
+.strategy-mode-badge.mode-debt_safety,
+.strategy-mode-badge.mode-debt_attack {
+  border-color: rgba(255, 115, 115, .34);
+  background: rgba(255, 115, 115, .08);
+  color: #ff9f9f;
+}
+
+.strategy-mode-badge.mode-wealth_building {
+  border-color: color-mix(in srgb, var(--green) 35%, transparent);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+}
+
+.strategy-safe-card {
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+.strategy-safe-card strong {
+  color: var(--green);
+}
+
+.strategy-safety-list {
+  margin-top: 16px;
+}
+
+.strategy-priority-mode {
+  display: block;
+  margin: 14px 0 8px;
+  font-size: clamp(21px, 3vw, 30px);
+  color: var(--cyan);
+}
+
+.strategy-priority-panel > p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.strategy-goal-focus {
+  display: grid;
+  gap: 5px;
+  margin-top: 18px;
+  padding: 14px 15px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 190, 80, .24);
+  background: rgba(255, 190, 80, .06);
+}
+
+.strategy-goal-focus span,
+.strategy-goal-focus small {
+  color: var(--muted);
+}
+
+.strategy-goal-focus strong {
+  color: #ffd27a;
+}
