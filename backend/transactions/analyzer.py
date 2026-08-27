@@ -136,13 +136,13 @@ def get_monthly_flow():
     - loan_received / loan_disbursement (cash received from financing);
     - receivable_payment (money paid back by people who owed the user).
 
-    Outflows:
-    - expense (actual consumption/spending), net of refunds;
-    - debt_payment (only installments/amounts actually paid that month).
+    Expenses shown by Analytics:
+    - expense (actual consumption/spending), net of refunds.
 
-    The outstanding balance of a debt is intentionally NOT charged as a monthly
-    expense. It remains a liability in Overview and only its actual payments
-    affect this chart.
+    Debt payments stay outside this monthly expense line. Debt scheduling and
+    monthly installments are handled by the debt/Overview logic and must not
+    inflate Analytics expenses. Loan disbursements still count as money received
+    for the month without creating a second debt record.
     """
     user_id = get_current_user_id()
 
@@ -178,10 +178,10 @@ def get_monthly_flow():
         ):
             item[key] = round(float(item.get(key) or 0), 2)
 
-        # Refunds reverse consumption. Debt payments are real cash outflows for
-        # the month, but the full outstanding debt balance is never added here.
+        # Refunds reverse consumption. Debt payments are intentionally NOT
+        # added to Analytics expenses; debt installments are handled separately.
         item["spending"] = round(item["gross_expenses"] - item["refunds"], 2)
-        item["expenses"] = round(item["spending"] + item["debt_payments"], 2)
+        item["expenses"] = item["spending"]
         item["outflow"] = item["expenses"]  # Backward-compatible alias.
         item["monthly_balance"] = round(item["income"] - item["expenses"], 2)
         cumulative = round(cumulative + item["monthly_balance"], 2)
