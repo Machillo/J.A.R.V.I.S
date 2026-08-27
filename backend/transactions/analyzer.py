@@ -126,12 +126,16 @@ def get_expenses_by_category_and_month():
 
 
 def get_monthly_flow():
-    """Monthly financial performance from recorded cash movements.
+    """Return the monthly Analytics series.
 
-    Analytics deliberately keeps debt balances out of this series. Each month shows
-    the money earned and the money spent during that month. Debt payments are cash
-    outflows, while loan disbursements are not treated as earned income. The
-    cumulative balance is therefore the running sum of each month's surplus/deficit.
+    This chart measures financial performance, not cash movements or debt service:
+    - income: only transactions explicitly classified as ``income``;
+    - expenses: only ``expense`` transactions, net of ``refund`` transactions;
+    - debt payments, transfers and loan disbursements stay outside the chart;
+    - cumulative_balance carries only each month's income-minus-expenses result.
+
+    Debt balances and debt payments remain available elsewhere in Finance, but they
+    must never inflate the monthly expense line in Analytics.
     """
     user_id = get_current_user_id()
 
@@ -141,7 +145,8 @@ def get_monthly_flow():
             SELECT
                 to_char(transaction_date, 'YYYY-MM') AS month,
                 COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END), 0) AS income,
-                COALESCE(SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END), 0) AS expenses,
+                COALESCE(SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END), 0) AS gross_expenses,
+                COALESCE(SUM(CASE WHEN transaction_type = 'refund' THEN amount ELSE 0 END), 0) AS refunds,
                 COALESCE(SUM(CASE WHEN transaction_type = 'debt_payment' THEN amount ELSE 0 END), 0) AS debt_payments
             FROM transactions
             WHERE user_id = %s
@@ -155,13 +160,18 @@ def get_monthly_flow():
     cumulative = 0.0
     for row in rows:
         item = dict(row)
-        item["income"] = float(item.get("income") or 0)
-        item["expenses"] = float(item.get("expenses") or 0)
-        item["debt_payments"] = float(item.get("debt_payments") or 0)
-        item["outflow"] = item["expenses"] + item["debt_payments"]
-        item["monthly_balance"] = round(item["income"] - item["outflow"], 2)
-        cumulative += item["monthly_balance"]
-        item["cumulative_balance"] = round(cumulative, 2)
+        item["income"] = round(float(item.get("income") or 0), 2)
+        item["gross_expenses"] = round(float(item.get("gross_expenses") or 0), 2)
+        item["refunds"] = round(float(item.get("refunds") or 0), 2)
+        item["debt_payments"] = round(float(item.get("debt_payments") or 0), 2)
+
+        # Analytics expense is consumption/spending for the month. A refund reverses
+        # part of that spending; debt service is intentionally not added here.
+        item["expenses"] = round(item["gross_expenses"] - item["refunds"], 2)
+        item["outflow"] = item["expenses"]  # Backward-compatible alias for older clients.
+        item["monthly_balance"] = round(item["income"] - item["expenses"], 2)
+        cumulative = round(cumulative + item["monthly_balance"], 2)
+        item["cumulative_balance"] = cumulative
         flow.append(item)
 
     return flow

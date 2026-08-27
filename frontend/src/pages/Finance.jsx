@@ -371,8 +371,8 @@ function MonthlyFinanceTrendChart({ monthly = [] }) {
   const points = rows.map((item) => ({
     month: item.month,
     income: Number(item.income) || 0,
-    expenses: Number(item.outflow) || 0,
-    monthlyBalance: Number(item.monthly_balance ?? ((Number(item.income) || 0) - (Number(item.outflow) || 0))),
+    expenses: Number(item.expenses) || 0,
+    monthlyBalance: Number(item.monthly_balance ?? ((Number(item.income) || 0) - (Number(item.expenses) || 0))),
     cumulative: Number(item.cumulative_balance) || 0,
   }));
 
