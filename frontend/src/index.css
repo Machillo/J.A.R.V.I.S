@@ -7685,3 +7685,12 @@ button {
   .finance-period-controls { align-items: stretch; }
   .finance-asof-picker { justify-content: space-between; width: 100%; }
 }
+
+/* Finance analytics: money scale + cumulative position */
+.trend-axis-label{fill:#71858d;font-size:12px;font-weight:700}
+.trend-summary-grid-four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.trend-summary-grid .trend-positive strong{color:#65ef9b}
+.trend-summary-grid .trend-negative strong{color:#ff5d73}
+.trend-history-note{display:block;margin-top:10px;color:#71858d;text-align:center;line-height:1.45}
+@media(max-width:980px){.trend-summary-grid-four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.trend-summary-grid-four{grid-template-columns:1fr}}

@@ -364,54 +364,90 @@ function CategoryBars({ data = [] }) {
 }
 
 
-function CapitalDebtTrendChart({ monthly = [], currentDebt = 0 }) {
+function IncomeDebtTrendChart({ monthly = [], currentDebt = 0 }) {
   const rows = (Array.isArray(monthly) ? monthly : []).slice(-12);
   if (!rows.length) return <EmptyPanel title="No trend data yet" description="The chart will grow as monthly movements are recorded." />;
 
-  const totalDebtPayments = rows.reduce((sum, item) => sum + (Number(item.debt_payments) || 0), 0);
-  const initial = { capital: 0, debt: Math.max(Number(currentDebt) || 0, 0) + totalDebtPayments, points: [] };
-  const calculated = rows.reduce((state, item) => {
-    const capital = state.capital + (Number(item.net_flow) || 0);
-    const debt = Math.max(state.debt - (Number(item.debt_payments) || 0), 0);
-    return { capital, debt, points: [...state.points, { month: item.month, capital, debt }] };
-  }, initial);
-  const points = calculated.points;
+  const points = rows.map((item) => ({
+    month: item.month,
+    income: Number(item.income) || 0,
+    debt: Number(item.debt_balance) || 0,
+    cumulative: Number(item.cumulative_balance) || 0,
+  }));
 
-  const values = points.flatMap((item) => [item.capital, item.debt]);
-  const min = Math.min(...values, 0);
+  const values = points.flatMap((item) => [item.income, item.debt]);
   const max = Math.max(...values, 1);
-  const range = Math.max(max - min, 1);
-  const width = 760;
-  const height = 290;
-  const padX = 38;
-  const padY = 28;
-  const x = (index) => padX + (index * (width - padX * 2)) / Math.max(points.length - 1, 1);
-  const y = (value) => padY + ((max - value) / range) * (height - padY * 2);
-  const capitalPath = points.map((item, index) => `${index ? "L" : "M"}${x(index)},${y(item.capital)}`).join(" ");
+  const width = 820;
+  const height = 330;
+  const padLeft = 82;
+  const padRight = 28;
+  const padTop = 28;
+  const padBottom = 48;
+  const plotWidth = width - padLeft - padRight;
+  const plotHeight = height - padTop - padBottom;
+  const x = (index) => padLeft + (index * plotWidth) / Math.max(points.length - 1, 1);
+  const y = (value) => padTop + ((max - value) / max) * plotHeight;
+  const incomePath = points.map((item, index) => `${index ? "L" : "M"}${x(index)},${y(item.income)}`).join(" ");
   const debtPath = points.map((item, index) => `${index ? "L" : "M"}${x(index)},${y(item.debt)}`).join(" ");
+
+  const highestIncome = points.reduce((best, item) => item.income > best.income ? item : best, points[0]);
+  const highestDebt = points.reduce((best, item) => item.debt > best.debt ? item : best, points[0]);
+  const accumulated = points.at(-1)?.cumulative || 0;
+  const accumulatedStatus = accumulated > 0 ? "SALDO A FAVOR" : accumulated < 0 ? "NEGATIVO" : "EN CERO";
 
   return (
     <div className="finance-trend-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Capital and debt trend by month">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Income and debt by month">
         {[0, 1, 2, 3, 4].map((line) => {
-          const lineY = padY + (line * (height - padY * 2)) / 4;
-          return <line key={line} x1={padX} x2={width - padX} y1={lineY} y2={lineY} className="trend-grid-line" />;
+          const ratio = line / 4;
+          const lineY = padTop + ratio * plotHeight;
+          const labelValue = max * (1 - ratio);
+          return (
+            <g key={line}>
+              <line x1={padLeft} x2={width - padRight} y1={lineY} y2={lineY} className="trend-grid-line" />
+              <text x={padLeft - 12} y={lineY + 4} textAnchor="end" className="trend-axis-label">{shortCRC(labelValue)}</text>
+            </g>
+          );
         })}
-        <path d={capitalPath} className="trend-path capital" />
+        <path d={incomePath} className="trend-path capital" />
         <path d={debtPath} className="trend-path debt" />
         {points.map((item, index) => (
           <g key={item.month}>
-            <circle cx={x(index)} cy={y(item.capital)} r="6" className="trend-dot capital" />
-            <circle cx={x(index)} cy={y(item.debt)} r="6" className="trend-dot debt" />
-            <text x={x(index)} y={height - 6} textAnchor="middle" className="trend-month-label">{formatMonthLabel(item.month)}</text>
+            <circle cx={x(index)} cy={y(item.income)} r="6" className="trend-dot capital">
+              <title>{`${formatMonthLabel(item.month)} · Income ${formatCRC(item.income)}`}</title>
+            </circle>
+            <circle cx={x(index)} cy={y(item.debt)} r="6" className="trend-dot debt">
+              <title>{`${formatMonthLabel(item.month)} · Debt ${formatCRC(item.debt)}`}</title>
+            </circle>
+            <text x={x(index)} y={height - 12} textAnchor="middle" className="trend-month-label">{formatMonthLabel(item.month)}</text>
           </g>
         ))}
       </svg>
-      <div className="trend-summary-grid">
-        <div><span>Capital trend</span><strong>{formatCRC(points.at(-1)?.capital || 0)}</strong><small>Accumulated net flow</small></div>
-        <div><span>Current debt</span><strong>{formatCRC(points.at(-1)?.debt || currentDebt)}</strong><small>Debt payments reduce the line</small></div>
+
+      <div className="trend-summary-grid trend-summary-grid-four">
+        <div className={accumulated < 0 ? "trend-negative" : accumulated > 0 ? "trend-positive" : ""}>
+          <span>Accumulated balance</span>
+          <strong>{formatCRC(accumulated)}</strong>
+          <small>{accumulatedStatus} · all recorded months</small>
+        </div>
+        <div>
+          <span>Highest monthly income</span>
+          <strong>{formatCRC(highestIncome.income)}</strong>
+          <small>{formatMonthLabel(highestIncome.month)}</small>
+        </div>
+        <div>
+          <span>Highest recorded debt</span>
+          <strong>{formatCRC(highestDebt.debt)}</strong>
+          <small>{formatMonthLabel(highestDebt.month)}</small>
+        </div>
+        <div>
+          <span>Current debt</span>
+          <strong>{formatCRC(points.at(-1)?.debt || currentDebt)}</strong>
+          <small>Month-end debt balance</small>
+        </div>
       </div>
-      <div className="legend trend-legend"><span className="cyan"></span> Capital <span className="red"></span> Debt</div>
+      <div className="legend trend-legend"><span className="cyan"></span> Income <span className="red"></span> Debt</div>
+      <small className="trend-history-note">Historical debt before the amortization ledger is reconstructed from the balances and principal payments JARVIS has recorded. Future months become exact as payments are tracked.</small>
     </div>
   );
 }
@@ -1283,7 +1319,7 @@ export default function Finance({
       </>}
 
       {activeTab === "analytics" && <div className="dashboard-grid finance-dashboard-grid finance-analytics-grid">
-        <article className="hud-panel large finance-trend-panel"><div className="panel-title"><div><h3>CAPITAL & DEBT TREND</h3></div><span>MONTHLY</span></div><CapitalDebtTrendChart monthly={monthlyFlow} currentDebt={debtTotal} /></article>
+        <article className="hud-panel large finance-trend-panel"><div className="panel-title"><div><h3>INCOME & DEBT TREND</h3></div><span>MONTHLY</span></div><IncomeDebtTrendChart monthly={monthlyFlow} currentDebt={debtTotal} /></article>
         <article className="hud-panel large"><div className="panel-title"><div><h3>INCOME VS EXPENSES</h3></div><span>HISTORY</span></div><MonthlyFlowChart data={monthlyFlow.map((item) => ({ month: item.month, income: item.income, outflow: item.outflow }))} /><div className="legend"><span className="cyan"></span> Income <span className="red"></span> Expenses + debt payments</div></article>
       </div>}
 
