@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CircleDollarSign,
@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import {
   commitFinanceInput,
   getDebts,
@@ -330,35 +331,128 @@ function FinanceInputPanel({ onSaved, compact = false }) {
   );
 }
 
-function CategoryBars({ data = [] }) {
-  const maxValue = Math.max(...data.map((item) => Number(item.total) || 0), 1);
+function SpendingDonut({ breakdown }) {
+  const categories = Array.isArray(breakdown?.categories) ? breakdown.categories : [];
+  const transactions = Array.isArray(breakdown?.transactions) ? breakdown.transactions : [];
+  const total = Number(breakdown?.total) || categories.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const [selectedCategory, setSelectedCategory] = useState(categories[0]?.category || "");
 
-  if (data.length === 0) {
-    return (
-      <EmptyPanel
-        title="Sin categorías todavía"
-        description="Cuando importemos enero a mayo, vas a ver en qué se va el dinero."
-      />
-    );
+  useEffect(() => {
+    if (!categories.length) {
+      setSelectedCategory("");
+      return;
+    }
+    if (!categories.some((item) => item.category === selectedCategory)) {
+      setSelectedCategory(categories[0].category);
+    }
+  }, [categories, selectedCategory]);
+
+  const selectedItems = useMemo(() =>
+    transactions
+      .filter((item) => item.category === selectedCategory)
+      .sort((a, b) => String(b.transaction_date).localeCompare(String(a.transaction_date))),
+    [transactions, selectedCategory]
+  );
+
+  const palette = ["#ff445f", "#8b5cf6", "#22d3ee", "#f59e0b", "#10b981", "#ec4899", "#60a5fa", "#a3e635", "#f97316", "#14b8a6", "#c084fc", "#fb7185"];
+
+  if (!categories.length) {
+    return <EmptyPanel title="Sin categorías todavía" description="Cuando haya gastos registrados, el gráfico se activará." />;
   }
 
-  return (
-    <div className="category-bars">
-      {data.map((item) => {
-        const width = Math.max((Number(item.total) / maxValue) * 100, 4);
+  const tooltipContent = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const row = payload[0]?.payload || {};
+    const percent = total > 0 ? ((Number(row.total) || 0) / total) * 100 : 0;
+    return (
+      <div className="spending-donut-tooltip">
+        <strong>{row.category}</strong>
+        <span>{formatCRC(row.total)}</span>
+        <small>{percent.toFixed(1)}% del gasto · {row.count || 0} movimientos</small>
+      </div>
+    );
+  };
 
-        return (
-          <div className="category-row" key={item.category}>
-            <div className="category-row-head">
-              <span>{item.category}</span>
-              <strong>{formatCRC(item.total)}</strong>
-            </div>
-            <div className="category-track">
-              <span style={{ width: `${width}%` }} />
-            </div>
+  return (
+    <div className="spending-donut-workspace">
+      <div className="spending-donut-main">
+        <div className="spending-donut-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={categories}
+                dataKey="total"
+                nameKey="category"
+                cx="50%"
+                cy="50%"
+                innerRadius="57%"
+                outerRadius="86%"
+                paddingAngle={2}
+                stroke="rgba(4, 14, 24, 0.9)"
+                strokeWidth={3}
+                onClick={(entry) => setSelectedCategory(entry?.category || "")}
+              >
+                {categories.map((item, index) => (
+                  <Cell
+                    key={item.category}
+                    fill={palette[index % palette.length]}
+                    opacity={!selectedCategory || selectedCategory === item.category ? 1 : 0.48}
+                    className="spending-donut-slice"
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={tooltipContent} />
+            </PieChart>
+          </ResponsiveContainer>
+          <button className="spending-donut-center" onClick={() => setSelectedCategory("")} title="Mostrar total">
+            <span>TOTAL YTD</span>
+            <strong>{shortCRC(total)}</strong>
+            <small>{breakdown?.period?.label || "Año actual"}</small>
+          </button>
+        </div>
+
+        <div className="spending-donut-legend">
+          {categories.map((item, index) => {
+            const percent = total > 0 ? ((Number(item.total) || 0) / total) * 100 : 0;
+            return (
+              <button
+                key={item.category}
+                className={selectedCategory === item.category ? "active" : ""}
+                onClick={() => setSelectedCategory(item.category)}
+              >
+                <i style={{ background: palette[index % palette.length] }} />
+                <span><strong>{item.category}</strong><small>{item.count} movimientos · {percent.toFixed(1)}%</small></span>
+                <b>{formatCRC(item.total)}</b>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="spending-category-detail">
+        <div className="spending-category-detail-head">
+          <div>
+            <span>CATEGORÍA SELECCIONADA</span>
+            <h4>{selectedCategory || "Todas"}</h4>
           </div>
-        );
-      })}
+          {selectedCategory ? <b>{formatCRC(categories.find((item) => item.category === selectedCategory)?.total || 0)}</b> : null}
+        </div>
+        {selectedCategory && selectedItems.length ? (
+          <div className="finance-detail-list spending-drilldown-list">
+            {selectedItems.map((item) => (
+              <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}>
+                <div>
+                  <strong>{item.description}</strong>
+                  <span>{item.transaction_date} · {item.synthetic ? "Gasto fijo recurrente" : item.source || "Transacción"}</span>
+                </div>
+                <b>{formatCRC(item.amount)}</b>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyPanel title="Seleccioná una categoría" description="Tocá una porción o una categoría para ver exactamente qué gastos contiene." />
+        )}
+      </div>
     </div>
   );
 }
@@ -1290,7 +1384,11 @@ export default function Finance({
   const balanceItems = [...incomeItems.map((item) => ({ ...item, balance_side: "Income" })), ...expenseItems.map((item) => ({ ...item, balance_side: "Outflow" }))];
   const debtItems = sortedDebts.map((debt) => ({ id: `debt-${debt.id}`, description: debt.name || "Debt", amount: Number(debt.remaining_amount) || 0, category: `Payment ${formatCRC(debt.monthly_payment || 0)} · Interest ${Number(debt.interest_rate || 0)}%`, transaction_date: debt.payment_day ? `Day ${debt.payment_day}` : "No fixed date" }));
   const monthlyFlow = transactionAnalysis?.monthly_flow || [];
-  const categoryChartData = (transactionAnalysis?.top_expense_categories || []).map((item) => ({ category: item.category || "Uncategorized", total: Number(item.total) || 0 }));
+  const spendingBreakdown = transactionAnalysis?.spending_breakdown || {
+    categories: (transactionAnalysis?.top_expense_categories || []).map((item) => ({ category: item.category || "Uncategorized", total: Number(item.total) || 0, count: Number(item.count) || 0 })),
+    transactions: [],
+    total: 0,
+  };
   const isOwner = currentUser?.role === "owner" || currentUser?.email === "gatotico99@gmail.com";
   const openDetail = (title, items = [], empty = "No movements to display.") => setDetail({ title, items, empty });
 
@@ -1325,7 +1423,7 @@ export default function Finance({
       </div>}
 
       {activeTab === "spending" && <div className="dashboard-grid finance-dashboard-grid finance-spending-grid">
-        <article className="hud-panel large"><div className="panel-title"><div><h3>EXPENSES BY CATEGORY</h3></div><span>CURRENT</span></div><CategoryBars data={categoryChartData} /></article>
+        <article className="hud-panel large"><div className="panel-title"><div><h3>EXPENSES BY CATEGORY</h3></div><span>{spendingBreakdown?.period?.label || "CURRENT"}</span></div><SpendingDonut breakdown={spendingBreakdown} /></article>
         <FixedExpensesPanel data={fixedStatus} onRefresh={onRefresh} isOwner={isOwner} />
         <article className="hud-panel large"><div className="panel-title"><div><h3>RECENT EXPENSES</h3></div><span>{recentExpenses.length}</span></div>{recentExpenses.length ? <div className="finance-detail-list recent-expense-list">{recentExpenses.map((item) => <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}><div><strong>{item.description}</strong><span>{item.transaction_date} · {item.category}</span></div><b>{formatCRC(item.amount)}</b></div>)}</div> : <EmptyPanel title="No recent expenses" description="New expenses will appear here." />}</article>
         <CurrencyAlertsPanel alerts={currencyAlerts} onApplied={async () => { await loadSupportingData(); await onRefresh?.(); }} />

@@ -191,6 +191,123 @@ def get_monthly_flow():
     return flow
 
 
+
+def get_spending_breakdown():
+    """Return YTD spending categories plus drill-down transactions.
+
+    Spending is based on real ``expense`` transactions.  The house contribution
+    is a special recurring cash expense in this personal finance setup: when a
+    month is missing a materialized Casa transaction, the active fixed-expense
+    schedule supplies that monthly occurrence so the spending view does not
+    under-report Vivienda. Existing Casa transactions are never duplicated.
+    """
+    user_id = get_current_user_id()
+    today = date.today()
+    year_start = date(today.year, 1, 1)
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, transaction_date, description, amount, transaction_type,
+                   COALESCE(NULLIF(TRIM(category), ''), 'Sin categoría') AS category,
+                   source, notes
+            FROM transactions
+            WHERE user_id = %s
+              AND transaction_type = 'expense'
+              AND transaction_date::date BETWEEN %s::date AND %s::date
+            ORDER BY transaction_date ASC, id ASC
+            """,
+            (user_id, year_start, today),
+        ).fetchall()
+
+        house = conn.execute(
+            """
+            SELECT id, name, category, expected_amount, frequency, interval_months,
+                   start_month, due_day, is_active
+            FROM fixed_expenses
+            WHERE user_id = %s
+              AND is_active = TRUE
+              AND LOWER(TRIM(name)) = 'casa'
+            ORDER BY id
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+
+    items = []
+    for row in rows:
+        item = dict(row)
+        item["amount"] = round(float(item.get("amount") or 0), 2)
+        item["synthetic"] = False
+        items.append(item)
+
+    # Casa is known to be paid monthly. Fill only missing months; never replace
+    # or duplicate a real transaction. This keeps YTD Vivienda complete while
+    # preserving the transaction ledger as the primary source of truth.
+    if house and float(house.get("expected_amount") or 0) > 0:
+        expected = round(float(house["expected_amount"]), 2)
+        house_category = house.get("category") or "Vivienda"
+
+        real_house_months = set()
+        for item in items:
+            desc = str(item.get("description") or "").lower()
+            category = str(item.get("category") or "").lower()
+            if category == str(house_category).lower() or "casa" in desc:
+                dt = item.get("transaction_date")
+                if hasattr(dt, "strftime"):
+                    real_house_months.add(dt.strftime("%Y-%m"))
+                else:
+                    real_house_months.add(str(dt)[:7])
+
+        month = year_start
+        while month <= today:
+            month_key = month.strftime("%Y-%m")
+            if month_key not in real_house_months:
+                due_day = int(house.get("due_day") or 1)
+                last_day = calendar.monthrange(month.year, month.month)[1]
+                scheduled_date = date(month.year, month.month, min(due_day, last_day))
+                # Casa is an explicitly confirmed monthly payment. For the current
+                # month, show it in YTD even when its configured due day is later
+                # than today; use today as the drill-down date instead of a future
+                # date.
+                synthetic_date = min(scheduled_date, today)
+                items.append({
+                        "id": f"fixed-casa-{month_key}",
+                        "transaction_date": synthetic_date.isoformat(),
+                        "description": "Casa",
+                        "amount": expected,
+                        "transaction_type": "expense",
+                        "category": house_category,
+                        "source": "fixed_expense_schedule",
+                        "notes": "Gasto fijo mensual completado en Spending para evitar subregistro histórico.",
+                        "synthetic": True,
+                    })
+
+            if month.month == 12:
+                month = date(month.year + 1, 1, 1)
+            else:
+                month = date(month.year, month.month + 1, 1)
+
+    items.sort(key=lambda item: (str(item.get("transaction_date") or ""), str(item.get("id") or "")))
+
+    totals = {}
+    for item in items:
+        category = item.get("category") or "Sin categoría"
+        totals.setdefault(category, {"category": category, "total": 0.0, "count": 0})
+        totals[category]["total"] += float(item.get("amount") or 0)
+        totals[category]["count"] += 1
+
+    categories = sorted(totals.values(), key=lambda row: row["total"], reverse=True)
+    for row in categories:
+        row["total"] = round(row["total"], 2)
+
+    return {
+        "period": {"start": year_start.isoformat(), "end": today.isoformat(), "label": f"{today.year} YTD"},
+        "total": round(sum(float(item.get("amount") or 0) for item in items), 2),
+        "categories": categories,
+        "transactions": items,
+    }
+
 def get_transaction_analysis():
     return {
         "summary": get_transaction_summary(),
@@ -198,4 +315,5 @@ def get_transaction_analysis():
         "expenses_by_month": get_expenses_by_month(),
         "expenses_by_category_and_month": get_expenses_by_category_and_month(),
         "monthly_flow": get_monthly_flow(),
+        "spending_breakdown": get_spending_breakdown(),
     }
