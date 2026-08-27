@@ -364,18 +364,19 @@ function CategoryBars({ data = [] }) {
 }
 
 
-function IncomeDebtTrendChart({ monthly = [], currentDebt = 0 }) {
+function MonthlyFinanceTrendChart({ monthly = [] }) {
   const rows = (Array.isArray(monthly) ? monthly : []).slice(-12);
   if (!rows.length) return <EmptyPanel title="No trend data yet" description="The chart will grow as monthly movements are recorded." />;
 
   const points = rows.map((item) => ({
     month: item.month,
     income: Number(item.income) || 0,
-    debt: Number(item.debt_balance) || 0,
+    expenses: Number(item.outflow) || 0,
+    monthlyBalance: Number(item.monthly_balance ?? ((Number(item.income) || 0) - (Number(item.outflow) || 0))),
     cumulative: Number(item.cumulative_balance) || 0,
   }));
 
-  const values = points.flatMap((item) => [item.income, item.debt]);
+  const values = points.flatMap((item) => [item.income, item.expenses]);
   const max = Math.max(...values, 1);
   const width = 820;
   const height = 330;
@@ -388,16 +389,17 @@ function IncomeDebtTrendChart({ monthly = [], currentDebt = 0 }) {
   const x = (index) => padLeft + (index * plotWidth) / Math.max(points.length - 1, 1);
   const y = (value) => padTop + ((max - value) / max) * plotHeight;
   const incomePath = points.map((item, index) => `${index ? "L" : "M"}${x(index)},${y(item.income)}`).join(" ");
-  const debtPath = points.map((item, index) => `${index ? "L" : "M"}${x(index)},${y(item.debt)}`).join(" ");
+  const expensePath = points.map((item, index) => `${index ? "L" : "M"}${x(index)},${y(item.expenses)}`).join(" ");
 
   const highestIncome = points.reduce((best, item) => item.income > best.income ? item : best, points[0]);
-  const highestDebt = points.reduce((best, item) => item.debt > best.debt ? item : best, points[0]);
-  const accumulated = points.at(-1)?.cumulative || 0;
+  const highestExpenses = points.reduce((best, item) => item.expenses > best.expenses ? item : best, points[0]);
+  const latest = points.at(-1);
+  const accumulated = latest?.cumulative || 0;
   const accumulatedStatus = accumulated > 0 ? "SALDO A FAVOR" : accumulated < 0 ? "NEGATIVO" : "EN CERO";
 
   return (
     <div className="finance-trend-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Income and debt by month">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Monthly income and expenses">
         {[0, 1, 2, 3, 4].map((line) => {
           const ratio = line / 4;
           const lineY = padTop + ratio * plotHeight;
@@ -410,14 +412,14 @@ function IncomeDebtTrendChart({ monthly = [], currentDebt = 0 }) {
           );
         })}
         <path d={incomePath} className="trend-path capital" />
-        <path d={debtPath} className="trend-path debt" />
+        <path d={expensePath} className="trend-path debt" />
         {points.map((item, index) => (
           <g key={item.month}>
             <circle cx={x(index)} cy={y(item.income)} r="6" className="trend-dot capital">
-              <title>{`${formatMonthLabel(item.month)} · Income ${formatCRC(item.income)}`}</title>
+              <title>{`${formatMonthLabel(item.month)} · Income ${formatCRC(item.income)} · Expenses ${formatCRC(item.expenses)} · Balance ${formatCRC(item.monthlyBalance)}`}</title>
             </circle>
-            <circle cx={x(index)} cy={y(item.debt)} r="6" className="trend-dot debt">
-              <title>{`${formatMonthLabel(item.month)} · Debt ${formatCRC(item.debt)}`}</title>
+            <circle cx={x(index)} cy={y(item.expenses)} r="6" className="trend-dot debt">
+              <title>{`${formatMonthLabel(item.month)} · Expenses ${formatCRC(item.expenses)} · Income ${formatCRC(item.income)} · Balance ${formatCRC(item.monthlyBalance)}`}</title>
             </circle>
             <text x={x(index)} y={height - 12} textAnchor="middle" className="trend-month-label">{formatMonthLabel(item.month)}</text>
           </g>
@@ -428,7 +430,7 @@ function IncomeDebtTrendChart({ monthly = [], currentDebt = 0 }) {
         <div className={accumulated < 0 ? "trend-negative" : accumulated > 0 ? "trend-positive" : ""}>
           <span>Accumulated balance</span>
           <strong>{formatCRC(accumulated)}</strong>
-          <small>{accumulatedStatus} · all recorded months</small>
+          <small>{accumulatedStatus} · sum of monthly leftovers</small>
         </div>
         <div>
           <span>Highest monthly income</span>
@@ -436,18 +438,18 @@ function IncomeDebtTrendChart({ monthly = [], currentDebt = 0 }) {
           <small>{formatMonthLabel(highestIncome.month)}</small>
         </div>
         <div>
-          <span>Highest recorded debt</span>
-          <strong>{formatCRC(highestDebt.debt)}</strong>
-          <small>{formatMonthLabel(highestDebt.month)}</small>
+          <span>Highest monthly expenses</span>
+          <strong>{formatCRC(highestExpenses.expenses)}</strong>
+          <small>{formatMonthLabel(highestExpenses.month)}</small>
         </div>
-        <div>
-          <span>Current debt</span>
-          <strong>{formatCRC(points.at(-1)?.debt || currentDebt)}</strong>
-          <small>Month-end debt balance</small>
+        <div className={latest?.monthlyBalance < 0 ? "trend-negative" : latest?.monthlyBalance > 0 ? "trend-positive" : ""}>
+          <span>Latest month balance</span>
+          <strong>{formatCRC(latest?.monthlyBalance || 0)}</strong>
+          <small>{formatMonthLabel(latest?.month)} · income − expenses</small>
         </div>
       </div>
-      <div className="legend trend-legend"><span className="cyan"></span> Income <span className="red"></span> Debt</div>
-      <small className="trend-history-note">Historical debt before the amortization ledger is reconstructed from the balances and principal payments JARVIS has recorded. Future months become exact as payments are tracked.</small>
+      <div className="legend trend-legend"><span className="cyan"></span> Income <span className="red"></span> Expenses</div>
+      <small className="trend-history-note">Each point is that month's actual recorded total. Accumulated balance only carries forward the surplus or deficit left by each month; total debt is kept separately in Overview.</small>
     </div>
   );
 }
@@ -1319,8 +1321,7 @@ export default function Finance({
       </>}
 
       {activeTab === "analytics" && <div className="dashboard-grid finance-dashboard-grid finance-analytics-grid">
-        <article className="hud-panel large finance-trend-panel"><div className="panel-title"><div><h3>INCOME & DEBT TREND</h3></div><span>MONTHLY</span></div><IncomeDebtTrendChart monthly={monthlyFlow} currentDebt={debtTotal} /></article>
-        <article className="hud-panel large"><div className="panel-title"><div><h3>INCOME VS EXPENSES</h3></div><span>HISTORY</span></div><MonthlyFlowChart data={monthlyFlow.map((item) => ({ month: item.month, income: item.income, outflow: item.outflow }))} /><div className="legend"><span className="cyan"></span> Income <span className="red"></span> Expenses + debt payments</div></article>
+        <article className="hud-panel large finance-trend-panel"><div className="panel-title"><div><h3>MONTHLY FINANCIAL TREND</h3></div><span>INCOME VS EXPENSES</span></div><MonthlyFinanceTrendChart monthly={monthlyFlow} /></article>
       </div>}
 
       {activeTab === "spending" && <div className="dashboard-grid finance-dashboard-grid finance-spending-grid">
