@@ -39,7 +39,7 @@ export default function Login() {
         <div className="auth-orb-wrap"><div className="auth-orb-glow"></div><div className="auth-orb"><BrainCircuit size={58} /></div></div>
         <p className="login-kicker">JARVIS</p>
         <h1 className="auth-title">J.A.R.V.I.S.</h1>
-        <p className="login-subtitle">Tu espacio financiero personal.</p>
+        <p className="login-subtitle">JARVIS Users · Tu asistente financiero.</p>
         <button className="login-google-btn auth-google-btn" onClick={loginWithGoogle} disabled={loading} type="button">
           <GoogleIcon /> {loading ? "Conectando..." : "Continuar con Google"}
         </button>

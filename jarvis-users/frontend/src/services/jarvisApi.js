@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001";
 
 async function authHeaders() {
   const { data } = await supabase.auth.getSession();
@@ -47,6 +47,7 @@ export const payDebt = (id, payload) => json(`/finance/debts/${id}/payments`, "P
 export const getStrategyBasic = () => request("/finance/strategy-basic");
 export const simulateStrategyBasic = (extra_monthly) => json("/finance/strategy-basic/simulate", "POST", { extra_monthly });
 export const getStrategyVip = () => request("/finance/strategy-vip");
+export const simulateStrategyVip = (payload) => json("/finance/strategy-vip/simulate", "POST", payload);
 export const getGoals = () => request("/goals");
 export const createGoal = (payload) => json("/goals", "POST", payload);
 export const updateGoal = (id, payload) => json(`/goals/${id}`, "PUT", payload);

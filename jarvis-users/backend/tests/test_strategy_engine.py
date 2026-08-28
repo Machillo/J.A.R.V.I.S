@@ -1,5 +1,5 @@
 import unittest
-from backend.finance.strategy_engine import build_basic_strategy, build_vip_strategy
+from backend.finance.strategy_engine import build_basic_strategy, build_paycheck_plan, build_vip_insights, build_vip_scenario, build_vip_strategy
 
 
 class StrategyEngineTests(unittest.TestCase):
@@ -48,6 +48,28 @@ class StrategyEngineTests(unittest.TestCase):
         self.assertIn("personal", buckets)
         self.assertIn("goal", buckets)
         self.assertTrue(r["director_mode"])
+
+    def test_vip_goal_guidance_is_deterministic(self):
+        snapshot = self.base()
+        insights = build_vip_insights(snapshot, build_vip_strategy(snapshot))
+        self.assertEqual(insights["active_goals"], 1)
+        self.assertGreater(insights["goal_guidance"][0]["remaining"], 0)
+        self.assertIsNotNone(insights["goal_guidance"][0]["monthly_needed"])
+
+    def test_vip_scenario_does_not_mutate_source(self):
+        snapshot = self.base()
+        original_income = snapshot["monthly_income_estimate"]
+        result = build_vip_scenario(snapshot, monthly_income_change=100000, monthly_expense_change=25000, one_time_extra=50000)
+        self.assertEqual(snapshot["monthly_income_estimate"], original_income)
+        self.assertEqual(result["delta"]["strategic_margin"], 75000)
+        self.assertEqual(result["inputs"]["one_time_extra"], 50000)
+
+    def test_paycheck_plan_scales_monthly_strategy(self):
+        strategy = build_basic_strategy(self.base())
+        plan = build_paycheck_plan(strategy, "biweekly")
+        self.assertGreater(plan["estimated_paycheck"], 0)
+        self.assertLess(plan["estimated_paycheck"], strategy["monthly_income"])
+        self.assertTrue(any(x["bucket"] == "essentials" for x in plan["envelopes"]))
 
 
 if __name__ == "__main__":

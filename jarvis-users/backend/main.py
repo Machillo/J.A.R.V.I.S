@@ -10,13 +10,14 @@ from backend.core.database import close_database, init_database
 from backend.finance.routes import router as finance_router
 from backend.goals.routes import router as goals_router
 from backend.transactions.routes import router as transactions_router
+from backend.admin.routes import router as admin_router
 
 
 app = FastAPI(title="JARVIS Users API", version="0.1.0")
 
 ALLOWED_ORIGINS = {
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
 }
 
 app.add_middleware(
@@ -37,7 +38,7 @@ def _is_public_path(path: str) -> bool:
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    if request.method == "OPTIONS" or _is_public_path(request.url.path):
+    if request.method == "OPTIONS" or _is_public_path(request.url.path) or request.url.path.startswith("/admin/"):
         return await call_next(request)
 
     authorization = request.headers.get("Authorization", "")
@@ -76,6 +77,7 @@ app.include_router(auth_router)
 app.include_router(finance_router)
 app.include_router(goals_router)
 app.include_router(transactions_router)
+app.include_router(admin_router)
 
 
 @app.on_event("startup")

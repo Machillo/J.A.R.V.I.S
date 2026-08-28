@@ -4,7 +4,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_user_id
 from backend.core.database import get_connection
-from backend.finance.strategy_engine import build_basic_strategy, build_vip_strategy
+from backend.finance.strategy_engine import build_basic_strategy, build_paycheck_plan, build_vip_insights, build_vip_scenario, build_vip_strategy
 
 
 def _today(value: str | None = None) -> str:
@@ -213,7 +213,7 @@ def get_strategy_snapshot():
         profile = conn.execute(
             """SELECT income_type, fixed_monthly_salary, hourly_rate, work_days_per_week, hours_per_day,
                       essential_monthly_expenses, liquid_savings, emergency_fund_target,
-                      strategy_preference, discretionary_monthly_minimum
+                      strategy_preference, discretionary_monthly_minimum, pay_frequency, payday_note
                FROM financial_profiles WHERE user_id=%s""",
             (user_id,),
         ).fetchone()
@@ -234,14 +234,24 @@ def get_strategy_snapshot():
         "emergency_fund_target": profile.get("emergency_fund_target") if profile else None,
         "strategy_preference": profile.get("strategy_preference") if profile else None,
         "discretionary_monthly_minimum": profile.get("discretionary_monthly_minimum") if profile else None,
+        "pay_frequency": profile.get("pay_frequency") if profile else None,
+        "payday_note": profile.get("payday_note") if profile else None,
         "debts": [dict(row) for row in debts],
         "goals": [dict(row) for row in goals],
     }
 
 
 def get_strategy_basic(extra_monthly: float = 0):
-    return build_basic_strategy(get_strategy_snapshot(), extra_monthly=extra_monthly)
+    snapshot = get_strategy_snapshot()
+    strategy = build_basic_strategy(snapshot, extra_monthly=extra_monthly)
+    return {**strategy, "next_paycheck": build_paycheck_plan(strategy, snapshot.get("pay_frequency"), vip=False)}
 
 
 def get_strategy_vip():
-    return build_vip_strategy(get_strategy_snapshot())
+    snapshot = get_strategy_snapshot()
+    strategy = build_vip_strategy(snapshot)
+    return {**strategy, "insights": build_vip_insights(snapshot, strategy), "next_paycheck": build_paycheck_plan(strategy, snapshot.get("pay_frequency"), vip=True)}
+
+
+def simulate_strategy_vip(monthly_income_change: float = 0, monthly_expense_change: float = 0, one_time_extra: float = 0):
+    return build_vip_scenario(get_strategy_snapshot(), monthly_income_change, monthly_expense_change, one_time_extra)

@@ -163,3 +163,114 @@ def build_vip_strategy(snapshot: dict) -> dict:
         "vip_allocations": allocations,
         "director_note": "JARVIS coordinó deuda, seguridad, metas y tu mínimo personal según la prioridad elegida.",
     }
+
+
+def _goal_monthly_need(goal: dict, reference_date=None) -> float | None:
+    """Monthly amount needed to hit a dated goal; None when no usable date exists."""
+    from datetime import date
+    target_date = goal.get("target_date")
+    if not target_date:
+        return None
+    try:
+        target = date.fromisoformat(str(target_date))
+    except ValueError:
+        return None
+    today = reference_date or date.today()
+    months = max((target.year - today.year) * 12 + target.month - today.month, 1)
+    gap = max(_money(goal.get("target_amount")) - _money(goal.get("current_amount")), 0)
+    return round(gap / months, 2)
+
+
+def build_vip_insights(snapshot: dict, strategy: dict | None = None) -> dict:
+    """Director-level diagnostics derived only from known data; never invents missing values."""
+    strategy = strategy or build_vip_strategy(snapshot)
+    income = _money(snapshot.get("monthly_income_estimate"))
+    essentials = snapshot.get("essential_monthly_expenses")
+    savings = _money(snapshot.get("liquid_savings"))
+    emergency_target = _money(snapshot.get("emergency_fund_target"))
+    debts = [d for d in snapshot.get("debts", []) if _money(d.get("remaining_amount")) > 0]
+    goals = [g for g in snapshot.get("goals", []) if _money(g.get("target_amount")) > _money(g.get("current_amount"))]
+
+    emergency_months = None
+    if essentials is not None and _money(essentials) > 0:
+        emergency_months = round(savings / _money(essentials), 1)
+
+    goal_guidance = []
+    for goal in goals:
+        gap = round(max(_money(goal.get("target_amount")) - _money(goal.get("current_amount")), 0), 2)
+        monthly_need = _goal_monthly_need(goal)
+        goal_guidance.append({
+            "id": goal.get("id"), "name": goal.get("name"), "priority": goal.get("priority") or "medium",
+            "remaining": gap, "target_date": goal.get("target_date"), "monthly_needed": monthly_need,
+        })
+
+    alerts = []
+    if income <= 0:
+        alerts.append({"level": "critical", "code": "income_missing", "message": "Falta un ingreso mensual estimable."})
+    if strategy.get("status") == "critical":
+        alerts.append({"level": "critical", "code": "negative_margin", "message": "Los compromisos conocidos superan el ingreso mensual estimado."})
+    if debts and any(d.get("interest_rate") is None for d in debts):
+        alerts.append({"level": "info", "code": "apr_missing", "message": "Hay deudas sin tasa registrada; completar ese dato mejora la priorización."})
+    if emergency_target > 0 and savings < emergency_target:
+        pct = round((savings / emergency_target) * 100, 1) if emergency_target else 0
+        alerts.append({"level": "warning", "code": "emergency_gap", "message": f"Tu fondo de emergencia está al {pct}% del objetivo."})
+    for goal in goal_guidance:
+        if goal["monthly_needed"] is not None and goal["monthly_needed"] > max(_money(strategy.get("strategic_margin")), 0):
+            alerts.append({"level": "warning", "code": f"goal_pressure_{goal['id']}", "message": f"La meta {goal['name']} requiere más al mes que tu margen estratégico actual."})
+
+    return {
+        "emergency_months": emergency_months,
+        "emergency_progress": round(min((savings / emergency_target) * 100, 100), 1) if emergency_target > 0 else None,
+        "goal_guidance": goal_guidance,
+        "alerts": alerts,
+        "total_debt": round(sum(_money(d.get("remaining_amount")) for d in debts), 2),
+        "active_goals": len(goals),
+    }
+
+
+def build_vip_scenario(snapshot: dict, monthly_income_change: float = 0, monthly_expense_change: float = 0,
+                       one_time_extra: float = 0) -> dict:
+    """Compare a hypothetical future against the current state without persisting anything."""
+    base_snapshot = {**snapshot, "debts": [dict(d) for d in snapshot.get("debts", [])], "goals": [dict(g) for g in snapshot.get("goals", [])]}
+    scenario_snapshot = {**base_snapshot}
+    scenario_snapshot["monthly_income_estimate"] = max(_money(base_snapshot.get("monthly_income_estimate")) + float(monthly_income_change or 0), 0)
+    current_essentials = base_snapshot.get("essential_monthly_expenses")
+    scenario_snapshot["essential_monthly_expenses"] = max(_money(current_essentials) + float(monthly_expense_change or 0), 0) if current_essentials is not None else None
+    scenario_snapshot["liquid_savings"] = _money(base_snapshot.get("liquid_savings")) + _money(one_time_extra)
+
+    current = build_vip_strategy(base_snapshot)
+    simulated = build_vip_strategy(scenario_snapshot)
+    return {
+        "current": current,
+        "scenario": simulated,
+        "delta": {
+            "strategic_margin": round(_money(simulated.get("strategic_margin")) - _money(current.get("strategic_margin")), 2),
+            "monthly_income": round(_money(simulated.get("monthly_income")) - _money(current.get("monthly_income")), 2),
+            "essential_expenses": round(_money(simulated.get("essential_expenses")) - _money(current.get("essential_expenses")), 2),
+        },
+        "inputs": {"monthly_income_change": round(float(monthly_income_change or 0), 2), "monthly_expense_change": round(float(monthly_expense_change or 0), 2), "one_time_extra": _money(one_time_extra)},
+    }
+
+
+def build_paycheck_plan(strategy: dict, pay_frequency: str | None, vip: bool = False) -> dict:
+    """Translate the monthly strategy into a practical next-paycheck envelope plan."""
+    periods = {"weekly": 52 / 12, "biweekly": 26 / 12, "monthly": 1}.get(pay_frequency or "monthly", 1)
+    income = round(_money(strategy.get("monthly_income")) / periods, 2)
+    essentials = round(_money(strategy.get("essential_expenses")) / periods, 2)
+    minimums = round(_money(strategy.get("minimum_debt_payments")) / periods, 2)
+    source = strategy.get("vip_allocations" if vip else "allocations", [])
+    envelopes = []
+    if essentials > 0:
+        envelopes.append({"bucket": "essentials", "label": "Gastos esenciales", "amount": essentials})
+    if minimums > 0:
+        envelopes.append({"bucket": "debt_minimums", "label": "Cuotas de deuda", "amount": minimums})
+    for allocation in source:
+        amount = round(_money(allocation.get("amount")) / periods, 2)
+        if amount > 0:
+            envelopes.append({**allocation, "amount": amount})
+    allocated = round(sum(_money(x.get("amount")) for x in envelopes), 2)
+    return {
+        "pay_frequency": pay_frequency or "monthly", "periods_per_month": round(periods, 4),
+        "estimated_paycheck": income, "envelopes": envelopes,
+        "unassigned": round(max(income - allocated, 0), 2),
+    }

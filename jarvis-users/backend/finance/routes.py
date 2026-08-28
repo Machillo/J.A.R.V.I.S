@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from backend.auth.plans import require_feature
-from backend.finance.models import DebtPaymentRequest, DebtRequest, DebtUpdateRequest, MoneyEntryRequest, OvertimeRequest, StrategySimulationRequest
+from backend.finance.models import DebtPaymentRequest, DebtRequest, DebtUpdateRequest, MoneyEntryRequest, OvertimeRequest, StrategySimulationRequest, VipScenarioRequest
 from backend.finance.service import (
     add_debt,
     add_expense,
@@ -15,6 +15,7 @@ from backend.finance.service import (
     get_strategy_basic,
     get_strategy_vip,
     get_summary,
+    simulate_strategy_vip,
     register_debt_payment,
     update_debt,
 )
@@ -99,3 +100,9 @@ def strategy_basic_simulate(request: StrategySimulationRequest):
 def strategy_vip():
     require_feature("strategy_vip")
     return get_strategy_vip()
+
+
+@router.post("/strategy-vip/simulate")
+def strategy_vip_simulate(request: VipScenarioRequest):
+    require_feature("projections")
+    return simulate_strategy_vip(request.monthly_income_change, request.monthly_expense_change, request.one_time_extra)

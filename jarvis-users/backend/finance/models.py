@@ -43,3 +43,9 @@ class DebtPaymentRequest(BaseModel):
 
 class StrategySimulationRequest(BaseModel):
     extra_monthly: float = Field(default=0, ge=0)
+
+
+class VipScenarioRequest(BaseModel):
+    monthly_income_change: float = 0
+    monthly_expense_change: float = 0
+    one_time_extra: float = Field(default=0, ge=0)

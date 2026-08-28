@@ -1,12 +1,41 @@
-.env
-.env.local
-.env.production
-.env.development
+# J.A.R.V.I.S MONOREPO
 
-__pycache__/
-*.pyc
+# Secrets / environment
+**/.env
+**/.env.*
+!**/.env.example
 
-database/*.db
-*.db
-backend/.env
-frontend/.env
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/.venv/
+**/venv/
+
+# Node / frontend
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/.cache/
+
+# Logs
+**/*.log
+**/logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+**/.idea/
+
+# Temporary files
+**/*.tmp
+**/*.temp
+**/*.bak
