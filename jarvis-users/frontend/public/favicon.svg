@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<defs><radialGradient id="g" cx="50%" cy="38%"><stop offset="0" stop-color="#29e6ff"/><stop offset=".6" stop-color="#063142"/><stop offset="1" stop-color="#02070d"/></radialGradient><filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="128" height="128" rx="28" fill="#02070d"/>
+<rect x="12" y="12" width="104" height="104" rx="24" fill="url(#g)" stroke="#29e6ff" stroke-width="3"/>
+<circle cx="64" cy="48" r="28" fill="#062130" stroke="#ff4df2" stroke-opacity=".75" stroke-width="2"/>
+<text x="64" y="88" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="62" fill="#e8fbff" filter="url(#glow)">J</text>
+</svg>
