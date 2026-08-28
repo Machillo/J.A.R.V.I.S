@@ -1,4 +1,4 @@
-import { BrainCircuit, ShieldCheck } from "lucide-react";
+import { Apple, BrainCircuit, Fingerprint, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 
@@ -14,19 +14,29 @@ function GoogleIcon() {
 }
 
 export default function Login() {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
 
-  const loginWithGoogle = async () => {
-    setLoading(true);
+  const oauth = async (provider) => {
+    setLoading(provider);
     setError("");
     const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { queryParams: { prompt: "select_account" } },
+      provider,
+      options: provider === "google" ? { queryParams: { prompt: "select_account" } } : undefined,
     });
     if (authError) {
       setError(authError.message);
-      setLoading(false);
+      setLoading("");
+    }
+  };
+
+  const loginWithPasskey = async () => {
+    setLoading("passkey");
+    setError("");
+    const { error: authError } = await supabase.auth.signInWithPasskey();
+    if (authError) {
+      setError(authError.message);
+      setLoading("");
     }
   };
 
@@ -39,12 +49,22 @@ export default function Login() {
         <div className="auth-orb-wrap"><div className="auth-orb-glow"></div><div className="auth-orb"><BrainCircuit size={58} /></div></div>
         <p className="login-kicker">JARVIS</p>
         <h1 className="auth-title">J.A.R.V.I.S.</h1>
-        <p className="login-subtitle">JARVIS Users · Tu asistente financiero.</p>
-        <button className="login-google-btn auth-google-btn" onClick={loginWithGoogle} disabled={loading} type="button">
-          <GoogleIcon /> {loading ? "Conectando..." : "Continuar con Google"}
-        </button>
+        <p className="login-subtitle">Una cuenta JARVIS. Elegí cómo demostrar que sos vos.</p>
+
+        <div className="auth-methods">
+          <button className="login-google-btn auth-google-btn" onClick={() => oauth("google")} disabled={Boolean(loading)} type="button">
+            <GoogleIcon /> {loading === "google" ? "Conectando..." : "Continuar con Google"}
+          </button>
+          <button className="auth-provider-btn" onClick={() => oauth("apple")} disabled={Boolean(loading)} type="button">
+            <Apple size={20} /> {loading === "apple" ? "Conectando..." : "Continuar con Apple"}
+          </button>
+          <button className="auth-provider-btn auth-passkey-btn" onClick={loginWithPasskey} disabled={Boolean(loading)} type="button">
+            <Fingerprint size={21} /> {loading === "passkey" ? "Verificando..." : "Entrar con Passkey / Face ID"}
+          </button>
+        </div>
+
         {error && <p className="onboarding-error">{error}</p>}
-        <p className="auth-security"><ShieldCheck size={16} /> Por ahora JARVIS utiliza Google como único acceso.</p>
+        <p className="auth-security"><ShieldCheck size={16} /> Face ID nunca sale de tu dispositivo. Desbloquea localmente tu passkey.</p>
       </section>
     </main>
   );

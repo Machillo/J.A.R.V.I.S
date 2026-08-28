@@ -207,3 +207,5 @@ export const createInvestmentSnapshot = (payload) => jsonRequest("/finance/inves
 export const getBusinessCenter = () => request("/finance/business-center");
 export const createBusiness = (payload) => jsonRequest("/finance/business-center/businesses", "POST", payload);
 export const createBusinessMovement = (payload) => jsonRequest("/finance/business-center/movements", "POST", payload);
+
+export const linkOwnerToUsers = () => request("/users-admin/owner-link", { method: "POST" });

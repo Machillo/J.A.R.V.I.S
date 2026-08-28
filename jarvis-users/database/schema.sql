@@ -1,9 +1,12 @@
 -- JARVIS Users - clean SaaS baseline
 -- Fresh installations should execute this file once in Supabase SQL Editor.
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS profiles (
     id BIGSERIAL PRIMARY KEY,
     supabase_user_id UUID NOT NULL UNIQUE,
+    account_id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     email TEXT NOT NULL UNIQUE,
     display_name TEXT,
     role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'owner')),
@@ -14,6 +17,17 @@ CREATE TABLE IF NOT EXISTS profiles (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_login_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS owner_personal_links (
+    id BIGSERIAL PRIMARY KEY,
+    users_profile_id BIGINT NOT NULL UNIQUE REFERENCES profiles(id) ON DELETE CASCADE,
+    personal_supabase_user_id UUID NOT NULL UNIQUE,
+    personal_allowed_user_id BIGINT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+    linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    verified_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS financial_profiles (

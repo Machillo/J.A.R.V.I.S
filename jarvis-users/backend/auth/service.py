@@ -8,6 +8,7 @@ import requests
 from fastapi import HTTPException, status
 
 from backend.core.database import get_connection
+from backend.auth.owner_bridge import bridge_status
 
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
@@ -29,6 +30,7 @@ def _serialize_profile(row) -> dict[str, Any] | None:
         return None
     return {
         "id": row["id"],
+        "account_id": str(row["account_id"]),
         "supabase_user_id": str(row["supabase_user_id"]),
         "email": row["email"],
         "display_name": row.get("display_name"),
@@ -121,7 +123,7 @@ def get_or_create_profile(supabase_user: dict[str, Any]):
         conn.commit()
 
         profile_row = conn.execute(
-            """SELECT id, supabase_user_id, email, display_name, role, status,
+            """SELECT id, account_id, supabase_user_id, email, display_name, role, status,
                       onboarding_completed, onboarding_level, plan_selected, created_at, updated_at, last_login_at
                FROM profiles WHERE id=%s""",
             (profile_id,),
@@ -135,6 +137,7 @@ def get_or_create_profile(supabase_user: dict[str, Any]):
     profile = _serialize_profile(profile_row)
     if profile:
         profile["subscription"] = subscription
+        profile["personal_bridge"] = bridge_status(profile)
     return profile
 
 

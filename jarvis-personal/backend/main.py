@@ -27,6 +27,7 @@ from backend.finance.business_center import router as business_center_router
 from backend.auth.current_user import set_current_user, reset_current_user
 from backend.auth.service import authenticate_access_token
 from backend.users_admin.routes import router as users_admin_router
+from backend.auth.owner_bridge_routes import router as owner_bridge_router
 
 app = FastAPI(title="Jarvis Core")
 
@@ -53,6 +54,7 @@ PUBLIC_PATHS = {
     "/auth/check-access",
     "/email-monitor/cron",
     "/notifications/cron",
+    "/internal/owner-bridge/verify",
 }
 
 
@@ -146,6 +148,7 @@ app.include_router(notifications_router)
 app.include_router(investment_center_router)
 app.include_router(business_center_router)
 app.include_router(users_admin_router)
+app.include_router(owner_bridge_router)
 
 class AskRequest(BaseModel):
     text: str

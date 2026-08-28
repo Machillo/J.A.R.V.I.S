@@ -11,6 +11,7 @@ import {
   getNotificationStatus,
   sendTestNotification,
   updateSportsPreferences,
+  linkOwnerToUsers,
 } from "../services/jarvisApi";
 import { enableJarvisPushNotifications, isPushSupported } from "../pushNotifications";
 
@@ -35,6 +36,8 @@ export default function Settings({ status }) {
   const [notificationStatus, setNotificationStatus] = useState("default");
   const [pushInfo, setPushInfo] = useState(null);
   const [pushMessage, setPushMessage] = useState("");
+  const [ownerBridgeMessage, setOwnerBridgeMessage] = useState("");
+  const [ownerBridgeBusy, setOwnerBridgeBusy] = useState(false);
 
   const isAdmin = me?.role === "owner" || me?.role === "admin";
   const isOwner = me?.role === "owner";
@@ -122,6 +125,20 @@ export default function Settings({ status }) {
     }
   };
 
+
+  const handleLinkOwnerBridge = async () => {
+    setOwnerBridgeBusy(true);
+    setOwnerBridgeMessage("Verificando ambas identidades...");
+    try {
+      const result = await linkOwnerToUsers();
+      setOwnerBridgeMessage(result?.verified ? "JARVIS Personal quedó vinculado con tu cuenta owner de JARVIS Users." : "No se pudo verificar el vínculo.");
+    } catch (error) {
+      setOwnerBridgeMessage(error.message);
+    } finally {
+      setOwnerBridgeBusy(false);
+    }
+  };
+
   const handleEnableNotifications = async () => {
     setPushMessage("Activando Web Push...");
     try {
@@ -171,6 +188,19 @@ export default function Settings({ status }) {
         </div>
       </div>
 
+
+
+      {isOwner && (
+        <div className="jarvis-panel settings-card">
+          <h2>Identidad JARVIS</h2>
+          <p>Vinculá esta identidad privada con tu cuenta owner de JARVIS Users. El vínculo usa los UUID verificados de ambos Supabase, no el correo.</p>
+          <button className="jarvis-action-button" type="button" onClick={handleLinkOwnerBridge} disabled={ownerBridgeBusy}>
+            {ownerBridgeBusy ? "Verificando..." : "Conectar con la app pública"}
+          </button>
+          <small>Después podrás entrar a la app con Google, Apple vinculado o una passkey/Face ID sin perder tu identidad Personal.</small>
+          {ownerBridgeMessage && <small className="email-sync-status">{ownerBridgeMessage}</small>}
+        </div>
+      )}
 
       {isOwner && (
         <div className="jarvis-panel settings-card premium-ai-card">

@@ -1,6 +1,7 @@
 import { Check, ChevronRight, Crown, Sparkles, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getPlans, selectPlan } from "../services/jarvisApi";
+import AccountSecurity from "../components/AccountSecurity";
 
 const icons = { free: WalletCards, basic: Sparkles, vip: Crown };
 
@@ -64,6 +65,8 @@ export default function Settings({ user, onUserChange }) {
         </div>
         <span className="role-pill">{user?.role}</span>
       </div>
+
+      <AccountSecurity user={user} />
 
       <div className="section-heading compact">
         <div>

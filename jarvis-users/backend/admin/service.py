@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 
 from backend.core.database import get_connection
+from backend.auth.owner_bridge import bind_owner_to_personal
 
 
 VALID_PLANS = {"free", "basic", "vip"}
@@ -92,3 +93,7 @@ def update_user_access(user_id: int, *, plan: str | None = None, status: str | N
 
         conn.commit()
     return get_user(user_id)
+
+
+def link_owner_personal_identity(personal_supabase_user_id: str):
+    return bind_owner_to_personal(personal_supabase_user_id)

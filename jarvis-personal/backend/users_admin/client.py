@@ -38,3 +38,7 @@ def get_user(user_id: int):
 
 def update_user_access(user_id: int, payload: dict):
     return _request("PATCH", f"/admin/users/{user_id}/access", json=payload)
+
+
+def link_owner_personal_identity(personal_supabase_user_id: str):
+    return _request("POST", "/admin/owner-link", json={"personal_supabase_user_id": personal_supabase_user_id})
