@@ -26,6 +26,7 @@ function json(path, method, body) {
 }
 
 export const getMe = () => request("/auth/me");
+export const getPersonalSession = () => request("/auth/personal-session");
 export const getPlans = () => request("/auth/plans");
 export const selectPlan = (plan) => json("/auth/plan", "POST", { plan });
 export const getOnboarding = () => request("/auth/onboarding");

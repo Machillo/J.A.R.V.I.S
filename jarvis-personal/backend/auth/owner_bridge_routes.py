@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from backend.auth.owner_bridge import require_owner_bridge_key, verify_personal_owner
+from backend.auth.owner_bridge import (
+    issue_owner_bridge_session,
+    require_owner_bridge_key,
+    verify_personal_owner,
+)
 
 
 router = APIRouter(
@@ -18,3 +22,8 @@ class OwnerVerifyRequest(BaseModel):
 @router.post("/verify")
 def verify_owner(payload: OwnerVerifyRequest):
     return verify_personal_owner(payload.personal_supabase_user_id)
+
+
+@router.post("/session")
+def create_owner_session(payload: OwnerVerifyRequest):
+    return issue_owner_bridge_session(payload.personal_supabase_user_id)

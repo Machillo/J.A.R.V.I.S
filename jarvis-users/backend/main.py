@@ -29,7 +29,7 @@ app.add_middleware(
 )
 
 PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/auth/health"}
-ONBOARDING_PATHS = {"/auth/me", "/auth/plans", "/auth/plan", "/auth/onboarding"}
+ONBOARDING_PATHS = {"/auth/me", "/auth/personal-session", "/auth/plans", "/auth/plan", "/auth/onboarding"}
 
 
 def _is_public_path(path: str) -> bool:
@@ -53,13 +53,13 @@ async def auth_middleware(request: Request, call_next):
             content={"detail": getattr(exc, "detail", "No se pudo autenticar el usuario.")},
         )
 
-    if not user.get("plan_selected") and request.url.path not in {"/auth/me", "/auth/plans", "/auth/plan"}:
+    if not user.get("plan_selected") and user.get("role") != "owner" and request.url.path not in {"/auth/me", "/auth/plans", "/auth/plan"}:
         return JSONResponse(
             status_code=428,
             content={"detail": "Elegí un plan antes de continuar.", "code": "plan_required"},
         )
 
-    if not user.get("onboarding_completed") and request.url.path not in ONBOARDING_PATHS:
+    if not user.get("onboarding_completed") and user.get("role") != "owner" and request.url.path not in ONBOARDING_PATHS:
         return JSONResponse(
             status_code=428,
             content={"detail": "Completá el onboarding financiero antes de continuar.", "code": "onboarding_required"},

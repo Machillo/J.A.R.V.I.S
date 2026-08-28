@@ -2,10 +2,20 @@ import { supabase } from "../lib/supabase";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
+const OWNER_BRIDGE_STORAGE_KEY = "jarvis-owner-bridge-token";
+
+export const getOwnerBridgeToken = () => window.sessionStorage.getItem(OWNER_BRIDGE_STORAGE_KEY) || "";
+export const setOwnerBridgeToken = (token) => {
+  if (token) window.sessionStorage.setItem(OWNER_BRIDGE_STORAGE_KEY, token);
+  else window.sessionStorage.removeItem(OWNER_BRIDGE_STORAGE_KEY);
+};
+
 const getAuthHeaders = async () => {
+  const bridgeToken = getOwnerBridgeToken();
+  if (bridgeToken) return { Authorization: `Bearer jarvis-owner:${bridgeToken}` };
+
   const { data } = await supabase.auth.getSession();
   const token = data?.session?.access_token;
-
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 

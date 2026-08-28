@@ -35,7 +35,7 @@ import Wealth from "./pages/Wealth";
 import Businesses from "./pages/Businesses";
 import Login from "./pages/Login";
 
-import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getProfilePreferences, getStatus, updateProfilePreferences } from "./services/jarvisApi";
+import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
 
 const sanitizeCourtesy = (text = "") =>
@@ -190,6 +190,7 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [session, setSession] = useState(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [ownerBridgeMode, setOwnerBridgeMode] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [aiUsage, setAiUsage] = useState(null);
   const [strategySummary, setStrategySummary] = useState(null);
@@ -227,6 +228,25 @@ export default function App() {
 
 
   useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const incomingBridgeToken = hash.get("jarvis_owner_bridge");
+    if (incomingBridgeToken) {
+      setOwnerBridgeToken(incomingBridgeToken);
+      setOwnerBridgeMode(true);
+      window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+      setSession({ user: { user_metadata: { full_name: "Kenneth" }, bridge: true } });
+      setSessionLoaded(true);
+      return;
+    }
+
+    const storedBridgeToken = getOwnerBridgeToken();
+    if (storedBridgeToken) {
+      setOwnerBridgeMode(true);
+      setSession({ user: { user_metadata: { full_name: "Kenneth" }, bridge: true } });
+      setSessionLoaded(true);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setSessionLoaded(true);
@@ -278,6 +298,14 @@ export default function App() {
   }, [session]);
 
   const handleLogout = async () => {
+    if (ownerBridgeMode) {
+      setOwnerBridgeToken("");
+      setOwnerBridgeMode(false);
+      const publicAppUrl = import.meta.env.VITE_JARVIS_PUBLIC_APP_URL || "http://localhost:5174";
+      window.location.replace(publicAppUrl);
+      return;
+    }
+
     await supabase.auth.signOut();
     setSession(null);
     setFinanceDashboard(null);

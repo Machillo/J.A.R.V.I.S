@@ -5,6 +5,7 @@ from backend.auth.models import FinancialSituationUpdateRequest, OnboardingReque
 from backend.auth.onboarding import complete_onboarding, get_onboarding_status
 from backend.auth.financial_situation import get_financial_situation, update_financial_situation
 from backend.auth.plans import get_available_plans, select_plan
+from backend.auth.owner_bridge import create_personal_session
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -18,6 +19,11 @@ def health():
 @router.get("/me")
 def me():
     return get_current_user()
+
+
+@router.get("/personal-session")
+def personal_session():
+    return create_personal_session(get_current_user())
 
 
 @router.get("/plans")

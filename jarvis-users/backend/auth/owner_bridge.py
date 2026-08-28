@@ -130,3 +130,37 @@ def bind_owner_to_personal(personal_supabase_user_id: str) -> dict[str, Any]:
         "personal_supabase_user_id": personal_uid,
         "verified": True,
     }
+
+
+def create_personal_session(profile: dict[str, Any]) -> dict[str, Any]:
+    if profile.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Solo la cuenta owner puede abrir JARVIS Personal.")
+
+    link = get_personal_link(int(profile["id"]))
+    if not link or link.get("status") != "active":
+        raise HTTPException(status_code=409, detail="La cuenta owner todavía no está vinculada con JARVIS Personal.")
+
+    if not BRIDGE_API_KEY:
+        raise HTTPException(status_code=503, detail="JARVIS_OWNER_BRIDGE_API_KEY no está configurada en JARVIS Users.")
+
+    try:
+        response = _http.post(
+            f"{PERSONAL_API_URL}/internal/owner-bridge/session",
+            headers={"X-JARVIS-BRIDGE-KEY": BRIDGE_API_KEY},
+            json={"personal_supabase_user_id": str(link["personal_supabase_user_id"])},
+            timeout=8,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=503, detail="JARVIS Personal no está disponible para iniciar la sesión owner.") from exc
+
+    payload = response.json() if response.content else {}
+    if not response.ok:
+        raise HTTPException(status_code=response.status_code, detail=payload.get("detail", "Personal rechazó la sesión owner."))
+
+    personal_app_url = os.getenv("JARVIS_PERSONAL_APP_URL", "http://localhost:5173").rstrip("/")
+    return {
+        "mode": "personal",
+        "personal_app_url": personal_app_url,
+        "bridge_token": payload["token"],
+        "expires_at": payload.get("expires_at"),
+    }

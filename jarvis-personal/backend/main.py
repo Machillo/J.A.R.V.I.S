@@ -26,6 +26,7 @@ from backend.finance.investment_center import router as investment_center_router
 from backend.finance.business_center import router as business_center_router
 from backend.auth.current_user import set_current_user, reset_current_user
 from backend.auth.service import authenticate_access_token
+from backend.auth.owner_bridge import authenticate_owner_bridge_token
 from backend.users_admin.routes import router as users_admin_router
 from backend.auth.owner_bridge_routes import router as owner_bridge_router
 
@@ -96,7 +97,10 @@ async def auth_middleware(request: Request, call_next):
     access_token = authorization.replace("Bearer ", "", 1).strip()
 
     try:
-        user = authenticate_access_token(access_token)
+        if access_token.startswith("jarvis-owner:"):
+            user = authenticate_owner_bridge_token(access_token.removeprefix("jarvis-owner:").strip())
+        else:
+            user = authenticate_access_token(access_token)
     except Exception as exc:
         status_code = getattr(exc, "status_code", 401)
         detail = getattr(exc, "detail", "No se pudo autenticar el usuario.")

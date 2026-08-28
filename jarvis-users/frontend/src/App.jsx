@@ -11,7 +11,7 @@ import FinancialSituation from "./pages/FinancialSituation";
 import Login from "./pages/Login";
 import PlanSelection from "./pages/PlanSelection";
 import Onboarding from "./pages/Onboarding";
-import { getMe } from "./services/jarvisApi";
+import { getMe, getPersonalSession } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
 
 export default function App() {
@@ -19,6 +19,8 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("overview");
+  const [routingOwner, setRoutingOwner] = useState(false);
+  const [ownerRouteError, setOwnerRouteError] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthReady(true); });
@@ -28,12 +30,33 @@ export default function App() {
 
   useEffect(() => {
     if (!session) return;
-    getMe().then(setUser).catch(() => setUser(null));
+    setOwnerRouteError("");
+    getMe()
+      .then(async (profile) => {
+        setUser(profile);
+        if (profile?.role !== "owner") return;
+
+        if (!profile?.personal_bridge?.linked) {
+          setOwnerRouteError("Tu cuenta owner fue reconocida, pero todavía no está vinculada con JARVIS Personal.");
+          return;
+        }
+
+        setRoutingOwner(true);
+        const personal = await getPersonalSession();
+        const target = `${personal.personal_app_url}/#jarvis_owner_bridge=${encodeURIComponent(personal.bridge_token)}`;
+        window.location.replace(target);
+      })
+      .catch((error) => {
+        setRoutingOwner(false);
+        setOwnerRouteError(error?.message || "No pudimos resolver tu identidad JARVIS.");
+        setUser(null);
+      });
   }, [session]);
 
-  if (!authReady || (session && !user)) return <main className="boot-screen"><strong>J.A.R.V.I.S.</strong><span>Preparando tu espacio...</span></main>;
+  if (!authReady || (session && !user) || routingOwner) return <main className="boot-screen"><strong>J.A.R.V.I.S.</strong><span>{routingOwner ? "Abriendo tu JARVIS Personal..." : "Preparando tu espacio..."}</span></main>;
   if (!session) return <Login />;
-  if (!user) return <main className="boot-screen"><strong>No pudimos cargar tu perfil.</strong><button onClick={() => supabase.auth.signOut()}>Cerrar sesión</button></main>;
+  if (!user) return <main className="boot-screen"><strong>No pudimos cargar tu perfil.</strong>{ownerRouteError && <span>{ownerRouteError}</span>}<button onClick={() => supabase.auth.signOut()}>Cerrar sesión</button></main>;
+  if (user.role === "owner" && ownerRouteError) return <main className="boot-screen"><strong>Cuenta owner reconocida.</strong><span>{ownerRouteError}</span><button onClick={() => supabase.auth.signOut()}>Cerrar sesión</button></main>;
   if (!user.plan_selected) return <PlanSelection onSelected={setUser} />;
   if (!user.onboarding_completed) return <Onboarding user={user} onComplete={setUser} />;
 
