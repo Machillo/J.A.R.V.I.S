@@ -45,6 +45,8 @@ export const updateDebt = (id, payload) => json(`/finance/debts/${id}`, "PUT", p
 export const deleteDebt = (id) => request(`/finance/debts/${id}`, { method: "DELETE" });
 export const payDebt = (id, payload) => json(`/finance/debts/${id}/payments`, "POST", payload);
 export const getStrategyBasic = () => request("/finance/strategy-basic");
+export const simulateStrategyBasic = (extra_monthly) => json("/finance/strategy-basic/simulate", "POST", { extra_monthly });
+export const getStrategyVip = () => request("/finance/strategy-vip");
 export const getGoals = () => request("/goals");
 export const createGoal = (payload) => json("/goals", "POST", payload);
 export const updateGoal = (id, payload) => json(`/goals/${id}`, "PUT", payload);

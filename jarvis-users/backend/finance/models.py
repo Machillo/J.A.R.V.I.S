@@ -39,3 +39,7 @@ class DebtPaymentRequest(BaseModel):
     amount: float = Field(gt=0)
     payment_date: str | None = None
     notes: str = ""
+
+
+class StrategySimulationRequest(BaseModel):
+    extra_monthly: float = Field(default=0, ge=0)

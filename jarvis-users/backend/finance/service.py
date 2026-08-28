@@ -4,6 +4,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_user_id
 from backend.core.database import get_connection
+from backend.finance.strategy_engine import build_basic_strategy, build_vip_strategy
 
 
 def _today(value: str | None = None) -> str:
@@ -195,30 +196,52 @@ def get_summary():
         "available_after_commitments": available,
     }
 
-def get_strategy_basic():
-    summary = get_summary()
-    income = summary["income"]
-    expenses = summary["expenses"]
-    debt_payment = summary["debt_monthly"]
-    debt_balance = summary["debt_balance"]
+def _monthly_income_estimate(profile: dict | None) -> float:
+    if not profile:
+        return 0.0
+    if profile.get("income_type") == "fixed":
+        return round(float(profile.get("fixed_monthly_salary") or 0), 2)
+    hourly = float(profile.get("hourly_rate") or 0)
+    hours = float(profile.get("hours_per_day") or 0)
+    days = float(profile.get("work_days_per_week") or 0)
+    return round(hourly * hours * days * 52 / 12, 2)
 
-    fixed_outflow = expenses + debt_payment
-    pressure = round((fixed_outflow / income * 100), 1) if income > 0 else 0
 
-    if income <= 0:
-        recommendation = "Registrá tus ingresos del mes para poder calcular una estrategia."
-        priority = "income"
-    elif fixed_outflow > income:
-        recommendation = "Tus compromisos superan tus ingresos del mes. Priorizá gastos esenciales y evitá nueva deuda."
-        priority = "stabilize"
-    elif debt_balance > 0 and pressure >= 70:
-        recommendation = "Tu flujo está muy comprometido. Mantené pagos mínimos y dirigí cualquier excedente a la deuda más costosa."
-        priority = "debt"
-    elif debt_balance > 0:
-        recommendation = "Tenés margen positivo. Conservá un pequeño colchón y utilizá parte del excedente para acelerar deuda."
-        priority = "debt"
-    else:
-        recommendation = "No tenés deuda registrada. Protegé un fondo de emergencia antes de aumentar gastos discrecionales."
-        priority = "emergency"
+def get_strategy_snapshot():
+    user_id = get_current_user_id()
+    with get_connection() as conn:
+        profile = conn.execute(
+            """SELECT income_type, fixed_monthly_salary, hourly_rate, work_days_per_week, hours_per_day,
+                      essential_monthly_expenses, liquid_savings, emergency_fund_target,
+                      strategy_preference, discretionary_monthly_minimum
+               FROM financial_profiles WHERE user_id=%s""",
+            (user_id,),
+        ).fetchone()
+        debts = conn.execute(
+            """SELECT id, name, remaining_amount, monthly_payment, interest_rate, payment_day
+               FROM debts WHERE user_id=%s AND remaining_amount > 0 ORDER BY id""",
+            (user_id,),
+        ).fetchall()
+        goals = conn.execute(
+            """SELECT id, name, target_amount, current_amount, target_date, priority
+               FROM financial_goals WHERE user_id=%s AND status='active' ORDER BY priority, target_date NULLS LAST, id""",
+            (user_id,),
+        ).fetchall()
+    return {
+        "monthly_income_estimate": _monthly_income_estimate(profile),
+        "essential_monthly_expenses": profile.get("essential_monthly_expenses") if profile else None,
+        "liquid_savings": profile.get("liquid_savings") if profile else None,
+        "emergency_fund_target": profile.get("emergency_fund_target") if profile else None,
+        "strategy_preference": profile.get("strategy_preference") if profile else None,
+        "discretionary_monthly_minimum": profile.get("discretionary_monthly_minimum") if profile else None,
+        "debts": [dict(row) for row in debts],
+        "goals": [dict(row) for row in goals],
+    }
 
-    return {**summary, "commitment_ratio": pressure, "priority": priority, "recommendation": recommendation}
+
+def get_strategy_basic(extra_monthly: float = 0):
+    return build_basic_strategy(get_strategy_snapshot(), extra_monthly=extra_monthly)
+
+
+def get_strategy_vip():
+    return build_vip_strategy(get_strategy_snapshot())
