@@ -965,7 +965,8 @@ def add_expense(
     expense_type: str = "variable",
     description: str = ""
 ):
-    user_id = get_current_user_id()
+    user_id = get_current_user_id()  # legacy compatibility during migration
+    workspace_id = get_current_workspace_id()
     category = normalize_category(category, "expense")
     if not expense_type or expense_type == "variable":
         expense_type = expense_type_for_category(category)
@@ -979,16 +980,18 @@ def add_expense(
                 description,
                 amount,
                 user_id,
+                workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 category,
                 expense_type,
                 description,
                 amount,
-                user_id
+                user_id,
+                workspace_id
             )
         )
 
@@ -1000,12 +1003,13 @@ def add_expense(
         "expense_type": expense_type,
         "description": description,
         "amount": amount,
-        "user_id": user_id
+        "user_id": user_id,
+        "workspace_id": workspace_id
     }
 
 
 def get_expenses():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -1016,12 +1020,13 @@ def get_expenses():
                    description,
                    amount,
                    created_at,
-                   user_id
+                   user_id,
+                   workspace_id
             FROM expenses
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -1033,7 +1038,7 @@ def get_financial_summary():
     Si el usuario aún no configuró perfil laboral, ingresos, gastos o deudas,
     devuelve ceros en vez de romper el dashboard.
     """
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     salary_projection = calculate_monthly_salary_projection()
 
@@ -1057,48 +1062,48 @@ def get_financial_summary():
             """
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM bonuses
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchone()["total"]
 
         debt_total = conn.execute(
             """
             SELECT COALESCE(SUM(remaining_amount), 0) AS total
             FROM debts
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchone()["total"]
 
         monthly_debt_payments = conn.execute(
             """
             SELECT COALESCE(SUM(monthly_payment), 0) AS total
             FROM debts
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchone()["total"]
 
         savings_total = conn.execute(
             """
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM savings
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchone()["total"]
 
         investments_total = conn.execute(
             """
             SELECT COALESCE(
                 (SELECT market_value FROM investment_portfolio_snapshots
-                 WHERE user_id = %s ORDER BY snapshot_date DESC, id DESC LIMIT 1),
-                (SELECT COALESCE(SUM(amount), 0) FROM investments WHERE user_id = %s),
+                 WHERE workspace_id = %s ORDER BY snapshot_date DESC, id DESC LIMIT 1),
+                (SELECT COALESCE(SUM(amount), 0) FROM investments WHERE workspace_id = %s),
                 0
             ) AS total
             """,
-            (user_id, user_id)
+            (workspace_id, workspace_id)
         ).fetchone()["total"]
 
         legacy_fixed_expenses_total = conn.execute(
@@ -1106,9 +1111,9 @@ def get_financial_summary():
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'fixed'
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchone()["total"]
 
         fixed_expenses_total = conn.execute(
@@ -1123,11 +1128,11 @@ def get_financial_summary():
                 END
             ), 0) AS total
             FROM fixed_expenses
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND is_active = TRUE
               AND expected_amount IS NOT NULL
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchone()["total"]
 
         variable_expenses_total = conn.execute(
@@ -1135,9 +1140,9 @@ def get_financial_summary():
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'variable'
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchone()["total"]
 
         one_time_expenses_total = conn.execute(
@@ -1145,9 +1150,9 @@ def get_financial_summary():
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM expenses
             WHERE expense_type = 'one_time'
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchone()["total"]
 
     bonus_total = _as_float(salary_projection.get("adjustments", {}).get("bonuses_net", bonus_total))
@@ -1205,7 +1210,7 @@ def get_financial_summary():
                 expenses_total,
             ]),
         },
-        "user_id": user_id,
+        "workspace_id": workspace_id,
     }
 
 def get_financial_cycle_report(as_of: date | None = None) -> dict:
@@ -1283,13 +1288,13 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             SELECT id, transaction_date, description, amount, transaction_type,
                    category, account, source, notes, created_at
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND LOWER(BTRIM(COALESCE(transaction_type, ''))) = 'expense'
               AND {_transaction_date_expr()} >= %s::date
               AND {_transaction_date_expr()} < %s::date
             ORDER BY {_transaction_date_expr()} DESC, id DESC
             """,
-            (user_id, expense_start.isoformat(), expense_end_exclusive.isoformat()),
+            (workspace_id, expense_start.isoformat(), expense_end_exclusive.isoformat()),
         ).fetchall()]
 
         debt_payments = [dict(row) for row in conn.execute(
@@ -1297,13 +1302,13 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             SELECT id, transaction_date, description, amount, transaction_type,
                    category, account, source, notes, created_at
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND LOWER(BTRIM(COALESCE(transaction_type, ''))) = 'debt_payment'
               AND {_transaction_date_expr()} >= %s::date
               AND {_transaction_date_expr()} < %s::date
             ORDER BY {_transaction_date_expr()} DESC, id DESC
             """,
-            (user_id, cycle_start.isoformat(), cycle_end_exclusive.isoformat()),
+            (workspace_id, cycle_start.isoformat(), cycle_end_exclusive.isoformat()),
         ).fetchall()]
 
         income_transactions = [dict(row) for row in conn.execute(
@@ -1311,13 +1316,13 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             SELECT id, transaction_date, description, amount, transaction_type,
                    category, account, source, notes, created_at
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND LOWER(BTRIM(COALESCE(transaction_type, ''))) = 'income'
               AND {_transaction_date_expr()} >= %s::date
               AND {_transaction_date_expr()} < %s::date
             ORDER BY {_transaction_date_expr()} DESC, id DESC
             """,
-            (user_id, cycle_start.isoformat(), cycle_end_exclusive.isoformat()),
+            (workspace_id, cycle_start.isoformat(), cycle_end_exclusive.isoformat()),
         ).fetchall()]
 
         loan_transactions = [dict(row) for row in conn.execute(
@@ -1325,13 +1330,13 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             SELECT id, transaction_date, description, amount, transaction_type,
                    category, account, source, notes, created_at
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND LOWER(BTRIM(COALESCE(transaction_type, ''))) IN ('loan_received', 'loan_disbursement')
               AND {_transaction_date_expr()} >= %s::date
               AND {_transaction_date_expr()} < %s::date
             ORDER BY {_transaction_date_expr()} DESC, id DESC
             """,
-            (user_id, cycle_start.isoformat(), cycle_end_exclusive.isoformat()),
+            (workspace_id, cycle_start.isoformat(), cycle_end_exclusive.isoformat()),
         ).fetchall()]
 
     # Extras are intentionally best-effort. They augment Net Income, but missing
@@ -1406,7 +1411,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
 
     try:
         from backend.finance.intelligence import calculate_goal_reserves, _fetch_active_goals
-        goal_reserves = calculate_goal_reserves(_fetch_active_goals(user_id)) or {}
+        goal_reserves = calculate_goal_reserves(_fetch_active_goals(workspace_id)) or {}
     except Exception:
         goal_reserves = {}
     goals_reserved = max(
@@ -1479,6 +1484,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             "income_sum": round(income_received_total, 2),
         },
         "user_id": user_id,
+        "workspace_id": workspace_id,
     }
 
 def check_spending(amount: float = 0):
@@ -1894,7 +1900,7 @@ def calculate_monthly_salary_projection():
     }
 
 def delete_expense(expense_id: int):
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         expense = conn.execute(
@@ -1907,9 +1913,9 @@ def delete_expense(expense_id: int):
                    user_id
             FROM expenses
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (expense_id, user_id)
+            (expense_id, workspace_id)
         ).fetchone()
 
         if not expense:
@@ -1922,9 +1928,9 @@ def delete_expense(expense_id: int):
             """
             DELETE FROM expenses
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (expense_id, user_id)
+            (expense_id, workspace_id)
         )
 
         conn.commit()
@@ -1943,7 +1949,7 @@ def update_expense(
     expense_type: str,
     description: str = ""
 ):
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     category = normalize_category(category, "expense")
     if not expense_type or expense_type == "variable":
         expense_type = expense_type_for_category(category)
@@ -1954,9 +1960,9 @@ def update_expense(
             SELECT id
             FROM expenses
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (expense_id, user_id)
+            (expense_id, workspace_id)
         ).fetchone()
 
         if not expense:
@@ -1973,7 +1979,7 @@ def update_expense(
                 expense_type = %s,
                 description = %s
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
             (
                 category,
@@ -1981,7 +1987,7 @@ def update_expense(
                 expense_type,
                 description,
                 expense_id,
-                user_id
+                workspace_id
             )
         )
 
@@ -1994,7 +2000,7 @@ def update_expense(
         "amount": amount,
         "expense_type": expense_type,
         "description": description,
-        "user_id": user_id,
+        "workspace_id": workspace_id,
         "status": "OK"
     }
 
@@ -2620,7 +2626,7 @@ def get_net_worth_report():
             "has_debts": bool(debts_list),
             "has_any_financial_data": bool(savings_list or investments_list or debts_list),
         },
-        "user_id": user_id,
+        "workspace_id": workspace_id,
     }
 
 def get_user_status():
@@ -2628,7 +2634,7 @@ def get_user_status():
     summary = get_financial_summary()
     net_worth = get_net_worth_report()
 
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         goals = conn.execute(
@@ -2637,7 +2643,7 @@ def get_user_status():
                    priority, status, created_at, user_id
             FROM financial_goals
             WHERE status = 'active'
-            AND user_id = %s
+            AND workspace_id = %s
             ORDER BY
                 CASE priority
                     WHEN 'critical' THEN 1
@@ -2648,7 +2654,7 @@ def get_user_status():
                 END,
                 target_date ASC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     goals_list = [dict(row) for row in goals]
@@ -2709,7 +2715,7 @@ def get_user_status():
             "risk_level": net_worth["risk_level"],
         },
         "setup": setup,
-        "user_id": user_id,
+        "workspace_id": workspace_id,
     }
 
 def get_financial_dashboard():

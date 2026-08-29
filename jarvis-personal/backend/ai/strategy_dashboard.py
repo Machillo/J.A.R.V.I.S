@@ -4,7 +4,7 @@ import json
 from datetime import date, datetime
 from typing import Any
 
-from backend.auth.current_user import get_current_user, get_current_user_id
+from backend.auth.current_user import get_current_user, get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.strategic_engine import get_financial_engine_report, calculate_emergency_fund
@@ -105,14 +105,14 @@ def _priority_weight(priority: Any) -> float:
     return 0.2
 
 
-def _fetch_active_financial_goals(user_id: int) -> list[dict[str, Any]]:
+def _fetch_active_financial_goals(workspace_id: str) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
                    priority, status, created_at
             FROM financial_goals
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND COALESCE(status, 'active') = 'active'
             ORDER BY
               CASE LOWER(COALESCE(priority, 'medium'))
@@ -128,7 +128,7 @@ def _fetch_active_financial_goals(user_id: int) -> list[dict[str, Any]]:
               target_date ASC NULLS LAST,
               id ASC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -184,7 +184,7 @@ def _safe_emergency_report() -> dict[str, Any]:
         return {}
 
 
-def _fetch_savings_total(user_id: int) -> float:
+def _fetch_savings_total(workspace_id: str) -> float:
     """Dinero reservado explícitamente como ahorro.
 
     No usamos el balance completo de la cuenta como fondo de emergencia porque
@@ -193,8 +193,8 @@ def _fetch_savings_total(user_id: int) -> float:
     try:
         with get_connection() as conn:
             row = conn.execute(
-                "SELECT COALESCE(SUM(amount), 0) AS total FROM savings WHERE user_id = %s",
-                (user_id,),
+                "SELECT COALESCE(SUM(amount), 0) AS total FROM savings WHERE workspace_id = %s",
+                (workspace_id,),
             ).fetchone()
         return _f(row["total"] if row else 0)
     except Exception:
@@ -405,7 +405,7 @@ def _build_dynamic_director_allocation(
     }
 
 
-def _fetch_investment_portfolio(user_id: int) -> dict[str, Any]:
+def _fetch_investment_portfolio(workspace_id: str) -> dict[str, Any]:
     """Resumen local de inversiones, listo para una futura sincronización IBKR read-only."""
     legacy_value = 0.0
     contributed = 0.0
@@ -414,8 +414,8 @@ def _fetch_investment_portfolio(user_id: int) -> dict[str, Any]:
     try:
         with get_connection() as conn:
             legacy = conn.execute(
-                "SELECT COALESCE(SUM(amount),0) AS total FROM investments WHERE user_id = %s",
-                (user_id,),
+                "SELECT COALESCE(SUM(amount),0) AS total FROM investments WHERE workspace_id = %s",
+                (workspace_id,),
             ).fetchone()
             legacy_value = _f(legacy["total"] if legacy else 0)
             # Las tablas nuevas son aditivas y no rompen instalaciones existentes.
@@ -439,13 +439,13 @@ def _fetch_investment_portfolio(user_id: int) -> dict[str, Any]:
                 )
             """)
             snap = conn.execute("""
-                SELECT * FROM investment_portfolio_snapshots WHERE user_id=%s
+                SELECT * FROM investment_portfolio_snapshots WHERE workspace_id=%s
                 ORDER BY snapshot_date DESC, id DESC LIMIT 1
-            """, (user_id,)).fetchone()
+            """, (workspace_id,)).fetchone()
             reserve = conn.execute("""
                 SELECT COALESCE(SUM(CASE WHEN flow_type='reserve' THEN amount WHEN flow_type='reserve_release' THEN -amount ELSE 0 END),0) AS total
-                FROM investment_cashflows WHERE user_id=%s AND currency='CRC'
-            """, (user_id,)).fetchone()
+                FROM investment_cashflows WHERE workspace_id=%s AND currency='CRC'
+            """, (workspace_id,)).fetchone()
             reserved = _f(reserve["total"] if reserve else 0)
             if snap:
                 d=dict(snap); legacy_value=_f(d.get('market_value')); contributed=_f(d.get('contributed_capital'))
@@ -501,7 +501,7 @@ def _is_debt_like_fixed_expense(row: dict[str, Any], debt_names: set[str]) -> bo
     return any(keyword in text for keyword in debt_keywords)
 
 
-def _get_strategy_living_expenses(user_id: int, debts: list[dict[str, Any]]) -> dict[str, Any]:
+def _get_strategy_living_expenses(workspace_id: str, debts: list[dict[str, Any]]) -> dict[str, Any]:
     """Gastos base usados por Estrategia Premium.
 
     Decisión V1 de Kenneth:
@@ -518,12 +518,12 @@ def _get_strategy_living_expenses(user_id: int, debts: list[dict[str, Any]]) -> 
             SELECT id, name, category, expected_amount, frequency, interval_months,
                    payment_method, auto_deducted, aliases, is_active
             FROM fixed_expenses
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND is_active = TRUE
               AND expected_amount IS NOT NULL
             ORDER BY expected_amount DESC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()]
 
     included: list[dict[str, Any]] = []
@@ -703,7 +703,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     debts = get_debts() or []
     summary = get_financial_summary() or {}
     salary_projection = calculate_monthly_salary_projection() or {}
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     cycle_report = _safe_cycle_report()
 
     salary_results = salary_projection.get("results") or {}
@@ -729,13 +729,13 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     original_debt = total_debt + paid_debt
     progress = round((paid_debt / original_debt) * 100, 2) if original_debt > 0 else 0
 
-    goals = _fetch_active_financial_goals(user_id)
+    goals = _fetch_active_financial_goals(workspace_id)
     goal_reserves = _calculate_goal_reserves(goals)
     critical_goal_required = _f(goal_reserves.get("critical_monthly_required"))
     weighted_goal_required = _f(goal_reserves.get("monthly_auto_reserve"))
     required_goal_reserve = max(critical_goal_required, weighted_goal_required)
 
-    living = _get_strategy_living_expenses(user_id, debts)
+    living = _get_strategy_living_expenses(workspace_id, debts)
     recurring_living_expenses = _f(living.get("fixed_living_total"))
     # current_period incluye debt_payment en Finance Overview. Para Strategy
     # usamos spending_only y restamos deuda una sola vez por separado.
@@ -763,8 +763,8 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     recurring_available_after_goals = max(recurring_before_goals - recurring_goal_allocation, 0.0)
 
     emergency_report = _safe_emergency_report()
-    savings_total = _fetch_savings_total(user_id)
-    investment_portfolio = _fetch_investment_portfolio(user_id)
+    savings_total = _fetch_savings_total(workspace_id)
+    investment_portfolio = _fetch_investment_portfolio(workspace_id)
     emergency_monthly_base = _f(emergency_report.get("monthly_base"))
     if emergency_monthly_base <= 0:
         emergency_monthly_base = recurring_living_expenses + configured_debt_payments

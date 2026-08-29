@@ -6,7 +6,7 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 
 
@@ -91,7 +91,7 @@ def _rate_to_monthly(rate: float) -> tuple[float, str]:
 
 
 def _fetch_transactions() -> list[dict[str, Any]]:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
             """
@@ -110,57 +110,57 @@ def _fetch_transactions() -> list[dict[str, Any]]:
                    exchange_rate,
                    created_at
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY transaction_date::date ASC, id ASC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     return [dict(row) for row in rows]
 
 
 def _fetch_debts() -> list[dict[str, Any]]:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, name, debt_type, total_amount, remaining_amount,
                    monthly_payment, interest_rate, term_months, payment_day, created_at
             FROM debts
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY remaining_amount DESC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     return [dict(row) for row in rows]
 
 
 def _fetch_goals() -> list[dict[str, Any]]:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date, priority, status, created_at
             FROM financial_goals
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             AND status = 'active'
             ORDER BY created_at ASC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     return [dict(row) for row in rows]
 
 
 def _fetch_expenses_table() -> list[dict[str, Any]]:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, category, expense_type, description, amount, created_at
             FROM expenses
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id ASC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -428,11 +428,11 @@ def calculate_financial_health_score() -> dict[str, Any]:
     short_term_debt = 0.0
 
     # Use savings table if available.
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         savings_total = conn.execute(
-            "SELECT COALESCE(SUM(amount),0) AS total FROM savings WHERE user_id = %s",
-            (user_id,),
+            "SELECT COALESCE(SUM(amount),0) AS total FROM savings WHERE workspace_id = %s",
+            (workspace_id,),
         ).fetchone()["total"]
     emergency_fund_current = _as_float(savings_total)
 
@@ -716,11 +716,11 @@ def smart_cash_allocation() -> dict[str, Any]:
     avg_net = _as_float(flow.get("averages", {}).get("net_operational"))
     emergency_target = _as_float(emergency.get("recommended_3_months"))
 
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         savings_total = conn.execute(
-            "SELECT COALESCE(SUM(amount),0) AS total FROM savings WHERE user_id = %s",
-            (user_id,),
+            "SELECT COALESCE(SUM(amount),0) AS total FROM savings WHERE workspace_id = %s",
+            (workspace_id,),
         ).fetchone()["total"]
     savings_total = _as_float(savings_total)
 

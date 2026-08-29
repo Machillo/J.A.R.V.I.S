@@ -534,13 +534,13 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
             _recalculate_receivable(conn, user_id, int(account["id"]))
 
 
-def _fetch_active_goals(user_id: int) -> list[dict[str, Any]]:
+def _fetch_active_goals(workspace_id: str) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date, priority, status, created_at
             FROM financial_goals
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND COALESCE(status, 'active') = 'active'
             ORDER BY
               CASE LOWER(priority)
@@ -556,7 +556,7 @@ def _fetch_active_goals(user_id: int) -> list[dict[str, Any]]:
               target_date ASC NULLS LAST,
               id ASC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -629,6 +629,7 @@ def calculate_goal_reserves(goals: list[dict[str, Any]]) -> dict[str, Any]:
 def get_real_availability() -> dict[str, Any]:
     """Ingreso neto - gastos fijos - deudas - metas críticas/ponderadas."""
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     start, end = _month_bounds()
     date_sql = _date_expr("transaction_date")
 
@@ -638,7 +639,7 @@ def get_real_availability() -> dict[str, Any]:
     except Exception:
         cycle = {}
 
-    goals = _fetch_active_goals(user_id)
+    goals = _fetch_active_goals(workspace_id)
     goal_reserves = calculate_goal_reserves(goals)
 
     net_income = _as_float(cycle.get("income", {}).get("expected_total"))
@@ -710,7 +711,7 @@ def _monthly_rate(rate: float) -> float:
 
 
 def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     availability = get_real_availability()
     if extra_cash is None:
         try:
@@ -728,10 +729,10 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
             """
             SELECT id, name, debt_type, remaining_amount, monthly_payment, interest_rate, payment_day
             FROM debts
-            WHERE user_id = %s AND remaining_amount > 0
+            WHERE workspace_id = %s AND remaining_amount > 0
             ORDER BY remaining_amount DESC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     debts = [dict(row) for row in rows]
     if not debts:

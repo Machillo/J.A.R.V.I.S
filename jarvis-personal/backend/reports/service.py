@@ -1,39 +1,39 @@
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.service import get_financial_summary
 from backend.goals.service import get_financial_goals
 
 
 def get_expense_breakdown():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT category, expense_type, SUM(amount) AS total
             FROM expenses
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             GROUP BY category, expense_type
             ORDER BY total DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
 
 
 def get_debt_breakdown():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT name, debt_type, remaining_amount, monthly_payment, interest_rate
             FROM debts
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY remaining_amount DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
