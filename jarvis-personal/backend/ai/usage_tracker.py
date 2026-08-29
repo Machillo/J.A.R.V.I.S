@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from backend.auth.current_user import get_current_user
+from backend.auth.current_user import get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
 
 DEFAULT_DAILY_LIMITS = {
@@ -29,6 +29,7 @@ def _ensure_usage_tables(conn) -> None:
         CREATE TABLE IF NOT EXISTS ai_usage_daily (
             id BIGSERIAL PRIMARY KEY,
             user_id BIGINT NOT NULL,
+            workspace_id UUID,
             usage_date DATE NOT NULL,
             prompt_tokens INTEGER NOT NULL DEFAULT 0,
             response_tokens INTEGER NOT NULL DEFAULT 0,
@@ -36,7 +37,7 @@ def _ensure_usage_tables(conn) -> None:
             requests_count INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, usage_date)
+            UNIQUE(workspace_id, usage_date)
         )
         """
     )
@@ -45,6 +46,7 @@ def _ensure_usage_tables(conn) -> None:
         CREATE TABLE IF NOT EXISTS ai_usage_events (
             id BIGSERIAL PRIMARY KEY,
             user_id BIGINT NOT NULL,
+            workspace_id UUID,
             usage_date DATE NOT NULL,
             route TEXT,
             model TEXT,
@@ -110,10 +112,10 @@ def get_today_usage(user_id: int | None = None) -> dict[str, Any]:
             """
             SELECT prompt_tokens, response_tokens, total_tokens, requests_count
             FROM ai_usage_daily
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             AND usage_date = CURRENT_DATE
             """,
-            (target_user_id,),
+            (get_current_workspace_id(),),
         ).fetchone()
         conn.commit()
 
@@ -154,6 +156,7 @@ def assert_can_use_ai(estimated_prompt_tokens: int = 0) -> dict[str, Any]:
 def record_ai_usage(prompt: str, response: str, route: str = "jarvis", model: str | None = None) -> dict[str, Any]:
     user = get_current_user()
     user_id = int(user["id"])
+    workspace_id = get_current_workspace_id()
     prompt_tokens = estimate_tokens(prompt)
     response_tokens = estimate_tokens(response)
     total_tokens = prompt_tokens + response_tokens
@@ -163,20 +166,20 @@ def record_ai_usage(prompt: str, response: str, route: str = "jarvis", model: st
         conn.execute(
             """
             INSERT INTO ai_usage_events (
-                user_id, usage_date, route, model,
+                user_id, workspace_id, usage_date, route, model,
                 prompt_tokens, response_tokens, total_tokens
             )
-            VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, CURRENT_DATE, %s, %s, %s, %s, %s)
             """,
-            (user_id, route, model, prompt_tokens, response_tokens, total_tokens),
+            (user_id, workspace_id, route, model, prompt_tokens, response_tokens, total_tokens),
         )
         conn.execute(
             """
             INSERT INTO ai_usage_daily (
-                user_id, usage_date, prompt_tokens, response_tokens, total_tokens, requests_count
+                user_id, workspace_id, usage_date, prompt_tokens, response_tokens, total_tokens, requests_count
             )
-            VALUES (%s, CURRENT_DATE, %s, %s, %s, 1)
-            ON CONFLICT (user_id, usage_date)
+            VALUES (%s, %s, CURRENT_DATE, %s, %s, %s, 1)
+            ON CONFLICT (workspace_id, usage_date)
             DO UPDATE SET
                 prompt_tokens = ai_usage_daily.prompt_tokens + EXCLUDED.prompt_tokens,
                 response_tokens = ai_usage_daily.response_tokens + EXCLUDED.response_tokens,
@@ -184,7 +187,7 @@ def record_ai_usage(prompt: str, response: str, route: str = "jarvis", model: st
                 requests_count = ai_usage_daily.requests_count + 1,
                 updated_at = NOW()
             """,
-            (user_id, prompt_tokens, response_tokens, total_tokens),
+            (user_id, workspace_id, prompt_tokens, response_tokens, total_tokens),
         )
         conn.commit()
 
@@ -211,8 +214,10 @@ def get_admin_usage_overview() -> dict[str, Any]:
                 COALESCE(u.requests_count, 0) AS requests_count,
                 COALESCE(l.daily_token_limit, 0) AS daily_limit
             FROM allowed_users au
+            LEFT JOIN accounts a ON a.legacy_allowed_user_id = au.id
+            LEFT JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
             LEFT JOIN ai_usage_daily u
-                ON u.user_id = au.id AND u.usage_date = CURRENT_DATE
+                ON u.workspace_id = w.id AND u.usage_date = CURRENT_DATE
             LEFT JOIN ai_usage_limits l
                 ON l.role = au.role
             ORDER BY au.role, au.email

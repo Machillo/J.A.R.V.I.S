@@ -8,7 +8,7 @@ from typing import Any
 import requests
 from fastapi import HTTPException, status
 
-from backend.auth.current_user import get_current_user
+from backend.auth.current_user import get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
@@ -43,6 +43,7 @@ def ensure_openai_tables(conn) -> None:
         CREATE TABLE IF NOT EXISTS ai_premium_usage_events (
             id BIGSERIAL PRIMARY KEY,
             user_id BIGINT NOT NULL,
+            workspace_id UUID,
             provider TEXT NOT NULL DEFAULT 'openai',
             model TEXT NOT NULL,
             route TEXT NOT NULL DEFAULT 'jarvis',
@@ -59,6 +60,7 @@ def ensure_openai_tables(conn) -> None:
         CREATE TABLE IF NOT EXISTS ai_premium_guides (
             id BIGSERIAL PRIMARY KEY,
             user_id BIGINT NOT NULL,
+            workspace_id UUID,
             guide_type TEXT NOT NULL,
             title TEXT,
             content TEXT NOT NULL,
@@ -73,7 +75,8 @@ def ensure_openai_tables(conn) -> None:
         """
         CREATE TABLE IF NOT EXISTS ai_premium_settings (
             id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL UNIQUE,
+            user_id BIGINT NOT NULL,
+            workspace_id UUID UNIQUE,
             enabled BOOLEAN NOT NULL DEFAULT TRUE,
             monthly_budget_usd NUMERIC(12, 2) NOT NULL DEFAULT 10.00,
             warning_percent INTEGER NOT NULL DEFAULT 80,
@@ -104,16 +107,16 @@ def _current_month_bounds() -> tuple[str, str]:
     return start, end
 
 
-def _settings_for_user(conn, user_id: int) -> dict[str, Any]:
+def _settings_for_workspace(conn, user_id: int, workspace_id: str) -> dict[str, Any]:
     ensure_openai_tables(conn)
     row = conn.execute(
         """
-        INSERT INTO ai_premium_settings (user_id, enabled, monthly_budget_usd, model, owner_only)
-        VALUES (%s, TRUE, %s, %s, %s)
-        ON CONFLICT (user_id) DO UPDATE SET updated_at = ai_premium_settings.updated_at
+        INSERT INTO ai_premium_settings (user_id, workspace_id, enabled, monthly_budget_usd, model, owner_only)
+        VALUES (%s, %s, TRUE, %s, %s, %s)
+        ON CONFLICT (workspace_id) DO UPDATE SET updated_at = ai_premium_settings.updated_at
         RETURNING *
         """,
-        (user_id, OPENAI_MONTHLY_BUDGET_USD, OPENAI_MODEL, OPENAI_OWNER_ONLY),
+        (user_id, workspace_id, OPENAI_MONTHLY_BUDGET_USD, OPENAI_MODEL, OPENAI_OWNER_ONLY),
     ).fetchone()
     return dict(row)
 
@@ -126,7 +129,8 @@ def get_openai_budget_status(user_id: int | None = None) -> dict[str, Any]:
 
     start, end = _current_month_bounds()
     with get_connection() as conn:
-        settings = _settings_for_user(conn, target_user_id)
+        workspace_id = get_current_workspace_id()
+        settings = _settings_for_workspace(conn, target_user_id, workspace_id)
         row = conn.execute(
             """
             SELECT
@@ -136,11 +140,11 @@ def get_openai_budget_status(user_id: int | None = None) -> dict[str, Any]:
                 COALESCE(SUM(total_tokens), 0) AS total_tokens,
                 COUNT(*) AS requests_count
             FROM ai_premium_usage_events
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND created_at >= %s::date
               AND created_at < %s::date
             """,
-            (target_user_id, start, end),
+            (workspace_id, start, end),
         ).fetchone()
         conn.commit()
 
@@ -200,12 +204,12 @@ def _record_openai_usage(
         conn.execute(
             """
             INSERT INTO ai_premium_usage_events (
-                user_id, provider, model, route,
+                user_id, workspace_id, provider, model, route,
                 prompt_tokens, completion_tokens, total_tokens, estimated_cost_usd
             )
-            VALUES (%s, 'openai', %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, 'openai', %s, %s, %s, %s, %s, %s)
             """,
-            (user_id, model, route, prompt_tokens, completion_tokens, total_tokens, estimated_cost_usd),
+            (user_id, get_current_workspace_id(), model, route, prompt_tokens, completion_tokens, total_tokens, estimated_cost_usd),
         )
         conn.commit()
     return get_openai_budget_status(user_id)
@@ -214,23 +218,24 @@ def _record_openai_usage(
 def save_premium_guide(guide_type: str, title: str, content: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
     user = get_current_user()
     user_id = int(user["id"])
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         ensure_openai_tables(conn)
         conn.execute(
             """
             UPDATE ai_premium_guides
             SET is_active = FALSE, updated_at = NOW()
-            WHERE user_id = %s AND guide_type = %s AND is_active = TRUE
+            WHERE workspace_id = %s AND guide_type = %s AND is_active = TRUE
             """,
-            (user_id, guide_type),
+            (workspace_id, guide_type),
         )
         row = conn.execute(
             """
-            INSERT INTO ai_premium_guides (user_id, guide_type, title, content, data)
-            VALUES (%s, %s, %s, %s, %s::jsonb)
+            INSERT INTO ai_premium_guides (user_id, workspace_id, guide_type, title, content, data)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb)
             RETURNING *
             """,
-            (user_id, guide_type, title, content, _json(data or {})),
+            (user_id, workspace_id, guide_type, title, content, _json(data or {})),
         ).fetchone()
         conn.commit()
     return {"status": "OK", "guide": dict(row)}
@@ -238,17 +243,18 @@ def save_premium_guide(guide_type: str, title: str, content: str, data: dict[str
 
 def get_active_premium_guides(limit: int = 3) -> list[dict[str, Any]]:
     user = get_current_user()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         ensure_openai_tables(conn)
         rows = conn.execute(
             """
             SELECT id, guide_type, title, content, data, created_at
             FROM ai_premium_guides
-            WHERE user_id = %s AND is_active = TRUE
+            WHERE workspace_id = %s AND is_active = TRUE
             ORDER BY updated_at DESC
             LIMIT %s
             """,
-            (int(user["id"]), limit),
+            (workspace_id, limit),
         ).fetchall()
         conn.commit()
     return [dict(row) for row in rows]

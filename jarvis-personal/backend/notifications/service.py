@@ -12,7 +12,7 @@ except Exception:  # pragma: no cover - keeps backend alive if dependency is not
     WebPushException = Exception
     webpush = None
 
-from backend.auth.current_user import get_current_user, get_current_user_id
+from backend.auth.current_user import get_current_user, get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
@@ -98,6 +98,7 @@ def ensure_notification_tables(conn) -> None:
         CREATE TABLE IF NOT EXISTS notification_jobs (
             id BIGSERIAL PRIMARY KEY,
             user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+            workspace_id UUID,
             title TEXT NOT NULL,
             body TEXT NOT NULL,
             category TEXT NOT NULL DEFAULT 'general',
@@ -111,7 +112,7 @@ def ensure_notification_tables(conn) -> None:
             last_error TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, dedupe_key)
+            UNIQUE(workspace_id, dedupe_key)
         )
         """
     )
@@ -121,23 +122,24 @@ def ensure_notification_tables(conn) -> None:
 
 def notification_health() -> dict[str, Any]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         ensure_notification_tables(conn)
         subscription_count = conn.execute(
             """
             SELECT COUNT(*) AS total
             FROM notification_subscriptions
-            WHERE user_id = %s AND enabled = TRUE
+            WHERE workspace_id = %s AND enabled = TRUE
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()["total"]
         pending_count = conn.execute(
             """
             SELECT COUNT(*) AS total
             FROM notification_jobs
-            WHERE user_id = %s AND status = 'pending'
+            WHERE workspace_id = %s AND status = 'pending'
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()["total"]
         conn.commit()
 
@@ -161,6 +163,7 @@ def get_vapid_public_key() -> dict[str, Any]:
 
 def save_push_subscription(payload: dict[str, Any]) -> dict[str, Any]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     normalized = _normalize_subscription_payload(payload)
     endpoint = normalized.get("endpoint")
 
@@ -171,12 +174,12 @@ def save_push_subscription(payload: dict[str, Any]) -> dict[str, Any]:
         ensure_notification_tables(conn)
         conn.execute(
             """
-            INSERT INTO notification_subscriptions (user_id, channel, endpoint, payload, enabled)
-            VALUES (%s, 'browser', %s, %s::jsonb, TRUE)
-            ON CONFLICT (user_id, channel, endpoint)
+            INSERT INTO notification_subscriptions (user_id, workspace_id, channel, endpoint, payload, enabled)
+            VALUES (%s, %s, 'browser', %s, %s::jsonb, TRUE)
+            ON CONFLICT (workspace_id, channel, endpoint)
             DO UPDATE SET payload = EXCLUDED.payload, enabled = TRUE, last_error = NULL, updated_at = NOW()
             """,
-            (user_id, endpoint, _json(normalized)),
+            (user_id, workspace_id, endpoint, _json(normalized)),
         )
         conn.commit()
 
@@ -261,6 +264,7 @@ def _send_to_subscription(conn, subscription: dict[str, Any], title: str, body: 
 def send_test_notification() -> dict[str, Any]:
     user = get_current_user()
     user_id = int(user["id"])
+    workspace_id = get_current_workspace_id()
     title = "J.A.R.V.I.S."
     body = "Señor, notificaciones reales activadas en este dispositivo."
 
@@ -270,10 +274,10 @@ def send_test_notification() -> dict[str, Any]:
             """
             SELECT *
             FROM notification_subscriptions
-            WHERE user_id = %s AND enabled = TRUE
+            WHERE workspace_id = %s AND enabled = TRUE
             ORDER BY updated_at DESC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
         sent = 0
         errors: list[str] = []
@@ -293,6 +297,23 @@ def send_test_notification() -> dict[str, Any]:
     }
 
 
+def _workspace_id_for_legacy_user(conn, user_id: int) -> str:
+    row = conn.execute(
+        """
+        SELECT w.id
+        FROM accounts a
+        JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
+        WHERE a.legacy_allowed_user_id = %s
+        ORDER BY w.created_at, w.id
+        LIMIT 1
+        """,
+        (user_id,),
+    ).fetchone()
+    if not row:
+        raise RuntimeError(f"No workspace personal found for legacy user_id={user_id}.")
+    return str(row["id"])
+
+
 def create_notification_job(
     user_id: int,
     title: str,
@@ -306,17 +327,18 @@ def create_notification_job(
 ) -> None:
     with get_connection() as conn:
         ensure_notification_tables(conn)
+        workspace_id = _workspace_id_for_legacy_user(conn, user_id)
         conn.execute(
             """
             INSERT INTO notification_jobs (
-                user_id, title, body, category, scheduled_at,
+                user_id, workspace_id, title, body, category, scheduled_at,
                 reference_type, reference_id, dedupe_key, payload
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
             ON CONFLICT (user_id, dedupe_key)
             DO NOTHING
             """,
-            (user_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key or f"manual:{user_id}:{scheduled_at.isoformat()}:{title}", _json(payload or {})),
+            (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key or f"manual:{workspace_id}:{scheduled_at.isoformat()}:{title}", _json(payload or {})),
         )
         conn.commit()
 
@@ -369,13 +391,14 @@ def enqueue_calendar_reminders(days: int = 45) -> int:
                     body = f"Señor, {title} inicia en 30 minutos."
                 before_count = conn.execute(
                     """
-                    INSERT INTO notification_jobs (user_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
-                    VALUES (%s, %s, %s, 'calendar', %s, 'event', %s, %s, %s::jsonb)
-                    ON CONFLICT (user_id, dedupe_key) DO NOTHING
+                    INSERT INTO notification_jobs (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
+                    VALUES (%s, %s, %s, %s, 'calendar', %s, 'event', %s, %s, %s::jsonb)
+                    ON CONFLICT (workspace_id, dedupe_key) DO NOTHING
                     RETURNING id
                     """,
                     (
                         user_id,
+                        str(event["workspace_id"]),
                         "Recordatorio de calendario",
                         body,
                         scheduled,
@@ -422,9 +445,9 @@ def enqueue_fixed_expense_reminders() -> int:
                     body = f"Señor, {expense.get('name')} vence el {due.date().isoformat()}{amount_text}."
                     row = conn.execute(
                         """
-                        INSERT INTO notification_jobs (user_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
-                        VALUES (%s, %s, %s, 'fixed_expense', %s, 'fixed_expense', %s, %s, %s::jsonb)
-                        ON CONFLICT (user_id, dedupe_key) DO NOTHING
+                        INSERT INTO notification_jobs (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
+                        VALUES (%s, %s, %s, %s, 'fixed_expense', %s, 'fixed_expense', %s, %s, %s::jsonb)
+                        ON CONFLICT (workspace_id, dedupe_key) DO NOTHING
                         RETURNING id
                         """,
                         (

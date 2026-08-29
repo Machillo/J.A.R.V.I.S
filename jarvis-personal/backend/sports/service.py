@@ -163,9 +163,11 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
         ensure_notification_tables(conn)
         owners = conn.execute(
             """
-            SELECT id
-            FROM allowed_users
-            WHERE role IN ('owner', 'admin') AND status = 'active'
+            SELECT au.id, w.id AS workspace_id
+            FROM allowed_users au
+            JOIN accounts a ON a.legacy_allowed_user_id = au.id
+            JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
+            WHERE au.role IN ('owner', 'admin') AND au.status = 'active'
             """
         ).fetchall()
 
@@ -174,20 +176,21 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
         # Fast dedupe before spending a Serper/Gemini request.
         pending_by_user = {}
         for owner in owners:
-            dedupe_key = f"sports-digest:{owner['id']}:{day_key}"
+            workspace_id = str(owner['workspace_id'])
+            dedupe_key = f"sports-digest:{workspace_id}:{day_key}"
             exists = conn.execute(
                 """
                 SELECT id
                 FROM notification_jobs
-                WHERE user_id = %s AND dedupe_key = %s
+                WHERE workspace_id = %s AND dedupe_key = %s
                 LIMIT 1
                 """,
-                (int(owner["id"]), dedupe_key),
+                (workspace_id, dedupe_key),
             ).fetchone()
             if exists:
                 skipped += 1
             else:
-                pending_by_user[int(owner["id"])] = dedupe_key
+                pending_by_user[(int(owner["id"]), workspace_id)] = dedupe_key
 
         conn.commit()
 
@@ -203,15 +206,15 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
 
     with get_connection() as conn:
         ensure_notification_tables(conn)
-        for user_id, dedupe_key in pending_by_user.items():
+        for (user_id, workspace_id), dedupe_key in pending_by_user.items():
             row = conn.execute(
                 """
-                INSERT INTO notification_jobs (user_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
-                VALUES (%s, 'Radar deportivo', %s, 'sports', %s, 'sports_radar', %s, %s, %s::jsonb)
-                ON CONFLICT (user_id, dedupe_key) DO NOTHING
+                INSERT INTO notification_jobs (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
+                VALUES (%s, %s, 'Radar deportivo', %s, 'sports', %s, 'sports_radar', %s, %s, %s::jsonb)
+                ON CONFLICT (workspace_id, dedupe_key) DO NOTHING
                 RETURNING id
                 """,
-                (user_id, body, scheduled_utc, day_key, dedupe_key, json.dumps(summary, ensure_ascii=False)),
+                (user_id, workspace_id, body, scheduled_utc, day_key, dedupe_key, json.dumps(summary, ensure_ascii=False)),
             ).fetchone()
             if row:
                 created += 1
