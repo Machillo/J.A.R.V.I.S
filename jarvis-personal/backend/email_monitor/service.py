@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from backend.auth.current_user import get_current_user, get_current_user_id, require_roles
+from backend.auth.current_user import get_current_user, get_current_user_id, get_current_workspace_id, require_roles
 from backend.core.database import get_connection
 from backend.finance.category_catalog import normalize_category
 from backend.email_monitor.parser import (
@@ -268,6 +268,16 @@ def ensure_email_tables(conn) -> None:
     ]:
         conn.execute(ddl)
 
+    for table_name in [
+        "email_monitor_settings",
+        "email_ingested_messages",
+        "email_transaction_candidates",
+        "email_statement_documents",
+        "card_aliases",
+        "email_parser_logs",
+    ]:
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS workspace_id UUID")
+
 
 def _owner_user_id(conn) -> int | None:
     row = conn.execute(
@@ -294,6 +304,25 @@ def _owner_user_id(conn) -> int | None:
     ).fetchone()
     return int(row["id"]) if row else None
 
+
+
+def _workspace_id_for_user(conn, user_id: int) -> str:
+    row = conn.execute(
+        """
+        SELECT w.id
+        FROM accounts a
+        JOIN workspaces w
+          ON w.owner_account_id = a.id
+         AND w.workspace_type = 'personal'
+        WHERE a.legacy_allowed_user_id = %s
+        ORDER BY w.created_at, w.id
+        LIMIT 1
+        """,
+        (user_id,),
+    ).fetchone()
+    if not row:
+        raise RuntimeError(f"No workspace personal found for legacy user_id={user_id}.")
+    return str(row["id"])
 
 def _log_email_event(
     conn,
@@ -478,6 +507,7 @@ def _require_owner_user() -> dict[str, Any]:
 def get_email_monitor_status() -> dict[str, Any]:
     user = _require_owner_user()
     user_id = int(user["id"])
+    workspace_id = str(user.get("workspace_id") or get_current_workspace_id())
 
     with get_connection() as conn:
         ensure_email_tables(conn)
@@ -512,17 +542,17 @@ def get_email_monitor_status() -> dict[str, Any]:
                 COUNT(*) FILTER (WHERE status = 'duplicate') AS duplicate,
                 COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
             FROM email_transaction_candidates
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()
         ignored = conn.execute(
             """
             SELECT COUNT(*) AS ignored
             FROM email_ingested_messages
-            WHERE user_id = %s AND status = 'ignored'
+            WHERE workspace_id = %s AND status = 'ignored'
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()
         totals = dict(totals)
         totals["ignored"] = int((ignored or {}).get("ignored") or 0)
@@ -660,6 +690,7 @@ def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
         """
         INSERT INTO transactions (
             user_id,
+            workspace_id,
             transaction_date,
             description,
             amount,
@@ -673,11 +704,12 @@ def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
             exchange_rate,
             created_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         RETURNING id
         """,
         (
             user_id,
+            _workspace_id_for_user(conn, user_id),
             candidate["transaction_date"],
             candidate["description"],
             candidate["amount"],
@@ -1013,6 +1045,7 @@ def scan_email_text(
 
     with get_connection() as conn:
         ensure_email_tables(conn)
+        workspace_id = _workspace_id_for_user(conn, user_id)
         email_message_id = _upsert_ingested_message(
             conn,
             user_id=user_id,
@@ -1026,6 +1059,10 @@ def scan_email_text(
             body=body,
             reason=parsed.get("ignore_reason") or parsed.get("confidence_reason") or "",
             attachment_names=attachment_names,
+        )
+        conn.execute(
+            "UPDATE email_ingested_messages SET workspace_id = %s WHERE id = %s AND user_id = %s",
+            (workspace_id, email_message_id, user_id),
         )
 
         if parsed.get("email_kind") == "ignored":
@@ -1056,10 +1093,10 @@ def scan_email_text(
             conn.execute(
                 """
                 INSERT INTO email_statement_documents (
-                    user_id, email_message_id, bank, subject, statement_month,
+                    user_id, workspace_id, email_message_id, bank, subject, statement_month,
                     received_at, attachment_names, extracted_text_excerpt, status
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending_reconciliation')
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending_reconciliation')
                 ON CONFLICT (user_id, email_message_id)
                 DO UPDATE SET
                     bank = EXCLUDED.bank,
@@ -1073,6 +1110,7 @@ def scan_email_text(
                 """,
                 (
                     user_id,
+                    workspace_id,
                     email_message_id,
                     parsed["bank"],
                     subject,
@@ -1205,14 +1243,14 @@ def scan_email_text(
         candidate_row = conn.execute(
             """
             INSERT INTO email_transaction_candidates (
-                user_id, email_message_id, fingerprint, transaction_id,
+                user_id, workspace_id, email_message_id, fingerprint, transaction_id,
                 transaction_date, description, amount, transaction_type,
                 category, account, source, notes, original_amount, original_currency,
                 exchange_rate, card_last4, card_owner, billing_cycle_start,
                 billing_cycle_end, dedupe_key, duplicate_of, canonical_transaction_id,
                 transaction_time, raw_description, normalized_description, confidence, status, review_reason
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, fingerprint)
             DO UPDATE SET
                 email_message_id = EXCLUDED.email_message_id,
@@ -1248,6 +1286,7 @@ def scan_email_text(
             """,
             (
                 user_id,
+                workspace_id,
                 email_message_id,
                 candidate_fp,
                 transaction_id,
@@ -1358,10 +1397,11 @@ def scan_email_text(
 def list_email_candidates(status_filter: str | None = None, limit: int = 250) -> dict[str, Any]:
     _require_owner_user()
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     safe_limit = max(1, min(int(limit or 250), 500))
-    where = "WHERE c.user_id = %s"
-    params: list[Any] = [user_id]
+    where = "WHERE c.workspace_id = %s"
+    params: list[Any] = [workspace_id]
     if status_filter:
         where += " AND c.status = %s"
         params.append(status_filter)
@@ -1396,9 +1436,9 @@ def list_email_candidates(status_filter: str | None = None, limit: int = 250) ->
                 COUNT(*) FILTER (WHERE status = 'confirmed') AS confirmed,
                 COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
             FROM email_transaction_candidates
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()
         conn.commit()
 
@@ -1413,6 +1453,7 @@ def list_email_candidates(status_filter: str | None = None, limit: int = 250) ->
 def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
     _require_owner_user()
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     decision_clean = (decision or "").lower().strip()
 
     with get_connection() as conn:
@@ -1421,9 +1462,9 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
             """
             SELECT *
             FROM email_transaction_candidates
-            WHERE id = %s AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
-            (candidate_id, user_id),
+            (candidate_id, workspace_id),
         ).fetchone()
 
         if not row:
@@ -1436,9 +1477,9 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
                 """
                 UPDATE email_transaction_candidates
                 SET status = 'rejected', updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 """,
-                (candidate_id, user_id),
+                (candidate_id, workspace_id),
             )
             conn.commit()
             return {"status": "OK", "message": "Candidato rechazado."}
@@ -1461,9 +1502,9 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
                 """
                 UPDATE email_transaction_candidates
                 SET status = 'confirmed', updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 """,
-                (candidate_id, user_id),
+                (candidate_id, workspace_id),
             )
             conn.commit()
             return {"status": "OK", "message": "Correo marcado como revisado; no afecta finanzas."}
@@ -1473,9 +1514,9 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
             """
             UPDATE email_transaction_candidates
             SET status = 'confirmed', transaction_id = %s, updated_at = NOW()
-            WHERE id = %s AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
-            (transaction_id, candidate_id, user_id),
+            (transaction_id, candidate_id, workspace_id),
         )
         conn.commit()
 
@@ -1492,6 +1533,7 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
     """
     _require_owner_user()
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     decision_clean = (decision or "").lower().strip()
     if decision_clean not in {"confirm", "confirmar", "guardar", "save", "reject", "rechazar", "rejected"}:
         raise HTTPException(status_code=400, detail="Decisión inválida.")
@@ -1520,10 +1562,10 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
             f"""
             SELECT *
             FROM email_transaction_candidates
-            WHERE user_id = %s AND id IN ({placeholders})
+            WHERE workspace_id = %s AND id IN ({placeholders})
             ORDER BY created_at ASC, id ASC
             """,
-            tuple([user_id] + unique_ids),
+            tuple([workspace_id] + unique_ids),
         ).fetchall()
 
         by_id = {int(row["id"]): dict(row) for row in rows}
@@ -1543,9 +1585,9 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
                     """
                     UPDATE email_transaction_candidates
                     SET status = 'rejected', updated_at = NOW()
-                    WHERE id = %s AND user_id = %s
+                    WHERE id = %s AND workspace_id = %s
                     """,
-                    (cid, user_id),
+                    (cid, workspace_id),
                 )
                 rejected += 1
                 items.append({"id": cid, "status": "rejected"})
@@ -1571,9 +1613,9 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
                 """
                 UPDATE email_transaction_candidates
                 SET status = 'confirmed', transaction_id = %s, updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 """,
-                (transaction_id, cid, user_id),
+                (transaction_id, cid, workspace_id),
             )
             confirmed += 1
             items.append({"id": cid, "status": "confirmed", "transaction_id": transaction_id})
@@ -1741,6 +1783,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
         owner_id = _owner_user_id(conn)
         if not owner_id:
             raise RuntimeError("No encontré usuario owner para guardar correos.")
+        owner_workspace_id = _workspace_id_for_user(conn, owner_id)
         _seed_default_card_aliases(conn, owner_id)
         settings_query = _settings_query_for_owner(conn, owner_id)
         conn.commit()
@@ -1819,9 +1862,9 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
             """
             UPDATE email_monitor_settings
             SET last_scan_at = NOW(), updated_at = NOW(), gmail_query = %s, auto_commit_confidence = 999
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             """,
-            (settings_query or DEFAULT_QUERY, owner_id),
+            (settings_query or DEFAULT_QUERY, owner_workspace_id),
         )
         conn.commit()
 
