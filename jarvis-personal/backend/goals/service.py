@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from backend.core.database import get_connection
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 
 
 def add_financial_goal(
@@ -12,6 +12,7 @@ def add_financial_goal(
     priority: str = "medium"
 ):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         cursor = conn.execute(
@@ -24,9 +25,10 @@ def add_financial_goal(
                 priority,
                 status,
                 user_id,
+                workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, 'active', %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, 'active', %s, %s, NOW())
             """,
             (
                 name,
@@ -34,7 +36,8 @@ def add_financial_goal(
                 current_amount,
                 target_date,
                 priority,
-                user_id
+                user_id,
+                workspace_id
             )
         )
 
@@ -48,23 +51,25 @@ def add_financial_goal(
         "target_date": target_date,
         "priority": priority,
         "status": "active",
-        "user_id": user_id
+        "user_id": user_id,
+        "workspace_id": workspace_id
     }
 
 
 def get_financial_goals():
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at, user_id
+                   priority, status, created_at, user_id, workspace_id
             FROM financial_goals
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [format_goal(dict(row)) for row in rows]
@@ -72,17 +77,18 @@ def get_financial_goals():
 
 def get_financial_goal(goal_id: int):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         goal = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at, user_id
+                   priority, status, created_at, user_id, workspace_id
             FROM financial_goals
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (goal_id, user_id)
+            (goal_id, workspace_id)
         ).fetchone()
 
     if not goal:
@@ -104,6 +110,7 @@ def update_financial_goal(
     status: str
 ):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         goal = conn.execute(
@@ -111,9 +118,9 @@ def update_financial_goal(
             SELECT id
             FROM financial_goals
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (goal_id, user_id)
+            (goal_id, workspace_id)
         ).fetchone()
 
         if not goal:
@@ -132,7 +139,7 @@ def update_financial_goal(
                 priority = %s,
                 status = %s
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
             (
                 name,
@@ -142,7 +149,7 @@ def update_financial_goal(
                 priority,
                 status,
                 goal_id,
-                user_id
+                workspace_id
             )
         )
 
@@ -153,17 +160,18 @@ def update_financial_goal(
 
 def delete_financial_goal(goal_id: int):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         goal = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at, user_id
+                   priority, status, created_at, user_id, workspace_id
             FROM financial_goals
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (goal_id, user_id)
+            (goal_id, workspace_id)
         ).fetchone()
 
         if not goal:
@@ -176,9 +184,9 @@ def delete_financial_goal(goal_id: int):
             """
             DELETE FROM financial_goals
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (goal_id, user_id)
+            (goal_id, workspace_id)
         )
 
         conn.commit()
@@ -192,6 +200,7 @@ def delete_financial_goal(goal_id: int):
 
 def add_goal_contribution(goal_id: int, amount: float):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         goal = conn.execute(
@@ -199,9 +208,9 @@ def add_goal_contribution(goal_id: int, amount: float):
             SELECT id, current_amount, target_amount
             FROM financial_goals
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (goal_id, user_id)
+            (goal_id, workspace_id)
         ).fetchone()
 
         if not goal:
@@ -223,13 +232,13 @@ def add_goal_contribution(goal_id: int, amount: float):
             SET current_amount = %s,
                 status = %s
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
             (
                 new_amount,
                 new_status,
                 goal_id,
-                user_id
+                workspace_id
             )
         )
 
@@ -278,20 +287,21 @@ def format_goal(goal: dict):
 
 def get_financial_goal_by_name(name: str):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     search = f"%{name.lower()}%"
 
     with get_connection() as conn:
         goal = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at, user_id
+                   priority, status, created_at, user_id, workspace_id
             FROM financial_goals
             WHERE lower(name) LIKE %s
             AND status = 'active'
-            AND user_id = %s
+            AND workspace_id = %s
             LIMIT 1
             """,
-            (search, user_id)
+            (search, workspace_id)
         ).fetchone()
 
     if not goal:
