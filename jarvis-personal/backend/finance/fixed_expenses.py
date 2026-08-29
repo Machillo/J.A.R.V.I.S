@@ -8,6 +8,7 @@ from datetime import date, datetime
 from typing import Any
 
 from backend.auth.current_user import get_current_user_id
+from backend.auth.workspace_context import get_current_workspace_id
 from backend.core.database import get_connection
 
 
@@ -170,13 +171,13 @@ def _status_for(expense: dict[str, Any], month_key: str, best: dict[str, Any] | 
 
 
 def list_fixed_expenses(active_only: bool = True) -> list[dict[str, Any]]:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     sql = """
         SELECT *
         FROM fixed_expenses
-        WHERE user_id = %s
+        WHERE workspace_id = %s
     """
-    params: list[Any] = [user_id]
+    params: list[Any] = [workspace_id]
     if active_only:
         sql += " AND is_active = TRUE"
     sql += " ORDER BY due_day NULLS LAST, name ASC"
@@ -204,63 +205,56 @@ def create_fixed_expense(
     currency: str = "CRC",
 ):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO fixed_expenses (
-                user_id, name, category, expected_amount, currency, frequency,
-                interval_months, start_month, due_day, payment_method,
-                auto_deducted, aliases, notes, is_active, created_at, updated_at
+        existing = conn.execute(
+            "SELECT id FROM fixed_expenses WHERE workspace_id = %s AND name = %s",
+            (workspace_id, name),
+        ).fetchone()
+        if existing:
+            expense_id = existing["id"]
+            conn.execute(
+                """
+                UPDATE fixed_expenses
+                SET category = %s, expected_amount = %s, currency = %s, frequency = %s,
+                    interval_months = %s, start_month = %s, due_day = %s, payment_method = %s,
+                    auto_deducted = %s, aliases = %s::jsonb, notes = %s, is_active = TRUE, updated_at = NOW()
+                WHERE id = %s AND workspace_id = %s
+                """,
+                (category, expected_amount, currency, frequency, interval_months, start_month, due_day,
+                 payment_method, auto_deducted, _encode_aliases(aliases), notes, expense_id, workspace_id),
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, TRUE, NOW(), NOW())
-            ON CONFLICT (user_id, name)
-            DO UPDATE SET
-                category = EXCLUDED.category,
-                expected_amount = EXCLUDED.expected_amount,
-                currency = EXCLUDED.currency,
-                frequency = EXCLUDED.frequency,
-                interval_months = EXCLUDED.interval_months,
-                start_month = EXCLUDED.start_month,
-                due_day = EXCLUDED.due_day,
-                payment_method = EXCLUDED.payment_method,
-                auto_deducted = EXCLUDED.auto_deducted,
-                aliases = EXCLUDED.aliases,
-                notes = EXCLUDED.notes,
-                is_active = TRUE,
-                updated_at = NOW()
-            RETURNING id
-            """,
-            (
-                user_id,
-                name,
-                category,
-                expected_amount,
-                currency,
-                frequency,
-                interval_months,
-                start_month,
-                due_day,
-                payment_method,
-                auto_deducted,
-                _encode_aliases(aliases),
-                notes,
-            ),
-        )
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO fixed_expenses (
+                    user_id, workspace_id, name, category, expected_amount, currency, frequency,
+                    interval_months, start_month, due_day, payment_method, auto_deducted, aliases,
+                    notes, is_active, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, TRUE, NOW(), NOW())
+                RETURNING id
+                """,
+                (user_id, workspace_id, name, category, expected_amount, currency, frequency,
+                 interval_months, start_month, due_day, payment_method, auto_deducted,
+                 _encode_aliases(aliases), notes),
+            )
+            expense_id = cursor.lastrowid
         conn.commit()
 
-    return get_fixed_expense(cursor.lastrowid)
+    return get_fixed_expense(expense_id)
 
 
 def get_fixed_expense(expense_id: int) -> dict[str, Any] | None:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         row = conn.execute(
             """
             SELECT *
             FROM fixed_expenses
-            WHERE id = %s AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
-            (expense_id, user_id),
+            (expense_id, workspace_id),
         ).fetchone()
     if row:
         row["aliases"] = _decode_aliases(row.get("aliases"))
@@ -268,7 +262,7 @@ def get_fixed_expense(expense_id: int) -> dict[str, Any] | None:
 
 
 def update_fixed_expense(expense_id: int, **updates):
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     allowed = {
         "name", "category", "expected_amount", "currency", "frequency",
         "interval_months", "start_month", "due_day", "payment_method",
@@ -289,14 +283,14 @@ def update_fixed_expense(expense_id: int, **updates):
         else:
             assignments.append(f"{key} = %s")
         params.append(value)
-    params.extend([expense_id, user_id])
+    params.extend([expense_id, workspace_id])
 
     with get_connection() as conn:
         conn.execute(
             f"""
             UPDATE fixed_expenses
             SET {', '.join(assignments)}, updated_at = NOW()
-            WHERE id = %s AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
             tuple(params),
         )
@@ -311,7 +305,7 @@ def delete_fixed_expense(expense_id: int):
 
 
 def get_fixed_expense_status(month: str | None = None) -> dict[str, Any]:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     month_key, start_date, end_date = _month_bounds(month)
     fixed_expenses = list_fixed_expenses(active_only=True)
 
@@ -320,12 +314,12 @@ def get_fixed_expense_status(month: str | None = None) -> dict[str, Any]:
             """
             SELECT id, transaction_date, description, amount, transaction_type, category, account, source, notes
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             AND transaction_date::date BETWEEN %s::date AND %s::date
             AND transaction_type IN ('expense', 'debt_payment')
             ORDER BY transaction_date ASC, id ASC
             """,
-            (user_id, start_date, end_date),
+            (workspace_id, start_date, end_date),
         ).fetchall()
 
     items = []
