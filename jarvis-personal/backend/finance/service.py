@@ -774,293 +774,190 @@ def get_debts():
 
 def add_saving(name: str, amount: float):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
-        cursor = conn.execute(
+        row = conn.execute(
             """
-            INSERT INTO savings (
-                name,
-                amount,
-                user_id,
-                created_at
-            )
-            VALUES (%s, %s, %s, NOW())
+            INSERT INTO savings (name, amount, user_id, workspace_id, created_at)
+            VALUES (%s, %s, %s, %s, NOW())
+            RETURNING id, name, amount, created_at, user_id, workspace_id
             """,
-            (
-                name,
-                amount,
-                user_id
-            )
-        )
-
+            (name, amount, user_id, workspace_id)
+        ).fetchone()
         conn.commit()
 
-    return {
-        "id": cursor.lastrowid,
-        "name": name,
-        "amount": amount,
-        "user_id": user_id
-    }
+    return dict(row)
 
 
 def get_savings():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id,
-                   name,
-                   amount,
-                   created_at,
-                   user_id
+            SELECT id, name, amount, created_at, user_id, workspace_id
             FROM savings
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
 
-def update_saving(
-    saving_id: int,
-    name: str,
-    amount: float
-):
-    user_id = get_current_user_id()
+
+def update_saving(saving_id: int, name: str, amount: float):
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         saving = conn.execute(
             """
-            SELECT id
-            FROM savings
-            WHERE id = %s
-            AND user_id = %s
+            SELECT id FROM savings
+            WHERE id = %s AND workspace_id = %s
             """,
-            (saving_id, user_id)
+            (saving_id, workspace_id)
         ).fetchone()
 
         if not saving:
-            return {
-                "message": "Ahorro no encontrado o no pertenece al usuario actual.",
-                "status": "ERROR"
-            }
+            return {"message": "Ahorro no encontrado o no pertenece al workspace actual.", "status": "ERROR"}
 
-        conn.execute(
+        row = conn.execute(
             """
             UPDATE savings
-            SET name = %s,
-                amount = %s
-            WHERE id = %s
-            AND user_id = %s
+            SET name = %s, amount = %s
+            WHERE id = %s AND workspace_id = %s
+            RETURNING id, name, amount, created_at, user_id, workspace_id
             """,
-            (
-                name,
-                amount,
-                saving_id,
-                user_id
-            )
-        )
-
+            (name, amount, saving_id, workspace_id)
+        ).fetchone()
         conn.commit()
 
-    return {
-        "message": "Ahorro actualizado correctamente.",
-        "id": saving_id,
-        "name": name,
-        "amount": amount,
-        "user_id": user_id,
-        "status": "OK"
-    }
+    result = dict(row)
+    result.update({"message": "Ahorro actualizado correctamente.", "status": "OK"})
+    return result
 
 
 def delete_saving(saving_id: int):
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         saving = conn.execute(
             """
-            SELECT id,
-                   name,
-                   amount,
-                   created_at,
-                   user_id
+            SELECT id, name, amount, created_at, user_id, workspace_id
             FROM savings
-            WHERE id = %s
-            AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
-            (saving_id, user_id)
+            (saving_id, workspace_id)
         ).fetchone()
 
         if not saving:
-            return {
-                "message": "Ahorro no encontrado o no pertenece al usuario actual.",
-                "status": "ERROR"
-            }
+            return {"message": "Ahorro no encontrado o no pertenece al workspace actual.", "status": "ERROR"}
 
         conn.execute(
             """
             DELETE FROM savings
-            WHERE id = %s
-            AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
-            (saving_id, user_id)
+            (saving_id, workspace_id)
         )
-
         conn.commit()
 
-    return {
-        "message": "Ahorro eliminado correctamente.",
-        "deleted_saving": dict(saving),
-        "status": "OK"
-    }
+    return {"message": "Ahorro eliminado correctamente.", "deleted_saving": dict(saving), "status": "OK"}
 
 
 def add_investment(name: str, amount: float):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
-        cursor = conn.execute(
+        row = conn.execute(
             """
-            INSERT INTO investments (
-                name,
-                amount,
-                user_id,
-                created_at
-            )
-            VALUES (%s, %s, %s, NOW())
+            INSERT INTO investments (name, amount, user_id, workspace_id, created_at)
+            VALUES (%s, %s, %s, %s, NOW())
+            RETURNING id, name, amount, created_at, user_id, workspace_id
             """,
-            (
-                name,
-                amount,
-                user_id
-            )
-        )
-
+            (name, amount, user_id, workspace_id)
+        ).fetchone()
         conn.commit()
 
-    return {
-        "id": cursor.lastrowid,
-        "name": name,
-        "amount": amount,
-        "user_id": user_id
-    }
+    return dict(row)
 
 
 def get_investments():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id,
-                   name,
-                   amount,
-                   created_at,
-                   user_id
+            SELECT id, name, amount, created_at, user_id, workspace_id
             FROM investments
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
 
-def update_investment(
-    investment_id: int,
-    name: str,
-    amount: float
-):
-    user_id = get_current_user_id()
+
+def update_investment(investment_id: int, name: str, amount: float):
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         investment = conn.execute(
             """
-            SELECT id
-            FROM investments
-            WHERE id = %s
-            AND user_id = %s
+            SELECT id FROM investments
+            WHERE id = %s AND workspace_id = %s
             """,
-            (investment_id, user_id)
+            (investment_id, workspace_id)
         ).fetchone()
 
         if not investment:
-            return {
-                "message": "Inversión no encontrada o no pertenece al usuario actual.",
-                "status": "ERROR"
-            }
+            return {"message": "Inversión no encontrada o no pertenece al workspace actual.", "status": "ERROR"}
 
-        conn.execute(
+        row = conn.execute(
             """
             UPDATE investments
-            SET name = %s,
-                amount = %s
-            WHERE id = %s
-            AND user_id = %s
+            SET name = %s, amount = %s
+            WHERE id = %s AND workspace_id = %s
+            RETURNING id, name, amount, created_at, user_id, workspace_id
             """,
-            (
-                name,
-                amount,
-                investment_id,
-                user_id
-            )
-        )
-
+            (name, amount, investment_id, workspace_id)
+        ).fetchone()
         conn.commit()
 
-    return {
-        "message": "Inversión actualizada correctamente.",
-        "id": investment_id,
-        "name": name,
-        "amount": amount,
-        "user_id": user_id,
-        "status": "OK"
-    }
+    result = dict(row)
+    result.update({"message": "Inversión actualizada correctamente.", "status": "OK"})
+    return result
 
 
 def delete_investment(investment_id: int):
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         investment = conn.execute(
             """
-            SELECT id,
-                   name,
-                   amount,
-                   created_at,
-                   user_id
+            SELECT id, name, amount, created_at, user_id, workspace_id
             FROM investments
-            WHERE id = %s
-            AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
-            (investment_id, user_id)
+            (investment_id, workspace_id)
         ).fetchone()
 
         if not investment:
-            return {
-                "message": "Inversión no encontrada o no pertenece al usuario actual.",
-                "status": "ERROR"
-            }
+            return {"message": "Inversión no encontrada o no pertenece al workspace actual.", "status": "ERROR"}
 
         conn.execute(
             """
             DELETE FROM investments
-            WHERE id = %s
-            AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
-            (investment_id, user_id)
+            (investment_id, workspace_id)
         )
-
         conn.commit()
 
-    return {
-        "message": "Inversión eliminada correctamente.",
-        "deleted_investment": dict(investment),
-        "status": "OK"
-    }
-
+    return {"message": "Inversión eliminada correctamente.", "deleted_investment": dict(investment), "status": "OK"}
 
 def add_expense(
     category: str,
@@ -2580,39 +2477,39 @@ def get_debt_payments(debt_id: int | None = None):
 
 def get_net_worth_report():
     """Reporte de patrimonio tolerante a listas vacías y NUMERIC de PostgreSQL."""
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         savings = conn.execute(
             """
-            SELECT id, name, amount, created_at, user_id
+            SELECT id, name, amount, created_at, user_id, workspace_id
             FROM savings
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
         investments = conn.execute(
             """
-            SELECT id, name, amount, created_at, user_id
+            SELECT id, name, amount, created_at, user_id, workspace_id
             FROM investments
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
         debts = conn.execute(
             """
             SELECT id, name, debt_type, total_amount, remaining_amount,
                    monthly_payment, interest_rate, term_months,
-                   payment_day, created_at, user_id
+                   payment_day, created_at, user_id, workspace_id
             FROM debts
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY remaining_amount DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     savings_list = [dict(row) for row in savings]
