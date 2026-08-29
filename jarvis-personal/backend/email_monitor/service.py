@@ -390,7 +390,7 @@ def _candidate_is_internal(candidate: dict[str, Any] | None) -> bool:
     return "movimiento interno" in text or "cuentas propias" in text or "inversión propia" in text or "inversion propia" in text
 
 
-def _internal_mirror_exists(conn, user_id: int, candidate: dict[str, Any]) -> bool:
+def _internal_mirror_exists(conn, workspace_id: str, candidate: dict[str, Any]) -> bool:
     """Detect already-ignored counterpart emails for the same internal transfer.
 
     BAC and MultiMoney send separate mirror notifications for one movement. If
@@ -406,19 +406,19 @@ def _internal_mirror_exists(conn, user_id: int, candidate: dict[str, Any]) -> bo
         """
         SELECT 1
         FROM email_parser_logs
-        WHERE user_id = %s
+        WHERE workspace_id = %s
           AND result = 'ignored'
           AND extracted_payload::text ILIKE %s
           AND extracted_payload::text ILIKE %s
           AND (reason ILIKE '%%intern%%' OR extracted_payload::text ILIKE '%%internal_transfer%%' OR extracted_payload::text ILIKE '%%Movimiento interno%%')
         LIMIT 1
         """,
-        (user_id, f"%{reference}%", f"%{tx_date}%"),
+        (workspace_id, f"%{reference}%", f"%{tx_date}%"),
     ).fetchone()
     return row is not None
 
 
-def _delete_pending_internal_mirrors(conn, user_id: int, internal_candidate: dict[str, Any]) -> int:
+def _delete_pending_internal_mirrors(conn, workspace_id: str, internal_candidate: dict[str, Any]) -> int:
     """Remove pending candidate mirrors after an internal counterpart is found.
 
     This keeps the review inbox clean when Gmail returns BAC before MultiMoney
@@ -432,14 +432,14 @@ def _delete_pending_internal_mirrors(conn, user_id: int, internal_candidate: dic
     rows = conn.execute(
         """
         DELETE FROM email_transaction_candidates
-        WHERE user_id = %s
+        WHERE workspace_id = %s
           AND status = 'pending'
           AND transaction_id IS NULL
           AND transaction_date = %s
           AND notes ILIKE %s
         RETURNING id
         """,
-        (user_id, tx_date, f"%{reference}%"),
+        (workspace_id, tx_date, f"%{reference}%"),
     ).fetchall()
     return len(rows)
 
@@ -733,7 +733,7 @@ def _extract_card_last4_from_account(account: str | None) -> str | None:
     return match.group(1) if match else None
 
 
-def _enrich_candidate_with_card_alias(conn, user_id: int, candidate: dict[str, Any]) -> dict[str, Any]:
+def _enrich_candidate_with_card_alias(conn, workspace_id: str, candidate: dict[str, Any]) -> dict[str, Any]:
     """Attach owner labels such as Kenneth/Emily/Sidey for additional cards.
 
     This is only metadata in notes/category review; it never changes money values.
@@ -745,10 +745,10 @@ def _enrich_candidate_with_card_alias(conn, user_id: int, candidate: dict[str, A
         """
         SELECT owner_label, relationship, is_primary
         FROM card_aliases
-        WHERE user_id = %s AND card_last4 = %s
+        WHERE workspace_id = %s AND card_last4 = %s
         LIMIT 1
         """,
-        (user_id, last4),
+        (workspace_id, last4),
     ).fetchone()
     if not row:
         return candidate
@@ -768,13 +768,13 @@ def _enrich_candidate_with_card_alias(conn, user_id: int, candidate: dict[str, A
     return candidate
 
 
-def _transaction_duplicate_match(conn, user_id: int, candidate: dict[str, Any]) -> int | None:
+def _transaction_duplicate_match(conn, workspace_id: str, candidate: dict[str, Any]) -> int | None:
     """Return an existing saved transaction id for exact duplicates."""
     row = conn.execute(
         """
         SELECT id
         FROM transactions
-        WHERE user_id = %s
+        WHERE workspace_id = %s
         AND transaction_date = %s
         AND ABS(amount - %s) < 0.01
         AND transaction_type = %s
@@ -782,7 +782,7 @@ def _transaction_duplicate_match(conn, user_id: int, candidate: dict[str, Any]) 
         LIMIT 1
         """,
         (
-            user_id,
+            workspace_id,
             candidate["transaction_date"],
             candidate["amount"],
             candidate["transaction_type"],
@@ -792,7 +792,7 @@ def _transaction_duplicate_match(conn, user_id: int, candidate: dict[str, Any]) 
     return int(row["id"]) if row else None
 
 
-def _candidate_duplicate_match(conn, user_id: int, candidate: dict[str, Any], current_fingerprint: str | None = None):
+def _candidate_duplicate_match(conn, workspace_id: str, candidate: dict[str, Any], current_fingerprint: str | None = None):
     """Find the canonical candidate for exact or semantic duplicates.
 
     Rule business Fase 1.5: exact same amount + same date + ±10 minutes.
@@ -805,24 +805,24 @@ def _candidate_duplicate_match(conn, user_id: int, candidate: dict[str, Any], cu
             """
             SELECT id, description, account, source, created_at
             FROM email_transaction_candidates
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND dedupe_key = %s
               AND (%s IS NULL OR fingerprint <> %s)
               AND status IN ('pending','confirmed','auto_saved')
             ORDER BY created_at ASC
             LIMIT 1
             """,
-            (user_id, dedupe_key, current_fingerprint, current_fingerprint),
+            (workspace_id, dedupe_key, current_fingerprint, current_fingerprint),
         ).fetchone()
         if row:
             return row
 
-    return find_semantic_duplicate(conn, user_id, candidate, current_fingerprint)
+    return find_semantic_duplicate(conn, workspace_id, candidate, current_fingerprint)
 
 
 
 
-def _repair_orphan_duplicate_links(conn, user_id: int) -> int:
+def _repair_orphan_duplicate_links(conn, workspace_id: str) -> int:
     """Backfill duplicate candidates that were marked without a canonical row.
 
     A duplicate candidate must point to the dominant candidate that represents
@@ -847,7 +847,7 @@ def _repair_orphan_duplicate_links(conn, user_id: int) -> int:
                 ) AS match_rank
             FROM email_transaction_candidates duplicate_row
             JOIN email_transaction_candidates canonical_row
-              ON canonical_row.user_id = duplicate_row.user_id
+              ON canonical_row.workspace_id = duplicate_row.workspace_id
              AND canonical_row.id <> duplicate_row.id
              AND canonical_row.transaction_date = duplicate_row.transaction_date
              AND ABS(canonical_row.amount - duplicate_row.amount) < 0.01
@@ -860,7 +860,7 @@ def _repair_orphan_duplicate_links(conn, user_id: int) -> int:
                       - (canonical_row.transaction_date + canonical_row.transaction_time)
                     ))) <= 600
              )
-            WHERE duplicate_row.user_id = %s
+            WHERE duplicate_row.workspace_id = %s
               AND duplicate_row.status = 'duplicate'
               AND duplicate_row.canonical_transaction_id IS NULL
         ), repaired AS (
@@ -877,7 +877,7 @@ def _repair_orphan_duplicate_links(conn, user_id: int) -> int:
         SELECT COUNT(*) AS repaired_count
         FROM repaired
         """,
-        (user_id,),
+        (workspace_id,),
     ).fetchone()
     return int((row or {}).get("repaired_count") or 0)
 
@@ -1079,7 +1079,7 @@ def scan_email_text(
                 extracted_payload=parsed,
                 reason=parsed.get("ignore_reason") or parsed.get("confidence_reason") or "Correo ignorado.",
             )
-            removed_mirrors = _delete_pending_internal_mirrors(conn, user_id, parsed) if _candidate_is_internal(parsed) else 0
+            removed_mirrors = _delete_pending_internal_mirrors(conn, workspace_id, parsed) if _candidate_is_internal(parsed) else 0
             conn.commit()
             return {
                 "status": "IGNORED_EMAIL",
@@ -1151,7 +1151,7 @@ def scan_email_text(
                 "statement": True,
             }
 
-        parsed = _enrich_candidate_with_card_alias(conn, user_id, parsed)
+        parsed = _enrich_candidate_with_card_alias(conn, workspace_id, parsed)
 
         raw_description = parsed.get("description") or ""
         normalized_description = normalize_description(raw_description)
@@ -1182,7 +1182,7 @@ def scan_email_text(
             )
         parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
 
-        if _internal_mirror_exists(conn, user_id, parsed):
+        if _internal_mirror_exists(conn, workspace_id, parsed):
             _log_email_event(
                 conn,
                 user_id=user_id,
@@ -1200,9 +1200,9 @@ def scan_email_text(
                 """
                 UPDATE email_ingested_messages
                 SET status = 'ignored', parse_reason = %s
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 """,
-                ("Movimiento espejo de transferencia interna ya detectada.", email_message_id, user_id),
+                ("Movimiento espejo de transferencia interna ya detectada.", email_message_id, workspace_id),
             )
             conn.commit()
             return {
@@ -1212,9 +1212,9 @@ def scan_email_text(
                 "candidate": None,
             }
 
-        duplicate_candidate = _candidate_duplicate_match(conn, user_id, parsed, candidate_fp)
+        duplicate_candidate = _candidate_duplicate_match(conn, workspace_id, parsed, candidate_fp)
         replace_existing_duplicate = False
-        existing_transaction_id = _transaction_duplicate_match(conn, user_id, parsed)
+        existing_transaction_id = _transaction_duplicate_match(conn, workspace_id, parsed)
         if existing_transaction_id:
             candidate_status = "duplicate"
             transaction_id = existing_transaction_id
@@ -1362,7 +1362,7 @@ def scan_email_text(
             )
 
         # Backfill histórico y defensa adicional para corridas reentrantes.
-        _repair_orphan_duplicate_links(conn, user_id)
+        _repair_orphan_duplicate_links(conn, workspace_id)
         refreshed_row = conn.execute(
             """
             SELECT *

@@ -54,7 +54,7 @@ def resolve_transaction_time(candidate: dict[str, Any]) -> str | None:
     return None
 
 
-def find_semantic_duplicate(conn, user_id: int, candidate: dict[str, Any], current_fingerprint: str | None = None):
+def find_semantic_duplicate(conn, workspace_id: str, candidate: dict[str, Any], current_fingerprint: str | None = None):
     """Find duplicate candidates using amount + same date + ±10 min.
 
     If either side lacks transaction_time, we still match same-day movements but
@@ -70,7 +70,7 @@ def find_semantic_duplicate(conn, user_id: int, candidate: dict[str, Any], curre
                  ELSE 0
                END AS in_window
         FROM email_transaction_candidates
-        WHERE user_id = %s
+        WHERE workspace_id = %s
           AND transaction_date = %s
           AND ABS(amount - %s) < 0.01
           AND status IN ('pending','confirmed','auto_saved')
@@ -81,7 +81,7 @@ def find_semantic_duplicate(conn, user_id: int, candidate: dict[str, Any], curre
             tx_time,
             candidate["transaction_date"],
             tx_time,
-            user_id,
+            workspace_id,
             candidate["transaction_date"],
             candidate["amount"],
             current_fingerprint,

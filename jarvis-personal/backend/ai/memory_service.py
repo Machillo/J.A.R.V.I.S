@@ -244,7 +244,7 @@ def create_memory_item(
                     title = %s,
                     importance = GREATEST(importance, %s),
                     updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 """,
                 (category, title, importance, existing["id"], workspace_id),
             )
@@ -289,7 +289,7 @@ def forget_memory_item(memory_id: int) -> dict[str, Any]:
             """
             UPDATE memory_items
             SET is_active = FALSE, updated_at = NOW()
-            WHERE id = %s AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
             (memory_id, workspace_id),
         )

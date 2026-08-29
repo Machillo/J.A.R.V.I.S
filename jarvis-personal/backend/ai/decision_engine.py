@@ -7,7 +7,7 @@ from datetime import date, datetime
 from typing import Any
 
 from backend.ai.chat_memory import create_pending_action, finish_pending_action, update_pending_action
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.service import get_debts, get_financial_cycle_report
 from backend.goals.service import add_financial_goal
@@ -198,17 +198,17 @@ def _get_cycle_financial_context() -> dict[str, Any]:
 
 
 def _fetch_active_goals() -> list[dict[str, Any]]:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date, priority, status
             FROM financial_goals
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND COALESCE(status, 'active') = 'active'
             ORDER BY target_date ASC NULLS LAST, id ASC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     return [dict(row) for row in rows]
 

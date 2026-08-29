@@ -931,6 +931,7 @@ def get_additional_card_report() -> dict[str, Any]:
     card 3131 from appearing in the additional-cards page.
     """
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         conn.execute(
             """
@@ -951,12 +952,12 @@ def get_additional_card_report() -> dict[str, Any]:
             """
             SELECT *
             FROM card_aliases
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND COALESCE(is_primary, FALSE) = FALSE
               AND LOWER(owner_label) NOT IN ('kenneth', 'kenneth andres')
             ORDER BY owner_label ASC, card_last4 ASC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
         rows = conn.execute(
             """
@@ -976,14 +977,14 @@ def get_additional_card_report() -> dict[str, Any]:
                 c.id AS candidate_id
             FROM transactions t
             LEFT JOIN email_transaction_candidates c
-              ON c.transaction_id = t.id AND c.user_id = t.user_id
-            WHERE t.user_id = %s
+              ON c.transaction_id = t.id AND c.workspace_id = t.workspace_id
+            WHERE t.workspace_id = %s
               AND t.transaction_type = 'expense'
               AND COALESCE(c.status, '') IN ('confirmed','auto_saved')
             ORDER BY t.transaction_date DESC, t.id DESC
             LIMIT 5000
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
         conn.commit()
 

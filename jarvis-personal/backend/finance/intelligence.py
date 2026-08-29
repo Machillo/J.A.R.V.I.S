@@ -303,7 +303,7 @@ def _ensure_card_aliases(conn) -> None:
 
 
 def _fetch_additional_card_totals(
-    conn, user_id: int, cycle_start: date, cycle_end: date
+    conn, workspace_id: str, cycle_start: date, cycle_end: date
 ) -> list[dict[str, Any]]:
     """Return additional-card spending only for the active card cycle.
 
@@ -315,9 +315,9 @@ def _fetch_additional_card_totals(
     rows = conn.execute(
         """
         WITH additional_aliases AS (
-            SELECT user_id, card_last4, owner_label
+            SELECT workspace_id, card_last4, owner_label
             FROM card_aliases
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND COALESCE(is_primary, FALSE) = FALSE
               AND LOWER(TRIM(owner_label)) NOT IN ('kenneth', 'kenneth andres')
         ), candidate_movements AS (
@@ -328,9 +328,9 @@ def _fetch_additional_card_totals(
                 c.amount
             FROM email_transaction_candidates c
             LEFT JOIN additional_aliases a
-              ON a.user_id = c.user_id
+              ON a.workspace_id = c.workspace_id
              AND a.card_last4 = c.card_last4
-            WHERE c.user_id = %s
+            WHERE c.workspace_id = %s
               AND c.transaction_type = 'expense'
               AND COALESCE(c.amount, 0) > 0
               AND c.transaction_date >= %s
@@ -355,7 +355,7 @@ def _fetch_additional_card_totals(
         GROUP BY person_name
         ORDER BY person_name
         """,
-        (user_id, user_id, cycle_start, cycle_end),
+        (workspace_id, workspace_id, cycle_start, cycle_end),
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -485,7 +485,7 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
     _ensure_receivable_tables(conn)
     _backfill_receivable_entries(conn, user_id)
     cycle_start, cycle_end = _card_cycle_bounds()
-    totals = _fetch_additional_card_totals(conn, user_id, cycle_start, cycle_end)
+    totals = _fetch_additional_card_totals(conn, workspace_id, cycle_start, cycle_end)
 
     for row in totals:
         person = str(row.get("person_name") or "").strip()
