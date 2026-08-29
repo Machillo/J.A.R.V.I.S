@@ -322,12 +322,13 @@ def _payment_breakdown_with_extra(
     return actual_payment, principal, round(interest, 2), round(fee, 2), round(extra_principal, 2)
 
 
-def _sync_automatic_debt_payments(user_id: int) -> None:
+def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None) -> None:
     """Sincroniza cuotas vencidas usando fechas reales y un libro de pagos idempotente.
 
     La fecha de inicio, primera cuota, día de pago y fecha actual determinan cuántas
     cuotas debieron aplicarse. Cada cuota se registra una sola vez en debt_payments.
     """
+    workspace_id = workspace_id or get_current_workspace_id()
     today = date.today()
     with get_connection() as conn:
         debts = conn.execute(
@@ -337,12 +338,12 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                    auto_update_monthly, installments_paid, created_at, last_payment_date,
                    interest_method, fixed_fee_amount
             FROM debts
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND COALESCE(auto_update_monthly, TRUE) = TRUE
               AND remaining_amount > 0
             ORDER BY id
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
 
         changed = False
@@ -359,10 +360,10 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                 """
                 SELECT payment_date, installment_number
                 FROM debt_payments
-                WHERE user_id = %s AND debt_id = %s AND payment_type = 'monthly_payment'
+                WHERE workspace_id = %s AND debt_id = %s AND payment_type = 'monthly_payment'
                 ORDER BY installment_number, payment_date
                 """,
-                (user_id, debt["id"]),
+                (workspace_id, debt["id"]),
             ).fetchall()
             existing_dates = {str(row.get("payment_date"))[:10] for row in payment_rows if row.get("payment_date")}
             ledger_paid = max([int(row.get("installment_number") or 0) for row in payment_rows] or [0])
@@ -398,42 +399,42 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                 conn.execute(
                     """
                     INSERT INTO debt_payments (
-                        user_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                        user_id, workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
                         fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
                         previous_monthly_payment, new_monthly_payment, description,
                         payment_date, installment_number, source, created_at
                     )
-                    SELECT %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto_schedule', NOW()
+                    SELECT %s, %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto_schedule', NOW()
                     WHERE NOT EXISTS (
                         SELECT 1 FROM debt_payments
-                        WHERE user_id = %s AND debt_id = %s
+                        WHERE workspace_id = %s AND debt_id = %s
                           AND payment_type = 'monthly_payment' AND payment_date = %s
                     )
                     """,
                     (
-                        user_id, debt["id"], actual_payment, principal, interest, fee, extra_principal, previous_balance, balance,
+                        user_id, workspace_id, debt["id"], actual_payment, principal, interest, fee, extra_principal, previous_balance, balance,
                         monthly_payment, monthly_payment,
                         f"Cuota automática {installment_number}/{term or '?'} de {debt.get('name') or 'deuda'}",
                         due.isoformat(), installment_number,
-                        user_id, debt["id"], due.isoformat(),
+                        workspace_id, debt["id"], due.isoformat(),
                     ),
                 )
                 conn.execute(
                     """
                     INSERT INTO transactions (
-                        user_id, transaction_date, description, amount, transaction_type,
+                        user_id, workspace_id, transaction_date, description, amount, transaction_type,
                         category, account, source, notes, created_at
                     )
-                    SELECT %s, %s, %s, %s, 'debt_payment', %s, NULL, 'auto_debt_schedule', %s, NOW()
+                    SELECT %s, %s, %s, %s, %s, 'debt_payment', %s, NULL, 'auto_debt_schedule', %s, NOW()
                     WHERE NOT EXISTS (
                         SELECT 1 FROM transactions
-                        WHERE user_id = %s AND source = 'auto_debt_schedule' AND notes = %s
+                        WHERE workspace_id = %s AND source = 'auto_debt_schedule' AND notes = %s
                     )
                     """,
                     (
-                        user_id, due.isoformat(), f"Cuota {debt.get('name') or 'deuda'}", actual_payment,
+                        user_id, workspace_id, due.isoformat(), f"Cuota {debt.get('name') or 'deuda'}", actual_payment,
                         debt.get("name") or "Deudas", f"debt_id:{debt['id']};installment:{installment_number}",
-                        user_id, f"debt_id:{debt['id']};installment:{installment_number}",
+                        workspace_id, f"debt_id:{debt['id']};installment:{installment_number}",
                     ),
                 )
                 paid_count = installment_number
@@ -457,13 +458,13 @@ def _sync_automatic_debt_payments(user_id: int) -> None:
                     next_payment_date = %s,
                     auto_update_monthly = CASE WHEN %s THEN FALSE ELSE auto_update_monthly END,
                     updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 """,
                 (
                     start_date.isoformat(), first_due.isoformat(), balance, paid_count,
                     last_due.isoformat() if last_due else None,
                     next_due.isoformat() if next_due else None,
-                    bool(finished), debt["id"], user_id,
+                    bool(finished), debt["id"], workspace_id,
                 ),
             )
 
@@ -604,6 +605,7 @@ def add_debt(
     fixed_fee_amount: float = 0,
 ):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     normalized_start = _parse_date(start_date) or date.today()
     normalized_first = _parse_date(first_payment_date) or _default_first_payment_date(normalized_start, payment_day)
 
@@ -626,10 +628,11 @@ def add_debt(
                 interest_method,
                 fixed_fee_amount,
                 user_id,
+                workspace_id,
                 created_at,
                 updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             RETURNING id
             """,
             (
@@ -647,7 +650,8 @@ def add_debt(
                 max(int(installments_paid or 0), 0),
                 str(interest_method or "monthly"),
                 max(_as_float(fixed_fee_amount), 0),
-                user_id
+                user_id,
+                workspace_id
             )
         )
         inserted = cursor.fetchone()
@@ -671,13 +675,15 @@ def add_debt(
         "auto_update_monthly": auto_update_monthly,
         "interest_method": str(interest_method or "monthly"),
         "fixed_fee_amount": max(_as_float(fixed_fee_amount), 0),
-        "user_id": user_id
+        "user_id": user_id,
+        "workspace_id": workspace_id
     }
 
 
 def get_debts():
     user_id = get_current_user_id()
-    _sync_automatic_debt_payments(user_id)
+    workspace_id = get_current_workspace_id()
+    _sync_automatic_debt_payments(user_id, workspace_id)
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -701,12 +707,13 @@ def get_debts():
                    fixed_fee_amount,
                    updated_at,
                    created_at,
-                   user_id
+                   user_id,
+                   workspace_id
             FROM debts
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     debts = [dict(row) for row in rows]
@@ -718,10 +725,10 @@ def get_debts():
                    MAX(installment_number) FILTER (WHERE payment_type = 'monthly_payment') AS max_installment,
                    MAX(payment_date) FILTER (WHERE payment_type = 'monthly_payment') AS last_payment_date
             FROM debt_payments
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             GROUP BY debt_id
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     stats_by_debt = {int(row["debt_id"]): dict(row) for row in payment_stats}
     today = date.today()
@@ -2084,6 +2091,7 @@ def update_expense(
 
 def delete_debt(debt_id: int):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         debt = conn.execute(
@@ -2100,9 +2108,9 @@ def delete_debt(debt_id: int):
                    user_id
             FROM debts
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (debt_id, user_id)
+            (debt_id, workspace_id)
         ).fetchone()
 
         if not debt:
@@ -2115,17 +2123,18 @@ def delete_debt(debt_id: int):
             """
             DELETE FROM debt_payments
             WHERE debt_id = %s
+              AND workspace_id = %s
             """,
-            (debt_id,)
+            (debt_id, workspace_id)
         )
 
         conn.execute(
             """
             DELETE FROM debts
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (debt_id, user_id)
+            (debt_id, workspace_id)
         )
 
         conn.commit()
@@ -2155,6 +2164,7 @@ def update_debt(
     fixed_fee_amount: float = 0,
 ):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         debt = conn.execute(
@@ -2162,9 +2172,9 @@ def update_debt(
             SELECT id, installments_paid, start_date, first_payment_date
             FROM debts
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (debt_id, user_id)
+            (debt_id, workspace_id)
         ).fetchone()
 
         if not debt:
@@ -2192,7 +2202,7 @@ def update_debt(
                 fixed_fee_amount = %s,
                 updated_at = NOW()
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
             (
                 name,
@@ -2210,7 +2220,7 @@ def update_debt(
                 str(interest_method or "monthly"),
                 max(_as_float(fixed_fee_amount), 0),
                 debt_id,
-                user_id
+                workspace_id
             )
         )
 
@@ -2247,6 +2257,7 @@ def apply_extra_payment_to_debt(
 ):
     """Apply a pure extraordinary payment directly to principal."""
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     amount = max(_as_float(amount), 0)
     if amount <= 0:
         return {"message": "El abono debe ser mayor que cero.", "status": "ERROR"}
@@ -2255,8 +2266,8 @@ def apply_extra_payment_to_debt(
         debt = conn.execute(
             """
             SELECT id, name, remaining_amount, monthly_payment, installments_paid
-            FROM debts WHERE id = %s AND user_id = %s
-            """, (debt_id, user_id)
+            FROM debts WHERE id = %s AND workspace_id = %s
+            """, (debt_id, workspace_id)
         ).fetchone()
         if not debt:
             return {"message": "Deuda no encontrada o no pertenece al usuario actual.", "status": "ERROR"}
@@ -2273,27 +2284,27 @@ def apply_extra_payment_to_debt(
                    auto_update_monthly = CASE WHEN %s <= 0 THEN FALSE ELSE auto_update_monthly END,
                    next_payment_date = CASE WHEN %s <= 0 THEN NULL ELSE next_payment_date END,
                    updated_at = NOW()
-               WHERE id = %s AND user_id = %s""",
-            (final_balance, final_payment, final_balance, final_balance, debt_id, user_id),
+               WHERE id = %s AND workspace_id = %s""",
+            (final_balance, final_payment, final_balance, final_balance, debt_id, workspace_id),
         )
         cursor = conn.execute(
             """
             INSERT INTO debt_payments (
-                user_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                user_id, workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
                 fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
                 previous_monthly_payment, new_monthly_payment, description, payment_date,
                 installment_number, source, created_at
-            ) VALUES (%s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra', NOW())
+            ) VALUES (%s, %s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra', NOW())
             """,
-            (user_id, debt_id, principal, principal, principal, previous_balance, final_balance,
+            (user_id, workspace_id, debt_id, principal, principal, principal, previous_balance, final_balance,
              previous_payment, final_payment, description or "Abono extraordinario a principal",
              date.today().isoformat(), int(debt.get("installments_paid") or 0)),
         )
         conn.execute(
-            """INSERT INTO transactions (user_id, transaction_date, description, amount, transaction_type,
+            """INSERT INTO transactions (user_id, workspace_id, transaction_date, description, amount, transaction_type,
                                       category, account, source, notes, created_at)
-               VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
-            (user_id, date.today().isoformat(), f"Abono extra {debt['name']}", principal, debt['name'],
+               VALUES (%s, %s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
+            (user_id, workspace_id, date.today().isoformat(), f"Abono extra {debt['name']}", principal, debt['name'],
              f"debt_id:{debt_id};extra_payment_id:{cursor.lastrowid}"),
         )
         conn.commit()
@@ -2309,6 +2320,7 @@ def apply_extra_payment_to_debt(
 
 def get_debt_by_name(name: str):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     search = f"%{name.lower()}%"
 
@@ -2325,10 +2337,10 @@ def get_debt_by_name(name: str):
                    user_id
             FROM debts
             WHERE lower(name) LIKE %s
-            AND user_id = %s
+            AND workspace_id = %s
             LIMIT 1
             """,
-            (search, user_id)
+            (search, workspace_id)
         ).fetchone()
 
     if not debt:
@@ -2363,6 +2375,7 @@ def apply_monthly_payment_to_debt(
     when the amortization engine has the required debt data.
     """
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     amount = max(_as_float(amount), 0)
     paid_on = _parse_date(payment_date) or date.today()
     if amount <= 0:
@@ -2374,8 +2387,8 @@ def apply_monthly_payment_to_debt(
             SELECT id, name, debt_type, total_amount, remaining_amount, monthly_payment,
                    interest_rate, term_months, payment_day, user_id, installments_paid,
                    last_payment_date, first_payment_date, interest_method, fixed_fee_amount
-            FROM debts WHERE id = %s AND user_id = %s
-            """, (debt_id, user_id)
+            FROM debts WHERE id = %s AND workspace_id = %s
+            """, (debt_id, workspace_id)
         ).fetchone()
         if not debt:
             return {"message": "Deuda no encontrada o no pertenece al usuario actual.", "status": "ERROR"}
@@ -2391,12 +2404,12 @@ def apply_monthly_payment_to_debt(
             SELECT id, amount, principal_amount, interest_amount, fee_amount,
                    new_remaining_amount, payment_date, installment_number
             FROM debt_payments
-            WHERE user_id = %s AND debt_id = %s
+            WHERE workspace_id = %s AND debt_id = %s
               AND payment_type = 'monthly_payment' AND source = 'auto_schedule'
             ORDER BY installment_number DESC, payment_date DESC
             LIMIT 1
             """,
-            (user_id, debt_id),
+            (workspace_id, debt_id),
         ).fetchone()
         if latest_auto and int(latest_auto.get("installment_number") or 0) == int(debt.get("installments_paid") or 0):
             auto_date = _parse_date(latest_auto.get("payment_date"))
@@ -2423,27 +2436,27 @@ def apply_monthly_payment_to_debt(
                            auto_update_monthly = CASE WHEN %s <= 0 THEN FALSE ELSE auto_update_monthly END,
                            next_payment_date = CASE WHEN %s <= 0 THEN NULL ELSE next_payment_date END,
                            updated_at = NOW()
-                       WHERE id = %s AND user_id = %s""",
-                    (final_balance, final_balance, final_balance, debt_id, user_id),
+                       WHERE id = %s AND workspace_id = %s""",
+                    (final_balance, final_balance, final_balance, debt_id, workspace_id),
                 )
                 cursor = conn.execute(
                     """
                     INSERT INTO debt_payments (
-                        user_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                        user_id, workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
                         fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
                         previous_monthly_payment, new_monthly_payment, description, payment_date,
                         installment_number, source, created_at
-                    ) VALUES (%s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra_after_auto', NOW())
+                    ) VALUES (%s, %s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra_after_auto', NOW())
                     """,
-                    (user_id, debt_id, extra_principal, extra_principal, extra_principal, previous_balance,
+                    (user_id, workspace_id, debt_id, extra_principal, extra_principal, extra_principal, previous_balance,
                      final_balance, scheduled, scheduled, description or "Excedente de cuota a principal",
                      paid_on.isoformat(), int(latest_auto.get("installment_number") or 0)),
                 )
                 conn.execute(
-                    """INSERT INTO transactions (user_id, transaction_date, description, amount, transaction_type,
+                    """INSERT INTO transactions (user_id, workspace_id, transaction_date, description, amount, transaction_type,
                                               category, account, source, notes, created_at)
-                       VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
-                    (user_id, paid_on.isoformat(), f"Abono extra {debt['name']}", extra_principal, debt['name'],
+                       VALUES (%s, %s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
+                    (user_id, workspace_id, paid_on.isoformat(), f"Abono extra {debt['name']}", extra_principal, debt['name'],
                      f"debt_id:{debt_id};extra_payment_id:{cursor.lastrowid}"),
                 )
                 conn.commit()
@@ -2489,22 +2502,22 @@ def apply_monthly_payment_to_debt(
             UPDATE debts SET remaining_amount = %s, monthly_payment = %s,
                 installments_paid = %s, last_payment_date = %s, next_payment_date = %s,
                 auto_update_monthly = CASE WHEN %s THEN FALSE ELSE auto_update_monthly END, updated_at = NOW()
-            WHERE id = %s AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
             (final_balance, final_monthly, installment_number, paid_on.isoformat(),
-             next_due.isoformat() if next_due else None, bool(finished), debt_id, user_id),
+             next_due.isoformat() if next_due else None, bool(finished), debt_id, workspace_id),
         )
 
         cursor = conn.execute(
             """
             INSERT INTO debt_payments (
-                user_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                user_id, workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
                 fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
                 previous_monthly_payment, new_monthly_payment, description, payment_date,
                 installment_number, source, created_at
-            ) VALUES (%s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual', NOW())
+            ) VALUES (%s, %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual', NOW())
             """,
-            (user_id, debt_id, actual_payment, principal, interest, fee, extra_principal,
+            (user_id, workspace_id, debt_id, actual_payment, principal, interest, fee, extra_principal,
              previous_balance, final_balance, previous_monthly, final_monthly,
              description or f"Pago cuota {installment_number}", paid_on.isoformat(), installment_number),
         )
@@ -2512,11 +2525,11 @@ def apply_monthly_payment_to_debt(
         note = f"debt_id:{debt_id};payment_id:{cursor.lastrowid}"
         conn.execute(
             """
-            INSERT INTO transactions (user_id, transaction_date, description, amount, transaction_type,
+            INSERT INTO transactions (user_id, workspace_id, transaction_date, description, amount, transaction_type,
                                       category, account, source, notes, created_at)
-            VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_payment', %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_payment', %s, NOW())
             """,
-            (user_id, paid_on.isoformat(), f"Pago {debt['name']}", actual_payment, debt['name'], note),
+            (user_id, workspace_id, paid_on.isoformat(), f"Pago {debt['name']}", actual_payment, debt['name'], note),
         )
         conn.commit()
 
@@ -2532,35 +2545,35 @@ def apply_monthly_payment_to_debt(
     }
 
 def get_debt_payments(debt_id: int | None = None):
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         if debt_id:
             rows = conn.execute(
                 """
-                SELECT id, user_id, debt_id, payment_type, amount, previous_remaining_amount,
+                SELECT id, user_id, workspace_id, debt_id, payment_type, amount, previous_remaining_amount,
                        new_remaining_amount, previous_monthly_payment,
                        new_monthly_payment, principal_amount, interest_amount, fee_amount, extra_principal_amount,
                        description, payment_date, installment_number, source, created_at
                 FROM debt_payments
                 WHERE debt_id = %s
-                AND user_id = %s
+                AND workspace_id = %s
                 ORDER BY id DESC
                 """,
-                (debt_id, user_id)
+                (debt_id, workspace_id)
             ).fetchall()
         else:
             rows = conn.execute(
                 """
-                SELECT id, user_id, debt_id, payment_type, amount, previous_remaining_amount,
+                SELECT id, user_id, workspace_id, debt_id, payment_type, amount, previous_remaining_amount,
                        new_remaining_amount, previous_monthly_payment,
                        new_monthly_payment, principal_amount, interest_amount, fee_amount, extra_principal_amount,
                        description, payment_date, installment_number, source, created_at
                 FROM debt_payments
-                WHERE user_id = %s
+                WHERE workspace_id = %s
                 ORDER BY id DESC
                 """,
-                (user_id,)
+                (workspace_id,)
             ).fetchall()
 
     return [dict(row) for row in rows]
