@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from backend.core.database import get_connection
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
 
 
@@ -509,14 +509,15 @@ def _variable_payroll_deductions(gross_amount: float, deductions: list[dict]) ->
 
 def add_salary(amount: float, source: str):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO salaries (amount, source, user_id, created_at)
-            VALUES (%s, %s, %s, NOW())
+            INSERT INTO salaries (amount, source, user_id, workspace_id, created_at)
+            VALUES (%s, %s, %s, %s, NOW())
             """,
-            (amount, source, user_id)
+            (amount, source, user_id, workspace_id)
         )
         conn.commit()
 
@@ -524,22 +525,23 @@ def add_salary(amount: float, source: str):
         "id": cursor.lastrowid,
         "amount": amount,
         "source": source,
-        "user_id": user_id
+        "user_id": user_id,
+        "workspace_id": workspace_id
     }
 
 
 def get_salaries():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, amount, source, user_id, created_at
+            SELECT id, amount, source, user_id, workspace_id, created_at
             FROM salaries
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -547,14 +549,15 @@ def get_salaries():
 
 def add_bonus(amount: float, description: str = ""):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO bonuses (amount, description, user_id, created_at)
-            VALUES (%s, %s, %s, NOW())
+            INSERT INTO bonuses (amount, description, user_id, workspace_id, created_at)
+            VALUES (%s, %s, %s, %s, NOW())
             """,
-            (amount, description, user_id)
+            (amount, description, user_id, workspace_id)
         )
         conn.commit()
 
@@ -562,22 +565,23 @@ def add_bonus(amount: float, description: str = ""):
         "id": cursor.lastrowid,
         "amount": amount,
         "description": description,
-        "user_id": user_id
+        "user_id": user_id,
+        "workspace_id": workspace_id
     }
 
 
 def get_bonuses():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, amount, description, user_id, created_at
+            SELECT id, amount, description, user_id, workspace_id, created_at
             FROM bonuses
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
