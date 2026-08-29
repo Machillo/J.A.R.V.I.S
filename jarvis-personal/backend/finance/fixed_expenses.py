@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Any
 
 from backend.auth.current_user import get_current_user_id
-from backend.auth.workspace_context import get_current_workspace_id
+from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 
 
