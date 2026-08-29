@@ -121,14 +121,14 @@ def _transaction_date_expr() -> str:
     )
 
 
-def _latest_base_salary(user_id: int) -> float:
+def _latest_base_salary(workspace_id: str) -> float:
     """Base mensual fija. Preferimos un salario base guardado; no depende de que entren transacciones bancarias."""
     with get_connection() as conn:
         row = conn.execute(
             """
             SELECT amount, source
             FROM salaries
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY
                 CASE
                     WHEN LOWER(source) LIKE '%%base%%' THEN 0
@@ -138,7 +138,7 @@ def _latest_base_salary(user_id: int) -> float:
                 id DESC
             LIMIT 1
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()
     return _as_float(row["amount"] if row else 0)
 
@@ -1223,6 +1223,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     paid with income accumulated through the following 5th.
     """
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     as_of = as_of or date.today()
 
     # Active Overview cycle. Day 5 belongs to the previous/open cycle; the
@@ -1270,7 +1271,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     base_net = _as_float(projection_results.get("base_net"))
     if base_net <= 0:
         try:
-            base_net = _latest_base_salary(user_id)
+            base_net = _latest_base_salary(workspace_id)
         except Exception:
             base_net = 0.0
 
@@ -1343,19 +1344,19 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
                 """
                 SELECT id, event_type, hours, multiplier, amount, description, created_at
                 FROM payroll_events
-                WHERE user_id = %s
+                WHERE workspace_id = %s
                 ORDER BY created_at ASC
                 """,
-                (user_id,),
+                (workspace_id,),
             ).fetchall()]
             bonuses = [dict(row) for row in conn.execute(
                 """
                 SELECT id, amount, description, created_at
                 FROM bonuses
-                WHERE user_id = %s
+                WHERE workspace_id = %s
                 ORDER BY created_at ASC
                 """,
-                (user_id,),
+                (workspace_id,),
             ).fetchall()]
 
         for event in payroll_events:
@@ -1536,11 +1537,12 @@ def set_employment_profile(
     holiday_multiplier: float = 2
 ):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         conn.execute(
-            "DELETE FROM employment_profile WHERE user_id = %s",
-            (user_id,)
+            "DELETE FROM employment_profile WHERE workspace_id = %s",
+            (workspace_id,)
         )
 
         cursor = conn.execute(
@@ -1551,16 +1553,18 @@ def set_employment_profile(
                 overtime_multiplier,
                 holiday_multiplier,
                 user_id,
+                workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 hourly_rate,
                 regular_hours_per_week,
                 overtime_multiplier,
                 holiday_multiplier,
-                user_id
+                user_id,
+                workspace_id
             )
         )
 
@@ -1572,23 +1576,24 @@ def set_employment_profile(
         "regular_hours_per_week": regular_hours_per_week,
         "overtime_multiplier": overtime_multiplier,
         "holiday_multiplier": holiday_multiplier,
-        "user_id": user_id
+        "user_id": user_id,
+        "workspace_id": workspace_id
     }
 
 
 def get_employment_profile():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         profile = conn.execute(
             """
-            SELECT id, hourly_rate, regular_hours_per_week, overtime_multiplier, holiday_multiplier, user_id, created_at
+            SELECT id, hourly_rate, regular_hours_per_week, overtime_multiplier, holiday_multiplier, user_id, workspace_id, created_at
             FROM employment_profile
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             LIMIT 1
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchone()
 
     if not profile:
@@ -1604,6 +1609,7 @@ def add_payroll_deduction(
     frequency: str
 ):
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         cursor = conn.execute(
@@ -1614,11 +1620,12 @@ def add_payroll_deduction(
                 amount,
                 frequency,
                 user_id,
+                workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
             """,
-            (name, deduction_type, amount, frequency, user_id)
+            (name, deduction_type, amount, frequency, user_id, workspace_id)
         )
 
         conn.commit()
@@ -1629,22 +1636,23 @@ def add_payroll_deduction(
         "deduction_type": deduction_type,
         "amount": amount,
         "frequency": frequency,
-        "user_id": user_id
+        "user_id": user_id,
+        "workspace_id": workspace_id
     }
 
 
 def get_payroll_deductions():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, deduction_type, amount, frequency, user_id, created_at
+            SELECT id, name, deduction_type, amount, frequency, user_id, workspace_id, created_at
             FROM payroll_deductions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -1684,6 +1692,7 @@ def add_payroll_event(
         amount = hours * hourly_rate
 
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         cursor = conn.execute(
@@ -1695,9 +1704,10 @@ def add_payroll_event(
                 amount,
                 description,
                 user_id,
+                workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 event_type,
@@ -1705,7 +1715,8 @@ def add_payroll_event(
                 multiplier,
                 amount,
                 description,
-                user_id
+                user_id,
+                workspace_id
             )
         )
 
@@ -1717,22 +1728,23 @@ def add_payroll_event(
         "hours": hours,
         "multiplier": multiplier,
         "amount": amount,
-        "description": description
+        "description": description,
+        "workspace_id": workspace_id
     }
 
 
 def get_payroll_events():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, event_type, hours, multiplier, amount, description, user_id, created_at
+            SELECT id, event_type, hours, multiplier, amount, description, user_id, workspace_id, created_at
             FROM payroll_events
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,)
+            (workspace_id,)
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -1748,7 +1760,7 @@ def calculate_monthly_salary_projection():
     - Los rebajos porcentuales configurados se aplican a OT/bonos; los rebajos fijos
       semanales se usan únicamente si no hay salario base neto guardado.
     """
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     profile = get_employment_profile()
     start_month, end_month = _current_month_bounds_sql()
 
@@ -1757,36 +1769,36 @@ def calculate_monthly_salary_projection():
             """
             SELECT name, deduction_type, amount, frequency
             FROM payroll_deductions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()]
 
         payroll_events = [dict(row) for row in conn.execute(
             """
             SELECT event_type, hours, multiplier, amount, description, created_at
             FROM payroll_events
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND created_at >= %s::date
               AND created_at < %s::date
             ORDER BY created_at ASC
             """,
-            (user_id, start_month, end_month),
+            (workspace_id, start_month, end_month),
         ).fetchall()]
 
         current_bonuses = [dict(row) for row in conn.execute(
             """
             SELECT amount, description, created_at
             FROM bonuses
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND created_at >= %s::date
               AND created_at < %s::date
             ORDER BY created_at ASC
             """,
-            (user_id, start_month, end_month),
+            (workspace_id, start_month, end_month),
         ).fetchall()]
 
-    base_salary_net = _latest_base_salary(user_id)
+    base_salary_net = _latest_base_salary(workspace_id)
 
     if profile:
         hourly_rate = float(profile["hourly_rate"] or 0)
