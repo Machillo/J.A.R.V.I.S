@@ -1,4 +1,4 @@
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from datetime import date, datetime
 import calendar
@@ -9,7 +9,7 @@ OUTFLOW_TYPES = ("expense", "debt_payment")
 
 
 def get_transaction_summary():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         def get_total(transaction_type: str):
@@ -18,9 +18,9 @@ def get_transaction_summary():
                 SELECT COALESCE(SUM(amount), 0) AS total
                 FROM transactions
                 WHERE transaction_type = %s
-                AND user_id = %s
+                AND workspace_id = %s
                 """,
-                (transaction_type, user_id),
+                (transaction_type, workspace_id),
             ).fetchone()["total"]
 
         total_income = get_total("income")
@@ -34,19 +34,19 @@ def get_transaction_summary():
             """
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             AND transaction_type IN ('loan_received', 'loan_disbursement')
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()["total"]
 
         total_transactions = conn.execute(
             """
             SELECT COUNT(*) AS total
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()["total"]
 
     return {
@@ -64,7 +64,7 @@ def get_transaction_summary():
 
 
 def get_top_expense_categories(limit: int = 8):
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -73,19 +73,19 @@ def get_top_expense_categories(limit: int = 8):
                    SUM(amount) AS total
             FROM transactions
             WHERE transaction_type = 'expense'
-            AND user_id = %s
+            AND workspace_id = %s
             GROUP BY COALESCE(NULLIF(TRIM(category), ''), 'Sin categoría')
             ORDER BY total DESC
             LIMIT %s
             """,
-            (user_id, limit),
+            (workspace_id, limit),
         ).fetchall()
 
     return [dict(row) for row in rows]
 
 
 def get_expenses_by_month():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -93,18 +93,18 @@ def get_expenses_by_month():
             SELECT to_char(transaction_date, 'YYYY-MM') AS month, SUM(amount) AS total
             FROM transactions
             WHERE transaction_type = 'expense'
-            AND user_id = %s
+            AND workspace_id = %s
             GROUP BY to_char(transaction_date, 'YYYY-MM')
             ORDER BY month
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
 
     return [dict(row) for row in rows]
 
 
 def get_expenses_by_category_and_month():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -115,11 +115,11 @@ def get_expenses_by_category_and_month():
                 SUM(amount) AS total
             FROM transactions
             WHERE transaction_type = 'expense'
-            AND user_id = %s
+            AND workspace_id = %s
             GROUP BY to_char(transaction_date, 'YYYY-MM'), COALESCE(NULLIF(TRIM(category), ''), 'Sin categoría')
             ORDER BY month, total DESC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
 
     return [dict(row) for row in rows]
@@ -144,7 +144,7 @@ def get_monthly_flow():
     inflate Analytics expenses. Loan disbursements still count as money received
     for the month without creating a second debt record.
     """
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -161,11 +161,11 @@ def get_monthly_flow():
                 COALESCE(SUM(CASE WHEN transaction_type = 'refund' THEN amount ELSE 0 END), 0) AS refunds,
                 COALESCE(SUM(CASE WHEN transaction_type = 'debt_payment' THEN amount ELSE 0 END), 0) AS debt_payments
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             GROUP BY to_char(transaction_date, 'YYYY-MM')
             ORDER BY month
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
 
     flow = []
@@ -201,7 +201,7 @@ def get_spending_breakdown():
     schedule supplies that monthly occurrence so the spending view does not
     under-report Vivienda. Existing Casa transactions are never duplicated.
     """
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     today = date.today()
     year_start = date(today.year, 1, 1)
 
@@ -212,12 +212,12 @@ def get_spending_breakdown():
                    COALESCE(NULLIF(TRIM(category), ''), 'Sin categoría') AS category,
                    source, notes
             FROM transactions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND transaction_type = 'expense'
               AND transaction_date::date BETWEEN %s::date AND %s::date
             ORDER BY transaction_date ASC, id ASC
             """,
-            (user_id, year_start, today),
+            (workspace_id, year_start, today),
         ).fetchall()
 
         house = conn.execute(
@@ -225,13 +225,13 @@ def get_spending_breakdown():
             SELECT id, name, category, expected_amount, frequency, interval_months,
                    start_month, due_day, is_active
             FROM fixed_expenses
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND is_active = TRUE
               AND LOWER(TRIM(name)) = 'casa'
             ORDER BY id
             LIMIT 1
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()
 
     items = []
