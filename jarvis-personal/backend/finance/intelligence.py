@@ -5,7 +5,7 @@ import re
 from datetime import date, datetime
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 
 
@@ -91,6 +91,7 @@ def _ensure_receivable_tables(conn) -> None:
     conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS notes TEXT")
     conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
     conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
+    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id)")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS receivable_payments (
@@ -106,7 +107,10 @@ def _ensure_receivable_tables(conn) -> None:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_user_status ON receivables(user_id, status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_source_key ON receivables(user_id, source_key)")
+    conn.execute("ALTER TABLE receivable_payments ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_payments_receivable ON receivable_payments(user_id, receivable_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_workspace_status ON receivables(workspace_id, status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_payments_workspace_receivable ON receivable_payments(workspace_id, receivable_id)")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS receivable_entries (
@@ -127,6 +131,8 @@ def _ensure_receivable_tables(conn) -> None:
     conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS cycle_start DATE")
     conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS cycle_end DATE")
     conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE")
+    conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_workspace_account ON receivable_entries(workspace_id, receivable_id, entry_date DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_account ON receivable_entries(user_id, receivable_id, entry_date DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_active_cycle ON receivable_entries(user_id, receivable_id, is_archived, cycle_start, cycle_end)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_receivable_entries_source_key ON receivable_entries(user_id, source_key) WHERE source_key IS NOT NULL")
@@ -139,6 +145,7 @@ def _person_key(person_name: str) -> str:
 
 
 def _get_or_create_person_receivable(conn, user_id: int, person_name: str) -> dict[str, Any]:
+    workspace_id = get_current_workspace_id()
     clean_name = str(person_name or "").strip()
     if not clean_name:
         raise ValueError("La persona es obligatoria.")
@@ -146,53 +153,55 @@ def _get_or_create_person_receivable(conn, user_id: int, person_name: str) -> di
         """
         SELECT *
         FROM receivables
-        WHERE user_id = %s
+        WHERE workspace_id = %s
           AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
         ORDER BY CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END, id ASC
         LIMIT 1
         """,
-        (user_id, clean_name),
+        (workspace_id, clean_name),
     ).fetchone()
     if row:
         return dict(row)
     created = conn.execute(
         """
         INSERT INTO receivables (
-            user_id, person_name, original_amount, paid_amount, pending_amount,
+            user_id, workspace_id, person_name, original_amount, paid_amount, pending_amount,
             status, notes, source_type, source_key
         )
-        VALUES (%s, %s, 0, 0, 0, 'completed', '', 'person_account', %s)
+        VALUES (%s, %s, %s, 0, 0, 0, 'completed', '', 'person_account', %s)
         RETURNING *
         """,
-        (user_id, clean_name, f"person:{_person_key(clean_name)}"),
+        (user_id, workspace_id, clean_name, f"person:{_person_key(clean_name)}"),
     ).fetchone()
     return dict(created)
 
 
 def _backfill_receivable_entries(conn, user_id: int) -> None:
+    workspace_id = get_current_workspace_id()
     """Move legacy manual balances/payments into the person ledger idempotently."""
     legacy_rows = conn.execute(
         """
         SELECT id, source_type, original_amount, person_name, notes, created_at
         FROM receivables
-        WHERE user_id = %s
+        WHERE workspace_id = %s
           AND source_type = 'manual'
           AND COALESCE(original_amount, 0) > 0
         """,
-        (user_id,),
+        (workspace_id,),
     ).fetchall()
     for row in legacy_rows:
         conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, receivable_id, entry_type, amount, description,
+                user_id, workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, source_key
             )
-            VALUES (%s, %s, 'charge', %s, %s, %s, 'legacy', %s)
+            VALUES (%s, %s, %s, 'charge', %s, %s, %s, 'legacy', %s)
             ON CONFLICT DO NOTHING
             """,
             (
                 user_id,
+                workspace_id,
                 row["id"],
                 row["original_amount"],
                 row.get("notes") or f"Saldo inicial de {row.get('person_name') or 'persona'}",
@@ -204,22 +213,22 @@ def _backfill_receivable_entries(conn, user_id: int) -> None:
         """
         SELECT id, receivable_id, amount, source_transaction_id, notes, created_at
         FROM receivable_payments
-        WHERE user_id = %s
+        WHERE workspace_id = %s
         """,
-        (user_id,),
+        (workspace_id,),
     ).fetchall()
     for row in payment_rows:
         conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, receivable_id, entry_type, amount, description,
+                user_id, workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, source_key, source_transaction_id
             )
-            SELECT %s, %s, 'payment', %s, %s, %s, 'legacy_payment', %s, %s
+            SELECT %s, %s, %s, 'payment', %s, %s, %s, 'legacy_payment', %s, %s
             WHERE NOT EXISTS (
                 SELECT 1
                 FROM receivable_entries existing
-                WHERE existing.user_id = %s
+                WHERE existing.workspace_id = %s
                   AND (
                         existing.source_key = %s
                      OR (%s IS NOT NULL AND existing.source_transaction_id = %s)
@@ -229,13 +238,14 @@ def _backfill_receivable_entries(conn, user_id: int) -> None:
             """,
             (
                 user_id,
+                workspace_id,
                 row["receivable_id"],
                 row["amount"],
                 row.get("notes") or "Pago registrado",
                 str(row.get("created_at") or date.today())[:10],
                 f"legacy_receivable_payment:{row['id']}",
                 row.get("source_transaction_id"),
-                user_id,
+                workspace_id,
                 f"legacy_receivable_payment:{row['id']}",
                 row.get("source_transaction_id"),
                 row.get("source_transaction_id"),
@@ -244,16 +254,17 @@ def _backfill_receivable_entries(conn, user_id: int) -> None:
 
 
 def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str, Any]:
+    workspace_id = get_current_workspace_id()
     totals = conn.execute(
         """
         SELECT
             COALESCE(SUM(amount) FILTER (WHERE entry_type = 'charge'), 0) AS charged,
             COALESCE(SUM(amount) FILTER (WHERE entry_type = 'payment'), 0) AS paid
         FROM receivable_entries
-        WHERE user_id = %s AND receivable_id = %s
+        WHERE workspace_id = %s AND receivable_id = %s
           AND COALESCE(is_archived, FALSE) = FALSE
         """,
-        (user_id, receivable_id),
+        (workspace_id, receivable_id),
     ).fetchone()
     charged = round(max(_as_float(totals.get("charged")), 0.0), 2)
     paid = round(max(_as_float(totals.get("paid")), 0.0), 2)
@@ -267,10 +278,10 @@ def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str,
             pending_amount = %s,
             status = %s,
             updated_at = NOW()
-        WHERE id = %s AND user_id = %s
+        WHERE id = %s AND workspace_id = %s
         RETURNING *
         """,
-        (charged, paid, pending, status, receivable_id, user_id),
+        (charged, paid, pending, status, receivable_id, workspace_id),
     ).fetchone()
     return dict(updated)
 
@@ -377,6 +388,7 @@ def _detect_receivable_payer_from_transaction(row: dict[str, Any]) -> str | None
 
 
 def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
+    workspace_id = get_current_workspace_id()
     """Apply incoming SINPE/reimbursement payments to matching receivables.
 
     Example: Emily sends a SINPE Móvil payment. The transaction is income and
@@ -387,13 +399,13 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
         """
         SELECT id, transaction_date, description, amount, transaction_type, category, account, source, notes
         FROM transactions
-        WHERE user_id = %s
+        WHERE workspace_id = %s
           AND transaction_type IN ('income', 'reimbursement')
           AND COALESCE(amount, 0) > 0
           AND COALESCE(source, '') IN ('email_monitor', 'manual', 'jarvis')
         ORDER BY transaction_date ASC, id ASC
         """,
-        (user_id,),
+        (workspace_id,),
     ).fetchall()
     for raw in rows:
         tx = dict(raw)
@@ -404,22 +416,22 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
             """
             SELECT id, original_amount, paid_amount, pending_amount
             FROM receivables
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
             ORDER BY CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END, id ASC
             LIMIT 1
             """,
-            (user_id, payer),
+            (workspace_id, payer),
         ).fetchone()
         if not rec:
             continue
         already = conn.execute(
             """
             SELECT id FROM receivable_payments
-            WHERE user_id = %s AND source_transaction_id = %s
+            WHERE workspace_id = %s AND source_transaction_id = %s
             LIMIT 1
             """,
-            (user_id, tx["id"]),
+            (workspace_id, tx["id"]),
         ).fetchone()
         if already:
             continue
@@ -432,10 +444,10 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
         status = "completed" if new_pending <= 0.01 else "partial"
         conn.execute(
             """
-            INSERT INTO receivable_payments (user_id, receivable_id, amount, source_transaction_id, notes)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO receivable_payments (user_id, workspace_id, receivable_id, amount, source_transaction_id, notes)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (user_id, rec["id"], payment, tx["id"], f"Pago detectado automáticamente desde ingreso: {tx.get('description') or ''}"),
+            (user_id, workspace_id, rec["id"], payment, tx["id"], f"Pago detectado automáticamente desde ingreso: {tx.get('description') or ''}"),
         )
         payment_date = tx.get("transaction_date") or date.today()
         if isinstance(payment_date, str):
@@ -444,15 +456,16 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
         conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, receivable_id, entry_type, amount, description,
+                user_id, workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, source_key, source_transaction_id,
                 cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, 'payment', %s, %s, %s, 'income_auto', %s, %s, %s, %s, FALSE)
+            VALUES (%s, %s, %s, 'payment', %s, %s, %s, 'income_auto', %s, %s, %s, %s, FALSE)
             ON CONFLICT DO NOTHING
             """,
             (
                 user_id,
+                workspace_id,
                 rec["id"],
                 payment,
                 f"Pago detectado: {tx.get('description') or payer}",
@@ -467,6 +480,7 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
 
 
 def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
+    workspace_id = get_current_workspace_id()
     """Mirror only the active cycle's additional-card purchases."""
     _ensure_receivable_tables(conn)
     _backfill_receivable_entries(conn, user_id)
@@ -489,10 +503,10 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
             conn.execute(
                 """
                 INSERT INTO receivable_entries (
-                    user_id, receivable_id, entry_type, amount, description,
+                    user_id, workspace_id, receivable_id, entry_type, amount, description,
                     entry_date, source_type, source_key, cycle_start, cycle_end, is_archived
                 )
-                VALUES (%s, %s, 'charge', %s, %s, %s, 'additional_card_auto', %s, %s, %s, FALSE)
+                VALUES (%s, %s, %s, 'charge', %s, %s, %s, 'additional_card_auto', %s, %s, %s, FALSE)
                 ON CONFLICT (user_id, source_key) WHERE source_key IS NOT NULL
                 DO UPDATE SET
                     receivable_id = EXCLUDED.receivable_id,
@@ -504,7 +518,7 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
                     is_archived = FALSE
                 """,
                 (
-                    user_id, account["id"], amount, description, cycle_start,
+                    user_id, workspace_id, account["id"], amount, description, cycle_start,
                     source_key, cycle_start, cycle_end,
                 ),
             )
@@ -513,9 +527,9 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
                 UPDATE receivables
                 SET source_type = CASE WHEN source_type = 'manual' THEN 'person_account' ELSE source_type END,
                     updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 """,
-                (account["id"], user_id),
+                (account["id"], workspace_id),
             )
             _recalculate_receivable(conn, user_id, int(account["id"]))
 
@@ -785,6 +799,7 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
 
 def list_receivables() -> dict[str, Any]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     cycle_start, cycle_end = _card_cycle_bounds()
     with get_connection() as conn:
         _ensure_receivable_tables(conn)
@@ -797,13 +812,13 @@ def list_receivables() -> dict[str, Any]:
             SELECT id, person_name, original_amount, paid_amount, pending_amount,
                    status, notes, source_type, source_key, created_at, updated_at
             FROM receivables
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY
               CASE status WHEN 'pending' THEN 1 WHEN 'partial' THEN 2 ELSE 3 END,
               person_name ASC,
               id ASC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
         items: list[dict[str, Any]] = []
         seen_people: set[str] = set()
@@ -831,12 +846,12 @@ def list_receivables() -> dict[str, Any]:
                         WHERE entry_type = 'payment' AND entry_date >= %s AND entry_date < %s
                     ), 0) AS cycle_payments
                 FROM receivable_entries
-                WHERE user_id = %s AND receivable_id = %s
+                WHERE workspace_id = %s AND receivable_id = %s
                   AND COALESCE(is_archived, FALSE) = FALSE
                 """,
                 (
                     cycle_start, cycle_start, cycle_start, cycle_end,
-                    cycle_start, cycle_end, user_id, row["id"],
+                    cycle_start, cycle_end, workspace_id, row["id"],
                 ),
             ).fetchone()
             prior_pending = round(
@@ -853,12 +868,12 @@ def list_receivables() -> dict[str, Any]:
                        source_type, source_key, source_transaction_id, created_at,
                        cycle_start, cycle_end
                 FROM receivable_entries
-                WHERE user_id = %s AND receivable_id = %s
+                WHERE workspace_id = %s AND receivable_id = %s
                   AND COALESCE(is_archived, FALSE) = FALSE
                   AND (entry_date >= %s OR %s > 0)
                 ORDER BY entry_date DESC, id DESC
                 """,
-                (user_id, row["id"], cycle_start, prior_pending),
+                (workspace_id, row["id"], cycle_start, prior_pending),
             ).fetchall()
             item["history"] = [dict(entry) for entry in history_rows]
             item["is_auto"] = any(
@@ -903,6 +918,7 @@ def add_receivable_entry(
 ) -> dict[str, Any]:
     """Add a manual purchase/loan/transfer owed by any person."""
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     clean_name = str(person_name or "").strip()
     clean_description = str(description or "").strip()
     clean_kind = str(entry_kind or "purchase").strip().lower()
@@ -936,14 +952,14 @@ def add_receivable_entry(
         entry = conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, receivable_id, entry_type, amount, description,
+                user_id, workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, 'charge', %s, %s, %s, %s, %s, %s, FALSE)
+            VALUES (%s, %s, %s, 'charge', %s, %s, %s, %s, %s, %s, FALSE)
             RETURNING *
             """,
             (
-                user_id, account["id"], numeric_amount, final_description,
+                user_id, workspace_id, account["id"], numeric_amount, final_description,
                 safe_date, f"manual_{clean_kind}", cycle_start, cycle_end,
             ),
         ).fetchone()
@@ -954,9 +970,10 @@ def add_receivable_entry(
 
 def update_receivable_entry(receivable_id: int, entry_id: int, amount: float | None = None, description: str | None = None, entry_date: str | None = None) -> dict[str, Any]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         _ensure_receivable_tables(conn)
-        entry = conn.execute("SELECT * FROM receivable_entries WHERE id=%s AND receivable_id=%s AND user_id=%s FOR UPDATE", (entry_id, receivable_id, user_id)).fetchone()
+        entry = conn.execute("SELECT * FROM receivable_entries WHERE id=%s AND receivable_id=%s AND workspace_id=%s FOR UPDATE", (entry_id, receivable_id, workspace_id)).fetchone()
         if not entry:
             return {"status": "NOT_FOUND", "message": "Movimiento no encontrado."}
         new_amount = round(_as_float(amount if amount is not None else entry["amount"]), 2)
@@ -968,12 +985,12 @@ def update_receivable_entry(receivable_id: int, entry_id: int, amount: float | N
         cycle_start, cycle_end = _card_cycle_bounds(parsed_day)
         updated_entry = conn.execute("""
             UPDATE receivable_entries SET amount=%s, description=%s, entry_date=%s, cycle_start=%s, cycle_end=%s
-            WHERE id=%s AND receivable_id=%s AND user_id=%s RETURNING *
-        """, (new_amount, new_description, new_date, cycle_start, cycle_end, entry_id, receivable_id, user_id)).fetchone()
+            WHERE id=%s AND receivable_id=%s AND workspace_id=%s RETURNING *
+        """, (new_amount, new_description, new_date, cycle_start, cycle_end, entry_id, receivable_id, workspace_id)).fetchone()
         linked_id = entry.get("source_transaction_id")
         if linked_id and entry.get("entry_type") == "payment":
-            conn.execute("UPDATE transactions SET amount=%s, original_amount=%s, transaction_date=%s, notes=%s WHERE id=%s AND user_id=%s", (new_amount, new_amount, new_date, f"Pago corregido de cuenta por cobrar #{receivable_id}. {new_description}".strip(), linked_id, user_id))
-            conn.execute("UPDATE receivable_payments SET amount=%s, notes=%s WHERE source_transaction_id=%s AND user_id=%s", (new_amount, new_description, linked_id, user_id))
+            conn.execute("UPDATE transactions SET amount=%s, original_amount=%s, transaction_date=%s, notes=%s WHERE id=%s AND workspace_id=%s", (new_amount, new_amount, new_date, f"Pago corregido de cuenta por cobrar #{receivable_id}. {new_description}".strip(), linked_id, workspace_id))
+            conn.execute("UPDATE receivable_payments SET amount=%s, notes=%s WHERE source_transaction_id=%s AND workspace_id=%s", (new_amount, new_description, linked_id, workspace_id))
         account = _recalculate_receivable(conn, user_id, receivable_id)
         conn.commit()
     return {"status": "OK", "item": account, "entry": dict(updated_entry)}
@@ -1005,6 +1022,7 @@ def apply_receivable_payment(
       should reduce receivables. Generic income must never be auto-applied.
     """
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     amount = max(_as_float(amount), 0.0)
     if amount <= 0:
         return {"status": "ERROR", "message": "Monto inválido."}
@@ -1012,8 +1030,8 @@ def apply_receivable_payment(
     with get_connection() as conn:
         _ensure_receivable_tables(conn)
         rec = conn.execute(
-            "SELECT * FROM receivables WHERE id = %s AND user_id = %s FOR UPDATE",
-            (receivable_id, user_id),
+            "SELECT * FROM receivables WHERE id = %s AND workspace_id = %s FOR UPDATE",
+            (receivable_id, workspace_id),
         ).fetchone()
         if not rec:
             return {"status": "NOT_FOUND", "message": "Cuenta por cobrar no encontrada."}
@@ -1040,6 +1058,7 @@ def apply_receivable_payment(
                 """
                 INSERT INTO transactions (
                     user_id,
+                    workspace_id,
                     transaction_date,
                     description,
                     amount,
@@ -1053,11 +1072,12 @@ def apply_receivable_payment(
                     exchange_rate,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, 'income', 'Cuentas por cobrar', %s, 'receivable_manual', %s, %s, 'CRC', 1, NOW())
+                VALUES (%s, %s, %s, %s, %s, 'income', 'Cuentas por cobrar', %s, 'receivable_manual', %s, %s, 'CRC', 1, NOW())
                 RETURNING id
                 """,
                 (
                     user_id,
+                    workspace_id,
                     safe_payment_date,
                     f"Pago de {person_name}",
                     payment,
@@ -1071,11 +1091,11 @@ def apply_receivable_payment(
         already = conn.execute(
             """
             SELECT id FROM receivable_payments
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND source_transaction_id = %s
             LIMIT 1
             """,
-            (user_id, linked_transaction_id),
+            (workspace_id, linked_transaction_id),
         ).fetchone()
         if already:
             return {"status": "DUPLICATE", "message": "Ese pago ya fue aplicado.", "source_transaction_id": linked_transaction_id}
@@ -1086,11 +1106,12 @@ def apply_receivable_payment(
 
         conn.execute(
             """
-            INSERT INTO receivable_payments (user_id, receivable_id, amount, source_transaction_id, notes)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO receivable_payments (user_id, workspace_id, receivable_id, amount, source_transaction_id, notes)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
             (
                 user_id,
+                workspace_id,
                 receivable_id,
                 payment,
                 linked_transaction_id,
@@ -1102,15 +1123,16 @@ def apply_receivable_payment(
         conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, receivable_id, entry_type, amount, description,
+                user_id, workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, source_key, source_transaction_id,
                 cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, 'payment', %s, %s, %s, 'manual_payment', %s, %s, %s, %s, FALSE)
+            VALUES (%s, %s, %s, 'payment', %s, %s, %s, 'manual_payment', %s, %s, %s, %s, FALSE)
             ON CONFLICT DO NOTHING
             """,
             (
                 user_id,
+                workspace_id,
                 receivable_id,
                 payment,
                 f"Pago recibido por {clean_method}. {clean_notes}".strip(),
