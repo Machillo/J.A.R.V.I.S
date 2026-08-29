@@ -443,7 +443,8 @@ def _delete_pending_internal_mirrors(conn, workspace_id: str, internal_candidate
     ).fetchall()
     return len(rows)
 
-def _seed_default_card_aliases(conn, user_id: int) -> None:
+def _seed_default_card_aliases(conn, user_id: int, workspace_id: str | None = None) -> None:
+    workspace_id = workspace_id or _workspace_id_for_user(conn, user_id)
     """Keep known BAC additional cards owner-aware.
 
     Kenneth's cards stay in the catalog as primary cards for parsing, but the
@@ -465,24 +466,25 @@ def _seed_default_card_aliases(conn, user_id: int) -> None:
     for last4, owner, relationship, is_primary in defaults:
         conn.execute(
             """
-            INSERT INTO card_aliases (user_id, card_last4, owner_label, relationship, is_primary)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (user_id, card_last4) DO UPDATE
+            INSERT INTO card_aliases (user_id, workspace_id, card_last4, owner_label, relationship, is_primary)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (workspace_id, card_last4) DO UPDATE
             SET owner_label = EXCLUDED.owner_label,
                 relationship = EXCLUDED.relationship,
                 is_primary = EXCLUDED.is_primary,
                 updated_at = NOW()
             """,
-            (user_id, last4, owner, relationship, is_primary),
+            (user_id, workspace_id, last4, owner, relationship, is_primary),
         )
 
 
-def _settings_query_for_owner(conn, user_id: int) -> str:
+def _settings_query_for_owner(conn, user_id: int, workspace_id: str | None = None) -> str:
+    workspace_id = workspace_id or _workspace_id_for_user(conn, user_id)
     row = conn.execute(
         """
-        INSERT INTO email_monitor_settings (user_id, gmail_query, auto_commit_confidence)
-        VALUES (%s, %s, 999)
-        ON CONFLICT (user_id) DO UPDATE
+        INSERT INTO email_monitor_settings (user_id, workspace_id, gmail_query, auto_commit_confidence)
+        VALUES (%s, %s, %s, 999)
+        ON CONFLICT (workspace_id) DO UPDATE
         SET gmail_query = CASE
                 WHEN email_monitor_settings.gmail_query IS NULL
                   OR email_monitor_settings.gmail_query = ''
@@ -494,7 +496,7 @@ def _settings_query_for_owner(conn, user_id: int) -> str:
             updated_at = NOW()
         RETURNING gmail_query
         """,
-        (user_id, DEFAULT_QUERY),
+        (user_id, workspace_id, DEFAULT_QUERY),
     ).fetchone()
     return (row or {}).get("gmail_query") or DEFAULT_QUERY
 
@@ -511,12 +513,12 @@ def get_email_monitor_status() -> dict[str, Any]:
 
     with get_connection() as conn:
         ensure_email_tables(conn)
-        _seed_default_card_aliases(conn, user_id)
+        _seed_default_card_aliases(conn, user_id, workspace_id)
         settings = conn.execute(
             """
-            INSERT INTO email_monitor_settings (user_id, gmail_query)
-            VALUES (%s, %s)
-            ON CONFLICT (user_id)
+            INSERT INTO email_monitor_settings (user_id, workspace_id, gmail_query)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (workspace_id)
             DO UPDATE SET
                 gmail_query = CASE
                     WHEN email_monitor_settings.gmail_query IS NULL
@@ -529,7 +531,7 @@ def get_email_monitor_status() -> dict[str, Any]:
                 updated_at = NOW()
             RETURNING *
             """,
-            (user_id, DEFAULT_QUERY),
+            (user_id, workspace_id, DEFAULT_QUERY),
         ).fetchone()
 
         totals = conn.execute(
@@ -583,6 +585,7 @@ def get_email_monitor_status() -> dict[str, Any]:
 
 
 def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transaction_id: int, candidate: dict[str, Any]) -> None:
+    workspace_id = _workspace_id_for_user(conn, user_id)
     """When an accepted email is an income from Emily/Sidey, reduce IOU balance.
 
     This keeps Cuentas por cobrar in sync immediately after the user confirms a
@@ -635,23 +638,23 @@ def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transactio
             """
             SELECT id, original_amount, paid_amount, pending_amount
             FROM receivables
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
               AND source_type = 'additional_card_auto'
             ORDER BY id ASC
             LIMIT 1
             """,
-            (user_id, payer),
+            (workspace_id, payer),
         ).fetchone()
         if not rec:
             return
         already = conn.execute(
             """
             SELECT id FROM receivable_payments
-            WHERE user_id = %s AND source_transaction_id = %s
+            WHERE workspace_id = %s AND source_transaction_id = %s
             LIMIT 1
             """,
-            (user_id, transaction_id),
+            (workspace_id, transaction_id),
         ).fetchone()
         if already:
             return
@@ -664,18 +667,18 @@ def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transactio
         status = "completed" if new_pending <= 0.01 else "partial"
         conn.execute(
             """
-            INSERT INTO receivable_payments (user_id, receivable_id, amount, source_transaction_id, notes)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO receivable_payments (user_id, workspace_id, receivable_id, amount, source_transaction_id, notes)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (user_id, rec["id"], amount, transaction_id, f"Pago detectado automáticamente desde correo: {candidate.get('description') or ''}"),
+            (user_id, workspace_id, rec["id"], amount, transaction_id, f"Pago detectado automáticamente desde correo: {candidate.get('description') or ''}"),
         )
         conn.execute(
             """
             UPDATE receivables
             SET paid_amount = %s, pending_amount = %s, status = %s, updated_at = NOW()
-            WHERE id = %s AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
-            (new_paid, new_pending, status, rec["id"], user_id),
+            (new_paid, new_pending, status, rec["id"], workspace_id),
         )
     except Exception:
         # Never block saving the financial transaction because IOU sync failed.
@@ -893,18 +896,18 @@ def _assert_duplicate_has_trace(candidate: dict[str, Any]) -> None:
         "canonical_transaction_id, duplicate_of, or transaction_id."
     )
 
-def _find_existing_ingested(conn, user_id: int, email_fp: str, provider_message_id: str | None):
+def _find_existing_ingested(conn, workspace_id: str, email_fp: str, provider_message_id: str | None):
     if provider_message_id:
         row = conn.execute(
             """
             SELECT id
             FROM email_ingested_messages
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND provider = 'gmail'
               AND provider_message_id = %s
             LIMIT 1
             """,
-            (user_id, provider_message_id),
+            (workspace_id, provider_message_id),
         ).fetchone()
         if row:
             return row
@@ -912,11 +915,11 @@ def _find_existing_ingested(conn, user_id: int, email_fp: str, provider_message_
         """
         SELECT id
         FROM email_ingested_messages
-        WHERE user_id = %s
+        WHERE workspace_id = %s
           AND fingerprint = %s
         LIMIT 1
         """,
-        (user_id, email_fp),
+        (workspace_id, email_fp),
     ).fetchone()
 
 
@@ -936,9 +939,10 @@ def _upsert_ingested_message(
     attachment_names: list[str] | None = None,
 ) -> int:
     attachment_names = attachment_names or []
+    workspace_id = _workspace_id_for_user(conn, user_id)
     raw_excerpt = (body or reason or "")[:1200]
     raw_body = (body or "")[:20000]
-    existing = _find_existing_ingested(conn, user_id, email_fp, provider_message_id)
+    existing = _find_existing_ingested(conn, workspace_id, email_fp, provider_message_id)
     if existing:
         email_id = int(existing["id"])
         conn.execute(
@@ -957,7 +961,7 @@ def _upsert_ingested_message(
                 attachment_names = %s,
                 attachment_count = %s,
                 parse_reason = %s
-            WHERE id = %s AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
             (
                 provider_message_id,
@@ -974,7 +978,7 @@ def _upsert_ingested_message(
                 len(attachment_names),
                 reason[:1000],
                 email_id,
-                user_id,
+                workspace_id,
             ),
         )
         return email_id
@@ -982,12 +986,12 @@ def _upsert_ingested_message(
     row = conn.execute(
         """
         INSERT INTO email_ingested_messages (
-            user_id, provider, provider_message_id, fingerprint, sender, subject,
+            user_id, workspace_id, provider, provider_message_id, fingerprint, sender, subject,
             received_at, bank, status, raw_excerpt, raw_body, body_text,
             attachment_names, attachment_count, parse_reason
         )
-        VALUES (%s, 'gmail', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (user_id, provider, provider_message_id)
+        VALUES (%s, %s, 'gmail', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (workspace_id, provider, provider_message_id)
         DO UPDATE SET
             fingerprint = EXCLUDED.fingerprint,
             sender = EXCLUDED.sender,
@@ -1005,6 +1009,7 @@ def _upsert_ingested_message(
         """,
         (
             user_id,
+            workspace_id,
             provider_message_id,
             email_fp,
             sender,
@@ -1061,7 +1066,7 @@ def scan_email_text(
             attachment_names=attachment_names,
         )
         conn.execute(
-            "UPDATE email_ingested_messages SET workspace_id = %s WHERE id = %s AND user_id = %s",
+            "UPDATE email_ingested_messages SET workspace_id = %s WHERE id = %s AND workspace_id = %s",
             (workspace_id, email_message_id, user_id),
         )
 
@@ -1097,7 +1102,7 @@ def scan_email_text(
                     received_at, attachment_names, extracted_text_excerpt, status
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending_reconciliation')
-                ON CONFLICT (user_id, email_message_id)
+                ON CONFLICT (workspace_id, email_message_id)
                 DO UPDATE SET
                     bank = EXCLUDED.bank,
                     subject = EXCLUDED.subject,
@@ -1124,11 +1129,11 @@ def scan_email_text(
             conn.execute(
                 """
                 DELETE FROM email_transaction_candidates
-                WHERE user_id = %s
+                WHERE workspace_id = %s
                   AND email_message_id = %s
                   AND transaction_type = 'statement'
                 """,
-                (user_id, email_message_id),
+                (workspace_id, email_message_id),
             )
             _log_email_event(
                 conn,
@@ -1251,7 +1256,7 @@ def scan_email_text(
                 transaction_time, raw_description, normalized_description, confidence, status, review_reason
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (user_id, fingerprint)
+            ON CONFLICT (workspace_id, fingerprint)
             DO UPDATE SET
                 email_message_id = EXCLUDED.email_message_id,
                 transaction_date = EXCLUDED.transaction_date,
@@ -1328,10 +1333,10 @@ def scan_email_text(
                 SET duplicate_of = %s,
                     canonical_transaction_id = %s,
                     updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                   AND status = 'duplicate'
                 """,
-                (int(canonical_candidate_id), int(canonical_candidate_id), int(candidate_row["id"]), user_id),
+                (int(canonical_candidate_id), int(canonical_candidate_id), int(candidate_row["id"]), workspace_id),
             )
             candidate_row["duplicate_of"] = int(canonical_candidate_id)
             candidate_row["canonical_transaction_id"] = int(canonical_candidate_id)
@@ -1341,9 +1346,9 @@ def scan_email_text(
                 """
                 UPDATE email_transaction_candidates
                 SET canonical_transaction_id = id, updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 """,
-                (int(candidate_row["id"]), user_id),
+                (int(candidate_row["id"]), workspace_id),
             )
             candidate_row["canonical_transaction_id"] = candidate_row["id"]
 
@@ -1356,9 +1361,9 @@ def scan_email_text(
                     canonical_transaction_id = %s,
                     review_reason = 'Duplicado semántico: existe una versión canónica más específica.',
                     updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 """,
-                (int(candidate_row["id"]), int(candidate_row["id"]), int(duplicate_candidate["id"]), user_id),
+                (int(candidate_row["id"]), int(candidate_row["id"]), int(duplicate_candidate["id"]), workspace_id),
             )
 
         # Backfill histórico y defensa adicional para corridas reentrantes.
@@ -1367,9 +1372,9 @@ def scan_email_text(
             """
             SELECT *
             FROM email_transaction_candidates
-            WHERE id = %s AND user_id = %s
+            WHERE id = %s AND workspace_id = %s
             """,
-            (int(candidate_row["id"]), user_id),
+            (int(candidate_row["id"]), workspace_id),
         ).fetchone()
         candidate_row = dict(refreshed_row) if refreshed_row else candidate_row
         _assert_duplicate_has_trace(candidate_row)
@@ -1410,7 +1415,7 @@ def list_email_candidates(status_filter: str | None = None, limit: int = 250) ->
 
     with get_connection() as conn:
         ensure_email_tables(conn)
-        _seed_default_card_aliases(conn, user_id)
+        _seed_default_card_aliases(conn, user_id, workspace_id)
         rows = conn.execute(
             f"""
             SELECT

@@ -335,7 +335,7 @@ def create_notification_job(
                 reference_type, reference_id, dedupe_key, payload
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            ON CONFLICT (user_id, dedupe_key)
+            ON CONFLICT (workspace_id, dedupe_key)
             DO NOTHING
             """,
             (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key or f"manual:{workspace_id}:{scheduled_at.isoformat()}:{title}", _json(payload or {})),
@@ -495,9 +495,9 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
                 """
                 SELECT *
                 FROM notification_subscriptions
-                WHERE user_id = %s AND enabled = TRUE
+                WHERE workspace_id = %s AND enabled = TRUE
                 """,
-                (job["user_id"],),
+                (job["workspace_id"],),
             ).fetchall()
             sent_to = 0
             errors: list[str] = []
