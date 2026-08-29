@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.service import get_financial_summary
 
@@ -22,12 +22,13 @@ def set_pay_schedule(
     first_pay_date: str | None = None,
     notes: str = "",
 ):
-    user_id = get_current_user_id()
+    user_id = get_current_user_id()  # legacy compatibility during migration
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         conn.execute(
-            "DELETE FROM pay_schedule WHERE user_id = %s",
-            (user_id,),
+            "DELETE FROM pay_schedule WHERE workspace_id = %s",
+            (workspace_id,),
         )
 
         cursor = conn.execute(
@@ -38,11 +39,12 @@ def set_pay_schedule(
                 first_pay_date,
                 notes,
                 user_id,
+                workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
             """,
-            (pay_frequency, pay_day, first_pay_date, notes, user_id),
+            (pay_frequency, pay_day, first_pay_date, notes, user_id, workspace_id),
         )
 
         conn.commit()
@@ -54,22 +56,23 @@ def set_pay_schedule(
         "first_pay_date": first_pay_date,
         "notes": notes,
         "user_id": user_id,
+        "workspace_id": workspace_id,
     }
 
 
 def get_pay_schedule():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         schedule = conn.execute(
             """
-            SELECT id, pay_frequency, pay_day, first_pay_date, notes, user_id, created_at
+            SELECT id, pay_frequency, pay_day, first_pay_date, notes, user_id, workspace_id, created_at
             FROM pay_schedule
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             LIMIT 1
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()
 
     if not schedule:

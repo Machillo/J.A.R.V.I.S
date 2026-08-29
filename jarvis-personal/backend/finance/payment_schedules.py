@@ -1,4 +1,4 @@
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 
 
@@ -14,7 +14,8 @@ def add_payment_schedule(
     auto_deducted: bool = False,
     notes: str = "",
 ):
-    user_id = get_current_user_id()
+    user_id = get_current_user_id()  # legacy compatibility during migration
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         cursor = conn.execute(
@@ -31,9 +32,10 @@ def add_payment_schedule(
                 auto_deducted,
                 notes,
                 user_id,
+                workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 name,
@@ -47,6 +49,7 @@ def add_payment_schedule(
                 auto_deducted,
                 notes,
                 user_id,
+                workspace_id,
             ),
         )
 
@@ -65,22 +68,23 @@ def add_payment_schedule(
         "auto_deducted": auto_deducted,
         "notes": notes,
         "user_id": user_id,
+        "workspace_id": workspace_id,
     }
 
 
 def get_payment_schedules():
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, name, entity_type, entity_id, payment_method, frequency,
-                   day_of_month, cut_day, payment_day, auto_deducted, notes, user_id, created_at
+                   day_of_month, cut_day, payment_day, auto_deducted, notes, user_id, workspace_id, created_at
             FROM payment_schedules
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             ORDER BY id DESC
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
 
     return [dict(row) for row in rows]
