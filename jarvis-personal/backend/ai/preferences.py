@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 
 DEFAULT_SPORTS_PREFS = {
@@ -59,18 +59,24 @@ def ensure_preference_tables(conn) -> None:
         """
     )
 
+    conn.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE")
+    conn.execute("ALTER TABLE notification_subscriptions ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_preferences_workspace_key ON user_preferences(workspace_id, preference_key)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_subscriptions_workspace_endpoint ON notification_subscriptions(workspace_id, channel, endpoint)")
+
 
 def get_preference(key: str, default: Any = None) -> Any:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         ensure_preference_tables(conn)
         row = conn.execute(
             """
             SELECT preference_value
             FROM user_preferences
-            WHERE user_id = %s AND preference_key = %s
+            WHERE workspace_id = %s AND preference_key = %s
             """,
-            (user_id, key),
+            (workspace_id, key),
         ).fetchone()
         conn.commit()
     return row["preference_value"] if row else default
@@ -78,16 +84,17 @@ def get_preference(key: str, default: Any = None) -> Any:
 
 def set_preference(key: str, value: Any) -> dict:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         ensure_preference_tables(conn)
         conn.execute(
             """
-            INSERT INTO user_preferences (user_id, preference_key, preference_value)
-            VALUES (%s, %s, %s::jsonb)
-            ON CONFLICT (user_id, preference_key)
+            INSERT INTO user_preferences (user_id, workspace_id, preference_key, preference_value)
+            VALUES (%s, %s, %s, %s::jsonb)
+            ON CONFLICT (workspace_id, preference_key)
             DO UPDATE SET preference_value = EXCLUDED.preference_value, updated_at = NOW()
             """,
-            (user_id, key, __import__('json').dumps(value, ensure_ascii=False)),
+            (user_id, workspace_id, key, __import__('json').dumps(value, ensure_ascii=False)),
         )
         conn.commit()
     return {"status": "OK", "key": key, "value": value}
@@ -119,17 +126,18 @@ def update_sports_preferences(payload: dict) -> dict:
 
 def save_browser_subscription(payload: dict) -> dict:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     endpoint = payload.get("endpoint") or "local-browser"
     with get_connection() as conn:
         ensure_preference_tables(conn)
         conn.execute(
             """
-            INSERT INTO notification_subscriptions (user_id, channel, endpoint, payload, enabled)
-            VALUES (%s, 'browser', %s, %s::jsonb, TRUE)
-            ON CONFLICT (user_id, channel, endpoint)
+            INSERT INTO notification_subscriptions (user_id, workspace_id, channel, endpoint, payload, enabled)
+            VALUES (%s, %s, 'browser', %s, %s::jsonb, TRUE)
+            ON CONFLICT (workspace_id, channel, endpoint)
             DO UPDATE SET payload = EXCLUDED.payload, enabled = TRUE, updated_at = NOW()
             """,
-            (user_id, endpoint, __import__('json').dumps(payload, ensure_ascii=False)),
+            (user_id, workspace_id, endpoint, __import__('json').dumps(payload, ensure_ascii=False)),
         )
         conn.commit()
     return {"status": "OK", "message": "Notificaciones registradas para este navegador."}

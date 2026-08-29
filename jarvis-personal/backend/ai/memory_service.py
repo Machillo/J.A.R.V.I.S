@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 
 MEMORY_CATEGORIES = {
@@ -120,9 +120,15 @@ def ensure_memory_tables(conn) -> None:
         """
     )
 
+    conn.execute("ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE")
+    conn.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_items_workspace_active ON memory_items(workspace_id, is_active)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_preferences_workspace_key ON user_preferences(workspace_id, preference_key)")
+
 
 def list_memory_items(category: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     limit = max(1, min(int(limit or 100), 250))
 
     with get_connection() as conn:
@@ -132,22 +138,22 @@ def list_memory_items(category: str | None = None, limit: int = 100) -> list[dic
                 """
                 SELECT id, category, title, content, importance, source, metadata, created_at, updated_at
                 FROM memory_items
-                WHERE user_id = %s AND is_active = TRUE AND category = %s
+                WHERE workspace_id = %s AND is_active = TRUE AND category = %s
                 ORDER BY importance DESC, updated_at DESC, id DESC
                 LIMIT %s
                 """,
-                (user_id, category, limit),
+                (workspace_id, category, limit),
             ).fetchall()
         else:
             rows = conn.execute(
                 """
                 SELECT id, category, title, content, importance, source, metadata, created_at, updated_at
                 FROM memory_items
-                WHERE user_id = %s AND is_active = TRUE
+                WHERE workspace_id = %s AND is_active = TRUE
                 ORDER BY importance DESC, updated_at DESC, id DESC
                 LIMIT %s
                 """,
-                (user_id, limit),
+                (workspace_id, limit),
             ).fetchall()
         conn.commit()
 
@@ -156,6 +162,7 @@ def list_memory_items(category: str | None = None, limit: int = 100) -> list[dic
 
 def search_memory_items(query: str, limit: int = 10) -> list[dict[str, Any]]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     query = _clean_text(query)
     limit = max(1, min(int(limit or 10), 50))
 
@@ -171,7 +178,7 @@ def search_memory_items(query: str, limit: int = 10) -> list[dict[str, Any]]:
             """
             SELECT id, category, title, content, importance, source, metadata, created_at, updated_at
             FROM memory_items
-            WHERE user_id = %s
+            WHERE workspace_id = %s
               AND is_active = TRUE
               AND (
                 LOWER(content) LIKE %s
@@ -181,7 +188,7 @@ def search_memory_items(query: str, limit: int = 10) -> list[dict[str, Any]]:
             ORDER BY importance DESC, updated_at DESC, id DESC
             LIMIT %s
             """,
-            (user_id, like_query, like_query, like_query, limit),
+            (workspace_id, like_query, like_query, like_query, limit),
         ).fetchall()
         conn.commit()
 
@@ -208,6 +215,7 @@ def create_memory_item(
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     content = _clean_text(content)
     if not content:
         return {"status": "ERROR", "message": "No hay contenido para guardar en memoria."}
@@ -222,10 +230,10 @@ def create_memory_item(
             """
             SELECT id
             FROM memory_items
-            WHERE user_id = %s AND is_active = TRUE AND LOWER(content) = LOWER(%s)
+            WHERE workspace_id = %s AND is_active = TRUE AND LOWER(content) = LOWER(%s)
             LIMIT 1
             """,
-            (user_id, content),
+            (workspace_id, content),
         ).fetchone()
 
         if existing:
@@ -238,7 +246,7 @@ def create_memory_item(
                     updated_at = NOW()
                 WHERE id = %s AND user_id = %s
                 """,
-                (category, title, importance, existing["id"], user_id),
+                (category, title, importance, existing["id"], workspace_id),
             )
             conn.commit()
             return {
@@ -251,10 +259,10 @@ def create_memory_item(
 
         cursor = conn.execute(
             """
-            INSERT INTO memory_items (user_id, category, title, content, importance, source, metadata)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+            INSERT INTO memory_items (user_id, workspace_id, category, title, content, importance, source, metadata)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
             """,
-            (user_id, category, title, content, importance, source, _json(metadata)),
+            (user_id, workspace_id, category, title, content, importance, source, _json(metadata)),
         )
         conn.commit()
 
@@ -274,6 +282,7 @@ def remember_from_message(user_message: str) -> dict[str, Any]:
 
 def forget_memory_item(memory_id: int) -> dict[str, Any]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         ensure_memory_tables(conn)
         result = conn.execute(
@@ -282,7 +291,7 @@ def forget_memory_item(memory_id: int) -> dict[str, Any]:
             SET is_active = FALSE, updated_at = NOW()
             WHERE id = %s AND user_id = %s
             """,
-            (memory_id, user_id),
+            (memory_id, workspace_id),
         )
         conn.commit()
     return {"status": "OK", "message": "Memoria eliminada.", "updated": result.rowcount}
@@ -290,15 +299,16 @@ def forget_memory_item(memory_id: int) -> dict[str, Any]:
 
 def get_profile_preferences() -> dict[str, Any]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         ensure_memory_tables(conn)
         row = conn.execute(
             """
             SELECT preference_value
             FROM user_preferences
-            WHERE user_id = %s AND preference_key = 'profile'
+            WHERE workspace_id = %s AND preference_key = 'profile'
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()
         conn.commit()
 
@@ -310,6 +320,7 @@ def get_profile_preferences() -> dict[str, Any]:
 
 def update_profile_preferences(payload: dict[str, Any]) -> dict[str, Any]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     current = get_profile_preferences()
     allowed = set(DEFAULT_PROFILE_PREFERENCES.keys()) | {"display_name", "timezone", "language", "avatar_data_url"}
     clean_payload = {key: value for key, value in (payload or {}).items() if key in allowed}
@@ -319,12 +330,12 @@ def update_profile_preferences(payload: dict[str, Any]) -> dict[str, Any]:
         ensure_memory_tables(conn)
         conn.execute(
             """
-            INSERT INTO user_preferences (user_id, preference_key, preference_value)
-            VALUES (%s, 'profile', %s::jsonb)
-            ON CONFLICT (user_id, preference_key)
+            INSERT INTO user_preferences (user_id, workspace_id, preference_key, preference_value)
+            VALUES (%s, %s, 'profile', %s::jsonb)
+            ON CONFLICT (workspace_id, preference_key)
             DO UPDATE SET preference_value = EXCLUDED.preference_value, updated_at = NOW()
             """,
-            (user_id, _json(merged)),
+            (user_id, workspace_id, _json(merged)),
         )
         conn.commit()
 

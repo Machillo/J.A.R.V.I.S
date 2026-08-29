@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 
 
@@ -24,18 +24,19 @@ def _safe_json_loads(value: Any, default: Any):
 def get_or_create_chat_session() -> int:
     """Devuelve una sesión activa simple por usuario para conversaciones con JARVIS."""
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         session = conn.execute(
             """
             SELECT id
             FROM chat_sessions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             AND status = 'active'
             ORDER BY id DESC
             LIMIT 1
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchone()
 
         if session:
@@ -43,10 +44,10 @@ def get_or_create_chat_session() -> int:
 
         cursor = conn.execute(
             """
-            INSERT INTO chat_sessions (user_id, status, created_at, updated_at)
-            VALUES (%s, 'active', NOW(), NOW())
+            INSERT INTO chat_sessions (user_id, workspace_id, status, created_at, updated_at)
+            VALUES (%s, %s, 'active', NOW(), NOW())
             """,
-            (user_id,),
+            (user_id, workspace_id),
         )
         conn.commit()
 
@@ -55,6 +56,7 @@ def get_or_create_chat_session() -> int:
 
 def get_pending_action() -> dict[str, Any] | None:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         row = conn.execute(
@@ -62,12 +64,12 @@ def get_pending_action() -> dict[str, Any] | None:
             SELECT id, user_id, session_id, action_type, status, current_field,
                    payload, missing_fields, created_at, updated_at
             FROM chat_pending_actions
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             AND status = %s
             ORDER BY id DESC
             LIMIT 1
             """,
-            (user_id, PENDING_STATUS),
+            (workspace_id, PENDING_STATUS),
         ).fetchone()
 
     if not row:
@@ -86,6 +88,7 @@ def create_pending_action(
     current_field: str | None = None,
 ) -> dict[str, Any]:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     session_id = get_or_create_chat_session()
     payload = payload or {}
     missing_fields = missing_fields or []
@@ -95,22 +98,23 @@ def create_pending_action(
             """
             UPDATE chat_pending_actions
             SET status = 'cancelled', updated_at = NOW()
-            WHERE user_id = %s
+            WHERE workspace_id = %s
             AND status = 'pending'
             """,
-            (user_id,),
+            (workspace_id,),
         )
 
         cursor = conn.execute(
             """
             INSERT INTO chat_pending_actions (
-                user_id, session_id, action_type, status, current_field,
+                user_id, workspace_id, session_id, action_type, status, current_field,
                 payload, missing_fields, created_at, updated_at
             )
-            VALUES (%s, %s, %s, 'pending', %s, %s::jsonb, %s::jsonb, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, 'pending', %s, %s::jsonb, %s::jsonb, NOW(), NOW())
             """,
             (
                 user_id,
+                workspace_id,
                 session_id,
                 action_type,
                 current_field,
@@ -139,6 +143,7 @@ def update_pending_action(
     current_field: str | None,
 ) -> None:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         conn.execute(
@@ -149,14 +154,14 @@ def update_pending_action(
                 current_field = %s,
                 updated_at = NOW()
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
             (
                 json.dumps(payload, ensure_ascii=False),
                 json.dumps(missing_fields, ensure_ascii=False),
                 current_field,
                 action_id,
-                user_id,
+                workspace_id,
             ),
         )
         conn.commit()
@@ -164,6 +169,7 @@ def update_pending_action(
 
 def finish_pending_action(action_id: int, status: str = "completed") -> None:
     user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         conn.execute(
@@ -172,8 +178,8 @@ def finish_pending_action(action_id: int, status: str = "completed") -> None:
             SET status = %s,
                 updated_at = NOW()
             WHERE id = %s
-            AND user_id = %s
+            AND workspace_id = %s
             """,
-            (status, action_id, user_id),
+            (status, action_id, workspace_id),
         )
         conn.commit()
