@@ -87,7 +87,7 @@ def ensure_notification_tables(conn) -> None:
             last_error TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, channel, endpoint)
+            UNIQUE(workspace_id, channel, endpoint)
         )
         """
     )

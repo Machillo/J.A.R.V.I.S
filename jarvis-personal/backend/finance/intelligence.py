@@ -106,7 +106,7 @@ def _ensure_receivable_tables(conn) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_user_status ON receivables(user_id, status)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_source_key ON receivables(user_id, source_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_source_key ON receivables(workspace_id, source_key)")
     conn.execute("ALTER TABLE receivable_payments ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_payments_receivable ON receivable_payments(user_id, receivable_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_workspace_status ON receivables(workspace_id, status)")
@@ -135,7 +135,7 @@ def _ensure_receivable_tables(conn) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_workspace_account ON receivable_entries(workspace_id, receivable_id, entry_date DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_account ON receivable_entries(user_id, receivable_id, entry_date DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_active_cycle ON receivable_entries(user_id, receivable_id, is_archived, cycle_start, cycle_end)")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_receivable_entries_source_key ON receivable_entries(user_id, source_key) WHERE source_key IS NOT NULL")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_receivable_entries_source_key ON receivable_entries(workspace_id, source_key) WHERE source_key IS NOT NULL")
 
 
 
@@ -507,7 +507,7 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
                     entry_date, source_type, source_key, cycle_start, cycle_end, is_archived
                 )
                 VALUES (%s, %s, %s, 'charge', %s, %s, %s, 'additional_card_auto', %s, %s, %s, FALSE)
-                ON CONFLICT (user_id, source_key) WHERE source_key IS NOT NULL
+                ON CONFLICT (workspace_id, source_key) WHERE source_key IS NOT NULL
                 DO UPDATE SET
                     receivable_id = EXCLUDED.receivable_id,
                     amount = EXCLUDED.amount,

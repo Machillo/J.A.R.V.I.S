@@ -102,8 +102,8 @@ def ensure_email_tables(conn) -> None:
             status TEXT NOT NULL DEFAULT 'processed',
             raw_excerpt TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, fingerprint),
-            UNIQUE(user_id, provider, provider_message_id)
+            UNIQUE(workspace_id, fingerprint),
+            UNIQUE(workspace_id, provider, provider_message_id)
         )
         """
     )
@@ -140,7 +140,7 @@ def ensure_email_tables(conn) -> None:
             review_reason TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, fingerprint)
+            UNIQUE(workspace_id, fingerprint)
         )
         """
     )
@@ -161,13 +161,13 @@ def ensure_email_tables(conn) -> None:
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_email_candidates_card_cycle
-        ON email_transaction_candidates(user_id, card_last4, billing_cycle_start, billing_cycle_end)
+        ON email_transaction_candidates(workspace_id, card_last4, billing_cycle_start, billing_cycle_end)
         """
     )
     conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_email_candidates_dedupe
-        ON email_transaction_candidates(user_id, transaction_date, amount, transaction_type, status)
+        ON email_transaction_candidates(workspace_id, transaction_date, amount, transaction_type, status)
         """
     )
     conn.execute(
@@ -192,7 +192,7 @@ def ensure_email_tables(conn) -> None:
             status TEXT NOT NULL DEFAULT 'pending_reconciliation',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, email_message_id)
+            UNIQUE(workspace_id, email_message_id)
         )
         """
     )
@@ -207,7 +207,7 @@ def ensure_email_tables(conn) -> None:
             is_primary BOOLEAN NOT NULL DEFAULT FALSE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, card_last4)
+            UNIQUE(workspace_id, card_last4)
         )
         """
     )

@@ -17,7 +17,7 @@ def _ensure_exchange_rates_table(conn):
             source TEXT NOT NULL DEFAULT 'manual',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE (user_id, rate_date, currency)
+            UNIQUE (workspace_id, rate_date, currency)
         )
         """
     )
@@ -45,7 +45,7 @@ def _save_exchange_rate(conn, user_id: int, workspace_id: str, transaction_date:
         """
         INSERT INTO exchange_rates (user_id, workspace_id, rate_date, currency, exchange_rate, source)
         VALUES (%s, %s, %s::date, UPPER(%s), %s, %s)
-        ON CONFLICT (user_id, rate_date, currency)
+        ON CONFLICT (workspace_id, rate_date, currency)
         DO UPDATE SET workspace_id = EXCLUDED.workspace_id,
                       exchange_rate = EXCLUDED.exchange_rate,
                       source = EXCLUDED.source,

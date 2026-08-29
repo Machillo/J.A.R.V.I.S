@@ -93,7 +93,16 @@ def require_feature(feature_code: str):
                FROM subscriptions s
                JOIN plan_features pf ON pf.plan_id=s.plan_id AND pf.enabled=TRUE
                JOIN features f ON f.id=pf.feature_id
-               WHERE s.user_id=%s AND f.code=%s""",
+               WHERE s.user_id=%s
+                 AND f.code=%s
+                 AND (
+                     COALESCE(s.access_source, 'self_service') <> 'courtesy'
+                     OR (
+                         s.status='active'
+                         AND s.expires_at IS NOT NULL
+                         AND s.expires_at > NOW()
+                     )
+                 )""",
             (user_id, feature_code),
         ).fetchone()
     if not row:

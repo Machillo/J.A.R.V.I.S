@@ -16,6 +16,7 @@ import {
   Settings as SettingsIcon,
   Target,
   UserRound,
+  UsersRound,
   Landmark,
   PiggyBank,
   Gem,
@@ -34,6 +35,7 @@ import Investments from "./pages/Investments";
 import Wealth from "./pages/Wealth";
 import Businesses from "./pages/Businesses";
 import Login from "./pages/Login";
+import UserManagement from "./pages/UserManagement";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
@@ -59,6 +61,7 @@ const appSections = {
   memory: { title: "Memory Core", eyebrow: "Config" },
   settings: { title: "Configuración", eyebrow: "Config" },
   goals: { title: "Metas", eyebrow: "Config" },
+  userManagement: { title: "Usuarios", eyebrow: "Owner Control" },
 };
 
 const getBottomGroup = (page) => {
@@ -114,6 +117,9 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
         <AppListItem icon={Brain} title="Memory Core" subtitle="Memoria y contexto personal" onClick={() => navigatePage("memory")} />
         <AppListItem icon={Target} title="Goals" subtitle="Objetivos y prioridades" onClick={() => navigatePage("goals")} />
         <AppListItem icon={SettingsIcon} title="System Settings" subtitle="Preferencias de JARVIS" onClick={() => navigatePage("settings")} />
+        {currentUser?.role === "owner" && (
+          <AppListItem icon={UsersRound} title="Administrar usuarios" subtitle="Buscar cuentas y otorgar cortesías" onClick={() => navigatePage("userManagement")} />
+        )}
       </div>
 
       <div className="app-section-card">
@@ -577,6 +583,9 @@ export default function App() {
 
       case "chats":
         return <ChatsHub navigatePage={navigatePage} />;
+
+      case "userManagement":
+        return <UserManagement />;
 
       case "profile":
         return <ProfileHub navigatePage={navigatePage} userName={userName} currentUser={currentUser} aiUsage={aiUsage} onLogout={handleLogout} profilePreferences={profilePreferences} onProfilePhotoChange={handleProfilePhotoChange} />;

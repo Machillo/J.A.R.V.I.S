@@ -42,3 +42,11 @@ def update_user_access(user_id: int, payload: dict):
 
 def link_owner_personal_identity(personal_supabase_user_id: str):
     return _request("POST", "/admin/owner-link", json={"personal_supabase_user_id": personal_supabase_user_id})
+
+
+def grant_user_courtesy(user_id: int, payload: dict):
+    return _request("POST", f"/admin/users/{user_id}/courtesy", json=payload)
+
+
+def revoke_user_courtesy(user_id: int):
+    return _request("DELETE", f"/admin/users/{user_id}/courtesy")

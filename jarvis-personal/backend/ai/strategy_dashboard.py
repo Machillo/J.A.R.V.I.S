@@ -944,7 +944,7 @@ def get_additional_card_report() -> dict[str, Any]:
                 is_primary BOOLEAN NOT NULL DEFAULT FALSE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                UNIQUE(user_id, card_last4)
+                UNIQUE(workspace_id, card_last4)
             )
             """
         )

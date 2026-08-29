@@ -39,7 +39,7 @@ def ensure_preference_tables(conn) -> None:
             preference_value JSONB NOT NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, preference_key)
+            UNIQUE(workspace_id, preference_key)
         )
         """
     )
@@ -54,7 +54,7 @@ def ensure_preference_tables(conn) -> None:
             enabled BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, channel, endpoint)
+            UNIQUE(workspace_id, channel, endpoint)
         )
         """
     )

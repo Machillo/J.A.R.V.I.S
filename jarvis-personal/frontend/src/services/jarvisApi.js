@@ -219,3 +219,7 @@ export const createBusiness = (payload) => jsonRequest("/finance/business-center
 export const createBusinessMovement = (payload) => jsonRequest("/finance/business-center/movements", "POST", payload);
 
 export const linkOwnerToUsers = () => request("/users-admin/owner-link", { method: "POST" });
+
+export const getManagedUsers = (search = "") => request(`/users-admin/users${search ? `?search=${encodeURIComponent(search)}` : ""}`);
+export const grantCourtesySubscription = (userId, payload) => jsonRequest(`/users-admin/users/${userId}/courtesy`, "POST", payload);
+export const revokeCourtesySubscription = (userId) => request(`/users-admin/users/${userId}/courtesy`, { method: "DELETE" });
