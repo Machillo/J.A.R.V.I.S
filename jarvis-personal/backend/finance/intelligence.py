@@ -1156,50 +1156,51 @@ def apply_receivable_payment(
 
 
 def list_account_balances() -> dict[str, Any]:
-    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT id, account_name, bank_name, account_last4, currency, current_balance, is_active, updated_at
             FROM account_balances
-            WHERE user_id = %s AND COALESCE(is_active, true) = true
+            WHERE workspace_id = %s AND COALESCE(is_active, true) = true
             ORDER BY bank_name, account_name
             """,
-            (user_id,),
+            (workspace_id,),
         ).fetchall()
     items = [dict(row) for row in rows]
     return {"status": "OK", "items": items, "total_real_balance": round(sum(_as_float(i.get("current_balance")) for i in items), 2)}
 
 
 def upsert_account_balance(account_name: str, current_balance: float, bank_name: str = "", account_last4: str = "", currency: str = "CRC") -> dict[str, Any]:
-    user_id = get_current_user_id()
+    user_id = get_current_user_id()  # legacy compatibility during migration
+    workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         existing = conn.execute(
             """
             SELECT id FROM account_balances
-            WHERE user_id = %s AND LOWER(account_name) = LOWER(%s) AND COALESCE(account_last4,'') = COALESCE(%s,'')
+            WHERE workspace_id = %s AND LOWER(account_name) = LOWER(%s) AND COALESCE(account_last4,'') = COALESCE(%s,'')
             LIMIT 1
             """,
-            (user_id, account_name, account_last4),
+            (workspace_id, account_name, account_last4),
         ).fetchone()
         if existing:
             row = conn.execute(
                 """
                 UPDATE account_balances
                 SET bank_name = %s, currency = %s, current_balance = %s, is_active = true, updated_at = NOW()
-                WHERE id = %s AND user_id = %s
+                WHERE id = %s AND workspace_id = %s
                 RETURNING *
                 """,
-                (bank_name, currency, current_balance, existing["id"], user_id),
+                (bank_name, currency, current_balance, existing["id"], workspace_id),
             ).fetchone()
         else:
             row = conn.execute(
                 """
-                INSERT INTO account_balances (user_id, account_name, bank_name, account_last4, currency, current_balance)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO account_balances (user_id, workspace_id, account_name, bank_name, account_last4, currency, current_balance)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (user_id, account_name, bank_name, account_last4, currency, current_balance),
+                (user_id, workspace_id, account_name, bank_name, account_last4, currency, current_balance),
             ).fetchone()
         conn.commit()
     return {"status": "OK", "item": dict(row)}
