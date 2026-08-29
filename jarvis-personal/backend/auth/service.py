@@ -5,6 +5,7 @@ import requests
 from fastapi import HTTPException, status
 
 from backend.core.database import get_connection
+from backend.auth.workspace_context import resolve_personal_workspace_context, sync_account_auth_identity
 
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -251,6 +252,13 @@ def authenticate_access_token(access_token: str) -> dict[str, Any]:
             """,
             (supabase_user["supabase_user_id"], effective_role, app_user["id"]),
         )
+        sync_account_auth_identity(
+            conn,
+            legacy_allowed_user_id=int(app_user["id"]),
+            supabase_user_id=supabase_user["supabase_user_id"],
+            effective_role=effective_role,
+        )
+        workspace_context = resolve_personal_workspace_context(conn, int(app_user["id"]))
         conn.commit()
 
     return {
@@ -259,4 +267,5 @@ def authenticate_access_token(access_token: str) -> dict[str, Any]:
         "role": effective_role,
         "status": app_user["status"],
         "supabase_user_id": supabase_user["supabase_user_id"],
+        **workspace_context,
     }

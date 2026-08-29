@@ -9,6 +9,7 @@ from uuid import UUID
 from fastapi import Header, HTTPException, status
 
 from backend.core.database import get_connection
+from backend.auth.workspace_context import resolve_personal_workspace_context
 
 
 BRIDGE_API_KEY = os.getenv("JARVIS_OWNER_BRIDGE_API_KEY", "").strip()
@@ -121,8 +122,10 @@ def authenticate_owner_bridge_token(token: str) -> dict:
             (allowed_user_id, personal_uid),
         ).fetchone()
 
-    if not row or row["status"] != "active" or row["role"] != "owner":
-        raise HTTPException(status_code=403, detail="La identidad owner de Personal ya no está autorizada.")
+        if not row or row["status"] != "active" or row["role"] != "owner":
+            raise HTTPException(status_code=403, detail="La identidad owner de Personal ya no está autorizada.")
+
+        workspace_context = resolve_personal_workspace_context(conn, int(row["id"]))
 
     return {
         "id": row["id"],
@@ -131,4 +134,5 @@ def authenticate_owner_bridge_token(token: str) -> dict:
         "status": row["status"],
         "supabase_user_id": str(row["supabase_user_id"]),
         "auth_source": "users_owner_bridge",
+        **workspace_context,
     }

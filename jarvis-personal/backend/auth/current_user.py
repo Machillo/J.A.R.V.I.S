@@ -36,7 +36,38 @@ def get_current_user() -> dict[str, Any]:
 
 
 def get_current_user_id() -> int:
+    """Legacy allowed_users.id. Mantener solo durante la migración."""
     return int(get_current_user()["id"])
+
+
+def get_current_account_id() -> str:
+    account_id = get_current_user().get("account_id")
+    if not account_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="El request autenticado no tiene account_id unificado.",
+        )
+    return str(account_id)
+
+
+def get_current_workspace_id() -> str:
+    workspace_id = get_current_user().get("workspace_id")
+    if not workspace_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="El request autenticado no tiene workspace_id unificado.",
+        )
+    return str(workspace_id)
+
+
+def get_current_workspace_role() -> str:
+    workspace_role = get_current_user().get("workspace_role")
+    if not workspace_role:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="El request autenticado no tiene rol de workspace.",
+        )
+    return str(workspace_role)
 
 
 def require_roles(*allowed_roles: str):
