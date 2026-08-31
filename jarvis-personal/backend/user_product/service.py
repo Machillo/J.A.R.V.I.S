@@ -5,13 +5,11 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from backend.auth.current_user import get_current_account_id, get_current_user, get_current_user_id, get_current_workspace_id
+from backend.auth.current_user import get_current_account_id, get_current_user_id, get_current_workspace_id
 from backend.auth.saas import require_feature
 from backend.core.database import get_connection
 from backend.finance.service import (
     add_salary,
-    delete_debt,
-    get_debts,
     get_expenses,
     get_payroll_events,
     get_salaries,
@@ -29,29 +27,41 @@ from backend.user_product.strategy_engine import (
 
 
 def _legacy_financial_user_id() -> int:
-    """Return a compatibility users.id for legacy financial FK columns.
+    """Return/create the legacy users.id required by old financial FKs.
 
-    Finva ownership is enforced by workspace_id. Some legacy Personal tables still
-    keep user_id foreign keys to users(id), while authentication is bridged through
-    allowed_users. Provision the compatibility row lazily without changing Personal.
+    Finva authorization is account/workspace based. Some historical Personal tables
+    still require user_id -> users(id), while authentication uses allowed_users.
+    This bridge is account-scoped by the authenticated account email and exists only
+    to satisfy those legacy foreign keys.
     """
-    allowed_user_id = get_current_user_id()
-    identity = get_current_user()
+    account_id = get_current_account_id()
     with get_connection() as conn:
-        row = conn.execute(
-            "SELECT id FROM users WHERE allowed_user_id=%s ORDER BY id LIMIT 1",
-            (allowed_user_id,),
+        account = conn.execute(
+            "SELECT primary_email, display_name FROM accounts WHERE id=%s",
+            (account_id,),
         ).fetchone()
-        if row:
-            return int(row["id"])
-        row = conn.execute(
-            """INSERT INTO users(allowed_user_id,name,country,timezone,created_at)
-               VALUES(%s,%s,'Unknown','UTC',NOW())
-               RETURNING id""",
-            (allowed_user_id, (identity.get("email") or "Finva user").strip()),
+        if not account:
+            raise HTTPException(status_code=401, detail="Cuenta no encontrada.")
+
+        email = (account.get("primary_email") or "").strip().lower()
+        if not email:
+            raise HTTPException(status_code=500, detail="La cuenta no tiene email principal.")
+
+        existing = conn.execute(
+            "SELECT id FROM users WHERE lower(email)=lower(%s) ORDER BY id LIMIT 1",
+            (email,),
+        ).fetchone()
+        if existing:
+            return int(existing["id"])
+
+        created = conn.execute(
+            """INSERT INTO users(email,name,country,timezone,created_at)
+               VALUES(%s,%s,%s,%s,NOW()) RETURNING id""",
+            (email, (account.get("display_name") or "Finva User").strip(), "Unknown", "UTC"),
         ).fetchone()
         conn.commit()
-    return int(row["id"])
+        return int(created["id"])
+
 
 def _money(value: Any) -> float:
     return round(float(value or 0), 2)
@@ -144,7 +154,7 @@ def list_overtime():
 
 
 def create_overtime(payload):
-    user_id = _legacy_financial_user_id()
+    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     amount = round(payload.hours * payload.hourly_rate * payload.multiplier, 2)
     with get_connection() as conn:
@@ -172,13 +182,14 @@ def create_user_debt(payload):
     with get_connection() as conn:
         row = conn.execute(
             """INSERT INTO debts(
-                   name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,
-                   term_months,payment_day,start_date,first_payment_date,auto_update_monthly,
-                   installments_paid,interest_method,fixed_fee_amount,user_id,workspace_id,created_at,updated_at
-               ) VALUES(%s,'other',%s,%s,%s,%s,NULL,%s,CURRENT_DATE,CURRENT_DATE,%s,0,'monthly',0,%s,%s,NOW(),NOW())
+                   user_id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,
+                   term_months,payment_day,created_at,first_payment_date,auto_update_monthly,
+                   installments_paid,updated_at,start_date,next_payment_date,last_payment_date,
+                   interest_method,fixed_fee_amount,workspace_id
+               ) VALUES(%s,%s,'other',%s,%s,%s,%s,NULL,%s,NOW(),NULL,%s,0,NOW(),NULL,NULL,NULL,'monthly',0,%s)
                RETURNING id,name,total_amount,remaining_amount,monthly_payment,interest_rate,payment_day,created_at""",
-            (payload.name.strip(), max(total, remaining), remaining, monthly, interest, payload.payment_day,
-             monthly > 0, user_id, workspace_id),
+            (user_id, payload.name.strip(), max(total, remaining), remaining, monthly, interest,
+             payload.payment_day, monthly > 0, workspace_id),
         ).fetchone()
         conn.commit()
     return row
@@ -189,44 +200,31 @@ def pay_user_debt(debt_id: int, amount: float):
     workspace_id = get_current_workspace_id()
     payment = max(float(amount or 0), 0)
     if payment <= 0:
-        raise HTTPException(status_code=422, detail="El pago debe ser mayor que cero.")
+        raise HTTPException(status_code=400, detail="El pago debe ser mayor que cero.")
     with get_connection() as conn:
         debt = conn.execute(
-            """SELECT id,name,remaining_amount,monthly_payment,installments_paid
-               FROM debts WHERE id=%s AND workspace_id=%s FOR UPDATE""",
+            "SELECT id,name,remaining_amount,monthly_payment FROM debts WHERE id=%s AND workspace_id=%s",
             (debt_id, workspace_id),
         ).fetchone()
         if not debt:
             raise HTTPException(status_code=404, detail="Deuda no encontrada.")
         previous = _money(debt.get("remaining_amount"))
-        principal = min(payment, previous)
-        remaining = round(max(previous - principal, 0), 2)
-        monthly = _money(debt.get("monthly_payment"))
+        applied = min(payment, previous)
+        new_remaining = max(previous - applied, 0)
         conn.execute(
-            "UPDATE debts SET remaining_amount=%s,updated_at=NOW() WHERE id=%s AND workspace_id=%s",
-            (remaining, debt_id, workspace_id),
+            "UPDATE debts SET remaining_amount=%s, updated_at=NOW() WHERE id=%s AND workspace_id=%s",
+            (new_remaining, debt_id, workspace_id),
         )
-        payment_row = conn.execute(
-            """INSERT INTO debt_payments(
-                   user_id,workspace_id,debt_id,payment_type,amount,previous_remaining_amount,new_remaining_amount,
-                   previous_monthly_payment,new_monthly_payment,principal_amount,interest_amount,fee_amount,
-                   extra_principal_amount,description,payment_date,installment_number,source,created_at
-               ) VALUES(%s,%s,%s,'extra_payment',%s,%s,%s,%s,%s,%s,0,0,%s,%s,CURRENT_DATE,%s,'finva',NOW())
-               RETURNING id""",
-            (user_id, workspace_id, debt_id, principal, previous, remaining, monthly, monthly, principal, principal,
-             "Pago registrado desde Finva", int(debt.get("installments_paid") or 0)),
-        ).fetchone()
+        # Keep an auditable transaction; legacy user_id uses users(id), ownership uses workspace_id.
         conn.execute(
             """INSERT INTO transactions(
                    user_id,workspace_id,transaction_date,description,amount,transaction_type,category,account,source,notes,created_at
-               ) VALUES(%s,%s,CURRENT_DATE,%s,%s,'debt_payment',%s,NULL,'finva',%s,NOW())""",
-            (user_id, workspace_id, f"Pago {debt['name']}", principal, debt['name'], f"debt_id:{debt_id}"),
+               ) VALUES(%s,%s,%s,%s,%s,'debt_payment',%s,NULL,'finva_debt_payment',%s,NOW())""",
+            (user_id, workspace_id, date.today().isoformat(), f"Pago {debt['name']}", applied,
+             debt["name"], f"debt_id:{debt_id}"),
         )
         conn.commit()
-    return {
-        "status": "ok", "payment_id": payment_row["id"], "debt_id": debt_id,
-        "payment_amount": principal, "new_remaining_amount": remaining,
-    }
+    return {"status": "OK", "debt_id": debt_id, "payment_amount": applied, "new_remaining_amount": new_remaining}
 
 
 
