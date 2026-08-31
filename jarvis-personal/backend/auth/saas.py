@@ -29,6 +29,38 @@ def _subscription(conn, account_id: str):
     return row
 
 
+
+def _activate_self_service_if_ready(conn, account_id: str):
+    """Heal a pending self-service plan once its onboarding requirement is met."""
+    row = conn.execute(
+        """SELECT s.status,s.access_source,p.code AS plan_code,a.onboarding_level
+           FROM account_subscriptions s
+           JOIN plans p ON p.id=s.plan_id
+           JOIN accounts a ON a.id=s.account_id
+           WHERE s.account_id=%s""",
+        (account_id,),
+    ).fetchone()
+    if not row:
+        return None
+
+    plan_code = (row.get("plan_code") or "free").lower()
+    completed = (row.get("onboarding_level") or "").lower()
+    ready = PLAN_RANK.get(completed, 0) >= PLAN_RANK.get(plan_code, 999)
+
+    if row.get("access_source") == "self_service" and row.get("status") == "pending" and ready:
+        conn.execute(
+            """UPDATE account_subscriptions
+               SET status='active',
+                   started_at=COALESCE(started_at,NOW()),
+                   updated_at=NOW()
+               WHERE account_id=%s
+                 AND access_source='self_service'
+                 AND status='pending'""",
+            (account_id,),
+        )
+    return _subscription(conn, account_id)
+
+
 def ensure_default_subscription(conn, account_id: str, role: str = "user"):
     existing = _subscription(conn, account_id)
     if existing:
@@ -54,6 +86,8 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
             (account_id,),
         ).fetchone()
         subscription = ensure_default_subscription(conn, account_id, user.get("role") or "user")
+        if user.get("role") != "owner":
+            subscription = _activate_self_service_if_ready(conn, account_id) or subscription
         conn.commit()
     return {
         **user,
@@ -143,13 +177,13 @@ def complete_onboarding(payload):
              (payload.payday_note or '').strip() or None, payload.essential_monthly_expenses, payload.liquid_savings,
              payload.emergency_fund_target, payload.strategy_preference, payload.discretionary_monthly_minimum),
         )
-        # Basic/VIP upgrades are intentionally pending until their required
-        # onboarding is completed. Reaching this point means the profile was
-        # validated and persisted, so activate the selected self-service plan.
         conn.execute(
             """UPDATE account_subscriptions
-               SET status='active', started_at=COALESCE(started_at,NOW()), updated_at=NOW()
-               WHERE account_id=%s AND access_source='self_service'""",
+               SET status='active',
+                   started_at=COALESCE(started_at,NOW()),
+                   updated_at=NOW()
+               WHERE account_id=%s
+                 AND access_source='self_service'""",
             (account_id,),
         )
         conn.execute(
@@ -166,6 +200,8 @@ def require_feature(feature_code: str):
         return True
     account_id = get_current_account_id()
     with get_connection() as conn:
+        _activate_self_service_if_ready(conn, account_id)
+        conn.commit()
         row = conn.execute(
             """SELECT 1 FROM account_subscriptions s
                JOIN plan_features pf ON pf.plan_id=s.plan_id AND pf.enabled=TRUE
