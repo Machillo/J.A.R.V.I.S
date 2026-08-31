@@ -225,10 +225,3 @@
 }
 
 
-/* Unified account onboarding */
-.unified-onboarding-shell{min-height:100vh;padding:22px;display:grid;place-items:center;background:radial-gradient(circle at 50% 0,rgba(49,167,190,.12),transparent 45%)}
-.unified-onboarding-card{width:min(980px,100%);padding:24px;border:1px solid rgba(126,249,255,.16);border-radius:24px;background:rgba(6,16,25,.92);box-shadow:0 24px 80px rgba(0,0,0,.28)}
-.unified-onboarding-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.unified-onboarding-top>div{display:grid;gap:3px}.unified-onboarding-top small{opacity:.62}.unified-onboarding-top button{display:inline-flex;align-items:center;gap:7px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:9px 12px}
-.unified-plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:20px}.unified-plan-grid article{padding:18px;border:1px solid rgba(126,249,255,.14);border-radius:18px;background:rgba(255,255,255,.025)}.unified-plan-grid ul{list-style:none;padding:0;display:grid;gap:8px}.unified-plan-grid li{display:flex;align-items:center;gap:7px;font-size:.88rem}.unified-plan-grid button,.unified-primary{width:100%;min-height:46px;border:1px solid rgba(126,249,255,.26);border-radius:14px;background:rgba(35,165,192,.17);color:inherit;font-weight:800}
-.unified-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:22px 0}.unified-form-grid label{display:grid;gap:7px;font-size:.83rem}.unified-form-grid input,.unified-form-grid select{width:100%;min-height:46px;padding:0 12px;border:1px solid rgba(126,249,255,.16);border-radius:13px;background:rgba(4,13,21,.88);color:inherit}.unified-onboarding-error{padding:10px 12px;border-radius:12px;background:rgba(190,50,50,.13);border:1px solid rgba(255,100,100,.2)}
-@media(max-width:760px){.unified-onboarding-shell{padding:12px}.unified-onboarding-card{padding:17px;border-radius:19px}.unified-plan-grid,.unified-form-grid{grid-template-columns:1fr}.unified-onboarding-top{align-items:flex-start}}

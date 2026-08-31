@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Crown, LogOut, Sparkles, WalletCards } from "lucide-react";
 import { completeOnboarding, getPlans, selectPlan } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
+import "./UnifiedOnboarding.css";
 
 const iconMap = { free: WalletCards, basic: Sparkles, vip: Crown };
 const label = (p) => p === "free" ? "Gratis" : p?.toUpperCase();
@@ -50,16 +51,44 @@ export default function UnifiedOnboarding({ user, onComplete }) {
     finally { setSaving(false); }
   };
 
-  if (!profile?.plan_selected) return <main className="unified-onboarding-shell"><section className="unified-onboarding-card">
-    <div className="unified-onboarding-top"><div><strong>J.A.R.V.I.S.</strong><small>Elegí tu plan personal</small></div><button onClick={() => supabase.auth.signOut()}><LogOut size={17}/> Salir</button></div>
-    <h1>Tu espacio financiero empieza acá</h1><p>Cada cuenta recibe su propio account y workspace aislado.</p>
-    {loading ? <p>Preparando planes...</p> : <div className="unified-plan-grid">{plans.map((item) => { const Icon=iconMap[item.code]||WalletCards; return <article key={item.code}><Icon size={28}/><h2>{item.name}</h2><p>{item.tagline}</p><ul>{item.features.map(f=><li key={f}><Check size={15}/>{f}</li>)}</ul><button disabled={saving} onClick={()=>choosePlan(item.code)}>Elegir {item.name}</button></article>; })}</div>}
-    {error && <p className="unified-onboarding-error">{error}</p>}
-  </section></main>;
+  if (!profile?.plan_selected) return <main className="unified-onboarding-shell">
+    <section className="unified-onboarding-card unified-plan-stage">
+      <div className="unified-onboarding-top">
+        <div>
+          <strong>J.A.R.V.I.S.</strong>
+          <small>Elegí tu plan personal</small>
+        </div>
+        <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> Salir</button>
+      </div>
+      <div className="unified-onboarding-intro">
+        <span className="unified-eyebrow">BIENVENIDO</span>
+        <h1>Tu espacio financiero empieza acá</h1>
+        <p>Cada cuenta recibe su propio espacio aislado. Podés empezar gratis y cambiar de plan cuando corresponda.</p>
+      </div>
+      {loading ? <div className="unified-loading"><div className="unified-spinner"/><span>Preparando tus planes...</span></div> : <div className="unified-plan-grid">{plans.map((item) => {
+        const Icon = iconMap[item.code] || WalletCards;
+        return <article key={item.code} className={`unified-plan-card ${item.code}`}>
+          <div className="unified-plan-icon"><Icon size={26}/></div>
+          <div className="unified-plan-copy"><span>{item.code === "free" ? "EMPEZÁ HOY" : item.code === "basic" ? "MÁS CONTROL" : "EXPERIENCIA COMPLETA"}</span><h2>{item.name}</h2><p>{item.tagline}</p></div>
+          <ul>{item.features.map(f => <li key={f}><Check size={16}/><span>{f}</span></li>)}</ul>
+          <button className="unified-plan-button" disabled={saving} onClick={() => choosePlan(item.code)}>{saving ? "Guardando..." : `Elegir ${item.name}`}</button>
+        </article>;
+      })}</div>}
+      {error && <p className="unified-onboarding-error">{error}</p>}
+    </section>
+  </main>;
 
-  return <main className="unified-onboarding-shell"><form className="unified-onboarding-card" onSubmit={submit}>
-    <div className="unified-onboarding-top"><div><strong>J.A.R.V.I.S.</strong><small>Onboarding {label(plan)}</small></div><button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> Salir</button></div>
-    <h1>Contame cómo funcionan tus finanzas</h1><p>Solo pedimos lo necesario para tu nivel. Después podés afinar todo dentro de JARVIS.</p>
+  return <main className="unified-onboarding-shell">
+    <form className="unified-onboarding-card unified-form-stage" onSubmit={submit}>
+      <div className="unified-onboarding-top">
+        <div><strong>J.A.R.V.I.S.</strong><small>Onboarding {label(plan)}</small></div>
+        <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> Salir</button>
+      </div>
+      <div className="unified-onboarding-intro">
+        <span className="unified-eyebrow">CONFIGURACIÓN INICIAL</span>
+        <h1>Contame cómo funcionan tus finanzas</h1>
+        <p>Solo pedimos lo necesario para tu nivel. Después podés afinar todo dentro de JARVIS.</p>
+      </div>
     <div className="unified-form-grid">
       <label>Tipo de ingreso<select value={form.income_type} onChange={e=>setForm({...form,income_type:e.target.value})}><option value="fixed">Salario fijo</option><option value="hourly">Por hora</option></select></label>
       {form.income_type === "fixed" ? <label>Salario mensual<input required type="number" min="1" value={form.fixed_monthly_salary} onChange={e=>setForm({...form,fixed_monthly_salary:e.target.value})}/></label> : <><label>Tarifa por hora<input required type="number" min="1" value={form.hourly_rate} onChange={e=>setForm({...form,hourly_rate:e.target.value})}/></label><label>Horas por día<input required type="number" min="0.1" max="24" value={form.hours_per_day} onChange={e=>setForm({...form,hours_per_day:e.target.value})}/></label></>}
@@ -69,7 +98,8 @@ export default function UnifiedOnboarding({ user, onComplete }) {
       {plan !== "free" && <><label>Gastos esenciales mensuales<input required type="number" min="0" value={form.essential_monthly_expenses} onChange={e=>setForm({...form,essential_monthly_expenses:e.target.value})}/></label><label>Ahorro líquido<input type="number" min="0" value={form.liquid_savings} onChange={e=>setForm({...form,liquid_savings:e.target.value})}/></label></>}
       {plan === "vip" && <><label>Meta fondo emergencia<input type="number" min="0" value={form.emergency_fund_target} onChange={e=>setForm({...form,emergency_fund_target:e.target.value})}/></label><label>Prioridad<select value={form.strategy_preference} onChange={e=>setForm({...form,strategy_preference:e.target.value})}><option value="balanced">Equilibrado</option><option value="debt">Salir de deudas</option><option value="emergency">Seguridad</option><option value="goals">Metas</option></select></label><label>Mínimo mensual para vos<input type="number" min="0" value={form.discretionary_monthly_minimum} onChange={e=>setForm({...form,discretionary_monthly_minimum:e.target.value})}/></label></>}
     </div>
-    <button className="unified-primary" disabled={saving}>{saving ? "Guardando..." : `Activar ${label(plan)}`}</button>
-    {error && <p className="unified-onboarding-error">{error}</p>}
-  </form></main>;
+      <button className="unified-primary" disabled={saving}>{saving ? "Guardando..." : `Activar ${label(plan)}`}</button>
+      {error && <p className="unified-onboarding-error">{error}</p>}
+    </form>
+  </main>;
 }
