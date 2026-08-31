@@ -5,13 +5,11 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from backend.auth.current_user import get_current_account_id, get_current_user_id, get_current_workspace_id
+from backend.auth.current_user import get_current_account_id, get_current_user, get_current_user_id, get_current_workspace_id
 from backend.auth.saas import require_feature
 from backend.core.database import get_connection
 from backend.finance.service import (
-    add_debt,
     add_salary,
-    apply_extra_payment_to_debt,
     delete_debt,
     get_debts,
     get_expenses,
@@ -27,6 +25,33 @@ from backend.user_product.strategy_engine import (
     build_vip_strategy,
 )
 
+
+
+
+def _legacy_financial_user_id() -> int:
+    """Return a compatibility users.id for legacy financial FK columns.
+
+    Finva ownership is enforced by workspace_id. Some legacy Personal tables still
+    keep user_id foreign keys to users(id), while authentication is bridged through
+    allowed_users. Provision the compatibility row lazily without changing Personal.
+    """
+    allowed_user_id = get_current_user_id()
+    identity = get_current_user()
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM users WHERE allowed_user_id=%s ORDER BY id LIMIT 1",
+            (allowed_user_id,),
+        ).fetchone()
+        if row:
+            return int(row["id"])
+        row = conn.execute(
+            """INSERT INTO users(allowed_user_id,name,country,timezone,created_at)
+               VALUES(%s,%s,'Unknown','UTC',NOW())
+               RETURNING id""",
+            (allowed_user_id, (identity.get("email") or "Finva user").strip()),
+        ).fetchone()
+        conn.commit()
+    return int(row["id"])
 
 def _money(value: Any) -> float:
     return round(float(value or 0), 2)
@@ -99,7 +124,7 @@ def list_expenses():
 
 
 def create_expense_entry(payload):
-    user_id = get_current_user_id()
+    user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
     category = normalize_category(payload.category or "general", "expense")
     expense_type = expense_type_for_category(category)
@@ -119,7 +144,7 @@ def list_overtime():
 
 
 def create_overtime(payload):
-    user_id = get_current_user_id()
+    user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
     amount = round(payload.hours * payload.hourly_rate * payload.multiplier, 2)
     with get_connection() as conn:
@@ -138,41 +163,70 @@ def create_overtime(payload):
 
 
 def create_user_debt(payload):
+    user_id = _legacy_financial_user_id()
+    workspace_id = get_current_workspace_id()
     remaining = float(payload.remaining_amount or 0)
     total = float(payload.total_amount if payload.total_amount is not None else remaining)
     monthly = float(payload.monthly_payment or 0)
     interest = float(payload.interest_rate or 0)
-    return add_debt(
-        name=payload.name.strip(),
-        debt_type="other",
-        total_amount=max(total, remaining),
-        remaining_amount=remaining,
-        monthly_payment=monthly,
-        interest_rate=interest,
-        term_months=None,
-        payment_day=payload.payment_day,
-        start_date=None,
-        first_payment_date=None,
-        installments_paid=0,
-        auto_update_monthly=False if monthly <= 0 else True,
-        interest_method="monthly",
-        fixed_fee_amount=0,
-    )
+    with get_connection() as conn:
+        row = conn.execute(
+            """INSERT INTO debts(
+                   name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,
+                   term_months,payment_day,start_date,first_payment_date,auto_update_monthly,
+                   installments_paid,interest_method,fixed_fee_amount,user_id,workspace_id,created_at,updated_at
+               ) VALUES(%s,'other',%s,%s,%s,%s,NULL,%s,CURRENT_DATE,CURRENT_DATE,%s,0,'monthly',0,%s,%s,NOW(),NOW())
+               RETURNING id,name,total_amount,remaining_amount,monthly_payment,interest_rate,payment_day,created_at""",
+            (payload.name.strip(), max(total, remaining), remaining, monthly, interest, payload.payment_day,
+             monthly > 0, user_id, workspace_id),
+        ).fetchone()
+        conn.commit()
+    return row
 
 
 def pay_user_debt(debt_id: int, amount: float):
-    debts = get_debts()
-    debt = next((row for row in debts if int(row["id"]) == int(debt_id)), None)
-    if not debt:
-        raise HTTPException(status_code=404, detail="Deuda no encontrada.")
-    new_remaining = max(_money(debt.get("remaining_amount")) - float(amount), 0)
-    return apply_extra_payment_to_debt(
-        debt_id=debt_id,
-        amount=float(amount),
-        new_remaining_amount=new_remaining,
-        new_monthly_payment=None,
-        description="Pago registrado desde JARVIS Users",
-    )
+    user_id = _legacy_financial_user_id()
+    workspace_id = get_current_workspace_id()
+    payment = max(float(amount or 0), 0)
+    if payment <= 0:
+        raise HTTPException(status_code=422, detail="El pago debe ser mayor que cero.")
+    with get_connection() as conn:
+        debt = conn.execute(
+            """SELECT id,name,remaining_amount,monthly_payment,installments_paid
+               FROM debts WHERE id=%s AND workspace_id=%s FOR UPDATE""",
+            (debt_id, workspace_id),
+        ).fetchone()
+        if not debt:
+            raise HTTPException(status_code=404, detail="Deuda no encontrada.")
+        previous = _money(debt.get("remaining_amount"))
+        principal = min(payment, previous)
+        remaining = round(max(previous - principal, 0), 2)
+        monthly = _money(debt.get("monthly_payment"))
+        conn.execute(
+            "UPDATE debts SET remaining_amount=%s,updated_at=NOW() WHERE id=%s AND workspace_id=%s",
+            (remaining, debt_id, workspace_id),
+        )
+        payment_row = conn.execute(
+            """INSERT INTO debt_payments(
+                   user_id,workspace_id,debt_id,payment_type,amount,previous_remaining_amount,new_remaining_amount,
+                   previous_monthly_payment,new_monthly_payment,principal_amount,interest_amount,fee_amount,
+                   extra_principal_amount,description,payment_date,installment_number,source,created_at
+               ) VALUES(%s,%s,%s,'extra_payment',%s,%s,%s,%s,%s,%s,0,0,%s,%s,CURRENT_DATE,%s,'finva',NOW())
+               RETURNING id""",
+            (user_id, workspace_id, debt_id, principal, previous, remaining, monthly, monthly, principal, principal,
+             "Pago registrado desde Finva", int(debt.get("installments_paid") or 0)),
+        ).fetchone()
+        conn.execute(
+            """INSERT INTO transactions(
+                   user_id,workspace_id,transaction_date,description,amount,transaction_type,category,account,source,notes,created_at
+               ) VALUES(%s,%s,CURRENT_DATE,%s,%s,'debt_payment',%s,NULL,'finva',%s,NOW())""",
+            (user_id, workspace_id, f"Pago {debt['name']}", principal, debt['name'], f"debt_id:{debt_id}"),
+        )
+        conn.commit()
+    return {
+        "status": "ok", "payment_id": payment_row["id"], "debt_id": debt_id,
+        "payment_amount": principal, "new_remaining_amount": remaining,
+    }
 
 
 
@@ -212,7 +266,7 @@ def list_user_goals():
 
 
 def create_user_goal(payload):
-    user_id = get_current_user_id()
+    user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         row = conn.execute(
@@ -251,7 +305,7 @@ def list_user_transactions():
 
 
 def create_user_transaction(payload):
-    user_id = get_current_user_id()
+    user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
     category = normalize_category(payload.category, payload.transaction_type)
     with get_connection() as conn:
