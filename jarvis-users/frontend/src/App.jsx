@@ -23,6 +23,10 @@ export default function App() {
   const [ownerRouteError, setOwnerRouteError] = useState("");
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [page]);
+
+  useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthReady(true); });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => { setSession(nextSession); setAuthReady(true); setUser(null); });
     return () => subscription.unsubscribe();
