@@ -211,7 +211,8 @@ def update_financial_situation(payload):
                  pay_frequency=EXCLUDED.pay_frequency,payday_note=EXCLUDED.payday_note,
                  essential_monthly_expenses=EXCLUDED.essential_monthly_expenses,liquid_savings=EXCLUDED.liquid_savings,
                  emergency_fund_target=EXCLUDED.emergency_fund_target,strategy_preference=EXCLUDED.strategy_preference,
-                 discretionary_monthly_minimum=EXCLUDED.discretionary_monthly_minimum,updated_at=NOW()""",
+                 discretionary_monthly_minimum=EXCLUDED.discretionary_monthly_minimum,updated_at=NOW()
+               RETURNING account_id""",
             (
                 account_id, workspace_id, payload.income_type,
                 payload.fixed_monthly_salary if payload.income_type == "fixed" else None,
