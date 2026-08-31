@@ -36,6 +36,7 @@ import Wealth from "./pages/Wealth";
 import Businesses from "./pages/Businesses";
 import Login from "./pages/Login";
 import UserManagement from "./pages/UserManagement";
+import UnifiedOnboarding from "./pages/UnifiedOnboarding";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
@@ -279,18 +280,23 @@ export default function App() {
     if (!session) return;
 
     try {
-      const [statusData, dashboardData, meData, usageData, strategyData, profileData] = await Promise.all([
+      const meData = await getMe();
+      setCurrentUser(meData);
+
+      // New commercial users finish plan selection/onboarding before Personal modules load.
+      if (meData?.role !== "owner" && (!meData?.plan_selected || !meData?.onboarding_completed)) {
+        return;
+      }
+
+      const [statusData, dashboardData, usageData, strategyData, profileData] = await Promise.all([
         getStatus(),
         getFinanceDashboard(),
-        getMe(),
         getJarvisUsageToday(),
         getJarvisPremiumStrategySummary().catch(() => null),
         getProfilePreferences().catch(() => null),
       ]);
-
       setStatus(statusData);
       setFinanceDashboard(dashboardData);
-      setCurrentUser(meData);
       setAiUsage(usageData);
       setStrategySummary(strategyData);
       setProfilePreferences(profileData?.value || profileData || null);
@@ -541,6 +547,14 @@ export default function App() {
 
   if (!session) {
     return <Login />;
+  }
+
+  if (!currentUser) {
+    return <div className="jarvis-app"><main className="main-shell home-mode"><section className="jarvis-home chat-home idle"><h1>J.A.R.V.I.S.</h1><p className="home-subtitle">Preparando tu espacio...</p></section></main></div>;
+  }
+
+  if (currentUser.role !== "owner" && (!currentUser.plan_selected || !currentUser.onboarding_completed)) {
+    return <UnifiedOnboarding user={currentUser} onComplete={(profile) => { setCurrentUser(profile); refreshAppData(); }} />;
   }
 
   const renderPage = () => {

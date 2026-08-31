@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 
 from backend.core.database import get_connection
 from backend.auth.workspace_context import resolve_personal_workspace_context, sync_account_auth_identity
+from backend.auth.saas import enrich_identity
 
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -227,11 +228,34 @@ def authenticate_access_token(access_token: str) -> dict[str, Any]:
     supabase_user = verify_supabase_token(access_token)
     app_user = get_allowed_user_by_email(supabase_user["email"])
 
+    # Unified JARVIS: a valid Google/Supabase identity gets its own account + Personal workspace.
+    # allowed_users remains only as the temporary legacy bridge required by older Personal tables.
     if not app_user:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Este correo no está autorizado para usar J.A.R.V.I.S.",
-        )
+        with get_connection() as conn:
+            legacy = conn.execute(
+                """INSERT INTO allowed_users(email,role,status,supabase_user_id,created_at,last_login_at)
+                   VALUES(%s,'user','active',%s,NOW(),NOW())""",
+                (supabase_user["email"], supabase_user["supabase_user_id"]),
+            ).fetchone()
+            legacy_id = int(legacy["id"])
+            account = conn.execute(
+                """INSERT INTO accounts(legacy_allowed_user_id,supabase_user_id,primary_email,display_name,role,status,created_at,updated_at,last_login_at)
+                   VALUES(%s,%s,%s,%s,'user','active',NOW(),NOW(),NOW())""",
+                (legacy_id, supabase_user["supabase_user_id"], supabase_user["email"], (supabase_user.get("raw") or {}).get("user_metadata", {}).get("full_name")),
+            ).fetchone()
+            account_id = str(account["id"])
+            workspace = conn.execute(
+                """INSERT INTO workspaces(workspace_key,owner_account_id,name,workspace_type,status,created_at,updated_at)
+                   VALUES(%s,%s,%s,'personal','active',NOW(),NOW())""",
+                (f"personal:{account_id}", account_id, f"{supabase_user['email']} Personal"),
+            ).fetchone()
+            conn.execute(
+                """INSERT INTO workspace_members(workspace_id,account_id,member_role,status,created_at,updated_at)
+                   VALUES(%s,%s,'owner','active',NOW(),NOW())""",
+                (workspace["id"], account_id),
+            )
+            conn.commit()
+        app_user = get_allowed_user_by_email(supabase_user["email"])
 
     if app_user["status"] != "active":
         raise HTTPException(
@@ -261,11 +285,11 @@ def authenticate_access_token(access_token: str) -> dict[str, Any]:
         workspace_context = resolve_personal_workspace_context(conn, int(app_user["id"]))
         conn.commit()
 
-    return {
+    return enrich_identity({
         "id": app_user["id"],
         "email": app_user["email"],
         "role": effective_role,
         "status": app_user["status"],
         "supabase_user_id": supabase_user["supabase_user_id"],
         **workspace_context,
-    }
+    })

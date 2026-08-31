@@ -223,3 +223,8 @@ export const linkOwnerToUsers = () => request("/users-admin/owner-link", { metho
 export const getManagedUsers = (search = "") => request(`/users-admin/users${search ? `?search=${encodeURIComponent(search)}` : ""}`);
 export const grantCourtesySubscription = (userId, payload) => jsonRequest(`/users-admin/users/${userId}/courtesy`, "POST", payload);
 export const revokeCourtesySubscription = (userId) => request(`/users-admin/users/${userId}/courtesy`, { method: "DELETE" });
+
+export const getPlans = () => request("/auth/plans");
+export const selectPlan = (plan) => jsonRequest("/auth/plan", "POST", { plan });
+export const getOnboarding = () => request("/auth/onboarding");
+export const completeOnboarding = (payload) => jsonRequest("/auth/onboarding", "POST", payload);
