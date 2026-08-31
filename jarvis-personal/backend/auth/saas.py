@@ -140,7 +140,19 @@ def complete_onboarding(payload):
              (payload.payday_note or '').strip() or None, payload.essential_monthly_expenses, payload.liquid_savings,
              payload.emergency_fund_target, payload.strategy_preference, payload.discretionary_monthly_minimum),
         )
-        conn.execute("UPDATE accounts SET onboarding_completed=TRUE,onboarding_level=%s,plan_selected=TRUE,updated_at=NOW() WHERE id=%s", (subscription_plan, account_id))
+        # Basic/VIP upgrades are intentionally pending until their required
+        # onboarding is completed. Reaching this point means the profile was
+        # validated and persisted, so activate the selected self-service plan.
+        conn.execute(
+            """UPDATE account_subscriptions
+               SET status='active', started_at=COALESCE(started_at,NOW()), updated_at=NOW()
+               WHERE account_id=%s AND access_source='self_service'""",
+            (account_id,),
+        )
+        conn.execute(
+            "UPDATE accounts SET onboarding_completed=TRUE,onboarding_level=%s,plan_selected=TRUE,updated_at=NOW() WHERE id=%s",
+            (subscription_plan, account_id),
+        )
         conn.commit()
     return {"status": "ok", "profile": enrich_identity(get_current_user())}
 
