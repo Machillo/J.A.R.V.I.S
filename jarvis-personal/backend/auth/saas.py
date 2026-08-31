@@ -90,9 +90,12 @@ def select_plan(plan_code: str):
                VALUES(%s,%s,%s,'self_service',NOW(),NULL,NULL,NULL,NULL,NOW(),NOW())
                ON CONFLICT(account_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status=EXCLUDED.status,
                    access_source='self_service',started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()""",
-            (account_id, plan["id"], "active" if plan_code == "free" else "pending"),
+            (account_id, plan["id"], "active" if (plan_code == "free" or not needs) else "pending"),
         )
-        conn.execute("UPDATE accounts SET plan_selected=TRUE,onboarding_completed=%s,updated_at=NOW() WHERE id=%s", (not needs, account_id))
+        conn.execute(
+            "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=%s,updated_at=NOW() WHERE id=%s",
+            (not needs, account_id),
+        )
         conn.commit()
     return {"status": "ok", "profile": enrich_identity(get_current_user())}
 
