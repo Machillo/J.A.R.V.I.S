@@ -15,9 +15,13 @@
   --danger: #ff8392;
   --gold: #e6c768;
   width: 100%;
+  height: 100dvh;
   min-height: 100dvh;
   overflow-x: hidden;
-  overflow-y: visible;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
   color: var(--text);
   background:
     radial-gradient(circle at 50% -10%, rgba(54, 173, 214, .16), transparent 34rem),
@@ -36,7 +40,7 @@
 .users-app .app,
 .users-app .mobile-app-shell {
   width: min(100%, 520px);
-  min-height: 100dvh;
+  min-height: 100%;
   margin: 0 auto;
   position: relative;
   overflow: visible;
@@ -51,7 +55,7 @@
 .users-app .mobile-content {
   width: 100%;
   max-width: none;
-  min-height: 100dvh;
+  min-height: 100%;
   margin: 0;
   padding: 0 16px calc(108px + env(safe-area-inset-bottom));
   overflow: visible;

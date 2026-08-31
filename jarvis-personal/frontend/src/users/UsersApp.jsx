@@ -16,7 +16,9 @@ export default function UsersApp({ user, onUserChange }) {
   const plan = user?.subscription?.plan || "free";
 
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const scroller = document.querySelector(".users-app");
+    if (scroller) scroller.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    else window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [page]);
 
   const pages = {
