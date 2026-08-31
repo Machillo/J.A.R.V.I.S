@@ -29,6 +29,7 @@ from backend.auth.service import authenticate_access_token
 from backend.auth.owner_bridge import authenticate_owner_bridge_token
 from backend.users_admin.routes import router as users_admin_router
 from backend.auth.owner_bridge_routes import router as owner_bridge_router
+from backend.user_product.routes import router as user_product_router
 
 app = FastAPI(title="Jarvis Core")
 
@@ -153,6 +154,7 @@ app.include_router(investment_center_router)
 app.include_router(business_center_router)
 app.include_router(users_admin_router)
 app.include_router(owner_bridge_router)
+app.include_router(user_product_router)
 
 class AskRequest(BaseModel):
     text: str

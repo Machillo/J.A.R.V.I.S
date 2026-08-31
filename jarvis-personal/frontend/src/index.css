@@ -7800,3 +7800,28 @@ button {
 
 /* Wealth Center */
 .wealth-hub-page{max-width:780px;margin:0 auto}.wealth-hub-intro{padding:8px 4px 18px}.wealth-hub-intro h2{margin:4px 0 6px}.wealth-hub-intro p{margin:0;opacity:.7}.wealth-options-group{overflow:hidden}.business-actions{display:flex;gap:10px;flex-wrap:wrap}.business-form{display:grid;gap:12px}.business-form input,.business-form select{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid rgba(148,163,184,.2);background:rgba(10,14,22,.65);color:inherit}.business-form label{display:grid;gap:6px;font-size:.82rem;opacity:.86}.business-list{display:grid;gap:10px;margin-top:14px}.business-card{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(15,23,42,.28)}.business-card>div{display:flex;flex-direction:column;gap:4px}.business-card>div:last-child{text-align:right}.business-card small,.business-card span{opacity:.7;font-size:.78rem}@media(max-width:620px){.business-card{align-items:flex-start;flex-direction:column}.business-card>div:last-child{text-align:left}}
+
+
+/* Unified JARVIS router */
+.unified-router-boot {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background: #050b10;
+  color: #eaf8ff;
+}
+.unified-router-boot strong { letter-spacing: .18em; font-size: 1.15rem; }
+.unified-router-boot span { color: #7894a1; }
+.unified-router-boot button {
+  margin-top: 10px;
+  min-height: 44px;
+  border: 1px solid rgba(93,214,255,.22);
+  border-radius: 12px;
+  background: #0c202a;
+  color: #eaf8ff;
+  padding: 0 16px;
+}
