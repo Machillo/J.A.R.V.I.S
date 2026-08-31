@@ -32,7 +32,7 @@
   outline-offset: 2px;
 }
 
-/* JARVIS Users — mobile-first product shell */
+/* Finva — mobile-first product shell */
 .users-app .app,
 .users-app .mobile-app-shell {
   width: min(100%, 520px);

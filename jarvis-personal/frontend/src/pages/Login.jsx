@@ -46,8 +46,8 @@ export default function Login() {
           <div className="auth-orb"><BrainCircuit size={58} /></div>
         </div>
 
-        <p className="login-kicker">JARVIS IDENTITY</p>
-        <h1 className="auth-title">J.A.R.V.I.S.</h1>
+        <p className="login-kicker">FINVA ID</p>
+        <h1 className="auth-title">FINVA</h1>
         <p className="login-subtitle">
           Una cuenta. Tus workspaces. Tus finanzas aisladas y conectadas cuando vos lo decidís.
         </p>

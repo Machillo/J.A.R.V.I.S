@@ -48,7 +48,7 @@ export default function AccountSecurity({ user }) {
         <div>
           <p className="eyebrow">Seguridad</p>
           <h2>Formas de entrar</h2>
-          <span>Todas apuntan a la misma identidad JARVIS; no crean otra cuenta cuando se vinculan desde aquí.</span>
+          <span>Todas apuntan a la misma identidad Finva; no crean otra cuenta cuando se vinculan desde aquí.</span>
         </div>
       </div>
 
@@ -68,13 +68,6 @@ export default function AccountSecurity({ user }) {
           <button type="button" onClick={registerPasskey} disabled={Boolean(busy)}>{busy === "passkey" ? "Registrando..." : passkeys.length ? "Agregar otra" : "Registrar"}</button>
         </article>
       </div>
-
-      {user?.role === "owner" && (
-        <div className={`owner-bridge-card ${user?.personal_bridge?.linked ? "is-linked" : ""}`}>
-          <div><strong>JARVIS Personal</strong><small>{user?.personal_bridge?.linked ? "Identidad privada conectada" : "Pendiente de vincular con tu identidad Personal"}</small></div>
-          <span>{user?.personal_bridge?.linked ? "Conectado" : "Pendiente"}</span>
-        </div>
-      )}
 
       <button className="security-refresh" type="button" onClick={reload}><RefreshCw size={15} /> Actualizar métodos</button>
       {message && <p className="success-banner">{message}</p>}

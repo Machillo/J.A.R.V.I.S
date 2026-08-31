@@ -9,7 +9,7 @@ import { supabase } from "./lib/supabase";
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
     <main className="unified-router-boot">
-      <strong>J.A.R.V.I.S.</strong>
+      <strong>FINVA</strong>
       <span>{message}</span>
     </main>
   );
@@ -57,6 +57,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const isPersonal = ownerBridgeMode || currentUser?.role === "owner" || currentUser?.role === "admin";
+    document.title = isPersonal ? "J.A.R.V.I.S." : "Finva";
+  }, [ownerBridgeMode, currentUser]);
+
+  useEffect(() => {
     if (ownerBridgeMode || !session) return;
 
     let cancelled = false;
@@ -65,7 +70,7 @@ export default function App() {
         if (!cancelled) setCurrentUser(profile);
       })
       .catch((error) => {
-        if (!cancelled) setIdentityError(error?.message || "No pudimos resolver tu identidad JARVIS.");
+        if (!cancelled) setIdentityError(error?.message || "No pudimos resolver tu cuenta.");
       });
 
     return () => { cancelled = true; };

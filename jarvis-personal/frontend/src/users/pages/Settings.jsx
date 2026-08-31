@@ -54,7 +54,7 @@ export default function Settings({ user, onUserChange }) {
     <section className="mobile-page settings-page">
       <div className="mobile-page-heading">
         <p className="eyebrow">Cuenta</p>
-        <h1>Mi JARVIS</h1>
+        <h1>Mi Finva</h1>
         <span>Administrá tu perfil y el plan que querés probar.</span>
       </div>
 
@@ -81,7 +81,7 @@ export default function Settings({ user, onUserChange }) {
         </div>
         <div className="current-plan-copy">
           <strong>{currentPlanInfo?.name || currentPlan.toUpperCase()}</strong>
-          <span>{currentPlanInfo?.tagline || "Plan personal JARVIS"}</span>
+          <span>{currentPlanInfo?.tagline || "Plan personal Finva"}</span>
         </div>
         <span className="plan-status-pill">Actual</span>
       </article>

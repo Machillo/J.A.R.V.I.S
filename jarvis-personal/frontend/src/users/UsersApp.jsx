@@ -36,7 +36,7 @@ export default function UsersApp({ user, onUserChange }) {
         <main className="content mobile-content">
           <header className="mobile-app-header">
             <div>
-              <strong>J.A.R.V.I.S.</strong>
+              <strong>FINVA</strong>
               <small>{plan === "free" ? "Gratis" : plan.toUpperCase()}</small>
             </div>
             <button className="profile-chip" type="button" onClick={() => setPage("settings")}>

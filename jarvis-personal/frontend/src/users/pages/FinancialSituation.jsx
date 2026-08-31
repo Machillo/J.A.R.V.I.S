@@ -121,7 +121,7 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
       <div className="mobile-page-heading">
         <p className="eyebrow">Perfil financiero · {planName}</p>
         <h1>Mi situación financiera</h1>
-        <span>Actualizá lo que JARVIS sabe de vos. Cada plan usa un nivel distinto de información.</span>
+        <span>Actualizá lo que Finva sabe de vos. Cada plan usa un nivel distinto de información.</span>
       </div>
 
       <article className="profile-completeness-card">
@@ -149,7 +149,7 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
 
         {plan !== "free" && <SituationCard icon={WalletCards} title="Gastos esenciales" summary={`${money(form.essential_monthly_expenses)} / mes`} editing={editing === "expenses"} onEdit={() => setEditing(editing === "expenses" ? "" : "expenses")} badge="Basic+">
           <label className="situation-single-field"><span>Estimado mensual</span><input type="number" min="0" value={form.essential_monthly_expenses} onChange={(e) => update("essential_monthly_expenses", e.target.value)} /></label>
-          <p className="situation-help">JARVIS usa este dato para no recomendar comprometer dinero que necesitás para vivir.</p>
+          <p className="situation-help">Finva usa este dato para no recomendar comprometer dinero que necesitás para vivir.</p>
         </SituationCard>}
 
         {plan !== "free" && <SituationCard icon={CreditCard} title="Deudas" summary={`${data.debts?.count || 0} deuda(s) · ${money(data.debts?.balance)}`} actionLabel="Administrar" onAction={() => onNavigate?.("debts")} badge="Basic+" />}
@@ -172,7 +172,7 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
       </div>
 
       {plan === "free" && <article className="tier-explanation-card"><ShieldCheck size={20}/><div><strong>Vista Gratis</strong><p>Mostramos solamente los datos que este plan necesita. Si subís a Basic, aparecerán gastos esenciales, deudas y ahorro sin mezclar funciones VIP.</p></div></article>}
-      {plan === "basic" && <article className="tier-explanation-card"><Sparkles size={20}/><div><strong>Vista Basic</strong><p>JARVIS usa ingresos, gastos esenciales, deudas y ahorro para construir recomendaciones determinísticas. Las preferencias avanzadas del Director quedan reservadas para VIP.</p></div></article>}
+      {plan === "basic" && <article className="tier-explanation-card"><Sparkles size={20}/><div><strong>Vista Basic</strong><p>Finva usa ingresos, gastos esenciales, deudas y ahorro para construir recomendaciones determinísticas. Las preferencias avanzadas del Director quedan reservadas para VIP.</p></div></article>}
       {plan === "vip" && <article className="tier-explanation-card vip"><ShieldCheck size={20}/><div><strong>Vista VIP</strong><p>Además de la base Basic, el perfil incorpora metas y preferencias que alimentarán la dirección financiera dinámica y sus futuros escenarios.</p></div></article>}
 
       {editing && <button type="button" className="situation-save-button" disabled={saving} onClick={save}><Save size={18}/>{saving ? "Guardando..." : "Guardar cambios"}</button>}

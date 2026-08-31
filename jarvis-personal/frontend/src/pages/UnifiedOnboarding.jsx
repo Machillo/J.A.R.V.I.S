@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Check, Crown, LogOut, Sparkles, WalletCards } from "lucide-react";
 import { completeOnboarding, getPlans, selectPlan } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
-import "./UnifiedOnboarding.css";
 
 const iconMap = { free: WalletCards, basic: Sparkles, vip: Crown };
 const label = (p) => p === "free" ? "Gratis" : p?.toUpperCase();
@@ -55,7 +54,7 @@ export default function UnifiedOnboarding({ user, onComplete }) {
     <section className="unified-onboarding-card unified-plan-stage">
       <div className="unified-onboarding-top">
         <div>
-          <strong>J.A.R.V.I.S.</strong>
+          <strong>FINVA</strong>
           <small>Elegí tu plan personal</small>
         </div>
         <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> Salir</button>
@@ -81,13 +80,13 @@ export default function UnifiedOnboarding({ user, onComplete }) {
   return <main className="unified-onboarding-shell">
     <form className="unified-onboarding-card unified-form-stage" onSubmit={submit}>
       <div className="unified-onboarding-top">
-        <div><strong>J.A.R.V.I.S.</strong><small>Onboarding {label(plan)}</small></div>
+        <div><strong>FINVA</strong><small>Onboarding {label(plan)}</small></div>
         <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> Salir</button>
       </div>
       <div className="unified-onboarding-intro">
         <span className="unified-eyebrow">CONFIGURACIÓN INICIAL</span>
         <h1>Contame cómo funcionan tus finanzas</h1>
-        <p>Solo pedimos lo necesario para tu nivel. Después podés afinar todo dentro de JARVIS.</p>
+        <p>Solo pedimos lo necesario para tu nivel. Después podés afinar todo dentro de Finva.</p>
       </div>
     <div className="unified-form-grid">
       <label>Tipo de ingreso<select value={form.income_type} onChange={e=>setForm({...form,income_type:e.target.value})}><option value="fixed">Salario fijo</option><option value="hourly">Por hora</option></select></label>
