@@ -13,7 +13,7 @@ async function request(path, options = {}) {
   const headers = { ...(await authHeaders()), ...(options.headers || {}) };
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.detail || payload?.error || "Error de API");
+  if (!response.ok) throw new Error(`Error ${response.status} en ${path}: ${payload?.detail || payload?.error || "Error de API"}`);
   return payload;
 }
 
@@ -40,10 +40,9 @@ export const createExpense = (payload) => json("/user-product/finance/expenses",
 export const getOvertime = () => request("/user-product/finance/overtime");
 export const createOvertime = (payload) => json("/user-product/finance/overtime", "POST", payload);
 
-export const getDebts = () => request("/finance/debts");
+export const getDebts = () => request("/user-product/finance/debts");
 export const createDebt = (payload) => json("/user-product/finance/debts", "POST", payload);
-export const updateDebt = (id, payload) => json(`/finance/debts/${id}`, "PUT", payload);
-export const deleteDebt = (id) => request(`/finance/debts/${id}`, { method: "DELETE" });
+export const deleteDebt = (id) => request(`/user-product/finance/debts/${id}`, { method: "DELETE" });
 export const payDebt = (id, payload) => json(`/user-product/finance/debts/${id}/payments`, "POST", payload);
 
 export const getStrategyBasic = () => request("/user-product/finance/strategy-basic");
@@ -51,12 +50,10 @@ export const simulateStrategyBasic = (extra_monthly) => json("/user-product/fina
 export const getStrategyVip = () => request("/user-product/finance/strategy-vip");
 export const simulateStrategyVip = (payload) => json("/user-product/finance/strategy-vip/simulate", "POST", payload);
 
-export const getGoals = () => request("/goals");
-export const createGoal = (payload) => json("/goals", "POST", payload);
-export const updateGoal = (id, payload) => json(`/goals/${id}`, "PUT", payload);
-export const deleteGoal = (id) => request(`/goals/${id}`, { method: "DELETE" });
+export const getGoals = () => request("/user-product/goals");
+export const createGoal = (payload) => json("/user-product/goals", "POST", payload);
+export const deleteGoal = (id) => request(`/user-product/goals/${id}`, { method: "DELETE" });
 
-export const getTransactions = () => request("/transactions");
-export const createTransaction = (payload) => json("/transactions", "POST", payload);
-export const updateTransaction = (id, payload) => json(`/transactions/${id}`, "PUT", payload);
-export const deleteTransaction = (id) => request(`/transactions/${id}`, { method: "DELETE" });
+export const getTransactions = () => request("/user-product/transactions");
+export const createTransaction = (payload) => json("/user-product/transactions", "POST", payload);
+export const deleteTransaction = (id) => request(`/user-product/transactions/${id}`, { method: "DELETE" });

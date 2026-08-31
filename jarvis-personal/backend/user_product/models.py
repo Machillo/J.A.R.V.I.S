@@ -68,3 +68,20 @@ class FinancialSituationRequest(BaseModel):
         if self.income_type == "hourly" and (self.hourly_rate is None or self.hours_per_day is None):
             raise ValueError("Indicá tarifa por hora y horas por día.")
         return self
+
+
+class GoalCreateRequest(BaseModel):
+    name: str
+    target_amount: float = Field(gt=0)
+    current_amount: float = Field(default=0, ge=0)
+    target_date: str | None = None
+    priority: str = "medium"
+
+
+class TransactionCreateRequest(BaseModel):
+    transaction_date: str
+    description: str
+    amount: float = Field(gt=0)
+    transaction_type: Literal["expense", "income"]
+    category: str = "general"
+    notes: str = ""

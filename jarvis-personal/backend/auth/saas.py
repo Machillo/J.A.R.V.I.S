@@ -156,7 +156,8 @@ def require_feature(feature_code: str):
                JOIN plan_features pf ON pf.plan_id=s.plan_id AND pf.enabled=TRUE
                JOIN features f ON f.id=pf.feature_id
                WHERE s.account_id=%s AND f.code=%s
-                 AND (s.access_source<>'courtesy' OR (s.status='active' AND s.expires_at IS NOT NULL AND s.expires_at>NOW()))""",
+                 AND s.status='active'
+                 AND (s.access_source<>'courtesy' OR (s.expires_at IS NOT NULL AND s.expires_at>NOW()))""",
             (account_id, feature_code),
         ).fetchone()
     if not row:

@@ -10,7 +10,6 @@ from backend.auth.saas import require_feature
 from backend.core.database import get_connection
 from backend.finance.service import (
     add_debt,
-    add_expense,
     add_salary,
     apply_extra_payment_to_debt,
     delete_debt,
@@ -19,6 +18,7 @@ from backend.finance.service import (
     get_payroll_events,
     get_salaries,
 )
+from backend.finance.category_catalog import normalize_category, expense_type_for_category
 from backend.user_product.strategy_engine import (
     build_basic_strategy,
     build_paycheck_plan,
@@ -99,8 +99,19 @@ def list_expenses():
 
 
 def create_expense_entry(payload):
-    result = add_expense(payload.category or "General", payload.amount, "variable", payload.description or "")
-    return {**result, "entry_date": payload.entry_date}
+    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
+    category = normalize_category(payload.category or "general", "expense")
+    expense_type = expense_type_for_category(category)
+    with get_connection() as conn:
+        row = conn.execute(
+            """INSERT INTO expenses(category,expense_type,description,amount,user_id,workspace_id,created_at)
+               VALUES(%s,%s,%s,%s,%s,%s,NOW())
+               RETURNING id,category,expense_type,description,amount,user_id,workspace_id,created_at""",
+            (category, expense_type, payload.description or "", payload.amount, user_id, workspace_id),
+        ).fetchone()
+        conn.commit()
+    return {**row, "entry_date": payload.entry_date or str(row.get("created_at") or "")[:10]}
 
 
 def list_overtime():
@@ -163,6 +174,109 @@ def pay_user_debt(debt_id: int, amount: float):
         description="Pago registrado desde JARVIS Users",
     )
 
+
+
+def list_user_debts():
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id,name,total_amount,remaining_amount,monthly_payment,interest_rate,payment_day,created_at
+               FROM debts WHERE workspace_id=%s ORDER BY id DESC""",
+            (workspace_id,),
+        ).fetchall()
+    return rows
+
+
+def delete_user_debt(debt_id: int):
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute(
+            "DELETE FROM debts WHERE id=%s AND workspace_id=%s RETURNING id",
+            (debt_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Deuda no encontrada.")
+        conn.commit()
+    return {"status": "ok", "id": debt_id}
+
+
+def list_user_goals():
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id,name,target_amount,current_amount,target_date,priority,status,created_at
+               FROM financial_goals WHERE workspace_id=%s ORDER BY id DESC""",
+            (workspace_id,),
+        ).fetchall()
+    return rows
+
+
+def create_user_goal(payload):
+    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute(
+            """INSERT INTO financial_goals(name,target_amount,current_amount,target_date,priority,status,user_id,workspace_id,created_at)
+               VALUES(%s,%s,%s,%s,%s,'active',%s,%s,NOW())
+               RETURNING id,name,target_amount,current_amount,target_date,priority,status,created_at""",
+            (payload.name.strip(), payload.target_amount, payload.current_amount, payload.target_date,
+             payload.priority, user_id, workspace_id),
+        ).fetchone()
+        conn.commit()
+    return row
+
+
+def delete_user_goal(goal_id: int):
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute(
+            "DELETE FROM financial_goals WHERE id=%s AND workspace_id=%s RETURNING id",
+            (goal_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Meta no encontrada.")
+        conn.commit()
+    return {"status": "ok", "id": goal_id}
+
+
+def list_user_transactions():
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id,transaction_date,description,amount,transaction_type,category,notes,created_at
+               FROM transactions WHERE workspace_id=%s ORDER BY transaction_date DESC,id DESC""",
+            (workspace_id,),
+        ).fetchall()
+    return rows
+
+
+def create_user_transaction(payload):
+    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
+    category = normalize_category(payload.category, payload.transaction_type)
+    with get_connection() as conn:
+        row = conn.execute(
+            """INSERT INTO transactions(transaction_date,description,amount,transaction_type,category,account,source,notes,user_id,workspace_id,created_at)
+               VALUES(%s,%s,%s,%s,%s,'','finva',%s,%s,%s,NOW())
+               RETURNING id,transaction_date,description,amount,transaction_type,category,notes,created_at""",
+            (payload.transaction_date, payload.description.strip(), payload.amount, payload.transaction_type,
+             category, payload.notes or "", user_id, workspace_id),
+        ).fetchone()
+        conn.commit()
+    return row
+
+
+def delete_user_transaction(transaction_id: int):
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute(
+            "DELETE FROM transactions WHERE id=%s AND workspace_id=%s RETURNING id",
+            (transaction_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transacción no encontrada.")
+        conn.commit()
+    return {"status": "ok", "id": transaction_id}
 
 def get_financial_situation():
     account_id = get_current_account_id()
