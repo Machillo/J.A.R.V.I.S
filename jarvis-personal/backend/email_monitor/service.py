@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from backend.auth.current_user import get_current_user, get_current_user_id, get_current_workspace_id, require_roles
+from backend.auth.current_user import get_current_user, get_current_user_id, require_roles
 from backend.core.database import get_connection
 from backend.finance.category_catalog import normalize_category
 from backend.email_monitor.parser import (
@@ -515,7 +515,8 @@ def _require_owner_user() -> dict[str, Any]:
 def get_email_monitor_status() -> dict[str, Any]:
     user = _require_owner_user()
     user_id = int(user["id"])
-    workspace_id = str(user.get("workspace_id") or get_current_workspace_id())
+    with get_connection() as conn:
+        workspace_id = _workspace_id_for_user(conn, user_id)
 
     with get_connection() as conn:
         ensure_email_tables(conn)
@@ -1412,7 +1413,8 @@ def scan_email_text(
 def list_email_candidates(status_filter: str | None = None, limit: int = 250) -> dict[str, Any]:
     _require_owner_user()
     user_id = get_current_user_id()
-    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        workspace_id = _workspace_id_for_user(conn, user_id)
 
     safe_limit = max(1, min(int(limit or 250), 500))
     where = "WHERE c.workspace_id = %s"
@@ -1468,7 +1470,8 @@ def list_email_candidates(status_filter: str | None = None, limit: int = 250) ->
 def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
     _require_owner_user()
     user_id = get_current_user_id()
-    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        workspace_id = _workspace_id_for_user(conn, user_id)
     decision_clean = (decision or "").lower().strip()
 
     with get_connection() as conn:
@@ -1548,7 +1551,8 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
     """
     _require_owner_user()
     user_id = get_current_user_id()
-    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        workspace_id = _workspace_id_for_user(conn, user_id)
     decision_clean = (decision or "").lower().strip()
     if decision_clean not in {"confirm", "confirmar", "guardar", "save", "reject", "rechazar", "rejected"}:
         raise HTTPException(status_code=400, detail="Decisión inválida.")
