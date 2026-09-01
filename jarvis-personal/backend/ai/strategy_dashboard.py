@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from backend.auth.current_user import get_current_user, get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
-from backend.finance.strategic_engine import get_financial_engine_report, calculate_emergency_fund
+from backend.finance.emergency_fund import get_salvavidas_state
+from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.ai.openai_client import get_active_premium_guides
 
 
@@ -43,11 +44,10 @@ def _normalize_payment(value: Any, remaining_amount: Any = 0) -> float:
 
 
 def _build_allocation_breakdown(allocation: dict[str, Any], base_amount: float) -> dict[str, Any]:
-    """Convierte porcentajes de estrategia en montos reales del ciclo actual.
+    """Convierte porcentajes de estrategia en montos reales del sobrante del ciclo.
 
-    Fuente de verdad: ingreso neto del ciclo actual. No descuenta aquí gastos o
-    deudas porque este bloque representa la distribución directiva del ingreso,
-    exactamente como se muestra en Estrategia Premium.
+    La base que recibe esta función ya excluyó gastos y obligaciones. Strategy
+    nunca distribuye el ingreso bruto: únicamente reparte el sobrante real.
     """
     base = max(_f(base_amount), 0.0)
     items: list[dict[str, Any]] = []
@@ -177,30 +177,6 @@ def _safe_cycle_report() -> dict[str, Any]:
         return {}
 
 
-def _safe_emergency_report() -> dict[str, Any]:
-    try:
-        return calculate_emergency_fund() or {}
-    except Exception:
-        return {}
-
-
-def _fetch_savings_total(workspace_id: str) -> float:
-    """Dinero reservado explícitamente como ahorro.
-
-    No usamos el balance completo de la cuenta como fondo de emergencia porque
-    ese dinero puede estar comprometido con tarjeta, casa, viajes u otras metas.
-    """
-    try:
-        with get_connection() as conn:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(amount), 0) AS total FROM savings WHERE workspace_id = %s",
-                (workspace_id,),
-            ).fetchone()
-        return _f(row["total"] if row else 0)
-    except Exception:
-        return 0.0
-
-
 def _goal_is_urgent(goal: dict[str, Any]) -> bool:
     remaining = _f(goal.get("remaining_amount"))
     months_left = int(_f(goal.get("months_left")) or 12)
@@ -252,12 +228,17 @@ def _build_dynamic_director_allocation(
     total_debt = sum(max(_f(d.get("remaining_amount")), 0.0) for d in debts)
 
     monthly_base = max(_f(emergency_monthly_base), 0.0)
-    # Con deuda alta no intentamos construir 3-6 meses de golpe. Primero un
-    # mini-colchón que evite volver a la tarjeta ante un imprevisto.
-    mini_fund_target = min(max(monthly_base * 0.50, 150_000.0), 250_000.0)
-    one_month_target = max(monthly_base, mini_fund_target)
-    three_month_target = one_month_target * 3
-    six_month_target = one_month_target * 6
+    # El Salvavidas oficial siempre usa exactamente 1/3/6 meses del costo mensual
+    # protegido. El mini-colchón solo es una etapa intermedia y nunca puede ser
+    # mayor que la meta oficial de un mes.
+    mini_fund_target = (
+        min(monthly_base, min(max(monthly_base * 0.50, 150_000.0), 250_000.0))
+        if monthly_base > 0
+        else 0.0
+    )
+    one_month_target = monthly_base
+    three_month_target = monthly_base * 3
+    six_month_target = monthly_base * 6
 
     goal_items = list(goal_reserves.get("items") or [])
     urgent_goals = [g for g in goal_items if _goal_is_urgent(g)]
@@ -485,31 +466,35 @@ def _monthly_amount_from_frequency(amount: Any, frequency: str | None, interval_
 
 
 def _is_debt_like_fixed_expense(row: dict[str, Any], debt_names: set[str]) -> bool:
+    raw_aliases = row.get("aliases") or []
+    if isinstance(raw_aliases, str):
+        try:
+            parsed = json.loads(raw_aliases)
+            raw_aliases = parsed if isinstance(parsed, list) else [raw_aliases]
+        except Exception:
+            raw_aliases = [part.strip() for part in raw_aliases.split(",") if part.strip()]
+    aliases = [str(item) for item in raw_aliases if str(item).strip()]
     text = " ".join([
         str(row.get("name") or ""),
         str(row.get("category") or ""),
         str(row.get("payment_method") or ""),
-        " ".join(row.get("aliases") or []),
+        " ".join(aliases),
     ]).lower()
     normalized_name = str(row.get("name") or "").lower().strip()
     if normalized_name in debt_names:
         return True
     debt_keywords = [
         "prestamo", "préstamo", "minicuota", "tasa cero", "reloj",
-        "tarjeta bac", "banco popular", "deuda", "cuota",
+        "tarjeta bac", "banco popular", "deuda",
     ]
     return any(keyword in text for keyword in debt_keywords)
 
-
 def _get_strategy_living_expenses(workspace_id: str, debts: list[dict[str, Any]]) -> dict[str, Any]:
-    """Gastos base usados por Estrategia Premium.
+    """Recurring living commitments used for forward projections.
 
-    Decisión V1 de Kenneth:
-    - La estrategia NO usa toda la tabla fixed_expenses, porque esa tabla sirve para
-      recordatorios/visibilidad y muchas filas duplican deudas o pagos detectables por correos.
-    - Para el cálculo duro de salida de deuda solo se descuenta Casa como gasto base fijo.
-    - Las deudas se descuentan únicamente desde debts.monthly_payment.
-    - Pagos de tarjeta, reloj, minicuotas, Popular, Papá, etc. nunca se duplican aquí.
+    Debts stay authoritative in ``debts`` and are never duplicated from
+    ``fixed_expenses``. For the non-debt recurring base we keep the commitments
+    Kenneth marked as unavoidable in V1: house and phone line.
     """
     debt_names = {str(d.get("name") or "").lower().strip() for d in debts}
     with get_connection() as conn:
@@ -533,13 +518,17 @@ def _get_strategy_living_expenses(workspace_id: str, debts: list[dict[str, Any]]
     for row in fixed_rows:
         monthly = _monthly_amount_from_frequency(row.get("expected_amount"), row.get("frequency"), row.get("interval_months"))
         name = str(row.get("name") or "").lower().strip()
+        category = str(row.get("category") or "").lower().strip()
         is_debt_like = _is_debt_like_fixed_expense(row, debt_names)
-        is_strategy_living = name == "casa"
+        is_house = name == "casa" or category == "vivienda"
+        is_phone_line = "línea" in name or "linea" in name or category in {"teléfono", "telefono", "telefonía", "telefonia"}
+        is_strategy_living = (is_house or is_phone_line) and not is_debt_like
         item = {
+            "id": row.get("id"),
             "name": row.get("name"),
             "category": row.get("category"),
             "monthly_amount": round(monthly, 2),
-            "reason": "strategy_base_living" if is_strategy_living else ("debt_duplicate" if is_debt_like else "ignored_until_email_or_manual_review"),
+            "reason": "mandatory_living" if is_strategy_living else ("debt_duplicate" if is_debt_like else "not_mandatory_for_projection"),
         }
         if is_strategy_living:
             included.append(item)
@@ -552,6 +541,196 @@ def _get_strategy_living_expenses(workspace_id: str, debts: list[dict[str, Any]]
         "variable_current_month_total": 0.0,
         "included_fixed": included,
         "excluded_from_strategy": excluded,
+    }
+
+
+def _parse_iso_date(value: Any) -> date | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return datetime.fromisoformat(str(value)[:10]).date()
+    except Exception:
+        return None
+
+
+def _transaction_date_expr_sql() -> str:
+    raw = "NULLIF(BTRIM(transaction_date::text), '')"
+    return (
+        "CASE "
+        f"WHEN {raw} ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}' "
+        f"THEN SUBSTRING({raw} FROM 1 FOR 10)::date "
+        "ELSE NULL END"
+    )
+
+
+def _fetch_post_cut_expenses(workspace_id: str, cycle_report: dict[str, Any]) -> dict[str, Any]:
+    """Expenses registered after the card statement cut, inside the active finance cycle.
+
+    Finance Overview intentionally freezes the payable card statement at the cut.
+    Strategy is more conservative: once a new expense appears after that cut, it
+    immediately reduces the money that can be distributed, even if it will be paid
+    on the next card statement.
+    """
+    cut_end = _parse_iso_date((cycle_report.get("expense_cycle") or {}).get("end"))
+    cycle_end = _parse_iso_date((cycle_report.get("cycle") or {}).get("end"))
+    if not cut_end or not cycle_end:
+        return {"total": 0.0, "count": 0, "start": None, "end": None}
+
+    start = cut_end + timedelta(days=1)
+    end = min(date.today(), cycle_end)
+    if start > end:
+        return {"total": 0.0, "count": 0, "start": start.isoformat(), "end": end.isoformat()}
+
+    expr = _transaction_date_expr_sql()
+    with get_connection() as conn:
+        row = conn.execute(
+            f"""
+            SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count
+            FROM transactions
+            WHERE workspace_id = %s
+              AND LOWER(BTRIM(COALESCE(transaction_type, ''))) = 'expense'
+              AND {expr} >= %s::date
+              AND {expr} < %s::date
+            """,
+            (workspace_id, start.isoformat(), (end + timedelta(days=1)).isoformat()),
+        ).fetchone()
+
+    return {
+        "total": round(_f(row.get("total") if row else 0), 2),
+        "count": int(_f(row.get("count") if row else 0)),
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+    }
+
+
+def _month_keys_between(start: date, end: date) -> list[str]:
+    keys: list[str] = []
+    cursor = start.replace(day=1)
+    limit = end.replace(day=1)
+    while cursor <= limit and len(keys) < 24:
+        keys.append(cursor.strftime("%Y-%m"))
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+    return keys
+
+
+def _pending_mandatory_fixed_expenses(
+    cycle_report: dict[str, Any],
+    salvavidas: dict[str, Any],
+) -> dict[str, Any]:
+    """Reserve mandatory recurrent bills that are due in this cycle and not detected as paid."""
+    cycle_start = _parse_iso_date((cycle_report.get("cycle") or {}).get("start"))
+    cycle_end = _parse_iso_date((cycle_report.get("cycle") or {}).get("end"))
+    mandatory = list(salvavidas.get("mandatory_expenses") or [])
+    mandatory_ids = {int(item["id"]) for item in mandatory if item.get("id") is not None}
+    if not cycle_start or not cycle_end or not mandatory_ids:
+        return {"total": 0.0, "items": []}
+
+    pending: list[dict[str, Any]] = []
+    seen: set[tuple[int, str]] = set()
+    for month_key in _month_keys_between(cycle_start, cycle_end):
+        try:
+            status_report = get_fixed_expense_status(month_key) or {}
+        except Exception:
+            continue
+        for item in status_report.get("items") or []:
+            fixed = item.get("fixed_expense") or {}
+            try:
+                fixed_id = int(fixed.get("id"))
+            except Exception:
+                continue
+            if fixed_id not in mandatory_ids or not item.get("due_this_month"):
+                continue
+            due = _parse_iso_date(item.get("due_date"))
+            if not due or due < cycle_start or due > cycle_end:
+                continue
+            key = (fixed_id, due.isoformat())
+            if key in seen:
+                continue
+            seen.add(key)
+            if str(item.get("status") or "").lower() == "paid":
+                continue
+            amount = max(_f(item.get("expected_amount")), 0.0)
+            pending.append({
+                "id": fixed_id,
+                "name": fixed.get("name") or "Pago recurrente",
+                "due_date": due.isoformat(),
+                "amount": round(amount, 2),
+                "status": item.get("status") or "pending",
+            })
+
+    return {
+        "total": round(sum(_f(item.get("amount")) for item in pending), 2),
+        "items": pending,
+    }
+
+
+def _add_months_iso(start: date, months: int | None) -> str | None:
+    if not months or months <= 0 or months >= 999:
+        return None
+    month_index = (start.month - 1) + int(months)
+    year = start.year + month_index // 12
+    month = month_index % 12 + 1
+    if month == 12:
+        next_month = date(year + 1, 1, 1)
+    else:
+        next_month = date(year, month + 1, 1)
+    last_day = (next_month - timedelta(days=1)).day
+    return date(year, month, min(start.day, last_day)).isoformat()
+
+
+def _build_current_priority(
+    *,
+    no_free_cash: bool,
+    director: dict[str, Any],
+    timeline: list[dict[str, Any]],
+) -> dict[str, Any]:
+    amounts = director.get("allocation_amounts") or {}
+    urgent_goals = director.get("urgent_goals") or []
+    emergency = director.get("emergency") or {}
+
+    if no_free_cash:
+        return {
+            "kind": "cash",
+            "title": "Cubrir obligaciones del ciclo",
+            "detail": "No hay sobrante real para repartir todavía.",
+        }
+    if urgent_goals and _f(amounts.get("meta_prioritaria")) > 0:
+        goal = urgent_goals[0]
+        return {
+            "kind": "goal",
+            "title": f"Meta: {goal.get('name') or 'prioritaria'}",
+            "detail": "JARVIS la protege primero porque tiene una fecha/prioridad activa.",
+        }
+    if timeline and _f(amounts.get("ataque_de_deuda")) > 0:
+        target = timeline[0]
+        return {
+            "kind": "debt",
+            "title": f"Atacar deuda: {target.get('name') or 'deuda prioritaria'}",
+            "detail": "El sobrante destinado a deuda se concentra primero en esta obligación.",
+        }
+    if _f(amounts.get("fondo_de_emergencia")) > 0 and _f(emergency.get("current")) < _f(emergency.get("six_month_target")):
+        return {
+            "kind": "salvavidas",
+            "title": "Construir Salvavidas",
+            "detail": "La prioridad es aumentar tus meses de cobertura antes de asumir más riesgo.",
+        }
+    if _f(amounts.get("inversion")) > 0:
+        return {
+            "kind": "investment",
+            "title": "Construir patrimonio",
+            "detail": "Las obligaciones están cubiertas y existe margen para invertir.",
+        }
+    return {
+        "kind": "control",
+        "title": "Mantener control del flujo",
+        "detail": director.get("mode_reason") or "JARVIS mantiene el sobrante bajo control.",
     }
 
 def _rate_to_monthly(rate: float) -> float:
@@ -572,11 +751,17 @@ def _sort_debts_for_director(debts: list[dict[str, Any]]) -> list[dict[str, Any]
         balance = _f(debt.get("remaining_amount"))
         rate = _f(debt.get("interest_rate"))
         name = str(debt.get("name") or "").lower()
-        # Cerrar deudas pequeñas libera mente y flujo; BAC/Minicuota tienen prioridad por interés.
-        small_bucket = 0 if balance <= 200_000 else 1
+        debt_type = str(debt.get("debt_type") or "other").lower().strip()
+
+        # Primero costo financiero real. Una Tasa Cero al 0% debe mantenerse al
+        # día, pero nunca desplazar una deuda que sí está cobrando intereses.
+        no_interest_bucket = 1 if rate <= 0.0001 else 0
+        zero_rate_financing_last = 1 if debt_type == "tasa_cero" and rate <= 0.0001 else 0
         high_rate_bucket = 0 if rate >= 25 else 1
+        small_bucket = 0 if balance <= 200_000 else 1
         popular_last = 1 if "popular" in name and balance > 1_000_000 else 0
-        return (popular_last, small_bucket, high_rate_bucket, -rate, balance)
+        return (zero_rate_financing_last, no_interest_bucket, popular_last, high_rate_bucket, small_bucket, -rate, balance)
+
     return sorted(debts, key=score)
 
 
@@ -585,22 +770,20 @@ def _simulate_debt_cascade(
     recurring_monthly_extra: float,
     first_month_extra: float = 0.0,
 ) -> tuple[list[dict[str, Any]], int, float]:
-    """Simula método cascada sin convertir extras únicos en ingreso permanente.
-
-    Reglas:
-    - recurring_monthly_extra: sobrante base recurrente de todos los meses.
-    - first_month_extra: OT/bono/feriado del mes actual; solo se aplica en el mes 1.
-    - Cuando una deuda muere, su mínimo queda dentro del pool y acelera la siguiente.
-    """
-    active = []
-    for index, debt in enumerate(_sort_debts_for_director(debts)):
+    """Simulate an active-debt cascade without keeping cancelled/paid rows in the route."""
+    ordered_active = [
+        debt for debt in _sort_debts_for_director(debts)
+        if _f(debt.get("remaining_amount")) > 0.01
+    ]
+    active: list[dict[str, Any]] = []
+    for debt in ordered_active:
         balance = _f(debt.get("remaining_amount"))
-        if balance <= 0:
-            continue
         minimum = _normalize_payment(debt.get("monthly_payment"), balance)
         active.append({
-            "priority": index + 1,
+            "priority": len(active) + 1,
+            "id": debt.get("id"),
             "name": debt.get("name") or "Deuda",
+            "debt_type": debt.get("debt_type") or "other",
             "balance": balance,
             "original_balance": balance,
             "minimum": minimum,
@@ -610,13 +793,15 @@ def _simulate_debt_cascade(
 
     minimum_pool = sum(item["minimum"] for item in active)
     recurring_pool = minimum_pool + max(recurring_monthly_extra, 0)
-    one_time_pool = max(first_month_extra, 0)
+    first_month_adjustment = _f(first_month_extra)
 
     if not active:
         return [], 0, recurring_pool
     if recurring_pool <= 0:
         return [{
+            "id": item.get("id"),
             "name": item["name"],
+            "debt_type": item.get("debt_type") or "other",
             "remaining_amount": round(item["original_balance"], 2),
             "interest_rate": item["interest_rate"],
             "minimum_payment": round(item["minimum"], 2),
@@ -624,58 +809,62 @@ def _simulate_debt_cascade(
             "estimated_months": 999,
             "priority": item["priority"],
             "payoff_month": None,
+            "estimated_payoff_date": None,
         } for item in active], 999, recurring_pool
 
-    payoff: dict[str, dict[str, Any]] = {}
+    payoff: dict[int, dict[str, Any]] = {}
     month = 0
     guard = 0
-    while active and guard < 600:
+    working = [dict(item) for item in active]
+    while working and guard < 600:
         month += 1
         guard += 1
-        for item in active:
+        for item in working:
             item["balance"] = item["balance"] * (1 + max(item["rate"], 0))
 
-        remaining_pool = recurring_pool + (one_time_pool if month == 1 else 0)
+        remaining_pool = max(recurring_pool + (first_month_adjustment if month == 1 else 0), 0.0)
 
-        # Mínimos primero para todas las deudas vivas.
-        for item in list(active):
+        # Pay every active minimum first.
+        for item in list(working):
             pay = min(item["minimum"], item["balance"], remaining_pool)
             item["balance"] -= pay
             remaining_pool -= pay
 
-        # Todo excedente ataca la primera deuda en cola.
-        while remaining_pool > 0 and active:
-            target = active[0]
+        # The remaining pool attacks the highest-priority active debt.
+        while remaining_pool > 0.01 and working:
+            target = working[0]
             pay = min(target["balance"], remaining_pool)
             target["balance"] -= pay
             remaining_pool -= pay
             if target["balance"] <= 1:
-                payoff[target["name"]] = {**target, "payoff_month": month}
-                active.pop(0)
+                payoff[int(target["id"] or target["priority"])] = {**target, "payoff_month": month}
+                working.pop(0)
             else:
                 break
 
-        for item in list(active):
+        for item in list(working):
             if item["balance"] <= 1:
-                payoff[item["name"]] = {**item, "payoff_month": month}
-                active.remove(item)
+                payoff[int(item["id"] or item["priority"])] = {**item, "payoff_month": month}
+                working.remove(item)
 
-        if month > 3 and recurring_pool <= sum(item["balance"] * item["rate"] for item in active):
+        if month > 3 and working and recurring_pool <= sum(item["balance"] * item["rate"] for item in working):
             break
 
-    result = []
-    original_order = _sort_debts_for_director(debts)
-    for index, debt in enumerate(original_order):
-        name = debt.get("name") or "Deuda"
+    result: list[dict[str, Any]] = []
+    for index, debt in enumerate(ordered_active):
         balance = _f(debt.get("remaining_amount"))
         minimum = _normalize_payment(debt.get("monthly_payment"), balance)
-        closed = payoff.get(name)
+        debt_key = int(debt.get("id") or index + 1)
+        closed = payoff.get(debt_key)
         payoff_month = closed.get("payoff_month") if closed else None
         recommended = minimum
         if index == 0:
-            recommended = min(balance, minimum + max(recurring_monthly_extra, 0) + one_time_pool)
+            first_month_attack = max(max(recurring_monthly_extra, 0) + first_month_adjustment, 0.0)
+            recommended = min(balance, minimum + first_month_attack)
         result.append({
-            "name": name,
+            "id": debt.get("id"),
+            "name": debt.get("name") or "Deuda",
+            "debt_type": debt.get("debt_type") or "other",
             "remaining_amount": round(balance, 2),
             "interest_rate": _f(debt.get("interest_rate")),
             "minimum_payment": round(minimum, 2),
@@ -683,24 +872,23 @@ def _simulate_debt_cascade(
             "estimated_months": payoff_month if payoff_month is not None else 999,
             "priority": index + 1,
             "payoff_month": payoff_month,
+            "estimated_payoff_date": _add_months_iso(date.today(), payoff_month),
         })
 
     total_months = max((item.get("payoff_month") or 0) for item in result) if result else 0
-    if active and guard >= 600:
+    if working:
         total_months = 999
     return result, total_months, recurring_pool
 
-
 def build_local_strategy_blueprint() -> dict[str, Any]:
-    """Premium strategy engine.
+    """Live personal strategy focused on real surplus, not gross income.
 
-    Rules Kenneth defined:
-    - Do not distribute income bruto. Use actual cycle cashflow.
-    - Current month OT/bonus/holiday only affects the current cycle.
-    - Debt strategy uses monthly debts, living expenses and active critical goals.
-    - Critical goals such as Ecuador must reserve money before extra debt attack.
+    Current-cycle distribution follows one rule: obligations and every expense
+    already registered come out first. Only the remainder is distributed among
+    Salvavidas, debt attack, goals, investment and free life money.
     """
-    debts = get_debts() or []
+    all_debts = get_debts() or []
+    debts = [debt for debt in all_debts if _f(debt.get("remaining_amount")) > 0.01]
     summary = get_financial_summary() or {}
     salary_projection = calculate_monthly_salary_projection() or {}
     workspace_id = get_current_workspace_id()
@@ -722,73 +910,83 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     )
     current_month_extra_net = max(current_month_income - recurring_monthly_income, 0.0)
 
-    configured_debt_payments = sum(_normalize_payment(d.get("monthly_payment"), d.get("remaining_amount")) for d in debts)
+    configured_debt_payments = sum(
+        _normalize_payment(debt.get("monthly_payment"), debt.get("remaining_amount"))
+        for debt in debts
+    )
     current_debt_payments = _f(cycle_report.get("debts", {}).get("payments_current_period"))
-    total_debt = sum(_f(d.get("remaining_amount")) for d in debts)
-    paid_debt = sum(max(_f(d.get("total_amount")) - _f(d.get("remaining_amount")), 0) for d in debts)
-    original_debt = total_debt + paid_debt
-    progress = round((paid_debt / original_debt) * 100, 2) if original_debt > 0 else 0
+    debt_commitment_current_cycle = max(configured_debt_payments, current_debt_payments)
+
+    total_debt = sum(max(_f(debt.get("remaining_amount")), 0.0) for debt in debts)
+    original_debt = sum(
+        max(_f(debt.get("total_amount")), _f(debt.get("remaining_amount")), 0.0)
+        for debt in all_debts
+    )
+    paid_debt = max(original_debt - total_debt, 0.0)
+    progress = round((paid_debt / original_debt) * 100, 2) if original_debt > 0 else 0.0
 
     goals = _fetch_active_financial_goals(workspace_id)
     goal_reserves = _calculate_goal_reserves(goals)
-    critical_goal_required = _f(goal_reserves.get("critical_monthly_required"))
-    weighted_goal_required = _f(goal_reserves.get("monthly_auto_reserve"))
-    required_goal_reserve = max(critical_goal_required, weighted_goal_required)
 
     living = _get_strategy_living_expenses(workspace_id, debts)
     recurring_living_expenses = _f(living.get("fixed_living_total"))
-    # current_period incluye debt_payment en Finance Overview. Para Strategy
-    # usamos spending_only y restamos deuda una sola vez por separado.
-    cycle_expenses = _f(cycle_report.get("expenses", {}).get("spending_only"))
-    if cycle_expenses <= 0:
-        cycle_expenses = max(
+
+    try:
+        salvavidas = get_salvavidas_state() or {}
+    except Exception:
+        salvavidas = {}
+
+    statement_spending = _f(cycle_report.get("expenses", {}).get("spending_only"))
+    if statement_spending <= 0:
+        statement_spending = max(
             _f(cycle_report.get("expenses", {}).get("current_period"))
             - _f(cycle_report.get("debts", {}).get("payments_current_period")),
             0.0,
         )
+    post_cut = _fetch_post_cut_expenses(workspace_id, cycle_report)
+    new_spending_after_cut = _f(post_cut.get("total"))
+    committed_spending = statement_spending + new_spending_after_cut
 
-    # Current-cycle strategic surplus, exactly as Kenneth defined it:
-    # income cycle - variable/current expenses - debt payments already due/paid.
-    # Fixed expenses are not subtracted here because they are represented by
-    # actual expenses imported/registered in the cycle.
-    current_before_goals = current_month_income - cycle_expenses - current_debt_payments
-    current_goal_allocation = min(max(current_before_goals, 0.0), required_goal_reserve)
-    distribution_base = max(current_before_goals - current_goal_allocation, 0.0)
+    pending_mandatory = _pending_mandatory_fixed_expenses(cycle_report, salvavidas)
+    mandatory_fixed_pending = _f(pending_mandatory.get("total"))
 
-    # Recurring projection for debt payoff: use the fixed salary baseline and
-    # the configured monthly debt payment as the normal debt-payment capacity.
-    # OT/bonus from the current month never repeats into future months.
-    recurring_before_goals = recurring_monthly_income - recurring_living_expenses - configured_debt_payments
-    recurring_goal_allocation = min(max(recurring_before_goals, 0.0), required_goal_reserve)
-    recurring_available_after_goals = max(recurring_before_goals - recurring_goal_allocation, 0.0)
+    # The current distribution base is the true remainder after all known outflows:
+    # payable statement spending + any new expense after cut + at least one full
+    # monthly debt obligation + mandatory recurrent bills still pending.
+    current_before_allocation = (
+        current_month_income
+        - committed_spending
+        - debt_commitment_current_cycle
+        - mandatory_fixed_pending
+    )
 
-    emergency_report = _safe_emergency_report()
-    savings_total = _f(emergency_report.get("current"))
-    investment_portfolio = _fetch_investment_portfolio(workspace_id)
-    emergency_monthly_base = _f(emergency_report.get("monthly_base"))
+    # Strategy and the Salvavidas screen must share the same source of truth.
+    # The current balance is manual in V1; the monthly base is recalculated live
+    # from active debts + Casa/Línea + user-protected recurring expenses.
+    savings_total = max(_f(salvavidas.get("current_amount")), 0.0)
+    emergency_monthly_base = max(_f(salvavidas.get("monthly_base")), 0.0)
     if emergency_monthly_base <= 0:
         emergency_monthly_base = recurring_living_expenses + configured_debt_payments
 
-    # Director V2: la base a repartir es el excedente real antes de asignaciones.
-    # La meta crítica deja de estar "por fuera" de los porcentajes: ahora aparece
-    # explícitamente como la primera capa del plan.
+    investment_portfolio = _fetch_investment_portfolio(workspace_id)
+
     director = _build_dynamic_director_allocation(
-        available_before_allocation=max(current_before_goals, 0.0),
+        available_before_allocation=max(current_before_allocation, 0.0),
         debts=debts,
         goal_reserves=goal_reserves,
         savings_total=savings_total,
         emergency_monthly_base=emergency_monthly_base,
     )
-    allocation = director["allocation"]
-    allocation_amounts = director["allocation_amounts"]
-    allocation_items = director["allocation_items"]
+    allocation = director.get("allocation") or {}
+    allocation_amounts = director.get("allocation_amounts") or {}
+    allocation_items = director.get("allocation_items") or []
     allocation_base_amount = _f(director.get("allocation_base_amount"))
     current_goal_allocation = _f(director.get("urgent_goal_reserved"))
-    distribution_base = allocation_base_amount
     current_debt_attack_extra = _f(allocation_amounts.get("ataque_de_deuda"))
 
-    # Proyección recurrente: recalcula el mismo criterio usando ingreso base,
-    # sin asumir que OT/bonos futuros se repetirán.
+    # Future payoff estimate uses recurring income only. Protected Salvavidas
+    # expenses are respected as recurring life costs, and current OT/bonus is not
+    # projected forever.
     recurring_non_debt_essentials = max(
         emergency_monthly_base - configured_debt_payments,
         recurring_living_expenses,
@@ -804,84 +1002,104 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         savings_total=savings_total,
         emergency_monthly_base=emergency_monthly_base,
     )
-    recurring_debt_attack_extra = _f(recurring_director.get("allocation_amounts", {}).get("ataque_de_deuda"))
+    recurring_debt_attack_extra = _f(
+        (recurring_director.get("allocation_amounts") or {}).get("ataque_de_deuda")
+    )
 
     base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
         debts,
         recurring_monthly_extra=recurring_debt_attack_extra,
-        first_month_extra=0,
+        first_month_extra=0.0,
     )
+    first_month_adjustment = current_debt_attack_extra - recurring_debt_attack_extra
     timeline, total_months, payment_pool = _simulate_debt_cascade(
         debts,
         recurring_monthly_extra=recurring_debt_attack_extra,
-        first_month_extra=current_debt_attack_extra,
+        first_month_extra=first_month_adjustment,
     )
 
     months_saved = 0
     if base_total_months and total_months and base_total_months < 999 and total_months < 999:
         months_saved = max(base_total_months - total_months, 0)
 
-    deficit_after_mandatory = current_month_income - cycle_expenses - current_debt_payments
-    no_free_cash = deficit_after_mandatory <= 0
+    no_free_cash = current_before_allocation <= 0.0
     mode = director.get("mode") or "cash_protection"
     mode_label = director.get("mode_label") or "PROTECCIÓN DE CAJA"
     status = "critical" if no_free_cash else ("controlled" if total_debt > 0 else "strong")
     objective = (
-        "Señor, este ciclo no tiene flujo libre. Primero cubra obligaciones; no hay dinero seguro para gastar o abonar extra."
-        if no_free_cash else
-        f"Señor, modo {mode_label}: {director.get('mode_reason')}"
+        "Señor, este ciclo no tiene sobrante real. Primero cubra obligaciones y gastos registrados."
+        if no_free_cash
+        else f"Señor, modo {mode_label}: {director.get('mode_reason')}"
     )
 
+    priority = _build_current_priority(
+        no_free_cash=no_free_cash,
+        director=director,
+        timeline=timeline,
+    )
+
+    debt_free_date = _add_months_iso(date.today(), total_months if total_months < 999 else None)
+    base_debt_free_date = _add_months_iso(date.today(), base_total_months if base_total_months < 999 else None)
+    first_month_one_time_boost = max(first_month_adjustment, 0.0)
+
     rules = [
-        "Primero se cubren gastos reales y pagos mínimos; nunca se usa el saldo total de una deuda como gasto mensual.",
-        "Una meta urgente con fecha se reserva antes de repartir el resto del excedente.",
-        "El fondo de emergencia se construye por etapas: mini-colchón, 1 mes, 3 meses y luego 6 meses esenciales.",
-        "La deuda recibe más peso conforme mejora el colchón; los porcentajes cambian con la situación y no son una regla fija.",
-        "Vida controlada es dinero que sí puede gastarse sin tocar obligaciones, meta prioritaria, seguridad ni inversión.",
-        "Inversión empieza con una meta base de ₡5.000 solo cuando existe flujo; se acumula antes de fondear IBKR para reducir costos.",
+        "Solo se distribuye el sobrante que queda después de obligaciones y gastos ya registrados.",
+        "Un gasto nuevo reduce el sobrante del ciclo desde que aparece, aunque no sea una deuda.",
+        "Las deudas activas reservan al menos su cuota mensual completa antes de repartir dinero.",
+        "Casa y línea se tratan como pagos recurrentes obligatorios; las demás protecciones del Salvavidas son configurables.",
         "OT, bonos, feriados y vacaciones aceleran únicamente el ciclo donde realmente ocurren.",
     ]
-    if no_free_cash:
-        rules.insert(0, "Señor, no hay dinero libre para repartir este ciclo; no se fabrica ataque de deuda.")
 
     return {
         "month": _month_key(),
         "status": status,
-        "strategy_type": "director_financiero_dinamico_v2",
+        "strategy_type": "director_financiero_dinamico_v3",
         "title": "Estrategia de Protección de Flujo" if no_free_cash else f"Director Financiero · {mode_label}",
         "mode": mode,
         "mode_label": mode_label,
         "mode_reason": director.get("mode_reason"),
         "objective": objective,
+        "priority": priority,
         "monthly_income": round(current_month_income, 2),
         "recurring_monthly_income": round(recurring_monthly_income, 2),
         "current_month_extra_net": round(current_month_extra_net, 2),
-        "current_month_one_time_debt_boost": round(current_debt_attack_extra, 2),
-        "monthly_expenses": round(cycle_expenses, 2),
+        "current_month_one_time_debt_boost": round(first_month_one_time_boost, 2),
+        "monthly_expenses": round(committed_spending, 2),
+        "statement_expenses": round(statement_spending, 2),
+        "new_expenses_after_cut": round(new_spending_after_cut, 2),
+        "new_expenses_after_cut_count": int(_f(post_cut.get("count"))),
+        "new_expenses_after_cut_window": {
+            "start": post_cut.get("start"),
+            "end": post_cut.get("end"),
+        },
+        "mandatory_fixed_pending": round(mandatory_fixed_pending, 2),
+        "mandatory_fixed_pending_items": pending_mandatory.get("items") or [],
         "recurring_living_expenses": round(recurring_living_expenses, 2),
         "recurring_essential_living_base": round(recurring_non_debt_essentials, 2),
-        "current_variable_expenses": round(cycle_expenses, 2),
+        "current_variable_expenses": round(committed_spending, 2),
         "monthly_debt_minimums": round(configured_debt_payments, 2),
         "configured_debt_payments": round(configured_debt_payments, 2),
         "current_debt_payments": round(current_debt_payments, 2),
-        "debt_payments_reserved": round(current_debt_payments, 2),
+        "debt_commitment_current_cycle": round(debt_commitment_current_cycle, 2),
+        "debt_payments_reserved": round(debt_commitment_current_cycle, 2),
         "critical_goals_reserved": round(current_goal_allocation, 2),
         "current_goal_allocation": round(current_goal_allocation, 2),
-        "available_before_goals": round(current_before_goals, 2),
-        "strategic_available_cash": round(distribution_base, 2),
-        "estimated_extra_cash": round(distribution_base, 2),
+        "available_before_goals": round(current_before_allocation, 2),
+        "strategic_available_cash": round(allocation_base_amount, 2),
+        "estimated_extra_cash": round(allocation_base_amount, 2),
         "base_estimated_extra_cash": round(_f(recurring_director.get("allocation_base_amount")), 2),
         "safe_to_spend": round(_f(director.get("safe_to_spend")), 2),
         "investment_recommended": round(_f(director.get("investment_recommended")), 2),
         "investment_target": round(_f(director.get("investment_target")), 2),
         "investment_portfolio": investment_portfolio,
         "emergency_fund": director.get("emergency") or {},
+        "salvavidas": salvavidas,
         "urgent_goals": director.get("urgent_goals") or [],
         "debt_attack_extra": round(current_debt_attack_extra, 2),
         "recurring_debt_attack_extra": round(recurring_debt_attack_extra, 2),
         "debt_payment_pool": round(payment_pool, 2),
         "base_debt_payment_pool": round(base_payment_pool, 2),
-        "fixed_expenses_total": round(cycle_expenses, 2),
+        "fixed_expenses_total": round(committed_spending, 2),
         "living_expense_debug": living,
         "salary_projection_debug": salary_projection,
         "cycle_report_debug": cycle_report,
@@ -891,10 +1109,23 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "allocation_base_amount": round(allocation_base_amount, 2),
         "allocation_amounts": allocation_amounts,
         "allocation_items": allocation_items,
+        "allocation_total": round(sum(_f(item.get("amount")) for item in allocation_items), 2),
+        "distribution_formula": {
+            "income": round(current_month_income, 2),
+            "statement_spending": round(statement_spending, 2),
+            "new_spending_after_cut": round(new_spending_after_cut, 2),
+            "debt_commitment": round(debt_commitment_current_cycle, 2),
+            "mandatory_fixed_pending": round(mandatory_fixed_pending, 2),
+            "surplus": round(allocation_base_amount, 2),
+        },
         "total_debt": round(total_debt, 2),
+        "debt_original_total": round(original_debt, 2),
+        "debt_paid_total": round(paid_debt, 2),
         "debt_progress_percent": progress,
         "estimated_total_months": total_months if timeline else 0,
+        "estimated_debt_free_date": debt_free_date,
         "base_estimated_total_months": base_total_months if base_timeline else 0,
+        "base_estimated_debt_free_date": base_debt_free_date,
         "months_saved_by_current_extras": months_saved,
         "timeline": timeline,
         "base_timeline": base_timeline,

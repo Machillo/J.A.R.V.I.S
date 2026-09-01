@@ -270,7 +270,7 @@ def _director_strategy_message(blueprint: dict) -> str:
         labels = {
             "ataque_de_deuda": "Ataque de deuda",
             "vida_controlada": "Vida controlada",
-            "fondo_de_emergencia": "Fondo de emergencia",
+            "fondo_de_emergencia": "Salvavidas",
             "metas_o_inversion": "Metas o inversión",
         }
         amounts = blueprint.get("allocation_amounts") or {}
@@ -278,7 +278,7 @@ def _director_strategy_message(blueprint: dict) -> str:
             f"{labels.get(k, k)} {v}% ({_money(amounts.get(k, 0))})"
             for k, v in allocation.items()
         )
-        lines.append(f"Distribución obligatoria del ingreso de este mes: {dist}.")
+        lines.append(f"Distribución del sobrante real de este ciclo: {dist}.")
     lines.append("Regla: OT, bono y feriados solo aceleran el mes actual; no se asumen como ingresos permanentes.")
     if recurring_income <= 0:
         lines.append("Pendiente crítico: configurar salario base mensual para aumentar precisión.")

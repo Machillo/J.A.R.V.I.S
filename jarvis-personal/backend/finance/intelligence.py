@@ -744,6 +744,7 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
         minimum = _as_float(debt.get("monthly_payment"))
         rate = _monthly_rate(_as_float(debt.get("interest_rate")))
         monthly_extra = max(surplus, 0.0)
+        baseline = _simulate_payoff(balance, minimum, rate)
         amortization_payment = minimum + monthly_extra
         amortization = _simulate_payoff(balance, amortization_payment, rate)
 
@@ -758,20 +759,34 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
         hybrid_extra = monthly_extra * 0.5
         hybrid = _simulate_payoff(balance, minimum + hybrid_extra, rate)
 
-        if rate >= 0.025:
-            recommendation = "Señor, conviene amortizar cada mes porque el interés es demasiado alto."
+        debt_type = str(debt.get("debt_type") or "other").lower().strip()
+        if debt_type == "tasa_cero" and rate <= 0:
+            recommendation = "Señor, esta deuda está a tasa cero: mantenga la cuota y no sacrifique Salvavidas o deuda con interés para adelantarla."
+            recommended = "MINIMUM"
+        elif rate >= 0.025:
+            recommendation = "Señor, conviene amortizar cada mes porque el costo financiero es alto."
             recommended = "A"
         elif months_to_save and months_to_save <= 4 and monthly_extra > minimum:
-            recommendation = f"Señor, puede ahorrar {months_to_save} meses y cancelar de golpe sin ahogar el flujo."
+            recommendation = f"Señor, puede acumular el excedente y tener capacidad de liquidarla en aproximadamente {months_to_save} meses."
             recommended = "B"
         else:
-            recommendation = "Señor, recomiendo estrategia híbrida: mantenga cuota mínima y dirija parte del excedente a abonos."
+            recommendation = "Señor, recomiendo una estrategia híbrida: mantenga la cuota y use solo parte del excedente para acelerar."
             recommended = "C"
+
+        baseline_months = baseline.get("months")
+        a_months = amortization.get("months")
+        c_months = hybrid.get("months")
+        months_saved_a = max(int(baseline_months) - int(a_months), 0) if baseline_months is not None and a_months is not None else None
+        months_saved_c = max(int(baseline_months) - int(c_months), 0) if baseline_months is not None and c_months is not None else None
+        baseline_interest = _as_float(baseline.get("total_interest"))
+        interest_saved_a = max(baseline_interest - _as_float(amortization.get("total_interest")), 0.0) if baseline.get("total_interest") is not None and amortization.get("total_interest") is not None else None
+        interest_saved_c = max(baseline_interest - _as_float(hybrid.get("total_interest")), 0.0) if baseline.get("total_interest") is not None and hybrid.get("total_interest") is not None else None
 
         scenarios.append({
             "debt": debt,
             "available_extra_cash": round(monthly_extra, 2),
-            "A_monthly_amortization": {"payment": round(amortization_payment, 2), **amortization},
+            "baseline_minimum": baseline,
+            "A_monthly_amortization": {"payment": round(amortization_payment, 2), "months_saved_vs_minimum": months_saved_a, "interest_saved_vs_minimum": round(interest_saved_a, 2) if interest_saved_a is not None else None, **amortization},
             "B_save_and_liquidate": {
                 "monthly_saving": round(monthly_extra, 2),
                 "estimated_months_to_lump_sum": months_to_save,
@@ -779,7 +794,7 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
                 "assumed_monthly_yield": round(reserve_rate, 6),
                 "status": "OK" if months_to_save else "NO_SURPLUS",
             },
-            "C_hybrid": {"payment": round(minimum + hybrid_extra, 2), "extra_to_debt": round(hybrid_extra, 2), **hybrid},
+            "C_hybrid": {"payment": round(minimum + hybrid_extra, 2), "extra_to_debt": round(hybrid_extra, 2), "months_saved_vs_minimum": months_saved_c, "interest_saved_vs_minimum": round(interest_saved_c, 2) if interest_saved_c is not None else None, **hybrid},
             "recommended_scenario": recommended,
             "recommendation": recommendation,
         })

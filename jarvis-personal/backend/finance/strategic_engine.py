@@ -389,6 +389,7 @@ def calculate_emergency_fund() -> dict[str, Any]:
         "monthly_base": round(monthly_base, 2),
         "components": {
             "debt_minimums": round(_as_float(components.get("debt_monthly_payments")), 2),
+            "mandatory_fixed_expenses": round(_as_float(components.get("mandatory_fixed_expenses")), 2),
             "protected_expenses": round(_as_float(components.get("protected_expenses")), 2),
         },
         "recommended_1_month": round(monthly_base, 2),
