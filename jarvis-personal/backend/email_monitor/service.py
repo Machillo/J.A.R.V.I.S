@@ -1005,6 +1005,7 @@ def _upsert_ingested_message(
         )
         VALUES (%s, %s, 'gmail', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (workspace_id, provider, provider_message_id)
+        WHERE provider_message_id IS NOT NULL
         DO UPDATE SET
             fingerprint = EXCLUDED.fingerprint,
             sender = EXCLUDED.sender,
