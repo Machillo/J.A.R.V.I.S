@@ -1266,6 +1266,7 @@ def scan_email_text(
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (workspace_id, fingerprint)
+            WHERE fingerprint IS NOT NULL
             DO UPDATE SET
                 email_message_id = EXCLUDED.email_message_id,
                 transaction_date = EXCLUDED.transaction_date,
