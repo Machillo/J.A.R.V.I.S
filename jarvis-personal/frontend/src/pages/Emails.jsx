@@ -191,7 +191,10 @@ export default function Emails({ onFinanceChanged }) {
             {lastScan.processed.slice(0, 250).map((item) => (
               <div key={item.gmail_id}>
                 <span>{item.subject || "Sin asunto"}</span>
-                <small>{item.status} {item.candidate_status ? `· ${item.candidate_status}` : ""}</small>
+                <small>
+                  {item.status} {item.candidate_status ? `· ${item.candidate_status}` : ""}
+                  {item.message ? ` · ${item.message}` : ""}
+                </small>
               </div>
             ))}
           </div>

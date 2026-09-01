@@ -4,6 +4,7 @@ import base64
 import html
 import hmac
 import json
+import logging
 import os
 import re
 from io import BytesIO
@@ -37,6 +38,7 @@ DEFAULT_QUERY = os.getenv(
 )
 # Fase 6.2: no se guarda nada automático. Primero validamos lectura limpia.
 AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "999"))
+logger = logging.getLogger(__name__)
 
 
 def build_current_month_gmail_query(base_query: str | None = None, today: date | None = None) -> str:
@@ -365,7 +367,12 @@ def _log_email_event(
             ),
         )
     except Exception:
-        pass
+        logger.exception(
+            "Could not persist email parser log action=%s result=%s provider_message_id=%s",
+            action,
+            result or action,
+            provider_message_id,
+        )
 
 
 def _candidate_reference(candidate: dict[str, Any] | None) -> str | None:
