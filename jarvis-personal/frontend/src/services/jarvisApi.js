@@ -63,6 +63,8 @@ export const getFinanceDashboard = () => request("/finance/dashboard");
 export const getFinanceCycleReport = (asOf = "") => request(`/finance/cycle-report${asOf ? `?as_of=${encodeURIComponent(asOf)}` : ""}`);
 export const getFinancialSummary = () => request("/finance/summary");
 export const getNetWorth = () => request("/finance/net-worth");
+export const getSalvavidas = () => request("/finance/salvavidas");
+export const updateSalvavidas = (payload) => jsonRequest("/finance/salvavidas", "PUT", payload);
 
 export const getRealAvailability = () => request("/finance/real-availability");
 export const getDebtAdvisory = () => request("/finance/debt-advisory");

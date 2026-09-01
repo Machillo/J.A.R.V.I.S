@@ -9004,3 +9004,345 @@ input[type="checkbox"] {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* === JARVIS Salvavidas =================================================== */
+.salvavidas-panel {
+  display: grid;
+  gap: 18px;
+  overflow: hidden;
+}
+
+.salvavidas-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.salvavidas-header h3,
+.salvavidas-section-copy strong {
+  margin: 0;
+}
+
+.salvavidas-mode-badge {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid rgba(139, 92, 246, 0.26);
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.1);
+  color: rgba(225, 213, 255, 0.92);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.salvavidas-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.salvavidas-summary-grid > div {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.salvavidas-summary-grid span,
+.salvavidas-amount-field > span,
+.salvavidas-component-row span,
+.salvavidas-base-total span {
+  display: block;
+  color: var(--text-muted, rgba(255, 255, 255, 0.62));
+  font-size: 0.78rem;
+}
+
+.salvavidas-summary-grid strong {
+  display: block;
+  margin-top: 6px;
+  font-size: clamp(1rem, 2.3vw, 1.22rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.salvavidas-progress-block {
+  display: grid;
+  gap: 10px;
+}
+
+.salvavidas-milestones {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.salvavidas-milestone {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 7px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.salvavidas-milestone strong {
+  grid-column: 2;
+  font-size: 0.78rem;
+}
+
+.salvavidas-milestone.reached {
+  border-color: rgba(85, 217, 155, 0.22);
+  background: rgba(85, 217, 155, 0.07);
+  color: rgba(212, 255, 233, 0.95);
+}
+
+.milestone-dot {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.salvavidas-editor {
+  display: grid;
+  gap: 14px;
+  padding-top: 2px;
+}
+
+.salvavidas-amount-field {
+  display: grid;
+  gap: 7px;
+}
+
+.salvavidas-money-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 54px;
+  padding: 0 15px;
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.salvavidas-money-input:focus-within {
+  border-color: rgba(139, 92, 246, 0.62);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.salvavidas-money-input > span {
+  color: rgba(255, 255, 255, 0.58);
+  font-weight: 800;
+}
+
+.salvavidas-money-input input {
+  width: 100%;
+  min-width: 0;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit;
+  font: inherit;
+  font-size: 1.12rem;
+  font-weight: 800;
+}
+
+.salvavidas-components {
+  display: grid;
+  gap: 10px;
+}
+
+.salvavidas-component-row,
+.salvavidas-base-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.salvavidas-component-row.locked {
+  border-color: rgba(79, 140, 255, 0.18);
+  background: rgba(79, 140, 255, 0.055);
+}
+
+.salvavidas-component-row small,
+.salvavidas-section-copy small,
+.salvavidas-expense-copy small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted, rgba(255, 255, 255, 0.56));
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.salvavidas-debt-list {
+  display: grid;
+  gap: 7px;
+  padding: 0 3px;
+}
+
+.salvavidas-debt-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.salvavidas-debt-list strong {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.salvavidas-expense-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.salvavidas-expense-list {
+  display: grid;
+  gap: 8px;
+}
+
+.salvavidas-expense-option {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 120ms ease;
+}
+
+.salvavidas-expense-option:active {
+  transform: scale(0.99);
+}
+
+.salvavidas-expense-option.selected {
+  border-color: rgba(85, 217, 155, 0.25);
+  background: rgba(85, 217, 155, 0.065);
+}
+
+.salvavidas-expense-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.salvavidas-check {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+}
+
+.salvavidas-expense-option.selected .salvavidas-check {
+  border-color: transparent;
+  color: #55d99b;
+}
+
+.salvavidas-expense-copy {
+  min-width: 0;
+}
+
+.salvavidas-expense-copy strong,
+.salvavidas-expense-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.salvavidas-expense-option > strong {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.salvavidas-base-total {
+  border-color: rgba(139, 92, 246, 0.2);
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.salvavidas-base-total strong {
+  font-size: 1.05rem;
+}
+
+.salvavidas-save {
+  width: 100%;
+  min-height: 50px;
+  justify-content: center;
+}
+
+.salvavidas-verification-note {
+  color: var(--text-muted, rgba(255, 255, 255, 0.52));
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.salvavidas-loading {
+  padding: 18px 0;
+  color: var(--text-muted, rgba(255, 255, 255, 0.58));
+}
+
+@media (max-width: 700px) {
+  .salvavidas-header {
+    display: grid;
+  }
+
+  .salvavidas-mode-badge {
+    justify-self: start;
+  }
+
+  .salvavidas-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .salvavidas-milestones {
+    grid-template-columns: 1fr;
+  }
+
+  .salvavidas-milestone {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .salvavidas-milestone strong {
+    grid-column: 3;
+  }
+}
+
+@media (max-width: 430px) {
+  .salvavidas-summary-grid {
+    gap: 8px;
+  }
+
+  .salvavidas-summary-grid > div {
+    padding: 12px;
+  }
+
+  .salvavidas-expense-option {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .salvavidas-expense-option > strong {
+    grid-column: 2;
+    justify-self: start;
+    color: rgba(255, 255, 255, 0.7);
+  }
+}

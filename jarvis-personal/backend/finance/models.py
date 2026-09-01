@@ -208,3 +208,8 @@ class AccountBalanceRequest(BaseModel):
 class GoalPlanningRequest(BaseModel):
     description: str
     estimated_total_cost: float | None = None
+
+
+class SalvavidasUpdateRequest(BaseModel):
+    current_amount: float | None = None
+    protected_expense_ids: list[int] | None = None

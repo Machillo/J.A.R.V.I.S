@@ -763,7 +763,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     recurring_available_after_goals = max(recurring_before_goals - recurring_goal_allocation, 0.0)
 
     emergency_report = _safe_emergency_report()
-    savings_total = _fetch_savings_total(workspace_id)
+    savings_total = _f(emergency_report.get("current"))
     investment_portfolio = _fetch_investment_portfolio(workspace_id)
     emergency_monthly_base = _f(emergency_report.get("monthly_base"))
     if emergency_monthly_base <= 0:

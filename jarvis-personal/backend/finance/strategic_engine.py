@@ -8,6 +8,7 @@ from typing import Any
 
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
+from backend.finance.emergency_fund import get_salvavidas_state
 
 
 ESSENTIAL_CATEGORIES = {
@@ -379,42 +380,22 @@ def calculate_debt_strategies(extra_payment: float = 0.0) -> dict[str, Any]:
 
 
 def calculate_emergency_fund() -> dict[str, Any]:
-    transactions = _fetch_transactions()
-    debts = _fetch_debts()
-    expenses_table = _fetch_expenses_table()
-
-    fixed_from_table = sum(_as_float(item.get("amount")) for item in expenses_table if item.get("expense_type") == "fixed")
-    debt_minimums = sum(_as_float(item.get("monthly_payment")) for item in debts)
-
-    monthly_category_totals: dict[str, dict[str, float]] = {}
-    for tx in transactions:
-        if tx.get("transaction_type") != "expense":
-            continue
-        category = (tx.get("category") or "").lower().strip()
-        if category not in ESSENTIAL_CATEGORIES:
-            continue
-        month = _month_key(tx["transaction_date"])
-        monthly_category_totals.setdefault(month, {})
-        monthly_category_totals[month][category] = monthly_category_totals[month].get(category, 0.0) + _as_float(tx.get("amount"))
-
-    monthly_essential_totals = [sum(values.values()) for values in monthly_category_totals.values()]
-    average_essentials = (
-        sum(monthly_essential_totals) / len(monthly_essential_totals)
-        if monthly_essential_totals else 0.0
-    )
-
-    monthly_base = max(fixed_from_table, average_essentials) + debt_minimums
-
+    salvavidas = get_salvavidas_state()
+    monthly_base = _as_float(salvavidas.get("monthly_base"))
+    components = salvavidas.get("components") or {}
     return {
         "status": "OK",
+        "current": round(_as_float(salvavidas.get("current_amount")), 2),
         "monthly_base": round(monthly_base, 2),
         "components": {
-            "fixed_expenses_registered": round(fixed_from_table, 2),
-            "average_essential_spending": round(average_essentials, 2),
-            "debt_minimums": round(debt_minimums, 2),
+            "debt_minimums": round(_as_float(components.get("debt_monthly_payments")), 2),
+            "protected_expenses": round(_as_float(components.get("protected_expenses")), 2),
         },
+        "recommended_1_month": round(monthly_base, 2),
         "recommended_3_months": round(monthly_base * 3, 2),
         "recommended_6_months": round(monthly_base * 6, 2),
+        "coverage_months": round(_as_float(salvavidas.get("coverage_months")), 2),
+        "progress_percent": round(_as_float(salvavidas.get("progress_percent")), 2),
     }
 
 
@@ -424,17 +405,8 @@ def calculate_financial_health_score() -> dict[str, Any]:
     debts = _fetch_debts()
 
     monthly_saving = max(_as_float(flow.get("averages", {}).get("net_operational")), 0.0)
-    emergency_fund_current = 0.0
+    emergency_fund_current = _as_float(emergency.get("current"))
     short_term_debt = 0.0
-
-    # Use savings table if available.
-    workspace_id = get_current_workspace_id()
-    with get_connection() as conn:
-        savings_total = conn.execute(
-            "SELECT COALESCE(SUM(amount),0) AS total FROM savings WHERE workspace_id = %s",
-            (workspace_id,),
-        ).fetchone()["total"]
-    emergency_fund_current = _as_float(savings_total)
 
     for debt in debts:
         debt_type = (debt.get("debt_type") or "").lower()
@@ -714,15 +686,8 @@ def smart_cash_allocation() -> dict[str, Any]:
     emergency = calculate_emergency_fund()
     debts = calculate_debt_strategies()
     avg_net = _as_float(flow.get("averages", {}).get("net_operational"))
-    emergency_target = _as_float(emergency.get("recommended_3_months"))
-
-    workspace_id = get_current_workspace_id()
-    with get_connection() as conn:
-        savings_total = conn.execute(
-            "SELECT COALESCE(SUM(amount),0) AS total FROM savings WHERE workspace_id = %s",
-            (workspace_id,),
-        ).fetchone()["total"]
-    savings_total = _as_float(savings_total)
+    emergency_target = _as_float(emergency.get("recommended_6_months"))
+    savings_total = _as_float(emergency.get("current"))
 
     if avg_net <= 0:
         return {
@@ -739,7 +704,7 @@ def smart_cash_allocation() -> dict[str, Any]:
         allocations.append({
             "target": "Fondo de emergencia",
             "amount": round(to_emergency, 2),
-            "reason": "Aún no cubre 3 meses de gastos esenciales.",
+            "reason": "El Salvavidas todavía no cubre los 6 meses objetivo.",
         })
         remaining -= to_emergency
 
@@ -763,7 +728,7 @@ def smart_cash_allocation() -> dict[str, Any]:
         "status": "OK",
         "surplus_estimate": round(avg_net, 2),
         "emergency_current": round(savings_total, 2),
-        "emergency_target_3_months": round(emergency_target, 2),
+        "emergency_target_6_months": round(emergency_target, 2),
         "allocations": allocations,
     }
 
@@ -785,7 +750,7 @@ def get_financial_engine_report() -> dict[str, Any]:
     if debts.get("status") == "OK" and debts.get("avalanche"):
         recommendations.append(f"Prioridad avalancha: {debts['avalanche']['priority_debt']['name']}.")
     if emergency.get("monthly_base", 0) > 0:
-        recommendations.append(f"Fondo de emergencia recomendado: ₡{emergency['recommended_3_months']:,.0f} a ₡{emergency['recommended_6_months']:,.0f}.")
+        recommendations.append(f"Salvavidas objetivo: ₡{emergency['recommended_6_months']:,.0f} para 6 meses de cobertura.")
     if micro.get("items"):
         top = micro["items"][0]
         recommendations.append(f"Gasto hormiga principal: {top['label']} suma ₡{top['total']:,.0f} en el histórico cargado.")

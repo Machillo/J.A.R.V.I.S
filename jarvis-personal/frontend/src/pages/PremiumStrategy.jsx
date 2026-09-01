@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, RefreshCw, Shield, TrendingUp } from "lucide-react";
-import { getDebtAdvisory, getJarvisPremiumStrategyDashboard } from "../services/jarvisApi";
+import { Activity, AlertTriangle, CheckCircle2, LifeBuoy, RefreshCw, Save, Shield, TrendingUp } from "lucide-react";
+import { getDebtAdvisory, getJarvisPremiumStrategyDashboard, getSalvavidas, updateSalvavidas } from "../services/jarvisApi";
 
 const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
 const usd = (value) => `$${Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -20,6 +20,9 @@ const allocationLabels = {
 
 export default function PremiumStrategy() {
   const [state, setState] = useState({ loading: true, data: null, debtAdvice: null, error: "", running: false });
+  const [salvavidasState, setSalvavidasState] = useState({ loading: true, saving: false, data: null, error: "" });
+  const [salvavidasAmount, setSalvavidasAmount] = useState("");
+  const [protectedExpenseIds, setProtectedExpenseIds] = useState([]);
 
   const load = async () => {
     setState((current) => ({ ...current, loading: true, error: "" }));
@@ -54,7 +57,51 @@ export default function PremiumStrategy() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  const loadSalvavidas = async () => {
+    setSalvavidasState((current) => ({ ...current, loading: true, error: "" }));
+    try {
+      const data = await getSalvavidas();
+      setSalvavidasState({ loading: false, saving: false, data, error: "" });
+      setSalvavidasAmount(String(Number(data?.current_amount || 0)));
+      setProtectedExpenseIds(Array.isArray(data?.protected_expense_ids) ? data.protected_expense_ids : []);
+      return data;
+    } catch (error) {
+      setSalvavidasState({ loading: false, saving: false, data: null, error: error.message || "No pude cargar el Salvavidas." });
+      return null;
+    }
+  };
+
+  const saveSalvavidas = async () => {
+    const amount = Number(salvavidasAmount || 0);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setSalvavidasState((current) => ({ ...current, error: "El saldo del Salvavidas debe ser un monto válido mayor o igual a cero." }));
+      return;
+    }
+    setSalvavidasState((current) => ({ ...current, saving: true, error: "" }));
+    try {
+      const data = await updateSalvavidas({
+        current_amount: amount,
+        protected_expense_ids: protectedExpenseIds,
+      });
+      setSalvavidasState({ loading: false, saving: false, data, error: "" });
+      setSalvavidasAmount(String(Number(data?.current_amount || 0)));
+      setProtectedExpenseIds(Array.isArray(data?.protected_expense_ids) ? data.protected_expense_ids : []);
+      await load();
+    } catch (error) {
+      setSalvavidasState((current) => ({ ...current, saving: false, error: error.message || "No pude guardar el Salvavidas." }));
+    }
+  };
+
+  const toggleProtectedExpense = (expenseId) => {
+    setProtectedExpenseIds((current) =>
+      current.includes(expenseId) ? current.filter((id) => id !== expenseId) : [...current, expenseId]
+    );
+  };
+
+  useEffect(() => {
+    load();
+    loadSalvavidas();
+  }, []);
 
   if (state.loading) {
     return <section className="page premium-strategy-page"><div className="hud-card">Cargando estrategia...</div></section>;
@@ -92,6 +139,11 @@ export default function PremiumStrategy() {
         : 0
     )
   );
+  const salvavidas = salvavidasState.data || {};
+  const salvavidasProgress = Math.max(0, Math.min(100, Number(salvavidas.progress_percent || 0)));
+  const salvavidasExpenses = Array.isArray(salvavidas.available_expenses) ? salvavidas.available_expenses : [];
+  const salvavidasDebts = Array.isArray(salvavidas.debts) ? salvavidas.debts : [];
+  const salvavidasMilestones = Array.isArray(salvavidas.milestones) ? salvavidas.milestones : [];
 
   return (
     <section className="page premium-strategy-page">
@@ -181,6 +233,129 @@ export default function PremiumStrategy() {
         </div>
       </div>
 
+      <div className="hud-panel salvavidas-panel">
+        <div className="salvavidas-header">
+          <div className="strategy-title-row">
+            <LifeBuoy size={22} />
+            <div>
+              <h3>Salvavidas · 6 meses</h3>
+              <p className="panel-subtitle">Tu reserva de supervivencia. Las cuotas de deuda entran automáticamente y vos elegís qué gastos querés proteger.</p>
+            </div>
+          </div>
+          <span className="salvavidas-mode-badge">SALDO MANUAL</span>
+        </div>
+
+        {salvavidasState.error && <div className="alert-card"><AlertTriangle size={18} /> {salvavidasState.error}</div>}
+
+        {salvavidasState.loading ? (
+          <div className="salvavidas-loading">Calculando tu cobertura...</div>
+        ) : (
+          <>
+            <div className="salvavidas-summary-grid">
+              <div><span>Objetivo actual</span><strong>{money(salvavidas.target_amount)}</strong></div>
+              <div><span>Guardado</span><strong>{money(salvavidas.current_amount)}</strong></div>
+              <div><span>Faltante</span><strong>{money(salvavidas.missing_amount)}</strong></div>
+              <div><span>Cobertura</span><strong>{Number(salvavidas.coverage_months || 0).toFixed(1)} meses</strong></div>
+            </div>
+
+            <div className="salvavidas-progress-block">
+              <div className="progress-label-row">
+                <span>Camino a 6 meses</span>
+                <strong>{salvavidasProgress.toFixed(0)}%</strong>
+              </div>
+              <div className="progress-track"><div style={{ width: `${salvavidasProgress}%` }} /></div>
+              <div className="salvavidas-milestones">
+                {salvavidasMilestones.map((item) => (
+                  <div key={item.months} className={`salvavidas-milestone ${item.reached ? "reached" : ""}`}>
+                    {item.reached ? <CheckCircle2 size={16} /> : <span className="milestone-dot" />}
+                    <span>{item.months} {item.months === 1 ? "mes" : "meses"}</span>
+                    <strong>{money(item.target)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="salvavidas-editor">
+              <label className="salvavidas-amount-field">
+                <span>¿Cuánto tenés guardado hoy?</span>
+                <div className="salvavidas-money-input">
+                  <span>₡</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    inputMode="decimal"
+                    value={salvavidasAmount}
+                    onChange={(event) => setSalvavidasAmount(event.target.value)}
+                    aria-label="Saldo actual del Salvavidas"
+                  />
+                </div>
+              </label>
+
+              <div className="salvavidas-components">
+                <div className="salvavidas-component-row locked">
+                  <div>
+                    <span>Cuotas mensuales de deudas</span>
+                    <small>Se incluyen automáticamente mientras la deuda esté activa.</small>
+                  </div>
+                  <strong>{money(salvavidas.components?.debt_monthly_payments)}</strong>
+                </div>
+
+                {salvavidasDebts.length > 0 && (
+                  <div className="salvavidas-debt-list">
+                    {salvavidasDebts.map((debt) => (
+                      <div key={debt.id}><span>{debt.name}</span><strong>{money(debt.monthly_payment)}/mes</strong></div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="salvavidas-expense-section">
+                  <div className="salvavidas-section-copy">
+                    <strong>Gastos que querés proteger</strong>
+                    <small>Elegí solo lo que querés poder seguir pagando durante seis meses sin trabajo.</small>
+                  </div>
+                  {salvavidasExpenses.length === 0 ? (
+                    <p className="muted-text">Todavía no hay gastos fijos activos para seleccionar.</p>
+                  ) : (
+                    <div className="salvavidas-expense-list">
+                      {salvavidasExpenses.map((expense) => {
+                        const checked = protectedExpenseIds.includes(expense.id);
+                        return (
+                          <label key={expense.id} className={`salvavidas-expense-option ${checked ? "selected" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleProtectedExpense(expense.id)}
+                            />
+                            <span className="salvavidas-check">{checked ? <CheckCircle2 size={18} /> : null}</span>
+                            <span className="salvavidas-expense-copy">
+                              <strong>{expense.name}</strong>
+                              <small>{expense.category}</small>
+                            </span>
+                            <strong>{money(expense.monthly_amount)}/mes</strong>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="salvavidas-base-total">
+                <span>Costo mensual protegido</span>
+                <strong>{money(salvavidas.monthly_base)}</strong>
+              </div>
+
+              <button className="primary-action-button salvavidas-save" type="button" onClick={saveSalvavidas} disabled={salvavidasState.saving}>
+                <Save size={18} />
+                {salvavidasState.saving ? "Guardando..." : "Guardar Salvavidas"}
+              </button>
+              <small className="salvavidas-verification-note">{salvavidas.verification?.message}</small>
+            </div>
+          </>
+        )}
+      </div>
+
       <div className="strategy-grid-2">
         <div className="hud-panel strategy-safety-panel">
           <h3><Shield size={18} /> Seguridad financiera</h3>
@@ -261,6 +436,129 @@ export default function PremiumStrategy() {
             <small>{debtScenarios.C_hybrid?.months || debtScenarios.hybrid?.estimated_months || "--"} meses</small>
           </div>
         </div>
+      </div>
+
+      <div className="hud-panel salvavidas-panel">
+        <div className="salvavidas-header">
+          <div className="strategy-title-row">
+            <LifeBuoy size={22} />
+            <div>
+              <h3>Salvavidas · 6 meses</h3>
+              <p className="panel-subtitle">Tu reserva de supervivencia. Las cuotas de deuda entran automáticamente y vos elegís qué gastos querés proteger.</p>
+            </div>
+          </div>
+          <span className="salvavidas-mode-badge">SALDO MANUAL</span>
+        </div>
+
+        {salvavidasState.error && <div className="alert-card"><AlertTriangle size={18} /> {salvavidasState.error}</div>}
+
+        {salvavidasState.loading ? (
+          <div className="salvavidas-loading">Calculando tu cobertura...</div>
+        ) : (
+          <>
+            <div className="salvavidas-summary-grid">
+              <div><span>Objetivo actual</span><strong>{money(salvavidas.target_amount)}</strong></div>
+              <div><span>Guardado</span><strong>{money(salvavidas.current_amount)}</strong></div>
+              <div><span>Faltante</span><strong>{money(salvavidas.missing_amount)}</strong></div>
+              <div><span>Cobertura</span><strong>{Number(salvavidas.coverage_months || 0).toFixed(1)} meses</strong></div>
+            </div>
+
+            <div className="salvavidas-progress-block">
+              <div className="progress-label-row">
+                <span>Camino a 6 meses</span>
+                <strong>{salvavidasProgress.toFixed(0)}%</strong>
+              </div>
+              <div className="progress-track"><div style={{ width: `${salvavidasProgress}%` }} /></div>
+              <div className="salvavidas-milestones">
+                {salvavidasMilestones.map((item) => (
+                  <div key={item.months} className={`salvavidas-milestone ${item.reached ? "reached" : ""}`}>
+                    {item.reached ? <CheckCircle2 size={16} /> : <span className="milestone-dot" />}
+                    <span>{item.months} {item.months === 1 ? "mes" : "meses"}</span>
+                    <strong>{money(item.target)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="salvavidas-editor">
+              <label className="salvavidas-amount-field">
+                <span>¿Cuánto tenés guardado hoy?</span>
+                <div className="salvavidas-money-input">
+                  <span>₡</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    inputMode="decimal"
+                    value={salvavidasAmount}
+                    onChange={(event) => setSalvavidasAmount(event.target.value)}
+                    aria-label="Saldo actual del Salvavidas"
+                  />
+                </div>
+              </label>
+
+              <div className="salvavidas-components">
+                <div className="salvavidas-component-row locked">
+                  <div>
+                    <span>Cuotas mensuales de deudas</span>
+                    <small>Se incluyen automáticamente mientras la deuda esté activa.</small>
+                  </div>
+                  <strong>{money(salvavidas.components?.debt_monthly_payments)}</strong>
+                </div>
+
+                {salvavidasDebts.length > 0 && (
+                  <div className="salvavidas-debt-list">
+                    {salvavidasDebts.map((debt) => (
+                      <div key={debt.id}><span>{debt.name}</span><strong>{money(debt.monthly_payment)}/mes</strong></div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="salvavidas-expense-section">
+                  <div className="salvavidas-section-copy">
+                    <strong>Gastos que querés proteger</strong>
+                    <small>Elegí solo lo que querés poder seguir pagando durante seis meses sin trabajo.</small>
+                  </div>
+                  {salvavidasExpenses.length === 0 ? (
+                    <p className="muted-text">Todavía no hay gastos fijos activos para seleccionar.</p>
+                  ) : (
+                    <div className="salvavidas-expense-list">
+                      {salvavidasExpenses.map((expense) => {
+                        const checked = protectedExpenseIds.includes(expense.id);
+                        return (
+                          <label key={expense.id} className={`salvavidas-expense-option ${checked ? "selected" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleProtectedExpense(expense.id)}
+                            />
+                            <span className="salvavidas-check">{checked ? <CheckCircle2 size={18} /> : null}</span>
+                            <span className="salvavidas-expense-copy">
+                              <strong>{expense.name}</strong>
+                              <small>{expense.category}</small>
+                            </span>
+                            <strong>{money(expense.monthly_amount)}/mes</strong>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="salvavidas-base-total">
+                <span>Costo mensual protegido</span>
+                <strong>{money(salvavidas.monthly_base)}</strong>
+              </div>
+
+              <button className="primary-action-button salvavidas-save" type="button" onClick={saveSalvavidas} disabled={salvavidasState.saving}>
+                <Save size={18} />
+                {salvavidasState.saving ? "Guardando..." : "Guardar Salvavidas"}
+              </button>
+              <small className="salvavidas-verification-note">{salvavidas.verification?.message}</small>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="strategy-grid-2">

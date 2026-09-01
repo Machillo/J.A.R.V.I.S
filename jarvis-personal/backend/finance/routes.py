@@ -35,6 +35,7 @@ from backend.finance.models import (
     ReceivablePaymentRequest, ReceivableEntryRequest, ReceivableEntryUpdateRequest,
     AccountBalanceRequest,
     GoalPlanningRequest,
+    SalvavidasUpdateRequest,
 )
 
 from backend.finance.service import (
@@ -123,6 +124,8 @@ from backend.finance.fixed_expenses import (
     seed_owner_fixed_expenses,
     update_fixed_expense,
 )
+
+from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
 
@@ -495,6 +498,16 @@ def financial_engine_debt_strategies():
 @router.get("/engine/emergency-fund")
 def financial_engine_emergency_fund():
     return calculate_emergency_fund()
+
+
+@router.get("/salvavidas")
+def salvavidas_state():
+    return get_salvavidas_state()
+
+
+@router.put("/salvavidas")
+def salvavidas_update(request: SalvavidasUpdateRequest):
+    return update_salvavidas(**request.model_dump(exclude_unset=True))
 
 
 @router.post("/engine/simulate")
