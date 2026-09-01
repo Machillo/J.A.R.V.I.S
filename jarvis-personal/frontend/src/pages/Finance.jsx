@@ -1397,7 +1397,7 @@ export default function Finance({
     transactions: [],
     total: 0,
   };
-  const isOwner = currentUser?.role === "owner" || currentUser?.email === "gatotico99@gmail.com";
+  const isOwner = currentUser?.role === "owner";
   const openDetail = (title, items = [], empty = "No movements to display.") => setDetail({ title, items, empty });
 
   return (

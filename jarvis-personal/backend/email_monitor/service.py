@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import html
+import hmac
 import json
 import os
 import re
@@ -23,7 +24,7 @@ from backend.email_monitor.parser import (
 from backend.email_monitor.deduplication import canonical_score, find_semantic_duplicate, resolve_transaction_time
 from backend.email_monitor.normalization import normalize_description
 
-OWNER_EMAIL = os.getenv("OWNER_EMAIL", "gatotico99@gmail.com")
+OWNER_EMAIL = os.getenv("OWNER_EMAIL", "").strip().lower()
 CRON_SECRET = os.getenv("EMAIL_MONITOR_CRON_SECRET", "")
 DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
@@ -108,6 +109,9 @@ def ensure_email_tables(conn) -> None:
         """
     )
     for ddl in [
+        "ALTER TABLE email_monitor_settings ADD COLUMN IF NOT EXISTS gmail_history_id TEXT",
+        "ALTER TABLE email_monitor_settings ADD COLUMN IF NOT EXISTS gmail_watch_expiration TIMESTAMPTZ",
+        "ALTER TABLE email_monitor_settings ADD COLUMN IF NOT EXISTS gmail_watch_topic TEXT",
         "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS raw_body TEXT",
         "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS body_text TEXT",
         "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS attachment_names TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]",
@@ -280,18 +284,8 @@ def ensure_email_tables(conn) -> None:
 
 
 def _owner_user_id(conn) -> int | None:
-    row = conn.execute(
-        """
-        SELECT id
-        FROM users
-        WHERE email = 'gatotico99@gmail.com'
-        ORDER BY id
-        LIMIT 1
-        """
-    ).fetchone()
-    if row:
-        return int(row["id"])
-
+    if not OWNER_EMAIL:
+        raise RuntimeError("OWNER_EMAIL no está configurado.")
     row = conn.execute(
         """
         SELECT id
@@ -451,17 +445,19 @@ def _seed_default_card_aliases(conn, user_id: int, workspace_id: str | None = No
     Additional Cards UI filters them out. Emily and Sidey are the only default
     additional-card owners shown there.
     """
+    try:
+        configured = json.loads(os.getenv("JARVIS_CARD_ALIASES", "[]") or "[]")
+    except json.JSONDecodeError:
+        configured = []
     defaults = [
-        ("3131", "Kenneth", "principal", True),
-        ("5108", "Kenneth", "principal", True),
-        ("1655", "Kenneth", "principal", True),
-        ("7514", "Kenneth", "principal", True),
-        ("8137", "Kenneth", "principal", True),  # cuenta IBAN BAC ligada a débito 1655
-        ("1813", "Kenneth", "principal", True),  # número corto/mascarado mostrado por BAC para la misma cuenta
-        ("8295", "Kenneth", "principal", True),
-        ("2205", "Emily", "adicional", False),
-        ("3149", "Emily", "adicional", False),
-        ("2179", "Sidey", "adicional", False),
+        (
+            str(item.get("last4") or ""),
+            str(item.get("owner") or ""),
+            str(item.get("relationship") or "principal"),
+            bool(item.get("is_primary", False)),
+        )
+        for item in configured
+        if isinstance(item, dict) and item.get("last4") and item.get("owner")
     ]
     for last4, owner, relationship, is_primary in defaults:
         conn.execute(
@@ -564,11 +560,16 @@ def get_email_monitor_status() -> dict[str, Any]:
         os.getenv(key)
         for key in ["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"]
     )
+    gmail_push_ready = gmail_ready and all(
+        os.getenv(key)
+        for key in ["GMAIL_PUBSUB_TOPIC", "GMAIL_PUBSUB_VERIFICATION_TOKEN", "EMAIL_MONITOR_CRON_SECRET"]
+    )
 
     return {
         "status": "OK",
         "owner_only": True,
         "gmail_ready": gmail_ready,
+        "gmail_push_ready": gmail_push_ready,
         "settings": dict(settings),
         "totals": totals if isinstance(totals, dict) else dict(totals),
         "required_env": [
@@ -579,6 +580,8 @@ def get_email_monitor_status() -> dict[str, Any]:
         "optional_env": [
             "GMAIL_FINANCE_QUERY",
             "EMAIL_AUTO_COMMIT_CONFIDENCE",
+            "GMAIL_PUBSUB_TOPIC",
+            "GMAIL_PUBSUB_VERIFICATION_TOKEN",
             "EMAIL_MONITOR_CRON_SECRET",
         ],
     }
@@ -1778,6 +1781,67 @@ def _list_gmail_messages(service, *, gmail_query: str, max_results: int) -> list
     return messages[:max_results]
 
 
+def _process_gmail_message(service, *, message_id: str, owner_id: int, auto_commit: bool = False) -> dict[str, Any]:
+    """Fetch and ingest one Gmail message through the existing parser pipeline."""
+    full = service.users().messages().get(userId="me", id=message_id, format="full").execute()
+    headers = {
+        h.get("name", "").lower(): h.get("value", "")
+        for h in full.get("payload", {}).get("headers", [])
+    }
+    subject = headers.get("subject", "")
+    sender = headers.get("from", "")
+    date_header = headers.get("date")
+    received_at = None
+    if date_header:
+        try:
+            received_at = parsedate_to_datetime(date_header).astimezone(timezone.utc).isoformat()
+        except Exception:
+            received_at = None
+
+    payload = full.get("payload", {})
+    body = _decode_gmail_body(payload) or full.get("snippet", "")
+    attachments = _collect_attachments(payload)
+    pdf_text, attachment_names = _extract_pdf_attachment_text(service, message_id, attachments)
+    if pdf_text:
+        body = f"{body}\n\n{pdf_text}".strip()
+
+    try:
+        result = scan_email_text(
+            subject=subject,
+            sender=sender,
+            body=body,
+            received_at=received_at,
+            auto_commit=auto_commit,
+            user_id=owner_id,
+            provider_message_id=message_id,
+            attachment_names=attachment_names,
+        )
+    except Exception as exc:
+        with get_connection() as conn:
+            ensure_email_tables(conn)
+            _log_email_event(
+                conn,
+                user_id=owner_id,
+                provider_message_id=message_id,
+                sender=sender,
+                subject=subject,
+                bank="unknown",
+                action="error",
+                reason=str(exc),
+            )
+            conn.commit()
+        result = {"status": "ERROR", "message": str(exc), "candidate": None}
+
+    return {
+        "gmail_id": message_id,
+        "subject": subject,
+        "sender": sender,
+        "status": result.get("status"),
+        "message": result.get("message"),
+        "candidate_status": (result.get("candidate") or {}).get("status"),
+    }
+
+
 def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
     # Lectura y candidatos pendientes únicamente. No autoguardar.
     auto_commit = False
@@ -1806,60 +1870,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
         message_id = item.get("id")
         if not message_id:
             continue
-        full = service.users().messages().get(userId="me", id=message_id, format="full").execute()
-        headers = {h.get("name", "").lower(): h.get("value", "") for h in full.get("payload", {}).get("headers", [])}
-        subject = headers.get("subject", "")
-        sender = headers.get("from", "")
-        date_header = headers.get("date")
-        received_at = None
-        if date_header:
-            try:
-                received_at = parsedate_to_datetime(date_header).astimezone(timezone.utc).isoformat()
-            except Exception:
-                received_at = None
-
-        payload = full.get("payload", {})
-        body = _decode_gmail_body(payload) or full.get("snippet", "")
-        attachments = _collect_attachments(payload)
-        pdf_text, attachment_names = _extract_pdf_attachment_text(service, message_id, attachments)
-        if pdf_text:
-            body = f"{body}\n\n{pdf_text}".strip()
-
-        try:
-            result = scan_email_text(
-                subject=subject,
-                sender=sender,
-                body=body,
-                received_at=received_at,
-                auto_commit=auto_commit,
-                user_id=owner_id,
-                provider_message_id=message_id,
-                attachment_names=attachment_names,
-            )
-        except Exception as exc:
-            with get_connection() as conn:
-                ensure_email_tables(conn)
-                _log_email_event(
-                    conn,
-                    user_id=owner_id,
-                    provider_message_id=message_id,
-                    sender=sender,
-                    subject=subject,
-                    bank="unknown",
-                    action="error",
-                    reason=str(exc),
-                )
-                conn.commit()
-            result = {"status": "ERROR", "message": str(exc), "candidate": None}
-
-        processed.append({
-            "gmail_id": message_id,
-            "subject": subject,
-            "sender": sender,
-            "status": result.get("status"),
-            "message": result.get("message"),
-            "candidate_status": (result.get("candidate") or {}).get("status"),
-        })
+        processed.append(_process_gmail_message(service, message_id=message_id, owner_id=owner_id))
 
     with get_connection() as conn:
         ensure_email_tables(conn)
@@ -1904,9 +1915,166 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
 def cron_sync(secret: str | None, max_results: int = 20) -> dict[str, Any]:
     if not CRON_SECRET:
         raise HTTPException(status_code=503, detail="EMAIL_MONITOR_CRON_SECRET no está configurado.")
-    if not secret or secret != CRON_SECRET:
+    if not secret or not hmac.compare_digest(secret, CRON_SECRET):
         raise HTTPException(status_code=403, detail="Cron secret inválido.")
     try:
         return sync_gmail_for_owner(max_results=max_results, auto_commit=False, current_month_only=True)
     except Exception as exc:
         return {"status": "ERROR", "message": str(exc)}
+
+
+def renew_gmail_watch(secret: str | None) -> dict[str, Any]:
+    """Create/renew Gmail push notifications (Gmail watches expire within 7 days)."""
+    if not CRON_SECRET:
+        raise HTTPException(status_code=503, detail="EMAIL_MONITOR_CRON_SECRET no está configurado.")
+    if not secret or not hmac.compare_digest(secret, CRON_SECRET):
+        raise HTTPException(status_code=403, detail="Cron secret inválido.")
+
+    topic_name = os.getenv("GMAIL_PUBSUB_TOPIC", "").strip()
+    if not topic_name:
+        raise HTTPException(status_code=503, detail="GMAIL_PUBSUB_TOPIC no está configurado.")
+
+    service = _gmail_service()
+    response = service.users().watch(
+        userId="me",
+        body={"topicName": topic_name, "labelIds": ["INBOX"]},
+    ).execute()
+    history_id = str(response.get("historyId") or "")
+    expiration_ms = int(response.get("expiration") or 0)
+    expiration = (
+        datetime.fromtimestamp(expiration_ms / 1000, tz=timezone.utc)
+        if expiration_ms
+        else None
+    )
+
+    with get_connection() as conn:
+        ensure_email_tables(conn)
+        owner_id = _owner_user_id(conn)
+        if not owner_id:
+            raise RuntimeError("No encontré usuario owner para configurar Gmail watch.")
+        workspace_id = _workspace_id_for_user(conn, owner_id)
+        _settings_query_for_owner(conn, owner_id)
+        conn.execute(
+            """
+            UPDATE email_monitor_settings
+            SET gmail_history_id = %s,
+                gmail_watch_expiration = %s,
+                gmail_watch_topic = %s,
+                updated_at = NOW()
+            WHERE workspace_id = %s
+            """,
+            (history_id, expiration, topic_name, workspace_id),
+        )
+        conn.commit()
+
+    return {
+        "status": "OK",
+        "history_id": history_id,
+        "expiration": expiration.isoformat() if expiration else None,
+        "message": "Gmail watch activado/renovado.",
+    }
+
+
+def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, Any]:
+    """Process a verified Google Pub/Sub Gmail notification idempotently."""
+    expected_token = os.getenv("GMAIL_PUBSUB_VERIFICATION_TOKEN", "")
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="GMAIL_PUBSUB_VERIFICATION_TOKEN no está configurado.")
+    if not token or not hmac.compare_digest(token, expected_token):
+        raise HTTPException(status_code=403, detail="Token Pub/Sub inválido.")
+
+    message = payload.get("message") or {}
+    encoded_data = message.get("data")
+    if not encoded_data:
+        raise HTTPException(status_code=400, detail="Notificación Pub/Sub sin data.")
+    try:
+        padding = "=" * (-len(encoded_data) % 4)
+        notification = json.loads(base64.urlsafe_b64decode(encoded_data + padding).decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Data Pub/Sub inválida.") from exc
+
+    pushed_history_id = str(notification.get("historyId") or "")
+    email_address = str(notification.get("emailAddress") or "").lower()
+    if not pushed_history_id:
+        raise HTTPException(status_code=400, detail="Notificación Gmail sin historyId.")
+    if email_address and email_address != OWNER_EMAIL.lower():
+        raise HTTPException(status_code=403, detail="La notificación no pertenece al correo owner.")
+
+    service = _gmail_service()
+    with get_connection() as conn:
+        ensure_email_tables(conn)
+        owner_id = _owner_user_id(conn)
+        if not owner_id:
+            raise RuntimeError("No encontré usuario owner para procesar Gmail push.")
+        workspace_id = _workspace_id_for_user(conn, owner_id)
+        settings_query = _settings_query_for_owner(conn, owner_id)
+        row = conn.execute(
+            "SELECT gmail_history_id FROM email_monitor_settings WHERE workspace_id = %s",
+            (workspace_id,),
+        ).fetchone()
+        previous_history_id = str((row or {}).get("gmail_history_id") or "")
+        conn.commit()
+
+    if not previous_history_id:
+        # The first watch notification is only a checkpoint. A normal scan
+        # catches anything that arrived before the watch was stored.
+        result = sync_gmail_for_owner(max_results=150, current_month_only=True)
+        processed = result.get("processed", [])
+    else:
+        message_ids: list[str] = []
+        page_token: str | None = None
+        try:
+            while True:
+                kwargs: dict[str, Any] = {
+                    "userId": "me",
+                    "startHistoryId": previous_history_id,
+                    "historyTypes": ["messageAdded"],
+                    "labelId": "INBOX",
+                }
+                if page_token:
+                    kwargs["pageToken"] = page_token
+                history = service.users().history().list(**kwargs).execute()
+                for event in history.get("history", []) or []:
+                    for added in event.get("messagesAdded", []) or []:
+                        message_id = (added.get("message") or {}).get("id")
+                        if message_id and message_id not in message_ids:
+                            message_ids.append(message_id)
+                page_token = history.get("nextPageToken")
+                if not page_token:
+                    break
+            processed = [
+                _process_gmail_message(service, message_id=message_id, owner_id=owner_id)
+                for message_id in message_ids
+            ]
+        except Exception as exc:
+            # Gmail returns 404 when the stored historyId is too old. The
+            # bounded cycle scan is the safe recovery path and remains idempotent.
+            if getattr(exc, "status_code", None) != 404 and getattr(getattr(exc, "resp", None), "status", None) != 404:
+                raise
+            result = sync_gmail_for_owner(max_results=150, current_month_only=True)
+            processed = result.get("processed", [])
+
+    with get_connection() as conn:
+        ensure_email_tables(conn)
+        conn.execute(
+            """
+            UPDATE email_monitor_settings
+            SET gmail_history_id = GREATEST(
+                    COALESCE(NULLIF(gmail_history_id, '')::NUMERIC, 0),
+                    %s::NUMERIC
+                )::TEXT,
+                last_scan_at = NOW(),
+                updated_at = NOW(),
+                gmail_query = %s
+            WHERE workspace_id = %s
+            """,
+            (pushed_history_id, settings_query or DEFAULT_QUERY, workspace_id),
+        )
+        conn.commit()
+
+    return {
+        "status": "OK",
+        "history_id": pushed_history_id,
+        "processed_count": len(processed),
+        "processed": processed,
+    }

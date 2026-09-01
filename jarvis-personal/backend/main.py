@@ -55,6 +55,8 @@ PUBLIC_PATHS = {
     "/auth/health",
     "/auth/check-access",
     "/email-monitor/cron",
+    "/email-monitor/gmail-watch",
+    "/email-monitor/gmail-push",
     "/notifications/cron",
     "/internal/owner-bridge/verify",
 }

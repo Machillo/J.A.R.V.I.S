@@ -9,6 +9,8 @@ from backend.email_monitor.service import (
     decide_candidate,
     get_email_monitor_status,
     list_email_candidates,
+    process_gmail_push,
+    renew_gmail_watch,
     scan_email_text,
     sync_gmail_for_owner,
 )
@@ -63,3 +65,13 @@ def email_monitor_cron(
     max_results: int = Query(default=150, ge=1, le=500),
 ):
     return cron_sync(secret=x_jarvis_cron_secret, max_results=max_results)
+
+
+@router.post("/gmail-watch")
+def email_monitor_gmail_watch(x_jarvis_cron_secret: str | None = Header(default=None)):
+    return renew_gmail_watch(secret=x_jarvis_cron_secret)
+
+
+@router.post("/gmail-push")
+def email_monitor_gmail_push(payload: dict, token: str | None = Query(default=None)):
+    return process_gmail_push(payload=payload, token=token)

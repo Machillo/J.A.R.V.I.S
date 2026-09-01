@@ -11,6 +11,7 @@ No secrets or auth tokens are printed.
 from __future__ import annotations
 
 import sys
+import os
 import uuid
 
 from fastapi import HTTPException
@@ -37,8 +38,8 @@ from backend.user_product.service import (
 )
 
 
-PERSONAL_EMAIL = "gatotico99@gmail.com"
-FINVA_EMAIL = "kenneth.d.alvarado@gmail.com"
+PERSONAL_EMAIL = os.getenv("PERSONAL_ISOLATION_TEST_EMAIL", "")
+FINVA_EMAIL = os.getenv("FINVA_ISOLATION_TEST_EMAIL", "")
 
 
 def fail(message: str):

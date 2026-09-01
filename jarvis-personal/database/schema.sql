@@ -442,6 +442,9 @@ CREATE TABLE IF NOT EXISTS email_monitor_settings (
     monitored_senders TEXT[] NOT NULL DEFAULT ARRAY['bac','credomatic','popular','multimoney'],
     gmail_query TEXT NOT NULL DEFAULT '',
     last_scan_at TIMESTAMPTZ,
+    gmail_history_id TEXT,
+    gmail_watch_expiration TIMESTAMPTZ,
+    gmail_watch_topic TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -498,7 +501,7 @@ INSERT INTO email_monitor_settings (user_id, gmail_query)
 SELECT id,
        '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular OR from:popular OR "BAC - SINPE" OR "Banco Popular") ("Notificación de transacción" OR "Notificación de Transferencia" OR "Transacción realizada" OR "Estado de cuenta" OR "Estado de Cuenta" OR "estados de cuenta" OR SINPE OR transferencia OR compra OR pago OR depósito OR deposito OR retiro OR abono)'
 FROM users
-WHERE email = 'gatotico99@gmail.com'
+WHERE email = NULLIF(current_setting('app.owner_email', true), '')
 ON CONFLICT (workspace_id)
 DO UPDATE SET gmail_query = EXCLUDED.gmail_query, updated_at = NOW();
 
@@ -565,7 +568,7 @@ CREATE INDEX IF NOT EXISTS idx_notification_jobs_user ON notification_jobs(user_
 -- Ejemplo opcional para prueba manual. Cambiá scheduled_at si querés probar cron.
 -- INSERT INTO notification_jobs (user_id, title, body, category, scheduled_at, dedupe_key)
 -- SELECT id, 'J.A.R.V.I.S.', 'Señor Kenneth, prueba programada de notificaciones.', 'test', NOW() + INTERVAL '1 minute', 'manual:test:phase7'
--- FROM allowed_users WHERE email = 'gatotico99@gmail.com'
+-- FROM allowed_users WHERE email = NULLIF(current_setting('app.owner_email', true), '')
 -- ON CONFLICT (user_id, dedupe_key) DO NOTHING;
 
 
@@ -1070,4 +1073,3 @@ SELECT a.id,p.id,'active','self_service',NOW(),NOW(),NOW()
 FROM accounts a CROSS JOIN plans p
 WHERE a.role<>'owner' AND p.code='free'
 ON CONFLICT(account_id) DO NOTHING;
-

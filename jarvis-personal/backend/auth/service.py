@@ -14,7 +14,7 @@ SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 VALID_ROLES = {"owner", "admin", "user", "viewer"}
 VALID_STATUSES = {"active", "blocked", "pending"}
-OWNER_EMAILS = {email.strip().lower() for email in os.getenv("OWNER_EMAILS", "gatotico99@gmail.com").split(",") if email.strip()}
+OWNER_EMAILS = {email.strip().lower() for email in os.getenv("OWNER_EMAILS", "").split(",") if email.strip()}
 
 
 def _normalize_email(email: str) -> str:

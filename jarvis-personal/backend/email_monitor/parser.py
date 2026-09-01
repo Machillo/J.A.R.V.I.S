@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import html
+import json
+import os
 import re
 import unicodedata
 from datetime import date, datetime
@@ -99,24 +101,20 @@ FIELD_LABELS = {
 
 # Known personal accounts. These are used only to prevent internal movements
 # from becoming expenses/income. Display/masking uses the last 4 digits.
-OWN_ACCOUNT_IBANS = {
-    "CR74031001010093646126": "MultiMoney colones",
-    "CR42010200009469042572": "BAC planilla",
-    "CR50010200009625018137": "BAC cuenta",
-}
+def _env_json_mapping(name: str) -> dict[str, str]:
+    try:
+        value = json.loads(os.getenv(name, "{}") or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return {str(key): str(label) for key, label in value.items()} if isinstance(value, dict) else {}
+
+
+OWN_ACCOUNT_IBANS = _env_json_mapping("JARVIS_OWN_ACCOUNT_IBANS")
 OWN_ACCOUNT_LAST4 = {iban[-4:]: label for iban, label in OWN_ACCOUNT_IBANS.items()}
-OWN_DEBIT_CARD_LAST4 = {"1655", "7514"}
-OWN_ACCOUNT_ALIASES = {
-    # IBAN/account/card endings that identify Kenneth's own money routes.
-    # These must never become pending review candidates when both sides are own accounts
-    # or when the template explicitly says the movement is an own investment/smart account.
-    "6126": "MultiMoney colones",
-    "2572": "BAC planilla",
-    "8137": "BAC cuenta",
-    "1813": "BAC cuenta",
-    "1655": "BAC débito",
-    "7514": "BAC débito",
+OWN_DEBIT_CARD_LAST4 = {
+    item.strip() for item in os.getenv("JARVIS_OWN_DEBIT_CARD_LAST4", "").split(",") if item.strip()
 }
+OWN_ACCOUNT_ALIASES = _env_json_mapping("JARVIS_OWN_ACCOUNT_ALIASES")
 CARD_PAYMENT_KEYWORDS = [
     "pago tarjeta bac", "pago de tarjeta", "tarjeta de credito", "tarjeta de crédito",
     "monto del pago", "comprobante de pago de tarjeta",

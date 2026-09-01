@@ -199,7 +199,9 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
 
     summary = get_sports_calendar_summary({"scope": "all", "query_type": "radar", "query": ""})
     body = summary.get("message") or "Señor, no encontré eventos deportivos claros para hoy."
-    body = body.replace("Señor Kenneth", "Señor").replace("Señor gatotico99", "Señor")
+    configured_name = os.getenv("OWNER_DISPLAY_NAME", "").strip()
+    if configured_name:
+        body = body.replace(f"Señor {configured_name}", "Señor")
     if not body.lower().startswith("señor"):
         body = f"Señor, {body}"
     body = body[:450]
