@@ -582,3 +582,422 @@
   .users-app .situation-card-head { grid-template-columns:auto 1fr; }
   .users-app .situation-edit { grid-column:2; justify-self:start; padding:0; }
 }
+
+/* ========================================================================== */
+/* 2026 MOBILE FINTECH VISUAL SYSTEM — FINVA                                  */
+/* Visual-only layer. Structure, order, navigation and flows remain intact.    */
+/* ========================================================================== */
+
+.users-app {
+  --f-bg: #071014;
+  --f-bg-2: #0a171d;
+  --f-surface: rgba(15, 31, 38, .9);
+  --f-surface-2: rgba(20, 40, 49, .94);
+  --f-soft: rgba(255,255,255,.045);
+  --f-border: rgba(182, 225, 238, .10);
+  --f-border-strong: rgba(182, 225, 238, .16);
+  --f-text: #f4fbfd;
+  --f-text-2: #c7d9df;
+  --f-muted: #7e9aa4;
+  --f-accent: #5dd6ff;
+  --f-accent-2: #4cb7dc;
+  --f-green: #55d99b;
+  --f-yellow: #eecb72;
+  --f-red: #ff7787;
+  --f-radius-sm: 14px;
+  --f-radius-md: 20px;
+  --f-radius-lg: 25px;
+  --f-shadow-sm: 0 8px 24px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.025);
+  --f-shadow-md: 0 20px 54px rgba(0,0,0,.25), inset 0 1px rgba(255,255,255,.035);
+  --text: var(--f-text);
+  --muted: var(--f-muted);
+  --border: var(--f-border);
+  --border-strong: var(--f-border-strong);
+  --accent-soft: rgba(93,214,255,.10);
+  width: 100%;
+  max-width: 560px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  background:
+    radial-gradient(circle at 52% -8%, rgba(93,214,255,.14), transparent 25rem),
+    radial-gradient(circle at 108% 24%, rgba(85,217,155,.07), transparent 24rem),
+    linear-gradient(180deg, var(--f-bg) 0%, #081217 100%);
+  color: var(--f-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  overflow-x: hidden;
+}
+
+body:has(.users-app) { background: #050b0e; }
+
+.users-app .mobile-app-shell { min-height: 100dvh; background: transparent; }
+
+.users-app .mobile-content {
+  width: 100%;
+  max-width: none;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 14px calc(98px + env(safe-area-inset-bottom));
+}
+
+.users-app .mobile-app-header {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  min-height: 66px;
+  margin: 0 -14px 12px;
+  padding: max(8px, env(safe-area-inset-top,0px)) 14px 8px;
+  background: linear-gradient(180deg, rgba(7,16,20,.95), rgba(7,16,20,.84) 78%, rgba(7,16,20,0));
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(140%);
+}
+
+.users-app .mobile-app-header strong {
+  display: block;
+  font-size: 1rem;
+  font-weight: 880;
+  letter-spacing: .09em;
+}
+
+.users-app .mobile-app-header small {
+  display: block;
+  margin-top: 2px;
+  color: var(--f-muted);
+  font-size: .68rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.users-app .profile-chip {
+  width: 42px;
+  height: 42px;
+  border-radius: 15px;
+  border: 1px solid var(--f-border-strong);
+  background: linear-gradient(145deg, rgba(93,214,255,.14), rgba(85,217,155,.08));
+  color: #eaffff;
+  box-shadow: inset 0 1px rgba(255,255,255,.04);
+  font-weight: 800;
+}
+
+.users-app .mobile-page,
+.users-app .page {
+  width: 100%;
+  max-width: none;
+  padding-bottom: 8px;
+}
+
+.users-app .mobile-page-heading,
+.users-app .page-heading-row {
+  margin-bottom: 14px;
+}
+
+.users-app .mobile-page-heading h1,
+.users-app .page-heading-row h1,
+.users-app .page-heading-row h2 {
+  color: var(--f-text);
+  font-size: clamp(1.7rem, 8vw, 2.18rem);
+  line-height: 1.02;
+  letter-spacing: -.045em;
+  font-weight: 850;
+}
+
+.users-app .mobile-page-heading p,
+.users-app .page-heading-row p,
+.users-app .subtitle,
+.users-app .muted-text { color: var(--f-muted); }
+
+.users-app .panel,
+.users-app .card,
+.users-app .mobile-panel,
+.users-app .situation-card-body,
+.users-app .premium-ai-card,
+.users-app .simulator-card,
+.users-app .tier-explanation-card,
+.users-app .profile-completeness-card,
+.users-app .settings-card,
+.users-app .account-card,
+.users-app .current-plan-card,
+.users-app .strategy-kpi-card,
+.users-app .vip-scenario {
+  border: 1px solid var(--f-border);
+  border-radius: var(--f-radius-lg);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.012)),
+    var(--f-surface);
+  box-shadow: var(--f-shadow-sm);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  backdrop-filter: blur(18px) saturate(120%);
+}
+
+.users-app .grid3,
+.users-app .kpis,
+.users-app .vip-health-grid,
+.users-app .strategy-kpi-grid,
+.users-app .dashboard-grid,
+.users-app .situation-card-list { gap: 11px; }
+
+.users-app .panel,
+.users-app .card,
+.users-app .mobile-panel { padding: 15px; }
+
+.users-app .card strong,
+.users-app .strategy-kpi-card strong,
+.users-app .kpis strong {
+  color: var(--f-text);
+  letter-spacing: -.035em;
+}
+
+.users-app .dashboard-plan-action {
+  min-height: 76px;
+  border: 1px solid var(--f-border-strong);
+  border-radius: 21px;
+  background:
+    linear-gradient(145deg, rgba(93,214,255,.085), rgba(255,255,255,.018)),
+    var(--f-surface);
+  box-shadow: var(--f-shadow-sm);
+  transition: transform .15s cubic-bezier(.2,.8,.2,1), border-color .15s ease;
+}
+
+.users-app .dashboard-plan-action:active { transform: scale(.985); }
+
+.users-app .dashboard-plan-action.vip {
+  border-color: rgba(238,203,114,.20);
+  background: linear-gradient(145deg, rgba(238,203,114,.09), rgba(255,255,255,.015)), var(--f-surface);
+  color: #f6e3ae;
+}
+
+.users-app .form input,
+.users-app .form select,
+.users-app .form textarea,
+.users-app .onboarding-field input,
+.users-app .onboarding-field select,
+.users-app .situation-form-grid input,
+.users-app .situation-form-grid select,
+.users-app .situation-single-field input,
+.users-app .vip-scenario-fields input,
+.users-app .simulator-controls input {
+  min-height: 50px;
+  border: 1px solid var(--f-border-strong);
+  border-radius: 16px;
+  background: rgba(255,255,255,.045);
+  color: var(--f-text);
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+}
+
+.users-app .form textarea { min-height: 104px; }
+
+.users-app .form input:focus,
+.users-app .form select:focus,
+.users-app .form textarea:focus,
+.users-app .onboarding-field input:focus,
+.users-app .onboarding-field select:focus,
+.users-app .situation-form-grid input:focus,
+.users-app .situation-form-grid select:focus,
+.users-app .situation-single-field input:focus,
+.users-app .vip-scenario-fields input:focus,
+.users-app .simulator-controls input:focus {
+  border-color: rgba(93,214,255,.5);
+  background: rgba(255,255,255,.06);
+  box-shadow: 0 0 0 4px rgba(93,214,255,.08);
+}
+
+.users-app .form button,
+.users-app .actions button,
+.users-app .row button,
+.users-app .change-plan-button,
+.users-app .confirm-plan-button,
+.users-app .scenario-button,
+.users-app .situation-save-button,
+.users-app .unified-primary {
+  min-height: 48px;
+  border: 1px solid rgba(93,214,255,.12);
+  border-radius: 16px;
+  background: linear-gradient(145deg, #2081a3, #17677f);
+  color: #fff;
+  font-weight: 780;
+  box-shadow: 0 9px 22px rgba(10,77,99,.19), inset 0 1px rgba(255,255,255,.08);
+  transition: transform .15s cubic-bezier(.2,.8,.2,1), filter .15s ease;
+}
+
+.users-app .form button:active,
+.users-app .actions button:active,
+.users-app .row button:active,
+.users-app .change-plan-button:active,
+.users-app .confirm-plan-button:active,
+.users-app .scenario-button:active,
+.users-app .situation-save-button:active { transform: scale(.98); }
+
+.users-app .danger,
+.users-app .sheet-logout {
+  border-color: rgba(255,119,135,.16) !important;
+  background: rgba(255,119,135,.09) !important;
+  color: #ffb6bf !important;
+  box-shadow: none !important;
+}
+
+.users-app .row,
+.users-app .lists p,
+.users-app .security-method-row,
+.users-app .settings-plan-main,
+.users-app .smart-goal-row,
+.users-app .timeline-item {
+  min-height: 62px;
+  padding: 11px 12px;
+  margin: 5px 0;
+  border: 1px solid rgba(255,255,255,.045);
+  border-radius: 16px;
+  background: rgba(255,255,255,.022);
+}
+
+.users-app .row small,
+.users-app .lists p small { color: var(--f-muted); }
+
+.users-app .progress-track,
+.users-app .premium-budget-bar,
+.users-app .profile-completeness-track {
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.075);
+}
+
+.users-app .progress-track > *,
+.users-app .premium-budget-bar > *,
+.users-app .profile-completeness-track > * {
+  border-radius: inherit;
+}
+
+.users-app .mobile-bottom-nav {
+  width: min(560px, 100vw);
+  padding: 7px 7px max(7px, env(safe-area-inset-bottom));
+  gap: 2px;
+  background: rgba(7,16,20,.92);
+  border-top: 1px solid rgba(182,225,238,.075);
+  box-shadow: 0 -18px 46px rgba(0,0,0,.24);
+  -webkit-backdrop-filter: blur(28px) saturate(145%);
+  backdrop-filter: blur(28px) saturate(145%);
+}
+
+.users-app .mobile-bottom-nav button {
+  min-height: 58px;
+  border-radius: 15px;
+  color: #66828c;
+  gap: 3px;
+  transition: transform .14s cubic-bezier(.2,.8,.2,1), color .14s ease, background .14s ease;
+}
+
+.users-app .mobile-bottom-nav button span {
+  font-size: .59rem;
+  font-weight: 700;
+}
+
+.users-app .mobile-bottom-nav button.active {
+  color: #ecfbff;
+  background: rgba(93,214,255,.10);
+  box-shadow: inset 0 0 0 1px rgba(93,214,255,.07);
+}
+
+.users-app .mobile-bottom-nav button:active { transform: scale(.96); }
+
+.users-app .mobile-more-backdrop {
+  background: rgba(0,0,0,.64);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+}
+
+.users-app .mobile-more-sheet {
+  border-radius: 28px 28px 0 0;
+  border-color: var(--f-border-strong);
+  background: #0d1c22;
+  box-shadow: 0 -28px 78px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.035);
+}
+
+.users-app .sheet-handle { background: #36505a; }
+
+.users-app .sheet-actions button {
+  min-height: 52px;
+  border-radius: 16px;
+  border-color: var(--f-border);
+  background: rgba(255,255,255,.035);
+}
+
+.users-app .sheet-actions button.active {
+  background: rgba(93,214,255,.10);
+  border-color: rgba(93,214,255,.18);
+}
+
+/* Auth surface inside FINVA scope. */
+.users-app .auth-shell,
+.users-app .login-page {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(93,214,255,.15), transparent 24rem),
+    linear-gradient(180deg, #071014 0%, #050b0e 100%);
+}
+
+.users-app .auth-grid-lines { opacity: .05; }
+.users-app .auth-aura-one { background: #5dd6ff; opacity: .17; }
+.users-app .auth-aura-two { background: #55d99b; opacity: .09; }
+
+.users-app .auth-card,
+.users-app .login-card {
+  border: 1px solid var(--f-border-strong);
+  border-radius: 30px;
+  background: rgba(14,29,36,.9);
+  box-shadow: 0 28px 80px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.035);
+}
+
+.users-app .auth-orb {
+  border-radius: 24px;
+  border-color: rgba(93,214,255,.16);
+  background: linear-gradient(145deg, rgba(93,214,255,.13), rgba(85,217,155,.07)), #11242c;
+  color: #bdefff;
+  box-shadow: inset 0 1px rgba(255,255,255,.05), 0 18px 38px rgba(44,159,194,.13);
+}
+
+.users-app .auth-orb-glow { background: rgba(93,214,255,.16); }
+.users-app .login-kicker { color: #6ecce9; }
+.users-app .auth-title { font-weight: 880; letter-spacing: -.045em; }
+
+.users-app .login-google-btn,
+.users-app .auth-google-btn,
+.users-app .auth-provider-btn {
+  min-height: 52px;
+  border-radius: 16px;
+  border-color: rgba(255,255,255,.10);
+  background: #f5fafb;
+  color: #0d171a;
+  box-shadow: 0 12px 26px rgba(0,0,0,.16);
+}
+
+/* Onboarding already has its own stylesheet; these keep post-onboarding cards aligned. */
+.users-app .onboarding-card,
+.users-app .plan-selection-card {
+  border-radius: 26px;
+  border-color: var(--f-border);
+  background: var(--f-surface);
+  box-shadow: var(--f-shadow-md);
+}
+
+.users-app button:focus-visible,
+.users-app input:focus-visible,
+.users-app select:focus-visible,
+.users-app textarea:focus-visible {
+  outline: 2px solid rgba(93,214,255,.7);
+  outline-offset: 2px;
+}
+
+@media (max-width: 390px) {
+  .users-app .mobile-content { padding-inline: 12px; }
+  .users-app .mobile-app-header { margin-inline: -12px; padding-inline: 12px; }
+  .users-app .mobile-bottom-nav button span { font-size: .54rem; }
+  .users-app .mobile-bottom-nav button svg { width: 22px; height: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .users-app *,
+  .users-app *::before,
+  .users-app *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

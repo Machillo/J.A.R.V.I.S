@@ -27,3 +27,33 @@
   color: #b9dbe7;
   font-size: 0.92rem;
 }
+
+/* 2026 FINVA onboarding polish — visual layer only */
+.unified-onboarding-shell{
+  padding:max(14px,env(safe-area-inset-top,0px)) 14px max(18px,env(safe-area-inset-bottom,0px));
+  background:radial-gradient(circle at 50% -8%,rgba(93,214,255,.15),transparent 26rem),linear-gradient(180deg,#071014 0%,#050b0e 100%);
+  color:#f4fbfd;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Inter,"Segoe UI",sans-serif;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-.01em;
+}
+.unified-onboarding-card{
+  width:min(100%,560px);
+  border:1px solid rgba(182,225,238,.11);
+  border-radius:28px;
+  padding:18px;
+  background:linear-gradient(145deg,rgba(255,255,255,.04),rgba(255,255,255,.012)),rgba(14,29,36,.92);
+  box-shadow:0 26px 74px rgba(0,0,0,.31),inset 0 1px rgba(255,255,255,.035);
+  backdrop-filter:blur(22px) saturate(125%);
+}
+.unified-onboarding-top{padding-bottom:14px;border-bottom-color:rgba(255,255,255,.055)}
+.unified-onboarding-top strong{font-weight:880;letter-spacing:.1em}.unified-onboarding-top small{color:#78939d;letter-spacing:.07em}
+.unified-onboarding-top button{min-height:42px;border-radius:14px;border-color:rgba(182,225,238,.11);background:rgba(255,255,255,.035);color:#eaf7fa}
+.unified-onboarding-intro{padding:20px 0 4px}.unified-eyebrow{color:#68c9e8;letter-spacing:.11em}.unified-onboarding-intro h1{margin:7px 0 9px;font-size:clamp(1.85rem,8vw,2.45rem);line-height:1.02;letter-spacing:-.048em;font-weight:860}.unified-onboarding-intro p{color:#839ea8;line-height:1.52}
+.unified-plan-grid{gap:11px;margin-top:18px}.unified-plan-card{gap:11px;padding:16px;border:1px solid rgba(182,225,238,.09);border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.04),rgba(255,255,255,.012)),rgba(15,31,38,.9);box-shadow:0 9px 25px rgba(0,0,0,.15),inset 0 1px rgba(255,255,255,.025)}
+.unified-plan-card.free{border-color:rgba(182,225,238,.09)}.unified-plan-card.basic{border-color:rgba(93,214,255,.22);background:linear-gradient(145deg,rgba(93,214,255,.07),rgba(255,255,255,.012)),rgba(15,31,38,.92)}.unified-plan-card.vip{border-color:rgba(238,203,114,.22);background:linear-gradient(145deg,rgba(238,203,114,.07),rgba(255,255,255,.01)),rgba(21,30,31,.94)}
+.unified-plan-icon{width:44px;height:44px;border-radius:14px;border-color:rgba(255,255,255,.07);background:rgba(255,255,255,.035)}.unified-plan-copy>span{color:#65c4e1;letter-spacing:.09em}.unified-plan-copy h2{font-size:1.22rem;letter-spacing:-.025em}.unified-plan-copy p{color:#8ca5ae;font-size:.86rem}.unified-plan-card li{color:#d9e8ec;font-size:.82rem}.unified-plan-button,.unified-primary{min-height:50px;border-radius:16px;background:linear-gradient(145deg,#2081a3,#17677f);color:#fff;box-shadow:0 9px 22px rgba(10,77,99,.19),inset 0 1px rgba(255,255,255,.08)}.unified-plan-card.vip .unified-plan-button{background:linear-gradient(145deg,#e3c568,#b69a43);color:#1a1607}
+.unified-form-grid{gap:11px;margin:18px 0}.unified-form-grid label{color:#d8e7eb}.unified-form-grid input,.unified-form-grid select{min-height:50px;border-radius:16px;border-color:rgba(182,225,238,.13);background:rgba(255,255,255,.045);color:#f4fbfd}.unified-form-grid input:focus,.unified-form-grid select:focus{border-color:rgba(93,214,255,.48);box-shadow:0 0 0 4px rgba(93,214,255,.08)}
+.unified-saved-note{border-radius:16px;border-color:rgba(93,214,255,.16);background:rgba(93,214,255,.065);color:#b9dbe7}
+.unified-onboarding-error{border-radius:16px;border-color:rgba(255,119,135,.2);background:rgba(255,119,135,.08);color:#ffc3cb}
+@media(max-width:420px){.unified-onboarding-card{padding:15px;border-radius:24px}.unified-plan-card{border-radius:20px}.unified-onboarding-top{align-items:center}.unified-onboarding-intro{padding-top:17px}}

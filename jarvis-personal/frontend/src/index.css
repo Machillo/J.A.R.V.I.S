@@ -7825,3 +7825,847 @@ button {
   color: #eaf8ff;
   padding: 0 16px;
 }
+
+/* ========================================================================== */
+/* 2026 MOBILE FINTECH VISUAL SYSTEM — J.A.R.V.I.S.                           */
+/* Visual-only layer. No DOM order, navigation, flow or information architecture */
+/* changes. Mobile app is the primary and final presentation target.           */
+/* ========================================================================== */
+
+:root {
+  --mfs-bg-0: #07070a;
+  --mfs-bg-1: #0d0d12;
+  --mfs-bg-2: #15151c;
+  --mfs-surface: rgba(24, 24, 32, 0.86);
+  --mfs-surface-strong: rgba(31, 31, 42, 0.94);
+  --mfs-surface-soft: rgba(255, 255, 255, 0.045);
+  --mfs-stroke: rgba(255, 255, 255, 0.085);
+  --mfs-stroke-strong: rgba(255, 255, 255, 0.14);
+  --mfs-text: #f7f7fb;
+  --mfs-text-2: #c8c8d2;
+  --mfs-text-3: #8d8d9a;
+  --mfs-purple: #8b5cf6;
+  --mfs-purple-2: #a78bfa;
+  --mfs-blue: #4f8cff;
+  --mfs-cyan: #66d9ef;
+  --mfs-green: #52d99a;
+  --mfs-yellow: #f3c969;
+  --mfs-red: #ff6b7d;
+  --mfs-shadow-sm: 0 8px 24px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.035);
+  --mfs-shadow-md: 0 18px 48px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);
+  --mfs-shadow-lg: 0 28px 80px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.045);
+  --mfs-radius-sm: 14px;
+  --mfs-radius-md: 20px;
+  --mfs-radius-lg: 26px;
+  --mfs-radius-xl: 32px;
+  --mfs-ease: cubic-bezier(.2,.8,.2,1);
+  --app-bg: var(--mfs-bg-0);
+  --app-surface: var(--mfs-surface);
+  --app-text: var(--mfs-text);
+  --app-muted: var(--mfs-text-3);
+  --app-border: var(--mfs-stroke);
+  --app-purple: var(--mfs-purple);
+  --app-blue: var(--mfs-blue);
+  --app-accent: var(--mfs-purple-2);
+  --cyan: var(--mfs-cyan);
+  --green: var(--mfs-green);
+  --red: var(--mfs-red);
+  --yellow: var(--mfs-yellow);
+  --text: var(--mfs-text);
+  --muted: var(--mfs-text-3);
+}
+
+html {
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% -12%, rgba(139, 92, 246, .18), transparent 32rem),
+    radial-gradient(circle at 108% 22%, rgba(79, 140, 255, .12), transparent 28rem),
+    linear-gradient(180deg, var(--mfs-bg-0) 0%, #09090d 48%, #060608 100%);
+  color: var(--mfs-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+::selection {
+  background: rgba(139,92,246,.34);
+  color: #fff;
+}
+
+.jarvis-app.app-shell-v2 {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  position: relative;
+  isolation: isolate;
+}
+
+body:has(.jarvis-app.app-shell-v2) {
+  background-color: var(--mfs-bg-0);
+}
+
+.main-shell.app-main-v2,
+.main-shell.app-main-v2.expanded {
+  padding: max(16px, env(safe-area-inset-top, 0px)) 16px calc(112px + var(--safe-bottom));
+}
+
+.main-shell.app-main-v2.home-mode {
+  padding-bottom: calc(176px + var(--safe-bottom));
+}
+
+.app-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  min-height: 74px;
+  align-items: center;
+  gap: 12px;
+  margin: 0 -16px 14px;
+  padding: max(10px, env(safe-area-inset-top, 0px)) 16px 10px;
+  background: linear-gradient(180deg, rgba(7,7,10,.94) 0%, rgba(7,7,10,.82) 78%, rgba(7,7,10,0) 100%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  backdrop-filter: blur(22px) saturate(145%);
+}
+
+.app-top-bar > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.app-top-bar span,
+.eyebrow,
+.strategy-eyebrow,
+.unified-eyebrow {
+  color: var(--mfs-purple-2);
+  font-size: .69rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.app-top-bar h1 {
+  margin-top: 2px;
+  font-size: clamp(1.72rem, 7.5vw, 2.2rem);
+  line-height: 1.02;
+  letter-spacing: -.045em;
+  font-weight: 850;
+}
+
+.app-back-button,
+.menu-toggle,
+.ghost-button,
+.hud-action-button,
+.jarvis-action-button,
+.primary-action-button,
+.command-button,
+.strategy-refresh-btn,
+.finance-file-button {
+  border: 1px solid var(--mfs-stroke);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.035));
+  color: var(--mfs-text);
+  box-shadow: inset 0 1px rgba(255,255,255,.045), 0 6px 18px rgba(0,0,0,.14);
+  transition: transform .16s var(--mfs-ease), border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+.app-back-button {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+}
+
+.app-back-button:active,
+.ghost-button:active,
+.hud-action-button:active,
+.jarvis-action-button:active,
+.primary-action-button:active,
+.command-button:active,
+.strategy-refresh-btn:active,
+.finance-file-button:active {
+  transform: scale(.965);
+  background: rgba(255,255,255,.09);
+}
+
+.hud-card,
+.hud-panel,
+.panel,
+.card,
+.status-card,
+.alert-card,
+.paycheck-card,
+.projection-card,
+.settings-card,
+.account-card,
+.business-card,
+.additional-card,
+.receivables-panel,
+.strategy-command-card,
+.strategy-priority-panel,
+.strategy-safety-panel,
+.strategy-scenario-panel,
+.strategy-investments-panel,
+.finance-trend-panel,
+.fixed-expenses-panel,
+.currency-alert-panel,
+.email-scan-panel,
+.data-table-panel,
+.memory-compose-card,
+.memory-list-card,
+.memory-profile-card,
+.investment-plan-panel {
+  border: 1px solid var(--mfs-stroke);
+  border-radius: var(--mfs-radius-lg);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.018)),
+    var(--mfs-surface);
+  box-shadow: var(--mfs-shadow-sm);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+
+.hud-card::before,
+.hud-panel::before,
+.hud-card::after,
+.hud-panel::after {
+  opacity: .3;
+}
+
+.hud-card:hover,
+.hud-panel:hover,
+.finance-click-card:hover,
+.business-card:hover,
+.app-section-card:hover {
+  border-color: var(--mfs-stroke-strong);
+}
+
+.hud-card h2,
+.hud-panel h2,
+.hud-panel h3,
+.panel-title h3,
+.section-heading,
+.page-section-header h2,
+.page-heading-row h2,
+.mobile-page-heading h1 {
+  color: var(--mfs-text);
+  letter-spacing: -.035em;
+  font-weight: 820;
+}
+
+.hud-card p,
+.hud-panel p,
+.panel-subtitle,
+.subtitle,
+.muted-text,
+small {
+  color: var(--mfs-text-3);
+}
+
+.kpis,
+.dashboard-grid,
+.data-kpi-grid,
+.finance-dashboard-grid,
+.finance-overview-grid,
+.finance-analytics-grid,
+.finance-spending-grid,
+.strategy-kpi-grid,
+.investment-kpi-grid,
+.email-kpi-grid,
+.goals-grid,
+.settings-grid,
+.cards-grid {
+  gap: 12px;
+}
+
+.hud-card,
+.hud-panel,
+.panel {
+  min-width: 0;
+}
+
+.hud-card strong,
+.strategy-kpi-card strong,
+.finance-simple-kpi strong,
+.investment-kpi-grid strong,
+.data-kpi-grid strong,
+.email-kpi-grid strong {
+  letter-spacing: -.035em;
+}
+
+/* Home assistant: calmer premium visual hierarchy. */
+.jarvis-home.chat-home {
+  min-height: calc(var(--app-vh, 100vh) - 205px);
+  padding: 14px 4px 2px;
+  justify-content: center;
+}
+
+.jarvis-core-orb {
+  width: 148px;
+  height: 148px;
+  margin-bottom: 18px;
+  filter: drop-shadow(0 22px 42px rgba(139,92,246,.18));
+}
+
+.orb-ring {
+  background: conic-gradient(from 220deg, rgba(139,92,246,0), var(--mfs-purple), var(--mfs-blue), var(--mfs-cyan), rgba(139,92,246,0) 78%);
+  filter: drop-shadow(0 0 24px rgba(139,92,246,.34));
+}
+
+.orb-center {
+  width: 98px;
+  height: 98px;
+  border: 1px solid rgba(255,255,255,.13);
+  background:
+    radial-gradient(circle at 34% 22%, rgba(255,255,255,.16), transparent 25%),
+    linear-gradient(145deg, rgba(139,92,246,.38), rgba(79,140,255,.24)),
+    rgba(18,18,25,.96);
+  box-shadow: inset 0 1px rgba(255,255,255,.08), 0 18px 52px rgba(79,140,255,.2);
+}
+
+.jarvis-greeting {
+  margin-bottom: 8px;
+  font-size: .95rem;
+  color: var(--mfs-text-3);
+  font-weight: 650;
+}
+
+.jarvis-home h1 {
+  font-size: clamp(2.65rem, 13vw, 4.2rem);
+  line-height: .96;
+  letter-spacing: -.075em;
+  font-weight: 880;
+}
+
+.home-subtitle {
+  margin-top: 10px;
+  font-size: .98rem;
+  color: var(--mfs-text-3);
+}
+
+.jarvis-mini-chat {
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px;
+  border-radius: var(--mfs-radius-lg);
+  background: rgba(20,20,28,.78);
+  border-color: var(--mfs-stroke);
+  box-shadow: var(--mfs-shadow-md);
+}
+
+.mini-chat-line {
+  border: 1px solid rgba(255,255,255,.045);
+  border-radius: 18px;
+  background: rgba(255,255,255,.045);
+  padding: 11px 12px;
+}
+
+.mini-chat-line.user {
+  background: linear-gradient(145deg, rgba(139,92,246,.18), rgba(79,140,255,.12));
+  border-color: rgba(167,139,250,.14);
+}
+
+/* Bottom composer inspired by native mobile messaging/assistant apps. */
+.jarvis-command-center {
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  bottom: calc(88px + var(--safe-bottom) + var(--keyboard-offset, 0px));
+  width: min(528px, calc(100vw - 24px));
+  min-height: 62px;
+  padding: 7px;
+  gap: 7px;
+  border: 1px solid var(--mfs-stroke-strong);
+  border-radius: 23px;
+  background: rgba(24,24,32,.9);
+  box-shadow: 0 18px 44px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.055);
+  -webkit-backdrop-filter: blur(26px) saturate(145%);
+  backdrop-filter: blur(26px) saturate(145%);
+}
+
+.jarvis-command-center::before { display: none; }
+
+.jarvis-command-center input {
+  min-height: 48px;
+  padding: 0 8px 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--mfs-text);
+  font-size: 1rem;
+  outline: 0;
+  box-shadow: none;
+}
+
+.jarvis-command-center input::placeholder { color: #777784; }
+
+.command-button,
+.voice-orb {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 16px;
+}
+
+.command-button {
+  border: 0;
+  background: linear-gradient(145deg, var(--mfs-purple), var(--mfs-blue));
+  box-shadow: 0 9px 22px rgba(79,140,255,.22), inset 0 1px rgba(255,255,255,.17);
+}
+
+.voice-orb {
+  border: 1px solid var(--mfs-stroke);
+  background: rgba(255,255,255,.055);
+  color: var(--mfs-text-2);
+  box-shadow: inset 0 1px rgba(255,255,255,.04);
+}
+
+.voice-orb.listening {
+  color: #fff;
+  border-color: rgba(255,107,125,.35);
+  background: rgba(255,107,125,.14);
+  box-shadow: 0 0 0 6px rgba(255,107,125,.06);
+}
+
+/* Mobile bottom navigation: edge-to-edge native tab bar. */
+.bottom-app-nav {
+  bottom: 0;
+  width: min(560px, 100vw);
+  min-height: 78px;
+  padding: 7px 7px max(7px, var(--safe-bottom));
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid rgba(255,255,255,.075);
+  background: rgba(12,12,17,.9);
+  box-shadow: 0 -18px 46px rgba(0,0,0,.26);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  backdrop-filter: blur(28px) saturate(150%);
+}
+
+.bottom-nav-item {
+  min-height: 58px;
+  border-radius: 16px;
+  color: #777783;
+  gap: 2px;
+  padding: 6px 1px 5px;
+}
+
+.bottom-nav-item span:last-child {
+  font-size: .59rem;
+  letter-spacing: -.01em;
+  font-weight: 700;
+}
+
+.bottom-nav-icon { height: 29px; }
+
+.bottom-nav-item.active {
+  color: #fff;
+  background: rgba(139,92,246,.13);
+  box-shadow: inset 0 0 0 1px rgba(167,139,250,.09);
+}
+
+.bottom-nav-item.active .bottom-nav-icon {
+  filter: drop-shadow(0 5px 10px rgba(139,92,246,.24));
+}
+
+/* Profile / hub rows. */
+.app-hub-page,
+.app-profile-page,
+.wealth-hub-page {
+  width: 100%;
+  max-width: none;
+}
+
+.profile-hero {
+  padding: 12px 0 18px;
+}
+
+.profile-avatar.large {
+  width: 108px;
+  height: 108px;
+  margin-bottom: 14px;
+  font-size: 42px;
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 20px 44px rgba(139,92,246,.16);
+}
+
+.profile-hero h1 {
+  font-size: 2rem;
+  font-weight: 850;
+  letter-spacing: -.05em;
+}
+
+.app-section-card {
+  margin: 12px 0;
+  border-radius: var(--mfs-radius-lg);
+  background: rgba(24,24,31,.8);
+  border-color: var(--mfs-stroke);
+  box-shadow: var(--mfs-shadow-sm);
+}
+
+.app-list-item {
+  grid-template-columns: 44px minmax(0,1fr) auto;
+  gap: 12px;
+  min-height: 70px;
+  padding: 12px 14px;
+}
+
+.app-list-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: rgba(139,92,246,.11);
+  color: #c4b5fd;
+  border: 1px solid rgba(167,139,250,.1);
+}
+
+.app-list-copy strong { font-size: .98rem; font-weight: 780; }
+.app-list-copy small { font-size: .78rem; line-height: 1.35; }
+.app-list-chevron { color: #555560; }
+.app-list-item:active { background: rgba(255,255,255,.045); }
+
+/* Form controls: consistent 48-52px mobile targets. */
+input,
+select,
+textarea,
+.finance-input-textarea,
+.memory-search-box,
+.search-box,
+.debt-form-grid input,
+.debt-form-grid select,
+.receivable-entry-form input,
+.receivable-entry-form select,
+.business-form input,
+.business-form select,
+.goal-edit-form input,
+.goal-edit-form select,
+.currency-rate-editor input {
+  border: 1px solid var(--mfs-stroke-strong);
+  border-radius: 16px;
+  background: rgba(255,255,255,.05);
+  color: var(--mfs-text);
+  outline: none;
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+  transition: border-color .17s ease, background .17s ease, box-shadow .17s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.finance-input-textarea:focus,
+.debt-form-grid input:focus,
+.debt-form-grid select:focus,
+.receivable-entry-form input:focus,
+.receivable-entry-form select:focus,
+.business-form input:focus,
+.business-form select:focus {
+  border-color: rgba(167,139,250,.5);
+  background: rgba(255,255,255,.065);
+  box-shadow: 0 0 0 4px rgba(139,92,246,.09);
+}
+
+/* Segmented controls and tabs. */
+.finance-tab-bar,
+.email-filter-tabs,
+.finance-period-controls {
+  border: 1px solid var(--mfs-stroke);
+  background: rgba(18,18,24,.82);
+  border-radius: 18px;
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+}
+
+.finance-tab-bar {
+  top: max(64px, env(safe-area-inset-top, 0px));
+  padding: 5px;
+  gap: 4px;
+}
+
+.finance-tab-bar button,
+.email-filter-tabs button,
+.finance-period-pill {
+  border-radius: 13px;
+  transition: transform .15s var(--mfs-ease), background .15s ease, color .15s ease;
+}
+
+.finance-tab-bar button.active,
+.email-filter-tabs button.active,
+.finance-period-pill.active {
+  color: #fff;
+  background: rgba(139,92,246,.16);
+  box-shadow: inset 0 0 0 1px rgba(167,139,250,.1);
+}
+
+/* Charts and data visualizations. */
+.chart-shell,
+.transaction-chart-shell,
+.finance-trend-chart,
+.spending-donut-chart {
+  border-radius: 20px;
+}
+
+.chart-shell,
+.transaction-chart-shell {
+  padding: 10px;
+  background: rgba(255,255,255,.022);
+  border: 1px solid rgba(255,255,255,.045);
+}
+
+.trend-grid-line { stroke: rgba(255,255,255,.06); }
+.trend-axis-label,
+.trend-month-label { fill: #777784; }
+.trend-dot { filter: drop-shadow(0 0 6px rgba(139,92,246,.28)); }
+
+.spending-donut-center {
+  border-color: rgba(255,255,255,.09);
+  background: radial-gradient(circle, #1b1b24, #101016);
+  box-shadow: inset 0 1px rgba(255,255,255,.04), 0 14px 30px rgba(0,0,0,.24);
+}
+
+.spending-donut-legend button {
+  border-radius: 14px;
+  background: rgba(255,255,255,.025);
+  border-color: rgba(255,255,255,.055);
+}
+
+.spending-donut-legend button:hover,
+.spending-donut-legend button.active {
+  transform: none;
+  background: rgba(139,92,246,.08);
+  border-color: rgba(167,139,250,.18);
+}
+
+/* Progress and financial status. */
+.progress-track,
+.debt-progress-bar,
+.investment-progress,
+.receivable-bar,
+.goal-progress,
+.usage-bar,
+.flow-bar {
+  background: rgba(255,255,255,.075);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-track > *,
+.debt-progress-bar > *,
+.investment-progress > *,
+.receivable-bar > *,
+.goal-progress > *,
+.usage-bar > *,
+.flow-bar > * {
+  border-radius: inherit;
+}
+
+.debt-card-v2 {
+  padding: 16px;
+  border-radius: var(--mfs-radius-md);
+  border-color: var(--mfs-stroke);
+  background: linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  box-shadow: var(--mfs-shadow-sm);
+}
+
+.debt-card-v2 .debt-progress-bar span {
+  background: linear-gradient(90deg, var(--mfs-purple), var(--mfs-blue));
+  box-shadow: none;
+}
+
+.debt-card-balance b { color: #ff8493; }
+.debt-metrics-grid span,
+.debt-date-grid span {
+  border-color: rgba(255,255,255,.055);
+  background: rgba(255,255,255,.025);
+  border-radius: 13px;
+}
+
+/* Modals become visually native sheets while keeping existing DOM/flow. */
+.finance-detail-modal-backdrop {
+  background: rgba(0,0,0,.62);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.finance-detail-modal,
+.debt-editor-modal {
+  border: 1px solid var(--mfs-stroke-strong);
+  border-radius: 28px 28px 0 0;
+  background: #15151c;
+  box-shadow: 0 -24px 72px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.04);
+}
+
+.debt-editor-modal .panel-title {
+  background: linear-gradient(180deg, rgba(21,21,28,.99), rgba(21,21,28,.92));
+}
+
+/* Login / auth shared visual treatment. */
+.login-page.auth-shell,
+.auth-shell {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(139,92,246,.18), transparent 24rem),
+    linear-gradient(180deg, #09090e 0%, #060608 100%);
+}
+
+.auth-grid-lines { opacity: .05; }
+.auth-aura-one { background: #8b5cf6; opacity: .2; }
+.auth-aura-two { background: #4f8cff; opacity: .14; }
+
+.login-card.auth-card,
+.auth-card {
+  width: min(100%, 420px);
+  border: 1px solid var(--mfs-stroke-strong);
+  border-radius: 30px;
+  background: rgba(23,23,31,.88);
+  box-shadow: var(--mfs-shadow-lg);
+  -webkit-backdrop-filter: blur(26px) saturate(135%);
+  backdrop-filter: blur(26px) saturate(135%);
+}
+
+.auth-orb {
+  border-radius: 24px;
+  border-color: rgba(167,139,250,.18);
+  background: linear-gradient(145deg, rgba(139,92,246,.24), rgba(79,140,255,.14)), #181820;
+  color: #d8ccff;
+  box-shadow: inset 0 1px rgba(255,255,255,.07), 0 16px 38px rgba(139,92,246,.14);
+}
+
+.auth-orb-glow { background: rgba(139,92,246,.18); }
+.login-kicker { color: #a78bfa; }
+.auth-title { font-weight: 880; letter-spacing: -.045em; }
+
+.login-google-btn,
+.auth-google-btn {
+  min-height: 52px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.11);
+  background: #f7f7fb;
+  color: #101014;
+  box-shadow: 0 12px 26px rgba(0,0,0,.18);
+  transition: transform .15s var(--mfs-ease), filter .15s ease;
+}
+
+.login-google-btn:active,
+.auth-google-btn:active { transform: scale(.985); filter: brightness(.96); }
+
+/* Owner controls remain visually consistent and touch-friendly. */
+.user-admin-intro,
+.user-admin-editor,
+.user-admin-results {
+  border-radius: var(--mfs-radius-lg);
+  border-color: var(--mfs-stroke);
+  background: var(--mfs-surface);
+  box-shadow: var(--mfs-shadow-sm);
+}
+
+.user-admin-search input,
+.user-admin-fields input,
+.user-admin-fields select {
+  min-height: 50px;
+  border-radius: 16px;
+  border-color: var(--mfs-stroke-strong);
+  background: rgba(255,255,255,.045);
+}
+
+.user-admin-search button,
+.user-admin-primary,
+.user-admin-danger {
+  min-height: 48px;
+  border-radius: 16px;
+}
+
+/* Accessibility + micro-interactions. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(167,139,250,.85);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .app-list-item:hover,
+  .bottom-nav-item:hover,
+  .hud-action-button:hover,
+  .ghost-button:hover,
+  .primary-action-button:hover {
+    filter: brightness(1.05);
+  }
+}
+
+@keyframes mfs-soft-pop {
+  0% { transform: scale(.985); opacity: .76; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.success-banner,
+.finance-input-message.success,
+.form-message.success {
+  animation: mfs-soft-pop .24s var(--mfs-ease);
+}
+
+@media (max-width: 560px) {
+  .main-shell.app-main-v2,
+  .main-shell.app-main-v2.expanded {
+    width: 100%;
+    padding-inline: 14px;
+  }
+
+  .app-top-bar { margin-inline: -14px; padding-inline: 14px; }
+
+  .hud-card,
+  .hud-panel,
+  .panel,
+  .app-section-card,
+  .debt-card-v2,
+  .business-card,
+  .settings-card,
+  .account-card {
+    border-radius: 22px;
+  }
+
+  .strategy-title-row,
+  .investment-hero,
+  .page-heading-row,
+  .receivables-title-row,
+  .panel-heading {
+    gap: 10px;
+  }
+
+  .spending-donut-chart { height: 276px; }
+  .spending-donut-center { width: 112px; height: 112px; }
+  .spending-donut-center strong { font-size: 1.15rem; }
+
+  .receivable-history-row,
+  .row,
+  .lists p {
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 390px) {
+  .bottom-nav-item span:last-child { font-size: .54rem; }
+  .bottom-nav-icon svg { width: 23px; height: 23px; }
+  .profile-avatar.small { width: 28px; height: 28px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
