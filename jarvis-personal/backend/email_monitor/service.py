@@ -24,7 +24,10 @@ from backend.email_monitor.parser import (
 from backend.email_monitor.deduplication import canonical_score, find_semantic_duplicate, resolve_transaction_time
 from backend.email_monitor.normalization import normalize_description
 
-OWNER_EMAIL = os.getenv("OWNER_EMAIL", "").strip().lower()
+OWNER_EMAIL = (
+    os.getenv("OWNER_EMAIL", "").strip()
+    or next((email.strip() for email in os.getenv("OWNER_EMAILS", "").split(",") if email.strip()), "")
+).lower()
 CRON_SECRET = os.getenv("EMAIL_MONITOR_CRON_SECRET", "")
 DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
