@@ -1079,11 +1079,6 @@ def scan_email_text(
             reason=parsed.get("ignore_reason") or parsed.get("confidence_reason") or "",
             attachment_names=attachment_names,
         )
-        conn.execute(
-            "UPDATE email_ingested_messages SET workspace_id = %s WHERE id = %s AND workspace_id = %s",
-            (workspace_id, email_message_id, user_id),
-        )
-
         if parsed.get("email_kind") == "ignored":
             _log_email_event(
                 conn,
