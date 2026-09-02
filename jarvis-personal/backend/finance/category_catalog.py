@@ -56,6 +56,10 @@ _CATEGORY_BY_NORMALIZED_NAME = {
     item["category_name"].strip().lower(): item["category_name"]
     for item in OFFICIAL_CATEGORIES
 }
+_CATEGORY_TRANSACTION_TYPE = {
+    item["category_name"]: item["transaction_type"]
+    for item in OFFICIAL_CATEGORIES
+}
 _ALIAS_TO_CATEGORY: dict[str, str] = {}
 for item in OFFICIAL_CATEGORIES:
     _ALIAS_TO_CATEGORY[item["category_name"].strip().lower()] = item["category_name"]
@@ -66,6 +70,20 @@ DEFAULT_EXPENSE_CATEGORY = "Compras"
 DEFAULT_INCOME_CATEGORY = "Otros ingresos"
 
 
+def _category_matches_transaction_type(category: str, transaction_type: str | None) -> bool:
+    if transaction_type == "income":
+        return _CATEGORY_TRANSACTION_TYPE.get(category) == "income"
+    if transaction_type in {"expense", "debt_payment"}:
+        return _CATEGORY_TRANSACTION_TYPE.get(category) == "expense"
+    return True
+
+
+def _safe_category(category: str, transaction_type: str | None) -> str:
+    if _category_matches_transaction_type(category, transaction_type):
+        return category
+    return DEFAULT_INCOME_CATEGORY if transaction_type == "income" else DEFAULT_EXPENSE_CATEGORY
+
+
 def normalize_category(value: str | None, transaction_type: str | None = None) -> str:
     if not value:
         return DEFAULT_INCOME_CATEGORY if transaction_type == "income" else DEFAULT_EXPENSE_CATEGORY
@@ -74,18 +92,19 @@ def normalize_category(value: str | None, transaction_type: str | None = None) -
     normalized = raw.lower()
 
     if normalized in _CATEGORY_BY_NORMALIZED_NAME:
-        return _CATEGORY_BY_NORMALIZED_NAME[normalized]
+        return _safe_category(_CATEGORY_BY_NORMALIZED_NAME[normalized], transaction_type)
 
     if normalized in _ALIAS_TO_CATEGORY:
-        return _ALIAS_TO_CATEGORY[normalized]
+        return _safe_category(_ALIAS_TO_CATEGORY[normalized], transaction_type)
 
     compact = re.sub(r"\s+", " ", normalized)
     if compact in _ALIAS_TO_CATEGORY:
-        return _ALIAS_TO_CATEGORY[compact]
+        return _safe_category(_ALIAS_TO_CATEGORY[compact], transaction_type)
 
     for alias, category in _ALIAS_TO_CATEGORY.items():
         if alias and alias in compact:
-            return category
+            if _category_matches_transaction_type(category, transaction_type):
+                return category
 
     return DEFAULT_INCOME_CATEGORY if transaction_type == "income" else DEFAULT_EXPENSE_CATEGORY
 

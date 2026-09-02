@@ -927,6 +927,19 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
         # Incoming notifications usually mention the credited own account.
         destination_account = ibans[-1]
 
+    # Some BAC templates omit explicit debit/credit wording but still
+    # identify Kenneth in the origin or destination account block. Use that
+    # structured ownership signal before falling back to an unknown transfer.
+    if direction == "unknown":
+        origin_is_owner = "kenneth" in normalize(origin_account)
+        destination_is_owner = "kenneth" in normalize(destination_account)
+        if origin_is_owner and not destination_is_owner:
+            is_out = True
+            direction = "out"
+        elif destination_is_owner and not origin_is_owner:
+            is_in = True
+            direction = "in"
+
     description_base = concept or ("SINPE enviado" if is_out else "SINPE recibido" if is_in else "Transferencia SINPE")
     notes = ["BAC SINPE por plantilla", "salida" if is_out else "entrada" if is_in else "dirección por revisar"]
     if reference_match:
@@ -1055,6 +1068,18 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
     is_received = "recepcion de fondos" in clean or "recepción de fondos" in clean or "depositamos tu credito" in clean or "depositamos tu crédito" in clean
     is_payment_received = "recibimos tu pago" in clean
     direction = "out" if is_debit else "in" if is_received else "payment" if is_payment_received else "unknown"
+
+    # "Operación realizada" can omit explicit debit wording even though the
+    # structured account blocks clearly show Kenneth as the sender/recipient.
+    if direction == "unknown":
+        origin_is_owner = "kenneth" in normalize(origin)
+        destination_is_owner = "kenneth" in normalize(destination)
+        if origin_is_owner and not destination_is_owner:
+            is_debit = True
+            direction = "out"
+        elif destination_is_owner and not origin_is_owner:
+            is_received = True
+            direction = "in"
 
     notes = ["MultiMoney transferencia por plantilla"]
     if origin:
