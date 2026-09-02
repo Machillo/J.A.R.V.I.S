@@ -74,6 +74,69 @@ def parse_multimoney_statement(text: str) -> list[dict[str, Any]]:
     return movements
 
 
+def parse_bac_statement(text: str) -> list[dict[str, Any]]:
+    """Parse BAC account statements that expose debit, credit and balance columns.
+
+    Credit-card summaries without explicit debit/credit columns are deliberately
+    rejected: importing an unsigned amount would risk reversing a payment or refund.
+    """
+    normalized_text = _plain(text)
+    has_ledger_columns = (
+        ("debito" in normalized_text or "debitos" in normalized_text)
+        and ("credito" in normalized_text or "creditos" in normalized_text)
+        and "saldo" in normalized_text
+    )
+    if not has_ledger_columns:
+        return []
+
+    matches = list(DATE_LINE.finditer(text or ""))
+    movements: list[dict[str, Any]] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        lines = [line.strip() for line in text[match.end():end].splitlines() if line.strip()]
+        money_positions = [i for i, line in enumerate(lines) if MONEY_LINE.fullmatch(line)]
+        if len(money_positions) < 3:
+            continue
+        first = money_positions[0]
+        if first < 1 or money_positions[:3] != [first, first + 1, first + 2]:
+            continue
+
+        prefix = lines[:first]
+        reference = prefix[0] if prefix[0].replace("-", "").isdigit() else f"bac-{match.group(1)}-{index + 1}"
+        description_start = 1 if reference == prefix[0] else 0
+        description = " ".join(prefix[description_start:]).strip()
+        if not description:
+            continue
+        debit, credit, balance = (_amount(lines[first + offset]) for offset in range(3))
+        if (debit > 0) == (credit > 0):
+            continue
+
+        normalized = _plain(description)
+        is_internal = any(term in normalized for term in (
+            "transferencia entre cuentas propias",
+            "traslado entre cuentas",
+            "inversion vista smart",
+        ))
+        transaction_type = "internal_transfer" if is_internal else "income" if credit > 0 else "expense"
+        category = "Transferencia interna" if is_internal else normalize_category(
+            detect_category(description), transaction_type
+        )
+        movements.append({
+            "transaction_date": datetime.strptime(match.group(1), "%d/%m/%Y").date().isoformat(),
+            "reference": reference,
+            "description": description,
+            "debit": debit,
+            "credit": credit,
+            "amount": debit if debit > 0 else credit,
+            "balance": balance,
+            "direction": "out" if debit > 0 else "in",
+            "transaction_type": transaction_type,
+            "category": category,
+            "ignored": is_internal,
+        })
+    return movements
+
+
 def ensure_statement_reconciliation_tables(conn) -> None:
     conn.execute(
         """
@@ -114,11 +177,13 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
     if not document:
         raise HTTPException(status_code=404, detail="Estado de cuenta no encontrado.")
     document = dict(document)
-    if document.get("bank") != "multimoney":
-        raise HTTPException(status_code=400, detail="Este primer conciliador admite estados MultiMoney.")
-    movements = parse_multimoney_statement(document.get("extracted_text") or "")
+    bank = document.get("bank")
+    if bank not in {"multimoney", "bac"}:
+        raise HTTPException(status_code=400, detail="La conciliación admite estados MultiMoney y BAC.")
+    parser = parse_multimoney_statement if bank == "multimoney" else parse_bac_statement
+    movements = parser(document.get("extracted_text") or "")
     if not movements:
-        raise HTTPException(status_code=422, detail="No pude extraer movimientos del PDF de MultiMoney.")
+        raise HTTPException(status_code=422, detail=f"No pude extraer movimientos seguros del PDF de {bank.upper()}.")
 
     counts = {"matched": 0, "missing": 0, "ambiguous": 0, "ignored": 0}
     for movement in movements:
@@ -153,7 +218,7 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
                     movement["amount"],
                     movement["description"],
                 ),
-            ).fetchone()
+            ).fetchone() if bank == "multimoney" else None
             if bac_mirror:
                 status = "ignored"
                 reason = "Movimiento espejo MultiMoney→BAC por fecha, monto, dirección y concepto; es traslado entre cuentas propias."
@@ -210,6 +275,7 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
                     user_id=user_id,
                     workspace_id=workspace_id,
                     statement_id=statement_id,
+                    bank=bank,
                     movement=movement,
                 )
                 status = "matched"
@@ -230,6 +296,7 @@ def _import_missing_statement_movement(
     user_id: int,
     workspace_id: str,
     statement_id: int,
+    bank: str,
     movement: dict[str, Any],
 ) -> int:
     """Import one authoritative statement row; the source marker makes retries idempotent."""
@@ -239,12 +306,12 @@ def _import_missing_statement_movement(
         SELECT id
         FROM transactions
         WHERE workspace_id = %s
-          AND source = 'multimoney_statement'
+          AND source = %s
           AND notes LIKE %s
         ORDER BY id
         LIMIT 1
         """,
-        (workspace_id, f"%{source_marker}%"),
+        (workspace_id, f"{bank}_statement", f"%{source_marker}%"),
     ).fetchone()
     if existing:
         return int(existing["id"])
@@ -255,7 +322,7 @@ def _import_missing_statement_movement(
             user_id, workspace_id, transaction_date, description, amount,
             transaction_type, category, account, source, notes, created_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'multimoney_statement', %s, NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         RETURNING id
         """,
         (
@@ -266,7 +333,8 @@ def _import_missing_statement_movement(
             movement["amount"],
             movement["transaction_type"],
             movement["category"],
-            "MultiMoney",
+            "MultiMoney" if bank == "multimoney" else "BAC",
+            f"{bank}_statement",
             f"Importado automáticamente durante conciliación mensual | {source_marker}",
         ),
     ).fetchone()
