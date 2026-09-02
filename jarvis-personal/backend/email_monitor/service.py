@@ -489,6 +489,145 @@ def _delete_pending_internal_mirrors(conn, workspace_id: str, internal_candidate
         )
     return len(rows)
 
+
+def _repair_historical_cross_bank_mirrors(conn, workspace_id: str) -> int:
+    """Remove old BAC/MultiMoney candidates that share one bank reference.
+
+    Reprocessing an already-ingested Gmail message is not a reliable migration
+    mechanism: old rows may preserve parser decisions from an earlier deploy.
+    Repair the review inbox directly, but only when bank, reference, date,
+    amount and opposite directions all agree.
+    """
+    rows = conn.execute(
+        """
+        SELECT c.id, c.email_message_id, c.transaction_date, c.amount,
+               c.notes, c.dedupe_key, m.bank
+        FROM email_transaction_candidates c
+        JOIN email_ingested_messages m ON m.id = c.email_message_id
+        WHERE c.workspace_id = %s
+          AND c.transaction_id IS NULL
+          AND c.status IN ('pending', 'duplicate')
+          AND m.bank IN ('bac', 'multimoney')
+          AND c.notes ILIKE '%%referencia%%'
+        """,
+        (workspace_id,),
+    ).fetchall()
+    grouped: dict[tuple[str, str, float], list[dict[str, Any]]] = {}
+    for raw in rows:
+        row = dict(raw)
+        reference = _candidate_reference(row)
+        if not reference:
+            continue
+        key = (reference, str(row.get("transaction_date")), round(float(row.get("amount") or 0), 2))
+        grouped.setdefault(key, []).append(row)
+
+    remove_ids: set[int] = set()
+    message_ids: set[int] = set()
+    for matches in grouped.values():
+        for left in matches:
+            left_direction = str(left.get("dedupe_key") or "").rsplit("|", 1)[-1]
+            for right in matches:
+                if left["id"] == right["id"] or left.get("bank") == right.get("bank"):
+                    continue
+                right_direction = str(right.get("dedupe_key") or "").rsplit("|", 1)[-1]
+                if {left_direction, right_direction} != {"in", "out"}:
+                    continue
+                remove_ids.update([int(left["id"]), int(right["id"])])
+                if left.get("email_message_id"):
+                    message_ids.add(int(left["email_message_id"]))
+                if right.get("email_message_id"):
+                    message_ids.add(int(right["email_message_id"]))
+
+    if not remove_ids:
+        return 0
+    conn.execute(
+        "DELETE FROM email_transaction_candidates WHERE workspace_id = %s AND id = ANY(%s)",
+        (workspace_id, list(remove_ids)),
+    )
+    if message_ids:
+        conn.execute(
+            """
+            UPDATE email_ingested_messages
+            SET status = 'ignored',
+                parse_reason = 'Movimiento espejo BAC/MultiMoney conciliado por referencia bancaria.'
+            WHERE workspace_id = %s AND id = ANY(%s)
+            """,
+            (workspace_id, list(message_ids)),
+        )
+    return len(remove_ids)
+
+
+def _scheduled_commitment_match(conn, workspace_id: str, candidate: dict[str, Any]) -> tuple[int | None, str] | None:
+    """Match email evidence to commitments JARVIS already materializes.
+
+    These emails confirm cash movements; they must not create a second ledger
+    transaction when the monthly debt/fixed-expense engines already account for
+    the same obligation.
+    """
+    description = str(candidate.get("description") or "").strip().lower()
+    amount = round(float(candidate.get("amount") or 0), 2)
+    transaction_date = candidate.get("transaction_date")
+    if not transaction_date or amount <= 0:
+        return None
+
+    if "pago" in description and "multimoney" in description:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM transactions
+            WHERE workspace_id = %s
+              AND source = 'auto_debt_schedule'
+              AND transaction_type = 'debt_payment'
+              AND ABS(amount - %s) < 0.01
+              AND transaction_date::date BETWEEN (%s::date - INTERVAL '7 days') AND (%s::date + INTERVAL '7 days')
+              AND (LOWER(description) LIKE '%%multimoney%%' OR LOWER(category) LIKE '%%multimoney%%')
+            ORDER BY ABS(transaction_date::date - %s::date), id DESC
+            LIMIT 1
+            """,
+            (workspace_id, amount, transaction_date, transaction_date, transaction_date),
+        ).fetchone()
+        if row:
+            return int(row["id"]), "Comprobante del pago automático de la deuda MultiMoney; no se duplica en finanzas."
+
+    if "casa" in description and "prestamo" in description:
+        fixed = conn.execute(
+            """
+            SELECT expected_amount
+            FROM fixed_expenses
+            WHERE workspace_id = %s AND is_active = TRUE AND LOWER(TRIM(name)) = 'casa'
+            LIMIT 1
+            """,
+            (workspace_id,),
+        ).fetchone()
+        debt = conn.execute(
+            """
+            SELECT id, monthly_payment
+            FROM debts
+            WHERE workspace_id = %s AND remaining_amount > 0
+              AND (LOWER(name) LIKE '%%pap%%' OR LOWER(debt_type) LIKE '%%familiar%%')
+            ORDER BY id
+            LIMIT 1
+            """,
+            (workspace_id,),
+        ).fetchone()
+        expected = round(float((fixed or {}).get("expected_amount") or 0) + float((debt or {}).get("monthly_payment") or 0), 2)
+        if expected > 0 and abs(expected - amount) < 0.02:
+            tx = None
+            if debt:
+                tx = conn.execute(
+                    """
+                    SELECT id FROM transactions
+                    WHERE workspace_id = %s AND source = 'auto_debt_schedule'
+                      AND notes LIKE %s
+                      AND DATE_TRUNC('month', transaction_date) = DATE_TRUNC('month', %s::date)
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (workspace_id, f"debt_id:{int(debt['id'])};%", transaction_date),
+                ).fetchone()
+            return (int(tx["id"]) if tx else None), "Comprobante combinado de Casa y préstamo de papá, ya contemplados por sus calendarios automáticos."
+
+    return None
+
 def _seed_default_card_aliases(conn, user_id: int, workspace_id: str | None = None) -> None:
     workspace_id = workspace_id or _workspace_id_for_user(conn, user_id)
     """Keep known BAC additional cards owner-aware.
@@ -1272,10 +1411,15 @@ def scan_email_text(
                 "removed_internal_mirrors": removed_mirrors,
             }
 
+        scheduled_match = _scheduled_commitment_match(conn, workspace_id, parsed)
         duplicate_candidate = _candidate_duplicate_match(conn, workspace_id, parsed, candidate_fp)
         replace_existing_duplicate = False
         existing_transaction_id = _transaction_duplicate_match(conn, workspace_id, parsed)
-        if existing_transaction_id:
+        if scheduled_match:
+            transaction_id, review_reason = scheduled_match
+            candidate_status = "duplicate"
+            duplicate_of = None
+        elif existing_transaction_id:
             candidate_status = "duplicate"
             transaction_id = existing_transaction_id
             duplicate_of = None
@@ -1383,6 +1527,21 @@ def scan_email_text(
             ),
         ).fetchone()
         candidate_row = dict(candidate_row) if candidate_row else {}
+
+        # A combined scheduled commitment (for example Casa + préstamo papá)
+        # may not have one canonical transaction because part of it is supplied
+        # by the fixed-expense calendar. Keep a self trace so the duplicate is
+        # auditable without inventing a second financial transaction.
+        if scheduled_match and candidate_status == "duplicate" and not transaction_id:
+            conn.execute(
+                """
+                UPDATE email_transaction_candidates
+                SET canonical_transaction_id = id, updated_at = NOW()
+                WHERE id = %s AND workspace_id = %s
+                """,
+                (int(candidate_row["id"]), workspace_id),
+            )
+            candidate_row["canonical_transaction_id"] = candidate_row["id"]
 
         # Persistencia defensiva de la relación canónica. La detección de
         # duplicados y la escritura de la fila no pueden quedar desacopladas:
@@ -1969,6 +2128,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
 
     with get_connection() as conn:
         ensure_email_tables(conn)
+        _repair_historical_cross_bank_mirrors(conn, owner_workspace_id)
         conn.execute(
             """
             UPDATE email_monitor_settings
