@@ -128,27 +128,35 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
             reason = "Traslado interno hacia Inversión Vista Smart; no se duplica como ingreso."
         else:
             # A MultiMoney debit and a BAC incoming SINPE can be the two sides
-            # of one transfer between Kenneth's own accounts. Bank reference is
-            # authoritative even when the free-text concept says "CAMISAS".
+            # of one transfer between the user's own accounts. MultiMoney's
+            # statement reference is internal and can differ from BAC's SINPE
+            # reference, so match the mirror by date, amount, direction and
+            # concept instead of relying only on the reference.
             bac_mirror = conn.execute(
                 """
-                SELECT 1
+                SELECT c.id
                 FROM email_ingested_messages m
-                LEFT JOIN email_transaction_candidates c ON c.email_message_id = m.id
+                JOIN email_transaction_candidates c ON c.email_message_id = m.id
                 WHERE m.workspace_id = %s
                   AND m.bank = 'bac'
-                  AND (
-                      COALESCE(c.dedupe_key, '') LIKE %s
-                      OR COALESCE(c.notes, '') LIKE %s
-                      OR COALESCE(m.raw_body, '') LIKE %s
-                  )
+                  AND %s = 'out'
+                  AND c.transaction_type = 'income'
+                  AND c.transaction_date::date = %s::date
+                  AND ABS(c.amount - %s) < 0.01
+                  AND LOWER(TRIM(c.description)) = LOWER(TRIM(%s))
                 LIMIT 1
                 """,
-                (workspace_id, f"%|{movement['reference']}|%", f"%{movement['reference']}%", f"%{movement['reference']}%"),
+                (
+                    workspace_id,
+                    movement["direction"],
+                    movement["transaction_date"],
+                    movement["amount"],
+                    movement["description"],
+                ),
             ).fetchone()
             if bac_mirror:
                 status = "ignored"
-                reason = "Movimiento espejo MultiMoney→BAC con la misma referencia; es traslado entre cuentas propias."
+                reason = "Movimiento espejo MultiMoney→BAC por fecha, monto, dirección y concepto; es traslado entre cuentas propias."
                 counts[status] += 1
                 _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movement, status, matched_id, reason)
                 continue
@@ -197,8 +205,15 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
                 status = "ambiguous"
                 reason = "Hay varias transacciones con la misma fecha y monto; requiere revisión."
             else:
-                status = "missing"
-                reason = "Aparece en el estado de cuenta pero no existe en Finanzas."
+                matched_id = _import_missing_statement_movement(
+                    conn,
+                    user_id=user_id,
+                    workspace_id=workspace_id,
+                    statement_id=statement_id,
+                    movement=movement,
+                )
+                status = "matched"
+                reason = "Faltaba en Finanzas y se agregó automáticamente desde el estado de cuenta verificado."
         counts[status] += 1
         _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movement, status, matched_id, reason)
     final_status = "reconciled" if counts["missing"] == 0 and counts["ambiguous"] == 0 else "needs_review"
@@ -207,6 +222,55 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
         (final_status, statement_id, workspace_id),
     )
     return {"status": "OK", "statement_id": statement_id, "movements": len(movements), "summary": counts, "reconciliation_status": final_status}
+
+
+def _import_missing_statement_movement(
+    conn,
+    *,
+    user_id: int,
+    workspace_id: str,
+    statement_id: int,
+    movement: dict[str, Any],
+) -> int:
+    """Import one authoritative statement row; the source marker makes retries idempotent."""
+    source_marker = f"statement:{statement_id}:reference:{movement['reference']}"
+    existing = conn.execute(
+        """
+        SELECT id
+        FROM transactions
+        WHERE workspace_id = %s
+          AND source = 'multimoney_statement'
+          AND notes LIKE %s
+        ORDER BY id
+        LIMIT 1
+        """,
+        (workspace_id, f"%{source_marker}%"),
+    ).fetchone()
+    if existing:
+        return int(existing["id"])
+
+    row = conn.execute(
+        """
+        INSERT INTO transactions (
+            user_id, workspace_id, transaction_date, description, amount,
+            transaction_type, category, account, source, notes, created_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'multimoney_statement', %s, NOW())
+        RETURNING id
+        """,
+        (
+            user_id,
+            workspace_id,
+            movement["transaction_date"],
+            movement["description"],
+            movement["amount"],
+            movement["transaction_type"],
+            movement["category"],
+            "MultiMoney",
+            f"Importado automáticamente durante conciliación mensual | {source_marker}",
+        ),
+    ).fetchone()
+    return int(row["id"])
 
 
 def _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movement, status, matched_id, reason) -> None:
