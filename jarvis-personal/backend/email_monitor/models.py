@@ -16,6 +16,15 @@ class EmailCandidateDecisionRequest(BaseModel):
     decision: str  # confirm | reject
 
 
+class EmailCandidateClassifyRequest(BaseModel):
+    candidate_id: int
+    description: str
+    transaction_type: str
+    category: str
+    remember_rule: bool = True
+    auto_commit_future: bool = True
+
+
 
 class EmailCandidateBulkDecisionRequest(BaseModel):
     candidate_ids: list[int]

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import html
 import hmac
+import hashlib
 import json
 import logging
 import os
@@ -1728,6 +1729,7 @@ def list_email_candidates(status_filter: str | None = None, limit: int = 250) ->
                 COUNT(*) FILTER (WHERE status = 'pending') AS pending,
                 COUNT(*) FILTER (WHERE status = 'duplicate') AS duplicate,
                 COUNT(*) FILTER (WHERE status = 'confirmed') AS confirmed,
+                COUNT(*) FILTER (WHERE status = 'auto_saved') AS auto_saved,
                 COUNT(*) FILTER (WHERE status = 'rejected') AS rejected
             FROM email_transaction_candidates
             WHERE workspace_id = %s
@@ -1816,6 +1818,138 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
         conn.commit()
 
     return {"status": "OK", "message": "Movimiento guardado.", "transaction_id": transaction_id}
+
+
+def _learned_rule_signature(conn, workspace_id: str, candidate: dict[str, Any]) -> dict[str, str | None]:
+    """Build a strict reusable signature; amount is deliberately not part of it."""
+    direction = str(candidate.get("dedupe_key") or "").rsplit("|", 1)[-1].lower()
+    if direction not in {"in", "out", "payment"}:
+        direction = None
+    notes = str(candidate.get("notes") or "")
+    origin = re.search(r"origen:\s*([^|]+)", notes, re.I)
+    destination = re.search(r"destino:\s*([^|]+)", notes, re.I)
+
+    def account_key(match):
+        digits = re.findall(r"\d{4}", match.group(1) if match else "")
+        if not digits:
+            return None
+        row = conn.execute(
+            """
+            SELECT account_key FROM email_financial_accounts
+            WHERE workspace_id = %s AND account_last4 = %s AND active = TRUE
+            LIMIT 1
+            """,
+            (workspace_id, digits[-1]),
+        ).fetchone()
+        return str(row["account_key"]) if row else None
+
+    return {
+        "direction": direction,
+        "origin_account_key": account_key(origin),
+        "destination_account_key": account_key(destination),
+        "concept": str(candidate.get("raw_description") or candidate.get("description") or "").strip(),
+    }
+
+
+def classify_candidate(
+    candidate_id: int,
+    description: str,
+    transaction_type: str,
+    category: str,
+    remember_rule: bool = True,
+    auto_commit_future: bool = True,
+) -> dict[str, Any]:
+    """Save a reviewed candidate and optionally learn an exact, account-bound rule."""
+    _require_owner_user()
+    user_id = get_current_user_id()
+    clean_description = re.sub(r"\s+", " ", description or "").strip()
+    clean_type = (transaction_type or "").strip().lower()
+    if not clean_description:
+        raise HTTPException(status_code=400, detail="Decime qué fue este movimiento.")
+    if clean_type not in {"expense", "income", "debt_payment"}:
+        raise HTTPException(status_code=400, detail="Tipo de movimiento inválido.")
+    clean_category = normalize_category(category, clean_type)
+
+    with get_connection() as conn:
+        workspace_id = _workspace_id_for_user(conn, user_id)
+        ensure_email_tables(conn)
+        row = conn.execute(
+            "SELECT * FROM email_transaction_candidates WHERE id = %s AND workspace_id = %s",
+            (candidate_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Candidato no encontrado.")
+        candidate = dict(row)
+        if candidate.get("transaction_id"):
+            return {"status": "OK", "message": "Ya estaba guardado.", "transaction_id": candidate["transaction_id"]}
+        if candidate.get("status") != "pending":
+            raise HTTPException(status_code=409, detail="Este movimiento ya no está pendiente.")
+
+        rule_id = None
+        learned = False
+        signature = _learned_rule_signature(conn, workspace_id, candidate)
+        # Some BAC templates do not expose masked account numbers. Exact concept
+        # + direction is still strict enough; account keys further constrain it
+        # whenever the email supplies them.
+        if remember_rule and signature["concept"] and signature["direction"]:
+            digest = hashlib.sha256(
+                "|".join(str(signature[key] or "") for key in ("direction", "origin_account_key", "destination_account_key", "concept")).encode()
+            ).hexdigest()[:16]
+            learned_row = conn.execute(
+                """
+                INSERT INTO email_classification_rules (
+                    user_id, workspace_id, name, priority, concept_pattern, match_mode,
+                    direction, origin_account_key, destination_account_key, action,
+                    output_description, transaction_type, category, allow_auto_commit,
+                    review_reason, metadata, active, updated_at
+                ) VALUES (%s, %s, %s, 200, %s, 'exact', %s, %s, %s, 'classify', %s, %s, %s, %s,
+                          %s, %s::jsonb, TRUE, NOW())
+                ON CONFLICT (workspace_id, name) DO UPDATE SET
+                    output_description = EXCLUDED.output_description,
+                    transaction_type = EXCLUDED.transaction_type,
+                    category = EXCLUDED.category,
+                    allow_auto_commit = EXCLUDED.allow_auto_commit,
+                    review_reason = EXCLUDED.review_reason,
+                    metadata = EXCLUDED.metadata,
+                    active = TRUE,
+                    updated_at = NOW()
+                RETURNING id
+                """,
+                (
+                    user_id, workspace_id, f"learned_email_{digest}", signature["concept"],
+                    signature["direction"], signature["origin_account_key"], signature["destination_account_key"],
+                    clean_description, clean_type, clean_category, bool(auto_commit_future),
+                    "Clasificación enseñada por Kenneth desde la revisión de correos.",
+                    json.dumps({"learned_from_candidate_id": candidate_id, "strict_signature": True}),
+                ),
+            ).fetchone()
+            rule_id = int(learned_row["id"])
+            learned = True
+
+        candidate.update(description=clean_description, transaction_type=clean_type, category=clean_category)
+        transaction_id = _insert_transaction(conn, user_id, candidate)
+        conn.execute(
+            """
+            UPDATE email_transaction_candidates
+            SET description = %s, transaction_type = %s, category = %s,
+                transaction_id = %s, status = 'confirmed', personal_rule_id = %s,
+                auto_commit_allowed = %s,
+                review_reason = %s, updated_at = NOW()
+            WHERE id = %s AND workspace_id = %s
+            """,
+            (
+                clean_description, clean_type, clean_category, transaction_id, rule_id,
+                bool(learned and auto_commit_future),
+                "Clasificado manualmente y regla personal aprendida." if learned else "Clasificado manualmente.",
+                candidate_id, workspace_id,
+            ),
+        )
+        conn.commit()
+
+    message = "Guardado y aprendido. La próxima coincidencia exacta será automática." if learned and auto_commit_future else "Movimiento guardado."
+    if remember_rule and not learned:
+        message += " No aprendí una automatización porque faltó identificar con seguridad las cuentas o la dirección."
+    return {"status": "OK", "message": message, "transaction_id": transaction_id, "personal_rule_id": rule_id, "learned": learned}
 
 
 def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str, Any]:

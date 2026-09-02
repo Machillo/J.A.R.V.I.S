@@ -5637,7 +5637,7 @@ body {
 
 .email-candidate-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
 }
@@ -5675,6 +5675,73 @@ body {
 .email-candidate-side > strong {
   color: var(--green);
   font-size: 18px;
+}
+
+.email-learning-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.email-classification-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(130px, 1fr) minmax(160px, 1fr);
+  gap: 12px;
+  padding: 15px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+  background: color-mix(in srgb, var(--cyan) 8%, rgba(0,0,0,.25));
+}
+
+.email-classification-panel > strong,
+.email-remember-rule,
+.email-classification-actions {
+  grid-column: 1 / -1;
+}
+
+.email-classification-panel label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.email-classification-panel input:not([type="checkbox"]),
+.email-classification-panel select {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 10px;
+  background: rgba(0,0,0,.3);
+  color: var(--text);
+  padding: 10px;
+}
+
+.email-classification-panel .email-remember-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.email-classification-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.email-classification-actions button {
+  border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+  color: var(--text);
+  padding: 9px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .email-classification-panel { grid-template-columns: 1fr; }
 }
 
 .email-status-pill {

@@ -209,6 +209,7 @@ export const getEmailMonitorCandidates = (status = "", limit = 50) => {
   return request(`/email-monitor/candidates?${params.toString()}`);
 };
 export const decideEmailCandidate = (payload) => jsonRequest("/email-monitor/candidates/decision", "POST", payload);
+export const classifyEmailCandidate = (payload) => jsonRequest("/email-monitor/candidates/classify", "POST", payload);
 export const bulkDecideEmailCandidates = (payload) => jsonRequest("/email-monitor/candidates/bulk-decision", "POST", payload);
 export const scanEmailText = (payload) => jsonRequest("/email-monitor/scan-text", "POST", payload);
 

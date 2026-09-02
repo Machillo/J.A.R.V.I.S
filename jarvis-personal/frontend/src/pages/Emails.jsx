@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, MailSearch, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BrainCircuit, MailSearch, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import {
-  bulkDecideEmailCandidates,
+  classifyEmailCandidate,
   decideEmailCandidate,
   getEmailMonitorCandidates,
   getEmailMonitorStatus,
@@ -42,11 +42,12 @@ export default function Emails({ onFinanceChanged }) {
   const [candidates, setCandidates] = useState([]);
   const [totals, setTotals] = useState({});
   const [filter, setFilter] = useState("pending");
-  const [selected, setSelected] = useState({});
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [message, setMessage] = useState("");
   const [lastScan, setLastScan] = useState(null);
+  const [classifying, setClassifying] = useState(null);
+  const [classification, setClassification] = useState({ description: "", transaction_type: "expense", category: "Compras", remember_rule: true });
 
   const load = async (nextFilter = filter) => {
     setLoading(true);
@@ -69,38 +70,13 @@ export default function Emails({ onFinanceChanged }) {
     load(filter);
   }, []);
 
-  const pendingItems = useMemo(
-    () => candidates.filter((item) => item.status === "pending" && !item.transaction_id),
-    [candidates]
-  );
-
-  const selectedIds = useMemo(
-    () => Object.entries(selected)
-      .filter(([, value]) => value)
-      .map(([key]) => Number(key)),
-    [selected]
-  );
-
-  const toggleAllPending = () => {
-    const allSelected = pendingItems.length > 0 && pendingItems.every((item) => selected[item.id]);
-    if (allSelected) {
-      setSelected({});
-      return;
-    }
-    const next = {};
-    pendingItems.forEach((item) => {
-      next[item.id] = true;
-    });
-    setSelected(next);
-  };
-
   const handleScan = async () => {
     setScanning(true);
-    setMessage("Escaneando Gmail. Se ignoran correos ya ingresados y no se autoguarda nada en finanzas...");
+    setMessage("Escaneando Gmail. Las reglas personales conocidas se procesan automáticamente; lo desconocido queda pendiente...");
     try {
       const result = await syncEmailMonitorGmail({
         max_results: 250,
-        auto_commit: false,
+        auto_commit: true,
         current_month_only: true,
       });
       setLastScan(result);
@@ -110,7 +86,6 @@ export default function Emails({ onFinanceChanged }) {
           `Encontrados: ${result?.found || 0} · Pendientes: ${summary.pending || 0} · Duplicados: ${summary.duplicates || 0}`
       );
       setFilter("pending");
-      setSelected({});
       await load("pending");
     } catch (error) {
       setMessage(error.message || "Falló el escaneo de Gmail.");
@@ -124,7 +99,6 @@ export default function Emails({ onFinanceChanged }) {
     try {
       const result = await decideEmailCandidate({ candidate_id: item.id, decision });
       setMessage(result?.message || "Listo.");
-      setSelected((current) => ({ ...current, [item.id]: false }));
       await load(filter);
       if (decision === "confirm") await onFinanceChanged?.();
     } catch (error) {
@@ -132,27 +106,31 @@ export default function Emails({ onFinanceChanged }) {
     }
   };
 
-  const handleBulkConfirm = async () => {
-    const ids = selectedIds.length > 0 ? selectedIds : pendingItems.map((item) => item.id);
-    if (ids.length === 0) {
-      setMessage("No hay movimientos pendientes para agregar.");
-      return;
-    }
-    setMessage(`Agregando ${ids.length} movimiento(s) a finanzas...`);
+  const openClassification = (item) => {
+    setClassifying(item.id);
+    setClassification({
+      description: item.description || "",
+      transaction_type: item.transaction_type === "income" ? "income" : item.transaction_type === "debt_payment" ? "debt_payment" : "expense",
+      category: item.category || "Compras",
+      remember_rule: true,
+    });
+  };
+
+  const handleClassification = async (item) => {
+    setMessage("JARVIS está guardando y aprendiendo esta clasificación...");
     try {
-      const result = await bulkDecideEmailCandidates({ candidate_ids: ids, decision: "confirm" });
-      setMessage(result?.message || "Movimientos agregados.");
-      setSelected({});
+      const result = await classifyEmailCandidate({ candidate_id: item.id, ...classification, auto_commit_future: classification.remember_rule });
+      setMessage(result?.message || "Movimiento clasificado.");
+      setClassifying(null);
       await load(filter);
       await onFinanceChanged?.();
     } catch (error) {
-      setMessage(error.message || "No pude guardar los movimientos.");
+      setMessage(error.message || "No pude guardar la clasificación.");
     }
   };
 
   const handleFilter = async (nextFilter) => {
     setFilter(nextFilter);
-    setSelected({});
     await load(nextFilter);
   };
 
@@ -162,7 +140,7 @@ export default function Emails({ onFinanceChanged }) {
         <div>
           <span className="eyebrow">Gmail → Finanzas</span>
           <h2>Correos financieros</h2>
-          <p>Primero escaneás, revisás los movimientos y después los agregás a finanzas. Nada se guarda solo.</p>
+          <p>JARVIS procesa las reglas que ya conoce. Si aparece un SINPE nuevo, te pregunta qué es antes de guardarlo.</p>
         </div>
         <button className="primary-action-button" type="button" onClick={handleScan} disabled={scanning || !monitor?.gmail_ready}>
           {scanning ? <RefreshCw size={18} /> : <MailSearch size={18} />}
@@ -210,12 +188,7 @@ export default function Emails({ onFinanceChanged }) {
           ))}
         </div>
         <div className="email-toolbar-actions">
-          <button className="jarvis-action-button secondary" type="button" onClick={toggleAllPending} disabled={pendingItems.length === 0}>
-            {selectedIds.length ? "Quitar selección" : "Seleccionar pendientes"}
-          </button>
-          <button className="jarvis-action-button" type="button" onClick={handleBulkConfirm} disabled={pendingItems.length === 0}>
-            <CheckCircle2 size={18} /> Agregar a finanzas
-          </button>
+          <span className="email-learning-note"><BrainCircuit size={17} /> Los pendientes necesitan clasificación.</span>
         </div>
       </div>
 
@@ -229,15 +202,6 @@ export default function Emails({ onFinanceChanged }) {
             const isPending = item.status === "pending" && !item.transaction_id;
             return (
               <article className={`email-candidate-card ${item.status}`} key={item.id}>
-                <label className="email-select-box">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selected[item.id])}
-                    disabled={!isPending}
-                    onChange={(event) => setSelected((current) => ({ ...current, [item.id]: event.target.checked }))}
-                  />
-                </label>
-
                 <div className="email-candidate-main">
                   <div className="email-candidate-title">
                     <strong>{item.description}</strong>
@@ -256,7 +220,7 @@ export default function Emails({ onFinanceChanged }) {
                   <strong>{money(item.amount)}</strong>
                   {isPending ? (
                     <div className="email-candidate-actions">
-                      <button type="button" onClick={() => handleSingleDecision(item, "confirm")}>Aceptar</button>
+                      <button type="button" onClick={() => openClassification(item)}><BrainCircuit size={14} /> Clasificar</button>
                       <button type="button" className="danger" onClick={() => handleSingleDecision(item, "reject")}><Trash2 size={14} /> Rechazar</button>
                     </div>
                   ) : item.transaction_id ? (
@@ -265,6 +229,36 @@ export default function Emails({ onFinanceChanged }) {
                     <small>Canónico #{item.canonical_transaction_id || item.duplicate_of}</small>
                   ) : null}
                 </div>
+
+                {isPending && classifying === item.id && (
+                  <div className="email-classification-panel">
+                    <strong>JARVIS pregunta: ¿qué fue este movimiento?</strong>
+                    <label>
+                      Nombre claro
+                      <input value={classification.description} onChange={(event) => setClassification((current) => ({ ...current, description: event.target.value }))} />
+                    </label>
+                    <label>
+                      Tipo
+                      <select value={classification.transaction_type} onChange={(event) => setClassification((current) => ({ ...current, transaction_type: event.target.value }))}>
+                        <option value="expense">Gasto</option>
+                        <option value="income">Ingreso</option>
+                        <option value="debt_payment">Pago de deuda</option>
+                      </select>
+                    </label>
+                    <label>
+                      Categoría
+                      <input value={classification.category} onChange={(event) => setClassification((current) => ({ ...current, category: event.target.value }))} />
+                    </label>
+                    <label className="email-remember-rule">
+                      <input type="checkbox" checked={classification.remember_rule} onChange={(event) => setClassification((current) => ({ ...current, remember_rule: event.target.checked }))} />
+                      Recordar esta combinación de cuentas, dirección y concepto para hacerla automática la próxima vez.
+                    </label>
+                    <div className="email-classification-actions">
+                      <button type="button" onClick={() => handleClassification(item)}>Guardar y aprender</button>
+                      <button type="button" className="secondary" onClick={() => setClassifying(null)}>Cancelar</button>
+                    </div>
+                  </div>
+                )}
               </article>
             );
           })}
