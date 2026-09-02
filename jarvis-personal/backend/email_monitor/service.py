@@ -205,6 +205,7 @@ def ensure_email_tables(conn) -> None:
             received_at TIMESTAMPTZ,
             attachment_names TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
             extracted_text_excerpt TEXT,
+            extracted_text TEXT,
             status TEXT NOT NULL DEFAULT 'pending_reconciliation',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -212,6 +213,7 @@ def ensure_email_tables(conn) -> None:
         )
         """
     )
+    conn.execute("ALTER TABLE email_statement_documents ADD COLUMN IF NOT EXISTS extracted_text TEXT")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS card_aliases (
@@ -1276,6 +1278,7 @@ def scan_email_text(
     user_id: int | None = None,
     provider_message_id: str | None = None,
     attachment_names: list[str] | None = None,
+    attachment_text: str | None = None,
 ) -> dict[str, Any]:
     if user_id is None:
         _require_owner_user()
@@ -1329,13 +1332,17 @@ def scan_email_text(
             }
 
         if parsed.get("email_kind") == "statement":
+            # Store the PDF extraction separately from the email HTML. The PDF
+            # is appended after the body during Gmail parsing, so clipping the
+            # combined body previously preserved CSS instead of transactions.
+            statement_text = (attachment_text or "").strip() or (body or "").strip()
             conn.execute(
                 """
                 INSERT INTO email_statement_documents (
                     user_id, workspace_id, email_message_id, bank, subject, statement_month,
-                    received_at, attachment_names, extracted_text_excerpt, status
+                    received_at, attachment_names, extracted_text_excerpt, extracted_text, status
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending_reconciliation')
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending_reconciliation')
                 ON CONFLICT (workspace_id, email_message_id)
                 DO UPDATE SET
                     bank = EXCLUDED.bank,
@@ -1344,6 +1351,7 @@ def scan_email_text(
                     received_at = COALESCE(EXCLUDED.received_at, email_statement_documents.received_at),
                     attachment_names = EXCLUDED.attachment_names,
                     extracted_text_excerpt = EXCLUDED.extracted_text_excerpt,
+                    extracted_text = EXCLUDED.extracted_text,
                     status = 'pending_reconciliation',
                     updated_at = NOW()
                 """,
@@ -1356,7 +1364,8 @@ def scan_email_text(
                     parsed.get("statement_month"),
                     received_at,
                     attachment_names,
-                    (body or "")[:2500],
+                    statement_text[:2500],
+                    statement_text,
                 ),
             )
             # Remove old zero-amount statement candidates if this message had any.
@@ -2237,6 +2246,7 @@ def _process_gmail_message(service, *, message_id: str, owner_id: int, auto_comm
             user_id=owner_id,
             provider_message_id=message_id,
             attachment_names=attachment_names,
+            attachment_text=pdf_text,
         )
     except Exception as exc:
         with get_connection() as conn:
