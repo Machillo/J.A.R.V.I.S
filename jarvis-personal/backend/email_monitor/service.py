@@ -2379,6 +2379,38 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
         ensure_email_tables(conn)
         _repair_historical_cross_bank_mirrors(conn, owner_workspace_id)
         _repair_historical_scheduled_commitments(conn, owner_workspace_id)
+        stored_statement_rows = conn.execute(
+            """
+            SELECT id, bank
+            FROM email_statement_documents
+            WHERE workspace_id = %s
+              AND bank IN ('bac', 'multimoney')
+              AND extracted_text IS NOT NULL
+              AND LENGTH(TRIM(extracted_text)) > 0
+              AND status IN ('pending_reconciliation', 'needs_review')
+            ORDER BY received_at, id
+            """,
+            (owner_workspace_id,),
+        ).fetchall()
+        stored_reconciliations: list[dict[str, Any]] = []
+        for statement in stored_statement_rows:
+            try:
+                result = reconcile_statement(
+                    conn,
+                    user_id=owner_id,
+                    workspace_id=owner_workspace_id,
+                    statement_id=int(statement["id"]),
+                )
+                stored_reconciliations.append(result)
+            except HTTPException as exc:
+                if exc.status_code != 422:
+                    raise
+                stored_reconciliations.append({
+                    "status": "PENDING_LAYOUT",
+                    "statement_id": int(statement["id"]),
+                    "bank": statement["bank"],
+                    "message": str(exc.detail),
+                })
         conn.execute(
             """
             UPDATE email_monitor_settings
@@ -2453,6 +2485,9 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
             "duplicates": duplicates,
             "ignored": ignored,
             "errors": errors,
+            "stored_statements_reconciled": sum(
+                1 for item in stored_reconciliations if item.get("status") == "OK"
+            ),
         },
         "message": (
             f"Escaneo completado. Encontrados: {len(messages)}, pendientes: {pending}, "
