@@ -24,6 +24,7 @@ from backend.email_monitor.parser import (
 )
 from backend.email_monitor.deduplication import canonical_score, find_semantic_duplicate, resolve_transaction_time
 from backend.email_monitor.normalization import normalize_description
+from backend.email_monitor.personal_rules import apply_workspace_email_rules
 
 OWNER_EMAIL = (
     os.getenv("OWNER_EMAIL", "").strip()
@@ -168,6 +169,8 @@ def ensure_email_tables(conn) -> None:
         "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS transaction_time TIME",
         "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS raw_description TEXT",
         "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS normalized_description TEXT",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS auto_commit_allowed BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS personal_rule_id BIGINT",
     ]:
         conn.execute(ddl)
     conn.execute(
@@ -1082,6 +1085,7 @@ def scan_email_text(
     with get_connection() as conn:
         ensure_email_tables(conn)
         workspace_id = _workspace_id_for_user(conn, user_id)
+        parsed = apply_workspace_email_rules(conn, workspace_id, parsed)
         email_message_id = _upsert_ingested_message(
             conn,
             user_id=user_id,
@@ -1279,9 +1283,10 @@ def scan_email_text(
                 category, account, source, notes, original_amount, original_currency,
                 exchange_rate, card_last4, card_owner, billing_cycle_start,
                 billing_cycle_end, dedupe_key, duplicate_of, canonical_transaction_id,
-                transaction_time, raw_description, normalized_description, confidence, status, review_reason
+                transaction_time, raw_description, normalized_description, confidence,
+                auto_commit_allowed, personal_rule_id, status, review_reason
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (workspace_id, fingerprint)
             WHERE fingerprint IS NOT NULL
             DO UPDATE SET
@@ -1307,6 +1312,8 @@ def scan_email_text(
                 raw_description = EXCLUDED.raw_description,
                 normalized_description = EXCLUDED.normalized_description,
                 confidence = EXCLUDED.confidence,
+                auto_commit_allowed = EXCLUDED.auto_commit_allowed,
+                personal_rule_id = EXCLUDED.personal_rule_id,
                 status = CASE
                     WHEN email_transaction_candidates.status IN ('confirmed','auto_saved')
                     THEN email_transaction_candidates.status
@@ -1344,6 +1351,8 @@ def scan_email_text(
                 parsed.get("raw_description"),
                 parsed.get("normalized_description"),
                 parsed["confidence"],
+                bool(parsed.get("auto_commit_allowed")),
+                parsed.get("personal_rule_id"),
                 candidate_status,
                 review_reason,
             ),
@@ -1409,6 +1418,7 @@ def scan_email_text(
         if (
             auto_commit
             and candidate_row.get("status") == "pending"
+            and bool(candidate_row.get("auto_commit_allowed"))
             and float(candidate_row.get("confidence") or 0) >= AUTO_COMMIT_CONFIDENCE
         ):
             transaction_id = _insert_transaction(conn, user_id, candidate_row)
