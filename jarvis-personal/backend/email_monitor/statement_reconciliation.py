@@ -13,6 +13,21 @@ from backend.transactions.parser import detect_category
 
 DATE_LINE = re.compile(r"(?m)^(\d{2}/\d{2}/\d{4})\s*$")
 MONEY_LINE = re.compile(r"^-?[\d,]+\.\d{2}$")
+BAC_CARD_ROW = re.compile(
+    r"^(?P<reference>\d{10,16})\s+"
+    r"(?P<date>\d{1,2}-[A-ZÁÉÍÓÚÑ]{3}-\d{2})\s+"
+    r"(?P<description>.+?)\s+(?P<currency>CRC|USD)\s+"
+    r"(?P<amount>[\d,]+\.\d{2}-?)$",
+    re.IGNORECASE,
+)
+BAC_INTEREST_TOTAL = re.compile(
+    r"^Total por concepto de intereses\s+(?P<crc>[\d,]+\.\d{2}-?)\s+(?P<usd>[\d,]+\.\d{2}-?)$",
+    re.IGNORECASE,
+)
+SPANISH_MONTHS = {
+    "ENE": 1, "FEB": 2, "MAR": 3, "ABR": 4, "MAY": 5, "JUN": 6,
+    "JUL": 7, "AGO": 8, "SET": 9, "SEP": 9, "OCT": 10, "NOV": 11, "DIC": 12,
+}
 
 
 def _plain(value: str | None) -> str:
@@ -80,6 +95,9 @@ def parse_bac_statement(text: str) -> list[dict[str, Any]]:
     Credit-card summaries without explicit debit/credit columns are deliberately
     rejected: importing an unsigned amount would risk reversing a payment or refund.
     """
+    if "tarjeta de credito" in _plain(text):
+        return _parse_bac_credit_card_statement(text)
+
     normalized_text = _plain(text)
     has_ledger_columns = (
         ("debito" in normalized_text or "debitos" in normalized_text)
@@ -133,6 +151,110 @@ def parse_bac_statement(text: str) -> list[dict[str, Any]]:
             "transaction_type": transaction_type,
             "category": category,
             "ignored": is_internal,
+        })
+    return movements
+
+
+def _parse_bac_credit_card_date(value: str) -> str:
+    day, month_name, year = value.upper().split("-")
+    month = SPANISH_MONTHS[month_name]
+    return datetime(2000 + int(year), month, int(day)).date().isoformat()
+
+
+def _parse_bac_credit_card_statement(text: str, exchange_rate: float = 495.0) -> list[dict[str, Any]]:
+    """Extract signed detail rows, excluding payments and summary/financing tables."""
+    section: str | None = None
+    card_last4: str | None = None
+    cutoff_date: str | None = None
+    movements: list[dict[str, Any]] = []
+    allowed_sections = {"purchases", "charges", "voluntary"}
+
+    for raw_line in (text or "").splitlines():
+        line = re.sub(r"\s+", " ", raw_line).strip()
+        plain = _plain(line)
+        cutoff_match = re.match(r"^Fecha de corte:\s*(\d{1,2}-[A-ZÁÉÍÓÚÑ]{3}-\d{2})$", line, re.IGNORECASE)
+        if cutoff_match:
+            cutoff_date = _parse_bac_credit_card_date(cutoff_match.group(1))
+            continue
+        if plain.startswith("b) detalle de compras del periodo"):
+            section = "purchases"
+            continue
+        if plain.startswith("c) detalle de intereses"):
+            section = "interest"
+            continue
+        if plain.startswith("d) detalle de otros cargos"):
+            section = "charges"
+            continue
+        if plain.startswith("e) detalle de productos y servicios de eleccion voluntaria"):
+            section = "voluntary"
+            continue
+        if plain.startswith(("f) cargos", "g) otras notas", "total de compras")):
+            section = None
+            continue
+
+        card_match = re.search(r"\*{8,}(\d{4})", line)
+        if card_match:
+            card_last4 = card_match.group(1)
+            continue
+        interest_match = BAC_INTEREST_TOTAL.fullmatch(line) if section == "interest" else None
+        if interest_match and cutoff_date:
+            for currency, raw_amount in (("CRC", interest_match.group("crc")), ("USD", interest_match.group("usd"))):
+                original_amount = _amount(raw_amount.rstrip("-"))
+                if original_amount <= 0:
+                    continue
+                is_credit = raw_amount.endswith("-")
+                amount_crc = round(original_amount * exchange_rate, 2) if currency == "USD" else original_amount
+                movements.append({
+                    "transaction_date": cutoff_date,
+                    "reference": f"interest-{card_last4 or 'account'}-{cutoff_date}-{currency}",
+                    "description": f"INTERESES TARJETA BAC {card_last4 or ''}".strip(),
+                    "debit": 0.0 if is_credit else amount_crc,
+                    "credit": amount_crc if is_credit else 0.0,
+                    "amount": amount_crc,
+                    "balance": None,
+                    "direction": "in" if is_credit else "out",
+                    "transaction_type": "income" if is_credit else "expense",
+                    "category": "Tarjeta BAC",
+                    "ignored": False,
+                    "original_amount": original_amount,
+                    "original_currency": currency,
+                    "exchange_rate": exchange_rate if currency == "USD" else None,
+                    "card_last4": card_last4,
+                    "statement_section": "interest",
+                })
+            section = None
+            continue
+        if section not in allowed_sections:
+            continue
+        match = BAC_CARD_ROW.fullmatch(line)
+        if not match:
+            continue
+
+        original_amount = _amount(match.group("amount").rstrip("-"))
+        # Credits/reversals within these sections carry a trailing minus sign.
+        is_credit = match.group("amount").endswith("-")
+        currency = match.group("currency").upper()
+        amount_crc = round(original_amount * exchange_rate, 2) if currency == "USD" else original_amount
+        description = re.sub(r"[_]+", " ", match.group("description")).strip()
+        transaction_type = "income" if is_credit else "expense"
+        category = normalize_category(detect_category(description), transaction_type)
+        movements.append({
+            "transaction_date": _parse_bac_credit_card_date(match.group("date")),
+            "reference": match.group("reference"),
+            "description": description,
+            "debit": 0.0 if is_credit else amount_crc,
+            "credit": amount_crc if is_credit else 0.0,
+            "amount": amount_crc,
+            "balance": None,
+            "direction": "in" if is_credit else "out",
+            "transaction_type": transaction_type,
+            "category": category,
+            "ignored": False,
+            "original_amount": original_amount,
+            "original_currency": currency,
+            "exchange_rate": exchange_rate if currency == "USD" else None,
+            "card_last4": card_last4,
+            "statement_section": section,
         })
     return movements
 
@@ -247,17 +369,29 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
                 _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movement, status, matched_id, reason)
                 continue
 
+            original_currency = movement.get("original_currency")
+            original_amount = movement.get("original_amount")
             rows = conn.execute(
                 """
                 SELECT id, description, transaction_type
                 FROM transactions
                 WHERE workspace_id = %s
                   AND transaction_date::date = %s::date
-                  AND ABS(amount - %s) < 0.01
+                  AND (
+                      ABS(amount - %s) < 0.01
+                      OR (%s = 'USD' AND original_currency = 'USD' AND ABS(original_amount - %s) < 0.01)
+                  )
                   AND transaction_type = %s
                 ORDER BY id
                 """,
-                (workspace_id, movement["transaction_date"], movement["amount"], movement["transaction_type"]),
+                (
+                    workspace_id,
+                    movement["transaction_date"],
+                    movement["amount"],
+                    original_currency,
+                    original_amount,
+                    movement["transaction_type"],
+                ),
             ).fetchall()
             exact_description_rows = [row for row in rows if _plain(row["description"]) == _plain(movement["description"])]
             if len(exact_description_rows) == 1:
@@ -300,7 +434,14 @@ def _import_missing_statement_movement(
     movement: dict[str, Any],
 ) -> int:
     """Import one authoritative statement row; the source marker makes retries idempotent."""
-    source_marker = f"statement:{statement_id}:reference:{movement['reference']}"
+    if bank == "multimoney":
+        source_marker = f"statement:{statement_id}:reference:{movement['reference']}"
+    else:
+        source_marker = (
+            f"statement:{statement_id}:card:{movement.get('card_last4') or 'account'}:"
+            f"reference:{movement['reference']}:date:{movement['transaction_date']}:"
+            f"amount:{movement.get('original_amount') or movement['amount']}"
+        )
     existing = conn.execute(
         """
         SELECT id
@@ -320,9 +461,10 @@ def _import_missing_statement_movement(
         """
         INSERT INTO transactions (
             user_id, workspace_id, transaction_date, description, amount,
-            transaction_type, category, account, source, notes, created_at
+            transaction_type, category, account, source, notes,
+            original_amount, original_currency, exchange_rate, created_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         RETURNING id
         """,
         (
@@ -336,6 +478,9 @@ def _import_missing_statement_movement(
             "MultiMoney" if bank == "multimoney" else "BAC",
             f"{bank}_statement",
             f"Importado automáticamente durante conciliación mensual | {source_marker}",
+            movement.get("original_amount"),
+            movement.get("original_currency"),
+            movement.get("exchange_rate"),
         ),
     ).fetchone()
     return int(row["id"])
