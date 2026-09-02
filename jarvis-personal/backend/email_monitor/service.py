@@ -36,8 +36,11 @@ DEFAULT_QUERY = os.getenv(
     # The old query mixed sender + keywords and Gmail returned only a tiny subset.
     '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopular OR from:popular)',
 )
-# Fase 6.2: no se guarda nada automático. Primero validamos lectura limpia.
-AUTO_COMMIT_CONFIDENCE = float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "999"))
+# Gmail ingestion is automatic only for high-confidence parser decisions.
+AUTO_COMMIT_CONFIDENCE = max(
+    0.0,
+    min(float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "0.95")), 1.0),
+)
 logger = logging.getLogger(__name__)
 
 
@@ -1402,6 +1405,32 @@ def scan_email_text(
         ).fetchone()
         candidate_row = dict(refreshed_row) if refreshed_row else candidate_row
         _assert_duplicate_has_trace(candidate_row)
+
+        if (
+            auto_commit
+            and candidate_row.get("status") == "pending"
+            and float(candidate_row.get("confidence") or 0) >= AUTO_COMMIT_CONFIDENCE
+        ):
+            transaction_id = _insert_transaction(conn, user_id, candidate_row)
+            conn.execute(
+                """
+                UPDATE email_transaction_candidates
+                SET status = 'auto_saved',
+                    transaction_id = %s,
+                    canonical_transaction_id = COALESCE(canonical_transaction_id, id),
+                    review_reason = 'Guardado automáticamente desde Gmail por alta confianza.',
+                    updated_at = NOW()
+                WHERE id = %s AND workspace_id = %s
+                  AND status = 'pending'
+                """,
+                (transaction_id, int(candidate_row["id"]), workspace_id),
+            )
+            candidate_row["status"] = "auto_saved"
+            candidate_row["transaction_id"] = transaction_id
+            candidate_row["canonical_transaction_id"] = candidate_row.get("canonical_transaction_id") or candidate_row["id"]
+            candidate_status = "auto_saved"
+            review_reason = "Guardado automáticamente desde Gmail por alta confianza."
+
         _log_email_event(
             conn,
             user_id=user_id,
@@ -1866,9 +1895,9 @@ def _process_gmail_message(service, *, message_id: str, owner_id: int, auto_comm
     }
 
 
-def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
-    # Lectura y candidatos pendientes únicamente. No autoguardar.
-    auto_commit = False
+def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
+    # Gmail/PubSub ingestion is automatic for high-confidence candidates.
+    auto_commit = True
     service = _gmail_service()
 
     with get_connection() as conn:
@@ -1894,17 +1923,27 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
         message_id = item.get("id")
         if not message_id:
             continue
-        processed.append(_process_gmail_message(service, message_id=message_id, owner_id=owner_id))
+        processed.append(
+            _process_gmail_message(
+                service,
+                message_id=message_id,
+                owner_id=owner_id,
+                auto_commit=auto_commit,
+            )
+        )
 
     with get_connection() as conn:
         ensure_email_tables(conn)
         conn.execute(
             """
             UPDATE email_monitor_settings
-            SET last_scan_at = NOW(), updated_at = NOW(), gmail_query = %s, auto_commit_confidence = 999
+            SET last_scan_at = NOW(),
+                updated_at = NOW(),
+                gmail_query = %s,
+                auto_commit_confidence = %s
             WHERE workspace_id = %s
             """,
-            (settings_query or DEFAULT_QUERY, owner_workspace_id),
+            (settings_query or DEFAULT_QUERY, AUTO_COMMIT_CONFIDENCE, owner_workspace_id),
         )
         gmail_ids = [item.get("gmail_id") for item in processed if item.get("gmail_id")]
         final_rows = conn.execute(
@@ -1974,7 +2013,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
             f"Escaneo completado. Encontrados: {len(messages)}, pendientes: {pending}, "
             f"ya en finanzas: {confirmed + auto_saved}, estados: {statements}, "
             f"duplicados: {duplicates}, ignorados: {ignored}, errores: {errors}. "
-            "Auto guardado desactivado."
+            f"Auto guardado activo desde {AUTO_COMMIT_CONFIDENCE:.0%} de confianza."
         ),
     }
 
@@ -1985,7 +2024,7 @@ def cron_sync(secret: str | None, max_results: int = 20) -> dict[str, Any]:
     if not secret or not hmac.compare_digest(secret, CRON_SECRET):
         raise HTTPException(status_code=403, detail="Cron secret inválido.")
     try:
-        return sync_gmail_for_owner(max_results=max_results, auto_commit=False, current_month_only=True)
+        return sync_gmail_for_owner(max_results=max_results, auto_commit=True, current_month_only=True)
     except Exception as exc:
         return {"status": "ERROR", "message": str(exc)}
 
@@ -2110,7 +2149,12 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
                 if not page_token:
                     break
             processed = [
-                _process_gmail_message(service, message_id=message_id, owner_id=owner_id)
+                _process_gmail_message(
+                    service,
+                    message_id=message_id,
+                    owner_id=owner_id,
+                    auto_commit=True,
+                )
                 for message_id in message_ids
             ]
         except Exception as exc:
