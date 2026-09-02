@@ -344,17 +344,19 @@ def _log_email_event(
     duplicate, or error. Logging must never break ingestion.
     """
     try:
+        workspace_id = _workspace_id_for_user(conn, user_id)
         payload_json = json.dumps(extracted_payload or {}, default=str) if extracted_payload else None
         conn.execute(
             """
             INSERT INTO email_parser_logs (
-                user_id, email_message_id, provider_message_id, sender, subject,
+                user_id, workspace_id, email_message_id, provider_message_id, sender, subject,
                 bank, action, result, reason, extracted_payload
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
             """,
             (
                 user_id,
+                workspace_id,
                 email_message_id,
                 provider_message_id,
                 sender,
@@ -441,10 +443,21 @@ def _delete_pending_internal_mirrors(conn, workspace_id: str, internal_candidate
           AND transaction_id IS NULL
           AND transaction_date = %s
           AND notes ILIKE %s
-        RETURNING id
+        RETURNING id, email_message_id
         """,
         (workspace_id, tx_date, f"%{reference}%"),
     ).fetchall()
+    message_ids = [int(row["email_message_id"]) for row in rows if row.get("email_message_id")]
+    if message_ids:
+        conn.execute(
+            """
+            UPDATE email_ingested_messages
+            SET status = 'ignored',
+                parse_reason = 'Movimiento espejo de una transferencia interna ya detectada.'
+            WHERE workspace_id = %s AND id = ANY(%s)
+            """,
+            (workspace_id, message_ids),
+        )
     return len(rows)
 
 def _seed_default_card_aliases(conn, user_id: int, workspace_id: str | None = None) -> None:
@@ -1893,9 +1906,50 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
             """,
             (settings_query or DEFAULT_QUERY, owner_workspace_id),
         )
+        gmail_ids = [item.get("gmail_id") for item in processed if item.get("gmail_id")]
+        final_rows = conn.execute(
+            """
+            SELECT
+                m.provider_message_id,
+                m.status AS email_status,
+                m.parse_reason,
+                c.status AS candidate_status,
+                c.transaction_id
+            FROM email_ingested_messages m
+            LEFT JOIN email_transaction_candidates c ON c.email_message_id = m.id
+            WHERE m.workspace_id = %s
+              AND m.provider_message_id = ANY(%s)
+            """,
+            (owner_workspace_id, gmail_ids),
+        ).fetchall() if gmail_ids else []
         conn.commit()
 
+    final_by_gmail_id = {str(row["provider_message_id"]): dict(row) for row in final_rows}
+    for item in processed:
+        final = final_by_gmail_id.get(str(item.get("gmail_id") or ""))
+        if not final:
+            continue
+        candidate_status = final.get("candidate_status")
+        email_status = final.get("email_status")
+        item["candidate_status"] = candidate_status
+        if candidate_status in {"confirmed", "auto_saved"}:
+            item["status"] = "OK"
+            item["message"] = "Ya estaba en finanzas."
+        elif candidate_status == "pending":
+            item["status"] = "OK"
+            item["message"] = "Pendiente de revisión."
+        elif candidate_status == "duplicate":
+            item["status"] = "DUPLICATE_EMAIL"
+            item["message"] = "Movimiento duplicado; no se vuelve a guardar."
+        elif email_status == "ignored":
+            item["status"] = "IGNORED_EMAIL"
+            item["message"] = final.get("parse_reason") or "Correo ignorado."
+        elif email_status == "statement":
+            item["status"] = "STATEMENT_DOCUMENT"
+            item["message"] = final.get("parse_reason") or "Estado de cuenta para conciliación."
+
     auto_saved = sum(1 for item in processed if item.get("candidate_status") == "auto_saved")
+    confirmed = sum(1 for item in processed if item.get("candidate_status") == "confirmed")
     pending = sum(1 for item in processed if item.get("candidate_status") == "pending")
     statements = sum(1 for item in processed if item.get("status") == "STATEMENT_DOCUMENT")
     ignored = sum(1 for item in processed if item.get("status") in {"IGNORED_EMAIL", "DUPLICATE_IGNORED_EMAIL"})
@@ -1909,6 +1963,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
         "processed": processed,
         "summary": {
             "auto_saved": auto_saved,
+            "confirmed": confirmed,
             "pending": pending,
             "statements": statements,
             "duplicates": duplicates,
@@ -1917,7 +1972,8 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = False, quer
         },
         "message": (
             f"Escaneo completado. Encontrados: {len(messages)}, pendientes: {pending}, "
-            f"estados: {statements}, duplicados: {duplicates}, ignorados: {ignored}, errores: {errors}. "
+            f"ya en finanzas: {confirmed + auto_saved}, estados: {statements}, "
+            f"duplicados: {duplicates}, ignorados: {ignored}, errores: {errors}. "
             "Auto guardado desactivado."
         ),
     }
