@@ -407,12 +407,11 @@ def _internal_mirror_exists(conn, workspace_id: str, candidate: dict[str, Any]) 
 
     BAC and MultiMoney send separate mirror notifications for one movement. If
     the MultiMoney/BAC mirror was already ignored as internal, the later BAC
-    SINPE candidate with the same reference/amount/date must not appear for
+    SINPE candidate with the same bank reference must not appear for
     manual approval.
     """
     reference = _candidate_reference(candidate)
-    tx_date = candidate.get("transaction_date")
-    if not reference or not tx_date:
+    if not reference:
         return False
     row = conn.execute(
         """
@@ -421,11 +420,10 @@ def _internal_mirror_exists(conn, workspace_id: str, candidate: dict[str, Any]) 
         WHERE workspace_id = %s
           AND result = 'ignored'
           AND extracted_payload::text ILIKE %s
-          AND extracted_payload::text ILIKE %s
           AND (reason ILIKE '%%intern%%' OR extracted_payload::text ILIKE '%%internal_transfer%%' OR extracted_payload::text ILIKE '%%Movimiento interno%%')
         LIMIT 1
         """,
-        (workspace_id, f"%{reference}%", f"%{tx_date}%"),
+        (workspace_id, f"%{reference}%"),
     ).fetchone()
     return row is not None
 
@@ -438,8 +436,7 @@ def _delete_pending_internal_mirrors(conn, workspace_id: str, internal_candidate
     touched.
     """
     reference = _candidate_reference(internal_candidate)
-    tx_date = internal_candidate.get("transaction_date")
-    if not reference or not tx_date:
+    if not reference:
         return 0
     rows = conn.execute(
         """
@@ -447,11 +444,10 @@ def _delete_pending_internal_mirrors(conn, workspace_id: str, internal_candidate
         WHERE workspace_id = %s
           AND status = 'pending'
           AND transaction_id IS NULL
-          AND transaction_date = %s
           AND notes ILIKE %s
         RETURNING id, email_message_id
         """,
-        (workspace_id, tx_date, f"%{reference}%"),
+        (workspace_id, f"%{reference}%"),
     ).fetchall()
     message_ids = [int(row["email_message_id"]) for row in rows if row.get("email_message_id")]
     if message_ids:
@@ -2023,7 +2019,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
             f"Escaneo completado. Encontrados: {len(messages)}, pendientes: {pending}, "
             f"ya en finanzas: {confirmed + auto_saved}, estados: {statements}, "
             f"duplicados: {duplicates}, ignorados: {ignored}, errores: {errors}. "
-            f"Auto guardado activo desde {AUTO_COMMIT_CONFIDENCE:.0%} de confianza."
+            "Autoguardado limitado a reglas personales autorizadas."
         ),
     }
 
