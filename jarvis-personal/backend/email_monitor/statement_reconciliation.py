@@ -48,7 +48,16 @@ def parse_multimoney_statement(text: str) -> list[dict[str, Any]]:
         is_internal = "inversion vista smart" in normalized
         is_interest = "capitalizacion normal de intereses" in normalized
         transaction_type = "internal_transfer" if is_internal else "income" if credit > 0 else "expense"
-        category = "Transferencia interna" if is_internal else "Inversión" if is_interest else normalize_category(detect_category(description), transaction_type)
+        if is_internal:
+            category = "Transferencia interna"
+        elif is_interest:
+            category = "Inversión"
+        elif "nutricionista" in normalized:
+            category = "Salud"
+        elif "bateria" in normalized:
+            category = "Transporte"
+        else:
+            category = normalize_category(detect_category(description), transaction_type)
         movements.append({
             "transaction_date": datetime.strptime(match.group(1), "%d/%m/%Y").date().isoformat(),
             "reference": lines[0],
@@ -118,6 +127,53 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
             status = "ignored"
             reason = "Traslado interno hacia Inversión Vista Smart; no se duplica como ingreso."
         else:
+            # A MultiMoney debit and a BAC incoming SINPE can be the two sides
+            # of one transfer between Kenneth's own accounts. Bank reference is
+            # authoritative even when the free-text concept says "CAMISAS".
+            bac_mirror = conn.execute(
+                """
+                SELECT 1
+                FROM email_ingested_messages m
+                LEFT JOIN email_transaction_candidates c ON c.email_message_id = m.id
+                WHERE m.workspace_id = %s
+                  AND m.bank = 'bac'
+                  AND (
+                      COALESCE(c.dedupe_key, '') LIKE %s
+                      OR COALESCE(c.notes, '') LIKE %s
+                      OR COALESCE(m.raw_body, '') LIKE %s
+                  )
+                LIMIT 1
+                """,
+                (workspace_id, f"%|{movement['reference']}|%", f"%{movement['reference']}%", f"%{movement['reference']}%"),
+            ).fetchone()
+            if bac_mirror:
+                status = "ignored"
+                reason = "Movimiento espejo MultiMoney→BAC con la misma referencia; es traslado entre cuentas propias."
+                counts[status] += 1
+                _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movement, status, matched_id, reason)
+                continue
+
+            scheduled_proof = None
+            if "casa y prestamo" in _plain(movement["description"]):
+                scheduled_proof = conn.execute(
+                    """
+                    SELECT id
+                    FROM email_transaction_candidates
+                    WHERE workspace_id = %s
+                      AND status = 'duplicate'
+                      AND transaction_date::date = %s::date
+                      AND ABS(amount - %s) < 0.01
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (workspace_id, movement["transaction_date"], movement["amount"]),
+                ).fetchone()
+            if scheduled_proof:
+                status = "matched"
+                reason = "Ya conciliado contra Casa y préstamo de papá programados; no se vuelve a registrar."
+                counts[status] += 1
+                _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movement, status, matched_id, reason)
+                continue
+
             rows = conn.execute(
                 """
                 SELECT id, description, transaction_type
@@ -125,10 +181,14 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
                 WHERE workspace_id = %s
                   AND transaction_date::date = %s::date
                   AND ABS(amount - %s) < 0.01
+                  AND transaction_type = %s
                 ORDER BY id
                 """,
-                (workspace_id, movement["transaction_date"], movement["amount"]),
+                (workspace_id, movement["transaction_date"], movement["amount"], movement["transaction_type"]),
             ).fetchall()
+            exact_description_rows = [row for row in rows if _plain(row["description"]) == _plain(movement["description"])]
+            if len(exact_description_rows) == 1:
+                rows = exact_description_rows
             if len(rows) == 1:
                 status = "matched"
                 matched_id = int(rows[0]["id"])
@@ -140,36 +200,40 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
                 status = "missing"
                 reason = "Aparece en el estado de cuenta pero no existe en Finanzas."
         counts[status] += 1
-        conn.execute(
-            """
-            INSERT INTO email_statement_reconciliation_lines (
-                user_id, workspace_id, statement_document_id, transaction_date, reference,
-                description, amount, debit, credit, balance, transaction_type, category,
-                reconciliation_status, matched_transaction_id, reason
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (workspace_id, statement_document_id, reference, transaction_date, amount)
-            DO UPDATE SET
-                description = EXCLUDED.description,
-                debit = EXCLUDED.debit,
-                credit = EXCLUDED.credit,
-                balance = EXCLUDED.balance,
-                transaction_type = EXCLUDED.transaction_type,
-                category = EXCLUDED.category,
-                reconciliation_status = EXCLUDED.reconciliation_status,
-                matched_transaction_id = EXCLUDED.matched_transaction_id,
-                reason = EXCLUDED.reason,
-                updated_at = NOW()
-            """,
-            (
-                user_id, workspace_id, statement_id, movement["transaction_date"], movement["reference"],
-                movement["description"], movement["amount"], movement["debit"], movement["credit"],
-                movement["balance"], movement["transaction_type"], movement["category"], status,
-                matched_id, reason,
-            ),
-        )
+        _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movement, status, matched_id, reason)
     final_status = "reconciled" if counts["missing"] == 0 and counts["ambiguous"] == 0 else "needs_review"
     conn.execute(
         "UPDATE email_statement_documents SET status = %s, updated_at = NOW() WHERE id = %s AND workspace_id = %s",
         (final_status, statement_id, workspace_id),
     )
     return {"status": "OK", "statement_id": statement_id, "movements": len(movements), "summary": counts, "reconciliation_status": final_status}
+
+
+def _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movement, status, matched_id, reason) -> None:
+    conn.execute(
+        """
+        INSERT INTO email_statement_reconciliation_lines (
+            user_id, workspace_id, statement_document_id, transaction_date, reference,
+            description, amount, debit, credit, balance, transaction_type, category,
+            reconciliation_status, matched_transaction_id, reason
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (workspace_id, statement_document_id, reference, transaction_date, amount)
+        DO UPDATE SET
+            description = EXCLUDED.description,
+            debit = EXCLUDED.debit,
+            credit = EXCLUDED.credit,
+            balance = EXCLUDED.balance,
+            transaction_type = EXCLUDED.transaction_type,
+            category = EXCLUDED.category,
+            reconciliation_status = EXCLUDED.reconciliation_status,
+            matched_transaction_id = EXCLUDED.matched_transaction_id,
+            reason = EXCLUDED.reason,
+            updated_at = NOW()
+        """,
+        (
+            user_id, workspace_id, statement_id, movement["transaction_date"], movement["reference"],
+            movement["description"], movement["amount"], movement["debit"], movement["credit"],
+            movement["balance"], movement["transaction_type"], movement["category"], status,
+            matched_id, reason,
+        ),
+    )
