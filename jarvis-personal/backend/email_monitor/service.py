@@ -1035,6 +1035,44 @@ def _transaction_duplicate_match(conn, workspace_id: str, candidate: dict[str, A
     return int(row["id"]) if row else None
 
 
+def _existing_receivable_payment_match(conn, workspace_id: str, candidate: dict[str, Any]) -> int | None:
+    """Prefer an already-recorded Sidey receivable payment over a new email income."""
+    if candidate.get("transaction_type") not in {"income", "reimbursement"}:
+        return None
+    text = " ".join(str(candidate.get(key) or "") for key in ("description", "notes", "account")).lower()
+    if "sidey" not in text:
+        return None
+    tables = conn.execute(
+        "SELECT to_regclass('public.receivables') IS NOT NULL AS r, to_regclass('public.receivable_payments') IS NOT NULL AS p"
+    ).fetchone()
+    if not tables or not tables["r"] or not tables["p"]:
+        return None
+    row = conn.execute(
+        """
+        SELECT t.id
+        FROM transactions t
+        LEFT JOIN receivable_payments rp
+          ON rp.workspace_id = t.workspace_id
+         AND rp.source_transaction_id = t.id
+        LEFT JOIN receivables r
+          ON r.workspace_id = t.workspace_id
+         AND r.id = rp.receivable_id
+        WHERE t.workspace_id = %s
+          AND t.transaction_date::date = %s::date
+          AND ABS(t.amount - %s) < 0.01
+          AND t.transaction_type = 'income'
+          AND (
+              LOWER(COALESCE(r.person_name, '')) = 'sidey'
+              OR t.source = 'receivable_manual'
+          )
+        ORDER BY CASE WHEN LOWER(COALESCE(r.person_name, '')) = 'sidey' THEN 0 ELSE 1 END, t.id
+        LIMIT 1
+        """,
+        (workspace_id, candidate["transaction_date"], candidate["amount"]),
+    ).fetchone()
+    return int(row["id"]) if row else None
+
+
 def _candidate_duplicate_match(conn, workspace_id: str, candidate: dict[str, Any], current_fingerprint: str | None = None):
     """Find the canonical candidate for exact or semantic duplicates.
 
@@ -1476,7 +1514,10 @@ def scan_email_text(
         scheduled_match = _scheduled_commitment_match(conn, workspace_id, parsed)
         duplicate_candidate = _candidate_duplicate_match(conn, workspace_id, parsed, candidate_fp)
         replace_existing_duplicate = False
-        existing_transaction_id = _transaction_duplicate_match(conn, workspace_id, parsed)
+        existing_transaction_id = (
+            _existing_receivable_payment_match(conn, workspace_id, parsed)
+            or _transaction_duplicate_match(conn, workspace_id, parsed)
+        )
         if scheduled_match:
             transaction_id, review_reason = scheduled_match
             candidate_status = "duplicate"
