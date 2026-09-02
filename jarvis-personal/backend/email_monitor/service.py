@@ -1409,13 +1409,25 @@ def scan_email_text(
                 ),
             ).fetchone()
             reconciliation = None
-            if parsed.get("bank") == "multimoney" and statement_row:
-                reconciliation = reconcile_statement(
-                    conn,
-                    user_id=user_id,
-                    workspace_id=workspace_id,
-                    statement_id=int(statement_row["id"]),
-                )
+            if parsed.get("bank") in {"multimoney", "bac"} and statement_row:
+                try:
+                    reconciliation = reconcile_statement(
+                        conn,
+                        user_id=user_id,
+                        workspace_id=workspace_id,
+                        statement_id=int(statement_row["id"]),
+                    )
+                except HTTPException as exc:
+                    if parsed.get("bank") != "bac" or exc.status_code != 422:
+                        raise
+                    # BAC publishes more than one PDF layout. Keep an unknown
+                    # layout pending for inspection instead of failing the Gmail
+                    # scan or, worse, importing unsigned/guessed movements.
+                    reconciliation = {
+                        "status": "PENDING_LAYOUT",
+                        "statement_id": int(statement_row["id"]),
+                        "message": str(exc.detail),
+                    }
             # Remove old zero-amount statement candidates if this message had any.
             conn.execute(
                 """
