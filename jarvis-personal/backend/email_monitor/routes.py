@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Header, Query
 
-from backend.email_monitor.models import EmailCandidateBulkDecisionRequest, EmailCandidateClassifyRequest, EmailCandidateDecisionRequest, EmailTextScanRequest
+from backend.email_monitor.models import EmailCandidateBulkDecisionRequest, EmailCandidateClassifyRequest, EmailCandidateDecisionRequest, EmailStatementReconcileRequest, EmailTextScanRequest
+from backend.email_monitor.statement_reconciliation import reconcile_statement
+from backend.auth.current_user import get_current_user_id
+from backend.core.database import get_connection
 from backend.email_monitor.service import (
     cron_sync,
+    _workspace_id_for_user,
     bulk_decide_candidates,
     classify_candidate,
     decide_candidate,
@@ -17,6 +21,16 @@ from backend.email_monitor.service import (
 )
 
 router = APIRouter(prefix="/email-monitor", tags=["Email Monitor"])
+
+
+@router.post("/statements/reconcile")
+def email_monitor_statement_reconcile(request: EmailStatementReconcileRequest):
+    user_id = get_current_user_id()
+    with get_connection() as conn:
+        workspace_id = _workspace_id_for_user(conn, user_id)
+        result = reconcile_statement(conn, user_id=user_id, workspace_id=workspace_id, statement_id=request.statement_id)
+        conn.commit()
+        return result
 
 
 @router.get("/status")

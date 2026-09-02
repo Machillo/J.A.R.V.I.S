@@ -26,6 +26,7 @@ from backend.email_monitor.parser import (
 from backend.email_monitor.deduplication import canonical_score, find_semantic_duplicate, resolve_transaction_time
 from backend.email_monitor.normalization import normalize_description
 from backend.email_monitor.personal_rules import apply_workspace_email_rules
+from backend.email_monitor.statement_reconciliation import reconcile_statement
 
 OWNER_EMAIL = (
     os.getenv("OWNER_EMAIL", "").strip()
@@ -1336,7 +1337,7 @@ def scan_email_text(
             # is appended after the body during Gmail parsing, so clipping the
             # combined body previously preserved CSS instead of transactions.
             statement_text = (attachment_text or "").strip() or (body or "").strip()
-            conn.execute(
+            statement_row = conn.execute(
                 """
                 INSERT INTO email_statement_documents (
                     user_id, workspace_id, email_message_id, bank, subject, statement_month,
@@ -1354,6 +1355,7 @@ def scan_email_text(
                     extracted_text = EXCLUDED.extracted_text,
                     status = 'pending_reconciliation',
                     updated_at = NOW()
+                RETURNING id
                 """,
                 (
                     user_id,
@@ -1367,7 +1369,15 @@ def scan_email_text(
                     statement_text[:2500],
                     statement_text,
                 ),
-            )
+            ).fetchone()
+            reconciliation = None
+            if parsed.get("bank") == "multimoney" and statement_row:
+                reconciliation = reconcile_statement(
+                    conn,
+                    user_id=user_id,
+                    workspace_id=workspace_id,
+                    statement_id=int(statement_row["id"]),
+                )
             # Remove old zero-amount statement candidates if this message had any.
             conn.execute(
                 """
@@ -1397,6 +1407,7 @@ def scan_email_text(
                 "message": "Estado de cuenta guardado como documento pendiente de conciliación.",
                 "candidate": None,
                 "statement": True,
+                "reconciliation": reconciliation,
             }
 
         parsed = _enrich_candidate_with_card_alias(conn, workspace_id, parsed)

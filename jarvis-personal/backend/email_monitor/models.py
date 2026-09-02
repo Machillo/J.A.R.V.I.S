@@ -29,3 +29,7 @@ class EmailCandidateClassifyRequest(BaseModel):
 class EmailCandidateBulkDecisionRequest(BaseModel):
     candidate_ids: list[int]
     decision: str  # confirm | reject
+
+
+class EmailStatementReconcileRequest(BaseModel):
+    statement_id: int
