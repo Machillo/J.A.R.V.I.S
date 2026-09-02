@@ -425,6 +425,33 @@ def _internal_mirror_exists(conn, workspace_id: str, candidate: dict[str, Any]) 
         """,
         (workspace_id, f"%{reference}%"),
     ).fetchone()
+    if row is not None:
+        return True
+
+    # BAC and MultiMoney may omit the counterparty account in one template.
+    # Their shared bank reference plus opposite directions is still a strong,
+    # deterministic signal that both emails describe the same own-account move.
+    direction = str(candidate.get("movement_direction") or "unknown")
+    bank = str(candidate.get("bank") or "unknown")
+    if direction not in {"in", "out"} or bank not in {"bac", "multimoney"}:
+        return False
+    opposite = "out" if direction == "in" else "in"
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM email_transaction_candidates c
+        JOIN email_ingested_messages m ON m.id = c.email_message_id
+        WHERE c.workspace_id = %s
+          AND c.transaction_id IS NULL
+          AND c.status IN ('pending', 'duplicate')
+          AND m.bank IN ('bac', 'multimoney')
+          AND m.bank <> %s
+          AND c.notes ILIKE %s
+          AND c.dedupe_key LIKE %s
+        LIMIT 1
+        """,
+        (workspace_id, bank, f"%{reference}%", f"%|{opposite}"),
+    ).fetchone()
     return row is not None
 
 
@@ -442,7 +469,7 @@ def _delete_pending_internal_mirrors(conn, workspace_id: str, internal_candidate
         """
         DELETE FROM email_transaction_candidates
         WHERE workspace_id = %s
-          AND status = 'pending'
+          AND status IN ('pending', 'duplicate')
           AND transaction_id IS NULL
           AND notes ILIKE %s
         RETURNING id, email_message_id
@@ -1214,6 +1241,7 @@ def scan_email_text(
         parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
 
         if _internal_mirror_exists(conn, workspace_id, parsed):
+            removed_mirrors = _delete_pending_internal_mirrors(conn, workspace_id, parsed)
             _log_email_event(
                 conn,
                 user_id=user_id,
@@ -1241,6 +1269,7 @@ def scan_email_text(
                 "message": "Movimiento espejo de transferencia interna ya detectada.",
                 "ignored": True,
                 "candidate": None,
+                "removed_internal_mirrors": removed_mirrors,
             }
 
         duplicate_candidate = _candidate_duplicate_match(conn, workspace_id, parsed, candidate_fp)
