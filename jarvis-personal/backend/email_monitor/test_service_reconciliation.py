@@ -1,5 +1,6 @@
 from backend.email_monitor.service import (
     _repair_historical_cross_bank_mirrors,
+    _repair_historical_scheduled_commitments,
     _scheduled_commitment_match,
 )
 
@@ -77,3 +78,22 @@ def test_house_and_father_loan_match_combined_schedules():
 
     assert match and match[0] == 701
     assert "Casa y préstamo" in match[1]
+
+
+def test_repairs_existing_pending_scheduled_receipt():
+    conn = FakeConn([
+        [{
+            "id": 979,
+            "description": "PAGO DE PRESTAMO MULTIMONEY",
+            "amount": 20461,
+            "transaction_date": "2026-08-31",
+        }],
+        {"id": 448},
+        None,
+    ])
+
+    assert _repair_historical_scheduled_commitments(conn, "workspace") == 1
+    update_sql, update_params = conn.calls[-1]
+    assert "status = 'duplicate'" in update_sql
+    assert update_params[0] == 448
+    assert update_params[-1] == 979

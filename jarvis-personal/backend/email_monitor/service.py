@@ -577,19 +577,16 @@ def _scheduled_commitment_match(conn, workspace_id: str, candidate: dict[str, An
             FROM transactions
             WHERE workspace_id = %s
               AND source = 'auto_debt_schedule'
-              AND transaction_type = 'debt_payment'
               AND ABS(amount - %s) <= GREATEST(1000, %s * 0.05)
               AND transaction_date::date BETWEEN (%s::date - INTERVAL '7 days') AND (%s::date + INTERVAL '7 days')
-              AND (
-                    LOWER(description) LIKE '%%multimoney%%'
-                 OR LOWER(description) LIKE '%%miltimoney%%'
-                 OR LOWER(category) LIKE '%%multimoney%%'
-                 OR LOWER(category) LIKE '%%miltimoney%%'
-              )
-            ORDER BY ABS(transaction_date::date - %s::date), id DESC
+            ORDER BY
+                CASE WHEN LOWER(description) LIKE '%%multi%%' OR LOWER(category) LIKE '%%multi%%' THEN 0 ELSE 1 END,
+                ABS(transaction_date::date - %s::date),
+                ABS(amount - %s),
+                id DESC
             LIMIT 1
             """,
-            (workspace_id, amount, amount, transaction_date, transaction_date, transaction_date),
+            (workspace_id, amount, amount, transaction_date, transaction_date, transaction_date, amount),
         ).fetchone()
         if row:
             return int(row["id"]), "Comprobante del pago automático de la deuda MultiMoney; no se duplica en finanzas."
@@ -632,6 +629,45 @@ def _scheduled_commitment_match(conn, workspace_id: str, candidate: dict[str, An
             return (int(tx["id"]) if tx else None), "Comprobante combinado de Casa y préstamo de papá, ya contemplados por sus calendarios automáticos."
 
     return None
+
+
+def _repair_historical_scheduled_commitments(conn, workspace_id: str) -> int:
+    """Reconcile pending rows created before scheduled matching existed."""
+    rows = conn.execute(
+        """
+        SELECT *
+        FROM email_transaction_candidates
+        WHERE workspace_id = %s
+          AND status = 'pending'
+          AND transaction_id IS NULL
+        ORDER BY id
+        """,
+        (workspace_id,),
+    ).fetchall()
+    repaired = 0
+    for raw in rows:
+        candidate = dict(raw)
+        match = _scheduled_commitment_match(conn, workspace_id, candidate)
+        if not match:
+            continue
+        transaction_id, reason = match
+        conn.execute(
+            """
+            UPDATE email_transaction_candidates
+            SET status = 'duplicate',
+                transaction_id = %s,
+                canonical_transaction_id = CASE
+                    WHEN %s IS NULL THEN id
+                    ELSE canonical_transaction_id
+                END,
+                review_reason = %s,
+                updated_at = NOW()
+            WHERE workspace_id = %s AND id = %s AND status = 'pending'
+            """,
+            (transaction_id, transaction_id, reason, workspace_id, int(candidate["id"])),
+        )
+        repaired += 1
+    return repaired
 
 def _seed_default_card_aliases(conn, user_id: int, workspace_id: str | None = None) -> None:
     workspace_id = workspace_id or _workspace_id_for_user(conn, user_id)
@@ -2134,6 +2170,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
     with get_connection() as conn:
         ensure_email_tables(conn)
         _repair_historical_cross_bank_mirrors(conn, owner_workspace_id)
+        _repair_historical_scheduled_commitments(conn, owner_workspace_id)
         conn.execute(
             """
             UPDATE email_monitor_settings
