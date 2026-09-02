@@ -578,13 +578,18 @@ def _scheduled_commitment_match(conn, workspace_id: str, candidate: dict[str, An
             WHERE workspace_id = %s
               AND source = 'auto_debt_schedule'
               AND transaction_type = 'debt_payment'
-              AND ABS(amount - %s) < 0.01
+              AND ABS(amount - %s) <= GREATEST(1000, %s * 0.05)
               AND transaction_date::date BETWEEN (%s::date - INTERVAL '7 days') AND (%s::date + INTERVAL '7 days')
-              AND (LOWER(description) LIKE '%%multimoney%%' OR LOWER(category) LIKE '%%multimoney%%')
+              AND (
+                    LOWER(description) LIKE '%%multimoney%%'
+                 OR LOWER(description) LIKE '%%miltimoney%%'
+                 OR LOWER(category) LIKE '%%multimoney%%'
+                 OR LOWER(category) LIKE '%%miltimoney%%'
+              )
             ORDER BY ABS(transaction_date::date - %s::date), id DESC
             LIMIT 1
             """,
-            (workspace_id, amount, transaction_date, transaction_date, transaction_date),
+            (workspace_id, amount, amount, transaction_date, transaction_date, transaction_date),
         ).fetchone()
         if row:
             return int(row["id"]), "Comprobante del pago automático de la deuda MultiMoney; no se duplica en finanzas."
@@ -603,7 +608,7 @@ def _scheduled_commitment_match(conn, workspace_id: str, candidate: dict[str, An
             """
             SELECT id, monthly_payment
             FROM debts
-            WHERE workspace_id = %s AND remaining_amount > 0
+            WHERE workspace_id = %s
               AND (LOWER(name) LIKE '%%pap%%' OR LOWER(debt_type) LIKE '%%familiar%%')
             ORDER BY id
             LIMIT 1

@@ -60,6 +60,7 @@ def test_multimoney_receipt_matches_automatic_debt_transaction():
 
     assert match and match[0] == 700
     assert "no se duplica" in match[1]
+    assert conn.calls[0][1][1:3] == (20461, 20461)
 
 
 def test_house_and_father_loan_match_combined_schedules():
