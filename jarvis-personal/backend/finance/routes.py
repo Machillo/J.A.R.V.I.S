@@ -59,6 +59,7 @@ from backend.finance.service import (
     add_payroll_event,
     get_payroll_events,
     calculate_monthly_salary_projection,
+    calculate_aguinaldo,
     delete_expense,
     update_expense,
     delete_debt,
@@ -172,6 +173,11 @@ def create_bonus(request: BonusRequest):
 @router.get("/bonuses")
 def bonuses():
     return get_bonuses()
+
+
+@router.get("/aguinaldo")
+def aguinaldo():
+    return calculate_aguinaldo()
 
 
 @router.post("/debts")
