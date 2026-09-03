@@ -2425,6 +2425,46 @@ def _process_gmail_message(service, *, message_id: str, owner_id: int, auto_comm
     }
 
 
+def sync_ccss_payroll_orders() -> dict[str, Any]:
+    """Backfill only CCSS payroll orders without running bank reconciliation."""
+    _require_owner_user()
+    service = _gmail_service()
+
+    with get_connection() as conn:
+        ensure_email_tables(conn)
+        owner_id = _owner_user_id(conn)
+        if not owner_id:
+            raise RuntimeError("No encontré usuario owner para guardar órdenes patronales.")
+
+    today = date.today()
+    period_start = date(today.year if today.month == 12 else today.year - 1, 12, 1)
+    gmail_query = (
+        'from:noreply@ccss.sa.cr subject:"Generación de Orden Patronal Digital" '
+        f'after:{period_start:%Y/%m/%d} -in:spam -in:trash'
+    )
+    messages = _list_gmail_messages(service, gmail_query=gmail_query, max_results=20)
+    processed = [
+        _process_gmail_message(
+            service,
+            message_id=item["id"],
+            owner_id=owner_id,
+            auto_commit=True,
+        )
+        for item in messages
+        if item.get("id")
+    ]
+    errors = [item for item in processed if item.get("status") == "ERROR"]
+    return {
+        "status": "OK" if not errors else "PARTIAL",
+        "found": len(messages),
+        "payroll_statements": sum(
+            1 for item in processed if item.get("status") == "PAYROLL_STATEMENT"
+        ),
+        "errors": len(errors),
+        "processed": processed,
+    }
+
+
 def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query: str | None = None, current_month_only: bool = True) -> dict[str, Any]:
     # Gmail/PubSub ingestion is automatic for high-confidence candidates.
     auto_commit = True
