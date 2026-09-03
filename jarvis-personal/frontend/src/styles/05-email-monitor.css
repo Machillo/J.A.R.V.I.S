@@ -1,0 +1,452 @@
+/* Email Monitor Review Flow */
+.emails-page {
+  display: grid;
+  gap: 18px;
+}
+
+.email-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.email-kpi-grid .hud-card {
+  min-height: auto;
+}
+
+.email-kpi-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.email-kpi-grid strong {
+  font-size: clamp(22px, 3vw, 30px);
+}
+
+.email-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.email-filter-tabs,
+.email-toolbar-actions,
+.email-candidate-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.email-filter-tabs button,
+.email-candidate-actions button {
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.055);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 9px 13px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.email-filter-tabs button.active,
+.email-candidate-actions button:hover {
+  border-color: color-mix(in srgb, var(--cyan) 45%, transparent);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+}
+
+.email-candidate-actions button.danger {
+  border-color: rgba(255, 95, 95, .28);
+  color: #ffb4b4;
+}
+
+.email-candidate-list,
+.email-scan-list {
+  display: grid;
+  gap: 10px;
+}
+
+.email-scan-list {
+  max-height: 280px;
+  overflow: auto;
+}
+
+.email-scan-list div,
+.email-candidate-card {
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.045);
+  border-radius: 18px;
+  padding: 13px 14px;
+}
+
+.email-scan-list span,
+.email-scan-list small {
+  display: block;
+}
+
+.email-scan-list small,
+.email-candidate-main small,
+.email-candidate-main p,
+.email-candidate-side small {
+  color: var(--muted);
+}
+
+.email-candidate-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.email-candidate-card.duplicate {
+  opacity: .72;
+}
+
+.email-select-box input {
+  width: 18px;
+  height: 18px;
+}
+
+.email-candidate-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.email-candidate-main p {
+  margin: 6px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.email-candidate-side {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+  text-align: right;
+}
+
+.email-candidate-side > strong {
+  color: var(--green);
+  font-size: 18px;
+}
+
+.email-learning-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.email-classification-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(130px, 1fr) minmax(160px, 1fr);
+  gap: 12px;
+  padding: 15px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+  background: color-mix(in srgb, var(--cyan) 8%, rgba(0,0,0,.25));
+}
+
+.email-classification-panel > strong,
+.email-remember-rule,
+.email-classification-actions {
+  grid-column: 1 / -1;
+}
+
+.email-classification-panel label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.email-classification-panel input:not([type="checkbox"]),
+.email-classification-panel select {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 10px;
+  background: rgba(0,0,0,.3);
+  color: var(--text);
+  padding: 10px;
+}
+
+.email-classification-panel .email-remember-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.email-classification-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.email-classification-actions button {
+  border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+  color: var(--text);
+  padding: 9px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .email-classification-panel { grid-template-columns: 1fr; }
+}
+
+.email-status-pill {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  background: rgba(255,255,255,.08);
+  color: var(--muted);
+}
+
+.email-status-pill.pending { color: var(--cyan); }
+.email-status-pill.confirmed,
+.email-status-pill.auto_saved { color: var(--green); }
+.email-status-pill.duplicate { color: #f0c36a; }
+.email-status-pill.rejected { color: #ffb4b4; }
+
+@media (max-width: 760px) {
+  .email-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .email-candidate-card {
+    grid-template-columns: auto 1fr;
+  }
+  .email-candidate-side {
+    grid-column: 1 / -1;
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+/* Email Monitor mobile polish */
+.emails-page,
+.emails-page * {
+  max-width: 100%;
+}
+
+.emails-page {
+  overflow-x: hidden;
+}
+
+.emails-page .page-section-header > div,
+.email-candidate-main,
+.email-candidate-title,
+.email-toolbar,
+.email-toolbar-actions,
+.email-filter-tabs {
+  min-width: 0;
+}
+
+.email-candidate-main strong,
+.email-candidate-main p,
+.email-candidate-main small,
+.email-scan-list span,
+.email-scan-list small {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.email-candidate-title strong {
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.email-candidate-actions button,
+.email-filter-tabs button,
+.email-toolbar-actions button,
+.emails-page .primary-action-button {
+  min-width: 0;
+  white-space: normal;
+}
+
+@media (max-width: 760px) {
+  .emails-page {
+    gap: 16px;
+    width: 100%;
+  }
+
+  .emails-page .page-section-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 14px;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  .emails-page .page-section-header h2 {
+    font-size: clamp(30px, 10.8vw, 42px);
+    line-height: .96;
+    letter-spacing: .07em;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+
+  .emails-page .page-section-header p {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .emails-page .primary-action-button {
+    width: 100%;
+    min-height: 58px;
+    padding: 14px 16px;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.25;
+  }
+
+  .email-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+  }
+
+  .email-kpi-grid .hud-card {
+    min-height: 92px;
+    padding: 16px;
+  }
+
+  .email-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .email-filter-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .email-filter-tabs button {
+    width: 100%;
+    min-height: 46px;
+    padding: 10px 12px;
+  }
+
+  .email-toolbar-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    width: 100%;
+  }
+
+  .email-toolbar-actions .jarvis-action-button {
+    width: 100%;
+    min-height: 56px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .email-candidate-list {
+    gap: 14px;
+  }
+
+  .email-candidate-card {
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    padding: 18px 16px;
+    border-radius: 22px;
+  }
+
+  .email-select-box {
+    padding-top: 3px;
+  }
+
+  .email-select-box input {
+    width: 22px;
+    height: 22px;
+  }
+
+  .email-candidate-title {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .email-candidate-title strong {
+    flex: 1 1 100%;
+    font-size: clamp(20px, 6.6vw, 28px);
+    letter-spacing: .01em;
+  }
+
+  .email-status-pill {
+    flex: 0 0 auto;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .email-candidate-main p {
+    margin: 7px 0 8px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.28;
+  }
+
+  .email-candidate-main small {
+    display: block;
+    line-height: 1.4;
+  }
+
+  .email-candidate-side {
+    grid-column: 2 / -1;
+    justify-items: start;
+    text-align: left;
+    gap: 14px;
+    width: 100%;
+  }
+
+  .email-candidate-side > strong {
+    font-size: clamp(24px, 7.4vw, 32px);
+    line-height: 1;
+  }
+
+  .email-candidate-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .email-candidate-actions button {
+    min-height: 46px;
+    padding: 11px 16px;
+  }
+}
+
+@media (max-width: 390px) {
+  .email-kpi-grid,
+  .email-filter-tabs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .emails-page .page-section-header h2 {
+    font-size: clamp(28px, 10vw, 36px);
+    letter-spacing: .05em;
+  }
+
+  .email-candidate-card {
+    padding: 16px 14px;
+  }
+}
+
