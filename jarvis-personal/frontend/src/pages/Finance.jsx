@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CircleDollarSign,
@@ -28,6 +28,7 @@ import {
   getCurrencyAlerts,
   setCurrencyRate,
   getAguinaldo,
+  syncAguinaldoFromCcss,
 } from "../services/jarvisApi";
 
 const formatCRC = (value = 0) =>
@@ -1320,7 +1321,11 @@ function IncomePanel({ cycleIncome, cycleTransactions, fixedExpectedIncome, extr
   );
 }
 
-function AguinaldoPanel({ data }) {
+function AguinaldoPanel({ data, loading, error, onRefresh }) {
+  if (loading && !data) return <LoadingPanel message="Leyendo tus órdenes patronales..." />;
+  if (error && !data) {
+    return <ErrorPanel error={error} onRetry={onRefresh} />;
+  }
   if (!data) return <LoadingPanel message="Calculando tu aguinaldo real..." />;
   const period = data.period || {};
   const sources = data.source_totals || {};
@@ -1333,12 +1338,13 @@ function AguinaldoPanel({ data }) {
         <article className="hud-card finance-simple-kpi"><span>PERÍODO</span><h2 className="aguinaldo-period-value">{period.start?.slice(0, 7)} → {period.end?.slice(0, 7)}</h2></article>
       </div>
       <article className="hud-panel large">
-        <div className="panel-title"><div><h3>CÁLCULO DEL AGUINALDO</h3><p>Actualizado al {period.calculated_through || "--"}</p></div><span>÷ 12</span></div>
+        <div className="panel-title"><div><h3>CÁLCULO DEL AGUINALDO</h3><p>Actualizado al {period.calculated_through || "--"}</p></div><button className="ghost-button" disabled={loading} onClick={onRefresh}>{loading ? "Leyendo CCSS..." : "Actualizar CCSS"}</button></div>
         <div className="aguinaldo-source-grid">
           <div><span>Órdenes patronales CCSS</span><strong>{formatCRC(sources.ccss_salary)}</strong></div>
           <div><span>Respaldo salarial manual</span><strong>{formatSignedCRC((Number(sources.salary) || 0) + (Number(sources.payroll_event) || 0) + (Number(sources.bonus) || 0))}</strong></div>
         </div>
         <small className="aguinaldo-note">La Orden Patronal es la fuente principal. El respaldo manual solo se utiliza en meses donde todavía no existe una orden de la CCSS.</small>
+        {error ? <small className="aguinaldo-note danger-text">{error}</small> : null}
       </article>
       <article className="hud-panel large">
         <div className="panel-title"><div><h3>DESGLOSE MENSUAL</h3></div><span>{months.length} MESES</span></div>
@@ -1365,6 +1371,9 @@ export default function Finance({
   const [detail, setDetail] = useState(null);
   const [currencyAlerts, setCurrencyAlerts] = useState(null);
   const [aguinaldo, setAguinaldo] = useState(null);
+  const [aguinaldoLoading, setAguinaldoLoading] = useState(false);
+  const [aguinaldoError, setAguinaldoError] = useState("");
+  const aguinaldoSyncStarted = useRef(false);
   const [financeAsOf, setFinanceAsOf] = useState(() => new Date().toISOString().slice(0, 10));
 
   const loadSupportingData = async () => {
@@ -1383,9 +1392,28 @@ export default function Finance({
     setDebts(debtsResult.status === "fulfilled" && Array.isArray(debtsResult.value) ? debtsResult.value : []);
     setCurrencyAlerts(currencyResult.status === "fulfilled" ? currencyResult.value : null);
     setAguinaldo(aguinaldoResult.status === "fulfilled" ? aguinaldoResult.value : null);
+    setAguinaldoError(aguinaldoResult.status === "rejected" ? (aguinaldoResult.reason?.message || "No pude calcular el aguinaldo.") : "");
+  };
+
+  const refreshAguinaldoFromCcss = async () => {
+    setAguinaldoLoading(true);
+    setAguinaldoError("");
+    try {
+      await syncAguinaldoFromCcss();
+      setAguinaldo(await getAguinaldo());
+    } catch (refreshError) {
+      setAguinaldoError(refreshError?.message || "No pude leer las órdenes patronales de Gmail.");
+    } finally {
+      setAguinaldoLoading(false);
+    }
   };
 
   useEffect(() => { loadSupportingData().catch(console.error); }, [dashboard, financeAsOf]);
+  useEffect(() => {
+    if (activeTab !== "aguinaldo" || aguinaldoSyncStarted.current) return;
+    aguinaldoSyncStarted.current = true;
+    refreshAguinaldoFromCcss();
+  }, [activeTab]);
   if (loading) return <LoadingPanel />;
   if (error) return <ErrorPanel error={error} onRetry={onRefresh} />;
 
@@ -1471,7 +1499,7 @@ export default function Finance({
       </div>}
 
       {activeTab === "income" && <IncomePanel cycleIncome={cycleIncome} cycleTransactions={cycleTransactions} fixedExpectedIncome={fixedExpectedIncome} extraExpectedIncome={extraExpectedIncome} />}
-      {activeTab === "aguinaldo" && <AguinaldoPanel data={aguinaldo} />}
+      {activeTab === "aguinaldo" && <AguinaldoPanel data={aguinaldo} loading={aguinaldoLoading} error={aguinaldoError} onRefresh={refreshAguinaldoFromCcss} />}
 
       {detail && <div className="finance-detail-modal-backdrop" onClick={() => setDetail(null)}><article className="hud-panel finance-detail-modal" onClick={(event) => event.stopPropagation()}><div className="panel-title"><div><h3>{detail.title}</h3></div><button className="ghost-button" onClick={() => setDetail(null)}>Close</button></div>{detail.items?.length ? <div className="finance-detail-list">{detail.items.map((item) => <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}><div><strong>{item.description}</strong><span>{item.transaction_date || "No date"} · {item.balance_side || item.category || item.transaction_type}</span></div><b>{formatCRC(item.amount ?? item.net_amount)}</b></div>)}</div> : <EmptyPanel title="No details" description={detail.empty} />}</article></div>}
     </section>
