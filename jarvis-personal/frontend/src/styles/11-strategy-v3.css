@@ -1,0 +1,682 @@
+/* =========================================================
+   JARVIS STRATEGY V3 · mobile-first decision center
+   ========================================================= */
+.strategy-v3-page {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+.strategy-v3-page .strategy-v3-hero {
+  position: static;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(139, 92, 246, 0.18);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(139, 92, 246, 0.12), transparent 42%),
+    rgba(255, 255, 255, 0.03);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
+}
+
+.strategy-v3-hero > div {
+  min-width: 0;
+}
+
+.strategy-v3-hero h2 {
+  margin: 3px 0 5px;
+  font-size: clamp(1.65rem, 7vw, 2.1rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.strategy-v3-hero p {
+  margin: 0;
+  max-width: 42rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.strategy-v3-hero .primary-action-button {
+  width: 100%;
+  min-height: 48px;
+  justify-content: center;
+}
+
+.strategy-priority-v3,
+.strategy-debt-progress-v3,
+.strategy-options-v3,
+.strategy-detail-panel.strategy-v3-detail {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.028);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.13);
+}
+
+.strategy-priority-v3 {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-color: rgba(79, 140, 255, 0.16);
+  background:
+    linear-gradient(145deg, rgba(79, 140, 255, 0.075), rgba(139, 92, 246, 0.035)),
+    rgba(255, 255, 255, 0.024);
+}
+
+.strategy-v3-label {
+  display: block;
+  color: rgba(255, 255, 255, 0.47);
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.strategy-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-width: 0;
+}
+
+.strategy-title-row > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #8b5cf6;
+}
+
+.strategy-title-row > div {
+  min-width: 0;
+}
+
+.strategy-title-row h3,
+.strategy-title-row h4 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.strategy-title-row p {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.strategy-debt-progress-v3 {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.strategy-debt-progress-v3 .progress-track,
+.strategy-v3-detail .progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.strategy-debt-progress-v3 .progress-track > div,
+.strategy-v3-detail .progress-track > div {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4f8cff, #8b5cf6);
+  transition: width 320ms ease;
+}
+
+.strategy-debt-progress-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.strategy-debt-progress-stats > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.strategy-debt-progress-stats span,
+.strategy-debt-mini-grid span,
+.strategy-surplus-card span,
+.strategy-debt-advice-summary span {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+
+.strategy-debt-progress-stats strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.87rem;
+  line-height: 1.25;
+}
+
+.strategy-options-v3 {
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+}
+
+.strategy-options-v3 > .strategy-v3-label {
+  margin: 1px 2px 3px;
+}
+
+.strategy-option-card-v3 {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 66px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  color: inherit;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.strategy-option-card-v3:active {
+  transform: scale(0.985);
+}
+
+.strategy-option-card-v3.active {
+  border-color: rgba(139, 92, 246, 0.28);
+  background: rgba(139, 92, 246, 0.075);
+}
+
+.strategy-option-card-v3 > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.strategy-option-card-v3 strong {
+  font-size: 0.9rem;
+}
+
+.strategy-option-card-v3 small {
+  overflow-wrap: anywhere;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
+.strategy-option-icon-v3 {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(139, 92, 246, 0.17);
+  border-radius: 14px;
+  color: #a78bfa;
+  background: rgba(139, 92, 246, 0.075);
+}
+
+.strategy-option-card-v3 > svg {
+  color: rgba(255, 255, 255, 0.34);
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.strategy-option-card-v3 > svg.open {
+  transform: rotate(90deg);
+  color: #a78bfa;
+}
+
+.strategy-detail-panel.strategy-v3-detail {
+  display: grid;
+  gap: 14px;
+  padding: 15px;
+  animation: strategyDetailIn 180ms ease-out both;
+}
+
+@keyframes strategyDetailIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.strategy-detail-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.strategy-v3-subsection {
+  display: grid;
+  gap: 8px;
+}
+
+.strategy-investment-decision-card,
+.strategy-debt-advice-summary,
+.strategy-surplus-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.027);
+}
+
+.strategy-investment-decision-card > span {
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+}
+
+.strategy-investment-decision-card > strong,
+.strategy-surplus-card > strong {
+  font-size: clamp(1.55rem, 8vw, 2.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.strategy-investment-decision-card p,
+.strategy-debt-advice-summary small,
+.strategy-surplus-card small {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.57);
+  font-size: 0.77rem;
+  line-height: 1.45;
+}
+
+.strategy-investment-decision-card.ready {
+  border-color: rgba(85, 217, 155, 0.2);
+  background: rgba(85, 217, 155, 0.055);
+}
+
+.strategy-investment-decision-card.ready > span { color: #55d99b; }
+.strategy-investment-decision-card.limited { border-color: rgba(238, 203, 114, 0.18); }
+.strategy-investment-decision-card.limited > span { color: #eecb72; }
+.strategy-investment-decision-card.blocked { border-color: rgba(255, 119, 135, 0.18); }
+.strategy-investment-decision-card.blocked > span { color: #ff7787; }
+
+.strategy-v3-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  border-radius: 15px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  background: rgba(79, 140, 255, 0.045);
+}
+
+.strategy-v3-note svg {
+  flex: 0 0 auto;
+  color: #4f8cff;
+}
+
+.strategy-debt-advice-summary > strong {
+  font-size: 1.35rem;
+  letter-spacing: -0.025em;
+}
+
+.strategy-debt-analysis-list {
+  display: grid;
+  gap: 11px;
+}
+
+.strategy-debt-analysis-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.strategy-debt-analysis-card > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.strategy-debt-analysis-card > header > div {
+  min-width: 0;
+}
+
+.strategy-debt-analysis-card h4 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.89rem;
+}
+
+.strategy-debt-analysis-card header small {
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.7rem;
+}
+
+.strategy-debt-analysis-card header > strong {
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.strategy-debt-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.strategy-debt-mini-grid > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.strategy-debt-mini-grid strong {
+  overflow-wrap: anywhere;
+  font-size: 0.76rem;
+}
+
+.strategy-advice-line {
+  margin: 0;
+  padding: 10px 11px;
+  border-left: 2px solid rgba(139, 92, 246, 0.55);
+  border-radius: 0 11px 11px 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  background: rgba(139, 92, 246, 0.045);
+}
+
+.strategy-debt-options-v3 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.strategy-debt-options-v3 > div {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  min-height: 86px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.strategy-debt-options-v3 > div.recommended {
+  border-color: rgba(85, 217, 155, 0.24);
+  background: rgba(85, 217, 155, 0.055);
+}
+
+.strategy-debt-options-v3 span {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.68rem;
+}
+
+.strategy-debt-options-v3 strong {
+  overflow-wrap: anywhere;
+  font-size: 0.84rem;
+}
+
+.strategy-debt-options-v3 small {
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.67rem;
+  line-height: 1.3;
+}
+
+.strategy-route-v3 {
+  display: grid;
+  gap: 9px;
+  padding-top: 4px;
+}
+
+.strategy-route-v3 .strategy-timeline {
+  display: grid;
+  gap: 7px;
+}
+
+.strategy-route-v3 .strategy-route-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.strategy-route-item > div {
+  min-width: 0;
+}
+
+.strategy-route-item p {
+  margin: 3px 0 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.strategy-route-item b {
+  max-width: 92px;
+  font-size: 0.7rem;
+  line-height: 1.25;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.strategy-distribution-v3 {
+  gap: 12px;
+}
+
+.strategy-surplus-card {
+  border-color: rgba(85, 217, 155, 0.19);
+  background: rgba(85, 217, 155, 0.052);
+}
+
+.strategy-surplus-card > span {
+  color: #55d99b;
+  letter-spacing: 0.1em;
+}
+
+.strategy-distribution-formula {
+  display: grid;
+  gap: 3px;
+  padding: 7px 0;
+}
+
+.strategy-distribution-formula > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 11px;
+}
+
+.strategy-distribution-formula > div:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.strategy-distribution-formula span {
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.strategy-distribution-formula strong {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+}
+
+.strategy-distribution-formula .result {
+  margin-top: 5px;
+  border: 1px solid rgba(85, 217, 155, 0.16);
+  background: rgba(85, 217, 155, 0.05);
+}
+
+.strategy-distribution-formula .result span,
+.strategy-distribution-formula .result strong {
+  color: #7ce4b1;
+  font-weight: 800;
+}
+
+.strategy-pending-obligations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.strategy-pending-obligations span {
+  padding: 6px 9px;
+  border: 1px solid rgba(238, 203, 114, 0.14);
+  border-radius: 999px;
+  color: rgba(238, 203, 114, 0.78);
+  font-size: 0.68rem;
+  background: rgba(238, 203, 114, 0.035);
+}
+
+.strategy-allocation-v3 {
+  display: grid;
+  gap: 7px;
+}
+
+.strategy-allocation-row-v3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.strategy-allocation-row-v3 > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.strategy-allocation-row-v3 span {
+  overflow-wrap: anywhere;
+  font-size: 0.79rem;
+  font-weight: 700;
+}
+
+.strategy-allocation-row-v3 small {
+  color: rgba(255, 255, 255, 0.43);
+  font-size: 0.67rem;
+}
+
+.strategy-allocation-row-v3 > strong {
+  flex: 0 0 auto;
+  font-size: 0.83rem;
+}
+
+.strategy-distribution-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 11px;
+  border-radius: 13px;
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
+.strategy-distribution-check svg {
+  flex: 0 0 auto;
+}
+
+.strategy-distribution-check.ok {
+  color: #71dfa9;
+  background: rgba(85, 217, 155, 0.045);
+}
+
+.strategy-distribution-check.warning {
+  color: #eecb72;
+  background: rgba(238, 203, 114, 0.045);
+}
+
+@media (max-width: 430px) {
+  .strategy-v3-page {
+    gap: 11px;
+  }
+
+  .strategy-v3-page .strategy-v3-hero,
+  .strategy-priority-v3,
+  .strategy-debt-progress-v3,
+  .strategy-options-v3,
+  .strategy-detail-panel.strategy-v3-detail {
+    border-radius: 20px;
+  }
+
+  .strategy-debt-progress-stats,
+  .strategy-debt-options-v3 {
+    grid-template-columns: 1fr;
+  }
+
+  .strategy-debt-options-v3 > div {
+    min-height: 0;
+  }
+
+  .strategy-debt-mini-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .strategy-debt-mini-grid > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .strategy-debt-analysis-card > header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .strategy-debt-analysis-card header > strong {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .strategy-route-v3 .strategy-route-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .strategy-route-item b {
+    grid-column: 2;
+    max-width: none;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strategy-detail-panel.strategy-v3-detail,
+  .strategy-option-card-v3,
+  .strategy-option-card-v3 > svg,
+  .strategy-debt-progress-v3 .progress-track > div,
+  .strategy-v3-detail .progress-track > div {
+    animation: none !important;
+    transition: none !important;
+  }
+}
