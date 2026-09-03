@@ -713,13 +713,29 @@ CREATE INDEX IF NOT EXISTS idx_investment_cashflows_user_date ON investment_cash
 
 CREATE TABLE IF NOT EXISTS investment_portfolio_snapshots (
     id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1, snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    snapshot_at TIMESTAMPTZ,
     market_value NUMERIC(14,2) NOT NULL DEFAULT 0, contributed_capital NUMERIC(14,2) NOT NULL DEFAULT 0,
     realized_pnl NUMERIC(14,2) NOT NULL DEFAULT 0, unrealized_pnl NUMERIC(14,2) NOT NULL DEFAULT 0,
     dividends NUMERIC(14,2) NOT NULL DEFAULT 0, taxes NUMERIC(14,2) NOT NULL DEFAULT 0,
     commissions NUMERIC(14,2) NOT NULL DEFAULT 0, funding_fees NUMERIC(14,2) NOT NULL DEFAULT 0,
-    currency TEXT NOT NULL DEFAULT 'USD', source TEXT NOT NULL DEFAULT 'manual', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    cash NUMERIC(18,4) NOT NULL DEFAULT 0, buying_power NUMERIC(18,4) NOT NULL DEFAULT 0,
+    gross_position_value NUMERIC(18,4) NOT NULL DEFAULT 0, accrued_cash NUMERIC(18,4) NOT NULL DEFAULT 0,
+    account_id_masked TEXT, account_mode TEXT NOT NULL DEFAULT 'manual', snapshot_key TEXT,
+    included_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE, exchange_rate_crc NUMERIC(14,6), market_value_crc NUMERIC(18,2),
+    currency TEXT NOT NULL DEFAULT 'USD', source TEXT NOT NULL DEFAULT 'manual',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_investment_snapshots_user_date ON investment_portfolio_snapshots(user_id, snapshot_date);
+
+CREATE TABLE IF NOT EXISTS investment_position_snapshots (
+    id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL,
+    portfolio_snapshot_id BIGINT NOT NULL REFERENCES investment_portfolio_snapshots(id) ON DELETE CASCADE,
+    symbol TEXT NOT NULL, sec_type TEXT NOT NULL, currency TEXT NOT NULL, exchange TEXT,
+    position NUMERIC(24,8) NOT NULL DEFAULT 0, average_cost NUMERIC(18,6) NOT NULL DEFAULT 0,
+    market_price NUMERIC(18,6) NOT NULL DEFAULT 0, market_value NUMERIC(18,4) NOT NULL DEFAULT 0,
+    unrealized_pnl NUMERIC(18,4) NOT NULL DEFAULT 0, realized_pnl NUMERIC(18,4) NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- Wealth / Business Center
 CREATE TABLE IF NOT EXISTS business_projects (

@@ -4,6 +4,7 @@ from typing import Any
 from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
+from backend.integrations.ibkr_readonly import ensure_ibkr_tables
 
 
 def _as_float(value, default: float = 0.0) -> float:
@@ -1168,6 +1169,7 @@ def get_financial_summary():
         )
 
     with get_connection() as conn:
+        ensure_ibkr_tables(conn)
         bonus_total = conn.execute(
             """
             SELECT COALESCE(SUM(amount), 0) AS total
@@ -1207,8 +1209,9 @@ def get_financial_summary():
         investments_total = conn.execute(
             """
             SELECT COALESCE(
-                (SELECT market_value FROM investment_portfolio_snapshots
-                 WHERE workspace_id = %s ORDER BY snapshot_date DESC, id DESC LIMIT 1),
+                (SELECT COALESCE(market_value_crc, market_value) FROM investment_portfolio_snapshots
+                 WHERE workspace_id = %s AND included_in_net_worth=TRUE
+                 ORDER BY snapshot_at DESC NULLS LAST, snapshot_date DESC, id DESC LIMIT 1),
                 (SELECT COALESCE(SUM(amount), 0) FROM investments WHERE workspace_id = %s),
                 0
             ) AS total
@@ -2608,6 +2611,7 @@ def get_net_worth_report():
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
+        ensure_ibkr_tables(conn)
         savings = conn.execute(
             """
             SELECT id, name, amount, created_at, user_id, workspace_id
@@ -2628,6 +2632,19 @@ def get_net_worth_report():
             (workspace_id,)
         ).fetchall()
 
+        ibkr_live = conn.execute(
+            """
+            SELECT id, COALESCE(market_value_crc, market_value) AS amount,
+                   snapshot_at AS created_at, user_id, workspace_id,
+                   account_id_masked, currency, market_value, exchange_rate_crc
+            FROM investment_portfolio_snapshots
+            WHERE workspace_id=%s AND source='ibkr_readonly'
+              AND account_mode='live' AND included_in_net_worth=TRUE
+            ORDER BY snapshot_at DESC NULLS LAST, snapshot_date DESC, id DESC LIMIT 1
+            """,
+            (workspace_id,),
+        ).fetchone()
+
         debts = conn.execute(
             """
             SELECT id, name, debt_type, total_amount, remaining_amount,
@@ -2642,6 +2659,10 @@ def get_net_worth_report():
 
     savings_list = [dict(row) for row in savings]
     investments_list = [dict(row) for row in investments]
+    if ibkr_live:
+        live_item = dict(ibkr_live)
+        live_item["name"] = f"IBKR {live_item.get('account_id_masked') or ''}".strip()
+        investments_list = [live_item]
     debts_list = [dict(row) for row in debts]
 
     savings_total = _safe_sum(savings_list, "amount")

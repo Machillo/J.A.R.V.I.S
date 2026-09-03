@@ -10,6 +10,7 @@ from backend.finance.service import get_debts, get_financial_summary, calculate_
 from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.ai.openai_client import get_active_premium_guides
+from backend.integrations.ibkr_readonly import ensure_ibkr_tables
 
 
 def _f(value: Any) -> float:
@@ -419,9 +420,11 @@ def _fetch_investment_portfolio(workspace_id: str) -> dict[str, Any]:
                     source TEXT NOT NULL DEFAULT 'manual', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
             """)
+            ensure_ibkr_tables(conn)
             snap = conn.execute("""
-                SELECT * FROM investment_portfolio_snapshots WHERE workspace_id=%s
-                ORDER BY snapshot_date DESC, id DESC LIMIT 1
+                SELECT * FROM investment_portfolio_snapshots
+                WHERE workspace_id=%s AND included_in_net_worth=TRUE
+                ORDER BY snapshot_at DESC NULLS LAST, snapshot_date DESC, id DESC LIMIT 1
             """, (workspace_id,)).fetchone()
             reserve = conn.execute("""
                 SELECT COALESCE(SUM(CASE WHEN flow_type='reserve' THEN amount WHEN flow_type='reserve_release' THEN -amount ELSE 0 END),0) AS total

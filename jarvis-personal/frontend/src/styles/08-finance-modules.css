@@ -670,6 +670,13 @@
 .currency-alert-note{display:block;margin-top:12px;color:var(--muted,#9eb1b7);font-size:.74rem;line-height:1.45}
 @media(max-width:720px){.finance-tab-bar{grid-template-columns:repeat(3,minmax(0,1fr))}.aguinaldo-source-grid{grid-template-columns:1fr}.currency-alert-row{align-items:stretch;flex-direction:column}.currency-rate-editor{width:100%;align-items:end}.currency-rate-editor label{flex:1}.currency-rate-editor input{min-width:0;width:100%}}
 
+.ibkr-sync-badge{display:inline-flex;margin-top:12px;padding:7px 11px;border:1px solid rgba(99,255,176,.35);border-radius:999px;color:#63ffb0;font-size:.72rem;font-weight:800;letter-spacing:.08em}
+.ibkr-sync-badge.stale{border-color:rgba(255,190,92,.4);color:#ffbe5c}
+.ibkr-positions-panel{margin-top:18px}
+.ibkr-position-row span,.ibkr-position-row strong{display:grid;gap:4px}
+.ibkr-position-row small{font-size:.75rem;color:var(--muted,#9eb1b7)}
+.ibkr-position-row strong{text-align:right}
+
 /* Finance cycle selector: the operating view stays open through payment day 5. */
 .finance-period-controls {
   display: flex;
@@ -849,4 +856,3 @@
   color: #eaf8ff;
   padding: 0 16px;
 }
-

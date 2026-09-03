@@ -31,6 +31,7 @@ from backend.users_admin.routes import router as users_admin_router
 from backend.auth.owner_bridge_routes import router as owner_bridge_router
 from backend.user_product.routes import router as user_product_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
+from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 
 app = FastAPI(title="Jarvis Core")
 
@@ -62,6 +63,7 @@ PUBLIC_PATHS = {
     "/deployment-monitor/webhook/github",
     "/deployment-monitor/webhook/vercel",
     "/deployment-monitor/webhook/render",
+    "/integrations/ibkr/snapshot",
     "/internal/owner-bridge/verify",
 }
 
@@ -157,6 +159,7 @@ app.include_router(ai_router)
 app.include_router(email_monitor_router)
 app.include_router(notifications_router)
 app.include_router(investment_center_router)
+app.include_router(ibkr_readonly_router)
 app.include_router(business_center_router)
 app.include_router(users_admin_router)
 app.include_router(owner_bridge_router)

@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter
 
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection, serialize_row, serialize_rows
+from backend.integrations.ibkr_readonly import ensure_ibkr_tables
 
 router = APIRouter(prefix="/finance/investment-center", tags=["finance-investments"])
 
@@ -34,6 +35,7 @@ class SnapshotRequest(BaseModel):
 
 def _summary(workspace_id: str):
     with get_connection() as conn:
+        ensure_ibkr_tables(conn)
         snap = conn.execute(
             """
             SELECT * FROM investment_portfolio_snapshots
@@ -43,6 +45,16 @@ def _summary(workspace_id: str):
             """,
             (workspace_id,),
         ).fetchone()
+        positions = conn.execute(
+            """
+            SELECT symbol, sec_type, currency, exchange, position, average_cost,
+                   market_price, market_value, unrealized_pnl, realized_pnl
+            FROM investment_position_snapshots
+            WHERE portfolio_snapshot_id=%s
+            ORDER BY market_value DESC, symbol
+            """,
+            (snap["id"],),
+        ).fetchall() if snap else []
         flows = conn.execute(
             """
             SELECT * FROM investment_cashflows
@@ -76,6 +88,18 @@ def _summary(workspace_id: str):
     taxes = float(s.get("taxes") or 0)
     commissions = float(s.get("commissions") or 0)
     funding = float(s.get("funding_fees") or 0)
+    snapshot_at = s.get("snapshot_at") or s.get("created_at")
+    age_seconds = None
+    if snapshot_at:
+        try:
+            parsed_at = datetime.fromisoformat(str(snapshot_at).replace("Z", "+00:00"))
+            age_seconds = max(0, int((datetime.now(timezone.utc) - parsed_at.astimezone(timezone.utc)).total_seconds()))
+        except (TypeError, ValueError):
+            pass
+    is_ibkr = s.get("source") == "ibkr_readonly"
+    sync_status = "manual_ready_for_ibkr"
+    if is_ibkr:
+        sync_status = "live" if age_seconds is not None and age_seconds <= 600 else "stale"
     gross = realized + unrealized + dividends
     net = gross - taxes - commissions - funding
     return {
@@ -86,7 +110,11 @@ def _summary(workspace_id: str):
         "net_pnl": round(net, 2),
         "return_pct": round((net / contributed * 100), 2) if contributed else 0,
         "funding_model": {"wise_percent_estimate": 1.23, "wise_to_ibkr_fixed_usd": 1.13},
-        "sync_status": "manual_ready_for_ibkr",
+        "positions": serialize_rows(positions),
+        "sync_status": sync_status,
+        "snapshot_age_seconds": age_seconds,
+        "read_only": is_ibkr,
+        "included_in_net_worth": bool(s.get("included_in_net_worth", True)),
     }
 
 
