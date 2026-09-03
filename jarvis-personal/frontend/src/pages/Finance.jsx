@@ -1338,12 +1338,12 @@ function AguinaldoPanel({ data, loading, error, onRefresh }) {
         <article className="hud-card finance-simple-kpi"><span>PERÍODO</span><h2 className="aguinaldo-period-value">{period.start?.slice(0, 7)} → {period.end?.slice(0, 7)}</h2></article>
       </div>
       <article className="hud-panel large">
-        <div className="panel-title"><div><h3>CÁLCULO DEL AGUINALDO</h3><p>Actualizado al {period.calculated_through || "--"}</p></div><button className="ghost-button" disabled={loading} onClick={onRefresh}>{loading ? "Leyendo CCSS..." : "Actualizar CCSS"}</button></div>
+        <div className="panel-title"><div><h3>CÁLCULO DEL AGUINALDO</h3><p>Órdenes disponibles hasta {period.official_through || "--"}</p></div><button className="ghost-button" disabled={loading} onClick={onRefresh}>{loading ? "Leyendo CCSS..." : "Actualizar CCSS"}</button></div>
         <div className="aguinaldo-source-grid">
           <div><span>Órdenes patronales CCSS</span><strong>{formatCRC(sources.ccss_salary)}</strong></div>
-          <div><span>Respaldo salarial manual</span><strong>{formatSignedCRC((Number(sources.salary) || 0) + (Number(sources.payroll_event) || 0) + (Number(sources.bonus) || 0))}</strong></div>
+          <div><span>Meses pendientes de orden</span><strong>{data.missing_months?.length || 0}</strong></div>
         </div>
-        <small className="aguinaldo-note">La Orden Patronal es la fuente principal. El respaldo manual solo se utiliza en meses donde todavía no existe una orden de la CCSS.</small>
+        <small className="aguinaldo-note">El cálculo usa únicamente el salario oficial reportado en cada Orden Patronal de la CCSS. Los meses cuya orden todavía no llegó permanecen pendientes y no se estiman con movimientos bancarios.</small>
         {error ? <small className="aguinaldo-note danger-text">{error}</small> : null}
       </article>
       <article className="hud-panel large">
