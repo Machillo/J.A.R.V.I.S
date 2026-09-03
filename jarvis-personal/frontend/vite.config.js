@@ -8,12 +8,6 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
-    build: {
-      // Lightning CSS can fail on Vercel when its cached native binary does not
-      // match the build image. esbuild keeps production CSS minified and makes
-      // the build deterministic across local and Vercel environments.
-      cssMinify: 'esbuild',
-    },
     server: {
       port: 5173,
       strictPort: true,
