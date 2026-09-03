@@ -261,6 +261,21 @@ def _send_to_subscription(conn, subscription: dict[str, Any], title: str, body: 
         return False, message
 
 
+def send_system_push(title: str, body: str, category: str = "system", url: str = "/") -> dict[str, Any]:
+    """Envía una alerta inmediata a todos los dispositivos owner habilitados."""
+    sent = 0
+    with get_connection() as conn:
+        ensure_notification_tables(conn)
+        subscriptions = conn.execute(
+            "SELECT * FROM notification_subscriptions WHERE enabled = TRUE"
+        ).fetchall()
+        for subscription in subscriptions:
+            ok, _ = _send_to_subscription(conn, subscription, title, body, category)
+            sent += int(ok)
+        conn.commit()
+    return {"status": "OK", "sent": sent, "url": url}
+
+
 def send_test_notification() -> dict[str, Any]:
     user = get_current_user()
     user_id = int(user["id"])
