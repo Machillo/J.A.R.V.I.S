@@ -27,6 +27,7 @@ import {
   seedOwnerFixedExpenses,
   getCurrencyAlerts,
   setCurrencyRate,
+  getAguinaldo,
 } from "../services/jarvisApi";
 
 const formatCRC = (value = 0) =>
@@ -1319,6 +1320,35 @@ function IncomePanel({ cycleIncome, cycleTransactions, fixedExpectedIncome, extr
   );
 }
 
+function AguinaldoPanel({ data }) {
+  if (!data) return <LoadingPanel message="Calculando tu aguinaldo real..." />;
+  const period = data.period || {};
+  const sources = data.source_totals || {};
+  const months = data.months || [];
+  return (
+    <div className="finance-income-workspace aguinaldo-workspace">
+      <div className="cards-grid finance-main-cards finance-income-cards">
+        <article className="hud-card finance-simple-kpi glow-green"><span>AGUINALDO ACUMULADO</span><h2>{formatCRC(data.accrued_aguinaldo)}</h2></article>
+        <article className="hud-card finance-simple-kpi"><span>SALARIO COMPUTABLE</span><h2>{formatCRC(data.earned_salary_total)}</h2></article>
+        <article className="hud-card finance-simple-kpi"><span>PERÍODO</span><h2 className="aguinaldo-period-value">{period.start?.slice(0, 7)} → {period.end?.slice(0, 7)}</h2></article>
+      </div>
+      <article className="hud-panel large">
+        <div className="panel-title"><div><h3>CÁLCULO DEL AGUINALDO</h3><p>Actualizado al {period.calculated_through || "--"}</p></div><span>÷ 12</span></div>
+        <div className="aguinaldo-source-grid">
+          <div><span>Salarios</span><strong>{formatCRC(sources.salary)}</strong></div>
+          <div><span>OT, feriados y VGH</span><strong>{formatSignedCRC(sources.payroll_event)}</strong></div>
+          <div><span>Bonos salariales</span><strong>{formatCRC(sources.bonus)}</strong></div>
+        </div>
+        <small className="aguinaldo-note">Solo incluye remuneración salarial registrada. No cuenta SINPE genéricos, reembolsos ni rendimientos de inversión.</small>
+      </article>
+      <article className="hud-panel large">
+        <div className="panel-title"><div><h3>DESGLOSE MENSUAL</h3></div><span>{months.length} MESES</span></div>
+        <div className="finance-detail-list">{months.map((item) => <div className="finance-detail-row" key={item.month}><div><strong>{item.month}</strong><span>{item.entries ? `${item.entries} registro${item.entries === 1 ? "" : "s"}` : "Sin salario registrado"}</span></div><b>{formatSignedCRC(item.total_earned)}</b></div>)}</div>
+      </article>
+    </div>
+  );
+}
+
 export default function Finance({
   dashboard,
   loading = false,
@@ -1335,11 +1365,12 @@ export default function Finance({
   const [debtSort, setDebtSort] = useState("saldo");
   const [detail, setDetail] = useState(null);
   const [currencyAlerts, setCurrencyAlerts] = useState(null);
+  const [aguinaldo, setAguinaldo] = useState(null);
   const [financeAsOf, setFinanceAsOf] = useState(() => new Date().toISOString().slice(0, 10));
 
   const loadSupportingData = async () => {
-    const [analysisResult, fixedResult, cycleResult, debtsResult, currencyResult] = await Promise.allSettled([
-      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(financeAsOf), getDebts(), getCurrencyAlerts(),
+    const [analysisResult, fixedResult, cycleResult, debtsResult, currencyResult, aguinaldoResult] = await Promise.allSettled([
+      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(financeAsOf), getDebts(), getCurrencyAlerts(), getAguinaldo(),
     ]);
     setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
     setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
@@ -1352,6 +1383,7 @@ export default function Finance({
     }
     setDebts(debtsResult.status === "fulfilled" && Array.isArray(debtsResult.value) ? debtsResult.value : []);
     setCurrencyAlerts(currencyResult.status === "fulfilled" ? currencyResult.value : null);
+    setAguinaldo(aguinaldoResult.status === "fulfilled" ? aguinaldoResult.value : null);
   };
 
   useEffect(() => { loadSupportingData().catch(console.error); }, [dashboard, financeAsOf]);
@@ -1407,6 +1439,7 @@ export default function Finance({
         <button className={activeTab === "analytics" ? "active" : ""} onClick={() => setActiveTab("analytics")}>Analytics</button>
         <button className={activeTab === "spending" ? "active" : ""} onClick={() => setActiveTab("spending")}>Spending</button>
         <button className={activeTab === "income" ? "active" : ""} onClick={() => setActiveTab("income")}>Income</button>
+        <button className={activeTab === "aguinaldo" ? "active" : ""} onClick={() => setActiveTab("aguinaldo")}>Aguinaldo</button>
       </div>
 
       {activeTab === "overview" && <>
@@ -1439,6 +1472,7 @@ export default function Finance({
       </div>}
 
       {activeTab === "income" && <IncomePanel cycleIncome={cycleIncome} cycleTransactions={cycleTransactions} fixedExpectedIncome={fixedExpectedIncome} extraExpectedIncome={extraExpectedIncome} />}
+      {activeTab === "aguinaldo" && <AguinaldoPanel data={aguinaldo} />}
 
       {detail && <div className="finance-detail-modal-backdrop" onClick={() => setDetail(null)}><article className="hud-panel finance-detail-modal" onClick={(event) => event.stopPropagation()}><div className="panel-title"><div><h3>{detail.title}</h3></div><button className="ghost-button" onClick={() => setDetail(null)}>Close</button></div>{detail.items?.length ? <div className="finance-detail-list">{detail.items.map((item) => <div className="finance-detail-row" key={item.id || `${item.transaction_date}-${item.description}-${item.amount}`}><div><strong>{item.description}</strong><span>{item.transaction_date || "No date"} · {item.balance_side || item.category || item.transaction_type}</span></div><b>{formatCRC(item.amount ?? item.net_amount)}</b></div>)}</div> : <EmptyPanel title="No details" description={detail.empty} />}</article></div>}
     </section>
