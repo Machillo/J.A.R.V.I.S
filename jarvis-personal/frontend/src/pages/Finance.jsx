@@ -1335,11 +1335,10 @@ function AguinaldoPanel({ data }) {
       <article className="hud-panel large">
         <div className="panel-title"><div><h3>CÁLCULO DEL AGUINALDO</h3><p>Actualizado al {period.calculated_through || "--"}</p></div><span>÷ 12</span></div>
         <div className="aguinaldo-source-grid">
-          <div><span>Salarios</span><strong>{formatCRC(sources.salary)}</strong></div>
-          <div><span>OT, feriados y VGH</span><strong>{formatSignedCRC(sources.payroll_event)}</strong></div>
-          <div><span>Bonos salariales</span><strong>{formatCRC(sources.bonus)}</strong></div>
+          <div><span>Órdenes patronales CCSS</span><strong>{formatCRC(sources.ccss_salary)}</strong></div>
+          <div><span>Respaldo salarial manual</span><strong>{formatSignedCRC((Number(sources.salary) || 0) + (Number(sources.payroll_event) || 0) + (Number(sources.bonus) || 0))}</strong></div>
         </div>
-        <small className="aguinaldo-note">Solo incluye remuneración salarial registrada. No cuenta SINPE genéricos, reembolsos ni rendimientos de inversión.</small>
+        <small className="aguinaldo-note">La Orden Patronal es la fuente principal. El respaldo manual solo se utiliza en meses donde todavía no existe una orden de la CCSS.</small>
       </article>
       <article className="hud-panel large">
         <div className="panel-title"><div><h3>DESGLOSE MENSUAL</h3></div><span>{months.length} MESES</span></div>
