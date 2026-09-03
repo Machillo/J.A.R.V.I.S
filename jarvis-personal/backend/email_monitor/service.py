@@ -38,7 +38,7 @@ DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
     # Sender-only query on purpose. The parser decides what is financial.
     # The old query mixed sender + keywords and Gmail returned only a tiny subset.
-    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopular OR from:popular OR from:ccss@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")',
+    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopular OR from:popular OR from:noreply@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")',
 )
 # Gmail ingestion is automatic only for high-confidence parser decisions.
 AUTO_COMMIT_CONFIDENCE = max(
@@ -755,8 +755,8 @@ def _settings_query_for_owner(conn, user_id: int, workspace_id: str | None = Non
         (user_id, workspace_id, DEFAULT_QUERY),
     ).fetchone()
     gmail_query = (row or {}).get("gmail_query") or DEFAULT_QUERY
-    if "orden patronal" not in gmail_query.lower() and "ccss@ccss.sa.cr" not in gmail_query.lower():
-        gmail_query = f'({gmail_query} OR from:ccss@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")'
+    if "orden patronal" not in gmail_query.lower() and "noreply@ccss.sa.cr" not in gmail_query.lower():
+        gmail_query = f'({gmail_query} OR from:noreply@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")'
         conn.execute(
             "UPDATE email_monitor_settings SET gmail_query = %s, updated_at = NOW() WHERE workspace_id = %s",
             (gmail_query, workspace_id),
@@ -2450,7 +2450,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
     today = date.today()
     aguinaldo_start = date(today.year if today.month == 12 else today.year - 1, 12, 1)
     payroll_query = (
-        'subject:"Generación de Orden Patronal Digital" '
+        'from:noreply@ccss.sa.cr subject:"Generación de Orden Patronal Digital" '
         f'after:{aguinaldo_start:%Y/%m/%d} -in:spam -in:trash'
     )
     payroll_messages = _list_gmail_messages(service, gmail_query=payroll_query, max_results=20)
