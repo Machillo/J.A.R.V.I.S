@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowDownToLine, Banknote, CircleDollarSign, RefreshCw, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
-import { getInvestmentCenter, getJarvisPremiumStrategyDashboard } from "../services/jarvisApi";
+import { getInvestmentCenter, getJarvisPremiumStrategyDashboard, syncInvestmentIbkr } from "../services/jarvisApi";
 
 const crc = (v) => `₡${Math.round(Number(v || 0)).toLocaleString("es-CR")}`;
 const usd = (v) => `$${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -15,6 +15,11 @@ export default function Investments() {
     } catch (e) { setState((s) => ({ ...s, loading: false, error: e.message || "No pude cargar inversiones." })); }
   };
   useEffect(() => { load(); }, []);
+  const syncIbkr = async () => {
+    setState((s) => ({ ...s, loading: true, error: "" }));
+    try { await syncInvestmentIbkr(); await load(); }
+    catch (e) { setState((s) => ({ ...s, loading: false, error: e.message || "No pude sincronizar IBKR." })); }
+  };
   if (state.loading) return <section className="investments-page"><div className="hud-panel"><RefreshCw className="spin" /> Cargando inversiones...</div></section>;
   if (state.error) return <section className="investments-page"><div className="hud-panel strategy-warning">{state.error}</div></section>;
 
@@ -22,10 +27,12 @@ export default function Investments() {
   const positions = c.positions || [];
   const recommended = Number(s.investment_recommended || 0); const target = Number(s.investment_target || 5000);
   const net = Number(c.net_pnl || 0); const gross = Number(c.gross_pnl || 0);
+  const syncMethod = c.sync_method || p.sync_method || "manual";
+  const syncLabel = syncMethod === "flex" ? "FLEX DIARIO" : "PUENTE TWS";
   return <section className="investments-page">
     <div className="investment-hero hud-panel">
-      <div><span className="strategy-eyebrow">WEALTH BUILDING</span><h2>Inversiones</h2><p>JARVIS separa inversión de dinero libre y aumenta el aporte solo cuando tu flujo lo permite.</p>{c.read_only ? <small className={`ibkr-sync-badge ${c.sync_status}`}>IBKR READ-ONLY · {String(p.account_mode || "").toUpperCase()} · {c.sync_status === "live" ? "EN VIVO" : "SIN ACTUALIZAR"} · {p.account_id_masked}</small> : null}</div>
-      <button className="strategy-refresh-btn" onClick={load}><RefreshCw size={17}/> Actualizar</button>
+      <div><span className="strategy-eyebrow">WEALTH BUILDING</span><h2>Inversiones</h2><p>JARVIS separa inversión de dinero libre y aumenta el aporte solo cuando tu flujo lo permite.</p>{c.read_only ? <small className={`ibkr-sync-badge ${c.sync_status}`}>IBKR READ-ONLY · {String(p.account_mode || "").toUpperCase()} · {syncLabel} · {c.sync_status === "current" ? "ACTUALIZADO" : "SIN ACTUALIZAR"} · {p.account_id_masked}</small> : null}</div>
+      <button className="strategy-refresh-btn" onClick={c.flex_configured ? syncIbkr : load}><RefreshCw size={17}/> {c.flex_configured ? "Sincronizar IBKR" : "Actualizar"}</button>
     </div>
 
     <div className="investment-kpi-grid">
@@ -62,7 +69,7 @@ export default function Investments() {
 
     <div className="hud-panel"><div className="panel-heading"><div><span className="strategy-eyebrow">FONDEO INTELIGENTE</span><h3>Acumular antes de enviar</h3></div><ArrowDownToLine/></div>
       <p>Modelo inicial: Wise ≈ <b>{c.funding_model?.wise_percent_estimate || 1.23}%</b> + <b>${c.funding_model?.wise_to_ibkr_fixed_usd || 1.13}</b> hacia IBKR. JARVIS puede reservar ₡5.000 varios meses y esperar antes de transferir para que el costo fijo pese menos.</p>
-      <small className="muted-text">{c.read_only ? "Datos recibidos desde el puente local de solo lectura. JARVIS no puede enviar órdenes." : "IBKR: integración read-only preparada. Hasta conectarla, cartera, comisiones, dividendos e impuestos pueden venir de snapshots/manuales."}</small>
+      <small className="muted-text">{c.read_only ? `Datos recibidos por ${syncMethod === "flex" ? "IBKR Flex, sin depender de una PC" : "el puente local"}. JARVIS no puede enviar órdenes.` : "IBKR: integración read-only preparada. Hasta conectarla, cartera, comisiones, dividendos e impuestos pueden venir de snapshots/manuales."}</small>
     </div>
   </section>;
 }

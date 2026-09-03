@@ -1,11 +1,11 @@
 from datetime import date, datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection, serialize_row, serialize_rows
-from backend.integrations.ibkr_readonly import ensure_ibkr_tables
+from backend.integrations.ibkr_readonly import ensure_ibkr_tables, flex_is_configured, sync_flex_snapshot
 
 router = APIRouter(prefix="/finance/investment-center", tags=["finance-investments"])
 
@@ -98,8 +98,10 @@ def _summary(workspace_id: str):
             pass
     is_ibkr = s.get("source") == "ibkr_readonly"
     sync_status = "manual_ready_for_ibkr"
+    sync_method = s.get("sync_method") or "manual"
     if is_ibkr:
-        sync_status = "live" if age_seconds is not None and age_seconds <= 600 else "stale"
+        fresh_seconds = 36 * 60 * 60 if sync_method == "flex" else 10 * 60
+        sync_status = "current" if age_seconds is not None and age_seconds <= fresh_seconds else "stale"
     gross = realized + unrealized + dividends
     net = gross - taxes - commissions - funding
     return {
@@ -114,6 +116,8 @@ def _summary(workspace_id: str):
         "sync_status": sync_status,
         "snapshot_age_seconds": age_seconds,
         "read_only": is_ibkr,
+        "sync_method": sync_method,
+        "flex_configured": flex_is_configured(),
         "included_in_net_worth": bool(s.get("included_in_net_worth", True)),
     }
 
@@ -121,6 +125,16 @@ def _summary(workspace_id: str):
 @router.get("")
 def get_center():
     return _summary(get_current_workspace_id())
+
+
+@router.post("/sync-ibkr")
+def sync_ibkr():
+    # The authentication middleware protects this route; Flex credentials never reach the browser.
+    get_current_workspace_id()
+    try:
+        return sync_flex_snapshot()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/cashflows")

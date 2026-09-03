@@ -1,6 +1,31 @@
 # JARVIS → IBKR read-only
 
-JARVIS receives account snapshots from a local bridge because Render cannot connect to TWS/Gateway on `127.0.0.1`.
+La integración principal usa **IBKR Flex Web Service**: funciona desde Render sin una PC encendida, descarga un Activity Statement y guarda un snapshot diario. Flex es información de cierre/estado de cuenta; no debe mostrarse como cotización en vivo.
+
+## Flex diario (recomendado)
+
+1. En Client Portal de IBKR, crear un **Activity Flex Query** que incluya Account Information, Equity Summary, Cash Report, Open Positions, Trades y Cash Transactions.
+2. Activar Flex Web Service y copiar el token y el Query ID.
+3. Configurar en Render:
+
+```text
+IBKR_FLEX_TOKEN=<token-secreto>
+IBKR_FLEX_QUERY_ID=<query-id>
+IBKR_FLEX_ACCOUNT_MODE=live
+IBKR_FLEX_CRON_SECRET=<secreto-largo>
+USD_CRC_FALLBACK=495
+```
+
+El botón **Sincronizar IBKR** llama al backend autenticado. Para automatizarlo diariamente, un cron debe ejecutar:
+
+```text
+POST https://<render-service>.onrender.com/integrations/ibkr/flex/cron
+X-Jarvis-Cron-Secret: <IBKR_FLEX_CRON_SECRET>
+```
+
+Una ejecución diaria después del cierre de mercado es suficiente. El token nunca se expone al frontend y el código no contiene operaciones para crear, modificar ni cancelar órdenes.
+
+El puente local TWS/Gateway queda como alternativa opcional para snapshots intradía. Render no puede conectarse al TWS/Gateway de `127.0.0.1`.
 
 ## Security boundary
 

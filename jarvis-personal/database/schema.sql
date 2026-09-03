@@ -721,6 +721,7 @@ CREATE TABLE IF NOT EXISTS investment_portfolio_snapshots (
     cash NUMERIC(18,4) NOT NULL DEFAULT 0, buying_power NUMERIC(18,4) NOT NULL DEFAULT 0,
     gross_position_value NUMERIC(18,4) NOT NULL DEFAULT 0, accrued_cash NUMERIC(18,4) NOT NULL DEFAULT 0,
     account_id_masked TEXT, account_mode TEXT NOT NULL DEFAULT 'manual', snapshot_key TEXT,
+    sync_method TEXT NOT NULL DEFAULT 'manual',
     included_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE, exchange_rate_crc NUMERIC(14,6), market_value_crc NUMERIC(18,2),
     currency TEXT NOT NULL DEFAULT 'USD', source TEXT NOT NULL DEFAULT 'manual',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

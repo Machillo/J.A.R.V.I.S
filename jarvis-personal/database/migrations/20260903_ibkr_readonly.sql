@@ -6,6 +6,7 @@ ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS accrued_cash
 ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS account_id_masked TEXT;
 ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS account_mode TEXT NOT NULL DEFAULT 'manual';
 ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS snapshot_key TEXT;
+ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS sync_method TEXT NOT NULL DEFAULT 'manual';
 ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS included_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS exchange_rate_crc NUMERIC(14,6);

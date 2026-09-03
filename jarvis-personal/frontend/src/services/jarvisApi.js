@@ -217,6 +217,7 @@ export const bulkDecideEmailCandidates = (payload) => jsonRequest("/email-monito
 export const scanEmailText = (payload) => jsonRequest("/email-monitor/scan-text", "POST", payload);
 
 export const getInvestmentCenter = () => request("/finance/investment-center");
+export const syncInvestmentIbkr = () => jsonRequest("/finance/investment-center/sync-ibkr", "POST", {});
 export const createInvestmentCashflow = (payload) => jsonRequest("/finance/investment-center/cashflows", "POST", payload);
 export const createInvestmentSnapshot = (payload) => jsonRequest("/finance/investment-center/snapshots", "POST", payload);
 

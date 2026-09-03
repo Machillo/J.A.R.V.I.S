@@ -64,6 +64,7 @@ PUBLIC_PATHS = {
     "/deployment-monitor/webhook/vercel",
     "/deployment-monitor/webhook/render",
     "/integrations/ibkr/snapshot",
+    "/integrations/ibkr/flex/cron",
     "/internal/owner-bridge/verify",
 }
 
