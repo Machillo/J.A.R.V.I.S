@@ -1,0 +1,677 @@
+/* ========================================================================== */
+/* 2026 MOBILE FINTECH — FINANCE STABILITY PASS                              */
+/* Corrective visual-only layer after real-device review.                    */
+/* Keeps all Finance DOM, data calculations, actions and information order.   */
+/* ========================================================================== */
+
+/* Finance navigation stays in document flow. On a phone it must read as a
+   native segmented control, not as a floating desktop toolbar over content. */
+.finance-workspace .finance-tab-bar {
+  position: relative;
+  top: auto;
+  z-index: 1;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 4px;
+  border-radius: 17px;
+  background: rgba(18, 18, 24, .92);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.finance-workspace .finance-tab-bar button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Finance panels use one clean surface. Remove the legacy HUD clipping and
+   decorative pseudo-layers that visually looked like stacked sheets. */
+.finance-workspace .hud-card,
+.finance-workspace .hud-panel,
+.finance-workspace .finance-click-card {
+  clip-path: none !important;
+  overflow: visible;
+  isolation: isolate;
+}
+
+.finance-workspace .hud-card::before,
+.finance-workspace .hud-card::after,
+.finance-workspace .hud-panel::before,
+.finance-workspace .hud-panel::after {
+  display: none !important;
+}
+
+.finance-workspace .finance-main-cards-clean,
+.finance-workspace .finance-income-cards {
+  width: 100%;
+  align-items: stretch;
+}
+
+.finance-workspace .finance-simple-kpi {
+  overflow: hidden;
+}
+
+.finance-workspace .finance-simple-kpi h2 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Modal base: always render above the app and as a visible mobile sheet. */
+.finance-detail-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 5000 !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: center !important;
+  padding: 10px 10px 0 !important;
+  overflow: hidden;
+  background: rgba(0, 0, 0, .72) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.finance-detail-modal,
+.finance-detail-modal.debt-editor-modal {
+  position: relative;
+  z-index: 5001;
+  width: min(100%, 560px) !important;
+  max-width: 560px !important;
+  max-height: min(88dvh, 760px) !important;
+  margin: 0 auto !important;
+  padding: 18px 16px max(18px, env(safe-area-inset-bottom)) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  display: block !important;
+  clip-path: none !important;
+  border: 1px solid rgba(255,255,255,.13) !important;
+  border-bottom: 0 !important;
+  border-radius: 26px 26px 0 0 !important;
+  background: #15151c !important;
+  color: var(--mfs-text) !important;
+  box-shadow: 0 -20px 64px rgba(0,0,0,.55) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.finance-detail-modal > *,
+.finance-detail-modal.debt-editor-modal > * {
+  position: relative;
+  z-index: 1;
+}
+
+.finance-detail-modal.debt-editor-modal .panel-title {
+  position: sticky;
+  top: -18px;
+  z-index: 5;
+  min-height: 56px;
+  margin: -18px -16px 16px;
+  padding: 14px 16px 10px;
+  gap: 10px;
+  background: rgba(21,21,28,.98) !important;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.finance-detail-modal.debt-editor-modal .panel-title h3 {
+  min-width: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.finance-detail-modal.debt-editor-modal .panel-title .ghost-button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+/* Debt add/payment forms: one-column phone layout, aligned labels and identical
+   field geometry. This also prevents the checkbox from inheriting text-input UI. */
+.finance-detail-modal.debt-editor-modal .debt-form-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 14px !important;
+  width: 100%;
+}
+
+.finance-detail-modal.debt-editor-modal .debt-form-grid label {
+  width: 100%;
+  min-width: 0;
+  gap: 7px;
+  align-items: stretch;
+}
+
+.finance-detail-modal.debt-editor-modal .debt-form-grid input:not([type="checkbox"]),
+.finance-detail-modal.debt-editor-modal .debt-form-grid select {
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 52px !important;
+  min-height: 52px !important;
+  margin: 0 !important;
+  padding: 0 14px !important;
+  box-sizing: border-box;
+  border-radius: 14px !important;
+  font-size: 16px !important;
+  line-height: 1.2;
+  appearance: auto;
+}
+
+.finance-detail-modal.debt-editor-modal .debt-auto-update-toggle {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between;
+  gap: 12px !important;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: 1px solid var(--mfs-stroke);
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+}
+
+.finance-detail-modal.debt-editor-modal .debt-auto-update-toggle input[type="checkbox"],
+input[type="checkbox"] {
+  width: 22px !important;
+  min-width: 22px !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex: 0 0 22px;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  accent-color: var(--mfs-purple);
+}
+
+.finance-detail-modal.debt-editor-modal .debt-form-preview {
+  grid-column: auto !important;
+  width: 100%;
+  min-width: 0;
+  padding: 13px 14px;
+  gap: 10px;
+  border-radius: 14px;
+}
+
+.finance-detail-modal.debt-editor-modal .debt-form-preview strong {
+  min-width: 0;
+  font-size: .72rem;
+  line-height: 1.25;
+}
+
+.finance-detail-modal.debt-editor-modal .debt-form-preview span {
+  flex: 0 0 auto;
+  max-width: 58%;
+  font-size: 1.05rem;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.finance-detail-modal.debt-editor-modal .debt-form-submit,
+.finance-detail-modal.debt-editor-modal .finance-input-message {
+  grid-column: auto !important;
+  width: 100%;
+}
+
+.finance-detail-modal.debt-editor-modal .debt-form-submit {
+  position: sticky;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 6;
+  min-height: 52px;
+  margin-top: 2px;
+}
+
+/* Income History is part of the page: no nested movable sheet/sideways list.
+   Keep description/date on the left and the amount anchored on the right. */
+.finance-income-workspace .finance-detail-list {
+  max-height: none !important;
+  overflow: visible !important;
+  padding-right: 0 !important;
+}
+
+.finance-income-workspace .finance-detail-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 12px !important;
+  width: 100%;
+  min-width: 0;
+  padding: 13px 14px;
+}
+
+.finance-income-workspace .finance-detail-row > div {
+  min-width: 0;
+}
+
+.finance-income-workspace .finance-detail-row strong,
+.finance-income-workspace .finance-detail-row span {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.finance-income-workspace .finance-detail-row b {
+  align-self: center;
+  justify-self: end;
+  max-width: 42vw;
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
+  font-size: .98rem;
+}
+
+@media (max-width: 560px) {
+  .finance-workspace .finance-tab-bar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .finance-workspace .finance-tab-bar button {
+    font-size: clamp(.67rem, 3vw, .78rem);
+    letter-spacing: 0;
+  }
+
+  .finance-workspace .finance-main-cards-clean,
+  .finance-workspace .finance-income-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+
+  .finance-workspace .finance-simple-kpi {
+    min-height: 118px;
+    padding: 14px;
+    gap: 9px;
+  }
+
+  .finance-workspace .finance-simple-kpi span {
+    font-size: .67rem;
+    letter-spacing: .08em;
+  }
+
+  .finance-workspace .finance-simple-kpi h2 {
+    font-size: clamp(1.35rem, 7vw, 1.85rem);
+    line-height: 1.05;
+  }
+
+  .finance-detail-modal-backdrop {
+    padding-inline: 0 !important;
+  }
+
+  .finance-detail-modal,
+  .finance-detail-modal.debt-editor-modal {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: 90dvh !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .finance-workspace .finance-tab-bar {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .finance-workspace .finance-tab-bar button {
+    min-height: 42px;
+    padding-inline: 3px;
+    font-size: .64rem;
+  }
+
+  .finance-workspace .finance-main-cards-clean,
+  .finance-workspace .finance-income-cards {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* === JARVIS Salvavidas =================================================== */
+.salvavidas-panel {
+  display: grid;
+  gap: 18px;
+  overflow: hidden;
+}
+
+.salvavidas-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.salvavidas-header h3,
+.salvavidas-section-copy strong {
+  margin: 0;
+}
+
+.salvavidas-mode-badge {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid rgba(139, 92, 246, 0.26);
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.1);
+  color: rgba(225, 213, 255, 0.92);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.salvavidas-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.salvavidas-summary-grid > div {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.salvavidas-summary-grid span,
+.salvavidas-amount-field > span,
+.salvavidas-component-row span,
+.salvavidas-base-total span {
+  display: block;
+  color: var(--text-muted, rgba(255, 255, 255, 0.62));
+  font-size: 0.78rem;
+}
+
+.salvavidas-summary-grid strong {
+  display: block;
+  margin-top: 6px;
+  font-size: clamp(1rem, 2.3vw, 1.22rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.salvavidas-progress-block {
+  display: grid;
+  gap: 10px;
+}
+
+.salvavidas-milestones {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.salvavidas-milestone {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 7px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.salvavidas-milestone strong {
+  grid-column: 2;
+  font-size: 0.78rem;
+}
+
+.salvavidas-milestone.reached {
+  border-color: rgba(85, 217, 155, 0.22);
+  background: rgba(85, 217, 155, 0.07);
+  color: rgba(212, 255, 233, 0.95);
+}
+
+.milestone-dot {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.salvavidas-editor {
+  display: grid;
+  gap: 14px;
+  padding-top: 2px;
+}
+
+.salvavidas-amount-field {
+  display: grid;
+  gap: 7px;
+}
+
+.salvavidas-money-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 54px;
+  padding: 0 15px;
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.salvavidas-money-input:focus-within {
+  border-color: rgba(139, 92, 246, 0.62);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.salvavidas-money-input > span {
+  color: rgba(255, 255, 255, 0.58);
+  font-weight: 800;
+}
+
+.salvavidas-money-input input {
+  width: 100%;
+  min-width: 0;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit;
+  font: inherit;
+  font-size: 1.12rem;
+  font-weight: 800;
+}
+
+.salvavidas-components {
+  display: grid;
+  gap: 10px;
+}
+
+.salvavidas-component-row,
+.salvavidas-base-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.salvavidas-component-row.locked {
+  border-color: rgba(79, 140, 255, 0.18);
+  background: rgba(79, 140, 255, 0.055);
+}
+
+.salvavidas-component-row small,
+.salvavidas-section-copy small,
+.salvavidas-expense-copy small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted, rgba(255, 255, 255, 0.56));
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.salvavidas-debt-list {
+  display: grid;
+  gap: 7px;
+  padding: 0 3px;
+}
+
+.salvavidas-debt-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.salvavidas-debt-list strong {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.salvavidas-expense-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.salvavidas-expense-list {
+  display: grid;
+  gap: 8px;
+}
+
+.salvavidas-expense-option {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 120ms ease;
+}
+
+.salvavidas-expense-option:active {
+  transform: scale(0.99);
+}
+
+.salvavidas-expense-option.selected {
+  border-color: rgba(85, 217, 155, 0.25);
+  background: rgba(85, 217, 155, 0.065);
+}
+
+.salvavidas-expense-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.salvavidas-check {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+}
+
+.salvavidas-expense-option.selected .salvavidas-check {
+  border-color: transparent;
+  color: #55d99b;
+}
+
+.salvavidas-expense-copy {
+  min-width: 0;
+}
+
+.salvavidas-expense-copy strong,
+.salvavidas-expense-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.salvavidas-expense-option > strong {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.salvavidas-base-total {
+  border-color: rgba(139, 92, 246, 0.2);
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.salvavidas-base-total strong {
+  font-size: 1.05rem;
+}
+
+.salvavidas-save {
+  width: 100%;
+  min-height: 50px;
+  justify-content: center;
+}
+
+.salvavidas-verification-note {
+  color: var(--text-muted, rgba(255, 255, 255, 0.52));
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.salvavidas-loading {
+  padding: 18px 0;
+  color: var(--text-muted, rgba(255, 255, 255, 0.58));
+}
+
+@media (max-width: 700px) {
+  .salvavidas-header {
+    display: grid;
+  }
+
+  .salvavidas-mode-badge {
+    justify-self: start;
+  }
+
+  .salvavidas-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .salvavidas-milestones {
+    grid-template-columns: 1fr;
+  }
+
+  .salvavidas-milestone {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .salvavidas-milestone strong {
+    grid-column: 3;
+  }
+}
+
+@media (max-width: 430px) {
+  .salvavidas-summary-grid {
+    gap: 8px;
+  }
+
+  .salvavidas-summary-grid > div {
+    padding: 12px;
+  }
+
+  .salvavidas-expense-option {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .salvavidas-expense-option > strong {
+    grid-column: 2;
+    justify-self: start;
+    color: rgba(255, 255, 255, 0.7);
+  }
+}
+
