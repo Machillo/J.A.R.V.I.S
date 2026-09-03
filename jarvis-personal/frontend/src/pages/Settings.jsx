@@ -12,6 +12,7 @@ import {
   sendTestNotification,
   updateSportsPreferences,
   linkOwnerToUsers,
+  getDeploymentMonitor,
 } from "../services/jarvisApi";
 import { enableJarvisPushNotifications, isPushSupported } from "../pushNotifications";
 
@@ -38,6 +39,7 @@ export default function Settings({ status }) {
   const [pushMessage, setPushMessage] = useState("");
   const [ownerBridgeMessage, setOwnerBridgeMessage] = useState("");
   const [ownerBridgeBusy, setOwnerBridgeBusy] = useState(false);
+  const [deployments, setDeployments] = useState(null);
 
   const isAdmin = me?.role === "owner" || me?.role === "admin";
   const isOwner = me?.role === "owner";
@@ -66,6 +68,12 @@ export default function Settings({ status }) {
         setPushInfo(notificationData);
       } catch (error) {
         console.warn("No pude cargar estado Web Push", error);
+      }
+
+      try {
+        setDeployments(await getDeploymentMonitor());
+      } catch (error) {
+        console.warn("No pude cargar el monitor de despliegues", error);
       }
 
       if (meData?.role === "owner" || meData?.role === "admin") {
@@ -199,6 +207,33 @@ export default function Settings({ status }) {
           </button>
           <small>Después podrás entrar a la app con Google, Apple vinculado o una passkey/Face ID sin perder tu identidad Personal.</small>
           {ownerBridgeMessage && <small className="email-sync-status">{ownerBridgeMessage}</small>}
+        </div>
+      )}
+
+      {isOwner && (
+        <div className="jarvis-panel settings-card deployment-monitor-card">
+          <h2>Monitor de despliegues</h2>
+          <p>Vercel y Render, con commit, estado y acceso al error original.</p>
+          <div className="deployment-status-grid">
+            {Object.entries(deployments?.latest || {}).map(([provider, item]) => (
+              <div className={`deployment-status-item ${item.status}`} key={provider}>
+                <span>{provider.toUpperCase()}</span>
+                <strong>{item.status === "success" ? "Correcto" : item.status === "failure" ? "Falló" : "Procesando"}</strong>
+                <small>{item.commit_sha ? item.commit_sha.slice(0, 7) : item.service_name}</small>
+              </div>
+            ))}
+          </div>
+          <div className="settings-list deployment-event-list">
+            {(deployments?.events || []).slice(0, 8).map((item) => (
+              <div key={item.id}>
+                <strong>{item.provider.toUpperCase()} · {item.status}</strong>
+                <span>{item.summary || item.event_type}</span>
+                <small>{item.detail || (item.commit_sha ? `Commit ${item.commit_sha.slice(0, 7)}` : "Sin detalle adicional")}</small>
+                {item.log_url && <a href={item.log_url} target="_blank" rel="noreferrer">Abrir log</a>}
+              </div>
+            ))}
+          </div>
+          {!deployments?.events?.length && <small>Aún no han llegado eventos. La tabla se activa automáticamente al conectar los webhooks.</small>}
         </div>
       )}
 
