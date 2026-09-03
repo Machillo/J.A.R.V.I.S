@@ -95,6 +95,7 @@ export const createSalary = (payload) => jsonRequest("/finance/salaries", "POST"
 
 export const getBonuses = () => request("/finance/bonuses");
 export const createBonus = (payload) => jsonRequest("/finance/bonuses", "POST", payload);
+export const getAguinaldo = () => request("/finance/aguinaldo");
 
 export const getDebts = () => request("/finance/debts");
 export const createDebt = (payload) => jsonRequest("/finance/debts", "POST", payload);
