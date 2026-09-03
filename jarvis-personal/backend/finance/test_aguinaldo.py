@@ -22,6 +22,7 @@ def test_aguinaldo_uses_real_salary_components_and_divides_by_twelve():
     assert report["earned_salary_total"] == 144_000
     assert report["accrued_aguinaldo"] == 12_000
     assert report["source_totals"] == {
+        "ccss_salary": 0,
         "salary": 120_000,
         "payroll_event": 12_000,
         "bonus": 12_000,
@@ -29,3 +30,11 @@ def test_aguinaldo_uses_real_salary_components_and_divides_by_twelve():
     august = next(item for item in report["months"] if item["month"] == "2026-08")
     assert august["total_earned"] == 144_000
     assert august["entries"] == 4
+
+
+def test_ccss_salary_can_replace_internal_month_components():
+    report = _build_aguinaldo_report([
+        {"kind": "ccss_salary", "amount": 712_647.40, "earned_on": date(2026, 7, 1)},
+    ], date(2026, 9, 3))
+    assert report["source_totals"]["ccss_salary"] == 712_647.40
+    assert report["accrued_aguinaldo"] == 59_387.28
