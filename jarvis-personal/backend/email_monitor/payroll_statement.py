@@ -18,7 +18,11 @@ def _money(value: str) -> float:
 
 
 def parse_ccss_order_patronal(subject: str, sender: str, text: str) -> dict[str, Any] | None:
-    """Extrae el salario Actual de una Orden Patronal Digital de la CCSS."""
+    """Extrae el salario Actual de una Orden Patronal Digital de la CCSS.
+
+    Mantener este parser en un módulo versionado evita depender de servicios
+    externos durante el arranque de FastAPI.
+    """
     combined = "\n".join([subject or "", sender or "", text or ""])
     plain = _plain(combined)
     if "orden patronal digital" not in plain:
