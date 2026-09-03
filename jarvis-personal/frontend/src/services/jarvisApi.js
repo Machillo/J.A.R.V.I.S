@@ -96,6 +96,11 @@ export const createSalary = (payload) => jsonRequest("/finance/salaries", "POST"
 export const getBonuses = () => request("/finance/bonuses");
 export const createBonus = (payload) => jsonRequest("/finance/bonuses", "POST", payload);
 export const getAguinaldo = () => request("/finance/aguinaldo");
+export const syncAguinaldoFromCcss = () => syncEmailMonitorGmail({
+  max_results: 150,
+  current_month_only: false,
+  query: 'from:noreply@ccss.sa.cr subject:"Generación de Orden Patronal Digital"',
+});
 
 export const getDebts = () => request("/finance/debts");
 export const createDebt = (payload) => jsonRequest("/finance/debts", "POST", payload);
