@@ -30,6 +30,7 @@ from backend.auth.owner_bridge import authenticate_owner_bridge_token
 from backend.users_admin.routes import router as users_admin_router
 from backend.auth.owner_bridge_routes import router as owner_bridge_router
 from backend.user_product.routes import router as user_product_router
+from backend.deployment_monitor.routes import router as deployment_monitor_router
 
 app = FastAPI(title="Jarvis Core")
 
@@ -58,6 +59,9 @@ PUBLIC_PATHS = {
     "/email-monitor/gmail-watch",
     "/email-monitor/gmail-push",
     "/notifications/cron",
+    "/deployment-monitor/webhook/github",
+    "/deployment-monitor/webhook/vercel",
+    "/deployment-monitor/webhook/render",
     "/internal/owner-bridge/verify",
 }
 
@@ -157,6 +161,7 @@ app.include_router(business_center_router)
 app.include_router(users_admin_router)
 app.include_router(owner_bridge_router)
 app.include_router(user_product_router)
+app.include_router(deployment_monitor_router)
 
 class AskRequest(BaseModel):
     text: str
