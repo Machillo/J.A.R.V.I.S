@@ -30,6 +30,72 @@ def _current_month_bounds_sql() -> tuple[str, str]:
     return start, end
 
 
+def _aguinaldo_period(as_of: date | None = None) -> tuple[date, date]:
+    """Período legal costarricense del aguinaldo: 1 dic. a 30 nov."""
+    as_of = as_of or date.today()
+    if as_of.month == 12:
+        return date(as_of.year, 12, 1), date(as_of.year + 1, 11, 30)
+    return date(as_of.year - 1, 12, 1), date(as_of.year, 11, 30)
+
+
+def _build_aguinaldo_report(rows: list[dict], as_of: date | None = None) -> dict:
+    """Calcula el acumulado desde ingresos salariales reales, nunca desde SINPE genéricos."""
+    as_of = as_of or date.today()
+    period_start, period_end = _aguinaldo_period(as_of)
+    cutoff = min(as_of, period_end)
+    monthly: dict[str, dict] = {}
+    source_totals = {"salary": 0.0, "payroll_event": 0.0, "bonus": 0.0}
+
+    for raw in rows:
+        earned_on = raw.get("earned_on")
+        if isinstance(earned_on, datetime):
+            earned_on = earned_on.date()
+        elif not isinstance(earned_on, date):
+            try:
+                earned_on = datetime.fromisoformat(str(earned_on)[:10]).date()
+            except (TypeError, ValueError):
+                continue
+        if earned_on < period_start or earned_on > cutoff:
+            continue
+
+        kind = str(raw.get("kind") or "salary")
+        amount = _as_float(raw.get("amount"))
+        source_totals[kind] = source_totals.get(kind, 0.0) + amount
+        month_key = earned_on.strftime("%Y-%m")
+        bucket = monthly.setdefault(month_key, {
+            "month": month_key, "salary": 0.0, "payroll_events": 0.0,
+            "bonuses": 0.0, "total_earned": 0.0, "entries": 0,
+        })
+        bucket_key = {"salary": "salary", "payroll_event": "payroll_events", "bonus": "bonuses"}.get(kind, "salary")
+        bucket[bucket_key] += amount
+        bucket["total_earned"] += amount
+        bucket["entries"] += 1
+
+    earned_total = sum(source_totals.values())
+    months = []
+    cursor = period_start.replace(day=1)
+    last_month = cutoff.replace(day=1)
+    while cursor <= last_month:
+        key = cursor.strftime("%Y-%m")
+        bucket = monthly.get(key, {
+            "month": key, "salary": 0.0, "payroll_events": 0.0,
+            "bonuses": 0.0, "total_earned": 0.0, "entries": 0,
+        })
+        months.append({name: round(value, 2) if isinstance(value, float) else value for name, value in bucket.items()})
+        cursor = date(cursor.year + (cursor.month == 12), 1 if cursor.month == 12 else cursor.month + 1, 1)
+
+    return {
+        "status": "OK" if rows else "NO_SALARY_DATA",
+        "period": {"start": period_start.isoformat(), "end": period_end.isoformat(), "calculated_through": cutoff.isoformat()},
+        "formula": "Total de salarios ordinarios y extraordinarios del período / 12",
+        "earned_salary_total": round(earned_total, 2),
+        "accrued_aguinaldo": round(earned_total / 12, 2),
+        "source_totals": {key: round(value, 2) for key, value in source_totals.items()},
+        "months": months,
+        "missing_months": [item["month"] for item in months if item["entries"] == 0],
+    }
+
+
 def _financial_cycle_bounds(today: date | None = None, closing_day: int = 5) -> tuple[date, date]:
     """Operating view closes *through* day 5 and rolls on day 6.
 
@@ -586,6 +652,33 @@ def get_bonuses():
         ).fetchall()
 
     return [dict(row) for row in rows]
+
+
+def calculate_aguinaldo(as_of: date | None = None):
+    """Aguinaldo acumulado usando solamente componentes salariales registrados."""
+    workspace_id = get_current_workspace_id()
+    period_start, period_end = _aguinaldo_period(as_of)
+    cutoff = min(as_of or date.today(), period_end) + timedelta(days=1)
+
+    with get_connection() as conn:
+        rows = [dict(row) for row in conn.execute(
+            """
+            SELECT 'salary' AS kind, amount, created_at::date AS earned_on, source AS description
+            FROM salaries
+            WHERE workspace_id = %s AND created_at >= %s::date AND created_at < %s::date
+            UNION ALL
+            SELECT 'payroll_event' AS kind, amount, created_at::date AS earned_on, description
+            FROM payroll_events
+            WHERE workspace_id = %s AND created_at >= %s::date AND created_at < %s::date
+            UNION ALL
+            SELECT 'bonus' AS kind, amount, created_at::date AS earned_on, description
+            FROM bonuses
+            WHERE workspace_id = %s AND created_at >= %s::date AND created_at < %s::date
+            ORDER BY earned_on ASC
+            """,
+            (workspace_id, period_start, cutoff, workspace_id, period_start, cutoff, workspace_id, period_start, cutoff),
+        ).fetchall()]
+    return _build_aguinaldo_report(rows, as_of)
 
 
 def add_debt(
