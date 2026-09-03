@@ -153,6 +153,7 @@ export const getNotificationStatus = () => request("/notifications/status");
 export const getVapidPublicKey = () => request("/notifications/vapid-public-key");
 export const savePushSubscription = (payload) => jsonRequest("/notifications/subscribe", "POST", payload);
 export const sendTestNotification = () => request("/notifications/test", { method: "POST" });
+export const getDeploymentMonitor = () => request("/deployment-monitor");
 export const getUpcomingCalendarEvents = (days = 30) => request(`/jarvis/calendar/upcoming?days=${days}`);
 
 export const getMemorySummary = () => request("/jarvis/memory/summary");
