@@ -17,6 +17,7 @@ from backend.email_monitor.service import (
     process_gmail_push,
     renew_gmail_watch,
     scan_email_text,
+    sync_ccss_payroll_orders,
     sync_gmail_for_owner,
 )
 
@@ -84,6 +85,11 @@ def email_monitor_sync_gmail(max_results: int = 150, auto_commit: bool = False, 
         query=query,
         current_month_only=current_month_only,
     )
+
+
+@router.post("/sync-ccss-payroll")
+def email_monitor_sync_ccss_payroll():
+    return sync_ccss_payroll_orders()
 
 
 @router.post("/cron")
