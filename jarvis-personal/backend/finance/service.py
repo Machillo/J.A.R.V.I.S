@@ -42,9 +42,10 @@ def _build_aguinaldo_report(rows: list[dict], as_of: date | None = None) -> dict
     """Calcula el acumulado desde ingresos salariales reales, nunca desde SINPE genéricos."""
     as_of = as_of or date.today()
     period_start, period_end = _aguinaldo_period(as_of)
-    cutoff = min(as_of, period_end)
+    # El salario del mes en curso aún no está cerrado ni reportado por la CCSS.
+    cutoff = period_end if as_of >= period_end else as_of.replace(day=1) - timedelta(days=1)
     monthly: dict[str, dict] = {}
-    source_totals = {"salary": 0.0, "payroll_event": 0.0, "bonus": 0.0}
+    source_totals = {"ccss_salary": 0.0, "salary": 0.0, "payroll_event": 0.0, "bonus": 0.0}
 
     for raw in rows:
         earned_on = raw.get("earned_on")
@@ -66,7 +67,7 @@ def _build_aguinaldo_report(rows: list[dict], as_of: date | None = None) -> dict
             "month": month_key, "salary": 0.0, "payroll_events": 0.0,
             "bonuses": 0.0, "total_earned": 0.0, "entries": 0,
         })
-        bucket_key = {"salary": "salary", "payroll_event": "payroll_events", "bonus": "bonuses"}.get(kind, "salary")
+        bucket_key = {"ccss_salary": "salary", "salary": "salary", "payroll_event": "payroll_events", "bonus": "bonuses"}.get(kind, "salary")
         bucket[bucket_key] += amount
         bucket["total_earned"] += amount
         bucket["entries"] += 1
@@ -655,28 +656,67 @@ def get_bonuses():
 
 
 def calculate_aguinaldo(as_of: date | None = None):
-    """Aguinaldo acumulado usando solamente componentes salariales registrados."""
+    """Aguinaldo: Orden Patronal CCSS primero; registros internos solo como respaldo."""
     workspace_id = get_current_workspace_id()
     period_start, period_end = _aguinaldo_period(as_of)
-    cutoff = min(as_of or date.today(), period_end) + timedelta(days=1)
+    calculation_date = as_of or date.today()
+    completed_through = period_end if calculation_date >= period_end else calculation_date.replace(day=1) - timedelta(days=1)
+    cutoff = completed_through + timedelta(days=1)
 
     with get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS payroll_salary_reports (
+                id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, workspace_id UUID NOT NULL,
+                email_message_id BIGINT, provider_message_id TEXT, period_month TEXT NOT NULL,
+                reported_salary NUMERIC NOT NULL, trans_previous_salary NUMERIC,
+                previous_salary NUMERIC, daily_subsidy NUMERIC, employer_number TEXT,
+                verification_code TEXT, source TEXT NOT NULL DEFAULT 'ccss_order_patronal',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(workspace_id, period_month), UNIQUE(workspace_id, provider_message_id)
+            )
+            """
+        )
         rows = [dict(row) for row in conn.execute(
             """
+            SELECT 'ccss_salary' AS kind, reported_salary AS amount,
+                   TO_DATE(period_month || '-01', 'YYYY-MM-DD') AS earned_on,
+                   'Orden Patronal CCSS' AS description
+            FROM payroll_salary_reports
+            WHERE workspace_id = %s
+              AND TO_DATE(period_month || '-01', 'YYYY-MM-DD') >= %s::date
+              AND TO_DATE(period_month || '-01', 'YYYY-MM-DD') < %s::date
+            UNION ALL
             SELECT 'salary' AS kind, amount, created_at::date AS earned_on, source AS description
             FROM salaries
             WHERE workspace_id = %s AND created_at >= %s::date AND created_at < %s::date
+              AND NOT EXISTS (
+                  SELECT 1 FROM payroll_salary_reports r
+                  WHERE r.workspace_id = salaries.workspace_id
+                    AND r.period_month = TO_CHAR(salaries.created_at, 'YYYY-MM')
+              )
             UNION ALL
             SELECT 'payroll_event' AS kind, amount, created_at::date AS earned_on, description
             FROM payroll_events
             WHERE workspace_id = %s AND created_at >= %s::date AND created_at < %s::date
+              AND NOT EXISTS (
+                  SELECT 1 FROM payroll_salary_reports r
+                  WHERE r.workspace_id = payroll_events.workspace_id
+                    AND r.period_month = TO_CHAR(payroll_events.created_at, 'YYYY-MM')
+              )
             UNION ALL
             SELECT 'bonus' AS kind, amount, created_at::date AS earned_on, description
             FROM bonuses
             WHERE workspace_id = %s AND created_at >= %s::date AND created_at < %s::date
+              AND NOT EXISTS (
+                  SELECT 1 FROM payroll_salary_reports r
+                  WHERE r.workspace_id = bonuses.workspace_id
+                    AND r.period_month = TO_CHAR(bonuses.created_at, 'YYYY-MM')
+              )
             ORDER BY earned_on ASC
             """,
-            (workspace_id, period_start, cutoff, workspace_id, period_start, cutoff, workspace_id, period_start, cutoff),
+            (workspace_id, period_start, cutoff, workspace_id, period_start, cutoff,
+             workspace_id, period_start, cutoff, workspace_id, period_start, cutoff),
         ).fetchall()]
     return _build_aguinaldo_report(rows, as_of)
 
