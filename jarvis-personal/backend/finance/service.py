@@ -656,7 +656,7 @@ def get_bonuses():
 
 
 def calculate_aguinaldo(as_of: date | None = None):
-    """Aguinaldo: Orden Patronal CCSS primero; registros internos solo como respaldo."""
+    """Aguinaldo based exclusively on official CCSS payroll orders."""
     workspace_id = get_current_workspace_id()
     period_start, period_end = _aguinaldo_period(as_of)
     calculation_date = as_of or date.today()
@@ -686,39 +686,16 @@ def calculate_aguinaldo(as_of: date | None = None):
             WHERE workspace_id = %s
               AND TO_DATE(period_month || '-01', 'YYYY-MM-DD') >= %s::date
               AND TO_DATE(period_month || '-01', 'YYYY-MM-DD') < %s::date
-            UNION ALL
-            SELECT 'salary' AS kind, amount, created_at::date AS earned_on, source AS description
-            FROM salaries
-            WHERE workspace_id = %s AND created_at >= %s::date AND created_at < %s::date
-              AND NOT EXISTS (
-                  SELECT 1 FROM payroll_salary_reports r
-                  WHERE r.workspace_id = salaries.workspace_id
-                    AND r.period_month = TO_CHAR(salaries.created_at, 'YYYY-MM')
-              )
-            UNION ALL
-            SELECT 'payroll_event' AS kind, amount, created_at::date AS earned_on, description
-            FROM payroll_events
-            WHERE workspace_id = %s AND created_at >= %s::date AND created_at < %s::date
-              AND NOT EXISTS (
-                  SELECT 1 FROM payroll_salary_reports r
-                  WHERE r.workspace_id = payroll_events.workspace_id
-                    AND r.period_month = TO_CHAR(payroll_events.created_at, 'YYYY-MM')
-              )
-            UNION ALL
-            SELECT 'bonus' AS kind, amount, created_at::date AS earned_on, description
-            FROM bonuses
-            WHERE workspace_id = %s AND created_at >= %s::date AND created_at < %s::date
-              AND NOT EXISTS (
-                  SELECT 1 FROM payroll_salary_reports r
-                  WHERE r.workspace_id = bonuses.workspace_id
-                    AND r.period_month = TO_CHAR(bonuses.created_at, 'YYYY-MM')
-              )
             ORDER BY earned_on ASC
             """,
-            (workspace_id, period_start, cutoff, workspace_id, period_start, cutoff,
-             workspace_id, period_start, cutoff, workspace_id, period_start, cutoff),
+            (workspace_id, period_start, cutoff),
         ).fetchall()]
-    return _build_aguinaldo_report(rows, as_of)
+    report = _build_aguinaldo_report(rows, as_of)
+    report["source"] = "ccss_order_patronal"
+    report["period"]["official_through"] = (
+        max(str(row["earned_on"])[:7] for row in rows) if rows else None
+    )
+    return report
 
 
 def add_debt(
