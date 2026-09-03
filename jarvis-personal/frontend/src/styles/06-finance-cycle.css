@@ -1,0 +1,326 @@
+/* Finance 5->5 cycle + review details */
+.finance-period-pill {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border: 1px solid rgba(34, 211, 238, .35);
+  border-radius: 999px;
+  color: #9ff8f1;
+  background: rgba(4, 20, 24, .58);
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-size: .78rem;
+}
+
+.finance-main-cards {
+  align-items: stretch;
+}
+
+.finance-click-card {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .09);
+  color: inherit;
+  font: inherit;
+}
+
+.finance-click-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(45, 212, 191, .55);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, .22), 0 0 28px rgba(45, 212, 191, .12);
+}
+
+.finance-detail-panel {
+  margin: 18px 0;
+}
+
+.finance-detail-list,
+.full-debt-list {
+  display: grid;
+  gap: 10px;
+  max-height: 460px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.finance-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid rgba(255, 255, 255, .08);
+}
+
+.finance-detail-row div {
+  min-width: 0;
+}
+
+.finance-detail-row strong,
+.finance-detail-row span {
+  display: block;
+}
+
+.finance-detail-row strong {
+  color: #f7fffb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.finance-detail-row span {
+  color: rgba(223, 255, 250, .66);
+  font-size: .84rem;
+  margin-top: 4px;
+}
+
+.finance-detail-row b {
+  color: #8dffbd;
+  white-space: nowrap;
+}
+
+.ghost-button {
+  border: 1px solid rgba(255, 255, 255, .12);
+  color: #dffefa;
+  background: rgba(255, 255, 255, .05);
+  border-radius: 999px;
+  padding: 9px 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.debts-panel-title select {
+  border: 1px solid rgba(45, 212, 191, .35);
+  background: rgba(4, 20, 24, .85);
+  color: #eafffb;
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-weight: 800;
+}
+
+.additional-card .mini-transaction-list {
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.goal-edit-button {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(45, 212, 191, .35);
+  color: #dcfffb;
+  background: rgba(45, 212, 191, .08);
+  border-radius: 999px;
+  padding: 9px 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.goal-edit-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.goal-edit-form label {
+  display: grid;
+  gap: 5px;
+  color: rgba(223, 255, 250, .68);
+  font-weight: 800;
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.goal-edit-form input,
+.goal-edit-form select {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(2, 18, 22, .75);
+  color: #f4fffd;
+  border-radius: 14px;
+  padding: 11px 12px;
+  font: inherit;
+  font-weight: 700;
+}
+
+.goal-edit-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.goal-card.critical {
+  border-color: rgba(255, 120, 120, .38);
+  box-shadow: 0 0 28px rgba(255, 80, 80, .08);
+}
+
+.goal-card.high {
+  border-color: rgba(251, 191, 36, .38);
+}
+
+@media (max-width: 720px) {
+  .finance-period-pill {
+    font-size: .68rem;
+    line-height: 1.35;
+  }
+
+  .finance-detail-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .finance-detail-row b {
+    font-size: 1.08rem;
+  }
+
+  .debts-panel-title {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .debts-panel-title select {
+    width: 100%;
+  }
+}
+
+
+/* Finance closeout polish: simple top KPIs + real modal details */
+.finance-main-cards-clean {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.finance-simple-kpi {
+  min-height: 138px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+
+.finance-simple-kpi span {
+  display: block;
+  color: rgba(223, 255, 250, .72);
+  font-size: .82rem;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.finance-simple-kpi h2 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  line-height: 1;
+}
+
+.finance-detail-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: clamp(14px, 4vw, 28px);
+  background: rgba(0, 8, 10, .72);
+  backdrop-filter: blur(10px);
+}
+
+.finance-detail-modal {
+  width: min(760px, 100%);
+  max-height: min(78vh, 720px);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-color: rgba(45, 212, 191, .32);
+  box-shadow: 0 28px 90px rgba(0,0,0,.48), 0 0 50px rgba(45, 212, 191, .13);
+}
+
+.finance-detail-modal .finance-detail-list {
+  max-height: none;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.finance-detail-modal .empty-state {
+  margin-top: 12px;
+}
+
+/* Additional cards closeout polish */
+.additional-cards-clean-page .page-section-header h2 {
+  margin-bottom: 0;
+}
+
+.additional-owner-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.additional-card-clean h3 {
+  margin: 18px 0 2px;
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  color: #8dffbd;
+}
+
+.additional-card-clean p {
+  margin: 0 0 16px;
+  color: rgba(223, 255, 250, .68);
+  font-weight: 800;
+}
+
+.additional-full-list {
+  max-height: min(58vh, 620px);
+  overflow: auto;
+}
+
+.additional-full-list div {
+  align-items: flex-start;
+}
+
+.additional-full-list span {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.additional-empty-row {
+  opacity: .72;
+}
+
+@media (max-width: 900px) {
+  .finance-main-cards-clean,
+  .additional-owner-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-simple-kpi {
+    min-height: 118px;
+  }
+
+  .finance-detail-modal-backdrop {
+    align-items: end;
+    padding: 10px;
+  }
+
+  .finance-detail-modal {
+    width: 100%;
+    max-height: 82vh;
+    border-radius: 26px 26px 18px 18px;
+  }
+}
+
+.email-candidate-main .email-candidate-detail {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+  color: rgba(175, 245, 226, 0.78);
+  font-size: 0.86rem;
+  margin-top: -2px;
+}
+
