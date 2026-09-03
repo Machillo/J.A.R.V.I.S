@@ -27,6 +27,7 @@ from backend.email_monitor.deduplication import canonical_score, find_semantic_d
 from backend.email_monitor.normalization import normalize_description
 from backend.email_monitor.personal_rules import apply_workspace_email_rules
 from backend.email_monitor.statement_reconciliation import reconcile_statement
+from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
 
 OWNER_EMAIL = (
     os.getenv("OWNER_EMAIL", "").strip()
@@ -37,7 +38,7 @@ DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
     # Sender-only query on purpose. The parser decides what is financial.
     # The old query mixed sender + keywords and Gmail returned only a tiny subset.
-    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopular OR from:popular)',
+    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopular OR from:popular OR from:ccss@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")',
 )
 # Gmail ingestion is automatic only for high-confidence parser decisions.
 AUTO_COMMIT_CONFIDENCE = max(
@@ -215,6 +216,29 @@ def ensure_email_tables(conn) -> None:
         """
     )
     conn.execute("ALTER TABLE email_statement_documents ADD COLUMN IF NOT EXISTS extracted_text TEXT")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS payroll_salary_reports (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL,
+            workspace_id UUID NOT NULL,
+            email_message_id BIGINT REFERENCES email_ingested_messages(id) ON DELETE SET NULL,
+            provider_message_id TEXT,
+            period_month TEXT NOT NULL,
+            reported_salary NUMERIC NOT NULL,
+            trans_previous_salary NUMERIC,
+            previous_salary NUMERIC,
+            daily_subsidy NUMERIC,
+            employer_number TEXT,
+            verification_code TEXT,
+            source TEXT NOT NULL DEFAULT 'ccss_order_patronal',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(workspace_id, period_month),
+            UNIQUE(workspace_id, provider_message_id)
+        )
+        """
+    )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS card_aliases (
@@ -730,7 +754,14 @@ def _settings_query_for_owner(conn, user_id: int, workspace_id: str | None = Non
         """,
         (user_id, workspace_id, DEFAULT_QUERY),
     ).fetchone()
-    return (row or {}).get("gmail_query") or DEFAULT_QUERY
+    gmail_query = (row or {}).get("gmail_query") or DEFAULT_QUERY
+    if "orden patronal" not in gmail_query.lower() and "ccss@ccss.sa.cr" not in gmail_query.lower():
+        gmail_query = f'({gmail_query} OR from:ccss@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")'
+        conn.execute(
+            "UPDATE email_monitor_settings SET gmail_query = %s, updated_at = NOW() WHERE workspace_id = %s",
+            (gmail_query, workspace_id),
+        )
+    return gmail_query
 
 
 def _require_owner_user() -> dict[str, Any]:
@@ -1323,10 +1354,66 @@ def scan_email_text(
         _require_owner_user()
         user_id = get_current_user_id()
 
-    parsed = parse_financial_email(subject, sender, body, received_at)
     attachment_names = attachment_names or []
-    parsed["attachment_names"] = attachment_names
     email_fp = fingerprint_email(sender, subject, body, received_at)
+    payroll_report = parse_ccss_order_patronal(subject, sender, attachment_text or body)
+
+    if payroll_report:
+        with get_connection() as conn:
+            ensure_email_tables(conn)
+            workspace_id = _workspace_id_for_user(conn, user_id)
+            email_message_id = _upsert_ingested_message(
+                conn, user_id=user_id, provider_message_id=provider_message_id,
+                email_fp=email_fp, sender=sender, subject=subject, received_at=received_at,
+                bank="ccss", status="payroll_statement", body=body,
+                reason=f"Orden patronal CCSS {payroll_report['period_month']} procesada.",
+                attachment_names=attachment_names,
+            )
+            row = conn.execute(
+                """
+                INSERT INTO payroll_salary_reports (
+                    user_id, workspace_id, email_message_id, provider_message_id,
+                    period_month, reported_salary, trans_previous_salary,
+                    previous_salary, daily_subsidy, employer_number, verification_code
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (workspace_id, period_month)
+                DO UPDATE SET email_message_id = EXCLUDED.email_message_id,
+                    provider_message_id = EXCLUDED.provider_message_id,
+                    reported_salary = EXCLUDED.reported_salary,
+                    trans_previous_salary = EXCLUDED.trans_previous_salary,
+                    previous_salary = EXCLUDED.previous_salary,
+                    daily_subsidy = EXCLUDED.daily_subsidy,
+                    employer_number = EXCLUDED.employer_number,
+                    verification_code = EXCLUDED.verification_code,
+                    updated_at = NOW()
+                RETURNING id
+                """,
+                (
+                    user_id, workspace_id, email_message_id, provider_message_id,
+                    payroll_report["period_month"], payroll_report["reported_salary"],
+                    payroll_report["trans_previous_salary"], payroll_report["previous_salary"],
+                    payroll_report["daily_subsidy"], payroll_report.get("employer_number"),
+                    payroll_report.get("verification_code"),
+                ),
+            ).fetchone()
+            _log_email_event(
+                conn, user_id=user_id, email_message_id=email_message_id,
+                provider_message_id=provider_message_id, sender=sender, subject=subject,
+                bank="ccss", action="payroll_statement", result="processed",
+                extracted_payload=payroll_report,
+                reason="Salario bruto oficial guardado desde Orden Patronal CCSS.",
+            )
+            conn.commit()
+        return {
+            "status": "PAYROLL_STATEMENT",
+            "message": f"Orden patronal {payroll_report['period_month']} guardada.",
+            "payroll_report_id": int(row["id"]),
+            "payroll_report": payroll_report,
+            "candidate": None,
+        }
+
+    parsed = parse_financial_email(subject, sender, body, received_at)
+    parsed["attachment_names"] = attachment_names
 
     with get_connection() as conn:
         ensure_email_tables(conn)
@@ -2360,6 +2447,15 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
     gmail_query = build_current_month_gmail_query(base_query) if current_month_only else base_query
 
     messages = _list_gmail_messages(service, gmail_query=gmail_query, max_results=effective_max_results)
+    today = date.today()
+    aguinaldo_start = date(today.year if today.month == 12 else today.year - 1, 12, 1)
+    payroll_query = (
+        'subject:"Generación de Orden Patronal Digital" '
+        f'after:{aguinaldo_start:%Y/%m/%d} -in:spam -in:trash'
+    )
+    payroll_messages = _list_gmail_messages(service, gmail_query=payroll_query, max_results=20)
+    seen_ids = {item.get("id") for item in messages}
+    messages.extend(item for item in payroll_messages if item.get("id") not in seen_ids)
     processed: list[dict[str, Any]] = []
 
     for item in messages:
@@ -2468,6 +2564,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
     confirmed = sum(1 for item in processed if item.get("candidate_status") == "confirmed")
     pending = sum(1 for item in processed if item.get("candidate_status") == "pending")
     statements = sum(1 for item in processed if item.get("status") == "STATEMENT_DOCUMENT")
+    payroll_statements = sum(1 for item in processed if item.get("status") == "PAYROLL_STATEMENT")
     ignored = sum(1 for item in processed if item.get("status") in {"IGNORED_EMAIL", "DUPLICATE_IGNORED_EMAIL"})
     duplicates = sum(1 for item in processed if item.get("status") == "DUPLICATE_EMAIL" or item.get("candidate_status") == "duplicate")
     errors = sum(1 for item in processed if item.get("status") == "ERROR")
@@ -2482,6 +2579,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
             "confirmed": confirmed,
             "pending": pending,
             "statements": statements,
+            "payroll_statements": payroll_statements,
             "duplicates": duplicates,
             "ignored": ignored,
             "errors": errors,
