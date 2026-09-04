@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronRight, Gem, Landmark, TrendingUp } from "lucide-react";
+import { AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronRight, Gem, Landmark, TrendingUp } from "lucide-react";
 
 export default function Wealth({ navigatePage }) {
   return <section className="app-hub-page wealth-hub-page">
@@ -8,6 +8,11 @@ export default function Wealth({ navigatePage }) {
       <p>Inversiones, negocios e ingresos que construyen patrimonio fuera de tu salario.</p>
     </div>
     <div className="app-list-group wealth-options-group">
+      <button className="app-list-item" onClick={() => navigatePage("deterioration")}>
+        <span className="app-list-icon"><AlertTriangle size={24}/></span>
+        <span className="app-list-copy"><strong>Deterioro financiero</strong><small>Alertas tempranas y causas de cambios negativos</small></span>
+        <ChevronRight size={22} className="app-list-chevron" />
+      </button>
       <button className="app-list-item" onClick={() => navigatePage("reconciliation")}>
         <span className="app-list-icon"><CheckCircle2 size={24}/></span>
         <span className="app-list-copy"><strong>Conciliación financiera</strong><small>Detectar diferencias, gastos olvidados y posibles duplicados</small></span>

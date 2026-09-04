@@ -38,6 +38,7 @@ import FinancialAccounts from "../pages/FinancialAccounts";
 import NetWorth from "../pages/NetWorth";
 import FinancialTimeline from "../pages/FinancialTimeline";
 import Reconciliation from "../pages/Reconciliation";
+import FinancialDeterioration from "../pages/FinancialDeterioration";
 import Login from "../pages/Login";
 import UserManagement from "../pages/UserManagement";
 import UnifiedOnboarding from "../pages/UnifiedOnboarding";
@@ -62,6 +63,7 @@ const appSections = {
   netWorth: { title: "Patrimonio neto", eyebrow: "Live Wealth" },
   financialTimeline: { title: "Timeline financiero", eyebrow: "Liquidity Map" },
   reconciliation: { title: "Conciliación", eyebrow: "Financial Control" },
+  deterioration: { title: "Deterioro financiero", eyebrow: "Early Warning" },
   chats: { title: "Data Tools", eyebrow: "Imports & Movements" },
   emails: { title: "Correos", eyebrow: "Chats" },
   transactions: { title: "Transacciones", eyebrow: "Chats" },
@@ -76,7 +78,7 @@ const appSections = {
 const getBottomGroup = (page) => {
   if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "profile";
   if (["memory", "settings", "goals", "profile"].includes(page)) return "profile";
-  if (["investments", "businesses", "financialAccounts", "netWorth", "financialTimeline", "reconciliation", "wealth"].includes(page)) return "wealth";
+  if (["investments", "businesses", "financialAccounts", "netWorth", "financialTimeline", "reconciliation", "deterioration", "wealth"].includes(page)) return "wealth";
   return page;
 };
 
@@ -583,6 +585,8 @@ export default function App() {
         return <FinancialTimeline />;
       case "reconciliation":
         return <Reconciliation />;
+      case "deterioration":
+        return <FinancialDeterioration />;
 
       case "investments":
         return <Investments />;

@@ -130,6 +130,7 @@ from backend.finance.fixed_expenses import (
 
 from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
 from backend.finance.reconciliation import get_financial_reconciliation, confirm_account_reconciliation
+from backend.finance.deterioration import get_financial_deterioration
 from backend.finance.timeline import get_financial_timeline
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
@@ -161,6 +162,11 @@ def financial_timeline(days: int = 45):
 @router.get("/reconciliation")
 def financial_reconciliation():
     return get_financial_reconciliation()
+
+
+@router.get("/deterioration")
+def financial_deterioration():
+    return get_financial_deterioration()
 
 
 @router.post("/reconciliation/{account_id}/confirm")
