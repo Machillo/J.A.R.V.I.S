@@ -87,6 +87,7 @@ export const applyReceivablePayment = (id, payload) => jsonRequest(`/finance/rec
 export const updateReceivableEntry = (receivableId, entryId, payload) => jsonRequest(`/finance/receivables/${receivableId}/entries/${entryId}`, "PUT", payload);
 export const getAccountBalances = () => request("/finance/account-balances");
 export const saveAccountBalance = (payload) => jsonRequest("/finance/account-balances", "POST", payload);
+export const deleteAccountBalance = (id) => request(`/finance/account-balances/${id}`, { method: "DELETE" });
 export const getRealBalance = () => request("/finance/real-balance");
 export const planGoalScenario = (payload) => jsonRequest("/finance/plan-goal", "POST", payload);
 

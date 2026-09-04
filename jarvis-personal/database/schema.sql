@@ -268,6 +268,7 @@ CREATE INDEX IF NOT EXISTS idx_payment_schedules_user_id ON payment_schedules(us
 CREATE INDEX IF NOT EXISTS idx_pay_schedule_user_id ON pay_schedule(user_id);
 CREATE INDEX IF NOT EXISTS idx_credit_card_settings_user_id ON credit_card_settings(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);
 
 
@@ -1090,3 +1091,26 @@ SELECT a.id,p.id,'active','self_service',NOW(),NOW(),NOW()
 FROM accounts a CROSS JOIN plans p
 WHERE a.role<>'owner' AND p.code='free'
 ON CONFLICT(account_id) DO NOTHING;
+
+-- Canonical real-world accounts (JARVIS 05). Kept after workspace creation.
+CREATE TABLE IF NOT EXISTS account_balances (
+    id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    account_name TEXT NOT NULL, bank_name TEXT NOT NULL DEFAULT '',
+    account_type TEXT NOT NULL DEFAULT 'checking', account_last4 TEXT NOT NULL DEFAULT '',
+    currency TEXT NOT NULL DEFAULT 'CRC', current_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
+    balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
+    include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE, is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(workspace_id, account_name, account_last4)
+);
+CREATE TABLE IF NOT EXISTS account_balance_history (
+    id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    financial_account_id BIGINT NOT NULL REFERENCES account_balances(id) ON DELETE CASCADE,
+    balance NUMERIC(18,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'CRC',
+    balance_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
+    note TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS financial_account_id BIGINT REFERENCES account_balances(id) ON DELETE SET NULL;
+ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS financial_account_id BIGINT REFERENCES account_balances(id) ON DELETE SET NULL;

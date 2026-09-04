@@ -2657,7 +2657,37 @@ def get_net_worth_report():
             (workspace_id,)
         ).fetchall()
 
-    savings_list = [dict(row) for row in savings]
+        accounts_table = conn.execute("SELECT to_regclass('public.account_balances') AS table_name").fetchone()
+        financial_accounts = conn.execute(
+            """
+            SELECT a.id, a.account_name AS name, a.account_type, a.currency, a.current_balance, a.source,
+                   CASE WHEN a.currency='CRC' THEN a.current_balance + COALESCE(m.movement_delta,0)
+                        ELSE (a.current_balance + COALESCE(m.movement_delta,0)) * COALESCE((
+                            SELECT exchange_rate FROM exchange_rates r
+                            WHERE r.workspace_id=a.workspace_id AND r.currency=a.currency
+                            ORDER BY rate_date DESC,id DESC LIMIT 1
+                        ), 1) END AS amount
+            FROM account_balances a
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(SUM(CASE
+                    WHEN t.transaction_type IN ('income','refund','reimbursement') THEN t.amount
+                    WHEN t.transaction_type IN ('expense','debt_payment') THEN -t.amount
+                    ELSE 0 END),0) AS movement_delta
+                FROM transactions t
+                WHERE t.workspace_id=a.workspace_id AND t.financial_account_id=a.id
+                  AND t.created_at > a.balance_as_of
+            ) m ON TRUE
+            WHERE a.workspace_id=%s AND a.is_active=TRUE AND a.include_in_net_worth=TRUE
+            """,
+            (workspace_id,),
+        ).fetchall() if accounts_table and accounts_table.get("table_name") else []
+
+    account_rows = [dict(row) for row in financial_accounts]
+    canonical_ready = any(_as_float(row.get("amount")) != 0 or row.get("source") != "transaction_backfill" for row in account_rows)
+    positive_accounts = [row for row in account_rows if _as_float(row.get("amount")) >= 0]
+    negative_accounts = [row for row in account_rows if _as_float(row.get("amount")) < 0]
+    # Once canonical accounts have real balances, they replace legacy savings to prevent double counting.
+    savings_list = positive_accounts if canonical_ready else [dict(row) for row in savings]
     investments_list = [dict(row) for row in investments]
     if ibkr_live:
         live_item = dict(ibkr_live)
@@ -2669,7 +2699,8 @@ def get_net_worth_report():
     investments_total = _safe_sum(investments_list, "amount")
     assets_total = savings_total + investments_total
 
-    debt_total = _safe_sum(debts_list, "remaining_amount")
+    account_liabilities = abs(_safe_sum(negative_accounts, "amount"))
+    debt_total = _safe_sum(debts_list, "remaining_amount") + account_liabilities
     monthly_debt_payments = _safe_sum(debts_list, "monthly_payment")
 
     net_worth = assets_total - debt_total
@@ -2742,6 +2773,7 @@ def get_net_worth_report():
             "monthly_debt_payments": monthly_debt_payments,
             "highest_debt": highest_debt,
             "high_interest_debts": high_interest_debts,
+            "account_liabilities": account_liabilities,
         },
         "net_worth": net_worth,
         "status": status,

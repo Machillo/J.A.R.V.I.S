@@ -1170,26 +1170,97 @@ def apply_receivable_payment(
     }
 
 
+def _ensure_account_tables(conn) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS account_balances (
+            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
+            workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            account_name TEXT NOT NULL, bank_name TEXT NOT NULL DEFAULT '',
+            account_type TEXT NOT NULL DEFAULT 'checking', account_last4 TEXT NOT NULL DEFAULT '',
+            currency TEXT NOT NULL DEFAULT 'CRC', current_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
+            balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
+            include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE, is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(workspace_id, account_name, account_last4)
+        )
+    """)
+    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'checking'")
+    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW()")
+    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual'")
+    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE")
+    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
+    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS account_balance_history (
+            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
+            workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            financial_account_id BIGINT NOT NULL REFERENCES account_balances(id) ON DELETE CASCADE,
+            balance NUMERIC(18,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'CRC',
+            balance_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
+            note TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """)
+    conn.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS financial_account_id BIGINT REFERENCES account_balances(id) ON DELETE SET NULL")
+
+
 def list_account_balances() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
+        _ensure_account_tables(conn)
         rows = conn.execute(
             """
-            SELECT id, account_name, bank_name, account_last4, currency, current_balance, is_active, updated_at
-            FROM account_balances
-            WHERE workspace_id = %s AND COALESCE(is_active, true) = true
-            ORDER BY bank_name, account_name
+            SELECT a.id, a.account_name, a.bank_name, a.account_type, a.account_last4, a.currency,
+                   a.current_balance, a.balance_as_of, a.source, a.include_in_net_worth, a.is_active, a.updated_at,
+                   COALESCE(m.movement_delta,0) AS movement_delta,
+                   a.current_balance + COALESCE(m.movement_delta,0) AS calculated_balance,
+                   COALESCE(m.movement_count,0) AS movements_since_balance
+            FROM account_balances a
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS movement_count,
+                       COALESCE(SUM(CASE
+                           WHEN t.transaction_type IN ('income','refund','reimbursement') THEN t.amount
+                           WHEN t.transaction_type IN ('expense','debt_payment') THEN -t.amount
+                           ELSE 0 END),0) AS movement_delta
+                FROM transactions t
+                WHERE t.workspace_id=a.workspace_id AND t.financial_account_id=a.id
+                  AND t.created_at > a.balance_as_of
+            ) m ON TRUE
+            WHERE a.workspace_id = %s AND COALESCE(a.is_active, true) = true
+            ORDER BY a.bank_name, a.account_name
             """,
             (workspace_id,),
         ).fetchall()
+        rates = conn.execute("SELECT DISTINCT ON(currency) currency, exchange_rate FROM exchange_rates WHERE workspace_id=%s ORDER BY currency, rate_date DESC, id DESC", (workspace_id,)).fetchall()
+        ibkr_table = conn.execute("SELECT to_regclass('public.investment_portfolio_snapshots') AS table_name").fetchone()
+        ibkr = conn.execute("""
+            SELECT id, account_id_masked, currency, market_value, market_value_crc, snapshot_at
+            FROM investment_portfolio_snapshots
+            WHERE workspace_id=%s AND source='ibkr_readonly' AND account_mode='live'
+            ORDER BY snapshot_at DESC NULLS LAST,id DESC LIMIT 1
+        """, (workspace_id,)).fetchone() if ibkr_table and ibkr_table.get("table_name") else None
+    rate_map = {str(row["currency"]).upper(): _as_float(row["exchange_rate"], 1) for row in rates}
     items = [dict(row) for row in rows]
-    return {"status": "OK", "items": items, "total_real_balance": round(sum(_as_float(i.get("current_balance")) for i in items), 2)}
+    for item in items:
+        currency = str(item.get("currency") or "CRC").upper()
+        item["balance_crc"] = round(_as_float(item.get("calculated_balance")) * (1 if currency == "CRC" else rate_map.get(currency, 1)), 2)
+    included = [item for item in items if item.get("include_in_net_worth")]
+    liquid_total = round(sum(_as_float(i.get("balance_crc")) for i in included), 2)
+    if ibkr:
+        items.append({
+            "id": f"ibkr-{ibkr['id']}", "account_name": f"IBKR {ibkr.get('account_id_masked') or ''}".strip(),
+            "bank_name": "Interactive Brokers", "account_type": "investment", "account_last4": "",
+            "currency": ibkr.get("currency") or "USD", "current_balance": _as_float(ibkr.get("market_value")),
+            "balance_crc": _as_float(ibkr.get("market_value_crc")), "balance_as_of": ibkr.get("snapshot_at"),
+            "source": "ibkr_flex", "include_in_net_worth": True, "is_active": True, "read_only": True,
+        })
+    return {"status": "OK", "items": items, "total_real_balance": liquid_total, "currency": "CRC"}
 
 
-def upsert_account_balance(account_name: str, current_balance: float, bank_name: str = "", account_last4: str = "", currency: str = "CRC") -> dict[str, Any]:
+def upsert_account_balance(account_name: str, current_balance: float, bank_name: str = "", account_last4: str = "", currency: str = "CRC", account_type: str = "checking", include_in_net_worth: bool = True, source: str = "manual", note: str = "") -> dict[str, Any]:
     user_id = get_current_user_id()  # legacy compatibility during migration
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
+        _ensure_account_tables(conn)
         existing = conn.execute(
             """
             SELECT id FROM account_balances
@@ -1202,23 +1273,41 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
             row = conn.execute(
                 """
                 UPDATE account_balances
-                SET bank_name = %s, currency = %s, current_balance = %s, is_active = true, updated_at = NOW()
+                SET bank_name=%s, account_type=%s, currency=%s, current_balance=%s,
+                    balance_as_of=NOW(), source=%s, include_in_net_worth=%s, is_active=true, updated_at=NOW()
                 WHERE id = %s AND workspace_id = %s
                 RETURNING *
                 """,
-                (bank_name, currency, current_balance, existing["id"], workspace_id),
+                (bank_name, account_type, currency.upper(), current_balance, source, include_in_net_worth, existing["id"], workspace_id),
             ).fetchone()
         else:
             row = conn.execute(
                 """
-                INSERT INTO account_balances (user_id, workspace_id, account_name, bank_name, account_last4, currency, current_balance)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO account_balances (user_id, workspace_id, account_name, bank_name, account_type, account_last4, currency, current_balance, source, include_in_net_worth)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING *
                 """,
-                (user_id, workspace_id, account_name, bank_name, account_last4, currency, current_balance),
+                (user_id, workspace_id, account_name, bank_name, account_type, account_last4, currency.upper(), current_balance, source, include_in_net_worth),
             ).fetchone()
+        conn.execute("""INSERT INTO account_balance_history(user_id,workspace_id,financial_account_id,balance,currency,source,note)
+                        VALUES(%s,%s,%s,%s,%s,%s,%s)""", (user_id, workspace_id, row["id"], current_balance, currency.upper(), source, note))
+        conn.execute("""UPDATE transactions SET financial_account_id=%s
+                        WHERE workspace_id=%s AND financial_account_id IS NULL
+                          AND (LOWER(BTRIM(account))=LOWER(BTRIM(%s)) OR (%s<>'' AND account LIKE %s))""",
+                     (row["id"], workspace_id, account_name, account_last4, f"%{account_last4}"))
         conn.commit()
     return {"status": "OK", "item": dict(row)}
+
+
+def deactivate_account_balance(account_id: int) -> dict[str, Any]:
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        _ensure_account_tables(conn)
+        row = conn.execute("UPDATE account_balances SET is_active=false,updated_at=NOW() WHERE id=%s AND workspace_id=%s RETURNING id", (account_id, workspace_id)).fetchone()
+        conn.commit()
+    if not row:
+        raise ValueError("Cuenta financiera no encontrada.")
+    return {"status": "OK", "id": account_id}
 
 
 def get_real_balance_reconciliation() -> dict[str, Any]:

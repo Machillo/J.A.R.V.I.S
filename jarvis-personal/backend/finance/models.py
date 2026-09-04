@@ -203,6 +203,10 @@ class AccountBalanceRequest(BaseModel):
     bank_name: str = ""
     account_last4: str = ""
     currency: str = "CRC"
+    account_type: str = "checking"
+    include_in_net_worth: bool = True
+    source: str = "manual"
+    note: str = ""
 
 
 class GoalPlanningRequest(BaseModel):

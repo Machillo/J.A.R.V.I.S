@@ -217,7 +217,17 @@ def get_salvavidas_state() -> dict[str, Any]:
 
     monthly_base = debt_monthly + mandatory_monthly + protected_monthly
     target = monthly_base * TARGET_MONTHS
-    current = max(_f(config.get("current_amount")), 0.0)
+    linked_account = None
+    with get_connection() as conn:
+        table = conn.execute("SELECT to_regclass('public.account_balances') AS table_name").fetchone()
+        if table and table.get("table_name"):
+            linked_account = conn.execute(
+                """SELECT id,current_balance,balance_as_of FROM account_balances
+                   WHERE workspace_id=%s AND is_active=TRUE AND account_type='emergency_fund'
+                   ORDER BY updated_at DESC,id DESC LIMIT 1""",
+                (workspace_id,),
+            ).fetchone()
+    current = max(_f(linked_account.get("current_balance") if linked_account else config.get("current_amount")), 0.0)
     missing = max(target - current, 0.0)
     coverage = current / monthly_base if monthly_base > 0 else 0.0
     progress = min((current / target) * 100.0, 100.0) if target > 0 else 0.0
@@ -253,8 +263,12 @@ def get_salvavidas_state() -> dict[str, Any]:
         "milestones": milestones,
         "verification": {
             "mode": "manual",
-            "account_linked": False,
-            "message": "El saldo se registra manualmente. Más adelante JARVIS lo conciliará con los movimientos y con la cuenta real que asignes al Salvavidas.",
+            "account_linked": bool(linked_account),
+            "message": (
+                "Saldo vinculado con la cuenta financiera real Salvavidas."
+                if linked_account else
+                "Guardá el saldo para crear y vincular la cuenta financiera Salvavidas."
+            ),
         },
     }
 
@@ -273,4 +287,17 @@ def update_salvavidas(*, current_amount: float | None = None, protected_expense_
 
     config["target_months"] = TARGET_MONTHS
     set_preference(PREFERENCE_KEY, config)
+    if current_amount is not None:
+        # Keep the old preference for compatibility while making Salvavidas a real account.
+        from backend.finance.intelligence import upsert_account_balance
+        upsert_account_balance(
+            account_name="Salvavidas",
+            current_balance=max(float(current_amount), 0.0),
+            bank_name="MultiMoney",
+            account_type="emergency_fund",
+            currency="CRC",
+            include_in_net_worth=True,
+            source="salvavidas",
+            note="Saldo actualizado desde Strategy",
+        )
     return get_salvavidas_state()

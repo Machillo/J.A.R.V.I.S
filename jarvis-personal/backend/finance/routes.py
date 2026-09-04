@@ -113,6 +113,7 @@ from backend.finance.intelligence import (
     list_account_balances,
     upsert_account_balance,
     get_real_balance_reconciliation,
+    deactivate_account_balance,
     plan_long_term_goal,
 )
 
@@ -709,7 +710,19 @@ def save_account_balance(request: AccountBalanceRequest):
         bank_name=request.bank_name,
         account_last4=request.account_last4,
         currency=request.currency,
+        account_type=request.account_type,
+        include_in_net_worth=request.include_in_net_worth,
+        source=request.source,
+        note=request.note,
     )
+
+
+@router.delete("/account-balances/{account_id}")
+def remove_account_balance(account_id: int):
+    try:
+        return deactivate_account_balance(account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/real-balance")
