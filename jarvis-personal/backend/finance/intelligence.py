@@ -1209,7 +1209,7 @@ def _ensure_account_tables(conn) -> None:
                 FROM account_balances
                 WHERE workspace_id=NEW.workspace_id AND is_active=TRUE
                   AND (LOWER(BTRIM(account_name))=LOWER(BTRIM(NEW.account))
-                       OR (account_last4<>'' AND NEW.account LIKE '%' || account_last4))
+                       OR (account_last4<>'' AND NEW.account LIKE CHR(37) || account_last4))
                 ORDER BY CASE WHEN LOWER(BTRIM(account_name))=LOWER(BTRIM(NEW.account)) THEN 0 ELSE 1 END,id
                 LIMIT 1;
             END IF;
