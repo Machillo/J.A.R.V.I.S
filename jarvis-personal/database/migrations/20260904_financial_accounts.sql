@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS account_balances (
     currency TEXT NOT NULL DEFAULT 'CRC',
     current_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
     annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0,
+    last_reconciliation_difference NUMERIC(18,2) NOT NULL DEFAULT 0,
     balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     source TEXT NOT NULL DEFAULT 'manual',
     include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE,
@@ -21,6 +22,9 @@ CREATE TABLE IF NOT EXISTS account_balances (
 
 ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'checking';
 ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0;
+ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS last_reconciliation_difference NUMERIC(18,2) NOT NULL DEFAULT 0;
+UPDATE account_balances SET annual_interest_rate=5.5, updated_at=NOW()
+WHERE LOWER(account_name)='multimoney colones' AND account_last4='6126' AND annual_interest_rate=0;
 ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual';
 ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE;

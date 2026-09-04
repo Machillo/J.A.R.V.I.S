@@ -1179,6 +1179,7 @@ def _ensure_account_tables(conn) -> None:
             account_type TEXT NOT NULL DEFAULT 'checking', account_last4 TEXT NOT NULL DEFAULT '',
             currency TEXT NOT NULL DEFAULT 'CRC', current_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
             annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0,
+            last_reconciliation_difference NUMERIC(18,2) NOT NULL DEFAULT 0,
             balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
             include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE, is_active BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1187,6 +1188,13 @@ def _ensure_account_tables(conn) -> None:
     """)
     conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'checking'")
     conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0")
+    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS last_reconciliation_difference NUMERIC(18,2) NOT NULL DEFAULT 0")
+    conn.execute("""
+        UPDATE account_balances
+        SET annual_interest_rate=5.5, updated_at=NOW()
+        WHERE LOWER(account_name)='multimoney colones' AND account_last4='6126'
+          AND annual_interest_rate=0
+    """)
     conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW()")
     conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual'")
     conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE")
@@ -1237,6 +1245,7 @@ def list_account_balances() -> dict[str, Any]:
         rows = conn.execute(
             """
             SELECT a.id, a.account_name, a.bank_name, a.account_type, a.account_last4, a.currency, a.annual_interest_rate,
+                   a.last_reconciliation_difference,
                    a.current_balance, a.balance_as_of, a.source, a.include_in_net_worth, a.is_active, a.updated_at,
                    COALESCE(m.movement_delta,0) AS movement_delta,
                    a.current_balance + COALESCE(m.movement_delta,0) AS calculated_balance,
@@ -1294,22 +1303,34 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
         _ensure_account_tables(conn)
         existing = conn.execute(
             """
-            SELECT id FROM account_balances
-            WHERE workspace_id = %s AND LOWER(account_name) = LOWER(%s) AND COALESCE(account_last4,'') = COALESCE(%s,'')
+            SELECT a.id, a.current_balance, a.source,
+                   a.current_balance + COALESCE((
+                       SELECT SUM(CASE
+                           WHEN t.transaction_type IN ('income','refund','reimbursement') THEN t.amount
+                           WHEN t.transaction_type IN ('expense','debt_payment') THEN -t.amount
+                           ELSE 0 END)
+                       FROM transactions t
+                       WHERE t.workspace_id=a.workspace_id AND t.financial_account_id=a.id
+                         AND t.created_at > a.balance_as_of
+                   ),0) AS expected_balance
+            FROM account_balances a
+            WHERE a.workspace_id = %s AND LOWER(a.account_name) = LOWER(%s) AND COALESCE(a.account_last4,'') = COALESCE(%s,'')
             LIMIT 1
             """,
             (workspace_id, account_name, account_last4),
         ).fetchone()
         if existing:
+            reconciliation_difference = 0.0 if existing.get("source") == "transaction_backfill" else current_balance - _as_float(existing.get("expected_balance"))
             row = conn.execute(
                 """
                 UPDATE account_balances
                 SET bank_name=%s, account_type=%s, currency=%s, current_balance=%s, annual_interest_rate=%s,
+                    last_reconciliation_difference=%s,
                     balance_as_of=NOW(), source=%s, include_in_net_worth=%s, is_active=true, updated_at=NOW()
                 WHERE id = %s AND workspace_id = %s
                 RETURNING *
                 """,
-                (bank_name, account_type, currency.upper(), current_balance, max(annual_interest_rate, 0), source, include_in_net_worth, existing["id"], workspace_id),
+                (bank_name, account_type, currency.upper(), current_balance, max(annual_interest_rate, 0), reconciliation_difference, source, include_in_net_worth, existing["id"], workspace_id),
             ).fetchone()
         else:
             row = conn.execute(
@@ -1343,12 +1364,12 @@ def deactivate_account_balance(account_id: int) -> dict[str, Any]:
 
 def get_real_balance_reconciliation() -> dict[str, Any]:
     accounts = list_account_balances()
-    availability = get_real_availability()
     receivables = list_receivables()
     total_real = _as_float(accounts.get("total_real_balance"))
-    theoretical = _as_float(availability.get("money_really_available"))
+    accountable = [item for item in accounts.get("items", []) if not item.get("read_only")]
+    difference = sum(_as_float(item.get("last_reconciliation_difference")) for item in accountable)
+    theoretical = total_real - difference
     pending_receivables = _as_float(receivables.get("summary", {}).get("total_pending"))
-    difference = total_real - theoretical
     level = "ok"
     if abs(difference) >= 50000:
         level = "high"
