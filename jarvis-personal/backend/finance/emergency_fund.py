@@ -296,6 +296,7 @@ def update_salvavidas(*, current_amount: float | None = None, protected_expense_
             bank_name="MultiMoney",
             account_type="emergency_fund",
             currency="CRC",
+            annual_interest_rate=0,
             include_in_net_worth=True,
             source="salvavidas",
             note="Saldo actualizado desde Strategy",

@@ -1178,6 +1178,7 @@ def _ensure_account_tables(conn) -> None:
             account_name TEXT NOT NULL, bank_name TEXT NOT NULL DEFAULT '',
             account_type TEXT NOT NULL DEFAULT 'checking', account_last4 TEXT NOT NULL DEFAULT '',
             currency TEXT NOT NULL DEFAULT 'CRC', current_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
+            annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0,
             balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
             include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE, is_active BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1185,6 +1186,7 @@ def _ensure_account_tables(conn) -> None:
         )
     """)
     conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'checking'")
+    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0")
     conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW()")
     conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual'")
     conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE")
@@ -1234,7 +1236,7 @@ def list_account_balances() -> dict[str, Any]:
         _ensure_account_tables(conn)
         rows = conn.execute(
             """
-            SELECT a.id, a.account_name, a.bank_name, a.account_type, a.account_last4, a.currency,
+            SELECT a.id, a.account_name, a.bank_name, a.account_type, a.account_last4, a.currency, a.annual_interest_rate,
                    a.current_balance, a.balance_as_of, a.source, a.include_in_net_worth, a.is_active, a.updated_at,
                    COALESCE(m.movement_delta,0) AS movement_delta,
                    a.current_balance + COALESCE(m.movement_delta,0) AS calculated_balance,
@@ -1268,6 +1270,10 @@ def list_account_balances() -> dict[str, Any]:
     for item in items:
         currency = str(item.get("currency") or "CRC").upper()
         item["balance_crc"] = round(_as_float(item.get("calculated_balance")) * (1 if currency == "CRC" else rate_map.get(currency, 1)), 2)
+        balance = max(_as_float(item.get("calculated_balance")), 0)
+        annual_rate = max(_as_float(item.get("annual_interest_rate")), 0)
+        item["projected_interest_monthly"] = round(balance * annual_rate / 100 / 12, 2)
+        item["projected_interest_annual"] = round(balance * annual_rate / 100, 2)
     included = [item for item in items if item.get("include_in_net_worth")]
     liquid_total = round(sum(_as_float(i.get("balance_crc")) for i in included), 2)
     if ibkr:
@@ -1281,7 +1287,7 @@ def list_account_balances() -> dict[str, Any]:
     return {"status": "OK", "items": items, "total_real_balance": liquid_total, "currency": "CRC"}
 
 
-def upsert_account_balance(account_name: str, current_balance: float, bank_name: str = "", account_last4: str = "", currency: str = "CRC", account_type: str = "checking", include_in_net_worth: bool = True, source: str = "manual", note: str = "") -> dict[str, Any]:
+def upsert_account_balance(account_name: str, current_balance: float, bank_name: str = "", account_last4: str = "", currency: str = "CRC", account_type: str = "checking", annual_interest_rate: float = 0, include_in_net_worth: bool = True, source: str = "manual", note: str = "") -> dict[str, Any]:
     user_id = get_current_user_id()  # legacy compatibility during migration
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
@@ -1298,21 +1304,21 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
             row = conn.execute(
                 """
                 UPDATE account_balances
-                SET bank_name=%s, account_type=%s, currency=%s, current_balance=%s,
+                SET bank_name=%s, account_type=%s, currency=%s, current_balance=%s, annual_interest_rate=%s,
                     balance_as_of=NOW(), source=%s, include_in_net_worth=%s, is_active=true, updated_at=NOW()
                 WHERE id = %s AND workspace_id = %s
                 RETURNING *
                 """,
-                (bank_name, account_type, currency.upper(), current_balance, source, include_in_net_worth, existing["id"], workspace_id),
+                (bank_name, account_type, currency.upper(), current_balance, max(annual_interest_rate, 0), source, include_in_net_worth, existing["id"], workspace_id),
             ).fetchone()
         else:
             row = conn.execute(
                 """
-                INSERT INTO account_balances (user_id, workspace_id, account_name, bank_name, account_type, account_last4, currency, current_balance, source, include_in_net_worth)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO account_balances (user_id, workspace_id, account_name, bank_name, account_type, account_last4, currency, current_balance, annual_interest_rate, source, include_in_net_worth)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING *
                 """,
-                (user_id, workspace_id, account_name, bank_name, account_type, account_last4, currency.upper(), current_balance, source, include_in_net_worth),
+                (user_id, workspace_id, account_name, bank_name, account_type, account_last4, currency.upper(), current_balance, max(annual_interest_rate, 0), source, include_in_net_worth),
             ).fetchone()
         conn.execute("""INSERT INTO account_balance_history(user_id,workspace_id,financial_account_id,balance,currency,source,note)
                         VALUES(%s,%s,%s,%s,%s,%s,%s)""", (user_id, workspace_id, row["id"], current_balance, currency.upper(), source, note))

@@ -711,6 +711,7 @@ def save_account_balance(request: AccountBalanceRequest):
         account_last4=request.account_last4,
         currency=request.currency,
         account_type=request.account_type,
+        annual_interest_rate=request.annual_interest_rate,
         include_in_net_worth=request.include_in_net_worth,
         source=request.source,
         note=request.note,

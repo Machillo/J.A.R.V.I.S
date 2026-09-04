@@ -204,6 +204,7 @@ class AccountBalanceRequest(BaseModel):
     account_last4: str = ""
     currency: str = "CRC"
     account_type: str = "checking"
+    annual_interest_rate: float = 0
     include_in_net_worth: bool = True
     source: str = "manual"
     note: str = ""
