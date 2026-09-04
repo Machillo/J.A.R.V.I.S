@@ -133,6 +133,11 @@ class WhatIfSimulationRequest(BaseModel):
     exchange_rate: float = 1.0
 
 
+class ReconciliationConfirmRequest(BaseModel):
+    real_balance: float
+    note: str = ""
+
+
 class ReconciliationRequest(BaseModel):
     opening_balance: float
     current_balance: float

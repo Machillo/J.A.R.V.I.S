@@ -64,6 +64,8 @@ export const getFinanceCycleReport = (asOf = "") => request(`/finance/cycle-repo
 export const getFinancialSummary = () => request("/finance/summary");
 export const getNetWorth = () => request("/finance/net-worth");
 export const getFinancialTimeline = (days = 45) => request(`/finance/timeline?days=${encodeURIComponent(days)}`);
+export const getFinancialReconciliation = () => request("/finance/reconciliation");
+export const confirmFinancialReconciliation = (id, payload) => jsonRequest(`/finance/reconciliation/${id}/confirm`, "POST", payload);
 export const getSalvavidas = () => request("/finance/salvavidas");
 export const updateSalvavidas = (payload) => jsonRequest("/finance/salvavidas", "PUT", payload);
 

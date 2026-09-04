@@ -36,6 +36,7 @@ from backend.finance.models import (
     AccountBalanceRequest,
     GoalPlanningRequest,
     SalvavidasUpdateRequest,
+    ReconciliationConfirmRequest,
 )
 
 from backend.finance.service import (
@@ -128,6 +129,7 @@ from backend.finance.fixed_expenses import (
 )
 
 from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
+from backend.finance.reconciliation import get_financial_reconciliation, confirm_account_reconciliation
 from backend.finance.timeline import get_financial_timeline
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
@@ -154,6 +156,16 @@ def net_worth_report():
 @router.get("/timeline")
 def financial_timeline(days: int = 45):
     return get_financial_timeline(days=days)
+
+
+@router.get("/reconciliation")
+def financial_reconciliation():
+    return get_financial_reconciliation()
+
+
+@router.post("/reconciliation/{account_id}/confirm")
+def confirm_reconciliation(account_id: int, request: ReconciliationConfirmRequest):
+    return confirm_account_reconciliation(account_id, request.real_balance, request.note)
 
 
 @router.post("/salaries")
