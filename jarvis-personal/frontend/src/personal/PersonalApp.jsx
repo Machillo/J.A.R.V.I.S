@@ -35,6 +35,7 @@ import Investments from "../pages/Investments";
 import Wealth from "../pages/Wealth";
 import Businesses from "../pages/Businesses";
 import FinancialAccounts from "../pages/FinancialAccounts";
+import NetWorth from "../pages/NetWorth";
 import Login from "../pages/Login";
 import UserManagement from "../pages/UserManagement";
 import UnifiedOnboarding from "../pages/UnifiedOnboarding";
@@ -56,6 +57,7 @@ const appSections = {
   investments: { title: "Inversiones", eyebrow: "Wealth Building" },
   businesses: { title: "Negocios", eyebrow: "Wealth Building" },
   financialAccounts: { title: "Cuentas", eyebrow: "Financial Ledger" },
+  netWorth: { title: "Patrimonio neto", eyebrow: "Live Wealth" },
   chats: { title: "Data Tools", eyebrow: "Imports & Movements" },
   emails: { title: "Correos", eyebrow: "Chats" },
   transactions: { title: "Transacciones", eyebrow: "Chats" },
@@ -70,7 +72,7 @@ const appSections = {
 const getBottomGroup = (page) => {
   if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "profile";
   if (["memory", "settings", "goals", "profile"].includes(page)) return "profile";
-  if (["investments", "businesses", "financialAccounts", "wealth"].includes(page)) return "wealth";
+  if (["investments", "businesses", "financialAccounts", "netWorth", "wealth"].includes(page)) return "wealth";
   return page;
 };
 
@@ -571,6 +573,8 @@ export default function App() {
         return <Wealth navigatePage={navigatePage} />;
       case "financialAccounts":
         return <FinancialAccounts />;
+      case "netWorth":
+        return <NetWorth />;
 
       case "investments":
         return <Investments />;
