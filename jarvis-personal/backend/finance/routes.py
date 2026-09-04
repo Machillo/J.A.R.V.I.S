@@ -128,6 +128,7 @@ from backend.finance.fixed_expenses import (
 )
 
 from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
+from backend.finance.timeline import get_financial_timeline
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
 
@@ -148,6 +149,11 @@ def financial_summary():
 @router.get("/net-worth")
 def net_worth_report():
     return get_net_worth_report()
+
+
+@router.get("/timeline")
+def financial_timeline(days: int = 45):
+    return get_financial_timeline(days=days)
 
 
 @router.post("/salaries")

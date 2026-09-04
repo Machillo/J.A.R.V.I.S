@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, ChevronRight, Gem, Landmark, TrendingUp } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, ChevronRight, Gem, Landmark, TrendingUp } from "lucide-react";
 
 export default function Wealth({ navigatePage }) {
   return <section className="app-hub-page wealth-hub-page">
@@ -8,6 +8,11 @@ export default function Wealth({ navigatePage }) {
       <p>Inversiones, negocios e ingresos que construyen patrimonio fuera de tu salario.</p>
     </div>
     <div className="app-list-group wealth-options-group">
+      <button className="app-list-item" onClick={() => navigatePage("financialTimeline")}>
+        <span className="app-list-icon"><CalendarDays size={24}/></span>
+        <span className="app-list-copy"><strong>Timeline financiero</strong><small>Liquidez móvil, ingresos, cuotas y compromisos próximos</small></span>
+        <ChevronRight size={22} className="app-list-chevron" />
+      </button>
       <button className="app-list-item" onClick={() => navigatePage("netWorth")}>
         <span className="app-list-icon"><Gem size={24}/></span>
         <span className="app-list-copy"><strong>Patrimonio neto en vivo</strong><small>Activos, inversiones, deudas e historial consolidado</small></span>
