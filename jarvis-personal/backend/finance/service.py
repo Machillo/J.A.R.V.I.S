@@ -2606,6 +2606,48 @@ def get_debt_payments(debt_id: int | None = None):
 
     return [dict(row) for row in rows]
 
+def _save_net_worth_snapshot(workspace_id: str, *, liquid_assets: float, investments: float, assets_total: float, liabilities_total: float, net_worth: float) -> list[dict]:
+    """Keep one auditable closing snapshot per day for the live wealth chart."""
+    user_id = get_current_user_id()
+    with get_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS net_worth_snapshots (
+                id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
+                workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                liquid_assets NUMERIC(18,2) NOT NULL DEFAULT 0,
+                investments NUMERIC(18,2) NOT NULL DEFAULT 0,
+                assets_total NUMERIC(18,2) NOT NULL DEFAULT 0,
+                liabilities_total NUMERIC(18,2) NOT NULL DEFAULT 0,
+                net_worth NUMERIC(18,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(workspace_id, snapshot_date)
+            )
+        """)
+        conn.execute("""
+            INSERT INTO net_worth_snapshots(
+                user_id,workspace_id,snapshot_date,liquid_assets,investments,
+                assets_total,liabilities_total,net_worth
+            ) VALUES(%s,%s,CURRENT_DATE,%s,%s,%s,%s,%s)
+            ON CONFLICT(workspace_id,snapshot_date) DO UPDATE SET
+                liquid_assets=EXCLUDED.liquid_assets,
+                investments=EXCLUDED.investments,
+                assets_total=EXCLUDED.assets_total,
+                liabilities_total=EXCLUDED.liabilities_total,
+                net_worth=EXCLUDED.net_worth,
+                updated_at=NOW()
+            RETURNING id
+        """, (user_id, workspace_id, liquid_assets, investments, assets_total, liabilities_total, net_worth))
+        history = conn.execute("""
+            SELECT snapshot_date,liquid_assets,investments,assets_total,liabilities_total,net_worth
+            FROM net_worth_snapshots WHERE workspace_id=%s
+            ORDER BY snapshot_date ASC LIMIT 366
+        """, (workspace_id,)).fetchall()
+        conn.commit()
+    return [dict(row) for row in history]
+
+
 def get_net_worth_report():
     """Reporte de patrimonio tolerante a listas vacías y NUMERIC de PostgreSQL."""
     workspace_id = get_current_workspace_id()
@@ -2759,6 +2801,19 @@ def get_net_worth_report():
             f"Tus pagos mensuales de deuda registrados suman aproximadamente ₡{monthly_debt_payments:,.2f}."
         )
 
+    history = _save_net_worth_snapshot(
+        workspace_id,
+        liquid_assets=savings_total,
+        investments=investments_total,
+        assets_total=assets_total,
+        liabilities_total=debt_total,
+        net_worth=net_worth,
+    )
+    previous = history[-2] if len(history) > 1 else None
+    previous_net_worth = _as_float(previous.get("net_worth")) if previous else net_worth
+    change_amount = net_worth - previous_net_worth
+    change_pct = (change_amount / abs(previous_net_worth) * 100) if previous and previous_net_worth else None
+
     return {
         "assets": {
             "savings": savings_list,
@@ -2776,6 +2831,12 @@ def get_net_worth_report():
             "account_liabilities": account_liabilities,
         },
         "net_worth": net_worth,
+        "history": history,
+        "change": {
+            "amount": round(change_amount, 2),
+            "percentage": round(change_pct, 2) if change_pct is not None else None,
+            "compared_with": previous.get("snapshot_date") if previous else None,
+        },
         "status": status,
         "risk_level": risk_level,
         "interpretation": interpretation,
