@@ -1201,6 +1201,31 @@ def _ensure_account_tables(conn) -> None:
         )
     """)
     conn.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS financial_account_id BIGINT REFERENCES account_balances(id) ON DELETE SET NULL")
+    conn.execute("""
+        CREATE OR REPLACE FUNCTION jarvis_link_financial_account() RETURNS TRIGGER AS $$
+        BEGIN
+            IF NEW.financial_account_id IS NULL AND NULLIF(BTRIM(NEW.account),'') IS NOT NULL THEN
+                SELECT id INTO NEW.financial_account_id
+                FROM account_balances
+                WHERE workspace_id=NEW.workspace_id AND is_active=TRUE
+                  AND (LOWER(BTRIM(account_name))=LOWER(BTRIM(NEW.account))
+                       OR (account_last4<>'' AND NEW.account LIKE '%' || account_last4))
+                ORDER BY CASE WHEN LOWER(BTRIM(account_name))=LOWER(BTRIM(NEW.account)) THEN 0 ELSE 1 END,id
+                LIMIT 1;
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql
+    """)
+    conn.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='trg_transactions_financial_account') THEN
+                CREATE TRIGGER trg_transactions_financial_account
+                BEFORE INSERT OR UPDATE OF account, financial_account_id ON transactions
+                FOR EACH ROW EXECUTE FUNCTION jarvis_link_financial_account();
+            END IF;
+        END $$
+    """)
 
 
 def list_account_balances() -> dict[str, Any]:
