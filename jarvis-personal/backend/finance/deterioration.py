@@ -32,7 +32,7 @@ def get_financial_deterioration() -> dict[str, Any]:
         rows = conn.execute(
             """SELECT transaction_date, amount, transaction_type, category, description
                FROM transactions WHERE workspace_id=%s
-               AND transaction_date ~ '^\\d{4}-\\d{2}-\\d{2}'
+               AND transaction_date::text ~ '^\\d{4}-\\d{2}-\\d{2}'
                AND transaction_date::date >= (%s::date - INTERVAL '12 months')
                ORDER BY transaction_date ASC""", (workspace_id, today.isoformat())
         ).fetchall()
