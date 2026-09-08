@@ -7,7 +7,7 @@ from typing import Any
 
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
-from backend.finance.emergency_fund import get_salvavidas_state
+from backend.finance.emergency_fund import get_salvavidas_state, _monthly_amount
 from backend.finance.fixed_expenses import list_fixed_expenses
 from backend.finance.intelligence import list_account_balances
 from backend.finance.service import get_debts
@@ -63,9 +63,53 @@ def get_financial_deterioration() -> dict[str, Any]:
     salvavidas = get_salvavidas_state()
     debts = [item for item in (get_debts() or []) if _n(item.get("remaining_amount")) > 0]
     fixed = list_fixed_expenses(active_only=True)
-    recurring = round(sum(max(_n(item.get("expected_amount")), 0) for item in fixed), 2)
+    recurring = round(sum(
+        _monthly_amount(item.get("expected_amount"), item.get("frequency"), item.get("interval_months"))
+        for item in fixed
+    ), 2)
     debt_balance = round(sum(_n(item.get("remaining_amount")) for item in debts), 2)
     debt_monthly = round(sum(_n(item.get("monthly_payment")) for item in debts), 2)
+    assets_total = round(sum(_n(item.get("balance_crc")) for item in accounts if item.get("include_in_net_worth")), 2)
+    net_worth = round(assets_total - debt_balance, 2)
+
+    # Persist one comparable observation per day. Without historical snapshots,
+    # a change detector can only describe the present and cannot prove decline.
+    previous = None
+    with get_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS financial_health_snapshots (
+                id BIGSERIAL PRIMARY KEY,
+                workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                snapshot_date DATE NOT NULL,
+                liquidity NUMERIC(14,2) NOT NULL DEFAULT 0,
+                recurring_monthly NUMERIC(14,2) NOT NULL DEFAULT 0,
+                debt_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
+                debt_monthly NUMERIC(14,2) NOT NULL DEFAULT 0,
+                salvavidas_coverage NUMERIC(10,4) NOT NULL DEFAULT 0,
+                net_worth NUMERIC(14,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(workspace_id, snapshot_date)
+            )
+        """)
+        previous = conn.execute("""
+            SELECT * FROM financial_health_snapshots
+            WHERE workspace_id=%s AND snapshot_date < %s
+            ORDER BY snapshot_date DESC LIMIT 1
+        """, (workspace_id, today.isoformat())).fetchone()
+        conn.execute("""
+            INSERT INTO financial_health_snapshots(
+                workspace_id,snapshot_date,liquidity,recurring_monthly,
+                debt_balance,debt_monthly,salvavidas_coverage,net_worth
+            ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT(workspace_id,snapshot_date) DO UPDATE SET
+                liquidity=EXCLUDED.liquidity,
+                recurring_monthly=EXCLUDED.recurring_monthly,
+                debt_balance=EXCLUDED.debt_balance,
+                debt_monthly=EXCLUDED.debt_monthly,
+                salvavidas_coverage=EXCLUDED.salvavidas_coverage,
+                net_worth=EXCLUDED.net_worth
+        """, (workspace_id, today.isoformat(), liquidity, recurring, debt_balance, debt_monthly, coverage, net_worth))
+        conn.commit()
 
     signals: list[dict[str, Any]] = []
     def add_signal(code: str, title: str, severity: str, metric: float, comparison: float, unit: str, context: str):
@@ -82,6 +126,22 @@ def get_financial_deterioration() -> dict[str, Any]:
         add_signal("salvavidas", "Cobertura Salvavidas baja", "high", coverage, 1, "meses", f"El fondo cubre aproximadamente {coverage:.2f} meses de obligaciones protegidas; la referencia mínima es 1 mes.")
     if liquidity < 0:
         add_signal("available_cash", "Liquidez disponible negativa", "high", liquidity, 0, "CRC", "Las cuentas líquidas conectadas/importadas están por debajo de cero.")
+    if previous:
+        prior_liquidity = _n(previous.get("liquidity"))
+        prior_recurring = _n(previous.get("recurring_monthly"))
+        prior_debt = _n(previous.get("debt_balance"))
+        prior_coverage = _n(previous.get("salvavidas_coverage"))
+        prior_net_worth = _n(previous.get("net_worth"))
+        if prior_liquidity > 0 and liquidity < prior_liquidity * 0.85:
+            add_signal("liquidity_history", "Caída de liquidez", "high", liquidity, prior_liquidity, "CRC", "La liquidez cayó más de 15% desde la observación anterior.")
+        if prior_recurring > 0 and recurring > prior_recurring * 1.10:
+            add_signal("recurring_history", "Obligaciones recurrentes en aumento", "medium", recurring, prior_recurring, "CRC/mes", "Los compromisos recurrentes aumentaron más de 10%.")
+        if prior_debt > 0 and debt_balance > prior_debt * 1.05:
+            add_signal("debt_history", "Saldo de deuda en aumento", "high", debt_balance, prior_debt, "CRC", "La deuda total aumentó más de 5% desde la observación anterior.")
+        if coverage + 0.10 < prior_coverage:
+            add_signal("coverage_history", "Cobertura Salvavidas en descenso", "medium", coverage, prior_coverage, "meses", "La cobertura protegida perdió al menos 0,1 meses.")
+        if prior_net_worth and net_worth < prior_net_worth:
+            add_signal("net_worth_history", "Patrimonio neto en descenso", "medium", net_worth, prior_net_worth, "CRC", "El patrimonio neto cayó desde la observación anterior.")
 
     severity_order = {"high": 0, "medium": 1, "low": 2}
     signals.sort(key=lambda item: severity_order.get(item["severity"], 9))
@@ -91,7 +151,7 @@ def get_financial_deterioration() -> dict[str, Any]:
         "health": "deteriorating" if any(item["severity"] == "high" for item in signals) else "watch" if signals else "stable",
         "primary_cause": cause,
         "signals": signals,
-        "context": {"liquidity_available": liquidity, "salvavidas_coverage_months": round(coverage, 2), "recurring_expected": recurring, "debt_balance": debt_balance, "debt_monthly_payments": debt_monthly, "latest_month": latest, "recent_average": average},
+        "context": {"liquidity_available": liquidity, "salvavidas_coverage_months": round(coverage, 2), "recurring_expected": recurring, "debt_balance": debt_balance, "debt_monthly_payments": debt_monthly, "net_worth": net_worth, "previous_snapshot_date": str(previous.get("snapshot_date")) if previous else None, "latest_month": latest, "recent_average": average},
         "monthly": [{"month": key, **monthly[key]} for key in ordered[-6:]],
         "note": "Las señales son informativas y no cambian cuentas, deudas ni transacciones automáticamente.",
     }

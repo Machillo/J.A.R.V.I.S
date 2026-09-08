@@ -9,6 +9,7 @@ from backend.finance.cashflow import get_pay_schedule
 from backend.finance.fixed_expenses import list_fixed_expenses
 from backend.finance.intelligence import list_account_balances
 from backend.finance.service import calculate_monthly_salary_projection, get_debts
+from backend.finance.emergency_fund import _looks_like_debt_duplicate
 from backend.goals.service import get_financial_goals
 
 
@@ -61,6 +62,21 @@ def _events_for_pay_schedule(schedule: dict[str, Any] | None, start: date, end: 
     return events
 
 
+def _salary_amount_per_event(monthly_net: float, frequency: str | None) -> float:
+    """Convert a monthly salary projection into the amount of one pay event."""
+    monthly_net = max(_money(monthly_net), 0.0)
+    frequency = str(frequency or "monthly").lower().strip()
+    payments_per_month = {
+        "weekly": 52 / 12,
+        "biweekly": 26 / 12,
+        "quincenal": 2,
+        "semimonthly": 2,
+        "monthly": 1,
+        "monthly_fixed": 1,
+    }.get(frequency, 1)
+    return round(monthly_net / payments_per_month, 2)
+
+
 def get_financial_timeline(days: int = 45) -> dict[str, Any]:
     """Project available CRC liquidity after each known event, without mutating data."""
     start = date.today()
@@ -73,11 +89,17 @@ def get_financial_timeline(days: int = 45) -> dict[str, Any]:
     salary = calculate_monthly_salary_projection()
     salary_amount = _money((salary.get("results") or {}).get("projected_net")) if isinstance(salary, dict) else 0
     schedule = get_pay_schedule()
-    pay_dates = _events_for_pay_schedule(schedule, start, end, salary_amount)
+    pay_event_amount = _salary_amount_per_event(
+        salary_amount, (schedule or {}).get("pay_frequency")
+    )
+    pay_dates = [when for when in _events_for_pay_schedule(schedule, start, end, pay_event_amount) if when <= end]
     for when in pay_dates:
-        events.append({"date": when.isoformat(), "name": "Ingreso de salario", "kind": "income", "amount": salary_amount, "impact": salary_amount, "source": "pay_schedule"})
+        events.append({"date": when.isoformat(), "name": "Ingreso de salario", "kind": "income", "amount": pay_event_amount, "impact": pay_event_amount, "source": "pay_schedule"})
 
+    debts = get_debts() or []
     for expense in list_fixed_expenses(active_only=True):
+        if _looks_like_debt_duplicate(expense, debts):
+            continue
         if not expense.get("due_day") or str(expense.get("frequency") or "monthly").lower() not in {"monthly", "bimonthly", "quarterly"}:
             continue
         interval = int(expense.get("interval_months") or 1)
@@ -87,7 +109,7 @@ def get_financial_timeline(days: int = 45) -> dict[str, Any]:
             amount = _money(expense.get("expected_amount"))
             events.append({"date": when.isoformat(), "name": expense.get("name") or "Gasto recurrente", "kind": "recurring_expense", "amount": amount, "impact": -amount, "source": "fixed_expense"})
 
-    for debt in get_debts() or []:
+    for debt in debts:
         if not debt.get("payment_day") or _money(debt.get("monthly_payment")) <= 0:
             continue
         for when in _next_monthly(int(debt["payment_day"]), start):

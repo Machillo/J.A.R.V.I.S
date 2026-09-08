@@ -76,18 +76,26 @@ def _days_left_in_month(target: date | None = None) -> int:
     return max((last - target).days, 0)
 
 
-def _rate_to_monthly(rate: float) -> tuple[float, str]:
-    """Return monthly decimal rate and transparent interpretation.
+def _project_closing_balance(opening: float, income_pending: float, expenses_pending: float, debt_pending: float) -> float:
+    return round(
+        _as_float(opening)
+        + _as_float(income_pending)
+        - _as_float(expenses_pending)
+        - _as_float(debt_pending),
+        2,
+    )
 
-    Costa Rican cards often show monthly rates around 2-4%. Long term loans
-    are usually registered as annual rates. If the value is <= 5, we treat it
-    as monthly percentage; otherwise as annual percentage.
+
+def _rate_to_monthly(rate: float) -> tuple[float, str]:
+    """Return monthly decimal rate from the canonical annual percentage.
+
+    ``debts.interest_rate`` is annual throughout the debt ledger. Guessing the
+    period from the numeric value made a legitimate 4.5% annual loan look like
+    4.5% monthly interest.
     """
     rate = _as_float(rate)
     if rate <= 0:
         return 0.0, "sin_interes_registrado"
-    if rate <= 5:
-        return rate / 100.0, "tasa_mensual_porcentaje"
     return (rate / 100.0) / 12.0, "tasa_anual_porcentaje"
 
 
@@ -405,22 +413,27 @@ def calculate_financial_health_score() -> dict[str, Any]:
     emergency = calculate_emergency_fund()
     debts = _fetch_debts()
 
-    monthly_saving = max(_as_float(flow.get("averages", {}).get("net_operational")), 0.0)
+    average_income = _as_float(flow.get("averages", {}).get("income"))
+    average_net = _as_float(flow.get("averages", {}).get("net_operational"))
+    monthly_saving = max(average_net, 0.0)
     emergency_fund_current = _as_float(emergency.get("current"))
-    short_term_debt = 0.0
-
-    for debt in debts:
-        debt_type = (debt.get("debt_type") or "").lower()
-        name = (debt.get("name") or "").lower()
-        if debt_type in SHORT_TERM_DEBT_CATEGORIES or any(cat in name for cat in SHORT_TERM_DEBT_CATEGORIES):
-            short_term_debt += _as_float(debt.get("remaining_amount"))
-        else:
-            short_term_debt += _as_float(debt.get("remaining_amount"))
-
+    total_debt = sum(_as_float(debt.get("remaining_amount")) for debt in debts)
+    debt_minimums = sum(_as_float(debt.get("monthly_payment")) for debt in debts)
     fixed_expenses = _as_float(emergency.get("monthly_base"))
-    denominator = short_term_debt + fixed_expenses
-    raw_score = (monthly_saving + emergency_fund_current) / denominator if denominator > 0 else 0.0
-    score = max(0, min(round(raw_score * 100, 2), 100))
+    coverage = emergency_fund_current / fixed_expenses if fixed_expenses > 0 else 0.0
+    savings_rate = average_net / average_income if average_income > 0 else 0.0
+    debt_service_ratio = debt_minimums / average_income if average_income > 0 else 1.0
+    highest_apr = max([_as_float(debt.get("interest_rate")) for debt in debts] or [0.0])
+
+    components = {
+        "cashflow": max(0.0, min((savings_rate + 0.05) / 0.25, 1.0)) * 30,
+        "emergency_coverage": min(coverage / 6, 1.0) * 30,
+        "debt_service": max(0.0, min((0.50 - debt_service_ratio) / 0.30, 1.0)) * 25,
+        "debt_cost": max(0.0, min((40 - highest_apr) / 40, 1.0)) * 15,
+    }
+    score = round(sum(components.values()), 2)
+    known_inputs = sum([average_income > 0, fixed_expenses > 0, bool(debts), flow.get("status") == "OK"])
+    confidence = round(known_inputs / 4, 2)
 
     if score >= 80:
         level = "strong"
@@ -433,14 +446,21 @@ def calculate_financial_health_score() -> dict[str, Any]:
 
     return {
         "status": "OK",
-        "formula": "(ahorro_mensual + fondo_emergencia) / (deudas_corto_plazo + gastos_fijos)",
+        "formula": "30% flujo + 30% cobertura + 25% carga de deuda + 15% costo de deuda",
         "score": score,
-        "raw_value": round(raw_score, 4),
+        "confidence": confidence,
+        "components": {key: round(value, 2) for key, value in components.items()},
         "level": level,
         "inputs": {
             "monthly_saving_estimate": round(monthly_saving, 2),
             "emergency_fund_current": round(emergency_fund_current, 2),
-            "short_term_debt": round(short_term_debt, 2),
+            "average_income": round(average_income, 2),
+            "average_net_cashflow": round(average_net, 2),
+            "savings_rate": round(savings_rate, 4),
+            "debt_service_ratio": round(debt_service_ratio, 4),
+            "emergency_coverage_months": round(coverage, 2),
+            "highest_debt_apr": round(highest_apr, 4),
+            "total_debt": round(total_debt, 2),
             "fixed_expenses_base": round(fixed_expenses, 2),
         },
     }
@@ -562,7 +582,7 @@ def forecast_month_end_balance() -> dict[str, Any]:
     actual_debt_payments = sum(_as_float(tx.get("amount")) for tx in current_transactions if tx.get("transaction_type") == "debt_payment")
 
     # Historical daily averages from completed months.
-    by_month = _group_monthly(historical_transactions)
+    by_month = _group_monthly(historical_transactions)[-6:]
     avg_expenses = 0.0
     avg_debt_payments = 0.0
     avg_income = 0.0
@@ -587,7 +607,27 @@ def forecast_month_end_balance() -> dict[str, Any]:
 
     expected_remaining_income = max(avg_income - actual_income, 0)
 
-    projected_end_balance = actual_income + actual_loans + expected_remaining_income - actual_expenses - actual_debt_payments - expected_remaining_expenses - expected_remaining_debt
+    # A balance forecast must start from today's reconciled liquid accounts.
+    # Actual movements are already reflected in ``calculated_balance`` and
+    # therefore must not be subtracted a second time.
+    try:
+        from backend.finance.intelligence import list_account_balances
+        account_items = list_account_balances().get("items", [])
+        opening_available = sum(
+            _as_float(item.get("balance_crc"))
+            for item in account_items
+            if item.get("include_in_net_worth")
+            and item.get("account_type") != "investment"
+        )
+    except Exception:
+        opening_available = 0.0
+
+    projected_end_balance = _project_closing_balance(
+        opening_available,
+        expected_remaining_income,
+        expected_remaining_expenses,
+        expected_remaining_debt,
+    )
 
     alert = None
     if projected_end_balance < 0:
@@ -599,6 +639,7 @@ def forecast_month_end_balance() -> dict[str, Any]:
     return {
         "status": "OK",
         "month": current_month,
+        "opening_available": round(opening_available, 2),
         "current_progress": {
             "actual_income": round(actual_income, 2),
             "actual_loans": round(actual_loans, 2),
@@ -618,7 +659,8 @@ def forecast_month_end_balance() -> dict[str, Any]:
         },
         "projected_end_balance": round(projected_end_balance, 2),
         "alert": alert,
-        "note": "Forecast basado en histórico + pagos esperados. No sustituye conciliación bancaria.",
+        "formula": "saldo líquido actual + ingresos pendientes - gastos pendientes - cuotas pendientes",
+        "note": "Forecast basado en saldos conciliados e histórico. La confianza baja cuando las cuentas están desactualizadas.",
     }
 
 
