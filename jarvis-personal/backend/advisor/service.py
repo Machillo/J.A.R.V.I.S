@@ -173,10 +173,12 @@ def get_financial_advice():
     actions = []
     primary = deterioration.get("primary_cause")
     if primary and primary.get("severity") == "high":
-        actions.append({"priority": 1, "type": "stabilize", "title": primary.get("title"), "reason": primary.get("context")})
+        primary_type = "emergency_fund" if primary.get("code") == "salvavidas" else "stabilize"
+        primary_title = "Proteger un mes de Salvavidas" if primary_type == "emergency_fund" else primary.get("title")
+        actions.append({"priority": 1, "type": primary_type, "title": primary_title, "reason": primary.get("context")})
     if reconciliation.get("summary", {}).get("needs_review", 0) or reconciliation.get("summary", {}).get("unlinked", 0):
         actions.append({"priority": 2, "type": "reconcile", "title": "Completar conciliación", "reason": "Una estrategia premium necesita saldos y movimientos comprobables."})
-    if float(salvavidas.get("coverage_months") or 0) < 1:
+    if float(salvavidas.get("coverage_months") or 0) < 1 and not any(action["type"] == "emergency_fund" for action in actions):
         actions.append({"priority": 3, "type": "emergency_fund", "title": "Proteger un mes de Salvavidas", "reason": "Antes de abonos extraordinarios o inversión hay que cubrir el riesgo inmediato."})
     if debts.get("status") == "OK" and debts.get("avalanche"):
         target = debts["avalanche"]["priority_debt"]
