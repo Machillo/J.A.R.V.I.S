@@ -147,6 +147,18 @@ def _clean_search_query(user_message: str) -> str:
 
 
 def _financial_read_intent(text: str) -> dict[str, Any] | None:
+    # Advisor questions must stay local even when they contain generic words
+    # such as "hoy", "puedo" or "consultar" that other routers may confuse
+    # with calendar or internet actions.
+    if any(phrase in text for phrase in [
+        "cuanto dinero puedo usar", "cuanto puedo usar realmente",
+        "dinero realmente disponible", "dinero puedo usar realmente",
+        "sin afectar mis obligaciones", "sin afectar mi salvavidas",
+        "que debo hacer hoy", "que hago con mi dinero",
+        "puedo invertir", "conviene invertir", "deberia invertir",
+        "que metas puedo financiar", "metas puedo financiar",
+    ]):
+        return {"intent": "advisor_summary", "entity": None, "confidence": 0.98, "source": "deterministic"}
     if re.search(r"deuda.+(pequena|menor|baja|chiquita)|menor.+deuda|mas pequena", text):
         return {"intent": "lowest_debt", "entity": None, "confidence": 0.95, "source": "deterministic"}
     if re.search(r"deuda.+(grande|mayor|alta)|mayor.+deuda|mas grande", text):
@@ -217,6 +229,12 @@ def _fallback_detect(user_message: str) -> dict[str, Any]:
 
     if not text:
         return {"intent": "unknown", "entity": None, "confidence": 0, "source": "deterministic"}
+
+    # Financial advice has priority over calendar/internet inference. Explicit
+    # web commands ("busca en internet...") are still handled just below.
+    finance_read = _financial_read_intent(text)
+    if finance_read and finance_read.get("intent") == "advisor_summary" and not _starts_with_any(text, ["busca ", "buscar ", "investiga ", "googlea "]):
+        return finance_read
 
     # 1. Internet explícito y consultas externas. Esto siempre va antes que finanzas.
     internet_prefixes = ["busca ", "buscar ", "investiga ", "consulta ", "googlea "]
