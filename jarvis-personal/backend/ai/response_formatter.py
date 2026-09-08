@@ -83,7 +83,8 @@ def fallback_response(intent: str, data: dict):
             return "Señor, necesito completar y conciliar sus datos para definir prioridades confiables."
         lines = ["Señor, estas son sus prioridades financieras actuales:"]
         for index, action in enumerate(actions, 1):
-            lines.append(f"{index}. {action.get('title', 'Revisar finanzas')}. {action.get('reason', '')}".strip())
+            reason = action.get("reason") or action.get("why") or ""
+            lines.append(f"{index}. {action.get('title', 'Revisar finanzas')}. {reason}".strip())
         return "\n".join(lines)
 
     return "Señor, análisis completado."
