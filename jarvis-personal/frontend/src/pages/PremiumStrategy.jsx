@@ -211,6 +211,30 @@ export default function PremiumStrategy() {
   const investmentState = allocationBase <= 0 ? "blocked" : investmentRecommended > 0 ? "ready" : "limited";
   const formula = strategy.distribution_formula || {};
   const distributionBalanced = Math.abs(allocationBase - allocationTotal) <= 1;
+  const distributionDestinations = [
+    {
+      key: "fondo_de_emergencia",
+      label: "Salvavidas",
+      amount: Number(allocationAmounts.fondo_de_emergencia || 0),
+    },
+    {
+      key: "ataque_de_deuda",
+      label: strategy.primary_debt_name
+        ? `Deuda prioritaria · ${strategy.primary_debt_name}`
+        : "Deuda prioritaria",
+      amount: Number(allocationAmounts.ataque_de_deuda || 0),
+    },
+    {
+      key: "vida_controlada",
+      label: "Uso libre",
+      amount: Number(allocationAmounts.vida_controlada || 0),
+    },
+    {
+      key: "inversion",
+      label: "Inversión",
+      amount: Number(allocationAmounts.inversion || 0),
+    },
+  ];
 
   const renderSalvavidas = () => (
     <div className="strategy-detail-panel salvavidas-panel strategy-v3-detail">
@@ -453,37 +477,13 @@ export default function PremiumStrategy() {
         <small>{Number(strategy.new_expenses_after_cut_count || 0) > 0 ? `${strategy.new_expenses_after_cut_count} gasto(s) nuevo(s) ya redujeron este monto.` : "Se recalcula cuando aparece un nuevo gasto."}</small>
       </div>
 
-      <div className="strategy-distribution-formula">
-        <div><span>Ingreso del ciclo</span><strong>+ {money(formula.income)}</strong></div>
-        <div><span>Gastos del estado/corte</span><strong>- {money(formula.statement_spending)}</strong></div>
-        <div><span>Nuevos gastos desde el corte</span><strong>- {money(formula.new_spending_after_cut)}</strong></div>
-        <div><span>Obligaciones de deuda del ciclo</span><strong>- {money(formula.debt_commitment)}</strong></div>
-        <div><span>Casa / Línea aún pendientes</span><strong>- {money(formula.mandatory_fixed_pending)}</strong></div>
-        <div className="result"><span>Sobrante</span><strong>{money(formula.surplus)}</strong></div>
-      </div>
-
-      {Array.isArray(strategy.mandatory_fixed_pending_items) && strategy.mandatory_fixed_pending_items.length > 0 && (
-        <div className="strategy-pending-obligations">
-          {strategy.mandatory_fixed_pending_items.map((item) => (
-            <span key={`${item.id}-${item.due_date}`}>{item.name} · {money(item.amount)} · vence {String(item.due_date || "").slice(5)}</span>
-          ))}
-        </div>
-      )}
-
       <div className="strategy-allocation-v3">
-        {allocationItems.length === 0 ? (
-          <p className="muted-text">No hay sobrante para distribuir en este ciclo.</p>
-        ) : allocationItems.map((item) => {
-          const key = item.key;
-          const percent = Number(item.percentage ?? allocation[key] ?? 0);
-          const amount = Number(item.amount ?? allocationAmounts[key] ?? 0);
-          return (
-            <div className="strategy-allocation-row-v3" key={key}>
-              <div><span>{allocationLabels[key] || key.replaceAll("_", " ")}</span><small>{percent.toFixed(1)}% del sobrante</small></div>
-              <strong>{money(amount)}</strong>
-            </div>
-          );
-        })}
+        {distributionDestinations.map((item) => (
+          <div className="strategy-allocation-row-v3" key={item.key}>
+            <div><span>{item.label}</span><small>Destino recomendado para este ciclo</small></div>
+            <strong>{money(item.amount)}</strong>
+          </div>
+        ))}
       </div>
 
       <div className={`strategy-distribution-check ${distributionBalanced ? "ok" : "warning"}`}>

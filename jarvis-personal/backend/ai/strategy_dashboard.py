@@ -547,6 +547,33 @@ def _get_strategy_living_expenses(workspace_id: str, debts: list[dict[str, Any]]
     }
 
 
+def _fetch_distributable_cash(workspace_id: str) -> float:
+    """Cash currently available in MultiMoney for the active distribution.
+
+    MultiMoney is a liquid account, not automatically the Salvavidas. Its balance
+    is therefore available to the director, which decides how much to assign to
+    Salvavidas, debt, free use and investment.
+    """
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                """SELECT COALESCE(SUM(current_balance), 0) AS total
+                   FROM account_balances
+                   WHERE workspace_id=%s
+                     AND is_active=TRUE
+                     AND currency='CRC'
+                     AND account_type<>'emergency_fund'
+                     AND (
+                         LOWER(COALESCE(bank_name,'')) LIKE '%%multimoney%%'
+                         OR LOWER(COALESCE(account_name,'')) LIKE '%%multimoney%%'
+                     )""",
+                (workspace_id,),
+            ).fetchone()
+        return max(_f(row.get("total") if row else 0), 0.0)
+    except Exception:
+        return 0.0
+
+
 def _parse_iso_date(value: Any) -> date | None:
     if not value:
         return None
@@ -952,11 +979,14 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
 
     pending_mandatory = _pending_mandatory_fixed_expenses(cycle_report, salvavidas)
     mandatory_fixed_pending = _f(pending_mandatory.get("total"))
+    distributable_cash = _fetch_distributable_cash(workspace_id)
 
     # The current distribution base is the true remainder after all known outflows:
     # payable statement spending + any new expense after cut + at least one full
     # monthly debt obligation + mandatory recurrent bills still pending.
     current_before_allocation = (
+        distributable_cash
+        +
         current_month_income
         - committed_spending
         - debt_commitment_current_cycle
@@ -1020,6 +1050,10 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         recurring_monthly_extra=recurring_debt_attack_extra,
         first_month_extra=first_month_adjustment,
     )
+    primary_debt_name = timeline[0].get("name") if timeline else None
+    for item in allocation_items:
+        if item.get("key") == "ataque_de_deuda":
+            item["target_name"] = primary_debt_name
 
     months_saved = 0
     if base_total_months and total_months and base_total_months < 999 and total_months < 999:
@@ -1089,6 +1123,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "current_goal_allocation": round(current_goal_allocation, 2),
         "available_before_goals": round(current_before_allocation, 2),
         "strategic_available_cash": round(allocation_base_amount, 2),
+        "distributable_account_cash": round(distributable_cash, 2),
         "estimated_extra_cash": round(allocation_base_amount, 2),
         "base_estimated_extra_cash": round(_f(recurring_director.get("allocation_base_amount")), 2),
         "safe_to_spend": round(_f(director.get("safe_to_spend")), 2),
@@ -1120,7 +1155,9 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
             "debt_commitment": round(debt_commitment_current_cycle, 2),
             "mandatory_fixed_pending": round(mandatory_fixed_pending, 2),
             "surplus": round(allocation_base_amount, 2),
+            "deficit": round(max(-current_before_allocation, 0.0), 2),
         },
+        "primary_debt_name": primary_debt_name,
         "total_debt": round(total_debt, 2),
         "debt_original_total": round(original_debt, 2),
         "debt_paid_total": round(paid_debt, 2),
