@@ -10,6 +10,7 @@ from backend.finance.strategic_engine import get_financial_engine_report
 from backend.finance.service import get_debts, get_financial_summary, get_net_worth_report
 from backend.transactions.analyzer import get_transaction_analysis
 from backend.ai.strategy_dashboard import build_local_strategy_blueprint
+from backend.advisor.service import get_financial_advice
 
 
 def _safe(fn, fallback):
@@ -21,6 +22,7 @@ def _safe(fn, fallback):
 
 def build_premium_context(user_message: str = "") -> dict[str, Any]:
     return {
+        "advisor_core": _safe(get_financial_advice, {}),
         "financial_summary": _safe(get_financial_summary, {}),
         "net_worth": _safe(get_net_worth_report, {}),
         "debts": _safe(get_debts, []),
@@ -123,6 +125,7 @@ def get_current_strategy_summary() -> dict[str, Any]:
     guide_items = context.get("premium_guides") or []
     active_strategy = next((g for g in guide_items if g.get("guide_type") == "financial_strategy"), None)
     strategic = context.get("strategic_engine") or {}
+    advisor = context.get("advisor_core") or {}
     allocation = strategic.get("allocation") or strategic.get("smart_cash_allocation") or {}
     allocations = allocation.get("allocations") if isinstance(allocation, dict) else None
 
@@ -172,5 +175,8 @@ def get_current_strategy_summary() -> dict[str, Any]:
         "health": (strategic.get("health") or {}),
         "forecast": (strategic.get("forecast") or {}),
         "strategy": blueprint,
+        "action_plan": advisor.get("action_plan") or [],
+        "data_quality": advisor.get("data_quality") or {},
+        "decision_policy": advisor.get("decision_policy"),
         "source": "premium_guide" if active_strategy else "local_fallback",
     }

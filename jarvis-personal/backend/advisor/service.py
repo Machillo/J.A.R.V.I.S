@@ -2,7 +2,7 @@ from backend.finance.service import get_user_status, get_net_worth_report
 from backend.transactions.analyzer import get_transaction_analysis
 
 
-def get_financial_advice():
+def _get_legacy_financial_advice():
     user_status = get_user_status()
     net_worth = get_net_worth_report()
     transactions = get_transaction_analysis()
@@ -137,6 +137,71 @@ def get_financial_advice():
             "net_worth": "/finance/net-worth",
             "transactions": "/transactions/analysis/summary"
         }
+    }
+
+
+def get_financial_advice():
+    """Canonical advisor response used by chat and the advisor endpoint.
+
+    Existing specialist engines remain deterministic; this function establishes
+    one priority order and exposes data quality instead of letting each module
+    independently claim to be the final recommendation.
+    """
+    from backend.finance.deterioration import get_financial_deterioration
+    from backend.finance.emergency_fund import get_salvavidas_state
+    from backend.finance.reconciliation import get_financial_reconciliation
+    from backend.finance.strategic_engine import get_financial_engine_report
+
+    legacy = _get_legacy_financial_advice()
+    engine = get_financial_engine_report()
+    deterioration = get_financial_deterioration()
+    reconciliation = get_financial_reconciliation()
+    salvavidas = get_salvavidas_state()
+
+    health = engine.get("health") or {}
+    forecast = engine.get("forecast") or {}
+    debts = engine.get("debts") or {}
+    confidence = float(health.get("confidence") or 0)
+    stale_or_missing = []
+    if not legacy.get("summary", {}).get("available_cash") and confidence < 0.75:
+        stale_or_missing.append("flujo mensual verificable")
+    if reconciliation.get("summary", {}).get("unlinked", 0):
+        stale_or_missing.append("movimientos sin cuenta")
+    if reconciliation.get("summary", {}).get("needs_review", 0):
+        stale_or_missing.append("cuentas por conciliar")
+
+    actions = []
+    primary = deterioration.get("primary_cause")
+    if primary and primary.get("severity") == "high":
+        actions.append({"priority": 1, "type": "stabilize", "title": primary.get("title"), "reason": primary.get("context")})
+    if reconciliation.get("summary", {}).get("needs_review", 0) or reconciliation.get("summary", {}).get("unlinked", 0):
+        actions.append({"priority": 2, "type": "reconcile", "title": "Completar conciliación", "reason": "Una estrategia premium necesita saldos y movimientos comprobables."})
+    if float(salvavidas.get("coverage_months") or 0) < 1:
+        actions.append({"priority": 3, "type": "emergency_fund", "title": "Proteger un mes de Salvavidas", "reason": "Antes de abonos extraordinarios o inversión hay que cubrir el riesgo inmediato."})
+    if debts.get("status") == "OK" and debts.get("avalanche"):
+        target = debts["avalanche"]["priority_debt"]
+        actions.append({"priority": 4, "type": "debt", "title": f"Atacar {target.get('name')}", "reason": "Es la deuda de mayor costo anual registrada."})
+    allocation = engine.get("smart_cash_allocation") or {}
+    if allocation.get("status") == "OK" and not actions:
+        actions.append({"priority": 5, "type": "allocate", "title": "Distribuir el excedente", "reason": "El flujo, la cobertura y las deudas permiten asignar capital."})
+
+    actions.sort(key=lambda item: item["priority"])
+    return {
+        **legacy,
+        "advisor_version": "advisor-core-v1",
+        "financial_score": health.get("score", legacy.get("financial_score")),
+        "health_label": health.get("level", legacy.get("health_label")),
+        "confidence": confidence,
+        "data_quality": {
+            "status": "reliable" if confidence >= 0.75 and not stale_or_missing else "review",
+            "missing_or_unverified": stale_or_missing,
+            "unlinked_transactions": reconciliation.get("summary", {}).get("unlinked", 0),
+            "accounts_to_reconcile": reconciliation.get("summary", {}).get("needs_review", 0),
+        },
+        "primary_diagnosis": primary,
+        "action_plan": actions[:3],
+        "forecast": forecast,
+        "decision_policy": "riesgo inmediato > calidad de datos > Salvavidas > deuda cara > metas > inversión",
     }
 
 def analyze_spending_habits():

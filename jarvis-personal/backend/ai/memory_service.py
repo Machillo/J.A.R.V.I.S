@@ -111,6 +111,7 @@ def ensure_memory_tables(conn) -> None:
         CREATE TABLE IF NOT EXISTS user_preferences (
             id BIGSERIAL PRIMARY KEY,
             user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+            workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
             preference_key TEXT NOT NULL,
             preference_value JSONB NOT NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

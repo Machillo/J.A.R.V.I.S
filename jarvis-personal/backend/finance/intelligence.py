@@ -707,7 +707,7 @@ def _monthly_rate(rate: float) -> float:
     rate = _as_float(rate)
     if rate <= 0:
         return 0.0
-    return rate / 100 if rate <= 5 else (rate / 100) / 12
+    return (rate / 100) / 12
 
 
 def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
