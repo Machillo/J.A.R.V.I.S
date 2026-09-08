@@ -78,6 +78,12 @@ def fallback_response(intent: str, data: dict):
         return "Señor, ya analicé su estado financiero general."
 
     if intent == "advisor_summary":
-        return "Señor, ya preparé una recomendación financiera con los datos actuales."
+        actions = list(data.get("action_plan") or [])[:3]
+        if not actions:
+            return "Señor, necesito completar y conciliar sus datos para definir prioridades confiables."
+        lines = ["Señor, estas son sus prioridades financieras actuales:"]
+        for index, action in enumerate(actions, 1):
+            lines.append(f"{index}. {action.get('title', 'Revisar finanzas')}. {action.get('reason', '')}".strip())
+        return "\n".join(lines)
 
     return "Señor, análisis completado."

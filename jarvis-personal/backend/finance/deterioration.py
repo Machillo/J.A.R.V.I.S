@@ -71,6 +71,7 @@ def get_financial_deterioration() -> dict[str, Any]:
     debt_monthly = round(sum(_n(item.get("monthly_payment")) for item in debts), 2)
     assets_total = round(sum(_n(item.get("balance_crc")) for item in accounts if item.get("include_in_net_worth")), 2)
     net_worth = round(assets_total - debt_balance, 2)
+    coverage = _n(salvavidas.get("coverage_months"))
 
     # Persist one comparable observation per day. Without historical snapshots,
     # a change detector can only describe the present and cannot prove decline.
@@ -121,7 +122,6 @@ def get_financial_deterioration() -> dict[str, Any]:
         add_signal("debt_payments", "Mayor carga de cuotas", "medium", latest["debt_payments"], average["debt_payments"], "CRC/mes", "Los pagos de deuda del último periodo superan el promedio reciente.")
     if prior and latest["expenses"] > average["expenses"] * 1.1 and latest["expenses"] > 0:
         add_signal("expenses", "Gastos creciendo", "medium", latest["expenses"], average["expenses"], "CRC/mes", "Los gastos registrados crecieron más de 10% contra el promedio reciente.")
-    coverage = _n(salvavidas.get("coverage_months"))
     if coverage < 1:
         add_signal("salvavidas", "Cobertura Salvavidas baja", "high", coverage, 1, "meses", f"El fondo cubre aproximadamente {coverage:.2f} meses de obligaciones protegidas; la referencia mínima es 1 mes.")
     if liquidity < 0:
