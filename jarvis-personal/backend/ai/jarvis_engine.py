@@ -417,6 +417,26 @@ def _format_financial_engine_message(report: dict) -> str:
     return "\n".join(lines)
 
 
+def _format_advisor_message(advice: dict) -> str:
+    actions = list(advice.get("action_plan") or [])[:3]
+    lines = [
+        "Señor, estas son sus tres prioridades financieras actuales:",
+    ]
+    if not actions:
+        lines.append("1. Completar y conciliar los datos financieros para emitir una recomendación confiable.")
+    else:
+        for index, action in enumerate(actions, 1):
+            title = action.get("title") or "Revisar situación financiera"
+            reason = action.get("reason") or ""
+            lines.append(f"{index}. {title}. {reason}".strip())
+    quality = advice.get("data_quality") or {}
+    if quality.get("status") != "reliable":
+        missing = ", ".join(quality.get("missing_or_unverified") or [])
+        if missing:
+            lines.append(f"Confianza limitada: falta revisar {missing}.")
+    return "\n".join(lines)
+
+
 def process_message(user_message: str):
     # Decisiones personales claras (compras/viajes) se resuelven localmente antes
     # del clasificador IA para ahorrar tokens y evitar respuestas genéricas.
@@ -448,6 +468,19 @@ def process_message(user_message: str):
                 "pending": pending_result.get("pending", False),
                 "data": pending_result.get("data"),
             }
+
+    # A financial diagnosis must always have a deterministic response. It must
+    # not depend on an external AI provider or fall through to an empty payload.
+    if intent_result.get("intent") == "advisor_summary":
+        advice = get_financial_advice()
+        return {
+            "message": _format_advisor_message(advice),
+            "intent": "advisor_summary",
+            "status": "OK",
+            "pending": False,
+            "source": "advisor_core_v1",
+            "data": advice,
+        }
 
     lower_message = (user_message or "").lower()
     if any(token in lower_message for token in ["quiero ir", "me gustaria ir", "me gustaría ir", "viajar", "viaje", "mónaco", "monaco", "f1", "formula 1", "fórmula 1"]):

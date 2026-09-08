@@ -153,7 +153,12 @@ def _financial_read_intent(text: str) -> dict[str, Any] | None:
         return {"intent": "highest_debt", "entity": None, "confidence": 0.95, "source": "deterministic"}
     if "patrimonio" in text or "net worth" in text:
         return {"intent": "net_worth", "entity": None, "confidence": 0.9, "source": "deterministic"}
-    if any(phrase in text for phrase in ["estado financiero", "resumen financiero", "como estoy", "cómo estoy"]):
+    if any(phrase in text for phrase in [
+        "estado financiero", "resumen financiero", "situacion financiera",
+        "situación financiera", "mis prioridades", "como estoy", "cómo estoy"
+    ]):
+        if "prioridad" in text or "prioridades" in text or "situacion financiera" in text or "situación financiera" in text:
+            return {"intent": "advisor_summary", "entity": None, "confidence": 0.95, "source": "deterministic"}
         return {"intent": "user_status", "entity": None, "confidence": 0.9, "source": "deterministic"}
     if any(word in text for word in ["habitos", "hábitos", "categorias", "categorías", "en que se va", "en que gasto"]):
         return {"intent": "spending_habits", "entity": None, "confidence": 0.85, "source": "deterministic"}
