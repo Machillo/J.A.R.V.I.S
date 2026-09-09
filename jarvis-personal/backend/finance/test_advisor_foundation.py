@@ -4,6 +4,7 @@ from backend.finance.strategic_engine import _project_closing_balance, _rate_to_
 from backend.finance.timeline import _salary_amount_per_event
 from backend.advisor.core import _minimum_projected_balance, _safe_usable_money
 from backend.ai.intent_router import _fallback_detect
+from backend.ai.strategy_dashboard import _build_dynamic_director_allocation
 
 
 class AdvisorFoundationTests(unittest.TestCase):
@@ -36,6 +37,31 @@ class AdvisorFoundationTests(unittest.TestCase):
     def test_usable_money_question_is_not_sent_to_internet(self):
         result = _fallback_detect("¿Cuánto dinero puedo usar realmente sin afectar mis obligaciones ni mi Salvavidas?")
         self.assertEqual(result["intent"], "advisor_summary")
+
+    def test_distribution_blocks_investment_with_expensive_debt_and_no_safety(self):
+        result = _build_dynamic_director_allocation(
+            available_before_allocation=100_000,
+            debts=[{"remaining_amount": 500_000, "interest_rate": 35.76}],
+            goal_reserves={},
+            savings_total=0,
+            emergency_monthly_base=250_000,
+        )
+        amounts = result["allocation_amounts"]
+        self.assertEqual(amounts["inversion"], 0)
+        self.assertEqual(amounts["fondo_de_emergencia"], 40_000)
+        self.assertEqual(amounts["ataque_de_deuda"], 45_000)
+        self.assertEqual(amounts["vida_controlada"], 15_000)
+
+    def test_distribution_allows_investment_only_without_debt_and_with_one_month_saved(self):
+        result = _build_dynamic_director_allocation(
+            available_before_allocation=100_000,
+            debts=[],
+            goal_reserves={},
+            savings_total=250_000,
+            emergency_monthly_base=250_000,
+        )
+        self.assertTrue(result["investment_allowed"])
+        self.assertEqual(result["allocation_amounts"]["inversion"], 55_000)
 
 
 if __name__ == "__main__":
