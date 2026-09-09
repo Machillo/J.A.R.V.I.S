@@ -186,10 +186,10 @@ def create_user_debt(payload):
                    term_months,payment_day,created_at,first_payment_date,auto_update_monthly,
                    installments_paid,updated_at,start_date,next_payment_date,last_payment_date,
                    interest_method,fixed_fee_amount,workspace_id
-               ) VALUES(%s,%s,'other',%s,%s,%s,%s,NULL,%s,NOW(),NULL,%s,0,NOW(),NULL,NULL,NULL,'monthly',0,%s)
-               RETURNING id,name,total_amount,remaining_amount,monthly_payment,interest_rate,payment_day,created_at""",
-            (user_id, payload.name.strip(), max(total, remaining), remaining, monthly, interest,
-             payload.payment_day, monthly > 0, workspace_id),
+               ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NULL,%s,0,NOW(),NULL,%s,NULL,'monthly',0,%s)
+               RETURNING id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,term_months,payment_day,next_payment_date,created_at""",
+            (user_id, payload.name.strip(), payload.debt_type, max(total, remaining), remaining, monthly, interest,
+             payload.term_months, payload.payment_day, monthly > 0, payload.next_payment_date, workspace_id),
         ).fetchone()
         conn.commit()
     return row
@@ -232,11 +232,35 @@ def list_user_debts():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT id,name,total_amount,remaining_amount,monthly_payment,interest_rate,payment_day,created_at
+            """SELECT id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,
+                      term_months,payment_day,next_payment_date,created_at,
+                      CASE WHEN total_amount>0 THEN ROUND((1-(remaining_amount/total_amount))*100,1) ELSE 0 END AS progress_percent
                FROM debts WHERE workspace_id=%s ORDER BY id DESC""",
             (workspace_id,),
         ).fetchall()
     return rows
+
+
+def update_user_debt(debt_id: int, payload):
+    workspace_id = get_current_workspace_id()
+    remaining = float(payload.remaining_amount or 0)
+    total = max(float(payload.total_amount if payload.total_amount is not None else remaining), remaining)
+    with get_connection() as conn:
+        row = conn.execute(
+            """UPDATE debts SET name=%s,debt_type=%s,total_amount=%s,remaining_amount=%s,
+                      monthly_payment=%s,interest_rate=%s,term_months=%s,payment_day=%s,
+                      next_payment_date=%s,updated_at=NOW()
+               WHERE id=%s AND workspace_id=%s
+               RETURNING id,name,debt_type,total_amount,remaining_amount,monthly_payment,
+                         interest_rate,term_months,payment_day,next_payment_date""",
+            (payload.name.strip(), payload.debt_type, total, remaining, payload.monthly_payment or 0,
+             payload.interest_rate, payload.term_months, payload.payment_day, payload.next_payment_date,
+             debt_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Deuda no encontrada.")
+        conn.commit()
+    return row
 
 
 def delete_user_debt(debt_id: int):
@@ -273,6 +297,51 @@ def create_user_goal(payload):
                RETURNING id,name,target_amount,current_amount,target_date,priority,status,created_at""",
             (payload.name.strip(), payload.target_amount, payload.current_amount, payload.target_date,
              payload.priority, user_id, workspace_id),
+        ).fetchone()
+        conn.commit()
+    return row
+
+
+def update_user_goal(goal_id: int, payload):
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute(
+            """UPDATE financial_goals SET name=%s,target_amount=%s,current_amount=%s,
+                      target_date=%s,priority=%s,status=%s
+               WHERE id=%s AND workspace_id=%s
+               RETURNING id,name,target_amount,current_amount,target_date,priority,status,created_at""",
+            (payload.name.strip(), payload.target_amount, min(payload.current_amount, payload.target_amount),
+             payload.target_date, payload.priority, payload.status, goal_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Meta no encontrada.")
+        conn.commit()
+    return row
+
+
+def contribute_user_goal(goal_id: int, payload):
+    workspace_id = get_current_workspace_id()
+    contribution_date = payload.contribution_date or date.today().isoformat()
+    with get_connection() as conn:
+        goal = conn.execute(
+            "SELECT id,target_amount,current_amount FROM financial_goals WHERE id=%s AND workspace_id=%s FOR UPDATE",
+            (goal_id, workspace_id),
+        ).fetchone()
+        if not goal:
+            raise HTTPException(status_code=404, detail="Meta no encontrada.")
+        amount = min(float(payload.amount), max(float(goal['target_amount']) - float(goal['current_amount']), 0))
+        if amount <= 0:
+            raise HTTPException(status_code=409, detail="La meta ya está completa.")
+        current = float(goal["current_amount"]) + amount
+        status = "completed" if current >= float(goal["target_amount"]) else "active"
+        conn.execute(
+            "INSERT INTO finva_goal_contributions(workspace_id,goal_id,amount,contribution_date) VALUES(%s,%s,%s,%s)",
+            (workspace_id, goal_id, amount, contribution_date),
+        )
+        row = conn.execute(
+            """UPDATE financial_goals SET current_amount=%s,status=%s WHERE id=%s AND workspace_id=%s
+               RETURNING id,name,target_amount,current_amount,target_date,priority,status""",
+            (current, status, goal_id, workspace_id),
         ).fetchone()
         conn.commit()
     return row

@@ -8,6 +8,10 @@ import Goals from "./pages/Goals";
 import Transactions from "./pages/Transactions";
 import SettingsPage from "./pages/Settings";
 import FinancialSituation from "./pages/FinancialSituation";
+import Budget from "./pages/Budget";
+import FinancialCalendar from "./pages/Calendar";
+import Recurring from "./pages/Recurring";
+import Reports from "./pages/Reports";
 import { supabase } from "../lib/supabase";
 import "./users.css";
 
@@ -30,6 +34,10 @@ export default function UsersApp({ user, onUserChange }) {
     transactions: <Transactions />,
     situation: <FinancialSituation plan={plan} onNavigate={setPage} />,
     settings: <SettingsPage user={user} onUserChange={onUserChange} />,
+    budget: <Budget />,
+    calendar: <FinancialCalendar />,
+    recurring: <Recurring />,
+    reports: <Reports />,
   };
 
   return (

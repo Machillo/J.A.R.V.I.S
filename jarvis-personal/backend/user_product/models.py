@@ -31,6 +31,13 @@ class UserDebtCreateRequest(BaseModel):
     monthly_payment: float | None = Field(default=None, ge=0)
     interest_rate: float | None = Field(default=None, ge=0)
     payment_day: int | None = Field(default=None, ge=1, le=31)
+    debt_type: str = "other"
+    term_months: int | None = Field(default=None, gt=0)
+    next_payment_date: str | None = None
+
+
+class UserDebtUpdateRequest(UserDebtCreateRequest):
+    pass
 
 
 class DebtPaymentRequest(BaseModel):
@@ -76,6 +83,34 @@ class GoalCreateRequest(BaseModel):
     current_amount: float = Field(default=0, ge=0)
     target_date: str | None = None
     priority: str = "medium"
+
+
+class GoalUpdateRequest(GoalCreateRequest):
+    status: Literal["active", "paused", "completed"] = "active"
+
+
+class GoalContributionRequest(BaseModel):
+    amount: float = Field(gt=0)
+    contribution_date: str | None = None
+
+
+class BudgetItemRequest(BaseModel):
+    category: str
+    monthly_limit: float = Field(ge=0)
+
+
+class BudgetUpdateRequest(BaseModel):
+    items: list[BudgetItemRequest]
+
+
+class RecurringItemRequest(BaseModel):
+    name: str
+    amount: float = Field(gt=0)
+    category: str = "general"
+    item_type: Literal["expense", "income"] = "expense"
+    frequency: Literal["weekly", "biweekly", "monthly", "quarterly", "annual"] = "monthly"
+    due_day: int | None = Field(default=None, ge=1, le=31)
+    is_active: bool = True
 
 
 class TransactionCreateRequest(BaseModel):

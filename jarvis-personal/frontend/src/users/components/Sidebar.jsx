@@ -1,4 +1,4 @@
-import { BarChart3, CreditCard, Landmark, LogOut, MoreHorizontal, ReceiptText, Settings, Sparkles, Target, WalletCards } from "lucide-react";
+import { BarChart3, CalendarDays, CreditCard, Landmark, LogOut, MoreHorizontal, ReceiptText, Repeat2, Settings, Sparkles, Target, WalletCards } from "lucide-react";
 import { useState } from "react";
 
 const mainItems = [
@@ -13,6 +13,7 @@ export default function Sidebar({ page, plan, onNavigate, onLogout }) {
   const secondaryItems = [
     ["situation", "Mi situación financiera", Landmark],
     ...(plan === "free" ? [] : [["strategy", plan === "vip" ? "Dirección VIP" : "Estrategia", Sparkles]]),
+    ...(plan === "free" ? [] : [["budget", "Presupuesto", WalletCards], ["calendar", "Calendario", CalendarDays], ["recurring", "Recurrentes", Repeat2], ["reports", "Reportes", BarChart3]]),
     ["transactions", "Historial", ReceiptText],
     ["settings", "Cuenta y plan", Settings],
   ];
