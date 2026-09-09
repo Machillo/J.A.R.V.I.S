@@ -20,6 +20,7 @@ from backend.finance.intelligence import (
     list_account_balances,
     _fetch_active_goals,
 )
+from backend.goals.strategy import build_goal_portfolio
 from backend.finance.reconciliation import get_financial_reconciliation
 from backend.finance.service import get_debts, get_financial_summary
 from backend.finance.strategic_engine import calculate_debt_strategies, calculate_financial_health_score
@@ -217,20 +218,16 @@ def build_advisor_strategy(*, persist: bool = True) -> dict[str, Any]:
         timeline_floor=timeline_floor,
     ) if quality["status"] == "reliable" else 0.0
 
-    goal_items = []
-    remaining_for_goals = usable
-    for goal in goals.get("items") or []:
-        required = _n(goal.get("monthly_required"))
-        priority = str(goal.get("priority") or "").lower()
-        urgent = priority in {"critical", "critica", "crítica"} and int(_n(goal.get("months_left")) or 99) <= 2
-        blocked_by = None
-        if protection["gap_one_month"] > 0 and not urgent:
-            blocked_by = "Salvavidas menor a un mes"
-        elif target_debt and _n(target_debt.get("interest_rate")) >= 10 and not urgent:
-            blocked_by = "deuda prioritaria con tasa anual de 10% o más"
-        fundable = 0.0 if blocked_by else min(required, remaining_for_goals)
-        goal_items.append({**goal, "fundable_now": round(fundable, 2), "fully_fundable": fundable + 0.01 >= required, "blocked_by": blocked_by})
-        remaining_for_goals = max(remaining_for_goals - fundable, 0)
+    goal_portfolio = build_goal_portfolio(
+        goals.get("items") or [],
+        available=usable,
+        one_month_protected=protection["gap_one_month"] <= 0.01,
+        highest_debt_apr=_n(target_debt.get("interest_rate")) if target_debt else 0.0,
+        immediate_risk=immediate_risk["exists"],
+    )
+    goal_items = goal_portfolio.get("items") or []
+    active_goal = goal_portfolio.get("active_goal")
+    remaining_for_goals = max(usable - _n(goal_portfolio.get("goal_allocation")), 0)
 
     health_inputs = health.get("inputs") or {}
     debt_service_ratio = _n(health_inputs.get("debt_service_ratio"))
@@ -273,8 +270,8 @@ def build_advisor_strategy(*, persist: bool = True) -> dict[str, Any]:
         if protection["gap_one_month"] > 0:
             debt_reason += " Queda en espera hasta completar el primer mes de Salvavidas."
         actions.append({"type": "debt", "title": f"Abonar a {target_debt.get('name')}", "amount": round(debt_amount, 2), "why": debt_reason})
-    if not actions and goal_items:
-        goal = goal_items[0]
+    if not actions and active_goal:
+        goal = active_goal
         actions.append({"type": "goal", "title": f"Financiar {goal.get('name')}", "amount": goal.get("fundable_now"), "why": "Es la meta activa de mayor prioridad y fecha."})
     if not actions and investment["prudent"]:
         actions.append({"type": "investment", "title": "Invertir el excedente autorizado", "amount": investment["recommended_amount"], "why": "No quedan bloqueos financieros previos."})
@@ -296,6 +293,7 @@ def build_advisor_strategy(*, persist: bool = True) -> dict[str, Any]:
             "formula": "mínimo entre excedente operativo, liquidez sobre protección y piso proyectado sobre protección",
         },
         "fundable_goals": goal_items,
+        "goal_portfolio": goal_portfolio,
         "investment": investment,
         "next_action": actions[0],
         "action_plan": actions[:3],
@@ -316,7 +314,7 @@ def build_advisor_strategy(*, persist: bool = True) -> dict[str, Any]:
             "debt_total": round(sum(_n(item.get("remaining_amount")) for item in debts), 2),
             "monthly_debt_payments": round(sum(_n(item.get("monthly_payment")) for item in debts), 2),
             "debt_payment_ratio": health_inputs.get("debt_service_ratio"),
-            "main_goal": goal_items[0] if goal_items else None,
+            "main_goal": active_goal,
         },
         "decision_policy": "datos > riesgo 45 días > conciliación > 1 mes Salvavidas > deuda cara > metas > 3-6 meses Salvavidas > inversión",
         "priorities": [item["title"] for item in actions[:3]],

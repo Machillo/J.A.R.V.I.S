@@ -213,6 +213,14 @@ export default function PremiumStrategy() {
   const distributionBalanced = Math.abs(allocationBase - allocationTotal) <= 1;
   const distributionDestinations = [
     {
+      key: "meta_prioritaria",
+      label: strategy.goal_portfolio?.active_goal?.name
+        ? `Meta activa · ${strategy.goal_portfolio.active_goal.name}`
+        : "Meta activa",
+      amount: Number(allocationAmounts.meta_prioritaria || 0),
+      optional: true,
+    },
+    {
       key: "fondo_de_emergencia",
       label: "Salvavidas",
       amount: Number(allocationAmounts.fondo_de_emergencia || 0),
@@ -478,7 +486,7 @@ export default function PremiumStrategy() {
       </div>
 
       <div className="strategy-allocation-v3">
-        {distributionDestinations.map((item) => (
+        {distributionDestinations.filter((item) => !item.optional || item.amount > 0).map((item) => (
           <div className="strategy-allocation-row-v3" key={item.key}>
             <div><span>{item.label}</span><small>Destino recomendado para este ciclo</small></div>
             <strong>{money(item.amount)}</strong>

@@ -56,6 +56,11 @@ export default function Goals() {
       target_date: goal.target_date || "",
       priority: goal.priority || "medium",
       status: goal.status || "active",
+      goal_type: goal.goal_type || "general",
+      alternative_group: goal.alternative_group || "",
+      is_selected: goal.is_selected !== false,
+      funding_order: goal.funding_order || 100,
+      depends_on_group: goal.depends_on_group || "",
     });
   };
 
@@ -73,6 +78,9 @@ export default function Goals() {
         target_amount: Number(form.target_amount) || 0,
         current_amount: Number(form.current_amount) || 0,
         target_date: form.target_date || null,
+        alternative_group: form.alternative_group || null,
+        depends_on_group: form.depends_on_group || null,
+        funding_order: Number(form.funding_order) || 100,
       });
       cancelEdit();
       await loadGoals();
@@ -146,6 +154,15 @@ export default function Goals() {
                         <option value="critical">Prioritaria</option>
                       </select>
                     </label>
+                    <label>Tipo
+                      <select value={form.goal_type} onChange={(event) => setForm({ ...form, goal_type: event.target.value })}>
+                        <option value="general">General</option><option value="travel">Viaje</option><option value="vehicle">Carro</option><option value="purchase">Compra</option>
+                      </select>
+                    </label>
+                    <label>Grupo alternativo<input placeholder="Ej: viaje-2027" value={form.alternative_group} onChange={(event) => setForm({ ...form, alternative_group: event.target.value })} /></label>
+                    {form.alternative_group && <label>Opción elegida<select value={String(form.is_selected)} onChange={(event) => setForm({ ...form, is_selected: event.target.value === "true" })}><option value="true">Sí, financiar esta</option><option value="false">No, solo comparar</option></select></label>}
+                    <label>Orden de financiamiento<input type="number" min="1" value={form.funding_order} onChange={(event) => setForm({ ...form, funding_order: event.target.value })} /></label>
+                    <label>Activar después del grupo<input placeholder="Ej: viaje-2027" value={form.depends_on_group} onChange={(event) => setForm({ ...form, depends_on_group: event.target.value })} /></label>
                     <label>Estado
                       <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
                         <option value="active">Activa</option>
@@ -166,6 +183,8 @@ export default function Goals() {
                     <div className="goal-money">{formatCRC(goal.current_amount)} / {formatCRC(goal.target_amount)}</div>
                     <div className="goal-remaining">Faltan {formatCRC(remaining)}</div>
                     <div className="goal-date"><Calendar size={14} />{goal.target_date || "Sin fecha"}</div>
+                    {goal.alternative_group && <div className="goal-date">{goal.is_selected ? "Alternativa elegida" : "Alternativa en comparación"} · {goal.alternative_group}</div>}
+                    {goal.depends_on_group && <div className="goal-date">Se activa después de {goal.depends_on_group}</div>}
                     <button className="goal-edit-button" onClick={() => startEdit(goal)}><Edit3 size={15} /> Editar</button>
                   </>
                 )}

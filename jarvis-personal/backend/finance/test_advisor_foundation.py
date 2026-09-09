@@ -5,6 +5,7 @@ from backend.finance.timeline import _salary_amount_per_event
 from backend.advisor.core import _minimum_projected_balance, _safe_usable_money
 from backend.ai.intent_router import _fallback_detect
 from backend.ai.strategy_dashboard import _build_dynamic_director_allocation
+from backend.goals.strategy import build_goal_portfolio
 
 
 class AdvisorFoundationTests(unittest.TestCase):
@@ -62,6 +63,22 @@ class AdvisorFoundationTests(unittest.TestCase):
         )
         self.assertTrue(result["investment_allowed"])
         self.assertEqual(result["allocation_amounts"]["inversion"], 55_000)
+
+    def test_goal_portfolio_funds_only_selected_trip_alternative(self):
+        goals = [
+            {"id": 1, "name": "Argentina", "status": "active", "alternative_group": "viaje-2027", "is_selected": True, "remaining_amount": 600_000, "monthly_required": 60_000, "funding_order": 10},
+            {"id": 2, "name": "Italia", "status": "candidate", "alternative_group": "viaje-2027", "is_selected": False, "remaining_amount": 1_500_000, "monthly_required": 150_000, "funding_order": 10},
+        ]
+        result = build_goal_portfolio(goals, available=100_000, one_month_protected=True, highest_debt_apr=0)
+        self.assertEqual(result["active_goal"]["name"], "Argentina")
+        self.assertEqual(result["goal_allocation"], 60_000)
+        self.assertEqual(result["items"][1]["blocked_by"], "alternativa no seleccionada")
+
+    def test_goal_portfolio_blocks_car_until_trip_and_financial_floor_are_ready(self):
+        goals = [{"id": 3, "name": "Carro", "status": "active", "depends_on_group": "viaje-2027", "remaining_amount": 5_000_000, "monthly_required": 200_000, "funding_order": 20}]
+        result = build_goal_portfolio(goals, available=300_000, one_month_protected=False, highest_debt_apr=26)
+        self.assertIsNone(result["active_goal"])
+        self.assertIn("primero debe completarse", result["items"][0]["blocked_by"])
 
 
 if __name__ == "__main__":

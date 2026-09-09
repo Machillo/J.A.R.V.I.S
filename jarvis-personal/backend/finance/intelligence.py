@@ -538,10 +538,11 @@ def _fetch_active_goals(workspace_id: str) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, target_amount, current_amount, target_date, priority, status, created_at
+            SELECT id, name, target_amount, current_amount, target_date, priority, status, created_at,
+                   goal_type, alternative_group, is_selected, funding_order, depends_on_group
             FROM financial_goals
             WHERE workspace_id = %s
-              AND COALESCE(status, 'active') = 'active'
+              AND COALESCE(status, 'active') IN ('active', 'candidate', 'completed')
             ORDER BY
               CASE LOWER(priority)
                 WHEN 'critical' THEN 1
@@ -600,9 +601,11 @@ def calculate_goal_reserves(goals: list[dict[str, Any]]) -> dict[str, Any]:
         monthly_required = remaining / months if months else remaining
         weight = _priority_weight(goal.get("priority"))
         weighted_reserve = monthly_required * weight
-        total_required += monthly_required
-        total_weighted += weighted_reserve
-        if weight >= 1:
+        counts_for_reserve = str(goal.get("status") or "active") == "active" and bool(goal.get("is_selected", True))
+        if counts_for_reserve:
+            total_required += monthly_required
+            total_weighted += weighted_reserve
+        if counts_for_reserve and weight >= 1:
             critical_required += monthly_required
 
         items.append({
@@ -616,6 +619,12 @@ def calculate_goal_reserves(goals: list[dict[str, Any]]) -> dict[str, Any]:
             "months_left": months,
             "monthly_required": round(monthly_required, 2),
             "auto_reserve": round(weighted_reserve, 2),
+            "status": goal.get("status") or "active",
+            "goal_type": goal.get("goal_type") or "general",
+            "alternative_group": goal.get("alternative_group"),
+            "is_selected": bool(goal.get("is_selected", True)),
+            "funding_order": int(_as_float(goal.get("funding_order")) or 100),
+            "depends_on_group": goal.get("depends_on_group"),
         })
 
     return {

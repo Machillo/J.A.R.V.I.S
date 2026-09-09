@@ -9,12 +9,21 @@ def add_financial_goal(
     target_amount: float,
     current_amount: float = 0,
     target_date: str | None = None,
-    priority: str = "medium"
+    priority: str = "medium", goal_type: str = "general",
+    alternative_group: str | None = None, is_selected: bool = True,
+    funding_order: int = 100, depends_on_group: str | None = None,
 ):
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
+        if alternative_group and is_selected:
+            conn.execute(
+                """UPDATE financial_goals SET is_selected = FALSE
+                   WHERE workspace_id = %s AND alternative_group = %s
+                     AND status IN ('active', 'candidate')""",
+                (workspace_id, alternative_group),
+            )
         cursor = conn.execute(
             """
             INSERT INTO financial_goals (
@@ -26,9 +35,10 @@ def add_financial_goal(
                 status,
                 user_id,
                 workspace_id,
-                created_at
+                created_at, goal_type, alternative_group, is_selected,
+                funding_order, depends_on_group
             )
-            VALUES (%s, %s, %s, %s, %s, 'active', %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, 'active', %s, %s, NOW(), %s, %s, %s, %s, %s)
             """,
             (
                 name,
@@ -37,7 +47,8 @@ def add_financial_goal(
                 target_date,
                 priority,
                 user_id,
-                workspace_id
+                workspace_id, goal_type, alternative_group, is_selected,
+                funding_order, depends_on_group
             )
         )
 
@@ -52,7 +63,9 @@ def add_financial_goal(
         "priority": priority,
         "status": "active",
         "user_id": user_id,
-        "workspace_id": workspace_id
+        "workspace_id": workspace_id, "goal_type": goal_type,
+        "alternative_group": alternative_group, "is_selected": is_selected,
+        "funding_order": funding_order, "depends_on_group": depends_on_group,
     }
 
 
@@ -64,7 +77,8 @@ def get_financial_goals():
         rows = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at, user_id, workspace_id
+                   priority, status, created_at, user_id, workspace_id,
+                   goal_type, alternative_group, is_selected, funding_order, depends_on_group
             FROM financial_goals
             WHERE workspace_id = %s
             ORDER BY id DESC
@@ -83,7 +97,8 @@ def get_financial_goal(goal_id: int):
         goal = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at, user_id, workspace_id
+                   priority, status, created_at, user_id, workspace_id,
+                   goal_type, alternative_group, is_selected, funding_order, depends_on_group
             FROM financial_goals
             WHERE id = %s
             AND workspace_id = %s
@@ -107,7 +122,9 @@ def update_financial_goal(
     current_amount: float,
     target_date: str | None,
     priority: str,
-    status: str
+    status: str, goal_type: str = "general", alternative_group: str | None = None,
+    is_selected: bool = True, funding_order: int = 100,
+    depends_on_group: str | None = None,
 ):
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
@@ -129,6 +146,14 @@ def update_financial_goal(
                 "status": "ERROR"
             }
 
+        if alternative_group and is_selected:
+            conn.execute(
+                """UPDATE financial_goals SET is_selected = FALSE
+                   WHERE workspace_id = %s AND alternative_group = %s
+                     AND id <> %s AND status IN ('active', 'candidate')""",
+                (workspace_id, alternative_group, goal_id),
+            )
+
         conn.execute(
             """
             UPDATE financial_goals
@@ -137,7 +162,8 @@ def update_financial_goal(
                 current_amount = %s,
                 target_date = %s,
                 priority = %s,
-                status = %s
+                status = %s, goal_type = %s, alternative_group = %s,
+                is_selected = %s, funding_order = %s, depends_on_group = %s
             WHERE id = %s
             AND workspace_id = %s
             """,
@@ -147,7 +173,8 @@ def update_financial_goal(
                 current_amount,
                 target_date,
                 priority,
-                status,
+                status, goal_type, alternative_group, is_selected,
+                funding_order, depends_on_group,
                 goal_id,
                 workspace_id
             )
@@ -166,7 +193,8 @@ def delete_financial_goal(goal_id: int):
         goal = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at, user_id, workspace_id
+                   priority, status, created_at, user_id, workspace_id,
+                   goal_type, alternative_group, is_selected, funding_order, depends_on_group
             FROM financial_goals
             WHERE id = %s
             AND workspace_id = %s
@@ -294,7 +322,8 @@ def get_financial_goal_by_name(name: str):
         goal = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at, user_id, workspace_id
+                   priority, status, created_at, user_id, workspace_id,
+                   goal_type, alternative_group, is_selected, funding_order, depends_on_group
             FROM financial_goals
             WHERE lower(name) LIKE %s
             AND status = 'active'

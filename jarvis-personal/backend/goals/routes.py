@@ -29,6 +29,9 @@ def create_goal(request: FinancialGoalRequest):
         current_amount=request.current_amount,
         target_date=request.target_date,
         priority=request.priority,
+        goal_type=request.goal_type, alternative_group=request.alternative_group,
+        is_selected=request.is_selected, funding_order=request.funding_order,
+        depends_on_group=request.depends_on_group,
     )
 
 
@@ -52,6 +55,9 @@ def edit_goal(goal_id: int, request: FinancialGoalUpdateRequest):
         target_date=request.target_date,
         priority=request.priority,
         status=request.status,
+        goal_type=request.goal_type, alternative_group=request.alternative_group,
+        is_selected=request.is_selected, funding_order=request.funding_order,
+        depends_on_group=request.depends_on_group,
     )
 
 

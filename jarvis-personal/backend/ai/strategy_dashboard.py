@@ -11,6 +11,7 @@ from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.ai.openai_client import get_active_premium_guides
 from backend.integrations.ibkr_readonly import ensure_ibkr_tables
+from backend.goals.strategy import build_goal_portfolio
 
 
 def _f(value: Any) -> float:
@@ -111,10 +112,11 @@ def _fetch_active_financial_goals(workspace_id: str) -> list[dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT id, name, target_amount, current_amount, target_date,
-                   priority, status, created_at
+                   priority, status, created_at, goal_type, alternative_group,
+                   is_selected, funding_order, depends_on_group
             FROM financial_goals
             WHERE workspace_id = %s
-              AND COALESCE(status, 'active') = 'active'
+              AND COALESCE(status, 'active') IN ('active', 'candidate', 'completed')
             ORDER BY
               CASE LOWER(COALESCE(priority, 'medium'))
                 WHEN 'critical' THEN 1
@@ -147,9 +149,11 @@ def _calculate_goal_reserves(goals: list[dict[str, Any]]) -> dict[str, Any]:
         monthly_required = remaining / months if months else remaining
         weight = _priority_weight(goal.get("priority"))
         auto_reserve = monthly_required * weight
-        required_total += monthly_required
-        weighted_total += auto_reserve
-        if weight >= 1.0:
+        counts_for_reserve = str(goal.get("status") or "active") == "active" and bool(goal.get("is_selected", True))
+        if counts_for_reserve:
+            required_total += monthly_required
+            weighted_total += auto_reserve
+        if counts_for_reserve and weight >= 1.0:
             critical_total += monthly_required
         items.append({
             "id": goal.get("id"),
@@ -162,6 +166,12 @@ def _calculate_goal_reserves(goals: list[dict[str, Any]]) -> dict[str, Any]:
             "months_left": months,
             "monthly_required": round(monthly_required, 2),
             "auto_reserve": round(auto_reserve, 2),
+            "status": goal.get("status") or "active",
+            "goal_type": goal.get("goal_type") or "general",
+            "alternative_group": goal.get("alternative_group"),
+            "is_selected": bool(goal.get("is_selected", True)),
+            "funding_order": int(_f(goal.get("funding_order")) or 100),
+            "depends_on_group": goal.get("depends_on_group"),
         })
     return {
         "items": items,
@@ -242,10 +252,7 @@ def _build_dynamic_director_allocation(
     six_month_target = monthly_base * 6
 
     goal_items = list(goal_reserves.get("items") or [])
-    urgent_goals = [g for g in goal_items if _goal_is_urgent(g)]
-    urgent_required = sum(_f(g.get("monthly_required")) for g in urgent_goals)
-    if urgent_required <= 0:
-        urgent_required = _f(goal_reserves.get("critical_monthly_required"))
+    urgent_goals: list[dict[str, Any]] = []
 
     amounts = {
         "meta_prioritaria": 0.0,
@@ -256,12 +263,6 @@ def _build_dynamic_director_allocation(
         "metas_o_inversion": 0.0,
     }
 
-    # Capa 1: meta con fecha límite. Se reserva el monto necesario de este ciclo,
-    # no un porcentaje inventado.
-    goal_now = min(base, max(urgent_required, 0.0))
-    amounts["meta_prioritaria"] = goal_now
-    remaining = max(base - goal_now, 0.0)
-
     debt_exists = total_debt > 1
     highest_debt_apr = max((_f(debt.get("interest_rate")) for debt in debts), default=0.0)
     safety_gap_mini = max(mini_fund_target - savings_total, 0.0)
@@ -271,6 +272,18 @@ def _build_dynamic_director_allocation(
         and safety_gap_month <= 0.01
         and highest_debt_apr < 10.0
     )
+    goal_portfolio = build_goal_portfolio(
+        goal_items,
+        available=base,
+        one_month_protected=safety_gap_month <= 0.01,
+        highest_debt_apr=highest_debt_apr,
+    )
+    active_goal = goal_portfolio.get("active_goal")
+    goal_now = _f(goal_portfolio.get("goal_allocation"))
+    if active_goal:
+        urgent_goals = [active_goal]
+    amounts["meta_prioritaria"] = goal_now
+    remaining = max(base - goal_now, 0.0)
 
     if base <= 0.01:
         mode = "cash_protection"
@@ -393,6 +406,8 @@ def _build_dynamic_director_allocation(
         "investment_recommended": round(investment_amount, 2),
         "investment_target": round(investment_amount, 2),
         "investment_allowed": investment_allowed,
+        "goal_portfolio": goal_portfolio,
+        "active_goal": active_goal,
         "investment_blockers": [
             reason for blocked, reason in (
                 (debt_exists, "Hay deudas activas."),
@@ -1159,6 +1174,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "emergency_fund": director.get("emergency") or {},
         "salvavidas": salvavidas,
         "urgent_goals": director.get("urgent_goals") or [],
+        "goal_portfolio": director.get("goal_portfolio") or {},
         "debt_attack_extra": round(current_debt_attack_extra, 2),
         "recurring_debt_attack_extra": round(recurring_debt_attack_extra, 2),
         "debt_payment_pool": round(payment_pool, 2),
