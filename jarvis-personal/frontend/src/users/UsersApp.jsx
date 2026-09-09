@@ -12,6 +12,7 @@ import Budget from "./pages/Budget";
 import FinancialCalendar from "./pages/Calendar";
 import Recurring from "./pages/Recurring";
 import Reports from "./pages/Reports";
+import MonthlySummary from "./pages/MonthlySummary";
 import { supabase } from "../lib/supabase";
 import "./users.css";
 
@@ -28,9 +29,9 @@ export default function UsersApp({ user, onUserChange }) {
   const pages = {
     overview: <Dashboard user={user} plan={plan} onNavigate={setPage} />,
     finance: <Finance />,
-    debts: <Debts />,
+    debts: <Debts plan={plan} />,
     strategy: <StrategyBasic plan={plan} />,
-    goals: <Goals />,
+    goals: <Goals plan={plan} />,
     transactions: <Transactions />,
     situation: <FinancialSituation plan={plan} onNavigate={setPage} />,
     settings: <SettingsPage user={user} onUserChange={onUserChange} />,
@@ -38,6 +39,7 @@ export default function UsersApp({ user, onUserChange }) {
     calendar: <FinancialCalendar />,
     recurring: <Recurring />,
     reports: <Reports />,
+    monthly: <MonthlySummary />,
   };
 
   return (

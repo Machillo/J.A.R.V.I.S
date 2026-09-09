@@ -2,22 +2,27 @@ from fastapi import APIRouter
 
 from backend.auth.saas import require_feature
 from backend.user_product.models import (
-    BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, FinancialSituationRequest,
-    GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest, OvertimeCreateRequest,
-    RecurringItemRequest, TransactionCreateRequest, UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
+    BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
+    FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
+    IncomeUpdateRequest, MovementUpdateRequest, OvertimeCreateRequest, RecurringItemRequest, TransactionCreateRequest,
+    UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
 from backend.user_product.service import (
     create_expense_entry, create_income, create_overtime, create_user_debt, create_user_goal,
-    create_user_transaction, delete_user_debt, delete_user_goal, delete_user_transaction,
+    create_user_transaction, delete_expense, delete_income, delete_user_debt, delete_user_goal, delete_user_transaction,
     get_financial_situation, get_strategy_basic, get_strategy_vip, get_user_finance_summary,
     list_expenses, list_income, list_overtime, list_user_debts, list_user_goals, list_user_transactions,
-    pay_user_debt, simulate_strategy_vip, update_financial_situation, update_user_debt,
-    update_user_goal, contribute_user_goal,
+    pay_user_debt, simulate_strategy_vip, update_expense, update_financial_situation, update_income,
+    update_user_debt, update_user_goal, contribute_user_goal,
 )
 from backend.user_product.basic_service import (
     create_recurring_item, delete_recurring_item, get_basic_dashboard, get_basic_report,
     get_financial_calendar, get_guided_budget, list_recurring_items, save_guided_budget,
     update_recurring_item,
+)
+from backend.user_product.free_service import (
+    delete_free_movement, get_free_dashboard, get_free_monthly_summary,
+    list_free_movements, update_free_movement,
 )
 
 router = APIRouter(prefix="/user-product", tags=["Finva Product"])
@@ -34,6 +39,14 @@ def income_list():
 def income_create(request: IncomeCreateRequest):
     require_feature("spending"); return create_income(request)
 
+@router.put("/finance/income/{income_id}")
+def income_update(income_id: int, request: IncomeUpdateRequest):
+    require_feature("spending"); return update_income(income_id, request)
+
+@router.delete("/finance/income/{income_id}")
+def income_delete(income_id: int):
+    require_feature("spending"); return delete_income(income_id)
+
 @router.get("/finance/expenses")
 def expenses_list():
     require_feature("spending"); return list_expenses()
@@ -41,6 +54,14 @@ def expenses_list():
 @router.post("/finance/expenses")
 def expenses_create(request: ExpenseCreateRequest):
     require_feature("spending"); return create_expense_entry(request)
+
+@router.put("/finance/expenses/{expense_id}")
+def expenses_update(expense_id: int, request: ExpenseUpdateRequest):
+    require_feature("spending"); return update_expense(expense_id, request)
+
+@router.delete("/finance/expenses/{expense_id}")
+def expenses_delete(expense_id: int):
+    require_feature("spending"); return delete_expense(expense_id)
 
 @router.get("/finance/overtime")
 def overtime_list():
@@ -84,7 +105,7 @@ def goals_update(goal_id: int, request: GoalUpdateRequest):
 
 @router.post("/goals/{goal_id}/contributions")
 def goals_contribute(goal_id: int, request: GoalContributionRequest):
-    require_feature("strategy_basic"); return contribute_user_goal(goal_id, request)
+    require_feature("goals"); return contribute_user_goal(goal_id, request)
 
 @router.delete("/goals/{goal_id}")
 def goals_delete(goal_id: int):
@@ -101,6 +122,26 @@ def transactions_create(request: TransactionCreateRequest):
 @router.delete("/transactions/{transaction_id}")
 def transactions_delete(transaction_id: int):
     require_feature("transactions"); return delete_user_transaction(transaction_id)
+
+@router.get("/free/dashboard")
+def free_dashboard():
+    require_feature("finance_overview"); return get_free_dashboard()
+
+@router.get("/free/monthly-summary")
+def free_monthly_summary(period: str | None = None):
+    require_feature("finance_overview"); return get_free_monthly_summary(period)
+
+@router.get("/free/movements")
+def free_movements():
+    require_feature("transactions"); return list_free_movements()
+
+@router.put("/free/movements/{movement_id}")
+def free_movement_update(movement_id: str, request: MovementUpdateRequest):
+    require_feature("transactions"); return update_free_movement(movement_id, request)
+
+@router.delete("/free/movements/{movement_id}")
+def free_movement_delete(movement_id: str):
+    require_feature("transactions"); return delete_free_movement(movement_id)
 
 @router.get("/financial-situation")
 def financial_situation():

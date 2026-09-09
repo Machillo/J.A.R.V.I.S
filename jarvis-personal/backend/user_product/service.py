@@ -9,10 +9,8 @@ from backend.auth.current_user import get_current_account_id, get_current_user_i
 from backend.auth.saas import require_feature
 from backend.core.database import get_connection
 from backend.finance.service import (
-    add_salary,
     get_expenses,
     get_payroll_events,
-    get_salaries,
 )
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
 from backend.user_product.strategy_engine import (
@@ -110,20 +108,56 @@ def get_user_finance_summary():
 
 
 def list_income():
-    return [
-        {
-            **row,
-            "description": row.get("source"),
-            "category": "salario",
-            "entry_date": str(row.get("created_at") or "")[:10],
-        }
-        for row in get_salaries()
-    ]
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id,amount,source,COALESCE(category,'Salario') category,user_id,workspace_id,created_at
+               FROM salaries WHERE workspace_id=%s ORDER BY created_at DESC,id DESC""",
+            (workspace_id,),
+        ).fetchall()
+    return [{**row,"description":row.get("source"),"entry_date":str(row.get("created_at") or "")[:10]} for row in rows]
 
 
 def create_income(payload):
-    result = add_salary(payload.amount, (payload.description or payload.category or "Ingreso").strip())
-    return {**result, "description": result.get("source"), "category": payload.category, "entry_date": payload.entry_date}
+    user_id = _legacy_financial_user_id()
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute(
+            """INSERT INTO salaries(user_id,workspace_id,amount,source,category,created_at)
+               VALUES(%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
+               RETURNING id,amount,source,category,created_at""",
+            (user_id, workspace_id, payload.amount, (payload.description or payload.category or "Ingreso").strip(),
+             (payload.category or "Otros ingresos").strip(), payload.entry_date),
+        ).fetchone()
+        conn.commit()
+    return {**row, "description": row.get("source"), "entry_date": str(row.get("created_at"))[:10]}
+
+
+def update_income(income_id: int, payload):
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute(
+            """UPDATE salaries SET amount=%s,source=%s,category=%s,
+                      created_at=COALESCE(%s::date,created_at::date)+TIME '12:00'
+               WHERE id=%s AND workspace_id=%s
+               RETURNING id,amount,source,category,created_at""",
+            (payload.amount, (payload.description or payload.category or "Ingreso").strip(),
+             (payload.category or "Otros ingresos").strip(), payload.entry_date, income_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Ingreso no encontrado.")
+        conn.commit()
+    return {**row, "description": row.get("source"), "entry_date": str(row.get("created_at"))[:10]}
+
+
+def delete_income(income_id: int):
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute("DELETE FROM salaries WHERE id=%s AND workspace_id=%s RETURNING id", (income_id, workspace_id)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Ingreso no encontrado.")
+        conn.commit()
+    return {"status": "ok", "id": income_id}
 
 
 def list_expenses():
@@ -136,17 +170,45 @@ def list_expenses():
 def create_expense_entry(payload):
     user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
-    category = normalize_category(payload.category or "general", "expense")
+    category = (payload.category or "Compras").strip()
     expense_type = expense_type_for_category(category)
     with get_connection() as conn:
         row = conn.execute(
             """INSERT INTO expenses(category,expense_type,description,amount,user_id,workspace_id,created_at)
-               VALUES(%s,%s,%s,%s,%s,%s,NOW())
+               VALUES(%s,%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
                RETURNING id,category,expense_type,description,amount,user_id,workspace_id,created_at""",
-            (category, expense_type, payload.description or "", payload.amount, user_id, workspace_id),
+            (category, expense_type, payload.description or "", payload.amount, user_id, workspace_id, payload.entry_date),
         ).fetchone()
         conn.commit()
     return {**row, "entry_date": payload.entry_date or str(row.get("created_at") or "")[:10]}
+
+
+def update_expense(expense_id: int, payload):
+    workspace_id = get_current_workspace_id()
+    category = (payload.category or "Compras").strip()
+    with get_connection() as conn:
+        row = conn.execute(
+            """UPDATE expenses SET amount=%s,description=%s,category=%s,expense_type=%s,
+                      created_at=COALESCE(%s::date,created_at::date)+TIME '12:00'
+               WHERE id=%s AND workspace_id=%s
+               RETURNING id,category,expense_type,description,amount,created_at""",
+            (payload.amount, payload.description or "", category, expense_type_for_category(category),
+             payload.entry_date, expense_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Gasto no encontrado.")
+        conn.commit()
+    return {**row, "entry_date": str(row.get("created_at"))[:10]}
+
+
+def delete_expense(expense_id: int):
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        row = conn.execute("DELETE FROM expenses WHERE id=%s AND workspace_id=%s RETURNING id", (expense_id, workspace_id)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Gasto no encontrado.")
+        conn.commit()
+    return {"status": "ok", "id": expense_id}
 
 
 def list_overtime():

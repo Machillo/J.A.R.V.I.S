@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
@@ -6,21 +7,29 @@ class IncomeCreateRequest(BaseModel):
     amount: float = Field(gt=0)
     description: str = ""
     category: str = "salario"
-    entry_date: str | None = None
+    entry_date: date | None = None
 
 
 class ExpenseCreateRequest(BaseModel):
     amount: float = Field(gt=0)
     description: str = ""
     category: str = "general"
-    entry_date: str | None = None
+    entry_date: date | None = None
+
+
+class IncomeUpdateRequest(IncomeCreateRequest):
+    pass
+
+
+class ExpenseUpdateRequest(ExpenseCreateRequest):
+    pass
 
 
 class OvertimeCreateRequest(BaseModel):
     hours: float = Field(gt=0)
     hourly_rate: float = Field(gt=0)
     multiplier: float = Field(default=1.5, gt=0)
-    work_date: str | None = None
+    work_date: date | None = None
     notes: str = ""
 
 
@@ -42,6 +51,11 @@ class UserDebtUpdateRequest(UserDebtCreateRequest):
 
 class DebtPaymentRequest(BaseModel):
     amount: float = Field(gt=0)
+
+
+class GoalContributionRequest(BaseModel):
+    amount: float = Field(gt=0)
+    contribution_date: date | None = None
 
 
 class BasicSimulationRequest(BaseModel):
@@ -81,7 +95,7 @@ class GoalCreateRequest(BaseModel):
     name: str
     target_amount: float = Field(gt=0)
     current_amount: float = Field(default=0, ge=0)
-    target_date: str | None = None
+    target_date: date | None = None
     priority: str = "medium"
 
 
@@ -114,7 +128,16 @@ class RecurringItemRequest(BaseModel):
 
 
 class TransactionCreateRequest(BaseModel):
-    transaction_date: str
+    transaction_date: date
+    description: str
+    amount: float = Field(gt=0)
+    transaction_type: Literal["expense", "income"]
+    category: str = "general"
+    notes: str = ""
+
+
+class MovementUpdateRequest(BaseModel):
+    transaction_date: date
     description: str
     amount: float = Field(gt=0)
     transaction_type: Literal["expense", "income"]
