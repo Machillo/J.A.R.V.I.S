@@ -1001,3 +1001,41 @@ body:has(.users-app) { background: #050b0e; }
     scroll-behavior: auto !important;
   }
 }
+
+/* FINVA Basic 01–07 */
+.users-app .negative, .users-app .expense { color: var(--danger); }
+.users-app .card em { color: var(--muted); font-size: .72rem; font-style: normal; }
+.users-app .basic-chart { display:block; margin-top:12px; overflow:hidden; }
+.users-app .history-row { display:grid; grid-template-columns:64px 1fr 1fr; align-items:center; gap:8px; padding:8px 0; }
+.users-app .history-row > span { display:grid; grid-template-columns:minmax(4px,1fr) auto; align-items:center; gap:6px; min-width:0; }
+.users-app .history-row i { display:block; max-width:100%; height:7px; min-width:3px; border-radius:8px; background:var(--accent); box-shadow:0 0 12px rgba(93,214,255,.18); }
+.users-app .history-row i.expense { background:var(--danger); }
+.users-app .history-row span { color:var(--muted); font-size:.66rem; }
+.users-app .category-bar { display:grid; grid-template-columns:96px 1fr auto; align-items:center; gap:8px; margin:12px 0; font-size:.76rem; }
+.users-app .category-bar i { display:block; height:7px; min-width:3px; border-radius:8px; background:var(--accent); }
+.users-app progress { width:100%; height:8px; border:0; border-radius:10px; overflow:hidden; accent-color:var(--accent); }
+.users-app .budget-list { display:grid; gap:10px; }
+.users-app .budget-list label { display:grid; grid-template-columns:1fr 120px; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid rgba(143,206,228,.09); }
+.users-app .budget-list label span, .users-app .budget-list label small { display:block; }
+.users-app .budget-list label small { color:var(--muted); margin-top:4px; }
+.users-app .budget-list input, .users-app .month-picker { width:100%; min-height:44px; border:1px solid var(--border); border-radius:12px; background:#07151c; color:var(--text); padding:9px 11px; }
+.users-app .calendar-list, .users-app .debt-grid, .users-app .goal-grid { display:grid; gap:12px; margin-top:12px; }
+.users-app .calendar-event { display:grid; grid-template-columns:58px 1fr auto; align-items:center; gap:10px; padding:13px 0; border-bottom:1px solid rgba(143,206,228,.09); }
+.users-app .calendar-event:last-child { border:0; }
+.users-app .calendar-event time { color:var(--accent); font-weight:800; }
+.users-app .calendar-event small { color:var(--muted); display:block; margin-top:3px; }
+.users-app .calendar-event.income strong { color:var(--success); }
+.users-app .calendar-event.expense strong, .users-app .calendar-event.debt strong { color:var(--danger); }
+.users-app .muted-row { color:var(--muted); padding:14px 0; }
+.users-app .report-row { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid rgba(143,206,228,.09); }
+.users-app .progress-report { display:grid; gap:8px; }
+.users-app .debt-card header, .users-app .goal-card-basic header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.users-app .debt-card header span, .users-app .debt-card header small, .users-app .goal-card-basic header small { display:block; }
+.users-app .debt-card header small, .users-app .goal-card-basic header small { color:var(--muted); margin-top:4px; }
+.users-app .debt-card p, .users-app .goal-card-basic p { color:var(--muted-2); font-size:.82rem; line-height:1.45; }
+.users-app .modal-backdrop { position:fixed; inset:0; z-index:100; display:grid; place-items:center; padding:18px; background:rgba(0,0,0,.74); backdrop-filter:blur(8px); }
+.users-app .edit-modal { width:min(100%,480px); max-height:88dvh; overflow:auto; }
+
+@media (min-width: 760px) {
+  .users-app .debt-grid, .users-app .goal-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

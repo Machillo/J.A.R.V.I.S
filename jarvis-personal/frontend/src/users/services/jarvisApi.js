@@ -42,6 +42,7 @@ export const createOvertime = (payload) => json("/user-product/finance/overtime"
 
 export const getDebts = () => request("/user-product/finance/debts");
 export const createDebt = (payload) => json("/user-product/finance/debts", "POST", payload);
+export const updateDebt = (id, payload) => json(`/user-product/finance/debts/${id}`, "PUT", payload);
 export const deleteDebt = (id) => request(`/user-product/finance/debts/${id}`, { method: "DELETE" });
 export const payDebt = (id, payload) => json(`/user-product/finance/debts/${id}/payments`, "POST", payload);
 
@@ -52,8 +53,20 @@ export const simulateStrategyVip = (payload) => json("/user-product/finance/stra
 
 export const getGoals = () => request("/user-product/goals");
 export const createGoal = (payload) => json("/user-product/goals", "POST", payload);
+export const updateGoal = (id, payload) => json(`/user-product/goals/${id}`, "PUT", payload);
+export const contributeGoal = (id, payload) => json(`/user-product/goals/${id}/contributions`, "POST", payload);
 export const deleteGoal = (id) => request(`/user-product/goals/${id}`, { method: "DELETE" });
 
 export const getTransactions = () => request("/user-product/transactions");
 export const createTransaction = (payload) => json("/user-product/transactions", "POST", payload);
 export const deleteTransaction = (id) => request(`/user-product/transactions/${id}`, { method: "DELETE" });
+
+export const getBasicDashboard = () => request("/user-product/basic/dashboard");
+export const getBudget = () => request("/user-product/basic/budget");
+export const saveBudget = (payload) => json("/user-product/basic/budget", "PUT", payload);
+export const getFinancialCalendar = (period) => request(`/user-product/basic/calendar${period ? `?period=${period}` : ""}`);
+export const getRecurring = () => request("/user-product/basic/recurring");
+export const createRecurring = (payload) => json("/user-product/basic/recurring", "POST", payload);
+export const updateRecurring = (id, payload) => json(`/user-product/basic/recurring/${id}`, "PUT", payload);
+export const deleteRecurring = (id) => request(`/user-product/basic/recurring/${id}`, { method: "DELETE" });
+export const getBasicReport = (period) => request(`/user-product/basic/reports${period ? `?period=${period}` : ""}`);

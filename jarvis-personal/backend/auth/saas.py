@@ -10,7 +10,7 @@ from backend.core.database import get_connection
 
 PLAN_COPY = {
     "free": {"name": "Gratis", "tagline": "Organizá y entendé tus números.", "features": ["Resumen financiero", "Ingresos y gastos", "Deudas", "Metas", "Transacciones", "Horas extra"]},
-    "basic": {"name": "Basic", "tagline": "JARVIS empieza a recomendar qué hacer.", "features": ["Todo Gratis", "Estrategia determinística", "Prioridades financieras", "Recomendaciones"]},
+    "basic": {"name": "Basic", "tagline": "FINVA organiza y guía tu mes.", "features": ["Todo Gratis", "Dashboard completo", "Presupuesto guiado", "Deudas y metas completas", "Calendario", "Recurrentes", "Reportes"]},
     "vip": {"name": "VIP", "tagline": "Director financiero personal.", "features": ["Todo Basic", "Estrategia dinámica", "Proyecciones", "Metas inteligentes", "Escenarios"]},
 }
 PLAN_RANK = {"free": 1, "basic": 2, "vip": 3}
