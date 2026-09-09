@@ -262,52 +262,56 @@ def _build_dynamic_director_allocation(
     amounts["meta_prioritaria"] = goal_now
     remaining = max(base - goal_now, 0.0)
 
-    # Quinta capa: inversión. Arranca pequeña y nunca se financia con deuda ni
-    # desplaza una meta urgente. ₡5.000 es la meta base cuando el flujo lo permite.
-    investment_target = 5_000.0
-    investment_amount = investment_target if remaining >= investment_target else 0.0
-    amounts["inversion"] = investment_amount
-    remaining = max(remaining - investment_amount, 0.0)
-
     debt_exists = total_debt > 1
+    highest_debt_apr = max((_f(debt.get("interest_rate")) for debt in debts), default=0.0)
     safety_gap_mini = max(mini_fund_target - savings_total, 0.0)
     safety_gap_month = max(one_month_target - savings_total, 0.0)
+    investment_allowed = (
+        not debt_exists
+        and safety_gap_month <= 0.01
+        and highest_debt_apr < 10.0
+    )
 
     if base <= 0.01:
         mode = "cash_protection"
         mode_label = "PROTECCIÓN DE CAJA"
         mode_reason = "No hay excedente real disponible después de obligaciones."
-        remaining_weights = {"debt": 0.0, "emergency": 0.0, "life": 0.0, "goals": 0.0}
+        remaining_weights = {"debt": 0.0, "emergency": 0.0, "life": 0.0, "investment": 0.0}
     elif urgent_goals or goal_now > 0.01:
         mode = "goal_protection"
         mode_label = "GOAL PROTECTION"
         mode_reason = "Hay una meta prioritaria con fecha cercana; se protege antes de acelerar deuda."
         if debt_exists and safety_gap_mini > 0:
-            remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "goals": 0.0}
+            remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "investment": 0.0}
         elif debt_exists:
-            remaining_weights = {"debt": 0.65, "emergency": 0.20, "life": 0.15, "goals": 0.0}
+            remaining_weights = {"debt": 0.65, "emergency": 0.20, "life": 0.15, "investment": 0.0}
         else:
-            remaining_weights = {"debt": 0.0, "emergency": 0.35, "life": 0.15, "goals": 0.50}
+            remaining_weights = {"debt": 0.0, "emergency": 0.85, "life": 0.15, "investment": 0.0}
     elif debt_exists and safety_gap_mini > 0:
         mode = "debt_safety"
         mode_label = "DEBT + SAFETY"
         mode_reason = "La deuda importa, pero el fondo mínimo todavía es insuficiente para absorber un imprevisto."
-        remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "goals": 0.0}
+        remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "investment": 0.0}
     elif debt_exists and safety_gap_month > 0:
         mode = "debt_attack"
         mode_label = "DEBT ATTACK"
         mode_reason = "El mini-colchón ya existe; se acelera deuda sin dejar de construir un mes de seguridad."
-        remaining_weights = {"debt": 0.65, "emergency": 0.20, "life": 0.15, "goals": 0.0}
+        remaining_weights = {"debt": 0.65, "emergency": 0.20, "life": 0.15, "investment": 0.0}
     elif debt_exists:
         mode = "debt_attack"
         mode_label = "DEBT ATTACK"
         mode_reason = "Hay al menos un mes de seguridad; la mayor parte del excedente puede atacar deuda."
-        remaining_weights = {"debt": 0.75, "emergency": 0.10, "life": 0.15, "goals": 0.0}
+        remaining_weights = {"debt": 0.75, "emergency": 0.10, "life": 0.15, "investment": 0.0}
     else:
         mode = "wealth_building"
         mode_label = "WEALTH BUILDING"
         mode_reason = "Sin deuda prioritaria, el excedente puede construir seguridad, metas e inversión."
-        remaining_weights = {"debt": 0.0, "emergency": 0.30, "life": 0.15, "goals": 0.55}
+        remaining_weights = {
+            "debt": 0.0,
+            "emergency": 0.30,
+            "life": 0.15,
+            "investment": 0.55 if investment_allowed else 0.0,
+        }
 
     emergency_raw = remaining * remaining_weights["emergency"]
     # No mandar más al fondo mini de lo necesario cuando el modo está intentando
@@ -319,19 +323,21 @@ def _build_dynamic_director_allocation(
 
     freed = max(emergency_raw - emergency_amount, 0.0)
     debt_amount = remaining * remaining_weights["debt"]
-    goals_amount = remaining * remaining_weights["goals"]
+    investment_amount = remaining * remaining_weights["investment"]
     life_amount = remaining * remaining_weights["life"]
 
     if freed > 0:
         if debt_exists:
             debt_amount += freed
         else:
-            goals_amount += freed
+            investment_amount += freed if investment_allowed else 0.0
+            if not investment_allowed:
+                emergency_amount += freed
 
     amounts["ataque_de_deuda"] = debt_amount
     amounts["fondo_de_emergencia"] = emergency_amount
     amounts["vida_controlada"] = life_amount
-    amounts["metas_o_inversion"] = goals_amount
+    amounts["inversion"] = investment_amount
 
     # Ajuste de redondeo / pesos: cualquier sobrante no asignado se protege.
     assigned = sum(amounts.values())
@@ -341,8 +347,10 @@ def _build_dynamic_director_allocation(
             amounts["meta_prioritaria"] += remainder
         elif debt_exists:
             amounts["ataque_de_deuda"] += remainder
+        elif investment_allowed:
+            amounts["inversion"] += remainder
         else:
-            amounts["metas_o_inversion"] += remainder
+            amounts["fondo_de_emergencia"] += remainder
 
     allocation, items = _allocation_from_amounts(amounts, base)
     safe_to_spend = round(amounts["vida_controlada"], 2)
@@ -383,7 +391,15 @@ def _build_dynamic_director_allocation(
         "urgent_goals": urgent_goals,
         "urgent_goal_reserved": round(goal_now, 2),
         "investment_recommended": round(investment_amount, 2),
-        "investment_target": round(investment_target, 2),
+        "investment_target": round(investment_amount, 2),
+        "investment_allowed": investment_allowed,
+        "investment_blockers": [
+            reason for blocked, reason in (
+                (debt_exists, "Hay deudas activas."),
+                (highest_debt_apr >= 10.0, "Existe deuda con tasa anual de 10% o más."),
+                (safety_gap_month > 0.01, "El Salvavidas todavía no cubre un mes."),
+            ) if blocked
+        ],
     }
 
 
@@ -938,6 +954,13 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         or _f(salary_results.get("projected_net"))
         or recurring_monthly_income
     )
+    income_received_current_cycle = _f(
+        cycle_report.get("income", {}).get("received_from_transactions")
+    )
+    remaining_income_current_cycle = max(
+        current_month_income - income_received_current_cycle,
+        0.0,
+    )
     current_month_extra_net = max(current_month_income - recurring_monthly_income, 0.0)
 
     configured_debt_payments = sum(
@@ -945,7 +968,10 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         for debt in debts
     )
     current_debt_payments = _f(cycle_report.get("debts", {}).get("payments_current_period"))
-    debt_commitment_current_cycle = max(configured_debt_payments, current_debt_payments)
+    debt_commitment_current_cycle = max(
+        configured_debt_payments - current_debt_payments,
+        0.0,
+    )
 
     total_debt = sum(max(_f(debt.get("remaining_amount")), 0.0) for debt in debts)
     original_debt = sum(
@@ -981,13 +1007,11 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     mandatory_fixed_pending = _f(pending_mandatory.get("total"))
     distributable_cash = _fetch_distributable_cash(workspace_id)
 
-    # The current distribution base is the true remainder after all known outflows:
-    # payable statement spending + any new expense after cut + at least one full
-    # monthly debt obligation + mandatory recurrent bills still pending.
+    # Distribution starts from money that exists today plus income still pending.
+    # Payments already received or paid are not counted for a second time.
     current_before_allocation = (
         distributable_cash
-        +
-        current_month_income
+        + remaining_income_current_cycle
         - committed_spending
         - debt_commitment_current_cycle
         - mandatory_fixed_pending
@@ -1100,6 +1124,8 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "monthly_income": round(current_month_income, 2),
         "recurring_monthly_income": round(recurring_monthly_income, 2),
         "current_month_extra_net": round(current_month_extra_net, 2),
+        "income_received_current_cycle": round(income_received_current_cycle, 2),
+        "remaining_income_current_cycle": round(remaining_income_current_cycle, 2),
         "current_month_one_time_debt_boost": round(first_month_one_time_boost, 2),
         "monthly_expenses": round(committed_spending, 2),
         "statement_expenses": round(statement_spending, 2),
@@ -1149,7 +1175,8 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "allocation_items": allocation_items,
         "allocation_total": round(sum(_f(item.get("amount")) for item in allocation_items), 2),
         "distribution_formula": {
-            "income": round(current_month_income, 2),
+            "cash_available_now": round(distributable_cash, 2),
+            "income": round(remaining_income_current_cycle, 2),
             "statement_spending": round(statement_spending, 2),
             "new_spending_after_cut": round(new_spending_after_cut, 2),
             "debt_commitment": round(debt_commitment_current_cycle, 2),
