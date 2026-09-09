@@ -15,6 +15,7 @@ export default function Sidebar({ page, plan, onNavigate, onLogout }) {
     ...(plan === "free" ? [] : [["strategy", plan === "vip" ? "Dirección VIP" : "Estrategia", Sparkles]]),
     ...(plan === "free" ? [] : [["budget", "Presupuesto", WalletCards], ["calendar", "Calendario", CalendarDays], ["recurring", "Recurrentes", Repeat2], ["reports", "Reportes", BarChart3]]),
     ["transactions", "Historial", ReceiptText],
+    ["monthly", "Resumen mensual", BarChart3],
     ["settings", "Cuenta y plan", Settings],
   ];
   const secondaryKeys = secondaryItems.map(([key]) => key);

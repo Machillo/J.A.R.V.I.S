@@ -35,8 +35,12 @@ export const updateFinancialSituation = (payload) => json("/user-product/financi
 export const getFinanceSummary = () => request("/user-product/finance/summary");
 export const getIncome = () => request("/user-product/finance/income");
 export const createIncome = (payload) => json("/user-product/finance/income", "POST", payload);
+export const updateIncome = (id, payload) => json(`/user-product/finance/income/${id}`, "PUT", payload);
+export const deleteIncome = (id) => request(`/user-product/finance/income/${id}`, { method: "DELETE" });
 export const getExpenses = () => request("/user-product/finance/expenses");
 export const createExpense = (payload) => json("/user-product/finance/expenses", "POST", payload);
+export const updateExpense = (id, payload) => json(`/user-product/finance/expenses/${id}`, "PUT", payload);
+export const deleteExpense = (id) => request(`/user-product/finance/expenses/${id}`, { method: "DELETE" });
 export const getOvertime = () => request("/user-product/finance/overtime");
 export const createOvertime = (payload) => json("/user-product/finance/overtime", "POST", payload);
 
@@ -70,3 +74,8 @@ export const createRecurring = (payload) => json("/user-product/basic/recurring"
 export const updateRecurring = (id, payload) => json(`/user-product/basic/recurring/${id}`, "PUT", payload);
 export const deleteRecurring = (id) => request(`/user-product/basic/recurring/${id}`, { method: "DELETE" });
 export const getBasicReport = (period) => request(`/user-product/basic/reports${period ? `?period=${period}` : ""}`);
+export const getFreeDashboard = () => request("/user-product/free/dashboard");
+export const getFreeMonthlySummary = (period) => request(`/user-product/free/monthly-summary${period ? `?period=${period}` : ""}`);
+export const getFreeMovements = () => request("/user-product/free/movements");
+export const updateFreeMovement = (id, payload) => json(`/user-product/free/movements/${encodeURIComponent(id)}`, "PUT", payload);
+export const deleteFreeMovement = (id) => request(`/user-product/free/movements/${encodeURIComponent(id)}`, { method: "DELETE" });
