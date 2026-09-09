@@ -169,6 +169,11 @@ CREATE TABLE IF NOT EXISTS financial_goals (
     target_date TEXT,
     priority TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
+    goal_type TEXT NOT NULL DEFAULT 'general',
+    alternative_group TEXT,
+    is_selected BOOLEAN NOT NULL DEFAULT TRUE,
+    funding_order INTEGER NOT NULL DEFAULT 100,
+    depends_on_group TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
