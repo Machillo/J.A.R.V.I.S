@@ -5,6 +5,7 @@ import PersonalApp from "./personal/PersonalApp";
 import UsersApp from "./users/UsersApp";
 import { getMe, getOwnerBridgeToken, setOwnerBridgeToken } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
+import { registerNativeAuthListener } from "./lib/nativeAuth";
 
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
@@ -21,6 +22,13 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [identityError, setIdentityError] = useState("");
   const [ownerBridgeMode, setOwnerBridgeMode] = useState(false);
+  const [nativeAuthError, setNativeAuthError] = useState("");
+
+  useEffect(() => {
+    let cleanup = () => {};
+    registerNativeAuthListener(setNativeAuthError).then((remove) => { cleanup = remove; });
+    return () => cleanup();
+  }, []);
 
   useEffect(() => {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
@@ -85,7 +93,7 @@ export default function App() {
   }
 
   if (!session) {
-    return <Login />;
+    return <Login nativeError={nativeAuthError} />;
   }
 
   if (identityError) {
