@@ -24,6 +24,7 @@ from backend.user_product.free_service import (
     delete_free_movement, get_free_dashboard, get_free_monthly_summary,
     list_free_movements, update_free_movement,
 )
+from backend.user_product.vip_service import get_vip_command_center
 
 router = APIRouter(prefix="/user-product", tags=["Finva Product"])
 
@@ -167,6 +168,10 @@ def strategy_vip():
 def strategy_vip_simulate(request: VipSimulationRequest):
     require_feature("strategy_vip")
     return simulate_strategy_vip(request.monthly_income_change, request.monthly_expense_change, request.one_time_extra)
+
+@router.get("/vip/command-center")
+def vip_command_center():
+    require_feature("strategy_vip"); return get_vip_command_center()
 
 @router.get("/basic/dashboard")
 def basic_dashboard():

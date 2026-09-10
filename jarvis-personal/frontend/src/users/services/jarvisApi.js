@@ -54,6 +54,7 @@ export const getStrategyBasic = () => request("/user-product/finance/strategy-ba
 export const simulateStrategyBasic = (extra_monthly) => json("/user-product/finance/strategy-basic/simulate", "POST", { extra_monthly });
 export const getStrategyVip = () => request("/user-product/finance/strategy-vip");
 export const simulateStrategyVip = (payload) => json("/user-product/finance/strategy-vip/simulate", "POST", payload);
+export const getVipCommandCenter = () => request("/user-product/vip/command-center");
 
 export const getGoals = () => request("/user-product/goals");
 export const createGoal = (payload) => json("/user-product/goals", "POST", payload);

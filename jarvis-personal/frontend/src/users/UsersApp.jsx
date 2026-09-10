@@ -13,6 +13,7 @@ import FinancialCalendar from "./pages/Calendar";
 import Recurring from "./pages/Recurring";
 import Reports from "./pages/Reports";
 import MonthlySummary from "./pages/MonthlySummary";
+import VipCenter from "./pages/VipCenter";
 import { supabase } from "../lib/supabase";
 import "./users.css";
 
@@ -30,7 +31,7 @@ export default function UsersApp({ user, onUserChange }) {
     overview: <Dashboard user={user} plan={plan} onNavigate={setPage} />,
     finance: <Finance />,
     debts: <Debts plan={plan} />,
-    strategy: <StrategyBasic plan={plan} />,
+    strategy: plan === "vip" ? <VipCenter /> : <StrategyBasic plan={plan} />,
     goals: <Goals plan={plan} />,
     transactions: <Transactions />,
     situation: <FinancialSituation plan={plan} onNavigate={setPage} />,
