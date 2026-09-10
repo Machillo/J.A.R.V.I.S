@@ -27,7 +27,11 @@ function json(path, method, body) {
 
 export const getMe = () => request("/auth/me");
 export const getPlans = () => request("/auth/plans");
-export const selectPlan = (plan) => json("/auth/plan", "POST", { plan });
+export const selectPlan = (plan, accept_beta_terms = false) => json("/auth/plan", "POST", { plan, accept_beta_terms, consent_version: "beta-2026-01-v1" });
+export const getBillingCatalog = () => request("/product-ops/billing/catalog");
+export const trackProductEvent = (payload) => json("/product-ops/events", "POST", payload);
+export const getFeedback = () => request("/product-ops/feedback");
+export const createFeedback = (payload) => json("/product-ops/feedback", "POST", payload);
 
 export const getFinancialSituation = () => request("/user-product/financial-situation");
 export const updateFinancialSituation = (payload) => json("/user-product/financial-situation", "PUT", payload);

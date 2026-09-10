@@ -1144,3 +1144,6 @@ body:has(.users-app) { background: #050b0e; }
   .users-app .vip-timeline { grid-template-columns:70px 1fr; }
   .users-app .vip-timeline > div { grid-column:2; text-align:left; }
 }
+.users-app .feedback-form{display:grid;gap:12px}.users-app .feedback-form label{display:grid;gap:6px;color:var(--muted)}
+.users-app .feedback-form input,.users-app .feedback-form select,.users-app .feedback-form textarea{width:100%;padding:12px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:#0b1117;color:inherit}
+.users-app .feedback-row{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}.users-app .feedback-row span{color:var(--muted)}
