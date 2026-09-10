@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, Tag } from "lucide-react";
 import { createExpense, createIncome, deleteExpense, deleteIncome, getExpenses, getIncome, updateExpense, updateIncome } from "../services/jarvisApi";
 
 const money = (v) => new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(Number(v) || 0);
@@ -9,12 +10,20 @@ const incomeEmpty = () => ({ amount: "", description: "", category: "Salario", e
 const expenseEmpty = () => ({ amount: "", description: "", category: "Compras", entry_date: today() });
 
 function EntryFields({ form, setForm, categories }) {
-  return <><input required type="number" min="0.01" step="0.01" placeholder="Monto" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}/><input required placeholder="Descripción" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}/><input list={`${categories[0]}-categories`} placeholder="Categoría" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}/><datalist id={`${categories[0]}-categories`}>{categories.map((item) => <option key={item} value={item}/>)}</datalist><input required type="date" value={form.entry_date} onChange={(e) => setForm({ ...form, entry_date: e.target.value })}/></>;
+  return <>
+    <label className="entry-amount-field"><span>Monto</span><div><b>₡</b><input required inputMode="decimal" type="number" min="0.01" step="0.01" placeholder="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}/></div></label>
+    <label><span>Descripción</span><input required placeholder="¿Qué movimiento fue?" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}/></label>
+    <div className="entry-field-row">
+      <label><span><Tag size={14}/> Categoría</span><input list={`${categories[0]}-categories`} placeholder="Categoría" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}/><datalist id={`${categories[0]}-categories`}>{categories.map((item) => <option key={item} value={item}/>)}</datalist></label>
+      <label><span><CalendarDays size={14}/> Fecha</span><input required type="date" value={form.entry_date} onChange={(e) => setForm({ ...form, entry_date: e.target.value })}/></label>
+    </div>
+  </>;
 }
 
 export default function Finance() {
   const [income, setIncome] = useState([]), [expenses, setExpenses] = useState([]), [error, setError] = useState("");
   const [incomeForm, setIncomeForm] = useState(incomeEmpty), [expenseForm, setExpenseForm] = useState(expenseEmpty), [editing, setEditing] = useState(null);
+  const [entryKind, setEntryKind] = useState("expense");
   const run = async (fn) => { setError(""); try { return await fn(); } catch (err) { setError(err?.message || "No se pudo completar la operación."); return null; } };
   const load = () => run(async () => { const [a,b] = await Promise.all([getIncome(),getExpenses()]); setIncome(a); setExpenses(b); });
   useEffect(() => { load(); }, []);
@@ -23,13 +32,19 @@ export default function Finance() {
   const remove = async (kind,id) => { if (!confirm("¿Eliminar este movimiento?")) return; if (await run(() => kind === "income" ? deleteIncome(id) : deleteExpense(id))) load(); };
   const saveEdit = async (e) => { e.preventDefault(); const payload={...editing,amount:Number(editing.amount)}; const saved=await run(()=>editing.kind==="income"?updateIncome(editing.id,payload):updateExpense(editing.id,payload)); if(saved){setEditing(null);load();} };
   const openEdit = (kind,item) => setEditing({ kind,id:item.id,amount:item.amount,description:item.description||item.source||"",category:item.category||(kind==="income"?"Salario":"Compras"),entry_date:item.entry_date||String(item.created_at).slice(0,10) });
-  return <section>
-    <div className="hero"><span>FREE 02–03</span><h1>Ingresos y gastos</h1><p>Registro manual con fecha, descripción y categorías propias.</p></div>
+  const isIncome = entryKind === "income";
+  return <section className="finance-page">
+    <div className="hero"><span>MOVIMIENTOS</span><h1>Ingresos y gastos</h1><p>Registrá lo importante en pocos segundos.</p></div>
     {error && <div className="panel error">{error}</div>}
-    <div className="grid3">
-      <form className="panel form" onSubmit={submitIncome}><h3>Nuevo ingreso</h3><EntryFields form={incomeForm} setForm={setIncomeForm} categories={incomeCategories}/><button>Guardar ingreso</button></form>
-      <form className="panel form" onSubmit={submitExpense}><h3>Nuevo gasto</h3><EntryFields form={expenseForm} setForm={setExpenseForm} categories={expenseCategories}/><button>Guardar gasto</button></form>
+    <div className="entry-segmented" role="tablist" aria-label="Tipo de movimiento">
+      <button type="button" className={isIncome ? "active income" : ""} onClick={()=>setEntryKind("income")}><ArrowDownLeft size={18}/> Ingreso</button>
+      <button type="button" className={!isIncome ? "active expense" : ""} onClick={()=>setEntryKind("expense")}><ArrowUpRight size={18}/> Gasto</button>
     </div>
+    <form className={`panel form entry-form ${isIncome ? "income" : "expense"}`} onSubmit={isIncome ? submitIncome : submitExpense}>
+      <div className="entry-form-title"><span>{isIncome ? <ArrowDownLeft size={20}/> : <ArrowUpRight size={20}/>}</span><div><h3>Nuevo {isIncome ? "ingreso" : "gasto"}</h3><small>Completá los datos del movimiento</small></div></div>
+      <EntryFields form={isIncome ? incomeForm : expenseForm} setForm={isIncome ? setIncomeForm : setExpenseForm} categories={isIncome ? incomeCategories : expenseCategories}/>
+      <button className="entry-save-button">Guardar {isIncome ? "ingreso" : "gasto"}</button>
+    </form>
     <div className="grid3 lists">
       <div className="panel"><h3>Ingresos recientes</h3>{income.slice(0,8).map((item)=><div className="row" key={item.id}><span><strong>{item.description||item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b>{money(item.amount)}</b><span className="actions"><button onClick={()=>openEdit("income",item)}>Editar</button><button className="danger" onClick={()=>remove("income",item.id)}>Eliminar</button></span></span></div>)}</div>
       <div className="panel"><h3>Gastos recientes</h3>{expenses.slice(0,8).map((item)=><div className="row" key={item.id}><span><strong>{item.description||item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b>{money(item.amount)}</b><span className="actions"><button onClick={()=>openEdit("expense",item)}>Editar</button><button className="danger" onClick={()=>remove("expense",item.id)}>Eliminar</button></span></span></div>)}</div>
