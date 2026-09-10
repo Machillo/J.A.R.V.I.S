@@ -36,13 +36,18 @@ from backend.product_ops.routes import router as product_ops_router
 
 app = FastAPI(title="Jarvis Core")
 
+ALLOWED_APP_ORIGINS = {
+    "http://localhost",
+    "https://localhost",
+    "capacitor://localhost",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://jarvis-frontend-delta.vercel.app",
+}
+
 app.add_middleware(
     CORSMiddleware,
-     allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://jarvis-frontend-delta.vercel.app",
-    ],
+    allow_origins=list(ALLOWED_APP_ORIGINS),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,11 +90,7 @@ async def auth_middleware(request: Request, call_next):
     origin = request.headers.get("origin")
 
     cors_headers = {}
-    if origin in {
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://jarvis-frontend-delta.vercel.app",
-    }:
+    if origin in ALLOWED_APP_ORIGINS:
         cors_headers["Access-Control-Allow-Origin"] = origin
         cors_headers["Access-Control-Allow-Credentials"] = "true"
 
