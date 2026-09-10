@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920">
+  <defs>
+    <radialGradient id="aura" cx="50%" cy="42%" r="56%"><stop stop-color="#173a50"/><stop offset=".48" stop-color="#0a1828"/><stop offset="1" stop-color="#02070d"/></radialGradient>
+    <linearGradient id="brand" x1="310" y1="650" x2="780" y2="1130"><stop stop-color="#a96cff"/><stop offset=".48" stop-color="#efeaff"/><stop offset="1" stop-color="#29e6ff"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="13" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#aura)"/>
+  <g opacity=".12" stroke="#29e6ff"><path d="M0 560H1080M0 1360H1080M140 0V1920M940 0V1920"/></g>
+  <rect x="370" y="600" width="340" height="340" rx="92" fill="#0b1e2c" stroke="#4bdcf0" stroke-opacity=".35" stroke-width="5"/>
+  <g transform="translate(396 626) scale(12)" fill="none" stroke="url(#brand)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+    <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M9 13a4.5 4.5 0 0 0 3-4M6.003 5.125A3 3 0 0 0 6.401 6.5M3.477 10.896a4 4 0 0 1 .585-.396M6 18a4 4 0 0 1-1.967-.516M12 13h4M12 18h6a2 2 0 0 1 2 2v1M12 8h8M16 8V5a2 2 0 0 1 2-2"/><circle cx="16" cy="13" r=".55" fill="#29e6ff" stroke="none"/><circle cx="18" cy="3" r=".55" fill="#b67cff" stroke="none"/><circle cx="20" cy="21" r=".55" fill="#29e6ff" stroke="none"/><circle cx="20" cy="8" r=".55" fill="#29e6ff" stroke="none"/>
+  </g>
+  <text x="540" y="1085" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="116" font-weight="800" letter-spacing="18" fill="#29e6ff" filter="url(#glow)">FINVA</text>
+  <text x="540" y="1168" text-anchor="middle" font-family="DejaVu Sans,Arial,sans-serif" font-size="31" letter-spacing="6" fill="#d6eaf2">TU ESTRATEGIA FINANCIERA</text>
+</svg>
