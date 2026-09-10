@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.5.1",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
     "@capacitor/core": "^8.5.1",
     "@supabase/supabase-js": "^2.107.0",
     "lucide-react": "^1.17.0",

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BrainCircuit, ShieldCheck } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { startGoogleLogin } from "../lib/nativeAuth";
 
 function GoogleIcon() {
   return (
@@ -13,7 +13,7 @@ function GoogleIcon() {
   );
 }
 
-export default function Login() {
+export default function Login({ nativeError = "" }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,17 +21,15 @@ export default function Login() {
     setLoading(true);
     setError("");
 
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        queryParams: { prompt: "select_account" },
-      },
-    });
+    const { error: authError } = await startGoogleLogin();
 
     if (authError) {
       setError(authError.message);
       setLoading(false);
+      return;
     }
+    // On Android the browser is external; keep the button usable if the user cancels.
+    setLoading(false);
   };
 
   return (
@@ -62,7 +60,7 @@ export default function Login() {
           {loading ? "Conectando con Google..." : "Continuar con Google"}
         </button>
 
-        {error && <p className="auth-message auth-error">{error}</p>}
+        {(error || nativeError) && <p className="auth-message auth-error">{error || nativeError}</p>}
 
         <p className="login-warning auth-secure-note">
           <ShieldCheck size={15} />
