@@ -14,6 +14,13 @@ PLAN_COPY = {
     "vip": {"name": "VIP", "tagline": "Director financiero personal.", "features": ["Todo Basic", "Estrategia dinámica", "Proyecciones", "Metas inteligentes", "Escenarios"]},
 }
 PLAN_RANK = {"free": 1, "basic": 2, "vip": 3}
+BUILTIN_FEATURE_MIN_PLAN = {
+    "basic_dashboard": "basic",
+    "guided_budget": "basic",
+    "financial_calendar": "basic",
+    "recurring_items": "basic",
+    "basic_reports": "basic",
+}
 
 
 def _subscription(conn, account_id: str):
@@ -211,6 +218,11 @@ def require_feature(feature_code: str):
                  AND (s.access_source<>'courtesy' OR (s.expires_at IS NOT NULL AND s.expires_at>NOW()))""",
             (account_id, feature_code),
         ).fetchone()
+        if not row and feature_code in BUILTIN_FEATURE_MIN_PLAN:
+            subscription = _subscription(conn, account_id)
+            active = subscription and subscription.get("status") == "active"
+            if active and PLAN_RANK.get(subscription.get("plan"), 0) >= PLAN_RANK[BUILTIN_FEATURE_MIN_PLAN[feature_code]]:
+                return True
     if not row:
         raise HTTPException(status_code=403, detail="Esta función no está incluida en tu plan.")
     return True
