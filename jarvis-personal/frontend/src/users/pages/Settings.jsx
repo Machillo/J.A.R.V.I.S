@@ -12,6 +12,7 @@ export default function Settings({ user, onUserChange }) {
   const [confirming, setConfirming] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [betaAccepted, setBetaAccepted] = useState(false);
 
   const currentPlan = user?.subscription?.plan || "free";
   const currentPlanInfo = useMemo(
@@ -39,7 +40,12 @@ export default function Settings({ user, onUserChange }) {
     setError("");
     setMessage("");
     try {
-      const response = await selectPlan(planCode);
+      const response = await selectPlan(planCode, planCode === "free" ? false : betaAccepted);
+      if (response.status === "payment_pending") {
+        setConfirming("");
+        setMessage(`Solicitud ${planCode.toUpperCase()} creada. Se activará únicamente cuando se confirme el pago.`);
+        return;
+      }
       onUserChange?.(response.profile);
       setConfirming("");
       setMessage(`Plan cambiado a ${response.profile?.subscription?.plan?.toUpperCase() || planCode.toUpperCase()}.`);
@@ -90,7 +96,7 @@ export default function Settings({ user, onUserChange }) {
         <div>
           <p className="eyebrow">Desarrollo</p>
           <h2>Cambiar de plan</h2>
-          <span>Durante las pruebas el cambio es inmediato y no genera cobros.</span>
+          <span>Basic y VIP requieren pago confirmado. El precio beta dura 3 meses.</span>
         </div>
       </div>
 
@@ -133,6 +139,7 @@ export default function Settings({ user, onUserChange }) {
       {confirming && confirming !== currentPlan && (
         <p className="plan-change-note">Tocá de nuevo “Confirmar” para aplicar el cambio. Más adelante esta pantalla gestionará upgrades, downgrades, renovación y cancelación real.</p>
       )}
+      <label className="beta-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>setBetaAccepted(e.target.checked)}/><span>Acepto el precio beta: Basic ₡1.990 o VIP ₡3.990 al mes por 3 meses; luego ₡2.990 o ₡5.990 respectivamente.</span></label>
       {message && <p className="success-banner">{message}</p>}
       {error && <p className="onboarding-error">{error}</p>}
     </section>

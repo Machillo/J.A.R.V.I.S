@@ -15,6 +15,8 @@ from pydantic import Field, model_validator
 
 class PlanSelectionRequest(BaseModel):
     plan: Literal["free", "basic", "vip"]
+    accept_beta_terms: bool = False
+    consent_version: str = Field(default="beta-2026-01-v1", max_length=40)
 
 
 class UnifiedOnboardingRequest(BaseModel):

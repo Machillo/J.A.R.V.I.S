@@ -38,7 +38,7 @@ def _subscription(conn, account_id: str):
 
 
 def _activate_self_service_if_ready(conn, account_id: str):
-    """Heal a pending self-service plan once its onboarding requirement is met."""
+    """Only Free can self-activate; paid access requires a confirmed payment."""
     row = conn.execute(
         """SELECT s.status,s.access_source,p.code AS plan_code,a.onboarding_level
            FROM account_subscriptions s
@@ -54,7 +54,7 @@ def _activate_self_service_if_ready(conn, account_id: str):
     completed = (row.get("onboarding_level") or "").lower()
     ready = PLAN_RANK.get(completed, 0) >= PLAN_RANK.get(plan_code, 999)
 
-    if row.get("access_source") == "self_service" and row.get("status") == "pending" and ready:
+    if row.get("access_source") == "self_service" and row.get("status") == "pending" and ready and plan_code == "free":
         conn.execute(
             """UPDATE account_subscriptions
                SET status='active',
@@ -112,14 +112,25 @@ def get_available_plans():
     return [{"code": r["code"], **PLAN_COPY[r["code"]]} for r in rows]
 
 
-def select_plan(plan_code: str):
+def select_plan(plan_code: str, accept_beta_terms: bool = False, consent_version: str = "beta-2026-01-v1"):
     if plan_code not in PLAN_COPY:
         raise HTTPException(status_code=400, detail="Plan no válido.")
     user = get_current_user()
     if user.get("role") == "owner":
         return {"status": "ok", "profile": enrich_identity(user)}
+    if plan_code in {"basic", "vip"}:
+        from backend.product_ops.service import create_checkout
+        result = create_checkout(plan_code, accept_beta_terms, consent_version)
+        return {**result, "profile": enrich_identity(user)}
     account_id = get_current_account_id()
     with get_connection() as conn:
+        if plan_code == "free":
+            from backend.product_ops.service import ensure_schema
+            ensure_schema(conn)
+            conn.execute("""UPDATE billing_subscriptions SET status='canceled',cancel_at_period_end=FALSE,updated_at=NOW()
+               WHERE account_id=%s AND status IN ('active','payment_pending','past_due')""", (account_id,))
+            conn.execute("""UPDATE billing_orders SET status='canceled',updated_at=NOW()
+               WHERE account_id=%s AND status='payment_pending'""", (account_id,))
         plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
         if not plan:
             raise HTTPException(status_code=404, detail="Plan no disponible.")
@@ -160,6 +171,10 @@ def complete_onboarding(payload):
         subscription_plan = (sub or {}).get("plan") or "free"
         if subscription_plan not in PLAN_COPY:
             raise HTTPException(status_code=409, detail="Seleccioná un plan primero.")
+        if subscription_plan in {"basic", "vip"} and (sub or {}).get("access_source") == "self_service":
+            from backend.product_ops.service import has_active_payment
+            if not has_active_payment(conn, account_id, subscription_plan):
+                raise HTTPException(status_code=402, detail="El plan se activa únicamente después de confirmar el pago.")
         if payload.income_type == "fixed" and payload.fixed_monthly_salary is None:
             raise HTTPException(status_code=422, detail="Indicá tu salario mensual.")
         if payload.income_type == "hourly" and (payload.hourly_rate is None or payload.hours_per_day is None):
@@ -208,6 +223,12 @@ def require_feature(feature_code: str):
     account_id = get_current_account_id()
     with get_connection() as conn:
         _activate_self_service_if_ready(conn, account_id)
+        subscription = _subscription(conn, account_id)
+        if subscription and subscription.get("access_source") == "self_service" and subscription.get("plan") in {"basic", "vip"}:
+            from backend.product_ops.service import has_active_payment
+            if not has_active_payment(conn, account_id, subscription.get("plan")):
+                conn.commit()
+                raise HTTPException(status_code=402, detail="Esta función requiere un pago confirmado.")
         conn.commit()
         row = conn.execute(
             """SELECT 1 FROM account_subscriptions s

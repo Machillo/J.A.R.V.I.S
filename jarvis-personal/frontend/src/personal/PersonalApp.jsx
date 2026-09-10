@@ -17,6 +17,7 @@ import {
   Target,
   UserRound,
   UsersRound,
+  Activity,
   Landmark,
   PiggyBank,
   Gem,
@@ -42,6 +43,7 @@ import FinancialDeterioration from "../pages/FinancialDeterioration";
 import Login from "../pages/Login";
 import UserManagement from "../pages/UserManagement";
 import UnifiedOnboarding from "../pages/UnifiedOnboarding";
+import ProductOperations from "../pages/ProductOperations";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
@@ -73,11 +75,12 @@ const appSections = {
   settings: { title: "Configuración", eyebrow: "Config" },
   goals: { title: "Metas", eyebrow: "Config" },
   userManagement: { title: "Usuarios", eyebrow: "Owner Control" },
+  productOperations: { title: "Operaciones", eyebrow: "FINVA Beta" },
 };
 
 const getBottomGroup = (page) => {
   if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "profile";
-  if (["memory", "settings", "goals", "profile"].includes(page)) return "profile";
+  if (["memory", "settings", "goals", "profile", "userManagement", "productOperations"].includes(page)) return "profile";
   if (["investments", "businesses", "financialAccounts", "netWorth", "financialTimeline", "reconciliation", "deterioration", "wealth"].includes(page)) return "wealth";
   return page;
 };
@@ -129,7 +132,8 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
         <AppListItem icon={Target} title="Goals" subtitle="Objetivos y prioridades" onClick={() => navigatePage("goals")} />
         <AppListItem icon={SettingsIcon} title="System Settings" subtitle="Preferencias de JARVIS" onClick={() => navigatePage("settings")} />
         {currentUser?.role === "owner" && (
-          <AppListItem icon={UsersRound} title="Administrar usuarios" subtitle="Buscar cuentas y otorgar cortesías" onClick={() => navigatePage("userManagement")} />
+          <><AppListItem icon={UsersRound} title="Administrar usuarios" subtitle="Buscar cuentas y otorgar cortesías" onClick={() => navigatePage("userManagement")} />
+          <AppListItem icon={Activity} title="Operaciones FINVA" subtitle="Pagos beta, uso y reportes" onClick={() => navigatePage("productOperations")} /></>
         )}
       </div>
 
@@ -620,6 +624,8 @@ export default function App() {
 
       case "userManagement":
         return <UserManagement />;
+      case "productOperations":
+        return <ProductOperations />;
 
       case "profile":
         return <ProfileHub navigatePage={navigatePage} userName={userName} currentUser={currentUser} aiUsage={aiUsage} onLogout={handleLogout} profilePreferences={profilePreferences} onProfilePhotoChange={handleProfilePhotoChange} />;

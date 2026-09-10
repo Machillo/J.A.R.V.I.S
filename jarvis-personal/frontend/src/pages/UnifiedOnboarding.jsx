@@ -24,6 +24,8 @@ export default function UnifiedOnboarding({ user, onComplete }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [betaAccepted, setBetaAccepted] = useState(false);
+  const [pending, setPending] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
   const hydrate = (data) => {
@@ -71,7 +73,11 @@ export default function UnifiedOnboarding({ user, onComplete }) {
   const choosePlan = async (code) => {
     setSaving(true); setError("");
     try {
-      const result = await selectPlan(code);
+      const result = await selectPlan(code, code === "free" ? false : betaAccepted);
+      if (result.status === "payment_pending") {
+        setPending(result.order);
+        return;
+      }
       setProfile(result.profile);
       const onboarding = await getOnboarding();
       hydrate(onboarding);
@@ -112,15 +118,18 @@ export default function UnifiedOnboarding({ user, onComplete }) {
         <h1>Tu espacio financiero empieza acá</h1>
         <p>Cada cuenta recibe su propio espacio aislado. Podés empezar gratis y cambiar de plan cuando corresponda.</p>
       </div>
+      {pending && <div className="unified-saved-note"><Check size={17}/><span>Solicitud {pending.plan_code.toUpperCase()} creada por ₡{Number(pending.amount).toLocaleString("es-CR")}. Tu acceso seguirá bloqueado hasta confirmar el pago.</span></div>}
       {loading ? <div className="unified-loading"><div className="unified-spinner"/><span>Preparando tus planes...</span></div> : <div className="unified-plan-grid">{plans.map((item) => {
         const Icon = iconMap[item.code] || WalletCards;
         return <article key={item.code} className={`unified-plan-card ${item.code}`}>
           <div className="unified-plan-icon"><Icon size={26}/></div>
           <div className="unified-plan-copy"><span>{item.code === "free" ? "EMPEZÁ HOY" : item.code === "basic" ? "MÁS CONTROL" : "EXPERIENCIA COMPLETA"}</span><h2>{item.name}</h2><p>{item.tagline}</p></div>
           <ul>{item.features.map(f => <li key={f}><Check size={16}/><span>{f}</span></li>)}</ul>
-          <button className="unified-plan-button" disabled={saving} onClick={() => choosePlan(item.code)}>{saving ? "Guardando..." : `Elegir ${item.name}`}</button>
+          {item.code !== "free" && <small className="beta-price">Beta: {item.code === "basic" ? "₡1.990" : "₡3.990"}/mes por 3 meses. Luego {item.code === "basic" ? "₡2.990" : "₡5.990"}/mes.</small>}
+          <button className="unified-plan-button" disabled={saving || (item.code !== "free" && !betaAccepted)} onClick={() => choosePlan(item.code)}>{saving ? "Guardando..." : `Elegir ${item.name}`}</button>
         </article>;
       })}</div>}
+      <label className="beta-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>setBetaAccepted(e.target.checked)}/><span>Acepto el precio beta por 3 meses y entiendo que después aplica el precio regular. El plan se activa solo al confirmar el pago.</span></label>
       {error && <p className="unified-onboarding-error">{error}</p>}
     </section>
   </main>;

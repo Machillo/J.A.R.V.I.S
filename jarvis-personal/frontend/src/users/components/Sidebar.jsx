@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, CreditCard, Landmark, LogOut, MoreHorizontal, ReceiptText, Repeat2, Settings, Sparkles, Target, WalletCards } from "lucide-react";
+import { BarChart3, CalendarDays, CreditCard, Landmark, LifeBuoy, LogOut, MoreHorizontal, ReceiptText, Repeat2, Settings, Sparkles, Target, WalletCards } from "lucide-react";
 import { useState } from "react";
 
 const mainItems = [
@@ -17,6 +17,7 @@ export default function Sidebar({ page, plan, onNavigate, onLogout }) {
     ["transactions", "Historial", ReceiptText],
     ["monthly", "Resumen mensual", BarChart3],
     ["settings", "Cuenta y plan", Settings],
+    ["feedback", "Ayuda y sugerencias", LifeBuoy],
   ];
   const secondaryKeys = secondaryItems.map(([key]) => key);
 

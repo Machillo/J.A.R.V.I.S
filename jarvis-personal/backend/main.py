@@ -32,6 +32,7 @@ from backend.auth.owner_bridge_routes import router as owner_bridge_router
 from backend.user_product.routes import router as user_product_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
+from backend.product_ops.routes import router as product_ops_router
 
 app = FastAPI(title="Jarvis Core")
 
@@ -166,6 +167,7 @@ app.include_router(users_admin_router)
 app.include_router(owner_bridge_router)
 app.include_router(user_product_router)
 app.include_router(deployment_monitor_router)
+app.include_router(product_ops_router)
 
 class AskRequest(BaseModel):
     text: str

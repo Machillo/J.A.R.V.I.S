@@ -14,6 +14,8 @@ import Recurring from "./pages/Recurring";
 import Reports from "./pages/Reports";
 import MonthlySummary from "./pages/MonthlySummary";
 import VipCenter from "./pages/VipCenter";
+import Feedback from "./pages/Feedback";
+import { trackProductEvent } from "./services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import "./users.css";
 
@@ -25,6 +27,8 @@ export default function UsersApp({ user, onUserChange }) {
     const scroller = document.querySelector(".users-app");
     if (scroller) scroller.scrollTo({ top: 0, left: 0, behavior: "auto" });
     else window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const eventMap = { overview:"dashboard_opened", finance:"finance_opened", debts:"debts_opened", goals:"goals_opened", transactions:"transactions_opened", strategy:"strategy_opened", budget:"budget_opened", calendar:"calendar_opened", recurring:"recurring_opened", reports:"reports_opened", settings:"settings_opened" };
+    if (eventMap[page]) trackProductEvent({ event_name:eventMap[page], surface:page, success:true }).catch(()=>{});
   }, [page]);
 
   const pages = {
@@ -41,6 +45,7 @@ export default function UsersApp({ user, onUserChange }) {
     recurring: <Recurring />,
     reports: <Reports />,
     monthly: <MonthlySummary />,
+    feedback: <Feedback />,
   };
 
   return (

@@ -237,6 +237,9 @@ export const grantCourtesySubscription = (userId, payload) => jsonRequest(`/user
 export const revokeCourtesySubscription = (userId) => request(`/users-admin/users/${userId}/courtesy`, { method: "DELETE" });
 
 export const getPlans = () => request("/auth/plans");
-export const selectPlan = (plan) => jsonRequest("/auth/plan", "POST", { plan });
+export const selectPlan = (plan, accept_beta_terms = false) => jsonRequest("/auth/plan", "POST", { plan, accept_beta_terms, consent_version: "beta-2026-01-v1" });
+export const getProductOperations = () => request("/product-ops/owner/dashboard");
+export const resolveTestPayment = (orderId, action = "confirm") => jsonRequest(`/product-ops/owner/orders/${orderId}`, "POST", { action });
+export const updateProductFeedback = (ticketId, payload) => jsonRequest(`/product-ops/owner/feedback/${ticketId}`, "PATCH", payload);
 export const getOnboarding = () => request("/auth/onboarding");
 export const completeOnboarding = (payload) => jsonRequest("/auth/onboarding", "POST", payload);

@@ -64,7 +64,7 @@ def plans():
 
 @router.post("/plan")
 def choose_plan(request: PlanSelectionRequest):
-    return select_plan(request.plan)
+    return select_plan(request.plan, request.accept_beta_terms, request.consent_version)
 
 
 @router.get("/onboarding")
