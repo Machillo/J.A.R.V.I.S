@@ -1,10 +1,5 @@
 import { supabase } from "../../lib/supabase";
-
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV
-    ? "http://127.0.0.1:8000"
-    : "https://jarvis-backend-152f.onrender.com");
+import { API_URL } from "../../lib/apiUrl";
 
 async function authHeaders() {
   const { data } = await supabase.auth.getSession();
