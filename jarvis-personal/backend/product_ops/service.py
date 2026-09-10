@@ -20,7 +20,13 @@ def ensure_schema(conn):
       basic_regular_price_crc NUMERIC(12,2) NOT NULL DEFAULT 2990,
       vip_regular_price_crc NUMERIC(12,2) NOT NULL DEFAULT 5990,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
-    conn.execute("""INSERT INTO finva_beta_programs(code) VALUES(%s) ON CONFLICT(code) DO NOTHING""", (BETA_CODE,))
+    # This table is keyed by ``code`` and intentionally has no numeric ``id``.
+    # Be explicit so the legacy database adapter does not append ``RETURNING id``.
+    conn.execute(
+        """INSERT INTO finva_beta_programs(code) VALUES(%s)
+           ON CONFLICT(code) DO NOTHING RETURNING code""",
+        (BETA_CODE,),
+    )
     conn.execute("""CREATE TABLE IF NOT EXISTS billing_orders (
       id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       workspace_id UUID, plan_code TEXT NOT NULL CHECK(plan_code IN ('basic','vip')),
