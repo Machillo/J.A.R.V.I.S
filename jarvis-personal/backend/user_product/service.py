@@ -65,6 +65,11 @@ def _money(value: Any) -> float:
     return round(float(value or 0), 2)
 
 
+def _ensure_income_schema(conn) -> None:
+    """Keep manual income compatible when a deployment precedes its migration."""
+    conn.execute("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'Salario'")
+
+
 def _monthly_income_estimate(profile: dict | None) -> float:
     if not profile:
         return 0.0
@@ -110,6 +115,7 @@ def get_user_finance_summary():
 def list_income():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
+        _ensure_income_schema(conn)
         rows = conn.execute(
             """SELECT id,amount,source,COALESCE(category,'Salario') category,user_id,workspace_id,created_at
                FROM salaries WHERE workspace_id=%s ORDER BY created_at DESC,id DESC""",
@@ -122,6 +128,7 @@ def create_income(payload):
     user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
+        _ensure_income_schema(conn)
         row = conn.execute(
             """INSERT INTO salaries(user_id,workspace_id,amount,source,category,created_at)
                VALUES(%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
@@ -136,6 +143,7 @@ def create_income(payload):
 def update_income(income_id: int, payload):
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
+        _ensure_income_schema(conn)
         row = conn.execute(
             """UPDATE salaries SET amount=%s,source=%s,category=%s,
                       created_at=COALESCE(%s::date,created_at::date)+TIME '12:00'
