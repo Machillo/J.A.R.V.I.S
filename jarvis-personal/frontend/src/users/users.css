@@ -1147,3 +1147,60 @@ body:has(.users-app) { background: #050b0e; }
 .users-app .feedback-form{display:grid;gap:12px}.users-app .feedback-form label{display:grid;gap:6px;color:var(--muted)}
 .users-app .feedback-form input,.users-app .feedback-form select,.users-app .feedback-form textarea{width:100%;padding:12px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:#0b1117;color:inherit}
 .users-app .feedback-row{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}.users-app .feedback-row span{color:var(--muted)}
+
+/* Native mobile pass: denser capture, clearer hierarchy and immediate dialogs. */
+.users-app .finance-page .hero { padding-bottom: 10px; }
+.users-app .finance-page .hero h1 { font-size: 1.8rem; }
+.users-app .entry-segmented {
+  display:grid; grid-template-columns:1fr 1fr; gap:4px; margin:4px 0 12px; padding:4px;
+  border:1px solid rgba(182,225,238,.09); border-radius:16px; background:rgba(0,0,0,.2);
+}
+.users-app .entry-segmented button {
+  min-height:44px; display:flex; align-items:center; justify-content:center; gap:7px; border:0;
+  border-radius:12px; background:transparent; color:var(--f-muted); font-weight:760;
+}
+.users-app .entry-segmented button.active { color:#f5fdff; background:#152b34; box-shadow:0 4px 14px rgba(0,0,0,.2),inset 0 1px rgba(255,255,255,.04); }
+.users-app .entry-segmented button.active.income svg { color:var(--success); }
+.users-app .entry-segmented button.active.expense svg { color:var(--danger); }
+.users-app .entry-form { gap:13px; padding:16px; border-radius:22px; }
+.users-app .entry-form-title { display:flex; align-items:center; gap:11px; margin-bottom:2px; }
+.users-app .entry-form-title > span { width:38px; height:38px; display:grid; place-items:center; border-radius:12px; background:rgba(93,214,255,.09); color:var(--accent); }
+.users-app .entry-form.expense .entry-form-title > span { color:var(--danger); background:rgba(255,119,135,.08); }
+.users-app .entry-form-title h3 { margin:0; font-size:1.02rem; }
+.users-app .entry-form-title small { display:block; margin-top:2px; color:var(--f-muted); font-size:.7rem; }
+.users-app .entry-form label { display:grid; gap:6px; min-width:0; }
+.users-app .entry-form label > span { display:flex; align-items:center; gap:5px; color:var(--f-muted); font-size:.69rem; font-weight:680; }
+.users-app .entry-form input { min-height:46px; border-radius:13px; }
+.users-app .entry-amount-field > div { display:flex; align-items:center; border:1px solid var(--f-border-strong); border-radius:15px; background:rgba(255,255,255,.045); overflow:hidden; }
+.users-app .entry-amount-field > div:focus-within { border-color:rgba(93,214,255,.5); box-shadow:0 0 0 4px rgba(93,214,255,.08); }
+.users-app .entry-amount-field b { padding-left:14px; color:var(--f-text-2); font-size:1.25rem; }
+.users-app .entry-amount-field input { border:0!important; background:transparent!important; box-shadow:none!important; font-size:1.3rem; font-weight:800; }
+.users-app .entry-field-row { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.users-app .entry-save-button { min-height:50px!important; margin-top:2px; }
+.users-app .entry-form.income .entry-save-button { background:linear-gradient(145deg,#23845f,#19684a); border-color:rgba(114,224,173,.2); }
+.users-app .entry-form.expense .entry-save-button { background:linear-gradient(145deg,#2380a0,#17647d); }
+.users-app .finance-page > .lists { margin-top:16px; }
+.users-app .finance-page > .lists .panel { padding:14px; border-radius:20px; }
+
+.users-app .plan-dialog-backdrop { position:fixed; inset:0; z-index:140; display:flex; align-items:flex-end; justify-content:center; padding:18px 14px max(18px,env(safe-area-inset-bottom)); background:rgba(0,0,0,.72); backdrop-filter:blur(10px); }
+.users-app .plan-dialog { position:relative; width:min(100%,480px); padding:22px 18px 18px; border:1px solid var(--f-border-strong); border-radius:26px; background:linear-gradient(155deg,#142830,#09161c 72%); box-shadow:0 28px 90px rgba(0,0,0,.55); animation:finva-sheet-in .2s cubic-bezier(.2,.8,.2,1); }
+.users-app .plan-dialog.plan-vip { border-color:rgba(238,203,114,.25); background:linear-gradient(155deg,#292515,#0b171c 72%); }
+.users-app .plan-dialog-close { position:absolute; top:14px; right:14px; width:36px; height:36px; display:grid; place-items:center; border:0; border-radius:50%; color:var(--f-muted); background:rgba(255,255,255,.06); }
+.users-app .plan-dialog-icon { width:50px; height:50px; display:grid; place-items:center; margin-bottom:14px; border-radius:16px; color:var(--accent); background:rgba(93,214,255,.1); }
+.users-app .plan-dialog.plan-vip .plan-dialog-icon { color:var(--gold); background:rgba(238,203,114,.1); }
+.users-app .plan-dialog h2 { margin:5px 42px 7px 0; font-size:1.35rem; letter-spacing:-.035em; }
+.users-app .plan-dialog > p:not(.eyebrow) { margin:0 0 16px; color:var(--f-muted); font-size:.82rem; }
+.users-app .dialog-consent { display:grid; grid-template-columns:24px 1fr; align-items:start; gap:10px; margin:14px 0; padding:14px; border:1px solid rgba(255,255,255,.08); border-radius:16px; background:rgba(255,255,255,.035); line-height:1.42; }
+.users-app .dialog-consent input { width:22px; height:22px; margin:0; accent-color:#4fc8ea; }
+.users-app .plan-dialog-error { display:flex; align-items:flex-start; gap:9px; margin:12px 0; padding:12px; border:1px solid rgba(255,119,135,.24); border-radius:14px; background:rgba(125,36,49,.2); color:#ffc2ca; font-size:.78rem; line-height:1.4; }
+.users-app .plan-dialog-error svg { flex:0 0 auto; margin-top:1px; }
+.users-app .plan-dialog-actions { display:grid; grid-template-columns:.8fr 1.2fr; gap:9px; margin-top:16px; }
+.users-app .plan-dialog-actions button { min-height:48px; border-radius:14px; font-weight:760; }
+.users-app .plan-dialog-cancel { border:1px solid var(--f-border); background:rgba(255,255,255,.04); color:var(--f-text-2); }
+.users-app .plan-dialog-confirm { border:1px solid rgba(93,214,255,.16); background:linear-gradient(145deg,#2081a3,#17677f); color:white; }
+@keyframes finva-sheet-in { from { transform:translateY(24px); opacity:.4; } to { transform:translateY(0); opacity:1; } }
+
+@media (max-width:390px) {
+  .users-app .entry-field-row { grid-template-columns:1fr; }
+  .users-app .finance-page .hero p { font-size:.8rem; }
+}

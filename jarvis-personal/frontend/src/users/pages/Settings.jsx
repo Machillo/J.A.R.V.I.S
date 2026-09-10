@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Crown, Sparkles, WalletCards } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, Crown, Sparkles, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getPlans, selectPlan } from "../services/jarvisApi";
 import AccountSecurity from "../components/AccountSecurity";
@@ -27,15 +27,21 @@ export default function Settings({ user, onUserChange }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const changePlan = async (planCode) => {
+  const openPlanDialog = (planCode) => {
     if (planCode === currentPlan) return;
-    if (confirming !== planCode) {
-      setConfirming(planCode);
-      setMessage("");
-      setError("");
+    setConfirming(planCode);
+    setMessage("");
+    setError("");
+    setBetaAccepted(false);
+  };
+
+  const changePlan = async () => {
+    const planCode = confirming;
+    if (!planCode || planCode === currentPlan) return;
+    if (planCode !== "free" && !betaAccepted) {
+      setError("Debés aceptar las condiciones del precio beta para continuar.");
       return;
     }
-
     setChanging(planCode);
     setError("");
     setMessage("");
@@ -43,7 +49,7 @@ export default function Settings({ user, onUserChange }) {
       const response = await selectPlan(planCode, planCode === "free" ? false : betaAccepted);
       if (response.status === "payment_pending") {
         setConfirming("");
-        setMessage(`Solicitud ${planCode.toUpperCase()} creada. Se activará únicamente cuando se confirme el pago.`);
+        setMessage(`Solicitud ${planCode.toUpperCase()} creada. Se activará cuando confirmemos el pago.`);
         return;
       }
       onUserChange?.(response.profile);
@@ -107,7 +113,6 @@ export default function Settings({ user, onUserChange }) {
           {plans.map((plan) => {
             const Icon = icons[plan.code] || WalletCards;
             const isCurrent = plan.code === currentPlan;
-            const isConfirming = confirming === plan.code;
             return (
               <article className={`settings-plan-row ${isCurrent ? "is-current" : ""}`} key={plan.code}>
                 <div className="settings-plan-main">
@@ -123,11 +128,11 @@ export default function Settings({ user, onUserChange }) {
                 ) : (
                   <button
                     type="button"
-                    className={isConfirming ? "confirm-plan-button" : "change-plan-button"}
+                    className="change-plan-button"
                     disabled={Boolean(changing)}
-                    onClick={() => changePlan(plan.code)}
+                    onClick={() => openPlanDialog(plan.code)}
                   >
-                    {changing === plan.code ? "Cambiando..." : isConfirming ? `Confirmar ${plan.name}` : <>Elegir <ChevronRight size={17} /></>}
+                    <>Elegir <ChevronRight size={17} /></>
                   </button>
                 )}
               </article>
@@ -136,12 +141,25 @@ export default function Settings({ user, onUserChange }) {
         </div>
       )}
 
-      {confirming && confirming !== currentPlan && (
-        <p className="plan-change-note">Tocá de nuevo “Confirmar” para aplicar el cambio. Más adelante esta pantalla gestionará upgrades, downgrades, renovación y cancelación real.</p>
-      )}
-      <label className="beta-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>setBetaAccepted(e.target.checked)}/><span>Acepto el precio beta: Basic ₡1.990 o VIP ₡3.990 al mes por 3 meses; luego ₡2.990 o ₡5.990 respectivamente.</span></label>
       {message && <p className="success-banner">{message}</p>}
-      {error && <p className="onboarding-error">{error}</p>}
+      {!confirming && error && <p className="onboarding-error">{error}</p>}
+
+      {confirming && confirming !== currentPlan && (() => {
+        const selected = plans.find((plan) => plan.code === confirming);
+        const SelectedIcon = icons[confirming] || WalletCards;
+        return <div className="plan-dialog-backdrop" role="presentation" onMouseDown={(event)=>{if(event.target===event.currentTarget&&!changing)setConfirming("");}}>
+          <section className={`plan-dialog plan-${confirming}`} role="dialog" aria-modal="true" aria-labelledby="plan-dialog-title">
+            <button className="plan-dialog-close" type="button" aria-label="Cerrar" disabled={Boolean(changing)} onClick={()=>setConfirming("")}><X size={20}/></button>
+            <div className="plan-dialog-icon"><SelectedIcon size={28}/></div>
+            <p className="eyebrow">Confirmar cambio</p>
+            <h2 id="plan-dialog-title">Cambiar a {selected?.name || confirming.toUpperCase()}</h2>
+            <p>{selected?.tagline || "Tu nuevo plan FINVA"}</p>
+            {confirming !== "free" && <label className="beta-consent dialog-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>{setBetaAccepted(e.target.checked);setError("");}}/><span>Acepto el precio beta de {confirming === "basic" ? "₡1.990" : "₡3.990"} al mes por 3 meses; luego {confirming === "basic" ? "₡2.990" : "₡5.990"}.</span></label>}
+            {error && <div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
+            <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>Cancelar</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? "Procesando..." : `Confirmar ${selected?.name || confirming.toUpperCase()}`}</button></div>
+          </section>
+        </div>;
+      })()}
     </section>
   );
 }
