@@ -15,6 +15,7 @@ import "./styles/08-finance-modules.css";
 import "./styles/09-mobile-system.css";
 import "./styles/10-finance-stability.css";
 import "./styles/11-strategy-v3.css";
+import "./styles/12-mobile-native-compat.css";
 import "./pages/PublicInfoPage.css";
 import "./pages/UnifiedOnboarding.css";
 import { registerJarvisServiceWorker } from "./pushNotifications";
