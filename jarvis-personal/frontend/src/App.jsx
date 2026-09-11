@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
 import Login from "./pages/Login";
 import UnifiedOnboarding from "./pages/UnifiedOnboarding";
 import PersonalApp from "./personal/PersonalApp";
@@ -82,6 +83,49 @@ export default function App() {
       });
 
     return () => { cancelled = true; };
+  }, [session, ownerBridgeMode]);
+
+  useEffect(() => {
+    if (ownerBridgeMode || !session) return;
+
+    let cancelled = false;
+    let nativeListener;
+    let refreshing = false;
+
+    const refreshProfile = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const profile = await getMe();
+        if (!cancelled) {
+          setCurrentUser(profile);
+          setIdentityError("");
+        }
+      } catch {
+        // Keep the current screen usable on a temporary network failure.
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshProfile();
+    };
+
+    window.addEventListener("focus", refreshProfile);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) refreshProfile();
+    }).then((listener) => {
+      nativeListener = listener;
+    });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refreshProfile);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      nativeListener?.remove();
+    };
   }, [session, ownerBridgeMode]);
 
   if (ownerBridgeMode) {
