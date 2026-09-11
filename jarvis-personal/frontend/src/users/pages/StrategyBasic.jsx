@@ -263,6 +263,7 @@ export default function StrategyBasic({ plan = "basic" }) {
               onChange={(event) => setExtra(event.target.value)}
             />
             <button
+              className="finva-button finva-button-secondary"
               type="button"
               onClick={runSimulation}
               disabled={loadingSimulation}
@@ -346,7 +347,7 @@ export default function StrategyBasic({ plan = "basic" }) {
             </label>
           </div>
           <button
-            className="scenario-button"
+            className="scenario-button finva-button finva-button-primary"
             type="button"
             onClick={runSimulation}
             disabled={loadingSimulation}
