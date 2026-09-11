@@ -1,0 +1,303 @@
+/*
+ * FINVA — Balance & Clarity
+ * Product-level color system. Kept separate from users.css so the theme can
+ * evolve without affecting the private JARVIS workspace.
+ */
+
+.users-app {
+  color-scheme: dark;
+  --bg: #0b132b;
+  --surface: #1c2541;
+  --surface-2: #243354;
+  --surface-3: #2d3e63;
+  --border: rgba(148, 163, 184, .18);
+  --border-strong: rgba(20, 184, 166, .46);
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --muted-2: #cbd5e1;
+  --accent: #14b8a6;
+  --accent-soft: rgba(20, 184, 166, .14);
+  --success: #34d399;
+  --danger: #fb7185;
+  --gold: #fbbf24;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(20, 184, 166, .13), transparent 30rem),
+    #0b132b;
+}
+
+.users-app .app,
+.users-app .mobile-app-shell {
+  background: linear-gradient(180deg, #0d1731 0%, #0b132b 42%, #081025 100%);
+  border-inline-color: rgba(148, 163, 184, .08);
+  box-shadow: 0 0 72px rgba(3, 7, 18, .36);
+}
+
+.users-app .mobile-app-header {
+  background: rgba(11, 19, 43, .88);
+  border-bottom-color: rgba(148, 163, 184, .12);
+}
+.users-app .mobile-app-header small,
+.users-app .eyebrow,
+.users-app .hero > span,
+.users-app .hero > p:first-child,
+.users-app .onboarding-heading p,
+.users-app .login-kicker { color: #5eead4; }
+
+.users-app .profile-chip {
+  border-color: rgba(20, 184, 166, .34);
+  background: linear-gradient(145deg, #243354, #16213c);
+  color: #f8fafc;
+  box-shadow: inset 0 1px rgba(255,255,255,.08), 0 8px 20px rgba(3,7,18,.25);
+}
+
+.users-app .panel,
+.users-app .card,
+.users-app .mobile-panel,
+.users-app .account-card,
+.users-app .current-plan-card,
+.users-app .settings-plan-row,
+.users-app .profile-completeness-card,
+.users-app .situation-card {
+  border-color: rgba(148, 163, 184, .18);
+  background: linear-gradient(145deg, rgba(28, 37, 65, .98), rgba(20, 30, 54, .98));
+  box-shadow: inset 0 1px rgba(255,255,255,.035), 0 12px 28px rgba(3,7,18,.20);
+}
+
+.users-app .error,
+.users-app .onboarding-error,
+.users-app .plan-dialog-error {
+  border-color: rgba(251, 113, 133, .38);
+  background: rgba(127, 29, 52, .24);
+  color: #fecdd3;
+}
+.users-app .success-banner {
+  border-color: rgba(52, 211, 153, .34);
+  background: rgba(6, 95, 70, .24);
+  color: #a7f3d0;
+}
+
+.users-app .form input,
+.users-app .form select,
+.users-app .form textarea,
+.users-app .onboarding-field input,
+.users-app .onboarding-field select,
+.users-app .situation-form-grid input,
+.users-app .situation-form-grid select,
+.users-app .situation-single-field input,
+.users-app .vip-scenario-fields input,
+.users-app .simulator-controls input {
+  border-color: rgba(148, 163, 184, .24);
+  background: #111c36;
+  color: #f8fafc;
+}
+.users-app input::placeholder,
+.users-app textarea::placeholder { color: #64748b; opacity: 1; }
+.users-app .form input:focus,
+.users-app .form select:focus,
+.users-app .form textarea:focus,
+.users-app .onboarding-field input:focus,
+.users-app .onboarding-field select:focus,
+.users-app .situation-form-grid input:focus,
+.users-app .situation-form-grid select:focus,
+.users-app .situation-single-field input:focus,
+.users-app .vip-scenario-fields input:focus,
+.users-app .simulator-controls input:focus {
+  border-color: rgba(20, 184, 166, .72);
+  background: #15213d;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, .13);
+}
+
+.users-app .form button,
+.users-app .actions button,
+.users-app .row button,
+.users-app .change-plan-button,
+.users-app .confirm-plan-button,
+.users-app .scenario-button,
+.users-app .entry-save-button {
+  border-color: rgba(45, 212, 191, .28);
+  background: linear-gradient(180deg, #14b8a6, #0d9488);
+  color: #f8fafc;
+  box-shadow: 0 8px 18px rgba(13, 148, 136, .18);
+}
+.users-app button:focus-visible,
+.users-app input:focus-visible,
+.users-app select:focus-visible,
+.users-app textarea:focus-visible {
+  outline-color: rgba(45, 212, 191, .82);
+}
+
+.users-app .danger,
+.users-app .sheet-logout {
+  border-color: rgba(251,113,133,.28)!important;
+  background: rgba(136,30,55,.42)!important;
+  color: #fecdd3!important;
+  box-shadow: none;
+}
+
+.users-app .mobile-bottom-nav {
+  background: rgba(11, 19, 43, .95);
+  border-top-color: rgba(148, 163, 184, .16);
+  box-shadow: 0 -12px 32px rgba(3,7,18,.28);
+}
+.users-app .mobile-bottom-nav button { color: #94a3b8; }
+.users-app .mobile-bottom-nav button.active {
+  color: #ccfbf1;
+  background: rgba(20, 184, 166, .15);
+}
+.users-app .mobile-bottom-nav button.active svg {
+  color: #2dd4bf;
+  filter: drop-shadow(0 0 7px rgba(45,212,191,.24));
+}
+
+.users-app .mobile-more-sheet,
+.users-app .plan-dialog {
+  border-color: rgba(148, 163, 184, .18);
+  background: #1c2541;
+}
+.users-app .sheet-handle { background: #475569; }
+.users-app .sheet-actions button,
+.users-app .onboarding-logout,
+.users-app .onboarding-actions .secondary,
+.users-app .plan-dialog-cancel {
+  border-color: rgba(148, 163, 184, .20);
+  background: #243354;
+  color: #e2e8f0;
+}
+.users-app .sheet-actions button.active {
+  border-color: rgba(20, 184, 166, .46);
+  background: rgba(20, 184, 166, .14);
+  color: #ccfbf1;
+}
+
+.users-app .entry-segmented {
+  border-color: rgba(148, 163, 184, .18);
+  background: #111c36;
+}
+.users-app .entry-segmented button { color: #94a3b8; }
+.users-app .entry-segmented button.active {
+  color: #f8fafc;
+  background: #243354;
+}
+.users-app .entry-segmented button.active.income,
+.users-app .entry-form.income .entry-form-title > span { color: #34d399; }
+.users-app .entry-segmented button.active.expense,
+.users-app .entry-form.expense .entry-form-title > span { color: #fb7185; }
+
+.users-app .goal-progress,
+.users-app .progress-fill,
+.users-app [class*="goal"][class*="progress"] > span {
+  background-color: #34d399;
+}
+.users-app .dashboard-plan-action {
+  border-color: rgba(20,184,166,.26);
+  background: linear-gradient(145deg, rgba(28,53,76,.96), rgba(20,30,54,.98));
+  color: #f8fafc;
+}
+.users-app .dashboard-plan-action.vip {
+  border-color: rgba(251,191,36,.32);
+  background: linear-gradient(145deg, rgba(79,62,24,.72), rgba(28,37,65,.98));
+  color: #fde68a;
+}
+
+/* Android-sized interaction targets and calmer depth. */
+@media (max-width: 700px) {
+  .users-app .content,
+  .users-app .mobile-content { padding-inline: 18px; }
+  .users-app .panel,
+  .users-app .card,
+  .users-app .mobile-panel,
+  .users-app .account-card,
+  .users-app .current-plan-card,
+  .users-app .settings-plan-row { border-radius: 22px; }
+  .users-app button { min-height: 48px; }
+  .users-app .mobile-bottom-nav button { min-height: 62px; }
+}
+
+/* Follow the phone setting. FINVA remains dark when the OS uses dark mode. */
+@media (prefers-color-scheme: light) {
+  .users-app {
+    color-scheme: light;
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface-2: #f1f5f9;
+    --surface-3: #e2e8f0;
+    --border: rgba(15, 23, 42, .10);
+    --border-strong: rgba(13, 148, 136, .34);
+    --text: #0f172a;
+    --muted: #64748b;
+    --muted-2: #475569;
+    --accent: #0d9488;
+    --accent-soft: rgba(13, 148, 136, .10);
+    --success: #10b981;
+    --danger: #f43f5e;
+    background: #f8fafc;
+  }
+  .users-app .app,
+  .users-app .mobile-app-shell {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 35%, #f1f5f9 100%);
+    border-inline-color: rgba(15,23,42,.06);
+    box-shadow: 0 0 56px rgba(15,23,42,.08);
+  }
+  .users-app .mobile-app-header,
+  .users-app .mobile-bottom-nav {
+    background: rgba(248,250,252,.94);
+    border-color: rgba(15,23,42,.10);
+  }
+  .users-app .profile-chip {
+    border-color: rgba(13,148,136,.24);
+    background: linear-gradient(145deg, #ffffff, #e2e8f0);
+    color: #0f172a;
+  }
+  .users-app .panel,
+  .users-app .card,
+  .users-app .mobile-panel,
+  .users-app .account-card,
+  .users-app .current-plan-card,
+  .users-app .settings-plan-row,
+  .users-app .profile-completeness-card,
+  .users-app .situation-card {
+    border-color: rgba(15,23,42,.10);
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(15,23,42,.07);
+  }
+  .users-app .form input,
+  .users-app .form select,
+  .users-app .form textarea,
+  .users-app .onboarding-field input,
+  .users-app .onboarding-field select,
+  .users-app .situation-form-grid input,
+  .users-app .situation-form-grid select,
+  .users-app .situation-single-field input,
+  .users-app .vip-scenario-fields input,
+  .users-app .simulator-controls input,
+  .users-app .entry-segmented {
+    border-color: rgba(15,23,42,.13);
+    background: #f8fafc;
+    color: #0f172a;
+  }
+  .users-app .form input:focus,
+  .users-app .form select:focus,
+  .users-app .form textarea:focus {
+    background: #ffffff;
+  }
+  .users-app .mobile-bottom-nav button { color: #64748b; }
+  .users-app .mobile-bottom-nav button.active {
+    color: #0f766e;
+    background: rgba(13,148,136,.11);
+  }
+  .users-app .mobile-more-sheet,
+  .users-app .plan-dialog { background: #ffffff; }
+  .users-app .sheet-actions button,
+  .users-app .onboarding-logout,
+  .users-app .onboarding-actions .secondary,
+  .users-app .plan-dialog-cancel {
+    border-color: rgba(15,23,42,.10);
+    background: #f1f5f9;
+    color: #334155;
+  }
+  .users-app .entry-segmented button.active { background: #ffffff; }
+  .users-app .dashboard-plan-action {
+    background: linear-gradient(145deg, #ffffff, #f0fdfa);
+    color: #0f172a;
+  }
+}
