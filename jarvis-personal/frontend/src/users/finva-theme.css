@@ -662,3 +662,391 @@ body:has(.users-app) { background: #0b132b; }
   .users-app .finva-dialog-actions .finva-button-danger,
   .users-app .finva-dialog-actions .finva-button-success { grid-row: 1; }
 }
+
+
+/* Content-first mobile density pass. */
+.users-app .content-first-page .hero,
+.users-app .finance-page .hero,
+.users-app .vip-center .hero {
+  padding-top: 14px;
+  padding-bottom: 12px;
+}
+.users-app .content-first-page .hero h1,
+.users-app .finance-page .hero h1 {
+  font-size: clamp(1.75rem, 8vw, 2.15rem);
+}
+.users-app .content-first-page .hero p,
+.users-app .finance-page .hero p {
+  margin-top: 7px;
+  font-size: .86rem;
+}
+
+.users-app .finva-add-strip,
+.users-app .finva-quick-action {
+  width: 100%;
+  min-height: 66px;
+  border: 1px solid rgba(45,212,191,.22);
+  border-radius: 19px;
+  background: linear-gradient(145deg, rgba(20,184,166,.14), rgba(28,37,65,.96));
+  color: #f8fafc;
+  padding: 11px 13px;
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 11px;
+  text-align: left;
+  box-shadow: 0 8px 20px rgba(3,7,18,.14);
+}
+.users-app .finva-add-strip > span,
+.users-app .finva-quick-action > span {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(20,184,166,.15);
+  color: #5eead4;
+}
+.users-app .finva-add-strip > div,
+.users-app .finva-quick-action > div { min-width: 0; }
+.users-app .finva-add-strip strong,
+.users-app .finva-add-strip small,
+.users-app .finva-quick-action strong,
+.users-app .finva-quick-action small { display: block; }
+.users-app .finva-add-strip strong,
+.users-app .finva-quick-action strong { font-size: .9rem; }
+.users-app .finva-add-strip small,
+.users-app .finva-quick-action small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: .69rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.users-app .finva-add-strip > svg,
+.users-app .finva-quick-action > svg { color: #5eead4; }
+.users-app .finva-add-strip:active,
+.users-app .finva-quick-action:active { transform: scale(.985); }
+
+.users-app .entry-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+.users-app .entry-quick-actions .finva-quick-action {
+  min-height: 82px;
+  grid-template-columns: 36px 1fr;
+  gap: 9px;
+}
+.users-app .entry-quick-actions .finva-quick-action > span {
+  width: 36px;
+  height: 36px;
+}
+.users-app .entry-quick-actions .finva-quick-action > svg { display: none; }
+.users-app .entry-quick-actions .expense {
+  border-color: rgba(251,113,133,.20);
+  background: linear-gradient(145deg, rgba(251,113,133,.10), rgba(28,37,65,.96));
+}
+.users-app .entry-quick-actions .expense > span {
+  color: #fda4af;
+  background: rgba(251,113,133,.12);
+}
+
+.users-app .content-first-grid { margin-top: 14px; }
+.users-app .content-first-lists { margin-top: 0; }
+.users-app .compact-record-card { padding: 15px; border-radius: 21px; }
+.users-app .compact-record-card header { margin-bottom: 10px; }
+.users-app .compact-record-card p {
+  margin: 8px 0;
+  font-size: .75rem;
+}
+.users-app .record-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin: 8px 0;
+  color: #94a3b8;
+  font-size: .7rem;
+}
+.users-app .compact-record-card .actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+.users-app .compact-record-card .actions .finva-button {
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 8px;
+  border-radius: 13px;
+  font-size: .7rem;
+}
+.users-app .compact-kpis { margin-top: 14px; }
+.users-app .compact-kpis .card { min-height: 84px; padding: 13px; }
+.users-app .compact-record-list { margin-top: 12px; padding: 8px 12px; }
+.users-app .finva-empty-state {
+  margin: 0;
+  padding: 20px 14px;
+  color: #94a3b8;
+  text-align: center;
+  font-size: .8rem;
+}
+
+/* Compact creation and editing sheets. */
+.users-app .finva-form-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 170;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(3,7,18,.70);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+}
+.users-app .finva-form-sheet {
+  width: min(100%, 560px);
+  max-height: min(88dvh, 760px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(45,212,191,.22);
+  border-bottom: 0;
+  border-radius: 28px 28px 0 0;
+  background: #1c2541;
+  box-shadow: 0 -28px 80px rgba(3,7,18,.48);
+  animation: finva-sheet-in .2s cubic-bezier(.2,.8,.2,1);
+}
+.users-app .finva-form-sheet::before {
+  content: "";
+  width: 42px;
+  height: 4px;
+  flex: 0 0 auto;
+  margin: 9px auto 3px;
+  border-radius: 999px;
+  background: #64748b;
+}
+.users-app .finva-form-sheet-header {
+  min-height: 64px;
+  padding: 10px 16px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(148,163,184,.13);
+}
+.users-app .finva-form-sheet-header small {
+  display: block;
+  color: #5eead4;
+  font-size: .65rem;
+  font-weight: 750;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.users-app .finva-form-sheet-header h2 {
+  margin: 3px 0 0;
+  color: #f8fafc;
+  font-size: 1.2rem;
+  letter-spacing: -.03em;
+}
+.users-app .finva-form-sheet-close {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  flex: 0 0 auto;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #243354;
+  color: #cbd5e1;
+}
+.users-app .finva-form-sheet-body {
+  overflow-y: auto;
+  padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+}
+.users-app .finva-sheet-form {
+  display: grid;
+  gap: 12px;
+}
+.users-app .finva-sheet-form.entry-form {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.users-app .finva-compact-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+}
+.users-app .finva-compact-fields label,
+.users-app .finva-sheet-form > label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.users-app .finva-compact-fields label > span,
+.users-app .finva-sheet-form > label > span {
+  color: #94a3b8;
+  font-size: .68rem;
+  font-weight: 700;
+}
+.users-app .finva-compact-fields input,
+.users-app .finva-compact-fields select,
+.users-app .finva-sheet-form input,
+.users-app .finva-sheet-form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid rgba(148,163,184,.20);
+  border-radius: 14px;
+  background: #111c36;
+  color: #f8fafc;
+  padding: 10px 12px;
+}
+.users-app .finva-sheet-form .entry-amount-field > div {
+  min-height: 54px;
+  border-radius: 16px;
+}
+.users-app .finva-sheet-form > .finva-button {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 2px;
+}
+.users-app .form .finva-button-ghost {
+  border: 1px solid rgba(148,163,184,.20);
+  background: #243354;
+  color: #e2e8f0;
+}
+.users-app .form .finva-button-success {
+  border: 0;
+  background: linear-gradient(180deg,#10b981,#059669);
+  color: #ffffff;
+}
+
+/* Reduce oversized global chrome without sacrificing touch targets. */
+.users-app .mobile-app-header {
+  min-height: 64px;
+  margin-bottom: 4px;
+}
+.users-app .profile-chip {
+  width: 42px;
+  height: 42px;
+}
+.users-app .mobile-bottom-nav {
+  min-height: 72px;
+  padding-top: 5px;
+}
+.users-app .mobile-bottom-nav button {
+  min-height: 56px;
+  border-radius: 17px;
+}
+.users-app .mobile-bottom-nav button::before {
+  top: 5px;
+  width: 48px;
+  height: 28px;
+}
+.users-app .mobile-bottom-nav button span { font-size: .6rem; }
+
+/* Basic/VIP information remains rich, but denser and easier to scan. */
+.users-app .vip-center .vip-hero {
+  padding: 16px 7px 18px;
+}
+.users-app .vip-center .vip-hero h1 {
+  font-size: clamp(2rem, 9vw, 2.45rem);
+}
+.users-app .vip-center .vip-hero p {
+  max-width: 440px;
+  font-size: .9rem;
+}
+.users-app .vip-refresh-button {
+  min-height: 44px;
+  margin-top: 12px;
+  padding-inline: 14px;
+}
+.users-app .vip-module {
+  margin-top: 12px;
+  padding: 15px;
+  border-radius: 21px;
+}
+.users-app .vip-module > header { margin-bottom: 12px; }
+.users-app .vip-module > header > span {
+  width: 39px;
+  height: 39px;
+  border-radius: 13px;
+}
+.users-app .vip-module > header h2 { font-size: 1rem; }
+.users-app .vip-module > header p { font-size: .7rem; }
+.users-app .vip-scenario { gap: 9px; }
+.users-app .vip-scenario input {
+  min-height: 47px;
+  margin-top: 4px;
+  border-radius: 14px;
+}
+.users-app .vip-scenario .finva-button {
+  min-height: 48px;
+  margin-top: 3px;
+}
+.users-app .vip-director,
+.users-app .safe-spend {
+  padding: 14px;
+  border-radius: 17px;
+}
+
+@media (max-width: 430px) {
+  .users-app .finva-compact-fields { grid-template-columns: 1fr; }
+  .users-app .compact-record-card .actions {
+    grid-template-columns: 1.2fr 1fr 1fr;
+  }
+  .users-app .entry-quick-actions .finva-quick-action {
+    min-height: 76px;
+    padding: 9px;
+  }
+  .users-app .entry-quick-actions .finva-quick-action small { display: none; }
+}
+
+@media (prefers-color-scheme: light) {
+  .users-app .finva-add-strip,
+  .users-app .finva-quick-action {
+    border-color: rgba(13,148,136,.18);
+    background: linear-gradient(145deg,#ffffff,#f0fdfa);
+    color: #0f172a;
+  }
+  .users-app .entry-quick-actions .expense {
+    border-color: rgba(244,63,94,.16);
+    background: linear-gradient(145deg,#ffffff,#fff1f2);
+  }
+  .users-app .finva-form-sheet {
+    border-color: rgba(13,148,136,.18);
+    background: #ffffff;
+  }
+  .users-app .finva-form-sheet-header {
+    border-bottom-color: rgba(15,23,42,.09);
+  }
+  .users-app .finva-form-sheet-header h2 { color: #0f172a; }
+  .users-app .finva-form-sheet-close {
+    background: #f1f5f9;
+    color: #475569;
+  }
+  .users-app .finva-compact-fields input,
+  .users-app .finva-compact-fields select,
+  .users-app .finva-sheet-form input,
+  .users-app .finva-sheet-form select {
+    border-color: rgba(15,23,42,.12);
+    background: #f8fafc;
+    color: #0f172a;
+  }
+  .users-app .record-meta,
+  .users-app .finva-empty-state { color: #64748b; }
+  .users-app .form .finva-button-ghost {
+    border-color: rgba(15,23,42,.10);
+    background: #f1f5f9;
+    color: #334155;
+  }
+}
