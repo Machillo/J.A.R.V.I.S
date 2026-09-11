@@ -57,3 +57,55 @@
 .unified-saved-note{border-radius:16px;border-color:rgba(93,214,255,.16);background:rgba(93,214,255,.065);color:#b9dbe7}
 .unified-onboarding-error{border-radius:16px;border-color:rgba(255,119,135,.2);background:rgba(255,119,135,.08);color:#ffc3cb}
 @media(max-width:420px){.unified-onboarding-card{padding:15px;border-radius:24px}.unified-plan-card{border-radius:20px}.unified-onboarding-top{align-items:center}.unified-onboarding-intro{padding-top:17px}}
+
+/* Compact, accessibility-safe plan chooser */
+.unified-plan-list{display:grid;gap:10px;margin-top:18px}
+.unified-plan-card{display:block;padding:0;overflow:hidden}
+.unified-plan-summary{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:13px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.unified-plan-summary>.unified-plan-icon{width:42px;height:42px}
+.unified-plan-summary>.unified-plan-copy{min-width:0;display:grid;gap:2px}
+.unified-plan-summary>.unified-plan-copy>span{font-size:.6rem;font-weight:850;letter-spacing:.09em;color:#65c4e1}
+.unified-plan-summary>.unified-plan-copy>strong{font-size:1rem;line-height:1.2}
+.unified-plan-summary>.unified-plan-copy>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8ca5ae;font-size:.74rem}
+.unified-plan-card.vip .unified-plan-summary>.unified-plan-copy>span{color:#e6c768}
+.unified-plan-price{display:grid;justify-items:end;font-size:.9rem;font-weight:830;white-space:nowrap}
+.unified-plan-price small{font-size:.61rem;color:#839ea8;font-weight:650}
+.unified-plan-details{display:grid;gap:12px;padding:0 14px 14px;border-top:1px solid rgba(182,225,238,.08)}
+.unified-plan-details ul{margin-top:13px;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
+.unified-plan-details .beta-price{color:#9bb0b8;line-height:1.4}
+.unified-payment-preview{display:flex;align-items:flex-start;gap:9px;padding:11px;border:1px solid rgba(20,184,166,.18);border-radius:14px;background:rgba(20,184,166,.06);color:#b8d7da;font-size:.76rem;line-height:1.4}
+.unified-payment-preview svg{flex:0 0 auto;color:#5eead4}
+.beta-consent{display:flex;align-items:flex-start;gap:10px;color:#d7e8eb;font-size:.77rem;line-height:1.42}
+.beta-consent input{flex:0 0 auto;width:20px;height:20px;margin:0;accent-color:#14b8a6}
+.unified-plan-details .unified-plan-button{margin:0;min-height:46px}
+
+/* SINPE activation inside the first-run flow */
+.unified-payment-stage{max-width:520px}
+.unified-payment-heading{display:flex;align-items:center;gap:13px;padding:20px 0 6px}
+.unified-payment-heading h1{margin:4px 0 0;font-size:clamp(1.55rem,7vw,2.1rem);line-height:1.08}
+.unified-payment-description{margin:10px 0 15px;color:#9bb0b8;line-height:1.5}
+.unified-payment-data{display:grid;gap:8px}
+.unified-payment-data>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center;padding:11px 12px;border:1px solid rgba(148,163,184,.14);border-radius:15px;background:rgba(255,255,255,.035)}
+.unified-payment-data span{color:#8fa6ae;font-size:.68rem}
+.unified-payment-data strong{font-size:.95rem;overflow-wrap:anywhere}
+.unified-payment-data button{grid-column:2;grid-row:1/span 2;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 10px;border:1px solid rgba(20,184,166,.24);border-radius:11px;background:rgba(20,184,166,.09);color:#eaf8ff;font-weight:720}
+.unified-payment-code strong{color:#5eead4;letter-spacing:.08em}
+.unified-payment-expiry{display:block;margin:9px 2px 13px;color:#8fa6ae;font-size:.68rem}
+.unified-receipt-upload{position:relative;display:flex;align-items:center;justify-content:center;gap:9px;min-height:49px;padding:10px 14px;border:1px dashed rgba(20,184,166,.38);border-radius:15px;color:#c1d8dd;background:rgba(20,184,166,.055);font-weight:700;text-align:center}
+.unified-receipt-upload input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.unified-payment-stage>.unified-primary{margin-top:12px}
+.unified-inline-error{display:flex;align-items:flex-start;gap:8px;margin:10px 0;padding:11px;border:1px solid rgba(255,119,135,.2);border-radius:14px;background:rgba(255,119,135,.08);color:#ffc3cb;font-size:.76rem;line-height:1.4}
+.unified-inline-error svg{flex:0 0 auto}
+.unified-payment-waiting{display:grid;justify-items:center;gap:10px;padding:34px 8px 18px;text-align:center}
+.unified-payment-waiting svg{color:#34d399}.unified-payment-waiting strong{font-size:1.15rem}.unified-payment-waiting p{margin:0;color:#b7cbd0;line-height:1.5}.unified-payment-waiting small{color:#829aa3;line-height:1.4}
+
+@media(max-width:520px){
+  .unified-onboarding-intro h1{font-size:clamp(1.65rem,8vw,2rem)}
+  .unified-onboarding-intro p{font-size:.86rem}
+  .unified-plan-summary{grid-template-columns:auto minmax(0,1fr) auto;padding:11px;gap:10px}
+  .unified-plan-summary>.unified-plan-icon{width:39px;height:39px}
+  .unified-plan-summary>.unified-plan-price{grid-column:2;justify-self:start;justify-items:start;font-size:.78rem}
+  .unified-plan-summary>svg{grid-column:3;grid-row:1/span 2}
+  .unified-plan-details ul{grid-template-columns:1fr}
+}
+@media(max-width:390px){.unified-payment-data>div{grid-template-columns:1fr}.unified-payment-data button{grid-column:1;grid-row:auto;width:100%;justify-content:center}}
