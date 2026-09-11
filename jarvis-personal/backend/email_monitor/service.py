@@ -1801,6 +1801,31 @@ def scan_email_text(
         candidate_row = dict(refreshed_row) if refreshed_row else candidate_row
         _assert_duplicate_has_trace(candidate_row)
 
+        # FINVA beta payments are activated only when the uploaded proof and a
+        # real incoming BAC SINPE notification agree on code and amount.
+        from backend.product_ops.service import match_sinpe_payment
+        payment_match = match_sinpe_payment(
+            conn,
+            {**candidate_row, "movement_direction": parsed.get("movement_direction")},
+        )
+        if payment_match:
+            description = f"Suscripción FINVA {payment_match['plan_code'].upper()}"
+            conn.execute(
+                """UPDATE email_transaction_candidates
+                SET description=%s, normalized_description=%s, category='Ingresos / FINVA',
+                    confidence=1, auto_commit_allowed=TRUE,
+                    review_reason='Pago FINVA confirmado por código, monto y correo BAC.', updated_at=NOW()
+                WHERE id=%s AND workspace_id=%s""",
+                (description, description, int(candidate_row["id"]), workspace_id),
+            )
+            candidate_row.update(
+                description=description,
+                normalized_description=description,
+                category="Ingresos / FINVA",
+                confidence=1,
+                auto_commit_allowed=True,
+            )
+
         if (
             auto_commit
             and candidate_row.get("status") == "pending"

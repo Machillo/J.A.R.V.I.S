@@ -235,6 +235,30 @@ export const getPlans = () => request("/auth/plans");
 export const selectPlan = (plan, accept_beta_terms = false) => jsonRequest("/auth/plan", "POST", { plan, accept_beta_terms, consent_version: "beta-2026-01-v1" });
 export const getProductOperations = () => request("/product-ops/owner/dashboard");
 export const resolveTestPayment = (orderId, action = "confirm") => jsonRequest(`/product-ops/owner/orders/${orderId}`, "POST", { action });
+export const openTestPaymentReceipt = async (orderId) => {
+  const preview = window.open("", "_blank");
+  const bridgeToken = getOwnerBridgeToken();
+  const options = bridgeToken ? { headers: { Authorization: `Bearer jarvis-owner:${bridgeToken}` } } : {};
+  const response = bridgeToken
+    ? await fetch(`${API_URL}/product-ops/owner/orders/${orderId}/receipt`, options)
+    : await authenticatedFetch(`${API_URL}/product-ops/owner/orders/${orderId}/receipt`, options);
+  if (!response.ok) {
+    preview?.close();
+    throw new Error(`No se pudo abrir el comprobante (${response.status}).`);
+  }
+  const url = URL.createObjectURL(await response.blob());
+  if (preview) {
+    preview.opener = null;
+    preview.location.href = url;
+  } else {
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.click();
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
 export const updateProductFeedback = (ticketId, payload) => jsonRequest(`/product-ops/owner/feedback/${ticketId}`, "PATCH", payload);
 export const getOnboarding = () => request("/auth/onboarding");
 export const completeOnboarding = (payload) => jsonRequest("/auth/onboarding", "POST", payload);

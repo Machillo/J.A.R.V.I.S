@@ -14,11 +14,17 @@ CREATE TABLE IF NOT EXISTS billing_orders (
   id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, workspace_id UUID,
   plan_code TEXT NOT NULL CHECK(plan_code IN ('basic','vip')), amount NUMERIC(12,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'CRC',
   status TEXT NOT NULL DEFAULT 'payment_pending' CHECK(status IN ('payment_pending','paid','failed','canceled','expired','refunded')),
-  provider TEXT NOT NULL DEFAULT 'sandbox', provider_order_id TEXT, beta_code TEXT, beta_price BOOLEAN NOT NULL DEFAULT TRUE,
+  provider TEXT NOT NULL DEFAULT 'sinpe_mobile', provider_order_id TEXT, beta_code TEXT, beta_price BOOLEAN NOT NULL DEFAULT TRUE,
+  payment_code TEXT, code_expires_at TIMESTAMPTZ,
+  receipt_filename TEXT, receipt_content_type TEXT, receipt_size INTEGER, receipt_sha256 TEXT, receipt_data BYTEA,
+  receipt_submitted_at TIMESTAMPTZ, receipt_status TEXT NOT NULL DEFAULT 'not_submitted',
+  verified_at TIMESTAMPTZ, verification_source TEXT, bank_reference TEXT, payer_name TEXT,
   consent_version TEXT NOT NULL, consent_at TIMESTAMPTZ NOT NULL, paid_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_billing_orders_status ON billing_orders(status,created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_billing_orders_payment_code ON billing_orders(payment_code) WHERE payment_code IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_billing_orders_receipt_sha256 ON billing_orders(receipt_sha256) WHERE receipt_sha256 IS NOT NULL;
 CREATE TABLE IF NOT EXISTS billing_subscriptions (
   account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE, workspace_id UUID,
   plan_code TEXT NOT NULL CHECK(plan_code IN ('basic','vip')),
