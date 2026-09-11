@@ -29,7 +29,7 @@ export default function VipCenter() {
   if(error&&!data)return <div className="panel error">{error}</div>;
   const score=data.score||{}, director=data.director||{}, debt=data.debt_planner||{}, report=data.reports||{}, variable=data.variable_income||{};
   return <section className="vip-center">
-    <div className="hero vip-hero"><span><Crown size={15}/> FINVA VIP</span><h1>Dirección financiera</h1><p>Una sola lectura de tu dinero: qué proteger, qué pagar y qué hacer después.</p><button type="button" onClick={load}><RefreshCw size={17}/> Actualizar análisis</button></div>
+    <div className="hero vip-hero"><span><Crown size={15}/> FINVA VIP</span><h1>Dirección financiera</h1><p>Una sola lectura de tu dinero: qué proteger, qué pagar y qué hacer después.</p><button className="finva-button finva-button-secondary vip-refresh-button" type="button" onClick={load}><RefreshCw size={17}/> Actualizar análisis</button></div>
     {error&&<div className="panel error">{error}</div>}
 
     <Section id={1} icon={Bot} title="Director Financiero proactivo" subtitle="La prioridad se calcula con tus datos; la explicación nunca cambia los números.">
@@ -50,7 +50,7 @@ export default function VipCenter() {
     </Section>
 
     <Section id={5} icon={Sparkles} title="¿Qué pasa si…?" subtitle="Sandbox: probá cambios sin alterar datos reales.">
-      <form className="vip-scenario" onSubmit={simulate}><label>Ingreso mensual adicional<input type="number" value={scenario.monthly_income_change} onChange={e=>setScenario({...scenario,monthly_income_change:e.target.value})}/></label><label>Cambio en gastos<input type="number" value={scenario.monthly_expense_change} onChange={e=>setScenario({...scenario,monthly_expense_change:e.target.value})}/></label><label>Dinero único disponible<input type="number" min="0" value={scenario.one_time_extra} onChange={e=>setScenario({...scenario,one_time_extra:e.target.value})}/></label><button disabled={simulating}>{simulating?"Calculando…":"Simular"}</button></form>
+      <form className="vip-scenario" onSubmit={simulate}><label>Ingreso mensual adicional<input type="number" value={scenario.monthly_income_change} onChange={e=>setScenario({...scenario,monthly_income_change:e.target.value})}/></label><label>Cambio en gastos<input type="number" value={scenario.monthly_expense_change} onChange={e=>setScenario({...scenario,monthly_expense_change:e.target.value})}/></label><label>Dinero único disponible<input type="number" min="0" value={scenario.one_time_extra} onChange={e=>setScenario({...scenario,one_time_extra:e.target.value})}/></label><button className="finva-button finva-button-primary" disabled={simulating}>{simulating?"Calculando…":"Simular"}</button></form>
       {result&&<div className="vip-simulation-result"><Metric label="Margen actual" value={money(result.current?.strategic_margin)}/><Metric label="Margen simulado" value={money(result.scenario?.strategic_margin)} tone={(result.delta?.strategic_margin||0)>=0?"positive":"negative"}/><Metric label="Cambio" value={money(result.delta?.strategic_margin)}/></div>}
     </Section>
 

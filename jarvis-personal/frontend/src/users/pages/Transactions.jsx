@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { deleteFreeMovement, getFreeMovements, updateFreeMovement } from "../services/jarvisApi";
+import { ConfirmDialog } from "../components/FinvaDialog";
 
 const money = (value) => new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(Number(value) || 0);
 
@@ -9,6 +10,8 @@ export default function Transactions() {
   const [type, setType] = useState("all");
   const [category, setCategory] = useState("all");
   const [edit, setEdit] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
   const [error, setError] = useState("");
   const load = () => getFreeMovements().then(setRows).catch((err) => setError(err.message));
   useEffect(() => { load(); }, []);
@@ -24,15 +27,18 @@ export default function Transactions() {
       setEdit(null); load();
     } catch (err) { setError(err.message); }
   };
-  const remove = async (row) => {
-    if (!confirm("¿Eliminar este movimiento?")) return;
-    try { await deleteFreeMovement(row.movement_id); load(); } catch (err) { setError(err.message); }
+  const remove = async () => {
+    setDeletingBusy(true);
+    try { await deleteFreeMovement(deleting.movement_id); setDeleting(null); load(); }
+    catch (err) { setError(err.message); }
+    finally { setDeletingBusy(false); }
   };
   return <section>
     <div className="hero"><span>FREE 06</span><h1>Historial</h1><p>Todos tus movimientos en un solo lugar.</p></div>
     {error && <div className="panel error">{error}</div>}
     <div className="panel movement-filters"><input placeholder="Buscar descripción o categoría" value={query} onChange={(e) => setQuery(e.target.value)}/><select value={type} onChange={(e) => setType(e.target.value)}><option value="all">Todos los tipos</option><option value="income">Ingresos</option><option value="expense">Gastos</option></select><select value={category} onChange={(e) => setCategory(e.target.value)}><option value="all">Todas las categorías</option>{categories.map((item) => <option key={item}>{item}</option>)}</select></div>
-    <div className="panel movement-table"><div className="movement-head"><span>Fecha</span><span>Movimiento</span><span>Monto</span></div>{filtered.length ? filtered.map((row) => <div className="movement-row" key={row.movement_id}><time>{String(row.transaction_date).slice(0, 10)}</time><span><strong>{row.description}</strong><small>{row.transaction_type === "income" ? "Ingreso" : "Gasto"} · {row.category}</small></span><span><b className={row.transaction_type === "expense" ? "negative" : "positive"}>{row.transaction_type === "expense" ? "−" : "+"}{money(row.amount)}</b>{row.editable && <span className="actions"><button onClick={() => setEdit({ ...row, transaction_date: String(row.transaction_date).slice(0, 10) })}>Editar</button><button className="danger" onClick={() => remove(row)}>Eliminar</button></span>}</span></div>) : <p>No hay movimientos con esos filtros.</p>}</div>
-    {edit && <div className="modal-backdrop"><form className="panel form edit-modal" onSubmit={save}><h3>Editar movimiento</h3><input required type="date" value={edit.transaction_date} onChange={(e) => setEdit({ ...edit, transaction_date: e.target.value })}/><input required value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })}/><input required type="number" min="0.01" step="0.01" value={edit.amount} onChange={(e) => setEdit({ ...edit, amount: e.target.value })}/><input required value={edit.category} onChange={(e) => setEdit({ ...edit, category: e.target.value })}/><button>Guardar cambios</button><button type="button" onClick={() => setEdit(null)}>Cancelar</button></form></div>}
+    <div className="panel movement-table"><div className="movement-head"><span>Fecha</span><span>Movimiento</span><span>Monto</span></div>{filtered.length ? filtered.map((row) => <div className="movement-row" key={row.movement_id}><time>{String(row.transaction_date).slice(0, 10)}</time><span><strong>{row.description}</strong><small>{row.transaction_type === "income" ? "Ingreso" : "Gasto"} · {row.category}</small></span><span><b className={row.transaction_type === "expense" ? "negative" : "positive"}>{row.transaction_type === "expense" ? "−" : "+"}{money(row.amount)}</b>{row.editable && <span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={() => setEdit({ ...row, transaction_date: String(row.transaction_date).slice(0, 10) })}>Editar</button><button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(row)}>Eliminar</button></span>}</span></div>) : <p>No hay movimientos con esos filtros.</p>}</div>
+    {edit && <div className="modal-backdrop"><form className="panel form edit-modal" onSubmit={save}><h3>Editar movimiento</h3><input required type="date" value={edit.transaction_date} onChange={(e) => setEdit({ ...edit, transaction_date: e.target.value })}/><input required value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })}/><input required type="number" min="0.01" step="0.01" value={edit.amount} onChange={(e) => setEdit({ ...edit, amount: e.target.value })}/><input required value={edit.category} onChange={(e) => setEdit({ ...edit, category: e.target.value })}/><button className="finva-button finva-button-primary">Guardar cambios</button><button className="finva-button finva-button-ghost" type="button" onClick={() => setEdit(null)}>Cancelar</button></form></div>}
+    <ConfirmDialog open={Boolean(deleting)} title="Eliminar movimiento" description={deleting ? `Se eliminará ${deleting.description}. Esta acción no se puede deshacer.` : ""} onConfirm={remove} onClose={() => { if (!deletingBusy) setDeleting(null); }} busy={deletingBusy}/>
   </section>;
 }
