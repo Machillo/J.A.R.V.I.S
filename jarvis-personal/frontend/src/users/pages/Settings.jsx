@@ -2,6 +2,7 @@ import { AlertTriangle, Check, CheckCircle2, ChevronRight, Clock3, Copy, Crown, 
 import { useEffect, useMemo, useState } from "react";
 import { getBillingCatalog, getMe, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
 import AccountSecurity from "../components/AccountSecurity";
+import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../../lib/receiptPicker";
 
 const icons = { free: WalletCards, basic: Sparkles, vip: Crown };
 
@@ -133,6 +134,18 @@ export default function Settings({ user, onUserChange }) {
       setError(err.message || "No se pudo subir el comprobante.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const chooseNativeReceipt = async () => {
+    setError("");
+    try {
+      const file = await pickNativeReceipt();
+      if (file) setReceipt(file);
+    } catch (err) {
+      if (!String(err?.message || "").toLowerCase().includes("cancel")) {
+        setError(err.message || "No pudimos abrir el comprobante.");
+      }
     }
   };
 
@@ -273,7 +286,10 @@ export default function Settings({ user, onUserChange }) {
                 <Upload size={19}/>
                 <span>{receipt ? `Listo: ${receipt.name}` : "Seleccioná una imagen o PDF"}</span>
               </div>
-              <input className="native-receipt-input" type="file" accept="image/*,.pdf,application/pdf" onChange={(event)=>{setReceipt(event.currentTarget.files?.item(0) || null);setError("");}}/>
+              {hasNativeReceiptPicker
+                ? <button className="native-receipt-picker-button" type="button" onClick={chooseNativeReceipt}>{receipt ? "Cambiar comprobante" : "Abrir archivos del teléfono"}</button>
+                : <input className="native-receipt-input" type="file" accept="image/*,.pdf,application/pdf" onChange={(event)=>{try{setReceipt(receiptFromWebInput(event.currentTarget));setError("");}catch(err){setReceipt(null);setError(err.message);}}}/>
+              }
               {error&&<div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
               <button className="payment-submit-button" type="button" disabled={uploading||!receipt||!payment.phone} onClick={sendReceipt}>{uploading?"Subiendo...":"Enviar comprobante"}</button>
             </> : <div className="payment-waiting-state">

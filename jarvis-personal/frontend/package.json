@@ -14,6 +14,7 @@
     "@capacitor/app": "^8.1.1",
     "@capacitor/browser": "^8.0.4",
     "@capacitor/core": "^8.5.1",
+    "@capawesome/capacitor-file-picker": "^8.1.0",
     "@supabase/supabase-js": "^2.107.0",
     "lucide-react": "^1.17.0",
     "react": "^19.2.6",
