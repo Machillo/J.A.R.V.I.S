@@ -1,5 +1,5 @@
-import { supabase } from "../lib/supabase";
 import { API_URL } from "../lib/apiUrl";
+import { authenticatedFetch } from "../lib/authenticatedFetch";
 
 const OWNER_BRIDGE_STORAGE_KEY = "jarvis-owner-bridge-token";
 
@@ -9,27 +9,20 @@ export const setOwnerBridgeToken = (token) => {
   else window.sessionStorage.removeItem(OWNER_BRIDGE_STORAGE_KEY);
 };
 
-const getAuthHeaders = async () => {
-  const bridgeToken = getOwnerBridgeToken();
-  if (bridgeToken) return { Authorization: `Bearer jarvis-owner:${bridgeToken}` };
-
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 const request = async (endpoint, options = {}) => {
-  const authHeaders = await getAuthHeaders();
-
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  const bridgeToken = getOwnerBridgeToken();
+  const fetchOptions = {
     cache: "no-store",
     ...options,
     headers: {
       Accept: "application/json",
       ...(options.headers || {}),
-      ...authHeaders,
+      ...(bridgeToken ? { Authorization: `Bearer jarvis-owner:${bridgeToken}` } : {}),
     },
-  });
+  };
+  const response = bridgeToken
+    ? await fetch(`${API_URL}${endpoint}`, fetchOptions)
+    : await authenticatedFetch(`${API_URL}${endpoint}`, fetchOptions);
 
   const contentType = response.headers.get("content-type") || "";
   const payload = contentType.includes("application/json")
@@ -173,17 +166,20 @@ export const updateProfilePreferences = (payload) => jsonRequest("/jarvis/prefer
 export const previewFinanceInput = (payload) => jsonRequest("/transactions/finance-input/preview", "POST", payload);
 export const commitFinanceInput = (payload) => jsonRequest("/transactions/finance-input/commit", "POST", payload);
 export const previewFinancePdf = async ({ file, default_year_month = "", exchange_rate = 495 }) => {
-  const authHeaders = await getAuthHeaders();
   const formData = new FormData();
   formData.append("file", file);
   if (default_year_month) formData.append("default_year_month", default_year_month);
   formData.append("exchange_rate", String(exchange_rate));
 
-  const response = await fetch(`${API_URL}/transactions/finance-input/pdf-preview`, {
+  const bridgeToken = getOwnerBridgeToken();
+  const options = {
     method: "POST",
-    headers: { ...authHeaders },
+    headers: bridgeToken ? { Authorization: `Bearer jarvis-owner:${bridgeToken}` } : {},
     body: formData,
-  });
+  };
+  const response = bridgeToken
+    ? await fetch(`${API_URL}/transactions/finance-input/pdf-preview`, options)
+    : await authenticatedFetch(`${API_URL}/transactions/finance-input/pdf-preview`, options);
 
   const payload = await response.json();
   if (!response.ok) {

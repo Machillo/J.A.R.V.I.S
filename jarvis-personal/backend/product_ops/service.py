@@ -184,7 +184,8 @@ def resolve_test_order(order_id: int, action: str):
           VALUES(%s,%s,%s,'active',%s,NOW()+INTERVAL '3 months',NOW(),NOW()+INTERVAL '1 month',%s,%s)
           ON CONFLICT(account_id) DO UPDATE SET plan_code=EXCLUDED.plan_code,status='active',beta_code=EXCLUDED.beta_code,
           beta_ends_at=EXCLUDED.beta_ends_at,current_period_start=NOW(),current_period_end=EXCLUDED.current_period_end,
-          paid_price_crc=EXCLUDED.paid_price_crc,regular_price_crc=EXCLUDED.regular_price_crc,updated_at=NOW()""",
+          paid_price_crc=EXCLUDED.paid_price_crc,regular_price_crc=EXCLUDED.regular_price_crc,updated_at=NOW()
+          RETURNING account_id""",
           (order["account_id"], order["workspace_id"], order["plan_code"], BETA_CODE, order["amount"], PRICES[order["plan_code"]]["regular"]))
         plan = conn.execute("SELECT id FROM plans WHERE code=%s", (order["plan_code"],)).fetchone()
         conn.execute("""INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,last_payment_at,created_at,updated_at)
