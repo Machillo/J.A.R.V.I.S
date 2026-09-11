@@ -233,6 +233,12 @@ export const revokeCourtesySubscription = (userId) => request(`/users-admin/user
 
 export const getPlans = () => request("/auth/plans");
 export const selectPlan = (plan, accept_beta_terms = false) => jsonRequest("/auth/plan", "POST", { plan, accept_beta_terms, consent_version: "beta-2026-01-v1" });
+export const getBillingCatalog = () => request("/product-ops/billing/catalog");
+export const uploadPaymentReceipt = (orderId, file) => {
+  const body = new FormData();
+  body.append("receipt", file);
+  return request(`/product-ops/billing/orders/${orderId}/receipt`, { method: "POST", body });
+};
 export const getProductOperations = () => request("/product-ops/owner/dashboard");
 export const resolveTestPayment = (orderId, action = "confirm") => jsonRequest(`/product-ops/owner/orders/${orderId}`, "POST", { action });
 export const openTestPaymentReceipt = async (orderId) => {
