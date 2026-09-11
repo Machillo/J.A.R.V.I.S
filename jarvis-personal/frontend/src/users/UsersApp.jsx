@@ -18,6 +18,7 @@ import Feedback from "./pages/Feedback";
 import { trackProductEvent } from "./services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import "./users.css";
+import "./finva-theme.css";
 
 export default function UsersApp({ user, onUserChange }) {
   const [page, setPage] = useState("overview");
