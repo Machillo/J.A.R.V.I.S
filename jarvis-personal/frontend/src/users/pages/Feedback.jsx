@@ -26,7 +26,7 @@ export default function Feedback() {
       <label>Tipo<select value={form.category} onChange={(e)=>setForm({...form,category:e.target.value})}><option value="improvement">Mejora</option><option value="error">Error</option><option value="payment">Pago</option><option value="support">Soporte</option><option value="security">Seguridad</option></select></label>
       <label>Asunto<input required minLength="3" maxLength="140" value={form.subject} onChange={(e)=>setForm({...form,subject:e.target.value})}/></label>
       <label>Detalle<textarea required minLength="5" maxLength="4000" rows="6" value={form.message} onChange={(e)=>setForm({...form,message:e.target.value})}/></label>
-      <button className="primary-button" disabled={busy}><Send size={17}/> {busy ? "Enviando..." : "Enviar"}</button>
+      <button className="primary-button finva-button finva-button-primary" disabled={busy}><Send size={17}/> {busy ? "Enviando..." : "Enviar"}</button>
       {notice && <p className="success-banner">{notice}</p>}{error && <p className="onboarding-error">{error}</p>}
     </form>
     {reports.length > 0 && <div className="mobile-panel"><h2>Mis reportes</h2>{reports.map(r=><div className="feedback-row" key={r.id}><strong>{r.public_id} · {r.subject}</strong><span>{r.status}</span></div>)}</div>}
