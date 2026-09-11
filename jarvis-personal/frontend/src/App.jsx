@@ -114,6 +114,7 @@ export default function App() {
 
     window.addEventListener("focus", refreshProfile);
     document.addEventListener("visibilitychange", onVisibilityChange);
+    const profileTimer = window.setInterval(refreshProfile, 30_000);
     CapacitorApp.addListener("appStateChange", ({ isActive }) => {
       if (isActive) refreshProfile();
     }).then((listener) => {
@@ -124,6 +125,7 @@ export default function App() {
       cancelled = true;
       window.removeEventListener("focus", refreshProfile);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.clearInterval(profileTimer);
       nativeListener?.remove();
     };
   }, [session, ownerBridgeMode]);

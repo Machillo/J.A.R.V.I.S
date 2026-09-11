@@ -1050,3 +1050,118 @@ body:has(.users-app) { background: #0b132b; }
     color: #334155;
   }
 }
+
+/* Beta subscription payment flow */
+.users-app .plan-payment-notice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  margin: 13px 0;
+  padding: 13px;
+  border: 1px solid rgba(20,184,166,.2);
+  border-radius: 16px;
+  background: rgba(20,184,166,.08);
+  color: var(--muted-2);
+  font-size: .78rem;
+  line-height: 1.45;
+}
+.users-app .plan-payment-notice svg { color: var(--accent); }
+.users-app .pending-payment-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 11px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 13px;
+  border: 1px solid rgba(251,191,36,.2);
+  border-radius: 18px;
+  background: linear-gradient(145deg,rgba(52,43,20,.8),rgba(20,28,46,.94));
+}
+.users-app .pending-payment-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--gold);
+  background: rgba(251,191,36,.1);
+}
+.users-app .pending-payment-card strong,
+.users-app .pending-payment-card small { display:block; }
+.users-app .pending-payment-card small { margin-top:3px; color:var(--muted); font-size:.7rem; }
+.users-app .pending-payment-card button,
+.users-app .sinpe-payment-data button {
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid rgba(20,184,166,.22);
+  border-radius: 12px;
+  background: rgba(20,184,166,.1);
+  color: var(--text);
+  font-weight: 730;
+}
+.users-app .payment-dialog { max-height:min(90dvh,760px); overflow-y:auto; }
+.users-app .sinpe-payment-data { display:grid; gap:8px; margin:14px 0; }
+.users-app .sinpe-payment-data > div {
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:5px 10px;
+  align-items:center;
+  padding:12px 13px;
+  border:1px solid rgba(148,163,184,.14);
+  border-radius:15px;
+  background:rgba(255,255,255,.035);
+}
+.users-app .sinpe-payment-data span { color:var(--muted); font-size:.69rem; }
+.users-app .sinpe-payment-data strong { font-size:.95rem; overflow-wrap:anywhere; }
+.users-app .sinpe-payment-data button { grid-column:2; grid-row:1 / span 2; display:inline-flex; align-items:center; gap:6px; }
+.users-app .payment-code-row strong { color:var(--accent); letter-spacing:.08em; }
+.users-app .payment-expiry-note { display:block; margin:-5px 1px 13px; color:var(--muted); font-size:.68rem; }
+.users-app .receipt-upload-field {
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  min-height:49px;
+  padding:10px 14px;
+  border:1px dashed rgba(20,184,166,.38);
+  border-radius:15px;
+  color:var(--muted-2);
+  background:rgba(20,184,166,.055);
+  font-weight:680;
+  text-align:center;
+}
+.users-app .receipt-upload-field input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.users-app .payment-submit-button {
+  width:100%;
+  min-height:50px;
+  margin-top:12px;
+  border:0;
+  border-radius:15px;
+  background:linear-gradient(145deg,#14b8a6,#0d9488);
+  color:white;
+  font-weight:790;
+}
+.users-app .payment-submit-button:disabled { opacity:.42; }
+.users-app .payment-waiting-state { display:grid; justify-items:center; gap:9px; padding:20px 4px 7px; text-align:center; }
+.users-app .payment-waiting-state svg { color:var(--success); }
+.users-app .payment-waiting-state p { margin:0; color:var(--muted-2); line-height:1.48; }
+.users-app .payment-waiting-state small { color:var(--muted); line-height:1.42; }
+
+@media (max-width:390px) {
+  .users-app .pending-payment-card { grid-template-columns:auto 1fr; }
+  .users-app .pending-payment-card > button { grid-column:1 / -1; width:100%; }
+  .users-app .sinpe-payment-data > div { grid-template-columns:1fr; }
+  .users-app .sinpe-payment-data button { grid-column:1; grid-row:auto; width:100%; justify-content:center; }
+}
+
+@media (prefers-color-scheme: light) {
+  .users-app .plan-payment-notice,
+  .users-app .pending-payment-card,
+  .users-app .sinpe-payment-data > div,
+  .users-app .receipt-upload-field { background:#f0fdfa; color:#334155; }
+  .users-app .pending-payment-card { background:linear-gradient(145deg,#fffbeb,#ffffff); }
+  .users-app .pending-payment-card button,
+  .users-app .sinpe-payment-data button { color:#0f172a; }
+}
