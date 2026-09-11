@@ -101,11 +101,8 @@ export default function App() {
           setCurrentUser(profile);
           setIdentityError("");
         }
-      } catch (error) {
+      } catch {
         // Keep the current screen usable on a temporary network failure.
-        if (!cancelled && !currentUser) {
-          setIdentityError(error?.message || "No pudimos actualizar tu cuenta.");
-        }
       } finally {
         refreshing = false;
       }
@@ -129,7 +126,7 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       nativeListener?.remove();
     };
-  }, [session, ownerBridgeMode, currentUser]);
+  }, [session, ownerBridgeMode]);
 
   if (ownerBridgeMode) {
     return <PersonalApp />;
