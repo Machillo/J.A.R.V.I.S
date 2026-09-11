@@ -1156,6 +1156,17 @@ body:has(.users-app) { background: #0b132b; }
   font:inherit;
   font-weight:740;
 }
+.users-app .native-receipt-picker-button {
+  width:100%;
+  min-height:49px;
+  padding:0 14px;
+  border:1px solid rgba(20,184,166,.38);
+  border-top:0;
+  border-radius:0 0 15px 15px;
+  background:var(--primary);
+  color:#fff;
+  font-weight:760;
+}
 .users-app .receipt-upload-field { min-height:42px; border-radius:15px 15px 0 0; border-bottom-color:rgba(20,184,166,.18); overflow-wrap:anywhere; }
 .users-app .payment-submit-button {
   width:100%;
