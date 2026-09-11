@@ -91,8 +91,9 @@
 .unified-payment-data button{grid-column:2;grid-row:1/span 2;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 10px;border:1px solid rgba(20,184,166,.24);border-radius:11px;background:rgba(20,184,166,.09);color:#eaf8ff;font-weight:720}
 .unified-payment-code strong{color:#5eead4;letter-spacing:.08em}
 .unified-payment-expiry{display:block;margin:9px 2px 13px;color:#8fa6ae;font-size:.68rem}
-.unified-receipt-upload{position:relative;display:flex;align-items:center;justify-content:center;gap:9px;min-height:49px;padding:10px 14px;border:1px dashed rgba(20,184,166,.38);border-radius:15px;color:#c1d8dd;background:rgba(20,184,166,.055);font-weight:700;text-align:center}
-.unified-receipt-upload input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.unified-receipt-upload{display:flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:9px 14px;border:1px dashed rgba(20,184,166,.25);border-radius:15px 15px 0 0;color:#c1d8dd;background:rgba(20,184,166,.045);font-weight:700;text-align:center;overflow-wrap:anywhere}
+.unified-native-file-input{display:block;width:100%;min-height:49px;padding:6px;border:1px solid rgba(20,184,166,.38);border-top:0;border-radius:0 0 15px 15px;background:rgba(20,184,166,.075);color:#c1d8dd;font:inherit;font-size:.78rem}
+.unified-native-file-input::file-selector-button{min-height:36px;margin-right:9px;padding:0 12px;border:0;border-radius:10px;background:#0d9488;color:#fff;font:inherit;font-weight:750}
 .unified-payment-stage>.unified-primary{margin-top:12px}
 .unified-inline-error{display:flex;align-items:flex-start;gap:8px;margin:10px 0;padding:11px;border:1px solid rgba(255,119,135,.2);border-radius:14px;background:rgba(255,119,135,.08);color:#ffc3cb;font-size:.76rem;line-height:1.4}
 .unified-inline-error svg{flex:0 0 auto}

@@ -269,11 +269,11 @@ export default function Settings({ user, onUserChange }) {
               </div>
               <small className="payment-expiry-note">Código válido hasta {order?.code_expires_at ? new Date(order.code_expires_at).toLocaleTimeString("es-CR", { hour: "2-digit", minute: "2-digit" }) : "dentro de 2 horas"}.</small>
               {!payment.phone&&<div className="plan-dialog-error"><AlertTriangle size={18}/><span>El número SINPE todavía no está configurado. No realicés el pago hasta que aparezca.</span></div>}
-              <label className="receipt-upload-field">
+              <div className="receipt-upload-field">
                 <Upload size={19}/>
-                <span>{receipt?.name || "Seleccionar comprobante"}</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event)=>{setReceipt(event.target.files?.[0] || null);setError("");}}/>
-              </label>
+                <span>{receipt ? `Listo: ${receipt.name}` : "Seleccioná una imagen o PDF"}</span>
+              </div>
+              <input className="native-receipt-input" type="file" accept="image/*,.pdf,application/pdf" onChange={(event)=>{setReceipt(event.currentTarget.files?.item(0) || null);setError("");}}/>
               {error&&<div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
               <button className="payment-submit-button" type="button" disabled={uploading||!receipt||!payment.phone} onClick={sendReceipt}>{uploading?"Subiendo...":"Enviar comprobante"}</button>
             </> : <div className="payment-waiting-state">
