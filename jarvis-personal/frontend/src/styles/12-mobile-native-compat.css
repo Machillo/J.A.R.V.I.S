@@ -1,0 +1,303 @@
+/* ==========================================================================
+   Native mobile compatibility — JARVIS Personal
+   Reliable touch scrolling plus Android/iPhone-safe layout overrides.
+   ========================================================================== */
+
+:root {
+  --jarvis-nav-height: 80px;
+  --jarvis-mobile-gutter: clamp(12px, 4vw, 18px);
+}
+
+.jarvis-app.app-shell-v2 {
+  height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom;
+  scrollbar-gutter: stable;
+}
+
+.jarvis-app.app-shell-v2 > .main-shell.app-main-v2 {
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
+  touch-action: pan-y pinch-zoom;
+}
+
+.app-logout-button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  border: 1px solid rgba(255, 107, 125, .22);
+  border-radius: 15px;
+  background: rgba(255, 107, 125, .08);
+  color: #ff91a0;
+  box-shadow: inset 0 1px rgba(255,255,255,.035);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-logout-button:active {
+  transform: scale(.96);
+  background: rgba(255, 107, 125, .15);
+}
+
+@media (max-width: 760px) {
+  body:has(.jarvis-app.app-shell-v2),
+  #root:has(.jarvis-app.app-shell-v2) {
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .jarvis-app.app-shell-v2 {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  .main-shell.app-main-v2,
+  .main-shell.app-main-v2.expanded {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding:
+      max(10px, env(safe-area-inset-top, 0px))
+      var(--jarvis-mobile-gutter)
+      calc(var(--jarvis-nav-height) + 28px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .main-shell.app-main-v2.home-mode {
+    padding-bottom: calc(var(--jarvis-nav-height) + 100px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .app-top-bar {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    gap: 10px;
+    min-height: 66px;
+    margin:
+      calc(-1 * max(10px, env(safe-area-inset-top, 0px)))
+      calc(-1 * var(--jarvis-mobile-gutter))
+      12px;
+    padding:
+      max(10px, env(safe-area-inset-top, 0px))
+      var(--jarvis-mobile-gutter)
+      8px;
+  }
+
+  .app-top-bar h1 {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: clamp(1.55rem, 7.2vw, 2rem);
+    line-height: 1.04;
+  }
+
+  .app-top-bar span {
+    margin-bottom: 3px;
+    font-size: .62rem;
+    letter-spacing: .11em;
+  }
+
+  .app-back-button,
+  .app-logout-button {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+  }
+
+  .bottom-app-nav {
+    width: min(560px, 100vw);
+    padding-inline:
+      max(6px, env(safe-area-inset-left, 0px))
+      max(6px, env(safe-area-inset-right, 0px));
+  }
+
+  .app-hub-page,
+  .app-profile-page,
+  .wealth-hub-page,
+  .dashboard-page,
+  .data-page,
+  .page,
+  .settings-page,
+  .memory-page,
+  .emails-page,
+  .investments-page,
+  .business-page,
+  .financial-accounts-page,
+  .net-worth-page,
+  .financial-timeline-page,
+  .reconciliation-page,
+  .deterioration-page,
+  .product-ops-page,
+  .premium-strategy-page,
+  .strategy-v3-page {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .hud-card,
+  .hud-panel,
+  .panel,
+  .jarvis-panel,
+  .app-section-card,
+  .settings-card,
+  .business-card,
+  .financial-account-row,
+  .product-ops-row {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .investment-kpi-grid,
+  .financial-account-kpis,
+  .net-worth-kpis,
+  .timeline-kpis,
+  .reconciliation-kpis,
+  .deterioration-kpis,
+  .product-ops-grid,
+  .data-kpi-grid,
+  .dashboard-grid,
+  .finance-dashboard-grid,
+  .finance-overview-grid,
+  .finance-analytics-grid,
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+
+  .investment-two-col,
+  .net-worth-columns,
+  .financial-account-fields,
+  .business-form,
+  .goal-edit-form,
+  .receivable-entry-form,
+  .user-admin-fields,
+  .finance-input-grid,
+  .vip-scenario-fields,
+  .simulator-controls {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .investment-hero,
+  .financial-accounts-hero,
+  .net-worth-hero,
+  .financial-timeline-hero,
+  .reconciliation-hero,
+  .deterioration-hero,
+  .product-ops-head,
+  .page-section-header,
+  .page-heading-row,
+  .receivables-title-row,
+  .panel-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .strategy-refresh-btn,
+  .hud-action-button,
+  .jarvis-action-button,
+  .primary-action-button,
+  .finance-file-button,
+  .user-admin-primary,
+  .user-admin-danger {
+    min-height: 46px;
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .product-ops-section {
+    padding: 14px;
+  }
+
+  .product-ops-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding: 13px 0;
+    overflow-wrap: anywhere;
+  }
+
+  .product-ops-row > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .responsive-table,
+  .data-table-panel,
+  .transaction-history-scroll,
+  .finance-preview-table {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .responsive-table table,
+  .finance-preview-table {
+    min-width: 620px;
+  }
+
+  .finance-detail-modal,
+  .debt-editor-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(var(--app-vh, 100dvh) - env(safe-area-inset-top, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .investment-kpi-grid,
+  .financial-account-kpis,
+  .net-worth-kpis,
+  .timeline-kpis,
+  .reconciliation-kpis,
+  .deterioration-kpis,
+  .product-ops-grid,
+  .data-kpi-grid,
+  .dashboard-grid,
+  .finance-dashboard-grid,
+  .finance-overview-grid,
+  .finance-analytics-grid,
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .product-kpi,
+  .investment-kpi-grid .hud-card,
+  .financial-account-kpis .hud-card,
+  .net-worth-kpis .hud-card {
+    min-height: 0;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  .jarvis-app.app-shell-v2 {
+    overscroll-behavior-y: auto;
+  }
+
+  .app-top-bar,
+  .bottom-app-nav,
+  .jarvis-command-center {
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
+  }
+}

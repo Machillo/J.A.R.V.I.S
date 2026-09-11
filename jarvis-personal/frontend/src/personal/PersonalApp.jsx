@@ -323,6 +323,19 @@ export default function App() {
     refreshAppData();
   }, [session]);
 
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const appScroller = document.querySelector(".jarvis-app.app-shell-v2");
+      if (appScroller) {
+        appScroller.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      } else {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activePage]);
+
   const handleLogout = async () => {
     if (ownerBridgeMode) {
       setOwnerBridgeToken("");
@@ -650,6 +663,9 @@ export default function App() {
               <span>{currentSection.eyebrow}</span>
               <h1>{currentSection.title}</h1>
             </div>
+            <button className="app-logout-button" type="button" onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión">
+              <LogOut size={21} />
+            </button>
           </header>
         )}
 
