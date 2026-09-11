@@ -390,3 +390,275 @@ body:has(.users-app) { background: #0b132b; }
     color: #0f172a;
   }
 }
+
+
+/* Unified Android controls — shared by Free, Basic and VIP. */
+.users-app .finva-button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 16px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 780;
+  line-height: 1.1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .14s ease, opacity .14s ease, background .14s ease;
+}
+.users-app .finva-button:active { transform: scale(.97); }
+.users-app .finva-button:disabled { opacity: .52; cursor: wait; }
+.users-app .finva-button-primary {
+  background: linear-gradient(180deg, #14b8a6, #0d9488);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(13,148,136,.18);
+}
+.users-app .finva-button-secondary {
+  border: 1px solid rgba(45,212,191,.25);
+  background: rgba(20,184,166,.12);
+  color: #ccfbf1;
+  box-shadow: none;
+}
+.users-app .finva-button-ghost {
+  border: 1px solid rgba(148,163,184,.20);
+  background: #243354;
+  color: #e2e8f0;
+  box-shadow: none;
+}
+.users-app .finva-button-danger {
+  border: 1px solid rgba(251,113,133,.24);
+  background: rgba(190,24,93,.18);
+  color: #fecdd3;
+  box-shadow: none;
+}
+.users-app .finva-button-success {
+  background: linear-gradient(180deg, #10b981, #059669);
+  color: #ffffff;
+}
+
+.users-app .vip-refresh-button {
+  width: fit-content;
+  margin-top: 16px;
+}
+.users-app .security-method-row .finva-button {
+  min-height: 40px;
+  padding-inline: 13px;
+}
+.users-app .security-refresh.finva-button {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.users-app .movement-filters input,
+.users-app .movement-filters select,
+.users-app .budget-list input,
+.users-app .month-picker,
+.users-app .feedback-form input,
+.users-app .feedback-form select,
+.users-app .feedback-form textarea {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid rgba(148,163,184,.22);
+  border-radius: 16px;
+  background: #111c36;
+  color: #f8fafc;
+  padding: 12px 15px;
+  outline: none;
+}
+.users-app .movement-filters input:focus,
+.users-app .movement-filters select:focus,
+.users-app .budget-list input:focus,
+.users-app .month-picker:focus,
+.users-app .feedback-form input:focus,
+.users-app .feedback-form select:focus,
+.users-app .feedback-form textarea:focus {
+  border-color: rgba(20,184,166,.72);
+  box-shadow: 0 0 0 3px rgba(20,184,166,.13);
+}
+.users-app select {
+  accent-color: #14b8a6;
+}
+.users-app input[type="date"] {
+  color-scheme: dark;
+}
+.users-app input[type="checkbox"],
+.users-app input[type="radio"] {
+  accent-color: #14b8a6;
+}
+
+/* App-owned bottom sheets replace browser prompt/confirm windows. */
+.users-app .finva-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 18px 14px max(18px, env(safe-area-inset-bottom));
+  background: rgba(3,7,18,.72);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.users-app .finva-dialog {
+  position: relative;
+  width: min(100%, 480px);
+  padding: 22px 18px 18px;
+  overflow: hidden;
+  border: 1px solid rgba(45,212,191,.25);
+  border-radius: 28px;
+  background: linear-gradient(155deg, #243354, #151f39 72%);
+  box-shadow: 0 28px 90px rgba(3,7,18,.56);
+  animation: finva-sheet-in .2s cubic-bezier(.2,.8,.2,1);
+}
+.users-app .finva-dialog-danger { border-color: rgba(251,113,133,.30); }
+.users-app .finva-dialog-success { border-color: rgba(52,211,153,.30); }
+.users-app .finva-dialog-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(148,163,184,.11);
+  color: #cbd5e1;
+  box-shadow: none;
+}
+.users-app .finva-dialog-icon {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 15px;
+  border-radius: 17px;
+  color: #2dd4bf;
+  background: rgba(20,184,166,.14);
+}
+.users-app .finva-dialog-danger .finva-dialog-icon {
+  color: #fb7185;
+  background: rgba(251,113,133,.13);
+}
+.users-app .finva-dialog-success .finva-dialog-icon {
+  color: #34d399;
+  background: rgba(52,211,153,.13);
+}
+.users-app .finva-dialog h2 {
+  margin: 0 44px 8px 0;
+  color: #f8fafc;
+  font-size: 1.35rem;
+  letter-spacing: -.035em;
+}
+.users-app .finva-dialog > p {
+  margin: 0 0 18px;
+  color: #94a3b8;
+  font-size: .86rem;
+  line-height: 1.5;
+}
+.users-app .finva-dialog-form { display: grid; gap: 16px; }
+.users-app .finva-dialog-form label { display: grid; gap: 7px; }
+.users-app .finva-dialog-form label > span {
+  color: #94a3b8;
+  font-size: .74rem;
+  font-weight: 700;
+}
+.users-app .finva-money-input {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(148,163,184,.24);
+  border-radius: 18px;
+  background: #111c36;
+}
+.users-app .finva-money-input:focus-within {
+  border-color: rgba(20,184,166,.72);
+  box-shadow: 0 0 0 3px rgba(20,184,166,.13);
+}
+.users-app .finva-money-input b {
+  padding-left: 16px;
+  color: #cbd5e1;
+  font-size: 1.3rem;
+}
+.users-app .finva-money-input input {
+  width: 100%;
+  min-width: 0;
+  min-height: 56px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f8fafc;
+  padding: 0 16px 0 10px;
+  font-size: 1.42rem;
+  font-weight: 820;
+}
+.users-app .finva-dialog-actions {
+  display: grid;
+  grid-template-columns: .85fr 1.15fr;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+@media (prefers-color-scheme: light) {
+  .users-app .finva-button-secondary {
+    border-color: rgba(13,148,136,.24);
+    background: rgba(13,148,136,.09);
+    color: #0f766e;
+  }
+  .users-app .finva-button-ghost {
+    border-color: rgba(15,23,42,.10);
+    background: #f1f5f9;
+    color: #334155;
+  }
+  .users-app .finva-button-danger {
+    border-color: rgba(244,63,94,.18);
+    background: rgba(244,63,94,.08);
+    color: #be123c;
+  }
+  .users-app .movement-filters input,
+  .users-app .movement-filters select,
+  .users-app .budget-list input,
+  .users-app .month-picker,
+  .users-app .feedback-form input,
+  .users-app .feedback-form select,
+  .users-app .feedback-form textarea {
+    border-color: rgba(15,23,42,.12);
+    background: #ffffff;
+    color: #0f172a;
+  }
+  .users-app input[type="date"] { color-scheme: light; }
+  .users-app .finva-dialog-backdrop { background: rgba(15,23,42,.46); }
+  .users-app .finva-dialog {
+    border-color: rgba(13,148,136,.22);
+    background: #ffffff;
+    box-shadow: 0 28px 80px rgba(15,23,42,.22);
+  }
+  .users-app .finva-dialog-danger { border-color: rgba(244,63,94,.22); }
+  .users-app .finva-dialog h2 { color: #0f172a; }
+  .users-app .finva-dialog > p,
+  .users-app .finva-dialog-form label > span { color: #64748b; }
+  .users-app .finva-dialog-close {
+    background: #f1f5f9;
+    color: #475569;
+  }
+  .users-app .finva-money-input {
+    border-color: rgba(15,23,42,.13);
+    background: #f8fafc;
+  }
+  .users-app .finva-money-input b { color: #475569; }
+  .users-app .finva-money-input input { color: #0f172a; }
+}
+
+@media (max-width: 390px) {
+  .users-app .finva-dialog-actions { grid-template-columns: 1fr; }
+  .users-app .finva-dialog-actions .finva-button-primary,
+  .users-app .finva-dialog-actions .finva-button-danger,
+  .users-app .finva-dialog-actions .finva-button-success { grid-row: 1; }
+}
