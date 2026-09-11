@@ -60,16 +60,16 @@ export default function AccountSecurity({ user }) {
 
         <article className="security-method-row">
           <div><Apple size={20} /><span><strong>Apple</strong><small>{hasProvider("apple") ? "Vinculado a esta misma cuenta" : "Podés agregar Sign in with Apple"}</small></span></div>
-          {hasProvider("apple") ? <CheckCircle2 size={18} /> : <button type="button" onClick={linkApple} disabled={Boolean(busy)}>{busy === "apple" ? "Abriendo..." : "Vincular"}</button>}
+          {hasProvider("apple") ? <CheckCircle2 size={18} /> : <button className="finva-button finva-button-secondary" type="button" onClick={linkApple} disabled={Boolean(busy)}>{busy === "apple" ? "Abriendo..." : "Vincular"}</button>}
         </article>
 
         <article className="security-method-row">
           <div><Fingerprint size={21} /><span><strong>Passkey / Face ID</strong><small>{passkeys.length ? `${passkeys.length} registrada${passkeys.length === 1 ? "" : "s"}` : "Usá biometría/PIN del dispositivo"}</small></span></div>
-          <button type="button" onClick={registerPasskey} disabled={Boolean(busy)}>{busy === "passkey" ? "Registrando..." : passkeys.length ? "Agregar otra" : "Registrar"}</button>
+          <button className="finva-button finva-button-secondary" type="button" onClick={registerPasskey} disabled={Boolean(busy)}>{busy === "passkey" ? "Registrando..." : passkeys.length ? "Agregar otra" : "Registrar"}</button>
         </article>
       </div>
 
-      <button className="security-refresh" type="button" onClick={reload}><RefreshCw size={15} /> Actualizar métodos</button>
+      <button className="security-refresh finva-button finva-button-ghost" type="button" onClick={reload}><RefreshCw size={15} /> Actualizar métodos</button>
       {message && <p className="success-banner">{message}</p>}
       {error && <p className="onboarding-error">{error}</p>}
     </>
