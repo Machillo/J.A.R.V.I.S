@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, Tag } from "lucide-react";
 import { createExpense, createIncome, deleteExpense, deleteIncome, getExpenses, getIncome, updateExpense, updateIncome } from "../services/jarvisApi";
+import { ConfirmDialog } from "../components/FinvaDialog";
 
 const money = (v) => new Intl.NumberFormat("es-CR", { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(Number(v) || 0);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -23,13 +24,14 @@ function EntryFields({ form, setForm, categories }) {
 export default function Finance() {
   const [income, setIncome] = useState([]), [expenses, setExpenses] = useState([]), [error, setError] = useState("");
   const [incomeForm, setIncomeForm] = useState(incomeEmpty), [expenseForm, setExpenseForm] = useState(expenseEmpty), [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null), [deletingBusy, setDeletingBusy] = useState(false);
   const [entryKind, setEntryKind] = useState("expense");
   const run = async (fn) => { setError(""); try { return await fn(); } catch (err) { setError(err?.message || "No se pudo completar la operación."); return null; } };
   const load = () => run(async () => { const [a,b] = await Promise.all([getIncome(),getExpenses()]); setIncome(a); setExpenses(b); });
   useEffect(() => { load(); }, []);
   const submitIncome = async (e) => { e.preventDefault(); if (await run(() => createIncome({ ...incomeForm, amount:Number(incomeForm.amount) }))) { setIncomeForm(incomeEmpty()); load(); } };
   const submitExpense = async (e) => { e.preventDefault(); if (await run(() => createExpense({ ...expenseForm, amount:Number(expenseForm.amount) }))) { setExpenseForm(expenseEmpty()); load(); } };
-  const remove = async (kind,id) => { if (!confirm("¿Eliminar este movimiento?")) return; if (await run(() => kind === "income" ? deleteIncome(id) : deleteExpense(id))) load(); };
+  const remove = async () => { setDeletingBusy(true); const removed = await run(() => deleting.kind === "income" ? deleteIncome(deleting.id) : deleteExpense(deleting.id)); setDeletingBusy(false); if (removed) { setDeleting(null); load(); } };
   const saveEdit = async (e) => { e.preventDefault(); const payload={...editing,amount:Number(editing.amount)}; const saved=await run(()=>editing.kind==="income"?updateIncome(editing.id,payload):updateExpense(editing.id,payload)); if(saved){setEditing(null);load();} };
   const openEdit = (kind,item) => setEditing({ kind,id:item.id,amount:item.amount,description:item.description||item.source||"",category:item.category||(kind==="income"?"Salario":"Compras"),entry_date:item.entry_date||String(item.created_at).slice(0,10) });
   const isIncome = entryKind === "income";
@@ -46,9 +48,10 @@ export default function Finance() {
       <button className="entry-save-button">Guardar {isIncome ? "ingreso" : "gasto"}</button>
     </form>
     <div className="grid3 lists">
-      <div className="panel"><h3>Ingresos recientes</h3>{income.slice(0,8).map((item)=><div className="row" key={item.id}><span><strong>{item.description||item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b>{money(item.amount)}</b><span className="actions"><button onClick={()=>openEdit("income",item)}>Editar</button><button className="danger" onClick={()=>remove("income",item.id)}>Eliminar</button></span></span></div>)}</div>
-      <div className="panel"><h3>Gastos recientes</h3>{expenses.slice(0,8).map((item)=><div className="row" key={item.id}><span><strong>{item.description||item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b>{money(item.amount)}</b><span className="actions"><button onClick={()=>openEdit("expense",item)}>Editar</button><button className="danger" onClick={()=>remove("expense",item.id)}>Eliminar</button></span></span></div>)}</div>
+      <div className="panel"><h3>Ingresos recientes</h3>{income.slice(0,8).map((item)=><div className="row" key={item.id}><span><strong>{item.description||item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit("income",item)}>Editar</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind:"income",id:item.id,label:item.description||item.category})}>Eliminar</button></span></span></div>)}</div>
+      <div className="panel"><h3>Gastos recientes</h3>{expenses.slice(0,8).map((item)=><div className="row" key={item.id}><span><strong>{item.description||item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit("expense",item)}>Editar</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind:"expense",id:item.id,label:item.description||item.category})}>Eliminar</button></span></span></div>)}</div>
     </div>
-    {editing && <div className="modal-backdrop"><form className="panel form edit-modal" onSubmit={saveEdit}><h3>Editar {editing.kind==="income"?"ingreso":"gasto"}</h3><EntryFields form={editing} setForm={setEditing} categories={editing.kind==="income"?incomeCategories:expenseCategories}/><button>Guardar cambios</button><button type="button" onClick={()=>setEditing(null)}>Cancelar</button></form></div>}
+    {editing && <div className="modal-backdrop"><form className="panel form edit-modal" onSubmit={saveEdit}><h3>Editar {editing.kind==="income"?"ingreso":"gasto"}</h3><EntryFields form={editing} setForm={setEditing} categories={editing.kind==="income"?incomeCategories:expenseCategories}/><button className="finva-button finva-button-primary">Guardar cambios</button><button className="finva-button finva-button-ghost" type="button" onClick={()=>setEditing(null)}>Cancelar</button></form></div>}
+    <ConfirmDialog open={Boolean(deleting)} title="Eliminar movimiento" description={deleting ? `Se eliminará ${deleting.label}. Esta acción no se puede deshacer.` : ""} onConfirm={remove} onClose={()=>{if(!deletingBusy)setDeleting(null);}} busy={deletingBusy}/>
   </section>;
 }
