@@ -195,7 +195,8 @@ export default function UnifiedOnboarding({ user, onComplete }) {
           </div>
           <small className="unified-payment-expiry">Código válido hasta {order?.code_expires_at ? new Date(order.code_expires_at).toLocaleTimeString("es-CR", { hour: "2-digit", minute: "2-digit" }) : "dentro de 2 horas"}.</small>
           {!payment.phone && <div className="unified-inline-error"><AlertTriangle size={18}/><span>El número SINPE todavía no está configurado. No realicés el pago hasta que aparezca.</span></div>}
-          <label className="unified-receipt-upload"><Upload size={19}/><span>{receipt?.name || "Seleccionar comprobante"}</span><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => { setReceipt(event.target.files?.[0] || null); setError(""); }}/></label>
+          <div className="unified-receipt-upload"><Upload size={19}/><span>{receipt ? `Listo: ${receipt.name}` : "Seleccioná una imagen o PDF"}</span></div>
+          <input className="unified-native-file-input" type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => { setReceipt(event.currentTarget.files?.item(0) || null); setError(""); }}/>
           {error && <p className="unified-onboarding-error">{error}</p>}
           <button className="unified-primary" type="button" disabled={uploading || !receipt || !payment.phone} onClick={sendReceipt}>{uploading ? "Subiendo..." : "Enviar comprobante"}</button>
         </> : <div className="unified-payment-waiting"><CheckCircle2 size={38}/><strong>Listo, ya recibimos tu comprobante</strong><p>FINVA está esperando la confirmación. Cuando coincidan el código y el monto, tu plan se activará automáticamente.</p><small>Podés cerrar la app. Al volver, continuaremos verificando el pago.</small></div>}

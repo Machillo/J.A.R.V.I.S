@@ -28,8 +28,7 @@ public class MainActivity extends BridgeActivity {
         if (!updateCheckStarted && !FirebaseApp.getApps(this).isEmpty()) {
             updateCheckStarted = true;
             FirebaseAppDistribution.getInstance()
-                .updateIfNewReleaseAvailable()
-                .addOnCompleteListener(task -> updateCheckStarted = false);
+                .updateIfNewReleaseAvailable();
         }
     }
 
