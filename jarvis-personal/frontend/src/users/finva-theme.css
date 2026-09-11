@@ -301,3 +301,92 @@
     color: #0f172a;
   }
 }
+
+
+/* Keep the legacy mobile tokens aligned with Balance & Clarity.
+   Some finance controls still consume --f-* directly. */
+.users-app {
+  --f-bg: #0b132b;
+  --f-bg-2: #111c36;
+  --f-surface: #1c2541;
+  --f-surface-2: #243354;
+  --f-soft: rgba(148, 163, 184, .07);
+  --f-border: rgba(148, 163, 184, .18);
+  --f-border-strong: rgba(20, 184, 166, .38);
+  --f-text: #f8fafc;
+  --f-text-2: #cbd5e1;
+  --f-muted: #94a3b8;
+  --f-accent: #14b8a6;
+  --f-accent-2: #0d9488;
+  --f-green: #34d399;
+  --f-red: #fb7185;
+  --accent: #14b8a6;
+}
+
+body:has(.users-app) { background: #0b132b; }
+
+.users-app .entry-form {
+  border-color: rgba(148, 163, 184, .18);
+  background: #1c2541;
+}
+.users-app .entry-amount-field > div {
+  border-color: rgba(148, 163, 184, .24);
+  background: #243354;
+}
+.users-app .entry-amount-field > div:focus-within {
+  border-color: rgba(20, 184, 166, .72);
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, .13);
+}
+.users-app .entry-form-title > span {
+  color: #2dd4bf;
+  background: rgba(20, 184, 166, .13);
+}
+.users-app .entry-form.expense .entry-form-title > span {
+  color: #fb7185;
+  background: rgba(251, 113, 133, .12);
+}
+.users-app .entry-form.income .entry-save-button {
+  border-color: rgba(52, 211, 153, .28);
+  background: linear-gradient(180deg, #10b981, #059669);
+  color: #ffffff;
+}
+.users-app .entry-form.expense .entry-save-button {
+  border-color: rgba(251, 113, 133, .24);
+  background: linear-gradient(180deg, #f43f5e, #e11d48);
+  color: #ffffff;
+}
+.users-app .entry-segmented button.active {
+  background: #243354;
+  color: #f8fafc;
+}
+.users-app .entry-segmented button.active.income::before { background: rgba(52, 211, 153, .16); }
+.users-app .entry-segmented button.active.expense::before { background: rgba(251, 113, 133, .14); }
+
+@media (prefers-color-scheme: light) {
+  .users-app {
+    --f-bg: #f8fafc;
+    --f-bg-2: #f1f5f9;
+    --f-surface: #ffffff;
+    --f-surface-2: #f1f5f9;
+    --f-soft: rgba(15, 23, 42, .04);
+    --f-border: rgba(15, 23, 42, .10);
+    --f-border-strong: rgba(13, 148, 136, .28);
+    --f-text: #0f172a;
+    --f-text-2: #475569;
+    --f-muted: #64748b;
+    --f-accent: #0d9488;
+    --f-accent-2: #0f766e;
+    --f-green: #10b981;
+    --f-red: #f43f5e;
+  }
+  body:has(.users-app) { background: #f8fafc; }
+  .users-app .entry-form { background: #ffffff; }
+  .users-app .entry-amount-field > div {
+    border-color: rgba(15, 23, 42, .13);
+    background: #f8fafc;
+  }
+  .users-app .entry-segmented button.active {
+    background: #ffffff;
+    color: #0f172a;
+  }
+}
