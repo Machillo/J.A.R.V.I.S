@@ -1,16 +1,8 @@
-import { supabase } from "../../lib/supabase";
 import { API_URL } from "../../lib/apiUrl";
-
-async function authHeaders() {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
-  if (!token) throw new Error("No hay sesión activa.");
-  return { Authorization: `Bearer ${token}` };
-}
+import { authenticatedFetch } from "../../lib/authenticatedFetch";
 
 async function request(path, options = {}) {
-  const headers = { ...(await authHeaders()), ...(options.headers || {}) };
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const response = await authenticatedFetch(`${API_URL}${path}`, options);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`Error ${response.status} en ${path}: ${payload?.detail || payload?.error || "Error de API"}`);
   return payload;

@@ -1178,6 +1178,256 @@ body:has(.users-app) { background: #050b0e; }
 .users-app .entry-field-row { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
 .users-app .entry-save-button { min-height:50px!important; margin-top:2px; }
 .users-app .entry-form.income .entry-save-button { background:linear-gradient(145deg,#23845f,#19684a); border-color:rgba(114,224,173,.2); }
+
+/* Android 2026 — Material-inspired, edge-to-edge and tactile. */
+.users-app {
+  --f-bg: #071114;
+  --f-surface: #102126;
+  --f-surface-2: #172a30;
+  --f-border: rgba(190, 226, 232, .09);
+  --f-border-strong: rgba(128, 211, 224, .22);
+  --f-text: #eefcff;
+  --f-text-2: #bed2d7;
+  --f-muted: #8aa3aa;
+  --accent: #73d9e8;
+  background: var(--f-bg);
+}
+
+body:has(.users-app) { background: var(--f-bg); }
+
+.users-app .app,
+.users-app .mobile-app-shell {
+  max-width: 600px;
+  border: 0;
+  box-shadow: none;
+  background: var(--f-bg);
+}
+
+.users-app .mobile-content {
+  padding-inline: 18px;
+  padding-bottom: calc(104px + env(safe-area-inset-bottom));
+}
+
+.users-app .mobile-app-header {
+  min-height: 72px;
+  margin-inline: -18px;
+  margin-bottom: 8px;
+  padding-inline: 20px;
+  background: rgba(7, 17, 20, .96);
+  border-bottom-color: rgba(190, 226, 232, .055);
+  box-shadow: 0 7px 22px rgba(0,0,0,.12);
+}
+
+.users-app .mobile-app-header strong {
+  font-size: 1.08rem;
+  letter-spacing: .08em;
+}
+
+.users-app .mobile-app-header small {
+  color: #8ba7ad;
+  font-size: .7rem;
+  font-weight: 650;
+}
+
+.users-app .profile-chip {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 0;
+  background: #19343a;
+  color: #dffaff;
+  box-shadow: inset 0 0 0 1px rgba(128, 211, 224, .14);
+}
+
+.users-app .hero,
+.users-app .mobile-page-heading {
+  padding: 24px 4px 18px;
+}
+
+.users-app .hero > span,
+.users-app .hero > p:first-child,
+.users-app .eyebrow {
+  color: #79cbd8;
+  font-size: .76rem;
+  font-weight: 720;
+  letter-spacing: .1em;
+}
+
+.users-app .hero h1,
+.users-app .mobile-page-heading h1 {
+  margin-top: 8px;
+  font-size: clamp(2rem, 9.4vw, 2.55rem);
+  line-height: 1;
+  letter-spacing: -.045em;
+}
+
+.users-app .hero p,
+.users-app .mobile-page-heading > span {
+  font-size: .95rem;
+  line-height: 1.45;
+}
+
+.users-app .panel,
+.users-app .card,
+.users-app .mobile-panel,
+.users-app .situation-card-body,
+.users-app .premium-ai-card,
+.users-app .simulator-card,
+.users-app .tier-explanation-card,
+.users-app .profile-completeness-card,
+.users-app .settings-card,
+.users-app .account-card,
+.users-app .current-plan-card,
+.users-app .strategy-kpi-card,
+.users-app .vip-scenario {
+  border-color: var(--f-border);
+  border-radius: 26px;
+  background: var(--f-surface);
+  box-shadow: 0 1px 0 rgba(255,255,255,.025), 0 8px 24px rgba(0,0,0,.12);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.users-app .panel,
+.users-app .card,
+.users-app .mobile-panel { padding: 18px; }
+
+.users-app .error {
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 177, 186, .18);
+  border-radius: 20px;
+  background: #3a2025;
+  color: #ffdadd;
+  line-height: 1.38;
+}
+
+.users-app .form input,
+.users-app .form select,
+.users-app .form textarea,
+.users-app .onboarding-field input,
+.users-app .onboarding-field select,
+.users-app .situation-form-grid input,
+.users-app .situation-form-grid select,
+.users-app .situation-single-field input,
+.users-app .vip-scenario-fields input,
+.users-app .simulator-controls input {
+  min-height: 56px;
+  border-radius: 18px;
+  border-color: rgba(190, 226, 232, .11);
+  background: var(--f-surface-2);
+  box-shadow: none;
+  padding-inline: 16px;
+}
+
+.users-app .form button,
+.users-app .actions button,
+.users-app .row button,
+.users-app .change-plan-button,
+.users-app .confirm-plan-button,
+.users-app .scenario-button,
+.users-app .situation-save-button,
+.users-app .unified-primary {
+  min-height: 54px;
+  border: 0;
+  border-radius: 999px;
+  background: #7bdcec;
+  color: #002f37;
+  font-weight: 820;
+  box-shadow: none;
+}
+
+.users-app .entry-segmented {
+  padding: 5px;
+  border: 0;
+  border-radius: 24px;
+  background: #0c1b1f;
+}
+
+.users-app .entry-segmented button {
+  min-height: 52px;
+  border-radius: 19px;
+}
+
+.users-app .entry-segmented button.active {
+  background: #21383e;
+  box-shadow: none;
+}
+
+.users-app .entry-form { padding: 20px; border-radius: 28px; }
+.users-app .entry-form-title > span { width: 44px; height: 44px; border-radius: 15px; }
+.users-app .entry-amount-field > div { min-height: 62px; border-radius: 20px; background: var(--f-surface-2); }
+.users-app .entry-amount-field input { font-size: 1.5rem; }
+.users-app .entry-save-button { min-height: 56px!important; border-radius: 999px!important; }
+
+.users-app .mobile-bottom-nav {
+  width: min(600px, 100vw);
+  min-height: 82px;
+  padding: 7px 8px max(7px, env(safe-area-inset-bottom));
+  background: rgba(11, 25, 29, .98);
+  border-top-color: rgba(190, 226, 232, .065);
+  box-shadow: 0 -8px 24px rgba(0,0,0,.16);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.users-app .mobile-bottom-nav button {
+  position: relative;
+  min-height: 64px;
+  border-radius: 20px;
+  color: #78939a;
+  gap: 5px;
+}
+
+.users-app .mobile-bottom-nav button::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 54px;
+  height: 31px;
+  border-radius: 999px;
+  background: transparent;
+  transform: translateX(-50%);
+  transition: background .16s ease, width .16s ease;
+}
+
+.users-app .mobile-bottom-nav button svg,
+.users-app .mobile-bottom-nav button span { position: relative; z-index: 1; }
+
+.users-app .mobile-bottom-nav button span {
+  font-size: .64rem;
+  font-weight: 680;
+}
+
+.users-app .mobile-bottom-nav button.active {
+  color: #def9fd;
+  background: transparent;
+  box-shadow: none;
+}
+
+.users-app .mobile-bottom-nav button.active::before { background: #24444b; }
+.users-app .mobile-bottom-nav button.active svg { filter: none; }
+
+.users-app .mobile-more-sheet {
+  border: 0;
+  border-radius: 32px 32px 0 0;
+  background: #13262b;
+}
+
+.users-app .sheet-actions button {
+  min-height: 56px;
+  border: 0;
+  border-radius: 18px;
+  background: #1a3036;
+}
+
+@media (max-width: 390px) {
+  .users-app .mobile-content { padding-inline: 14px; }
+  .users-app .mobile-app-header { margin-inline: -14px; padding-inline: 16px; }
+  .users-app .panel,
+  .users-app .card,
+  .users-app .mobile-panel { padding: 16px; }
+}
 .users-app .entry-form.expense .entry-save-button { background:linear-gradient(145deg,#2380a0,#17647d); }
 .users-app .finance-page > .lists { margin-top:16px; }
 .users-app .finance-page > .lists .panel { padding:14px; border-radius:20px; }
