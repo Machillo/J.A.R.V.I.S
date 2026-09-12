@@ -55,9 +55,12 @@ export default function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
-      setCurrentUser(null);
+      // Returning from Android's file picker can refresh the Supabase token.
+      // Keep the mounted screen during TOKEN_REFRESHED so transient state
+      // such as the selected receipt is not lost.
+      if (event !== "TOKEN_REFRESHED") setCurrentUser(null);
       setIdentityError("");
       setSessionLoaded(true);
     });

@@ -275,13 +275,13 @@ export default function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
       setFinanceDashboard(null);
       setStatus(null);
       setJarvisResponse(null);
       setChatHistory([]);
-      setCurrentUser(null);
+      if (event !== "TOKEN_REFRESHED") setCurrentUser(null);
       setAiUsage(null);
       setStrategySummary(null);
       setProfilePreferences(null);
