@@ -29,6 +29,9 @@ def ensure_legal_schema(conn) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_legal_acceptances_account ON legal_acceptances(account_id,created_at DESC)"
     )
+    # Legal evidence is written and read only by the authenticated backend.
+    conn.execute("ALTER TABLE legal_acceptances ENABLE ROW LEVEL SECURITY")
+    conn.execute("REVOKE ALL PRIVILEGES ON TABLE legal_acceptances FROM anon, authenticated")
 
 
 def legal_status(conn, account_id: str) -> dict:

@@ -46,3 +46,15 @@ CREATE TABLE IF NOT EXISTS feedback_reports (
   plan_code TEXT, app_version TEXT, owner_notes TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ
 );
+
+ALTER TABLE finva_beta_programs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE billing_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE billing_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feedback_reports ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL PRIVILEGES ON TABLE finva_beta_programs FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON TABLE billing_orders FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON TABLE billing_subscriptions FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON TABLE product_events FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON TABLE feedback_reports FROM anon, authenticated;

@@ -199,6 +199,17 @@ def ensure_schema(conn):
       workspace_id UUID, category TEXT NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'new', plan_code TEXT, app_version TEXT, owner_notes TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ)""")
+    # These tables are backend-only. Keep them inaccessible through the
+    # Supabase Data API even when runtime schema recovery creates them.
+    for table_name in (
+        "finva_beta_programs",
+        "billing_orders",
+        "billing_subscriptions",
+        "product_events",
+        "feedback_reports",
+    ):
+        conn.execute(f"ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY")
+        conn.execute(f"REVOKE ALL PRIVILEGES ON TABLE {table_name} FROM anon, authenticated")
 
 
 def _counts(conn):

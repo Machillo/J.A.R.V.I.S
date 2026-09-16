@@ -16,4 +16,7 @@ CREATE TABLE IF NOT EXISTS legal_acceptances (
 CREATE INDEX IF NOT EXISTS idx_legal_acceptances_account
     ON legal_acceptances(account_id,created_at DESC);
 
+ALTER TABLE legal_acceptances ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE legal_acceptances FROM anon, authenticated;
+
 COMMIT;
