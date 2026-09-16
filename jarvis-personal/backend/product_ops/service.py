@@ -11,13 +11,76 @@ from backend.auth.current_user import get_current_account_id, get_current_user, 
 from backend.core.database import get_connection
 
 BETA_CODE = "beta-2026-01"
+LAUNCH_PROMOTION_CODE = "launch-free-2026"
+LAUNCH_PROMOTION_END = datetime(2027, 1, 1, 6, 0, 0, tzinfo=timezone.utc)
 PRICES = {
-    "basic": {"beta": 1990, "regular": 2990, "slots": 15},
-    "vip": {"beta": 3990, "regular": 5990, "slots": 15},
+    "basic": {"regular": 2990},
+    "vip": {"regular": 5990},
 }
 PAYMENT_CODE_PATTERN = re.compile(r"\bFINVA-[A-Z0-9]{6}\b", re.I)
 RECEIPT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 MAX_RECEIPT_BYTES = 5 * 1024 * 1024
+
+
+def launch_promotion_status(now: datetime | None = None):
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    active = current < LAUNCH_PROMOTION_END
+    return {
+        "code": LAUNCH_PROMOTION_CODE,
+        "active": active,
+        "ends_at": LAUNCH_PROMOTION_END.isoformat().replace("+00:00", "Z"),
+        "message": (
+            "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No se realizará ningún cobro automático."
+            if active else
+            "La promoción terminó. Basic y VIP utilizan sus precios mensuales normales."
+        ),
+    }
+
+
+def activate_launch_promotion(plan_code: str):
+    if plan_code not in PRICES:
+        raise HTTPException(400, "Plan promocional no válido.")
+    if not launch_promotion_status()["active"]:
+        raise HTTPException(409, "La promoción gratuita ya terminó.")
+    account_id = get_current_account_id()
+    with get_connection() as conn:
+        ensure_schema(conn)
+        plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
+        if not plan:
+            raise HTTPException(404, "Plan no disponible.")
+        current = conn.execute("SELECT onboarding_level FROM accounts WHERE id=%s FOR UPDATE", (account_id,)).fetchone()
+        completed = (current or {}).get("onboarding_level")
+        rank = {"free": 1, "basic": 2, "vip": 3}
+        needs_onboarding = rank.get(completed or "", 0) < rank[plan_code]
+        conn.execute(
+            """UPDATE billing_orders SET status='canceled',updated_at=NOW()
+               WHERE account_id=%s AND status='payment_pending'""",
+            (account_id,),
+        )
+        conn.execute(
+            """INSERT INTO account_subscriptions(
+                   account_id,plan_id,status,access_source,started_at,expires_at,courtesy_note,
+                   granted_by,granted_at,created_at,updated_at
+               ) VALUES(%s,%s,'active','courtesy',NOW(),%s,%s,NULL,NOW(),NOW(),NOW())
+               ON CONFLICT(account_id) DO UPDATE SET
+                   plan_id=EXCLUDED.plan_id,status='active',access_source='courtesy',started_at=NOW(),
+                   expires_at=EXCLUDED.expires_at,courtesy_note=EXCLUDED.courtesy_note,
+                   granted_by=NULL,granted_at=NOW(),updated_at=NOW()""",
+            (account_id, plan["id"], LAUNCH_PROMOTION_END, LAUNCH_PROMOTION_CODE),
+        )
+        conn.execute(
+            "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=%s,updated_at=NOW() WHERE id=%s",
+            (not needs_onboarding, account_id),
+        )
+        conn.commit()
+    record_event("launch_promotion_activated", "plan_selection")
+    return {
+        "status": "promotion_active",
+        "promotion": launch_promotion_status(),
+        "message": f"{plan_code.upper()} quedó activo gratis hasta el 31 de diciembre de 2026.",
+    }
 
 
 def _sinpe_instructions():
@@ -148,7 +211,10 @@ def catalog():
     account_id = get_current_account_id()
     with get_connection() as conn:
         ensure_schema(conn)
-        used = _counts(conn)
+        promotion = launch_promotion_status()
+        if promotion["active"]:
+            conn.execute("""UPDATE billing_orders SET status='canceled',updated_at=NOW()
+              WHERE account_id=%s AND status='payment_pending'""", (account_id,))
         order = conn.execute("""SELECT id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
           receipt_submitted_at,receipt_status,verified_at,verification_source,created_at,updated_at FROM billing_orders
           WHERE account_id=%s ORDER BY created_at DESC LIMIT 1""", (account_id,)).fetchone()
@@ -162,31 +228,26 @@ def catalog():
         conn.commit()
     plans = []
     for code, info in PRICES.items():
-        plans.append({"code": code, "beta_price_crc": info["beta"], "regular_price_crc": info["regular"],
-                      "beta_months": 3, "slots_total": info["slots"], "slots_remaining": max(0, info["slots"] - used.get(code, 0))})
+        plans.append({"code": code, "regular_price_crc": info["regular"]})
     return {"program": BETA_CODE, "plans": plans, "order": _public_order(order), "subscription": subscription,
             "payment": _sinpe_instructions(),
-            "notice": "Durante la beta pagás por SINPE Móvil. El plan se activa cuando FINVA confirma el depósito."}
+            "promotion": promotion,
+            "notice": promotion["message"] if promotion["active"] else "Basic y VIP se activan al confirmar el pago mensual por SINPE Móvil."}
 
 
 def create_checkout(plan_code: str, accepted: bool, consent_version: str):
     if plan_code not in PRICES:
         raise HTTPException(400, "Plan de pago no válido.")
+    if launch_promotion_status()["active"]:
+        return activate_launch_promotion(plan_code)
     if not accepted:
-        raise HTTPException(422, "Debés aceptar las condiciones del precio beta.")
+        raise HTTPException(422, "Debés aceptar el precio mensual normal para continuar.")
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     with get_connection() as conn:
         ensure_schema(conn)
         conn.execute("""UPDATE billing_orders SET status='expired',updated_at=NOW()
           WHERE account_id=%s AND status='payment_pending' AND receipt_submitted_at IS NULL
             AND code_expires_at IS NOT NULL AND code_expires_at<NOW()""", (account_id,))
-        used = _counts(conn).get(plan_code, 0)
-        already_occupies_slot = conn.execute(
-            "SELECT 1 FROM billing_subscriptions WHERE account_id=%s AND plan_code=%s AND status='active' AND beta_code=%s",
-            (account_id, plan_code, BETA_CODE),
-        ).fetchone()
-        if not already_occupies_slot and used >= PRICES[plan_code]["slots"]:
-            raise HTTPException(409, "Los cupos beta de este plan están completos.")
         existing = conn.execute("""SELECT id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
           receipt_submitted_at,receipt_status,created_at,updated_at FROM billing_orders
           WHERE account_id=%s AND plan_code=%s AND status='payment_pending' ORDER BY created_at DESC LIMIT 1""", (account_id, plan_code)).fetchone()
@@ -204,11 +265,11 @@ def create_checkout(plan_code: str, accepted: bool, consent_version: str):
           WHERE account_id=%s AND status='payment_pending'""", (account_id,))
         payment_code = _new_payment_code(conn)
         order = conn.execute("""INSERT INTO billing_orders(
-            account_id,workspace_id,plan_code,amount,provider,beta_code,consent_version,consent_at,payment_code,code_expires_at
-          ) VALUES(%s,%s,%s,%s,'sinpe_mobile',%s,%s,NOW(),%s,NOW()+INTERVAL '2 hours')
+            account_id,workspace_id,plan_code,amount,provider,beta_code,beta_price,consent_version,consent_at,payment_code,code_expires_at
+          ) VALUES(%s,%s,%s,%s,'sinpe_mobile',%s,FALSE,%s,NOW(),%s,NOW()+INTERVAL '2 hours')
           RETURNING id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
             receipt_submitted_at,receipt_status,created_at,updated_at""",
-          (account_id, workspace_id, plan_code, PRICES[plan_code]["beta"], BETA_CODE, consent_version, payment_code)).fetchone()
+          (account_id, workspace_id, plan_code, PRICES[plan_code]["regular"], None, consent_version, payment_code)).fetchone()
         conn.commit()
     record_event("checkout_started", "plan_selection")
     return {"status": "payment_pending", "order": _public_order(order), "payment": _sinpe_instructions(),
@@ -263,7 +324,14 @@ def list_feedback():
 def owner_dashboard():
     with get_connection() as conn:
         ensure_schema(conn)
-        used = _counts(conn)
+        promotion_rows = conn.execute(
+            """SELECT p.code AS plan_code,COUNT(*) AS used
+               FROM account_subscriptions s JOIN plans p ON p.id=s.plan_id
+               WHERE s.status='active' AND s.access_source='courtesy' AND s.courtesy_note=%s
+                 AND s.expires_at>NOW() GROUP BY p.code""",
+            (LAUNCH_PROMOTION_CODE,),
+        ).fetchall()
+        promotional = {row["plan_code"]: int(row["used"]) for row in promotion_rows}
         pending = conn.execute("""SELECT o.id,o.plan_code,o.amount,o.currency,o.payment_code,o.receipt_submitted_at,
           o.receipt_status,o.created_at,a.primary_email AS email,a.display_name
           FROM billing_orders o JOIN accounts a ON a.id=o.account_id WHERE o.status='payment_pending' ORDER BY o.created_at""").fetchall()
@@ -272,7 +340,7 @@ def owner_dashboard():
         tickets = conn.execute("""SELECT f.id,f.category,f.subject,f.message,f.status,f.owner_notes,f.created_at,a.primary_email AS email
           FROM feedback_reports f JOIN accounts a ON a.id=f.account_id ORDER BY CASE f.status WHEN 'new' THEN 1 WHEN 'reviewing' THEN 2 ELSE 3 END,f.created_at DESC LIMIT 100""").fetchall()
         conn.commit()
-    return {"beta": {code: {"used": used.get(code, 0), "total": info["slots"], "remaining": info["slots"]-used.get(code, 0)} for code, info in PRICES.items()},
+    return {"promotion": {**launch_promotion_status(), "plans": promotional},
             "pending_orders": pending, "feature_usage_30d": events,
             "tickets": [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in tickets]}
 
@@ -330,24 +398,23 @@ def get_receipt(order_id: int):
 
 
 def _activate_order(conn, order, verification_source: str, bank_reference: str | None = None, payer_name: str | None = None):
-    already_occupies_slot = conn.execute(
-        "SELECT 1 FROM billing_subscriptions WHERE account_id=%s AND plan_code=%s AND status='active' AND beta_code=%s",
-        (order["account_id"], order["plan_code"], BETA_CODE),
-    ).fetchone()
-    if not already_occupies_slot and _counts(conn).get(order["plan_code"], 0) >= PRICES[order["plan_code"]]["slots"]:
-        raise HTTPException(409, "No quedan cupos beta.")
+    if launch_promotion_status()["active"]:
+        raise HTTPException(409, "Basic y VIP están gratis durante la promoción; esta orden no debe cobrarse.")
+    if Decimal(str(order.get("amount") or 0)) != Decimal(str(PRICES[order["plan_code"]]["regular"])):
+        conn.execute("UPDATE billing_orders SET status='expired',updated_at=NOW() WHERE id=%s", (order["id"],))
+        raise HTTPException(409, "La orden usa un precio anterior. Creá una nueva solicitud con el precio normal.")
     conn.execute("""UPDATE billing_orders SET status='paid',paid_at=NOW(),verified_at=NOW(),
       verification_source=%s,bank_reference=COALESCE(%s,bank_reference),payer_name=COALESCE(%s,payer_name),
       provider_order_id=COALESCE(%s,provider_order_id),receipt_status='verified',updated_at=NOW() WHERE id=%s""",
       (verification_source, bank_reference, payer_name, bank_reference, order["id"]))
     conn.execute("""INSERT INTO billing_subscriptions(account_id,workspace_id,plan_code,status,provider,beta_code,beta_ends_at,current_period_start,current_period_end,paid_price_crc,regular_price_crc)
-      VALUES(%s,%s,%s,'active','sinpe_mobile',%s,NOW()+INTERVAL '3 months',NOW(),NOW()+INTERVAL '1 month',%s,%s)
+      VALUES(%s,%s,%s,'active','sinpe_mobile',NULL,NULL,NOW(),NOW()+INTERVAL '1 month',%s,%s)
       ON CONFLICT(account_id) DO UPDATE SET plan_code=EXCLUDED.plan_code,status='active',provider='sinpe_mobile',beta_code=EXCLUDED.beta_code,
       beta_ends_at=CASE WHEN billing_subscriptions.beta_code=EXCLUDED.beta_code THEN billing_subscriptions.beta_ends_at ELSE EXCLUDED.beta_ends_at END,
       current_period_start=NOW(),current_period_end=EXCLUDED.current_period_end,
       paid_price_crc=EXCLUDED.paid_price_crc,regular_price_crc=EXCLUDED.regular_price_crc,updated_at=NOW()
       RETURNING account_id""",
-      (order["account_id"], order["workspace_id"], order["plan_code"], BETA_CODE, order["amount"], PRICES[order["plan_code"]]["regular"]))
+      (order["account_id"], order["workspace_id"], order["plan_code"], order["amount"], PRICES[order["plan_code"]]["regular"]))
     plan = conn.execute("SELECT id FROM plans WHERE code=%s", (order["plan_code"],)).fetchone()
     conn.execute("""INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,last_payment_at,created_at,updated_at)
       VALUES(%s,%s,'active','self_service',NOW(),NOW(),NOW(),NOW()) ON CONFLICT(account_id) DO UPDATE SET
@@ -357,7 +424,7 @@ def _activate_order(conn, order, verification_source: str, bank_reference: str |
 
 
 def match_sinpe_payment(conn, candidate: dict):
-    """Activate a beta order only from a parsed incoming BAC SINPE confirmation.
+    """Activate a current-price order only from a parsed incoming BAC SINPE confirmation.
 
     The bank email is the source of truth. The uploaded receipt is required as
     user-provided evidence but never activates a plan by itself.

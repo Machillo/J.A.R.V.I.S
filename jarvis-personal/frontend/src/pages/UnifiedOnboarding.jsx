@@ -74,6 +74,7 @@ export default function UnifiedOnboarding({ user, onComplete }) {
   }, []);
 
   const receiptSubmittedAt = paymentFlow?.order?.receipt_submitted_at;
+  const promotionActive = Boolean(billing?.promotion?.active);
 
   useEffect(() => {
     if (!receiptSubmittedAt) return undefined;
@@ -105,7 +106,7 @@ export default function UnifiedOnboarding({ user, onComplete }) {
   const choosePlan = async (code) => {
     setSaving(true); setError("");
     try {
-      const result = await selectPlan(code, code === "free" ? false : betaAccepted);
+      const result = await selectPlan(code, code === "free" || promotionActive ? false : betaAccepted);
       if (result.status === "payment_pending") {
         setBilling((current) => ({ ...current, order: result.order, payment: result.payment }));
         setPaymentFlow({ order: result.order, payment: result.payment });
@@ -197,7 +198,7 @@ export default function UnifiedOnboarding({ user, onComplete }) {
           <div><strong>FINVA</strong><small>Activar {order?.plan_code?.toUpperCase()}</small></div>
           {!submitted && <button type="button" onClick={() => { setPaymentFlow(null); setReceipt(null); setError(""); }} disabled={uploading}>Volver</button>}
         </div>
-        <div className="unified-payment-heading"><div className="unified-plan-icon"><Smartphone size={24}/></div><div><span className="unified-eyebrow">PAGO BETA POR SINPE</span><h1>{submitted ? "Comprobante recibido" : `Activar ${order?.plan_code?.toUpperCase()}`}</h1></div></div>
+        <div className="unified-payment-heading"><div className="unified-plan-icon"><Smartphone size={24}/></div><div><span className="unified-eyebrow">PAGO MENSUAL POR SINPE</span><h1>{submitted ? "Comprobante recibido" : `Activar ${order?.plan_code?.toUpperCase()}`}</h1></div></div>
         {!submitted ? <>
           <p className="unified-payment-description">Hacé el SINPE con el monto exacto y pegá el código completo en el detalle. Después subí el comprobante.</p>
           <div className="unified-payment-data">
@@ -238,13 +239,13 @@ export default function UnifiedOnboarding({ user, onComplete }) {
           <button type="button" className="unified-plan-summary" aria-expanded={expanded} onClick={() => { setExpandedPlan(expanded ? "" : item.code); setBetaAccepted(false); setError(""); }}>
             <span className="unified-plan-icon"><Icon size={22}/></span>
             <span className="unified-plan-copy"><span>{item.code === "free" ? "EMPEZÁ HOY" : item.code === "basic" ? "MÁS CONTROL" : "EXPERIENCIA COMPLETA"}</span><strong>{item.name}</strong><small>{item.tagline}</small></span>
-            <span className="unified-plan-price">{item.code === "free" ? "₡0" : item.code === "basic" ? "₡1.990" : "₡3.990"}<small>{item.code === "free" ? "" : "/mes"}</small></span>
+            <span className="unified-plan-price">{item.code === "free" || promotionActive ? "₡0" : `₡${Number(item.regular_price_crc || 0).toLocaleString("es-CR")}`}<small>{item.code === "free" ? "" : promotionActive ? " hasta 31 dic" : "/mes"}</small></span>
             {expanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
           </button>
           {expanded && <div className="unified-plan-details">
             <ul>{item.features.map(f => <li key={f}><Check size={16}/><span>{f}</span></li>)}</ul>
-            {item.code !== "free" && <><small className="beta-price">Precio beta por 3 meses. Luego {item.code === "basic" ? "₡2.990" : "₡5.990"}/mes.</small><div className="unified-payment-preview"><Smartphone size={18}/><span>Al continuar generaremos el código para el detalle del SINPE y podrás subir el comprobante aquí mismo.</span></div><label className="beta-consent"><input type="checkbox" checked={betaAccepted} onChange={(e) => { setBetaAccepted(e.target.checked); setError(""); }}/><span>Acepto el precio beta y entiendo que el plan se activa al confirmar el pago.</span></label></>}
-            <button className="unified-plan-button" disabled={saving || (item.code !== "free" && !betaAccepted)} onClick={() => choosePlan(item.code)}>{saving ? "Preparando..." : item.code === "free" ? "Empezar gratis" : `Continuar con ${item.name}`}</button>
+            {item.code !== "free" && (promotionActive ? <div className="unified-payment-preview"><CheckCircle2 size={18}/><span>Acceso gratuito hasta el 31 de diciembre de 2026. Después costará ₡{Number(item.regular_price_crc || 0).toLocaleString("es-CR")}/mes y no se cobrará automáticamente.</span></div> : <><small className="beta-price">Precio normal: ₡{Number(item.regular_price_crc || 0).toLocaleString("es-CR")}/mes.</small><div className="unified-payment-preview"><Smartphone size={18}/><span>Al continuar generaremos el código para el detalle del SINPE y podrás subir el comprobante aquí mismo.</span></div><label className="beta-consent"><input type="checkbox" checked={betaAccepted} onChange={(e) => { setBetaAccepted(e.target.checked); setError(""); }}/><span>Acepto el precio normal de ₡{Number(item.regular_price_crc || 0).toLocaleString("es-CR")} al mes y entiendo que el plan se activa al confirmar el pago.</span></label></>)}
+            <button className="unified-plan-button" disabled={saving || (item.code !== "free" && !promotionActive && !betaAccepted)} onClick={() => choosePlan(item.code)}>{saving ? "Preparando..." : item.code === "free" ? "Empezar gratis" : promotionActive ? `Activar ${item.name} gratis` : `Continuar con ${item.name}`}</button>
           </div>}
         </article>;
       })}</div>}

@@ -26,6 +26,7 @@ export default function Settings({ user, onUserChange }) {
     [plans, currentPlan],
   );
   const receiptSubmittedAt = paymentFlow?.order?.receipt_submitted_at || billing?.order?.receipt_submitted_at;
+  const promotionActive = Boolean(billing?.promotion?.active);
 
   useEffect(() => {
     Promise.all([getPlans(), getBillingCatalog()])
@@ -91,15 +92,15 @@ export default function Settings({ user, onUserChange }) {
   const changePlan = async () => {
     const planCode = confirming;
     if (!planCode || planCode === currentPlan) return;
-    if (planCode !== "free" && !betaAccepted) {
-      setError("Debés aceptar las condiciones del precio beta para continuar.");
+    if (planCode !== "free" && !promotionActive && !betaAccepted) {
+      setError("Debés aceptar el precio mensual normal para continuar.");
       return;
     }
     setChanging(planCode);
     setError("");
     setMessage("");
     try {
-      const response = await selectPlan(planCode, planCode === "free" ? false : betaAccepted);
+      const response = await selectPlan(planCode, planCode === "free" || promotionActive ? false : betaAccepted);
       if (response.status === "payment_pending") {
         setConfirming("");
         setBilling((current) => ({ ...current, order: response.order, payment: response.payment }));
@@ -191,7 +192,7 @@ export default function Settings({ user, onUserChange }) {
         <div>
           <p className="eyebrow">Desarrollo</p>
           <h2>Cambiar de plan</h2>
-          <span>Durante la beta, Basic y VIP se pagan por SINPE Móvil y se activan al confirmar el depósito.</span>
+          <span>{promotionActive ? "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático." : "Basic y VIP utilizan sus precios normales y se activan al confirmar el SINPE."}</span>
         </div>
       </div>
 
@@ -254,8 +255,7 @@ export default function Settings({ user, onUserChange }) {
             <p className="eyebrow">Confirmar cambio</p>
             <h2 id="plan-dialog-title">Cambiar a {selected?.name || confirming.toUpperCase()}</h2>
             <p>{selected?.tagline || "Tu nuevo plan FINVA"}</p>
-            {confirming !== "free" && <div className="plan-payment-notice"><Smartphone size={19}/><span>Al continuar, FINVA generará un código para pegar en el detalle del SINPE. Después subís el comprobante y el plan se activa cuando confirmemos el depósito.</span></div>}
-            {confirming !== "free" && <label className="beta-consent dialog-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>{setBetaAccepted(e.target.checked);setError("");}}/><span>Acepto el precio beta de {confirming === "basic" ? "₡1.990" : "₡3.990"} al mes por 3 meses; luego {confirming === "basic" ? "₡2.990" : "₡5.990"}.</span></label>}
+            {confirming !== "free" && (promotionActive ? <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio normal será {confirming === "basic" ? "₡2.990" : "₡5.990"}/mes, sin cobro automático.</span></div> : <><div className="plan-payment-notice"><Smartphone size={19}/><span>Al continuar, FINVA generará un código para el detalle del SINPE. El plan se activa cuando confirmemos el depósito.</span></div><label className="beta-consent dialog-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>{setBetaAccepted(e.target.checked);setError("");}}/><span>Acepto el precio normal de {confirming === "basic" ? "₡2.990" : "₡5.990"} al mes.</span></label></>)}
             {error && <div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
             <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>Cancelar</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? "Procesando..." : `Confirmar ${selected?.name || confirming.toUpperCase()}`}</button></div>
           </section>
@@ -270,7 +270,7 @@ export default function Settings({ user, onUserChange }) {
           <section className={`plan-dialog payment-dialog plan-${order?.plan_code || "basic"}`} role="dialog" aria-modal="true" aria-labelledby="payment-dialog-title">
             <button className="plan-dialog-close" type="button" aria-label="Cerrar" disabled={uploading} onClick={()=>{setPaymentFlow(null);setReceipt(null);setError("");}}><X size={20}/></button>
             <div className="plan-dialog-icon"><Smartphone size={26}/></div>
-            <p className="eyebrow">Pago beta por SINPE</p>
+            <p className="eyebrow">Pago mensual por SINPE</p>
             <h2 id="payment-dialog-title">Activar {order?.plan_code?.toUpperCase()}</h2>
             {!submitted ? <>
               <p>Realizá el SINPE con estos datos. El código debe ir completo en el detalle del pago.</p>
