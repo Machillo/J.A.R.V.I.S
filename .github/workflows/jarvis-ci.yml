@@ -62,3 +62,4 @@ jobs:
       - run: python -c "import backend.main"
       - run: python -m pytest -q backend
       - run: python backend/scripts/check_file_size_budget.py
+      - run: python backend/scripts/check_public_secrets.py

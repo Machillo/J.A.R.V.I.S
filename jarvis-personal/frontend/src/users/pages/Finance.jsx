@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, Plus, Tag } from "lucide-react";
-import { createExpense, createIncome, deleteExpense, deleteIncome, getExpenses, getIncome, updateExpense, updateIncome } from "../services/jarvisApi";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, Clock3, Plus, Tag } from "lucide-react";
+import { createExpense, createIncome, createOvertime, deleteExpense, deleteIncome, getExpenses, getFinancialSituation, getIncome, getOvertime, updateExpense, updateIncome } from "../services/jarvisApi";
 import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
 
@@ -10,6 +10,7 @@ const incomeCategories = ["Salario","Horas extra","Bono","Reembolso","Otros ingr
 const expenseCategories = ["Vivienda","Servicios","Internet","Teléfono","Seguros","Comida","Restaurante","Transporte","Gasolina","Entretenimiento","Compras","Salud","Deporte","Servicios personales","Mascotas","Otros"];
 const incomeEmpty = () => ({ amount:"", description:"", category:"Salario", entry_date:today() });
 const expenseEmpty = () => ({ amount:"", description:"", category:"Compras", entry_date:today() });
+const overtimeEmpty = () => ({ hours:"", hourly_rate:"", multiplier:"1.5", work_date:today(), notes:"" });
 
 function EntryFields({ form, setForm, categories }) {
   return <>
@@ -25,25 +26,30 @@ function EntryFields({ form, setForm, categories }) {
 export default function Finance() {
   const [income,setIncome] = useState([]);
   const [expenses,setExpenses] = useState([]);
+  const [overtime,setOvertime] = useState([]);
   const [error,setError] = useState("");
   const [incomeForm,setIncomeForm] = useState(incomeEmpty);
   const [expenseForm,setExpenseForm] = useState(expenseEmpty);
+  const [overtimeForm,setOvertimeForm] = useState(overtimeEmpty);
   const [entryKind,setEntryKind] = useState(null);
   const [editing,setEditing] = useState(null);
   const [deleting,setDeleting] = useState(null);
   const [deletingBusy,setDeletingBusy] = useState(false);
 
-  const run = async (fn) => {
+  const run = useCallback(async (fn) => {
     setError("");
     try { return await fn(); }
     catch (err) { setError(err?.message || "No se pudo completar la operación."); return null; }
-  };
-  const load = () => run(async () => {
-    const [incomeRows,expenseRows] = await Promise.all([getIncome(),getExpenses()]);
+  }, []);
+  const load = useCallback(() => run(async () => {
+    const [incomeRows,expenseRows,overtimeRows,situation] = await Promise.all([getIncome(),getExpenses(),getOvertime(),getFinancialSituation()]);
     setIncome(incomeRows);
     setExpenses(expenseRows);
-  });
-  useEffect(() => { load(); }, []);
+    setOvertime(overtimeRows);
+    const profileRate = situation?.financial_profile?.hourly_rate;
+    if (profileRate) setOvertimeForm((current) => current.hourly_rate ? current : {...current,hourly_rate:String(profileRate)});
+  }), [run]);
+  useEffect(() => { load(); }, [load]);
 
   const submitIncome = async (event) => {
     event.preventDefault();
@@ -57,6 +63,20 @@ export default function Finance() {
     event.preventDefault();
     if (await run(() => createExpense({...expenseForm,amount:Number(expenseForm.amount)}))) {
       setExpenseForm(expenseEmpty());
+      setEntryKind(null);
+      load();
+    }
+  };
+  const submitOvertime = async (event) => {
+    event.preventDefault();
+    const payload = {
+      ...overtimeForm,
+      hours:Number(overtimeForm.hours),
+      hourly_rate:Number(overtimeForm.hourly_rate),
+      multiplier:Number(overtimeForm.multiplier),
+    };
+    if (await run(() => createOvertime(payload))) {
+      setOvertimeForm((current) => ({...overtimeEmpty(),hourly_rate:current.hourly_rate}));
       setEntryKind(null);
       load();
     }
@@ -75,6 +95,7 @@ export default function Finance() {
   };
   const openEdit = (kind,item) => setEditing({ kind,id:item.id,amount:item.amount,description:item.description || item.source || "",category:item.category || (kind === "income" ? "Salario" : "Compras"),entry_date:item.entry_date || String(item.created_at).slice(0,10) });
   const isIncome = entryKind === "income";
+  const isOvertime = entryKind === "overtime";
   const activeForm = isIncome ? incomeForm : expenseForm;
 
   return <section className="finance-page">
@@ -84,18 +105,26 @@ export default function Finance() {
     <div className="entry-quick-actions">
       <button className="finva-quick-action income" type="button" onClick={() => setEntryKind("income")}><span><ArrowDownLeft size={20}/></span><div><strong>Agregar ingreso</strong><small>Salario, bono u otro ingreso</small></div><Plus size={18}/></button>
       <button className="finva-quick-action expense" type="button" onClick={() => setEntryKind("expense")}><span><ArrowUpRight size={20}/></span><div><strong>Agregar gasto</strong><small>Compra, servicio u otro gasto</small></div><Plus size={18}/></button>
+      <button className="finva-quick-action overtime" type="button" onClick={() => setEntryKind("overtime")}><span><Clock3 size={20}/></span><div><strong>Agregar horas extra</strong><small>Sirve con salario mensual o pago por hora</small></div><Plus size={18}/></button>
     </div>
 
     <div className="grid3 lists content-first-lists">
       <div className="panel"><h3>Ingresos recientes</h3>{income.length ? income.slice(0,8).map((item) => <div className="row" key={item.id}><span><strong>{item.description || item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b className="positive">{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={() => openEdit("income",item)}>Editar</button><button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting({kind:"income",id:item.id,label:item.description || item.category})}>Eliminar</button></span></span></div>) : <p className="finva-empty-state">Todavía no agregaste ingresos.</p>}</div>
       <div className="panel"><h3>Gastos recientes</h3>{expenses.length ? expenses.slice(0,8).map((item) => <div className="row" key={item.id}><span><strong>{item.description || item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b className="negative">{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={() => openEdit("expense",item)}>Editar</button><button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting({kind:"expense",id:item.id,label:item.description || item.category})}>Eliminar</button></span></span></div>) : <p className="finva-empty-state">Todavía no agregaste gastos.</p>}</div>
+      <div className="panel"><h3>Horas extra recientes</h3>{overtime.length ? overtime.slice(0,8).map((item) => <div className="row" key={item.id}><span><strong>{Number(item.hours)} horas · ×{Number(item.multiplier)}</strong><small>{String(item.work_date || item.created_at || "").slice(0,10)}{item.notes || item.description ? ` · ${item.notes || item.description}` : ""}</small></span><b className="positive">{money(item.amount)}</b></div>) : <p className="finva-empty-state">Todavía no agregaste horas extra.</p>}</div>
     </div>
 
-    <FinvaFormSheet open={Boolean(entryKind)} eyebrow="Nuevo movimiento" title={isIncome ? "Agregar ingreso" : "Agregar gasto"} onClose={() => setEntryKind(null)}>
-      <form className={`form finva-sheet-form entry-form ${isIncome ? "income" : "expense"}`} onSubmit={isIncome ? submitIncome : submitExpense}>
+    <FinvaFormSheet open={Boolean(entryKind)} eyebrow="Nuevo movimiento" title={isOvertime ? "Agregar horas extra" : isIncome ? "Agregar ingreso" : "Agregar gasto"} onClose={() => setEntryKind(null)}>
+      {isOvertime ? <form className="form finva-sheet-form entry-form overtime" onSubmit={submitOvertime}>
+        <div className="entry-field-row"><label><span>Horas extra trabajadas</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" value={overtimeForm.hours} onChange={(e)=>setOvertimeForm({...overtimeForm,hours:e.target.value})} placeholder="Ej. 3"/></label><label><span>Pago por hora normal</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" value={overtimeForm.hourly_rate} onChange={(e)=>setOvertimeForm({...overtimeForm,hourly_rate:e.target.value})} placeholder="Ej. 2500"/></label></div>
+        <div className="entry-field-row"><label><span>Multiplicador</span><select value={overtimeForm.multiplier} onChange={(e)=>setOvertimeForm({...overtimeForm,multiplier:e.target.value})}><option value="1">×1 normal</option><option value="1.5">×1.5</option><option value="2">×2 doble</option><option value="3">×3 triple</option></select></label><label><span><CalendarDays size={14}/> Fecha trabajada</span><input required type="date" value={overtimeForm.work_date} onChange={(e)=>setOvertimeForm({...overtimeForm,work_date:e.target.value})}/></label></div>
+        <label><span>Nota opcional</span><input value={overtimeForm.notes} onChange={(e)=>setOvertimeForm({...overtimeForm,notes:e.target.value})} placeholder="Ej. cierre mensual"/></label>
+        <p className="finva-form-hint">FINVA calcula: horas × pago por hora × multiplicador.</p>
+        <button className="finva-button finva-button-success">Guardar horas extra</button>
+      </form> : <form className={`form finva-sheet-form entry-form ${isIncome ? "income" : "expense"}`} onSubmit={isIncome ? submitIncome : submitExpense}>
         <EntryFields form={activeForm} setForm={isIncome ? setIncomeForm : setExpenseForm} categories={isIncome ? incomeCategories : expenseCategories}/>
         <button className={`finva-button ${isIncome ? "finva-button-success" : "finva-button-primary"}`}>Guardar {isIncome ? "ingreso" : "gasto"}</button>
-      </form>
+      </form>}
     </FinvaFormSheet>
 
     <FinvaFormSheet open={Boolean(editing)} eyebrow="Movimiento" title={editing?.kind === "income" ? "Editar ingreso" : "Editar gasto"} onClose={() => setEditing(null)}>

@@ -5,6 +5,8 @@ from backend import main
 from backend.auth import legal
 from backend.notifications import routes as notification_routes
 from backend.product_ops import service as product_ops_service
+from backend.user_product import gmail_service
+from backend.user_product.models import OvertimeCreateRequest
 
 
 class RecordingConnection:
@@ -112,3 +114,32 @@ def test_rls_lockdown_migration_fails_if_public_tables_remain_unprotected():
     assert "REVOKE ALL PRIVILEGES" in migration
     assert "ALL SEQUENCES IN SCHEMA public" in migration
     assert "Public application tables still missing RLS" in migration
+
+
+def test_internal_function_hardening_is_explicit_and_future_safe():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260916_internal_function_hardening.sql"
+    ).read_text(encoding="utf-8")
+
+    assert migration.count("SET search_path = pg_catalog, public") == 2
+    assert "REVOKE ALL ON FUNCTION public.jarvis_workspace_backfill_audit() FROM PUBLIC, anon, authenticated" in migration
+    assert "REVOKE ALL ON FUNCTION public.jarvis_link_financial_account() FROM PUBLIC, anon, authenticated" in migration
+    assert "ALTER DEFAULT PRIVILEGES IN SCHEMA public" in migration
+
+
+def test_finva_gmail_scope_is_read_only_and_identity_adapter_is_user_specific():
+    assert gmail_service.GMAIL_SCOPE == "https://www.googleapis.com/auth/gmail.readonly"
+    text = gmail_service._adapt_identity(
+        "Compra para María Fernanda por ₡12.500",
+        "María Fernanda Solano",
+    )
+    assert "María" not in text
+    assert "Kenneth" in text
+
+
+def test_overtime_accepts_decimal_hours_and_common_multipliers():
+    overtime = OvertimeCreateRequest(hours=2.5, hourly_rate=2500, multiplier=1.5)
+    assert overtime.hours * overtime.hourly_rate * overtime.multiplier == 9375

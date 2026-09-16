@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, Query
 
 from backend.auth.saas import require_feature
 from backend.user_product.models import (
@@ -27,6 +27,15 @@ from backend.user_product.free_service import (
     list_free_movements, update_free_movement,
 )
 from backend.user_product.vip_service import get_vip_command_center
+from backend.user_product.gmail_service import (
+    begin_gmail_connection,
+    disconnect_gmail,
+    finish_gmail_connection,
+    gmail_maintenance,
+    gmail_status,
+    process_gmail_push,
+    sync_current_gmail,
+)
 
 router = APIRouter(prefix="/user-product", tags=["Finva Product"])
 
@@ -194,6 +203,34 @@ def strategy_vip_simulate(request: VipSimulationRequest):
 @router.get("/vip/command-center")
 def vip_command_center():
     require_feature("strategy_vip"); return get_vip_command_center()
+
+@router.get("/vip/gmail/status")
+def vip_gmail_status():
+    require_feature("strategy_vip"); return gmail_status()
+
+@router.post("/vip/gmail/connect")
+def vip_gmail_connect():
+    require_feature("strategy_vip"); return begin_gmail_connection()
+
+@router.get("/vip/gmail/callback")
+def vip_gmail_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+    return finish_gmail_connection(code=code, state=state, error=error)
+
+@router.post("/vip/gmail/sync")
+def vip_gmail_sync():
+    require_feature("strategy_vip"); return sync_current_gmail()
+
+@router.delete("/vip/gmail")
+def vip_gmail_disconnect():
+    require_feature("strategy_vip"); return disconnect_gmail()
+
+@router.post("/vip/gmail/maintenance")
+def vip_gmail_maintenance(x_finva_cron_secret: str | None = Header(default=None)):
+    return gmail_maintenance(x_finva_cron_secret)
+
+@router.post("/vip/gmail/push")
+def vip_gmail_push(payload: dict, token: str | None = Query(default=None)):
+    return process_gmail_push(payload, token)
 
 @router.get("/basic/dashboard")
 def basic_dashboard():
