@@ -5,7 +5,6 @@ from backend.finance.allocation_engine import calculate_allocation_plan
 from backend.finance.evaluators import evaluate_loan, evaluate_installment_purchase
 from datetime import datetime
 
-import traceback
 from fastapi import APIRouter, HTTPException
 
 from backend.finance.models import (
@@ -609,59 +608,7 @@ def financial_cycle_report(as_of: str | None = None):
 
 @router.get("/dashboard")
 def financial_dashboard():
-    try:
-        return get_financial_dashboard()
-
-    except Exception as error:
-        return {
-            "status": "ERROR",
-            "endpoint": "/finance/dashboard",
-            "error_type": type(error).__name__,
-            "error": str(error),
-        }
-    
-@router.get("/dashboard-debug")
-def financial_dashboard_debug():
-    steps = {}
-
-    try:
-        steps["current_user"] = "START"
-        from backend.auth.current_user import get_current_user
-        steps["user"] = get_current_user()
-        steps["current_user"] = "OK"
-
-        steps["financial_summary"] = "START"
-        summary = get_financial_summary()
-        steps["financial_summary"] = "OK"
-
-        steps["net_worth"] = "START"
-        net_worth = get_net_worth_report()
-        steps["net_worth"] = "OK"
-
-        steps["user_status"] = "START"
-        user_status = get_user_status()
-        steps["user_status"] = "OK"
-
-        steps["dashboard"] = "START"
-        dashboard = get_financial_dashboard()
-        steps["dashboard"] = "OK"
-
-        return {
-            "status": "OK",
-            "steps": steps,
-            "summary": summary,
-            "net_worth": net_worth,
-            "user_status": user_status,
-            "dashboard": dashboard,
-        }
-
-    except Exception as error:
-        return {
-            "status": "ERROR",
-            "error_type": type(error).__name__,
-            "error": str(error),
-            "steps": steps,
-        }
+    return get_financial_dashboard()
 
 @router.get("/real-availability")
 def real_availability():

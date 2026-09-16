@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import os
 from fastapi import APIRouter, Header, HTTPException, status
 
@@ -36,7 +37,9 @@ def notifications_test():
 
 @router.post("/cron")
 def notifications_cron(x_cron_secret: str | None = Header(default=None)):
-    expected = os.getenv("NOTIFICATION_CRON_SECRET") or os.getenv("EMAIL_MONITOR_CRON_SECRET")
-    if expected and x_cron_secret != expected:
+    expected = (os.getenv("NOTIFICATION_CRON_SECRET") or os.getenv("EMAIL_MONITOR_CRON_SECRET") or "").strip()
+    if not expected:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="El cron de notificaciones no está configurado.")
+    if not x_cron_secret or not hmac.compare_digest(x_cron_secret, expected):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cron secret inválido.")
     return send_due_notifications()

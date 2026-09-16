@@ -27,6 +27,22 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+  frontend-lint-report:
+    name: Frontend lint report
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: jarvis-personal/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: jarvis-personal/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
   backend:
     name: Backend import
     runs-on: ubuntu-latest
@@ -41,5 +57,8 @@ jobs:
           cache: pip
           cache-dependency-path: jarvis-personal/requirements.txt
       - run: pip install -r requirements.txt
+      - run: pip install pytest
       - run: python -m compileall -q backend
       - run: python -c "import backend.main"
+      - run: python -m pytest -q backend
+      - run: python backend/scripts/check_file_size_budget.py

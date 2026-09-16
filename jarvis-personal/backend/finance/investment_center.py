@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -8,6 +9,7 @@ from backend.core.database import get_connection, serialize_row, serialize_rows
 from backend.integrations.ibkr_readonly import ensure_ibkr_tables, flex_is_configured, sync_flex_snapshot
 
 router = APIRouter(prefix="/finance/investment-center", tags=["finance-investments"])
+logger = logging.getLogger(__name__)
 
 
 class CashflowRequest(BaseModel):
@@ -134,7 +136,8 @@ def sync_ibkr():
     try:
         return sync_flex_snapshot()
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.exception("IBKR manual sync failed")
+        raise HTTPException(status_code=502, detail="No se pudo sincronizar IBKR en este momento.") from exc
 
 
 @router.post("/cashflows")

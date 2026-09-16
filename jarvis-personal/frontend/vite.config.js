@@ -16,5 +16,19 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(supabaseUrl),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(supabaseAnonKey),
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined
+            if (id.includes('firebase') || id.includes('@capacitor-firebase')) return 'firebase'
+            if (id.includes('@supabase')) return 'supabase'
+            if (id.includes('recharts')) return 'charts'
+            if (id.includes('react')) return 'react'
+            return 'vendor'
+          },
+        },
+      },
+    },
   }
 })
