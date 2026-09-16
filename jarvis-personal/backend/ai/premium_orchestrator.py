@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from backend.ai.openai_client import ask_openai_json, get_active_premium_guides
@@ -12,12 +13,15 @@ from backend.transactions.analyzer import get_transaction_analysis
 from backend.ai.strategy_dashboard import build_local_strategy_blueprint
 from backend.advisor.service import get_financial_advice
 
+logger = logging.getLogger(__name__)
+
 
 def _safe(fn, fallback):
     try:
         return fn()
-    except Exception as exc:
-        return {"error": str(exc), "fallback": fallback}
+    except Exception:
+        logger.exception("Premium context source failed: %s", getattr(fn, "__name__", "callable"))
+        return {"unavailable": True, "fallback": fallback}
 
 
 def build_premium_context(user_message: str = "") -> dict[str, Any]:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 from backend.ai.action_flow import continue_pending_action, start_action, _missing_required, _save_action
@@ -29,14 +30,17 @@ from backend.finance.strategic_engine import get_financial_engine_report, simula
 from backend.finance.intelligence import plan_long_term_goal, get_debt_advisory
 from backend.finance.fixed_expenses import handle_fixed_expense_message
 from backend.ai.strategy_dashboard import build_local_strategy_blueprint
+
+logger = logging.getLogger(__name__)
 from backend.ai.decision_engine import handle_decision_pending_action, handle_personal_decision_request
 
 
 def _safe_call(fn, fallback):
     try:
         return fn()
-    except Exception as exc:
-        return {"error": str(exc), "fallback": fallback}
+    except Exception:
+        logger.exception("JARVIS context source failed: %s", getattr(fn, "__name__", "callable"))
+        return {"unavailable": True, "fallback": fallback}
 
 
 def build_financial_context() -> dict:

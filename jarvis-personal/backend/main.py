@@ -1,12 +1,10 @@
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
-import traceback
+import logging
+from uuid import uuid4
 
 from backend.core.brain import process_input
 from backend.core.database import init_database
-from backend.core.user import get_user
-from backend.core.config import get_config
-from backend.core.time import get_time
 from backend.core.events import add_event, get_events
 from backend.core.logs import get_logs
 from backend.finance.routes import router as finance_router
@@ -35,6 +33,7 @@ from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.routes import router as product_ops_router
 
 app = FastAPI(title="Jarvis Core")
+logger = logging.getLogger("jarvis.api")
 
 ALLOWED_APP_ORIGINS = {
     "http://localhost",
@@ -57,9 +56,6 @@ app.add_middleware(
 PUBLIC_PATHS = {
     "/",
     "/status",
-    "/docs",
-    "/redoc",
-    "/openapi.json",
     "/auth/health",
     "/auth/check-access",
     "/email-monitor/cron",
@@ -76,13 +72,14 @@ PUBLIC_PATHS = {
 
 
 def _is_public_path(path: str) -> bool:
-    if path in PUBLIC_PATHS:
-        return True
+    return path in PUBLIC_PATHS
 
-    if path.startswith("/docs") or path.startswith("/redoc"):
-        return True
 
-    return False
+def _internal_error_payload(error_id: str) -> dict[str, str]:
+    return {
+        "detail": "Ocurrió un error interno. Intentá nuevamente.",
+        "error_id": error_id,
+    }
 
 
 @app.middleware("http")
@@ -129,21 +126,12 @@ async def auth_middleware(request: Request, call_next):
         response = await call_next(request)
         return response
 
-    except Exception as error:
-        print("[GLOBAL ERROR]", flush=True)
-        print(f"Path: {request.url.path}", flush=True)
-        print(f"Type: {type(error).__name__}", flush=True)
-        print(f"Error: {str(error)}", flush=True)
-        traceback.print_exc()
-
+    except Exception:
+        error_id = uuid4().hex
+        logger.exception("Unhandled API error id=%s path=%s", error_id, request.url.path)
         return JSONResponse(
             status_code=500,
-            content={
-                "status": "ERROR",
-                "path": request.url.path,
-                "error_type": type(error).__name__,
-                "error": str(error),
-            },
+            content=_internal_error_payload(error_id),
             headers=cors_headers,
         )
 
@@ -195,11 +183,7 @@ def home():
 
 @app.get("/status")
 def status():
-    return {
-        "user": get_user(),
-        "time": get_time(),
-        "config": get_config()
-    }
+    return {"status": "ok"}
 
 
 @app.post("/ask")

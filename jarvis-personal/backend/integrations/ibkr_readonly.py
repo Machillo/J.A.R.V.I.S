@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -17,6 +18,7 @@ from backend.core.database import get_connection, serialize_row, serialize_rows
 
 
 router = APIRouter(prefix="/integrations/ibkr", tags=["IBKR read-only"])
+logger = logging.getLogger(__name__)
 
 
 class IbkrPosition(BaseModel):
@@ -437,7 +439,8 @@ def sync_flex_cron(x_jarvis_cron_secret: str | None = Header(default=None)):
     try:
         return sync_flex_snapshot()
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.exception("IBKR scheduled sync failed")
+        raise HTTPException(status_code=502, detail="No se pudo sincronizar IBKR en este momento.") from exc
 
 
 def latest_ibkr_snapshot(conn, workspace_id: str):
