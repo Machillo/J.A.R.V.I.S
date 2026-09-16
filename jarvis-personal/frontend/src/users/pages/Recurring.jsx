@@ -54,7 +54,7 @@ export default function Recurring() {
       <form className="form finva-sheet-form" onSubmit={submit}>
         <div className="finva-compact-fields">
           <label><span>Nombre</span><input required placeholder="Ej. Netflix" value={form.name} onChange={(e) => setForm({...form,name:e.target.value})}/></label>
-          <label><span>Monto</span><input required type="number" inputMode="decimal" min="0.01" placeholder="₡0" value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></label>
+          <label><span>Monto</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="₡0" value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></label>
           <label><span>Categoría</span><input placeholder="Categoría" value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/></label>
           <label><span>Tipo</span><select value={form.item_type} onChange={(e) => setForm({...form,item_type:e.target.value})}><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
           <label><span>Frecuencia</span><select value={form.frequency} onChange={(e) => setForm({...form,frequency:e.target.value})}><option value="weekly">Semanal</option><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option><option value="quarterly">Trimestral</option><option value="annual">Anual</option></select></label>

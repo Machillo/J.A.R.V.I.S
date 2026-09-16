@@ -108,6 +108,29 @@ class GoalContributionRequest(BaseModel):
     contribution_date: str | None = None
 
 
+class SavingsPlanCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    monthly_amount: float = Field(gt=0)
+    saved_amount: float = Field(default=0, ge=0)
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.end_date < self.start_date:
+            raise ValueError("La fecha final debe ser igual o posterior a la fecha inicial.")
+        return self
+
+
+class SavingsPlanUpdateRequest(SavingsPlanCreateRequest):
+    status: Literal["active", "paused", "completed"] = "active"
+
+
+class SavingsPlanContributionRequest(BaseModel):
+    amount: float = Field(gt=0)
+    contribution_date: date | None = None
+
+
 class BudgetItemRequest(BaseModel):
     category: str
     monthly_limit: float = Field(ge=0)

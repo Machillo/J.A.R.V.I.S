@@ -430,6 +430,127 @@ def delete_user_goal(goal_id: int):
     return {"status": "ok", "id": goal_id}
 
 
+def _ensure_savings_plan_schema(conn) -> None:
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS finva_savings_plans (
+               id BIGSERIAL PRIMARY KEY,
+               account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+               workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+               name TEXT NOT NULL,
+               monthly_amount NUMERIC(14,2) NOT NULL CHECK (monthly_amount > 0),
+               saved_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (saved_amount >= 0),
+               start_date DATE NOT NULL,
+               end_date DATE NOT NULL CHECK (end_date >= start_date),
+               status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused','completed')),
+               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+           )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS finva_savings_plan_contributions (
+               id BIGSERIAL PRIMARY KEY,
+               workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+               savings_plan_id BIGINT NOT NULL REFERENCES finva_savings_plans(id) ON DELETE CASCADE,
+               amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
+               contribution_date DATE NOT NULL DEFAULT CURRENT_DATE,
+               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+           )"""
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_finva_savings_plans_workspace ON finva_savings_plans(workspace_id, status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_finva_savings_contributions_plan ON finva_savings_plan_contributions(savings_plan_id, contribution_date)")
+    conn.execute("ALTER TABLE finva_savings_plans ENABLE ROW LEVEL SECURITY")
+    conn.execute("ALTER TABLE finva_savings_plan_contributions ENABLE ROW LEVEL SECURITY")
+    conn.execute("REVOKE ALL ON TABLE finva_savings_plans, finva_savings_plan_contributions FROM anon, authenticated")
+    conn.execute("REVOKE ALL ON SEQUENCE finva_savings_plans_id_seq, finva_savings_plan_contributions_id_seq FROM anon, authenticated")
+
+
+def list_savings_plans():
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        _ensure_savings_plan_schema(conn)
+        rows = conn.execute(
+            """SELECT id,name,monthly_amount,saved_amount,start_date,end_date,status,created_at,updated_at
+               FROM finva_savings_plans WHERE workspace_id=%s ORDER BY status='active' DESC,id DESC""",
+            (workspace_id,),
+        ).fetchall()
+        conn.commit()
+    return rows
+
+
+def create_savings_plan(payload):
+    account_id = get_current_account_id()
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        _ensure_savings_plan_schema(conn)
+        row = conn.execute(
+            """INSERT INTO finva_savings_plans(account_id,workspace_id,name,monthly_amount,saved_amount,start_date,end_date)
+               VALUES(%s,%s,%s,%s,%s,%s,%s)
+               RETURNING id,name,monthly_amount,saved_amount,start_date,end_date,status,created_at,updated_at""",
+            (account_id, workspace_id, payload.name.strip(), payload.monthly_amount, payload.saved_amount,
+             payload.start_date, payload.end_date),
+        ).fetchone()
+        conn.commit()
+    return row
+
+
+def update_savings_plan(plan_id: int, payload):
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        _ensure_savings_plan_schema(conn)
+        row = conn.execute(
+            """UPDATE finva_savings_plans SET name=%s,monthly_amount=%s,saved_amount=%s,
+                      start_date=%s,end_date=%s,status=%s,updated_at=NOW()
+               WHERE id=%s AND workspace_id=%s
+               RETURNING id,name,monthly_amount,saved_amount,start_date,end_date,status,created_at,updated_at""",
+            (payload.name.strip(), payload.monthly_amount, payload.saved_amount, payload.start_date,
+             payload.end_date, payload.status, plan_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Ahorro programado no encontrado.")
+        conn.commit()
+    return row
+
+
+def contribute_savings_plan(plan_id: int, payload):
+    workspace_id = get_current_workspace_id()
+    contribution_date = payload.contribution_date or date.today()
+    with get_connection() as conn:
+        _ensure_savings_plan_schema(conn)
+        plan = conn.execute(
+            "SELECT id,saved_amount FROM finva_savings_plans WHERE id=%s AND workspace_id=%s FOR UPDATE",
+            (plan_id, workspace_id),
+        ).fetchone()
+        if not plan:
+            raise HTTPException(status_code=404, detail="Ahorro programado no encontrado.")
+        conn.execute(
+            """INSERT INTO finva_savings_plan_contributions(workspace_id,savings_plan_id,amount,contribution_date)
+               VALUES(%s,%s,%s,%s)""",
+            (workspace_id, plan_id, payload.amount, contribution_date),
+        )
+        row = conn.execute(
+            """UPDATE finva_savings_plans SET saved_amount=saved_amount+%s,updated_at=NOW()
+               WHERE id=%s AND workspace_id=%s
+               RETURNING id,name,monthly_amount,saved_amount,start_date,end_date,status,created_at,updated_at""",
+            (payload.amount, plan_id, workspace_id),
+        ).fetchone()
+        conn.commit()
+    return row
+
+
+def delete_savings_plan(plan_id: int):
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        _ensure_savings_plan_schema(conn)
+        row = conn.execute(
+            "DELETE FROM finva_savings_plans WHERE id=%s AND workspace_id=%s RETURNING id",
+            (plan_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Ahorro programado no encontrado.")
+        conn.commit()
+    return {"status": "ok", "id": plan_id}
+
+
 def list_user_transactions():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
