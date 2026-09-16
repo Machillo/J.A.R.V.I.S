@@ -170,6 +170,11 @@ export default function Settings({ user, onUserChange }) {
 
       <AccountSecurity user={user} />
 
+      <article className="account-card">
+        <div><strong>Información legal</strong><small>Consultá los documentos vigentes cuando querás.</small></div>
+        <span><a href="/terms" target="_blank" rel="noreferrer">Términos</a> · <a href="/privacy" target="_blank" rel="noreferrer">Privacidad</a></span>
+      </article>
+
       <div className="section-heading compact">
         <div>
           <p className="eyebrow">Suscripción</p>

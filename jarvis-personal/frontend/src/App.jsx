@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import Login from "./pages/Login";
 import UnifiedOnboarding from "./pages/UnifiedOnboarding";
+import LegalConsent from "./pages/LegalConsent";
 import PersonalApp from "./personal/PersonalApp";
 import UsersApp from "./users/UsersApp";
 import { getMe, getOwnerBridgeToken, setOwnerBridgeToken } from "./services/jarvisApi";
@@ -173,6 +174,10 @@ export default function App() {
 
   if (!currentUser) {
     return <BootScreen />;
+  }
+
+  if (currentUser.role !== "owner" && currentUser.role !== "admin" && currentUser.legal?.required) {
+    return <LegalConsent user={currentUser} onAccepted={setCurrentUser} />;
   }
 
   if (currentUser.role === "owner" || currentUser.role === "admin") {

@@ -50,6 +50,10 @@ const jsonRequest = (endpoint, method, payload) =>
 
 export const getStatus = () => request("/status");
 export const getMe = () => request("/auth/me");
+export const acceptLegal = async (payload) => {
+  await jsonRequest("/auth/legal/accept", "POST", payload);
+  return getMe();
+};
 
 export const getFinanceDashboard = () => request("/finance/dashboard");
 export const getFinanceCycleReport = (asOf = "") => request(`/finance/cycle-report${asOf ? `?as_of=${encodeURIComponent(asOf)}` : ""}`);
