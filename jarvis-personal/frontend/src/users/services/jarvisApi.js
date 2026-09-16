@@ -55,6 +55,10 @@ export const simulateStrategyBasic = (extra_monthly) => json("/user-product/fina
 export const getStrategyVip = () => request("/user-product/finance/strategy-vip");
 export const simulateStrategyVip = (payload) => json("/user-product/finance/strategy-vip/simulate", "POST", payload);
 export const getVipCommandCenter = () => request("/user-product/vip/command-center");
+export const getVipGmailStatus = () => request("/user-product/vip/gmail/status");
+export const connectVipGmail = () => request("/user-product/vip/gmail/connect", { method: "POST" });
+export const syncVipGmail = () => request("/user-product/vip/gmail/sync", { method: "POST" });
+export const disconnectVipGmail = () => request("/user-product/vip/gmail", { method: "DELETE" });
 
 export const getGoals = () => request("/user-product/goals");
 export const createGoal = (payload) => json("/user-product/goals", "POST", payload);

@@ -1,6 +1,8 @@
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, Clock3, Copy, Crown, Smartphone, Sparkles, Upload, WalletCards, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { getBillingCatalog, getMe, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, Clock3, Copy, Crown, Mail, RefreshCw, Smartphone, Sparkles, Unplug, Upload, WalletCards, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Browser } from "@capacitor/browser";
+import { App } from "@capacitor/app";
+import { connectVipGmail, disconnectVipGmail, getBillingCatalog, getMe, getPlans, getVipGmailStatus, selectPlan, syncVipGmail, uploadPaymentReceipt } from "../services/jarvisApi";
 import AccountSecurity from "../components/AccountSecurity";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../../lib/receiptPicker";
 
@@ -19,6 +21,8 @@ export default function Settings({ user, onUserChange }) {
   const [receipt, setReceipt] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState("");
+  const [gmail, setGmail] = useState(null);
+  const [gmailBusy, setGmailBusy] = useState("");
 
   const currentPlan = user?.subscription?.plan || "free";
   const currentPlanInfo = useMemo(
@@ -37,6 +41,56 @@ export default function Settings({ user, onUserChange }) {
       .catch((err) => setError(err.message || "No se pudieron cargar los planes."))
       .finally(() => setLoading(false));
   }, []);
+
+  const loadGmail = useCallback(async () => {
+    if (currentPlan !== "vip") return;
+    try { setGmail(await getVipGmailStatus()); }
+    catch (err) { setError(err.message || "No se pudo consultar Gmail."); }
+  }, [currentPlan]);
+
+  useEffect(() => {
+    if (currentPlan !== "vip") { setGmail(null); return undefined; }
+    loadGmail();
+    const refresh = () => { if (document.visibilityState === "visible") loadGmail(); };
+    document.addEventListener("visibilitychange", refresh);
+    let appUrlListener;
+    App.addListener("appUrlOpen", async ({ url }) => {
+      if (!url?.startsWith("com.finva.app://gmail/callback")) return;
+      try { await Browser.close(); } catch { /* El navegador ya puede estar cerrado. */ }
+      await loadGmail();
+    }).then((listener) => { appUrlListener = listener; });
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      appUrlListener?.remove();
+    };
+  }, [currentPlan, loadGmail]);
+
+  const connectGmail = async () => {
+    setGmailBusy("connect"); setError("");
+    try {
+      const response = await connectVipGmail();
+      if (!response?.authorization_url) throw new Error("Google no devolvió una dirección de autorización.");
+      await Browser.open({ url: response.authorization_url, presentationStyle: "popover" });
+    } catch (err) { setError(err.message || "No se pudo abrir Google."); }
+    finally { setGmailBusy(""); }
+  };
+
+  const syncGmail = async () => {
+    setGmailBusy("sync"); setError("");
+    try {
+      const result = await syncVipGmail();
+      await loadGmail();
+      setMessage(`Gmail actualizado: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`);
+    } catch (err) { setError(err.message || "No se pudo actualizar Gmail."); }
+    finally { setGmailBusy(""); }
+  };
+
+  const disconnectGmail = async () => {
+    setGmailBusy("disconnect"); setError("");
+    try { await disconnectVipGmail(); setGmail({ connected:false, status:"disconnected" }); setMessage("Gmail quedó desconectado de FINVA."); }
+    catch (err) { setError(err.message || "No se pudo desconectar Gmail."); }
+    finally { setGmailBusy(""); }
+  };
 
   useEffect(() => {
     if (!receiptSubmittedAt) return undefined;
@@ -169,6 +223,18 @@ export default function Settings({ user, onUserChange }) {
       </div>
 
       <AccountSecurity user={user} />
+
+      {currentPlan === "vip" && <article className={`gmail-connection-card ${gmail?.needs_reauthorization ? "needs-attention" : ""}`}>
+        <div className="gmail-connection-heading"><span><Mail size={21}/></span><div><strong>Movimientos desde Gmail</strong><small>Solo lectura · BAC y MultiMoney</small></div></div>
+        {!gmail?.connected ? <>
+          <p>{gmail?.needs_reauthorization ? "El permiso de Google venció o fue revocado. Reconectalo para continuar importando movimientos." : "Conectá el Gmail donde recibís las notificaciones bancarias. FINVA no puede enviar, modificar ni borrar correos."}</p>
+          <button type="button" className="finva-button finva-button-primary" disabled={Boolean(gmailBusy)} onClick={connectGmail}>{gmailBusy === "connect" ? "Abriendo Google…" : gmail?.needs_reauthorization ? "Reconectar Gmail" : "Conectar Gmail"}</button>
+        </> : <>
+          <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{gmail.google_email}</strong><small>{gmail.automatic_updates ? "Lectura automática activa" : "Conectado · falta activar la automatización del servidor"}</small></span></div>
+          {gmail.pending > 0 && <p>{gmail.pending} movimiento(s) necesitan revisión antes de guardarse.</p>}
+          <div className="gmail-connection-actions"><button type="button" disabled={Boolean(gmailBusy)} onClick={syncGmail}><RefreshCw size={16}/>{gmailBusy === "sync" ? "Actualizando…" : "Actualizar ahora"}</button><button type="button" className="danger" disabled={Boolean(gmailBusy)} onClick={disconnectGmail}><Unplug size={16}/>Desconectar</button></div>
+        </>}
+      </article>}
 
       <article className="account-card">
         <div><strong>Información legal</strong><small>Consultá los documentos vigentes cuando querás.</small></div>

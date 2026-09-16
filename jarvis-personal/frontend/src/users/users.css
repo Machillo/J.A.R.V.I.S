@@ -440,6 +440,20 @@
 .users-app .account-card strong,
 .users-app .account-card small { display:block; }
 .users-app .account-card small { margin-top:4px; color:var(--muted); word-break:break-word; }
+
+.users-app .gmail-connection-card { display:grid; gap:14px; padding:18px; border:1px solid rgba(20,184,166,.24); border-radius:24px; background:linear-gradient(145deg,rgba(20,184,166,.09),rgba(28,37,65,.82)); box-shadow:0 18px 42px rgba(0,0,0,.18); }
+.users-app .gmail-connection-card.needs-attention { border-color:rgba(251,113,133,.42); background:linear-gradient(145deg,rgba(244,63,94,.10),rgba(28,37,65,.84)); }
+.users-app .gmail-connection-heading,.users-app .gmail-connection-status,.users-app .gmail-connection-actions { display:flex; align-items:center; gap:11px; }
+.users-app .gmail-connection-heading>span { display:grid; place-items:center; width:42px; height:42px; border-radius:14px; color:var(--accent); background:rgba(20,184,166,.12); }
+.users-app .gmail-connection-heading strong,.users-app .gmail-connection-heading small,.users-app .gmail-connection-status strong,.users-app .gmail-connection-status small { display:block; }
+.users-app .gmail-connection-heading small,.users-app .gmail-connection-status small,.users-app .gmail-connection-card p { color:var(--muted); }
+.users-app .gmail-connection-card p { margin:0; line-height:1.55; }
+.users-app .gmail-connection-status { padding:12px 14px; border-radius:16px; background:rgba(15,23,42,.34); color:#34d399; }
+.users-app .gmail-connection-status span { min-width:0; }
+.users-app .gmail-connection-status strong { overflow:hidden; text-overflow:ellipsis; }
+.users-app .gmail-connection-actions { flex-wrap:wrap; }
+.users-app .gmail-connection-actions button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:42px; padding:10px 14px; border:1px solid rgba(148,163,184,.22); border-radius:14px; background:rgba(255,255,255,.06); color:var(--text); }
+.users-app .gmail-connection-actions button.danger { color:#fb7185; border-color:rgba(251,113,133,.25); }
 .users-app .role-pill,
 .users-app .plan-status-pill { flex:0 0 auto; border:1px solid var(--border-strong); color:#91cfe5; border-radius:999px; padding:5px 9px; font-size:.64rem; text-transform:uppercase; letter-spacing:.08em; }
 .users-app .current-plan-card { padding:14px; display:grid; grid-template-columns:auto 1fr auto; gap:11px; align-items:center; }

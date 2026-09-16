@@ -230,8 +230,8 @@ def create_overtime(payload):
     with get_connection() as conn:
         row = conn.execute(
             """INSERT INTO payroll_events(event_type,hours,multiplier,amount,description,user_id,workspace_id,created_at)
-               VALUES('ot',%s,%s,%s,%s,%s,%s,NOW()) RETURNING id,created_at""",
-            (payload.hours, payload.multiplier, amount, payload.notes or "", user_id, workspace_id),
+               VALUES('ot',%s,%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00') RETURNING id,created_at""",
+            (payload.hours, payload.multiplier, amount, payload.notes or "", user_id, workspace_id, payload.work_date),
         ).fetchone()
         conn.commit()
     return {

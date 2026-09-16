@@ -907,6 +907,7 @@ RETURNS TABLE (
     distinct_workspaces BIGINT
 )
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public
 AS $$
 DECLARE
     tbl TEXT;
@@ -940,7 +941,7 @@ DECLARE
     ];
 BEGIN
     FOREACH tbl IN ARRAY target_tables LOOP
-        IF to_regclass(format('public.%I', tbl)) IS NULL THEN
+        IF pg_catalog.to_regclass(pg_catalog.format('public.%I', tbl)) IS NULL THEN
             CONTINUE;
         END IF;
 
@@ -954,7 +955,7 @@ BEGIN
             CONTINUE;
         END IF;
 
-        RETURN QUERY EXECUTE format(
+        RETURN QUERY EXECUTE pg_catalog.format(
             'SELECT %L::TEXT, COUNT(*)::BIGINT, COUNT(workspace_id)::BIGINT, COUNT(*) FILTER (WHERE workspace_id IS NULL)::BIGINT, COUNT(DISTINCT workspace_id)::BIGINT FROM public.%I',
             tbl,
             tbl
@@ -964,6 +965,9 @@ END $$;
 
 COMMENT ON FUNCTION public.jarvis_workspace_backfill_audit() IS
 'Phase 2A migration audit. unmapped_rows must be zero before enforcing workspace ownership or switching backend reads/writes.';
+
+REVOKE ALL ON FUNCTION public.jarvis_workspace_backfill_audit() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.jarvis_workspace_backfill_audit() TO postgres;
 
 
 -- Unified SaaS foundation (2026-08-31)
