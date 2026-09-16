@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Crown, LogOut, Smartphone, Sparkles, Upload, WalletCards } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Crown, HelpCircle, LogOut, Smartphone, Sparkles, Upload, WalletCards } from "lucide-react";
 import { completeOnboarding, getBillingCatalog, getOnboarding, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../lib/receiptPicker";
@@ -16,6 +16,21 @@ const EMPTY_FORM = {
 };
 
 const valueOrEmpty = (v) => v === null || v === undefined ? "" : String(v);
+
+function FieldHelp({ label, children }) {
+  const [open, setOpen] = useState(false);
+  return <span className="unified-field-label">
+    <span>{label}</span>
+    <button
+      type="button"
+      className="unified-help-button"
+      aria-label={`Ayuda sobre ${label}`}
+      aria-expanded={open}
+      onClick={(event) => { event.preventDefault(); event.stopPropagation(); setOpen((current) => !current); }}
+    ><HelpCircle size={16}/></button>
+    {open && <span className="unified-help-message" role="status">{children}</span>}
+  </span>;
+}
 
 export default function UnifiedOnboarding({ user, onComplete }) {
   const [profile, setProfile] = useState(user);
@@ -269,22 +284,28 @@ export default function UnifiedOnboarding({ user, onComplete }) {
 
       <div className="unified-form-grid">
         {!baseAlreadyKnown && <>
-          <label>Tipo de ingreso<select value={form.income_type} onChange={e=>setForm({...form,income_type:e.target.value})}><option value="fixed">Salario fijo</option><option value="hourly">Por hora</option></select></label>
-          {form.income_type === "fixed" ? <label>Salario mensual<input required type="number" min="1" value={form.fixed_monthly_salary} onChange={e=>setForm({...form,fixed_monthly_salary:e.target.value})}/></label> : <><label>Tarifa por hora<input required type="number" min="1" value={form.hourly_rate} onChange={e=>setForm({...form,hourly_rate:e.target.value})}/></label><label>Horas por día<input required type="number" min="0.1" max="24" value={form.hours_per_day} onChange={e=>setForm({...form,hours_per_day:e.target.value})}/></label></>}
-          <label>Días por semana<input required type="number" min="1" max="7" value={form.work_days_per_week} onChange={e=>setForm({...form,work_days_per_week:e.target.value})}/></label>
-          <label>Frecuencia de pago<select value={form.pay_frequency} onChange={e=>setForm({...form,pay_frequency:e.target.value})}><option value="weekly">Semanal</option><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option></select></label>
-          <label>Días de pago<input value={form.payday_note} placeholder="Ej. cada jueves" onChange={e=>setForm({...form,payday_note:e.target.value})}/></label>
+          <fieldset className="unified-income-type">
+            <legend><FieldHelp label="¿Cómo te pagan?">Elegí salario mensual si recibís un monto parecido cada mes. Elegí pago por hora si tu ingreso depende de las horas trabajadas.</FieldHelp></legend>
+            <div>
+              <label className={form.income_type === "fixed" ? "is-selected" : ""}><input type="radio" name="income_type" value="fixed" checked={form.income_type === "fixed"} onChange={e=>setForm({...form,income_type:e.target.value})}/><span><strong>Salario mensual</strong><small>Recibo un monto fijo o parecido cada mes</small></span></label>
+              <label className={form.income_type === "hourly" ? "is-selected" : ""}><input type="radio" name="income_type" value="hourly" checked={form.income_type === "hourly"} onChange={e=>setForm({...form,income_type:e.target.value})}/><span><strong>Pago por hora</strong><small>Mi pago depende de cuántas horas trabajo</small></span></label>
+            </div>
+          </fieldset>
+          {form.income_type === "fixed" ? <label><FieldHelp label="Salario que te llega al mes (neto)">Es el dinero que realmente recibís después de rebajos. No escribás el salario bruto que aparece antes de deducciones.</FieldHelp><input required type="number" min="1" inputMode="decimal" placeholder="Ej. 450000" value={form.fixed_monthly_salary} onChange={e=>setForm({...form,fixed_monthly_salary:e.target.value})}/></label> : <><label><FieldHelp label="Cuánto te pagan por hora">Escribí el monto que recibís por una hora normal de trabajo, sin multiplicarlo por el día o el mes.</FieldHelp><input required type="number" min="1" inputMode="decimal" placeholder="Ej. 2400" value={form.hourly_rate} onChange={e=>setForm({...form,hourly_rate:e.target.value})}/></label><label><FieldHelp label="Horas que trabajás por día">Escribí tus horas normales de un día. Podés poner un número entero como 8 o un decimal como 7.5.</FieldHelp><input required type="number" min="0.25" max="24" step="0.25" inputMode="decimal" placeholder="Ej. 8" value={form.hours_per_day} onChange={e=>setForm({...form,hours_per_day:e.target.value})}/></label></>}
+          <label><FieldHelp label="Días que trabajás por semana">Indicá cuántos días trabajás normalmente en una semana, por ejemplo 5.</FieldHelp><input required type="number" min="1" max="7" step="1" inputMode="numeric" placeholder="Ej. 5" value={form.work_days_per_week} onChange={e=>setForm({...form,work_days_per_week:e.target.value})}/></label>
+          <label><FieldHelp label="Cada cuánto te pagan">Seleccioná si recibís dinero todas las semanas, dos veces al mes o una vez al mes.</FieldHelp><select value={form.pay_frequency} onChange={e=>setForm({...form,pay_frequency:e.target.value})}><option value="weekly">Cada semana</option><option value="biweekly">Dos veces al mes</option><option value="monthly">Una vez al mes</option></select></label>
+          <label><FieldHelp label="¿Qué día te pagan?">Podés escribir una fecha aproximada o una descripción sencilla. Esto ayuda a organizar el calendario.</FieldHelp><input value={form.payday_note} placeholder="Ej. cada jueves o 15 y 30" onChange={e=>setForm({...form,payday_note:e.target.value})}/></label>
         </>}
 
         {plan !== "free" && !basicAlreadyKnown && <>
-          <label>Gastos esenciales mensuales<input required type="number" min="0" value={form.essential_monthly_expenses} onChange={e=>setForm({...form,essential_monthly_expenses:e.target.value})}/></label>
-          <label>Ahorro líquido<input type="number" min="0" value={form.liquid_savings} onChange={e=>setForm({...form,liquid_savings:e.target.value})}/></label>
+          <label><FieldHelp label="Gastos necesarios del mes">Sumá aproximadamente lo que necesitás para vivir: vivienda, comida, servicios, transporte, medicinas y pagos indispensables.</FieldHelp><input required type="number" min="0" inputMode="decimal" placeholder="Ej. 300000" value={form.essential_monthly_expenses} onChange={e=>setForm({...form,essential_monthly_expenses:e.target.value})}/></label>
+          <label><FieldHelp label="Ahorro disponible ahora">Dinero que ya tenés guardado y podés usar de inmediato sin vender nada: efectivo o saldo disponible en una cuenta. Antes lo llamábamos ahorro líquido.</FieldHelp><input type="number" min="0" inputMode="decimal" placeholder="Ej. 50000" value={form.liquid_savings} onChange={e=>setForm({...form,liquid_savings:e.target.value})}/></label>
         </>}
 
         {plan === "vip" && !vipAlreadyKnown && <>
-          <label>Meta fondo emergencia<input type="number" min="0" value={form.emergency_fund_target} onChange={e=>setForm({...form,emergency_fund_target:e.target.value})}/></label>
-          <label>Prioridad<select value={form.strategy_preference} onChange={e=>setForm({...form,strategy_preference:e.target.value})}><option value="balanced">Equilibrado</option><option value="debt">Salir de deudas</option><option value="emergency">Seguridad</option><option value="goals">Metas</option></select></label>
-          <label>Mínimo mensual para vos<input type="number" min="0" value={form.discretionary_monthly_minimum} onChange={e=>setForm({...form,discretionary_monthly_minimum:e.target.value})}/></label>
+          <label><FieldHelp label="Cuánto querés guardar para emergencias">Es tu meta de dinero reservado para imprevistos, como una reparación, una enfermedad o perder temporalmente el ingreso.</FieldHelp><input type="number" min="0" inputMode="decimal" placeholder="Ej. 900000" value={form.emergency_fund_target} onChange={e=>setForm({...form,emergency_fund_target:e.target.value})}/></label>
+          <label><FieldHelp label="¿Qué querés priorizar?">FINVA usará esta elección para ordenar sus recomendaciones. Equilibrado reparte la atención entre deudas, seguridad y metas.</FieldHelp><select value={form.strategy_preference} onChange={e=>setForm({...form,strategy_preference:e.target.value})}><option value="balanced">Un poco de todo</option><option value="debt">Salir de deudas</option><option value="emergency">Crear ahorro de emergencia</option><option value="goals">Cumplir mis metas</option></select></label>
+          <label><FieldHelp label="Dinero mínimo para tus gustos">Monto mensual que querés conservar para salidas, entretenimiento o compras personales, sin asignarlo a deudas o ahorro.</FieldHelp><input type="number" min="0" inputMode="decimal" placeholder="Ej. 30000" value={form.discretionary_monthly_minimum} onChange={e=>setForm({...form,discretionary_monthly_minimum:e.target.value})}/></label>
         </>}
       </div>
 

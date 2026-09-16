@@ -224,9 +224,9 @@ def complete_onboarding(payload):
             if not has_active_payment(conn, account_id, subscription_plan):
                 raise HTTPException(status_code=402, detail="El plan se activa únicamente después de confirmar el pago.")
         if payload.income_type == "fixed" and payload.fixed_monthly_salary is None:
-            raise HTTPException(status_code=422, detail="Indicá tu salario mensual.")
+            raise HTTPException(status_code=422, detail="Indicá el salario que realmente te llega al mes.")
         if payload.income_type == "hourly" and (payload.hourly_rate is None or payload.hours_per_day is None):
-            raise HTTPException(status_code=422, detail="Indicá tarifa por hora y horas por día.")
+            raise HTTPException(status_code=422, detail="Indicá cuánto te pagan por hora y cuántas horas trabajás normalmente por día.")
         if subscription_plan in {"basic","vip"} and payload.essential_monthly_expenses is None:
             raise HTTPException(status_code=422, detail="Basic/VIP requiere un estimado de gastos esenciales.")
         if subscription_plan == "vip" and not payload.strategy_preference:
