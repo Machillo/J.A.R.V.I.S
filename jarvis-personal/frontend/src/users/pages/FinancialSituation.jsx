@@ -5,6 +5,7 @@ import {
   CircleDollarSign,
   CreditCard,
   Flag,
+  HelpCircle,
   PiggyBank,
   Save,
   ShieldCheck,
@@ -36,6 +37,15 @@ const labels = {
 };
 
 const numOrNull = (value) => value === "" || value === null || value === undefined ? null : Number(value);
+
+function FieldHelp({ label, children }) {
+  const [open, setOpen] = useState(false);
+  return <span className="situation-field-label">
+    <span>{label}</span>
+    <button type="button" aria-label={`Ayuda sobre ${label}`} aria-expanded={open} onClick={(event) => { event.preventDefault(); event.stopPropagation(); setOpen((current) => !current); }}><HelpCircle size={15}/></button>
+    {open && <span className="situation-field-help" role="status">{children}</span>}
+  </span>;
+}
 
 export default function FinancialSituation({ plan = "free", onNavigate }) {
   const [data, setData] = useState(null);
@@ -133,22 +143,22 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
       <div className="situation-card-list">
         <SituationCard icon={CircleDollarSign} title="Ingresos" summary={form.income_type === "fixed" ? `${money(form.fixed_monthly_salary)} / mes` : `${money(form.hourly_rate)} / hora`} editing={editing === "income"} onEdit={() => setEditing(editing === "income" ? "" : "income")}>
           <div className="situation-form-grid">
-            <label><span>Tipo de ingreso</span><select value={form.income_type} onChange={(e) => update("income_type", e.target.value)}><option value="fixed">Salario fijo</option><option value="hourly">Pago por hora</option></select></label>
-            {form.income_type === "fixed" ? <label><span>Salario mensual</span><input type="number" min="0" value={form.fixed_monthly_salary} onChange={(e) => update("fixed_monthly_salary", e.target.value)} /></label> : <label><span>Pago por hora</span><input type="number" min="0" value={form.hourly_rate} onChange={(e) => update("hourly_rate", e.target.value)} /></label>}
+            <label><FieldHelp label="¿Cómo te pagan?">Salario mensual es para un monto fijo o parecido cada mes. Pago por hora es cuando el ingreso depende de las horas trabajadas.</FieldHelp><select value={form.income_type} onChange={(e) => update("income_type", e.target.value)}><option value="fixed">Recibo un salario mensual</option><option value="hourly">Me pagan por hora trabajada</option></select></label>
+            {form.income_type === "fixed" ? <label><FieldHelp label="Salario que te llega al mes">Usá el monto neto: el dinero que realmente recibís después de rebajos.</FieldHelp><input type="number" min="0" inputMode="decimal" value={form.fixed_monthly_salary} onChange={(e) => update("fixed_monthly_salary", e.target.value)} /></label> : <label><FieldHelp label="Cuánto te pagan por hora">Es el pago de una hora normal, sin multiplicarlo por el día o el mes.</FieldHelp><input type="number" min="0" inputMode="decimal" value={form.hourly_rate} onChange={(e) => update("hourly_rate", e.target.value)} /></label>}
           </div>
         </SituationCard>
 
         <SituationCard icon={BriefcaseBusiness} title="Trabajo y pagos" summary={`${form.work_days_per_week} días/semana · ${form.pay_frequency === "weekly" ? "semanal" : form.pay_frequency === "monthly" ? "mensual" : "quincenal"}`} editing={editing === "work"} onEdit={() => setEditing(editing === "work" ? "" : "work")}>
           <div className="situation-form-grid">
-            <label><span>Días por semana</span><input type="number" min="1" max="7" value={form.work_days_per_week} onChange={(e) => update("work_days_per_week", e.target.value)} /></label>
-            {form.income_type === "hourly" && <label><span>Horas por día</span><input type="number" min="0.1" max="24" step="0.1" value={form.hours_per_day} onChange={(e) => update("hours_per_day", e.target.value)} /></label>}
-            <label><span>Frecuencia de pago</span><select value={form.pay_frequency} onChange={(e) => update("pay_frequency", e.target.value)}><option value="weekly">Semanal</option><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option></select></label>
-            <label><span>Día(s) aproximado(s)</span><input value={form.payday_note} onChange={(e) => update("payday_note", e.target.value)} placeholder="Ej. 15 y 30" /></label>
+            <label><FieldHelp label="Días que trabajás por semana">Escribí cuántos días trabajás normalmente en una semana.</FieldHelp><input type="number" min="1" max="7" step="1" inputMode="numeric" value={form.work_days_per_week} onChange={(e) => update("work_days_per_week", e.target.value)} /></label>
+            {form.income_type === "hourly" && <label><FieldHelp label="Horas que trabajás por día">Podés escribir un número entero como 8 o un decimal como 7.5.</FieldHelp><input type="number" min="0.25" max="24" step="0.25" inputMode="decimal" value={form.hours_per_day} onChange={(e) => update("hours_per_day", e.target.value)} /></label>}
+            <label><FieldHelp label="Cada cuánto te pagan">Elegí si recibís dinero semanalmente, dos veces al mes o una vez al mes.</FieldHelp><select value={form.pay_frequency} onChange={(e) => update("pay_frequency", e.target.value)}><option value="weekly">Cada semana</option><option value="biweekly">Dos veces al mes</option><option value="monthly">Una vez al mes</option></select></label>
+            <label><FieldHelp label="¿Qué día te pagan?">Escribí una fecha o descripción aproximada para organizar el calendario.</FieldHelp><input value={form.payday_note} onChange={(e) => update("payday_note", e.target.value)} placeholder="Ej. 15 y 30" /></label>
           </div>
         </SituationCard>
 
         {plan !== "free" && <SituationCard icon={WalletCards} title="Gastos esenciales" summary={`${money(form.essential_monthly_expenses)} / mes`} editing={editing === "expenses"} onEdit={() => setEditing(editing === "expenses" ? "" : "expenses")} badge="Basic+">
-          <label className="situation-single-field"><span>Estimado mensual</span><input type="number" min="0" value={form.essential_monthly_expenses} onChange={(e) => update("essential_monthly_expenses", e.target.value)} /></label>
+          <label className="situation-single-field"><FieldHelp label="Gastos necesarios del mes">Incluí vivienda, comida, servicios, transporte, medicinas y otros pagos indispensables.</FieldHelp><input type="number" min="0" value={form.essential_monthly_expenses} onChange={(e) => update("essential_monthly_expenses", e.target.value)} /></label>
           <p className="situation-help">Finva usa este dato para no recomendar comprometer dinero que necesitás para vivir.</p>
         </SituationCard>}
 
@@ -156,8 +166,8 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
 
         {plan !== "free" && <SituationCard icon={PiggyBank} title="Ahorro y emergencia" summary={`${money(form.liquid_savings)} disponibles`} editing={editing === "savings"} onEdit={() => setEditing(editing === "savings" ? "" : "savings")} badge="Basic+">
           <div className="situation-form-grid">
-            <label><span>Ahorro líquido</span><input type="number" min="0" value={form.liquid_savings} onChange={(e) => update("liquid_savings", e.target.value)} /></label>
-            <label><span>Meta de emergencia</span><input type="number" min="0" value={form.emergency_fund_target} onChange={(e) => update("emergency_fund_target", e.target.value)} /></label>
+            <label><FieldHelp label="Ahorro disponible ahora">Dinero guardado que podés usar inmediatamente, como efectivo o saldo disponible en una cuenta.</FieldHelp><input type="number" min="0" value={form.liquid_savings} onChange={(e) => update("liquid_savings", e.target.value)} /></label>
+            <label><FieldHelp label="Meta para emergencias">Monto que querés reservar para imprevistos.</FieldHelp><input type="number" min="0" value={form.emergency_fund_target} onChange={(e) => update("emergency_fund_target", e.target.value)} /></label>
           </div>
         </SituationCard>}
 
@@ -165,8 +175,8 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
 
         {plan === "vip" && <SituationCard icon={Sparkles} title="Preferencias del Director" summary={form.strategy_preference === "debt" ? "Priorizar deudas" : form.strategy_preference === "emergency" ? "Priorizar seguridad" : form.strategy_preference === "goals" ? "Priorizar metas" : "Estrategia equilibrada"} editing={editing === "vip"} onEdit={() => setEditing(editing === "vip" ? "" : "vip")} badge="VIP">
           <div className="situation-form-grid">
-            <label><span>Prioridad principal</span><select value={form.strategy_preference} onChange={(e) => update("strategy_preference", e.target.value)}><option value="debt">Salir de deudas</option><option value="emergency">Seguridad</option><option value="goals">Metas</option><option value="balanced">Equilibrado</option></select></label>
-            <label><span>Mínimo mensual para vos</span><input type="number" min="0" value={form.discretionary_monthly_minimum} onChange={(e) => update("discretionary_monthly_minimum", e.target.value)} /></label>
+            <label><FieldHelp label="¿Qué querés priorizar?">FINVA usa esta respuesta para ordenar sus recomendaciones.</FieldHelp><select value={form.strategy_preference} onChange={(e) => update("strategy_preference", e.target.value)}><option value="debt">Salir de deudas</option><option value="emergency">Crear ahorro de emergencia</option><option value="goals">Cumplir mis metas</option><option value="balanced">Un poco de todo</option></select></label>
+            <label><FieldHelp label="Dinero mínimo para tus gustos">Monto que querés conservar mensualmente para entretenimiento, salidas o compras personales.</FieldHelp><input type="number" min="0" value={form.discretionary_monthly_minimum} onChange={(e) => update("discretionary_monthly_minimum", e.target.value)} /></label>
           </div>
         </SituationCard>}
       </div>

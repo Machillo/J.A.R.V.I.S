@@ -502,6 +502,8 @@
 .users-app .situation-edit { border:0; background:transparent; color:#78c6e1; display:flex; align-items:center; gap:3px; padding:7px; }
 .users-app .situation-card-body { border-top:1px solid var(--border); padding:13px; background:#071820; }
 .users-app .situation-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.users-app .situation-field-label{position:relative;display:flex;align-items:center;gap:6px}.users-app .situation-field-label>button{display:inline-grid;place-items:center;flex:0 0 26px;width:26px;height:26px;padding:0;border:1px solid rgba(20,184,166,.35);border-radius:50%;background:rgba(20,184,166,.1);color:#5eead4;cursor:pointer}.users-app .situation-field-help{position:absolute;z-index:20;left:0;top:calc(100% + 6px);width:min(290px,calc(100vw - 64px));padding:10px 11px;border:1px solid rgba(20,184,166,.35);border-radius:12px;background:#10242c;color:#eefcfb;font-size:.76rem;font-weight:500;line-height:1.45;box-shadow:0 14px 32px rgba(0,0,0,.4)}
+@media(max-width:560px){.users-app .situation-field-help{position:fixed;left:18px;right:18px;top:auto;bottom:calc(92px + env(safe-area-inset-bottom));width:auto;font-size:.85rem}}
 .users-app .situation-form-grid label,
 .users-app .situation-single-field { display:grid; gap:6px; }
 .users-app .situation-form-grid span,

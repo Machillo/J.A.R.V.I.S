@@ -43,7 +43,7 @@ class UnifiedOnboardingRequest(BaseModel):
     @model_validator(mode="after")
     def validate_income(self):
         if self.income_type == "fixed" and self.fixed_monthly_salary is None:
-            raise ValueError("Indicá tu salario mensual.")
+            raise ValueError("Indicá el salario que realmente te llega al mes.")
         if self.income_type == "hourly" and (self.hourly_rate is None or self.hours_per_day is None):
-            raise ValueError("Indicá tarifa por hora y horas por día.")
+            raise ValueError("Indicá cuánto te pagan por hora y cuántas horas trabajás normalmente por día.")
         return self
