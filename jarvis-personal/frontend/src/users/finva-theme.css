@@ -502,12 +502,19 @@ body:has(.users-app) { background: #0b132b; }
   background: rgba(3,7,18,.72);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .users-app .finva-dialog {
   position: relative;
   width: min(100%, 480px);
   padding: 22px 18px 18px;
-  overflow: hidden;
+  max-height: calc(100dvh - 36px - env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid rgba(45,212,191,.25);
   border-radius: 28px;
   background: linear-gradient(155deg, #243354, #151f39 72%);
@@ -829,6 +836,7 @@ body:has(.users-app) { background: #0b132b; }
   background: #64748b;
 }
 .users-app .finva-form-sheet-header {
+  flex: 0 0 auto;
   min-height: 64px;
   padding: 10px 16px 11px;
   display: flex;
@@ -865,9 +873,12 @@ body:has(.users-app) { background: #0b132b; }
   color: #cbd5e1;
 }
 .users-app .finva-form-sheet-body {
+  min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
   padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .users-app .finva-sheet-form {
   display: grid;
@@ -1240,6 +1251,68 @@ body:has(.users-app) { background: #0b132b; }
   .users-app .pending-payment-card > button { grid-column:1 / -1; width:100%; }
   .users-app .sinpe-payment-data > div { grid-template-columns:1fr; }
   .users-app .sinpe-payment-data button { grid-column:1; grid-row:auto; width:100%; justify-content:center; }
+}
+
+/* Accessibility: large Android/iOS text must never hide actions or content. */
+html:has(.users-app),
+body:has(.users-app),
+#root:has(.users-app) {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.users-app {
+  height: 100dvh;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y pinch-zoom;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.users-app .mobile-app-shell { min-height: 100%; height: auto; }
+.users-app .mobile-content { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
+.users-app .mobile-app-header {
+  height: auto;
+  min-height: 66px;
+  padding-block: max(8px, env(safe-area-inset-top, 0px)) 8px;
+}
+.users-app .mobile-bottom-nav { height: auto; }
+.users-app .mobile-bottom-nav button { height: auto; min-height: 64px; }
+.users-app .mobile-bottom-nav button span,
+.users-app .situation-card-copy small {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+.users-app .plan-dialog-backdrop {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.users-app .plan-dialog {
+  max-height: calc(100dvh - 36px - env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.users-app .mobile-more-sheet { min-height: 0; -webkit-overflow-scrolling: touch; }
+.users-app :is(h1,h2,h3,p,small,strong,span,label,button) { overflow-wrap: anywhere; }
+
+@media (max-width: 520px) {
+  .users-app .kpis,
+  .users-app .entry-field-row,
+  .users-app .situation-form-grid,
+  .users-app .finva-compact-fields { grid-template-columns: minmax(0,1fr); }
+  .users-app .compact-record-card .actions,
+  .users-app .finva-dialog-actions,
+  .users-app .plan-dialog-actions { grid-template-columns: minmax(0,1fr); }
+  .users-app .situation-card-head { grid-template-columns: auto minmax(0,1fr); align-items: start; }
+  .users-app .situation-edit { grid-column: 1 / -1; justify-content: center; width: 100%; }
 }
 
 @media (prefers-color-scheme: light) {

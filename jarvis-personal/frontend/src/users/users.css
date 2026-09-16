@@ -65,7 +65,7 @@
   position: sticky;
   top: 0;
   z-index: 40;
-  height: 66px;
+  min-height: 66px;
   margin: 0 -16px 8px;
   padding: 0 16px;
   display: flex;
