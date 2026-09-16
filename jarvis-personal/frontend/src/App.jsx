@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import Login from "./pages/Login";
 import UnifiedOnboarding from "./pages/UnifiedOnboarding";
@@ -7,6 +7,7 @@ import UsersApp from "./users/UsersApp";
 import { getMe, getOwnerBridgeToken, setOwnerBridgeToken } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
 import { registerNativeAuthListener } from "./lib/nativeAuth";
+import { identifyTelemetryUser, trackEvent } from "./lib/telemetry";
 
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
@@ -24,6 +25,12 @@ export default function App() {
   const [identityError, setIdentityError] = useState("");
   const [ownerBridgeMode, setOwnerBridgeMode] = useState(false);
   const [nativeAuthError, setNativeAuthError] = useState("");
+  const currentUserRef = useRef(null);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+    identifyTelemetryUser(currentUser);
+  }, [currentUser]);
 
   useEffect(() => {
     let cleanup = () => {};
@@ -32,6 +39,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let activeUserId = null;
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const incomingBridgeToken = hash.get("jarvis_owner_bridge");
 
@@ -49,6 +57,7 @@ export default function App() {
     }
 
     supabase.auth.getSession().then(({ data }) => {
+      activeUserId = data.session?.user?.id || null;
       setSession(data.session);
       setSessionLoaded(true);
     });
@@ -56,11 +65,14 @@ export default function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      const nextUserId = nextSession?.user?.id || null;
+      const identityChanged = event === "SIGNED_OUT" || (activeUserId !== null && activeUserId !== nextUserId);
+      activeUserId = nextUserId;
       setSession(nextSession);
       // Returning from Android's file picker can refresh the Supabase token.
       // Keep the mounted screen during TOKEN_REFRESHED so transient state
       // such as the selected receipt is not lost.
-      if (event !== "TOKEN_REFRESHED") setCurrentUser(null);
+      if (identityChanged) setCurrentUser(null);
       setIdentityError("");
       setSessionLoaded(true);
     });
@@ -94,14 +106,25 @@ export default function App() {
     let cancelled = false;
     let nativeListener;
     let refreshing = false;
+    let lastRefreshAt = 0;
+
+    const profileChanged = (previous, next) => {
+      if (!previous) return true;
+      const fields = ["id", "role", "plan", "plan_selected", "onboarding_completed", "subscription_status"];
+      return fields.some((field) => previous?.[field] !== next?.[field])
+        || previous?.subscription?.plan !== next?.subscription?.plan
+        || previous?.subscription?.status !== next?.subscription?.status;
+    };
 
     const refreshProfile = async () => {
-      if (refreshing) return;
+      const now = Date.now();
+      if (refreshing || now - lastRefreshAt < 15_000) return;
       refreshing = true;
+      lastRefreshAt = now;
       try {
         const profile = await getMe();
         if (!cancelled) {
-          setCurrentUser(profile);
+          if (profileChanged(currentUserRef.current, profile)) setCurrentUser(profile);
           setIdentityError("");
         }
       } catch {
@@ -111,24 +134,17 @@ export default function App() {
       }
     };
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") refreshProfile();
-    };
-
-    window.addEventListener("focus", refreshProfile);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    const profileTimer = window.setInterval(refreshProfile, 30_000);
     CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-      if (isActive) refreshProfile();
+      if (isActive) {
+        trackEvent("app_resumed");
+        refreshProfile();
+      }
     }).then((listener) => {
       nativeListener = listener;
     });
 
     return () => {
       cancelled = true;
-      window.removeEventListener("focus", refreshProfile);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.clearInterval(profileTimer);
       nativeListener?.remove();
     };
   }, [session, ownerBridgeMode]);

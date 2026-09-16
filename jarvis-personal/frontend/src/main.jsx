@@ -19,9 +19,11 @@ import "./styles/12-mobile-native-compat.css";
 import "./pages/PublicInfoPage.css";
 import "./pages/UnifiedOnboarding.css";
 import { registerJarvisServiceWorker } from "./pushNotifications";
+import { initializeTelemetry } from "./lib/telemetry";
 
 const publicPages = new Set(["/about", "/privacy"]);
 const isPublicPage = publicPages.has(window.location.pathname);
+initializeTelemetry();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

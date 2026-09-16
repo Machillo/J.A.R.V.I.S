@@ -17,6 +17,7 @@ import VipCenter from "./pages/VipCenter";
 import Feedback from "./pages/Feedback";
 import { trackProductEvent } from "./services/jarvisApi";
 import { supabase } from "../lib/supabase";
+import { trackScreen } from "../lib/telemetry";
 import "./users.css";
 import "./finva-theme.css";
 
@@ -30,6 +31,7 @@ export default function UsersApp({ user, onUserChange }) {
     else window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     const eventMap = { overview:"dashboard_opened", finance:"finance_opened", debts:"debts_opened", goals:"goals_opened", transactions:"transactions_opened", strategy:"strategy_opened", budget:"budget_opened", calendar:"calendar_opened", recurring:"recurring_opened", reports:"reports_opened", settings:"settings_opened" };
     if (eventMap[page]) trackProductEvent({ event_name:eventMap[page], surface:page, success:true }).catch(()=>{});
+    trackScreen(`finva_${page}`, "FinvaPage");
   }, [page]);
 
   const pages = {

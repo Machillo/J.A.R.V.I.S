@@ -47,6 +47,7 @@ import ProductOperations from "../pages/ProductOperations";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
+import { recordError, trackScreen } from "../lib/telemetry";
 
 const sanitizeCourtesy = (text = "") =>
   String(text || "")
@@ -249,6 +250,7 @@ export default function App() {
 
 
   useEffect(() => {
+    let activeUserId = null;
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const incomingBridgeToken = hash.get("jarvis_owner_bridge");
     if (incomingBridgeToken) {
@@ -269,6 +271,7 @@ export default function App() {
     }
 
     supabase.auth.getSession().then(({ data }) => {
+      activeUserId = data.session?.user?.id || null;
       setSession(data.session);
       setSessionLoaded(true);
     });
@@ -276,15 +279,20 @@ export default function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      const nextUserId = nextSession?.user?.id || null;
+      const identityChanged = event === "SIGNED_OUT" || (activeUserId !== null && activeUserId !== nextUserId);
+      activeUserId = nextUserId;
       setSession(nextSession);
-      setFinanceDashboard(null);
-      setStatus(null);
-      setJarvisResponse(null);
-      setChatHistory([]);
-      if (event !== "TOKEN_REFRESHED") setCurrentUser(null);
-      setAiUsage(null);
-      setStrategySummary(null);
-      setProfilePreferences(null);
+      if (identityChanged) {
+        setFinanceDashboard(null);
+        setStatus(null);
+        setJarvisResponse(null);
+        setChatHistory([]);
+        setCurrentUser(null);
+        setAiUsage(null);
+        setStrategySummary(null);
+        setProfilePreferences(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -316,6 +324,7 @@ export default function App() {
       setProfilePreferences(profileData?.value || profileData || null);
     } catch (error) {
       console.error(error);
+      recordError(error, "jarvis_refresh_app_data");
     }
   };
 
@@ -324,6 +333,7 @@ export default function App() {
   }, [session]);
 
   useEffect(() => {
+    trackScreen(`jarvis_${activePage}`, "JarvisPage");
     const frame = window.requestAnimationFrame(() => {
       const appScroller = document.querySelector(".jarvis-app.app-shell-v2");
       if (appScroller) {

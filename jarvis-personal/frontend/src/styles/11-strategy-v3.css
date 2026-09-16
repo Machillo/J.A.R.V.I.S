@@ -409,6 +409,57 @@
   gap: 7px;
 }
 
+.doctor-strange-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(179, 124, 255, 0.2);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(179, 124, 255, 0.07), rgba(85, 217, 155, 0.025));
+}
+
+.doctor-strange-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.doctor-strange-grid article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(4, 10, 20, 0.42);
+}
+
+.doctor-strange-grid article.recommended {
+  border-color: rgba(85, 217, 155, 0.28);
+}
+
+.doctor-strange-grid span {
+  color: #b989ff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.doctor-strange-grid strong {
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.doctor-strange-grid small {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.68rem;
+}
+
+@media (max-width: 560px) {
+  .doctor-strange-grid { grid-template-columns: 1fr; }
+}
+
 .strategy-debt-options-v3 > div {
   display: grid;
   align-content: start;

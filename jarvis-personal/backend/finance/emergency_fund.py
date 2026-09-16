@@ -10,7 +10,8 @@ from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 
 PREFERENCE_KEY = "salvavidas"
-TARGET_MONTHS = 6
+DEFAULT_TARGET_MONTHS = 6
+ALLOWED_TARGET_MONTHS = (1, 3, 6)
 
 
 def _f(value: Any) -> float:
@@ -58,10 +59,11 @@ def _load_config() -> dict[str, Any]:
     if not isinstance(raw, dict):
         raw = {}
     protected = raw.get("protected_expense_ids") or []
+    candidate_target = int(_f(raw.get("target_months")) or DEFAULT_TARGET_MONTHS)
     return {
         "current_amount": max(_f(raw.get("current_amount")), 0.0),
         "protected_expense_ids": [int(item) for item in protected if str(item).isdigit()],
-        "target_months": TARGET_MONTHS,
+        "target_months": candidate_target if candidate_target in ALLOWED_TARGET_MONTHS else DEFAULT_TARGET_MONTHS,
     }
 
 
@@ -216,7 +218,8 @@ def get_salvavidas_state() -> dict[str, Any]:
         optional_items.append(_expense_payload(expense, monthly, selected=selected))
 
     monthly_base = debt_monthly + mandatory_monthly + protected_monthly
-    target = monthly_base * TARGET_MONTHS
+    target_months = config["target_months"]
+    target = monthly_base * target_months
     linked_account = None
     with get_connection() as conn:
         table = conn.execute("SELECT to_regclass('public.account_balances') AS table_name").fetchone()
@@ -245,7 +248,7 @@ def get_salvavidas_state() -> dict[str, Any]:
         "status": "OK",
         "current_amount": round(current, 2),
         "monthly_base": round(monthly_base, 2),
-        "target_months": TARGET_MONTHS,
+        "target_months": target_months,
         "target_amount": round(target, 2),
         "missing_amount": round(missing, 2),
         "coverage_months": round(coverage, 2),
@@ -273,7 +276,12 @@ def get_salvavidas_state() -> dict[str, Any]:
     }
 
 
-def update_salvavidas(*, current_amount: float | None = None, protected_expense_ids: list[int] | None = None) -> dict[str, Any]:
+def update_salvavidas(
+    *,
+    current_amount: float | None = None,
+    protected_expense_ids: list[int] | None = None,
+    target_months: int | None = None,
+) -> dict[str, Any]:
     config = _load_config()
     if current_amount is not None:
         config["current_amount"] = max(float(current_amount), 0.0)
@@ -285,7 +293,11 @@ def update_salvavidas(*, current_amount: float | None = None, protected_expense_
                 clean_ids.append(value)
         config["protected_expense_ids"] = clean_ids
 
-    config["target_months"] = TARGET_MONTHS
+    if target_months is not None:
+        clean_target = int(target_months)
+        if clean_target not in ALLOWED_TARGET_MONTHS:
+            raise ValueError("El objetivo del Salvavidas debe ser de 1, 3 o 6 meses.")
+        config["target_months"] = clean_target
     set_preference(PREFERENCE_KEY, config)
     if current_amount is not None:
         # Keep the old preference for compatibility while making Salvavidas a real account.

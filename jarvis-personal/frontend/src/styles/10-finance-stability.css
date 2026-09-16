@@ -416,6 +416,15 @@ input[type="checkbox"] {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.025);
   color: rgba(255, 255, 255, 0.58);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.salvavidas-milestone.selected {
+  border-color: rgba(77, 208, 225, 0.58);
+  box-shadow: 0 0 0 2px rgba(77, 208, 225, 0.1);
+  color: #f7fbff;
 }
 
 .salvavidas-milestone strong {
@@ -674,4 +683,3 @@ input[type="checkbox"] {
     color: rgba(255, 255, 255, 0.7);
   }
 }
-

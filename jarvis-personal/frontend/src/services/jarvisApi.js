@@ -64,6 +64,7 @@ export const updateSalvavidas = (payload) => jsonRequest("/finance/salvavidas", 
 
 export const getRealAvailability = () => request("/finance/real-availability");
 export const getDebtAdvisory = (extraCash = null) => request(`/finance/debt-advisory${extraCash == null ? "" : `?extra_cash=${encodeURIComponent(extraCash)}`}`);
+export const getDebtStrategies = () => request("/finance/engine/debt-strategies");
 export const getReceivables = () => request("/finance/receivables");
 export const createReceivable = (payload) => jsonRequest("/finance/receivables", "POST", payload);
 export const addReceivableEntry = async (payload) => {

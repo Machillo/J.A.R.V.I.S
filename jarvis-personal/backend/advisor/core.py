@@ -203,12 +203,18 @@ def build_advisor_strategy(*, persist: bool = True) -> dict[str, Any]:
     }
 
     target_debt = None
-    if debt_strategy.get("status") == "OK" and debt_strategy.get("avalanche"):
-        target_debt = debt_strategy["avalanche"].get("priority_debt")
+    if debt_strategy.get("status") == "OK":
+        balanced = ((debt_strategy.get("doctor_strange") or {}).get("strategies") or {}).get("balanced") or {}
+        balanced_order = balanced.get("order") or []
+        if balanced_order:
+            first_id = balanced_order[0].get("id")
+            target_debt = next((item for item in debt_strategy.get("debts", []) if item.get("id") == first_id), None)
+        elif debt_strategy.get("avalanche"):
+            target_debt = debt_strategy["avalanche"].get("priority_debt")
         if target_debt:
             target_debt = {
                 **target_debt,
-                "why": f"Tiene la mayor tasa anual registrada ({_n(target_debt.get('interest_rate')):.2f}%) y atacarla primero minimiza intereses.",
+                "why": "Doctor Strange comparó las rutas posibles y esta deuda abre la estrategia balanceada entre costo, tiempo y victorias rápidas.",
             }
 
     usable = _safe_usable_money(

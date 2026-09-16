@@ -223,3 +223,4 @@ class GoalPlanningRequest(BaseModel):
 class SalvavidasUpdateRequest(BaseModel):
     current_amount: float | None = None
     protected_expense_ids: list[int] | None = None
+    target_months: int | None = None

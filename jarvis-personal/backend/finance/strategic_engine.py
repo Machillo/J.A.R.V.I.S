@@ -9,6 +9,7 @@ from typing import Any
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.emergency_fund import get_salvavidas_state
+from backend.finance.doctor_strange import calculate_doctor_strange
 
 
 ESSENTIAL_CATEGORIES = {
@@ -133,7 +134,8 @@ def _fetch_debts() -> list[dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT id, name, debt_type, total_amount, remaining_amount,
-                   monthly_payment, interest_rate, term_months, payment_day, created_at
+                   monthly_payment, interest_rate, term_months, payment_day,
+                   interest_method, fixed_fee_amount, created_at
             FROM debts
             WHERE workspace_id = %s
             ORDER BY remaining_amount DESC
@@ -382,6 +384,7 @@ def calculate_debt_strategies(extra_payment: float = 0.0) -> dict[str, Any]:
             "total_monthly_payment": round(sum(item["monthly_payment"] for item in normalized), 2),
             "total_projected_interest": round(sum(_as_float(item.get("total_interest")) for item in minimum_cost_items), 2),
         },
+        "doctor_strange": calculate_doctor_strange(normalized, extra_payment=max(_as_float(extra_payment), 0.0)),
         "recommended": strategy_payload("avalanche", avalanche_order),
         "note": "Avalancha minimiza intereses. Bola de nieve prioriza motivación pagando saldos pequeños primero.",
     }
