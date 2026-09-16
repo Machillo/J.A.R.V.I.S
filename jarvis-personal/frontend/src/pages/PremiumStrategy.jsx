@@ -13,10 +13,12 @@ import {
 } from "lucide-react";
 import {
   getDebtAdvisory,
+  getDebtStrategies,
   getJarvisPremiumStrategyDashboard,
   getSalvavidas,
   updateSalvavidas,
 } from "../services/jarvisApi";
+import { trackEvent } from "../lib/telemetry";
 
 const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
 
@@ -62,7 +64,7 @@ const monthsText = (value) => {
 const optionCopy = {
   salvavidas: {
     title: "Salvavidas",
-    subtitle: "Definí y construí tus 6 meses de cobertura.",
+    subtitle: "Elegí y construí 1, 3 o 6 meses de cobertura.",
     icon: LifeBuoy,
   },
   investments: {
@@ -83,10 +85,11 @@ const optionCopy = {
 };
 
 export default function PremiumStrategy() {
-  const [state, setState] = useState({ loading: true, data: null, debtAdvice: null, error: "", running: false });
+  const [state, setState] = useState({ loading: true, data: null, debtAdvice: null, debtStrategies: null, error: "", running: false });
   const [activeSection, setActiveSection] = useState(null);
   const [salvavidasState, setSalvavidasState] = useState({ loading: true, saving: false, data: null, error: "" });
   const [salvavidasAmount, setSalvavidasAmount] = useState("");
+  const [salvavidasTargetMonths, setSalvavidasTargetMonths] = useState(6);
   const [protectedExpenseIds, setProtectedExpenseIds] = useState([]);
 
   const load = async ({ keepPage = false } = {}) => {
@@ -95,18 +98,24 @@ export default function PremiumStrategy() {
       const strategyResult = await getJarvisPremiumStrategyDashboard();
       const strategyPayload = strategyResult?.strategy || {};
       let debtAdvice = null;
+      let debtStrategies = null;
       try {
-        debtAdvice = await getDebtAdvisory(Number(strategyPayload.debt_attack_extra || 0));
+        [debtAdvice, debtStrategies] = await Promise.all([
+          getDebtAdvisory(Number(strategyPayload.debt_attack_extra || 0)),
+          getDebtStrategies(),
+        ]);
       } catch {
         debtAdvice = null;
+        debtStrategies = null;
       }
-      setState({ loading: false, data: strategyResult, debtAdvice, error: "", running: false });
+      setState({ loading: false, data: strategyResult, debtAdvice, debtStrategies, error: "", running: false });
       return strategyResult;
     } catch (error) {
       setState((current) => ({
         loading: false,
         data: current.data,
         debtAdvice: current.debtAdvice,
+        debtStrategies: current.debtStrategies,
         error: error.message || "No pude cargar la estrategia.",
         running: false,
       }));
@@ -124,6 +133,7 @@ export default function PremiumStrategy() {
       const data = await getSalvavidas();
       setSalvavidasState({ loading: false, saving: false, data, error: "" });
       setSalvavidasAmount(String(Number(data?.current_amount || 0)));
+      setSalvavidasTargetMonths(Number(data?.target_months || 6));
       setProtectedExpenseIds(Array.isArray(data?.protected_expense_ids) ? data.protected_expense_ids : []);
       return data;
     } catch (error) {
@@ -143,10 +153,13 @@ export default function PremiumStrategy() {
       const data = await updateSalvavidas({
         current_amount: amount,
         protected_expense_ids: protectedExpenseIds,
+        target_months: salvavidasTargetMonths,
       });
       setSalvavidasState({ loading: false, saving: false, data, error: "" });
       setSalvavidasAmount(String(Number(data?.current_amount || 0)));
+      setSalvavidasTargetMonths(Number(data?.target_months || 6));
       setProtectedExpenseIds(Array.isArray(data?.protected_expense_ids) ? data.protected_expense_ids : []);
+      trackEvent("salvavidas_saved", { target_months: Number(data?.target_months || salvavidasTargetMonths) });
       await load({ keepPage: true });
     } catch (error) {
       setSalvavidasState((current) => ({ ...current, saving: false, error: error.message || "No pude guardar el Salvavidas." }));
@@ -180,6 +193,8 @@ export default function PremiumStrategy() {
   const allocationTotal = Number(strategy.allocation_total || allocationItems.reduce((sum, item) => sum + Number(item.amount || 0), 0));
   const progress = Math.max(0, Math.min(100, Number(strategy.debt_progress_percent || 0)));
   const debtAdvice = state.debtAdvice || {};
+  const doctorStrange = state.debtStrategies?.doctor_strange || {};
+  const doctorStrategies = doctorStrange.strategies || {};
   const adviceScenarios = useMemo(
     () => (Array.isArray(debtAdvice.scenarios) ? debtAdvice.scenarios : []),
     [debtAdvice.scenarios]
@@ -250,7 +265,7 @@ export default function PremiumStrategy() {
         <div className="strategy-title-row">
           <LifeBuoy size={22} />
           <div>
-            <h3>Salvavidas · 6 meses</h3>
+            <h3>Salvavidas · {salvavidasTargetMonths} {salvavidasTargetMonths === 1 ? "mes" : "meses"}</h3>
             <p>Deudas, Casa y Línea entran solas. Vos elegís qué otros gastos querés proteger.</p>
           </div>
         </div>
@@ -264,22 +279,31 @@ export default function PremiumStrategy() {
       ) : (
         <>
           <div className="salvavidas-summary-grid">
-            <div><span>Objetivo 6 meses</span><strong>{money(salvavidas.target_amount)}</strong></div>
+            <div><span>Objetivo {salvavidasTargetMonths} {salvavidasTargetMonths === 1 ? "mes" : "meses"}</span><strong>{money(salvavidas.target_amount)}</strong></div>
             <div><span>Guardado</span><strong>{money(salvavidas.current_amount)}</strong></div>
             <div><span>Faltante</span><strong>{money(salvavidas.missing_amount)}</strong></div>
             <div><span>Cobertura</span><strong>{Number(salvavidas.coverage_months || 0).toFixed(1)} meses</strong></div>
           </div>
 
           <div className="salvavidas-progress-block">
-            <div className="progress-label-row"><span>Camino a 6 meses</span><strong>{salvavidasProgress.toFixed(0)}%</strong></div>
+            <div className="progress-label-row"><span>Camino a {salvavidasTargetMonths} {salvavidasTargetMonths === 1 ? "mes" : "meses"}</span><strong>{salvavidasProgress.toFixed(0)}%</strong></div>
             <div className="progress-track"><div style={{ width: `${salvavidasProgress}%` }} /></div>
             <div className="salvavidas-milestones">
               {salvavidasMilestones.map((item) => (
-                <div key={item.months} className={`salvavidas-milestone ${item.reached ? "reached" : ""}`}>
+                <button
+                  type="button"
+                  key={item.months}
+                  className={`salvavidas-milestone ${item.reached ? "reached" : ""} ${salvavidasTargetMonths === item.months ? "selected" : ""}`}
+                  onClick={() => {
+                    setSalvavidasTargetMonths(item.months);
+                    trackEvent("salvavidas_target_selected", { target_months: item.months });
+                  }}
+                  aria-pressed={salvavidasTargetMonths === item.months}
+                >
                   {item.reached ? <CheckCircle2 size={16} /> : <span className="milestone-dot" />}
                   <span>{item.months} {item.months === 1 ? "mes" : "meses"}</span>
                   <strong>{money(item.target)}</strong>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -400,6 +424,37 @@ export default function PremiumStrategy() {
       <div className="strategy-detail-heading">
         <div className="strategy-title-row"><Activity size={22} /><div><h3>Asesoría de deudas</h3><p>Qué atacar, cuánto cambia el tiempo y qué ruta sigue cada deuda activa.</p></div></div>
       </div>
+
+      {doctorStrange.status === "OK" && (
+        <div className="doctor-strange-panel">
+          <div className="salvavidas-section-copy">
+            <strong>Doctor Strange</strong>
+            <small>{doctorStrange.permutations_evaluated.toLocaleString("es-CR")} rutas simuladas con interés diario, cargos y cuotas mínimas.</small>
+          </div>
+          <div className="doctor-strange-grid">
+            {[
+              ["cheapest", "Más barata"],
+              ["fastest", "Más rápida"],
+              ["motivational", "Motivacional"],
+              ["balanced", "Balanceada"],
+            ].map(([key, label]) => {
+              const route = doctorStrategies[key];
+              if (!route) return null;
+              return (
+                <article key={key} className={key === "balanced" ? "recommended" : ""}>
+                  <span>{label}</span>
+                  <strong>{route.order?.map((item) => item.name).join(" → ")}</strong>
+                  <small>{monthsText(route.months)} · costo {money(route.total_cost)}</small>
+                  <small>Libre aprox. {formatDate(route.payoff_date)}</small>
+                </article>
+              );
+            })}
+          </div>
+          {(doctorStrange.data_quality?.prepayment_penalties_assumed_zero || []).length > 0 && (
+            <p className="strategy-v3-note"><AlertTriangle size={16} /> Penalización de prepago asumida en ₡0 donde todavía no está registrada.</p>
+          )}
+        </div>
+      )}
 
       <div className="strategy-debt-advice-summary">
         <span>Extra asignado a deuda este ciclo</span>

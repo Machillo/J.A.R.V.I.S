@@ -8,6 +8,7 @@ from backend.auth.current_user import get_current_user, get_current_user_id, get
 from backend.core.database import get_connection
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.emergency_fund import get_salvavidas_state
+from backend.finance.doctor_strange import calculate_doctor_strange
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.ai.openai_client import get_active_premium_guides
 from backend.integrations.ibkr_readonly import ensure_ibkr_tables
@@ -832,10 +833,17 @@ def _simulate_debt_cascade(
     first_month_extra: float = 0.0,
 ) -> tuple[list[dict[str, Any]], int, float]:
     """Simulate an active-debt cascade without keeping cancelled/paid rows in the route."""
-    ordered_active = [
-        debt for debt in _sort_debts_for_director(debts)
-        if _f(debt.get("remaining_amount")) > 0.01
-    ]
+    candidates = [debt for debt in debts if _f(debt.get("remaining_amount")) > 0.01]
+    multiverse = calculate_doctor_strange(
+        candidates,
+        extra_payment=max(_f(recurring_monthly_extra) + _f(first_month_extra), 0.0),
+    )
+    balanced = (multiverse.get("strategies") or {}).get("balanced") or {}
+    ordered_ids = [item.get("id") for item in balanced.get("order") or []]
+    by_id = {item.get("id"): item for item in candidates}
+    ordered_active = [by_id[item_id] for item_id in ordered_ids if item_id in by_id]
+    if len(ordered_active) != len(candidates):
+        ordered_active = _sort_debts_for_director(candidates)
     active: list[dict[str, Any]] = []
     for debt in ordered_active:
         balance = _f(debt.get("remaining_amount"))
