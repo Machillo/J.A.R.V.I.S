@@ -18,10 +18,11 @@ import "./styles/11-strategy-v3.css";
 import "./styles/12-mobile-native-compat.css";
 import "./pages/PublicInfoPage.css";
 import "./pages/UnifiedOnboarding.css";
+import "./pages/LegalConsent.css";
 import { registerJarvisServiceWorker } from "./pushNotifications";
 import { initializeTelemetry } from "./lib/telemetry";
 
-const publicPages = new Set(["/about", "/privacy"]);
+const publicPages = new Set(["/about", "/privacy", "/terms"]);
 const isPublicPage = publicPages.has(window.location.pathname);
 initializeTelemetry();
 

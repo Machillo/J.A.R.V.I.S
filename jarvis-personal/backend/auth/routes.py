@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 
-from backend.auth.models import AllowedUserRequest, CheckAccessRequest, PlanSelectionRequest, UnifiedOnboardingRequest
+from backend.auth.models import AllowedUserRequest, CheckAccessRequest, LegalAcceptanceRequest, PlanSelectionRequest, UnifiedOnboardingRequest
+from backend.auth.legal import accept_legal_documents
 from backend.auth.service import (
     get_allowed_users,
     create_allowed_user,
@@ -55,6 +56,11 @@ def check_access(request: CheckAccessRequest):
 @router.get("/me")
 def me():
     return enrich_identity(get_current_user())
+
+
+@router.post("/legal/accept")
+def accept_legal(request_body: LegalAcceptanceRequest, request: Request):
+    return accept_legal_documents(request_body, request)
 
 
 @router.get("/plans")

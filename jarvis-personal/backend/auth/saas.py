@@ -122,6 +122,8 @@ def ensure_default_subscription(conn, account_id: str, role: str = "user"):
 
 
 def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
+    from backend.auth.legal import legal_status
+
     account_id = str(user["account_id"])
     with get_connection() as conn:
         account = conn.execute(
@@ -129,6 +131,7 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
             (account_id,),
         ).fetchone()
         subscription = ensure_default_subscription(conn, account_id, user.get("role") or "user")
+        legal = legal_status(conn, account_id)
         if user.get("role") != "owner":
             subscription = _activate_self_service_if_ready(conn, account_id) or subscription
         conn.commit()
@@ -139,6 +142,7 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
         "onboarding_level": (account or {}).get("onboarding_level"),
         "plan_selected": bool((account or {}).get("plan_selected")),
         "subscription": subscription,
+        "legal": legal,
     }
 
 

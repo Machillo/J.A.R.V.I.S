@@ -116,6 +116,14 @@
   color: var(--cyan);
 }
 
+.legal-copy {
+  max-width: 900px;
+}
+
+.legal-copy p {
+  color: #c1d2d8;
+}
+
 .public-copy {
   max-width: 820px;
   padding: clamp(24px, 5vw, 48px);
@@ -145,6 +153,11 @@
   .public-info-nav {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .public-info-nav div {
+    width: 100%;
+    overflow-x: auto;
   }
 
   .public-info-content {
