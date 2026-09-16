@@ -21,9 +21,9 @@ function DebtFields({ value, setValue, advanced }) {
   return <div className="finva-compact-fields">
     <label><span>Nombre de la deuda</span><input required placeholder="Ej. Tarjeta BAC" value={value.name} onChange={(e) => setValue({...value,name:e.target.value})}/></label>
     {advanced && <label><span>Tipo</span><select value={value.debt_type} onChange={(e) => setValue({...value,debt_type:e.target.value})}><option value="credit_card">Tarjeta</option><option value="loan">Préstamo</option><option value="other">Otra</option></select></label>}
-    <label><span>Saldo pendiente</span><input required type="number" inputMode="decimal" min="0" placeholder="₡0" value={value.remaining_amount} onChange={(e) => setValue({...value,remaining_amount:e.target.value})}/></label>
-    <label><span>Monto original</span><input type="number" inputMode="decimal" min="0" placeholder="₡0" value={value.total_amount} onChange={(e) => setValue({...value,total_amount:e.target.value})}/></label>
-    <label><span>Cuota mensual</span><input type="number" inputMode="decimal" min="0" placeholder="₡0" value={value.monthly_payment} onChange={(e) => setValue({...value,monthly_payment:e.target.value})}/></label>
+    <label><span>Saldo pendiente</span><input required type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.remaining_amount} onChange={(e) => setValue({...value,remaining_amount:e.target.value})}/></label>
+    <label><span>Monto original</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.total_amount} onChange={(e) => setValue({...value,total_amount:e.target.value})}/></label>
+    <label><span>Cuota mensual</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.monthly_payment} onChange={(e) => setValue({...value,monthly_payment:e.target.value})}/></label>
     {advanced && <>
       <label><span>Interés anual</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="0%" value={value.interest_rate} onChange={(e) => setValue({...value,interest_rate:e.target.value})}/></label>
       <label><span>Plazo en meses</span><input type="number" inputMode="numeric" min="1" placeholder="Ej. 24" value={value.term_months} onChange={(e) => setValue({...value,term_months:e.target.value})}/></label>

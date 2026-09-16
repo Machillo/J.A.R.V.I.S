@@ -114,3 +114,24 @@
   .unified-plan-details ul{grid-template-columns:1fr}
 }
 @media(max-width:390px){.unified-payment-data>div{grid-template-columns:1fr}.unified-payment-data button{grid-column:1;grid-row:auto;width:100%;justify-content:center}}
+
+/* Stable native/autofill colors in Android WebView and mobile browsers. */
+.unified-onboarding-shell{color-scheme:dark}
+.unified-onboarding-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.unified-onboarding-shell select,
+.unified-onboarding-shell textarea{
+  background-color:#10242c !important;
+  color:#f4fbfd !important;
+  -webkit-text-fill-color:#f4fbfd !important;
+  caret-color:#5dd6ff;
+  opacity:1;
+}
+.unified-onboarding-shell select option{background:#10242c;color:#f4fbfd}
+.unified-onboarding-shell input:-webkit-autofill,
+.unified-onboarding-shell input:-webkit-autofill:hover,
+.unified-onboarding-shell input:-webkit-autofill:focus,
+.unified-onboarding-shell select:-webkit-autofill{
+  -webkit-text-fill-color:#f4fbfd !important;
+  box-shadow:0 0 0 1000px #10242c inset !important;
+  transition:background-color 9999s ease-out 0s;
+}

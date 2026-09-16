@@ -61,6 +61,11 @@ export const createGoal = (payload) => json("/user-product/goals", "POST", paylo
 export const updateGoal = (id, payload) => json(`/user-product/goals/${id}`, "PUT", payload);
 export const contributeGoal = (id, payload) => json(`/user-product/goals/${id}/contributions`, "POST", payload);
 export const deleteGoal = (id) => request(`/user-product/goals/${id}`, { method: "DELETE" });
+export const getSavingsPlans = () => request("/user-product/savings-plans");
+export const createSavingsPlan = (payload) => json("/user-product/savings-plans", "POST", payload);
+export const updateSavingsPlan = (id, payload) => json(`/user-product/savings-plans/${id}`, "PUT", payload);
+export const contributeSavingsPlan = (id, payload) => json(`/user-product/savings-plans/${id}/contributions`, "POST", payload);
+export const deleteSavingsPlan = (id) => request(`/user-product/savings-plans/${id}`, { method: "DELETE" });
 
 export const getTransactions = () => request("/user-product/transactions");
 export const createTransaction = (payload) => json("/user-product/transactions", "POST", payload);

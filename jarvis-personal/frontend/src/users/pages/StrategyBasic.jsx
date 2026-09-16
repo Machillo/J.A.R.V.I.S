@@ -258,7 +258,7 @@ export default function StrategyBasic({ plan = "basic" }) {
             <input
               type="number"
               min="0"
-              step="5000"
+              step="0.01"
               value={extra}
               onChange={(event) => setExtra(event.target.value)}
             />
@@ -306,7 +306,7 @@ export default function StrategyBasic({ plan = "basic" }) {
               <span>Cambio ingreso / mes</span>
               <input
                 type="number"
-                step="10000"
+                step="0.01"
                 value={vipScenario.monthly_income_change}
                 onChange={(event) =>
                   setVipScenario({
@@ -320,7 +320,7 @@ export default function StrategyBasic({ plan = "basic" }) {
               <span>Cambio gastos / mes</span>
               <input
                 type="number"
-                step="10000"
+                step="0.01"
                 value={vipScenario.monthly_expense_change}
                 onChange={(event) =>
                   setVipScenario({
@@ -335,7 +335,7 @@ export default function StrategyBasic({ plan = "basic" }) {
               <input
                 type="number"
                 min="0"
-                step="10000"
+                step="0.01"
                 value={vipScenario.one_time_extra}
                 onChange={(event) =>
                   setVipScenario({

@@ -1184,6 +1184,57 @@ body:has(.users-app) { background: #0b132b; }
 .users-app .payment-waiting-state p { margin:0; color:var(--muted-2); line-height:1.48; }
 .users-app .payment-waiting-state small { color:var(--muted); line-height:1.42; }
 
+/* Keep Android WebView/autofill from painting unreadable native fields. */
+.users-app input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.users-app select,
+.users-app textarea {
+  color-scheme: dark;
+  background-color: #111c36 !important;
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  caret-color: #5eead4;
+  opacity: 1;
+}
+.users-app select option { background:#111c36; color:#f8fafc; }
+.users-app input:-webkit-autofill,
+.users-app input:-webkit-autofill:hover,
+.users-app input:-webkit-autofill:focus,
+.users-app textarea:-webkit-autofill,
+.users-app select:-webkit-autofill {
+  -webkit-text-fill-color:#f8fafc !important;
+  box-shadow:0 0 0 1000px #111c36 inset !important;
+  transition:background-color 9999s ease-out 0s;
+}
+.users-app input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(1); opacity:.78; }
+
+.users-app .goals-segmented {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:5px;
+  margin:0 0 14px;
+  padding:5px;
+  border:1px solid rgba(148,163,184,.16);
+  border-radius:16px;
+  background:rgba(8,16,37,.72);
+}
+.users-app .goals-segmented button {
+  min-height:43px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  padding:7px 9px;
+  border:0;
+  border-radius:12px;
+  background:transparent;
+  color:#94a3b8;
+  font:inherit;
+  font-size:.76rem;
+  font-weight:760;
+}
+.users-app .goals-segmented button.active { background:rgba(20,184,166,.17); color:#ccfbf1; }
+.users-app .savings-plan-card progress { accent-color:#34d399; }
+
 @media (max-width:390px) {
   .users-app .pending-payment-card { grid-template-columns:auto 1fr; }
   .users-app .pending-payment-card > button { grid-column:1 / -1; width:100%; }

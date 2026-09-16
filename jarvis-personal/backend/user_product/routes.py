@@ -5,6 +5,7 @@ from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
     IncomeUpdateRequest, MovementUpdateRequest, OvertimeCreateRequest, RecurringItemRequest, TransactionCreateRequest,
+    SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
 from backend.user_product.service import (
@@ -13,7 +14,8 @@ from backend.user_product.service import (
     get_financial_situation, get_strategy_basic, get_strategy_vip, get_user_finance_summary,
     list_expenses, list_income, list_overtime, list_user_debts, list_user_goals, list_user_transactions,
     pay_user_debt, simulate_strategy_vip, update_expense, update_financial_situation, update_income,
-    update_user_debt, update_user_goal, contribute_user_goal,
+    update_user_debt, update_user_goal, contribute_user_goal, create_savings_plan,
+    delete_savings_plan, contribute_savings_plan, list_savings_plans, update_savings_plan,
 )
 from backend.user_product.basic_service import (
     create_recurring_item, delete_recurring_item, get_basic_dashboard, get_basic_report,
@@ -111,6 +113,26 @@ def goals_contribute(goal_id: int, request: GoalContributionRequest):
 @router.delete("/goals/{goal_id}")
 def goals_delete(goal_id: int):
     require_feature("goals"); return delete_user_goal(goal_id)
+
+@router.get("/savings-plans")
+def savings_plans_list():
+    require_feature("goals"); return list_savings_plans()
+
+@router.post("/savings-plans")
+def savings_plans_create(request: SavingsPlanCreateRequest):
+    require_feature("goals"); return create_savings_plan(request)
+
+@router.put("/savings-plans/{plan_id}")
+def savings_plans_update(plan_id: int, request: SavingsPlanUpdateRequest):
+    require_feature("goals"); return update_savings_plan(plan_id, request)
+
+@router.post("/savings-plans/{plan_id}/contributions")
+def savings_plans_contribute(plan_id: int, request: SavingsPlanContributionRequest):
+    require_feature("goals"); return contribute_savings_plan(plan_id, request)
+
+@router.delete("/savings-plans/{plan_id}")
+def savings_plans_delete(plan_id: int):
+    require_feature("goals"); return delete_savings_plan(plan_id)
 
 @router.get("/transactions")
 def transactions_list():
