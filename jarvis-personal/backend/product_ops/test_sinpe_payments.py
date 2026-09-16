@@ -79,3 +79,15 @@ def test_receipt_signature_must_match_declared_type():
     assert service._valid_receipt_signature("image/png", b"\x89PNG\r\n\x1a\nrest")
     assert service._valid_receipt_signature("application/pdf", b"%PDF-1.7 rest")
     assert not service._valid_receipt_signature("image/png", b"%PDF-1.7 rest")
+
+
+def test_launch_promotion_ends_at_costa_rica_new_year():
+    assert service.launch_promotion_status(datetime(2027, 1, 1, 5, 59, tzinfo=timezone.utc))["active"] is True
+    assert service.launch_promotion_status(datetime(2027, 1, 1, 6, 0, tzinfo=timezone.utc))["active"] is False
+
+
+def test_only_regular_prices_remain():
+    assert service.PRICES == {
+        "basic": {"regular": 2990},
+        "vip": {"regular": 5990},
+    }

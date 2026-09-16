@@ -134,7 +134,7 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
         <AppListItem icon={SettingsIcon} title="System Settings" subtitle="Preferencias de JARVIS" onClick={() => navigatePage("settings")} />
         {currentUser?.role === "owner" && (
           <><AppListItem icon={UsersRound} title="Administrar usuarios" subtitle="Buscar cuentas y otorgar cortesías" onClick={() => navigatePage("userManagement")} />
-          <AppListItem icon={Activity} title="Operaciones FINVA" subtitle="Pagos beta, uso y reportes" onClick={() => navigatePage("productOperations")} /></>
+          <AppListItem icon={Activity} title="Operaciones FINVA" subtitle="Promoción, pagos, uso y reportes" onClick={() => navigatePage("productOperations")} /></>
         )}
       </div>
 

@@ -23,7 +23,43 @@ BUILTIN_FEATURE_MIN_PLAN = {
 }
 
 
+def _restore_expired_launch_promotion(conn, account_id: str):
+    """Return an expired launch promotion to a paid plan, or to Free.
+
+    A previous paid SINPE subscription is kept in ``billing_subscriptions``
+    while the temporary courtesy is active, so promotional access never
+    destroys access the customer already purchased.
+    """
+    from backend.product_ops.service import LAUNCH_PROMOTION_CODE
+
+    expired = conn.execute(
+        """SELECT 1 FROM account_subscriptions
+           WHERE account_id=%s AND access_source='courtesy' AND courtesy_note=%s
+             AND expires_at IS NOT NULL AND expires_at<=NOW()""",
+        (account_id, LAUNCH_PROMOTION_CODE),
+    ).fetchone()
+    if not expired:
+        return
+    paid = conn.execute(
+        """SELECT plan_code FROM billing_subscriptions
+           WHERE account_id=%s AND status='active' AND provider<>'promotion'
+           ORDER BY updated_at DESC LIMIT 1""",
+        (account_id,),
+    ).fetchone()
+    fallback_code = (paid or {}).get("plan_code") or "free"
+    plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (fallback_code,)).fetchone()
+    if not plan:
+        return
+    conn.execute(
+        """UPDATE account_subscriptions SET plan_id=%s,status='active',access_source='self_service',
+             started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()
+           WHERE account_id=%s""",
+        (plan["id"], account_id),
+    )
+
+
 def _subscription(conn, account_id: str):
+    _restore_expired_launch_promotion(conn, account_id)
     row = conn.execute(
         """SELECT s.id, p.code AS plan, p.name AS plan_name,
                   CASE WHEN s.access_source='courtesy' AND s.expires_at IS NOT NULL AND s.expires_at<=NOW() THEN 'expired' ELSE s.status END AS status,
@@ -107,12 +143,20 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_available_plans():
+    from backend.product_ops.service import PRICES, launch_promotion_status
+
     with get_connection() as conn:
         rows = conn.execute("SELECT code FROM plans WHERE code IN ('free','basic','vip') AND is_active=TRUE ORDER BY CASE code WHEN 'free' THEN 1 WHEN 'basic' THEN 2 ELSE 3 END").fetchall()
-    return [{"code": r["code"], **PLAN_COPY[r["code"]]} for r in rows]
+    promotion = launch_promotion_status()
+    return [{
+        "code": row["code"],
+        **PLAN_COPY[row["code"]],
+        "regular_price_crc": (PRICES.get(row["code"]) or {}).get("regular", 0),
+        "promotion": promotion if row["code"] in {"basic", "vip"} else None,
+    } for row in rows]
 
 
-def select_plan(plan_code: str, accept_beta_terms: bool = False, consent_version: str = "beta-2026-01-v1"):
+def select_plan(plan_code: str, accept_beta_terms: bool = False, consent_version: str = "regular-2027-v1"):
     if plan_code not in PLAN_COPY:
         raise HTTPException(status_code=400, detail="Plan no válido.")
     user = get_current_user()
