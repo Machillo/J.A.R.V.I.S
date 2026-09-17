@@ -1,5 +1,6 @@
 import { API_URL } from "../lib/apiUrl";
 import { authenticatedFetch } from "../lib/authenticatedFetch";
+import { apiError } from "../lib/apiErrors";
 
 const OWNER_BRIDGE_STORAGE_KEY = "jarvis-owner-bridge-token";
 
@@ -30,12 +31,7 @@ const request = async (endpoint, options = {}) => {
     : await response.text();
 
   if (!response.ok) {
-    const message =
-      typeof payload === "string"
-        ? payload
-        : payload?.detail || payload?.error || JSON.stringify(payload);
-
-    throw new Error(`Error en ${endpoint}: ${response.status} ${message}`);
+    throw apiError(response, payload, endpoint);
   }
 
   return payload;
@@ -76,7 +72,7 @@ export const addReceivableEntry = async (payload) => {
     return await jsonRequest("/finance/receivables/entries", "POST", payload);
   } catch (error) {
     // Compatibility fallback while an older backend deployment is still live.
-    if (!String(error?.message || "").includes("404")) throw error;
+    if (error?.status !== 404) throw error;
     return jsonRequest("/finance/receivables", "POST", {
       person_name: payload.person_name,
       amount: payload.amount,
