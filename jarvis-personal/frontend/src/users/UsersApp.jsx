@@ -11,6 +11,7 @@ import { supabase } from "../lib/supabase";
 import { trackScreen } from "../lib/telemetry";
 import "./users.css";
 import "./finva-theme.css";
+import "./finva-progressive.css";
 
 export default function UsersApp({ user, onUserChange }) {
   const [page, setPage] = useState(() => window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview");
@@ -33,47 +34,22 @@ export default function UsersApp({ user, onUserChange }) {
     const failed = (event) => setApiIssue(event.detail || {});
     window.addEventListener("finva:open-support", open);
     window.addEventListener("finva:api-error", failed);
-    return () => {
-      window.removeEventListener("finva:open-support", open);
-      window.removeEventListener("finva:api-error", failed);
-    };
+    return () => { window.removeEventListener("finva:open-support", open); window.removeEventListener("finva:api-error", failed); };
   }, []);
 
-  useEffect(() => {
-    if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice);
-  }, [user?.subscription?.access_notice]);
-
+  useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);
   const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange });
 
   return (
     <NativeProductShell product="finva" platform={platform} plan={plan} className="users-app">
       <div className="app mobile-app-shell">
-        <NativeProductHeader
-          product="FINVA"
-          subtitle={plan === "free" ? "Gratis" : plan.toUpperCase()}
-          avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()}
-          onProfile={() => setPage("settings")}
-        />
+        <NativeProductHeader product="FINVA" subtitle={plan === "free" ? "Gratis" : plan.toUpperCase()} avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()} onProfile={() => setPage("settings")}/>
         <main className="content mobile-content native-scroll-content">
-          {accessNotice && <aside className="subscription-ended-banner" role="status">
-            <div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div>
-            <button type="button" onClick={() => setAccessNotice(null)}>Entendido</button>
-          </aside>}
-          {apiIssue && <aside className="finva-api-help" role="alert">
-            <div><strong>No pudimos completar esa acción</strong><span>Intentá nuevamente o envianos un reporte; agregaremos la referencia técnica automáticamente.</span></div>
-            <button type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>Contactar soporte</button>
-            <button type="button" aria-label="Cerrar aviso" onClick={() => setApiIssue(null)}>×</button>
-          </aside>}
-          <AppErrorBoundary resetKey={page} screen={page}>
-            {pages[page] || pages.overview}
-          </AppErrorBoundary>
+          {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>Entendido</button></aside>}
+          {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>No pudimos completar esa acción</strong><span>Intentá nuevamente o envianos un reporte; agregaremos la referencia técnica automáticamente.</span></div><button type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>Contactar soporte</button><button type="button" aria-label="Cerrar aviso" onClick={() => setApiIssue(null)}>×</button></aside>}
+          <AppErrorBoundary resetKey={page} screen={page}>{pages[page] || pages.overview}</AppErrorBoundary>
         </main>
-        <FinvaNavigation
-          page={page}
-          plan={plan}
-          onNavigate={setPage}
-          onLogout={() => supabase.auth.signOut()}
-        />
+        <FinvaNavigation page={page} plan={plan} onNavigate={setPage} onLogout={() => supabase.auth.signOut()}/>
       </div>
     </NativeProductShell>
   );
