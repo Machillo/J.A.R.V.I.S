@@ -1405,3 +1405,60 @@ html[data-color-mode-resolved="light"] .users-app .plan-dialog-cancel {
 }
 html[data-color-mode-resolved="light"] .users-app .mobile-bottom-nav button { color: #667d85; }
 html[data-color-mode-resolved="light"] .users-app .mobile-bottom-nav button.active { color: #087c72; background: rgba(15,159,145,.12); }
+
+/* Light mode must override the explicit dark colors used by legacy modules. */
+html[data-color-mode-resolved="light"] .users-app :is(
+  .hero h1,
+  .mobile-page-heading h1,
+  .section-heading h2,
+  .panel h2,
+  .panel h3,
+  .card h2,
+  .card h3,
+  .card strong,
+  .kpis strong,
+  .current-plan-copy strong,
+  .settings-plan-main strong,
+  .row strong,
+  .lists strong,
+  .situation-card-copy strong,
+  .monthly-highlight strong,
+  .report-row b
+) { color: var(--text) !important; -webkit-text-fill-color: var(--text) !important; }
+
+html[data-color-mode-resolved="light"] .users-app :is(
+  .hero p,
+  .mobile-page-heading > span,
+  .section-heading span,
+  .card small,
+  .current-plan-copy span,
+  .settings-plan-main small,
+  .row small,
+  .situation-card-copy small
+) { color: var(--muted) !important; -webkit-text-fill-color: var(--muted) !important; }
+
+html[data-color-mode-resolved="light"] .users-app input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html[data-color-mode-resolved="light"] .users-app select,
+html[data-color-mode-resolved="light"] .users-app textarea {
+  color-scheme: light;
+  background-color: #ffffff !important;
+  color: #102a30 !important;
+  -webkit-text-fill-color: #102a30 !important;
+  caret-color: #0f9f91;
+}
+html[data-color-mode-resolved="light"] .users-app select option { background:#ffffff; color:#102a30; }
+html[data-color-mode-resolved="light"] .users-app input:-webkit-autofill,
+html[data-color-mode-resolved="light"] .users-app input:-webkit-autofill:hover,
+html[data-color-mode-resolved="light"] .users-app input:-webkit-autofill:focus,
+html[data-color-mode-resolved="light"] .users-app textarea:-webkit-autofill,
+html[data-color-mode-resolved="light"] .users-app select:-webkit-autofill {
+  -webkit-text-fill-color:#102a30 !important;
+  box-shadow:0 0 0 1000px #ffffff inset !important;
+}
+html[data-color-mode-resolved="light"] .users-app input[type="date"]::-webkit-calendar-picker-indicator { filter:none; opacity:.72; }
+html[data-color-mode-resolved="light"] .users-app :is(.error,.onboarding-error,.plan-dialog-error) {
+  color:#881337 !important;
+  -webkit-text-fill-color:#881337 !important;
+  background:#fff1f2;
+  border-color:#fda4af;
+}
