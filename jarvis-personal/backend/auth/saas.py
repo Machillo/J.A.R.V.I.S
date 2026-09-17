@@ -39,27 +39,70 @@ def _restore_expired_launch_promotion(conn, account_id: str):
         (account_id, LAUNCH_PROMOTION_CODE),
     ).fetchone()
     if not expired:
-        return
+        return None
     paid = conn.execute(
         """SELECT plan_code FROM billing_subscriptions
            WHERE account_id=%s AND status='active' AND provider<>'promotion'
+             AND (current_period_end IS NULL OR current_period_end>NOW())
            ORDER BY updated_at DESC LIMIT 1""",
         (account_id,),
     ).fetchone()
     fallback_code = (paid or {}).get("plan_code") or "free"
     plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (fallback_code,)).fetchone()
     if not plan:
-        return
+        return None
     conn.execute(
         """UPDATE account_subscriptions SET plan_id=%s,status='active',access_source='self_service',
              started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()
            WHERE account_id=%s""",
         (plan["id"], account_id),
     )
+    return {
+        "code": "promotion_ended",
+        "title": "Tu acceso gratuito terminó",
+        "message": (
+            f"Continuás con tu plan {fallback_code.upper()}."
+            if fallback_code != "free"
+            else "Ahora estás en el plan Gratis. Podés volver a Basic o VIP cuando querás."
+        ),
+    }
+
+
+def _expire_unpaid_subscription(conn, account_id: str):
+    """Expire a finished paid period and return the account to Free."""
+    expired = conn.execute(
+        """UPDATE billing_subscriptions
+           SET status='expired',updated_at=NOW()
+           WHERE account_id=%s AND status='active'
+             AND current_period_end IS NOT NULL AND current_period_end<=NOW()
+           RETURNING plan_code,current_period_end""",
+        (account_id,),
+    ).fetchone()
+    if not expired:
+        return None
+    free = conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
+    if not free:
+        return None
+    conn.execute(
+        """UPDATE account_subscriptions
+           SET plan_id=%s,status='active',access_source='self_service',started_at=NOW(),
+               expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()
+           WHERE account_id=%s""",
+        (free["id"], account_id),
+    )
+    return {
+        "code": "subscription_expired",
+        "title": "Tu suscripción terminó",
+        "message": "Ahora estás en el plan Gratis. Podés renovar Basic o VIP cuando querás.",
+        "previous_plan": expired.get("plan_code"),
+        "expired_at": expired.get("current_period_end"),
+    }
 
 
 def _subscription(conn, account_id: str):
-    _restore_expired_launch_promotion(conn, account_id)
+    notice = _expire_unpaid_subscription(conn, account_id)
+    if notice is None:
+        notice = _restore_expired_launch_promotion(conn, account_id)
     row = conn.execute(
         """SELECT s.id, p.code AS plan, p.name AS plan_name,
                   CASE WHEN s.access_source='courtesy' AND s.expires_at IS NOT NULL AND s.expires_at<=NOW() THEN 'expired' ELSE s.status END AS status,
@@ -69,7 +112,7 @@ def _subscription(conn, account_id: str):
            WHERE s.account_id=%s""",
         (account_id,),
     ).fetchone()
-    return row
+    return {**row, "access_notice": notice} if row and notice else row
 
 
 
