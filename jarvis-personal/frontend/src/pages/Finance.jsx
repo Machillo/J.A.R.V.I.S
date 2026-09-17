@@ -118,7 +118,6 @@ function JarvisActionSheet({ title, onClose, children, className = "" }) {
     document.body
   );
 }
-
 const formatMonthLabel = (month = "") => {
   const parts = String(month).split("-");
   if (parts.length !== 2) return month || "--";
