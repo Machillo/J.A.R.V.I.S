@@ -84,7 +84,14 @@ const optionCopy = {
   },
 };
 
-export default function PremiumStrategy() {
+export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
+  const strategyApi = api || {
+    getStrategyDashboard: getJarvisPremiumStrategyDashboard,
+    getDebtAdvisory,
+    getDebtStrategies,
+    getSalvavidas,
+    updateSalvavidas,
+  };
   const [state, setState] = useState({ loading: true, data: null, debtAdvice: null, debtStrategies: null, error: "", running: false });
   const [activeSection, setActiveSection] = useState(null);
   const [salvavidasState, setSalvavidasState] = useState({ loading: true, saving: false, data: null, error: "" });
@@ -95,14 +102,14 @@ export default function PremiumStrategy() {
   const load = async ({ keepPage = false } = {}) => {
     setState((current) => ({ ...current, loading: keepPage ? current.loading : true, running: keepPage, error: "" }));
     try {
-      const strategyResult = await getJarvisPremiumStrategyDashboard();
+      const strategyResult = await strategyApi.getStrategyDashboard();
       const strategyPayload = strategyResult?.strategy || {};
       let debtAdvice = null;
       let debtStrategies = null;
       try {
         [debtAdvice, debtStrategies] = await Promise.all([
-          getDebtAdvisory(Number(strategyPayload.debt_attack_extra || 0)),
-          getDebtStrategies(),
+          strategyApi.getDebtAdvisory(Number(strategyPayload.debt_attack_extra || 0)),
+          strategyApi.getDebtStrategies(),
         ]);
       } catch {
         debtAdvice = null;
@@ -130,7 +137,7 @@ export default function PremiumStrategy() {
   const loadSalvavidas = async () => {
     setSalvavidasState((current) => ({ ...current, loading: true, error: "" }));
     try {
-      const data = await getSalvavidas();
+      const data = await strategyApi.getSalvavidas();
       setSalvavidasState({ loading: false, saving: false, data, error: "" });
       setSalvavidasAmount(String(Number(data?.current_amount || 0)));
       setSalvavidasTargetMonths(Number(data?.target_months || 6));
@@ -150,7 +157,7 @@ export default function PremiumStrategy() {
     }
     setSalvavidasState((current) => ({ ...current, saving: true, error: "" }));
     try {
-      const data = await updateSalvavidas({
+      const data = await strategyApi.updateSalvavidas({
         current_amount: amount,
         protected_expense_ids: protectedExpenseIds,
         target_months: salvavidasTargetMonths,
@@ -347,7 +354,7 @@ export default function PremiumStrategy() {
               )}
 
               <div className="salvavidas-component-row locked">
-                <div><span>Casa + Línea</span><small>Pagos recurrentes que JARVIS protege siempre.</small></div>
+                <div><span>Casa + Línea</span><small>Pagos recurrentes que {brandName} protege siempre.</small></div>
                 <strong>{money(salvavidas.components?.mandatory_fixed_expenses)}</strong>
               </div>
               {mandatoryExpenses.length > 0 && (
@@ -459,7 +466,7 @@ export default function PremiumStrategy() {
       <div className="strategy-debt-advice-summary">
         <span>Extra asignado a deuda este ciclo</span>
         <strong>{money(strategy.debt_attack_extra)}</strong>
-        <small>{debtAdvice.message || "JARVIS recalcula la prioridad con tus datos activos."}</small>
+        <small>{debtAdvice.message || `${brandName} recalcula la prioridad con tus datos activos.`}</small>
       </div>
 
       {rankedAdvice.length === 0 ? (
@@ -531,7 +538,7 @@ export default function PremiumStrategy() {
   const renderDistribution = () => (
     <div className="strategy-detail-panel strategy-v3-detail strategy-distribution-v3">
       <div className="strategy-detail-heading">
-        <div className="strategy-title-row"><CircleDollarSign size={22} /><div><h3>Distribución de dinero</h3><p>JARVIS reparte solo lo que verdaderamente sobró después de pagos y gastos conocidos.</p></div></div>
+        <div className="strategy-title-row"><CircleDollarSign size={22} /><div><h3>Distribución de dinero</h3><p>{brandName} reparte solo lo que verdaderamente sobró después de pagos y gastos conocidos.</p></div></div>
       </div>
 
       <div className="strategy-surplus-card">

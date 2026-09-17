@@ -24,6 +24,7 @@ from backend.auth.current_user import (
 from backend.core.database import get_connection
 from backend.email_monitor.parser import parse_financial_email
 from backend.finance.category_catalog import normalize_category
+from backend.user_product.service import _legacy_financial_user_id
 
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
@@ -144,6 +145,9 @@ def gmail_status() -> dict[str, Any]:
 def begin_gmail_connection() -> dict[str, str]:
     client_id, _, redirect_uri = _google_config()
     user = get_current_user()
+    # Gmail candidates ultimately write to legacy financial tables whose FK is
+    # users.id, not allowed_users.id. They are different identity namespaces.
+    legacy_user_id = _legacy_financial_user_id()
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
     state = secrets.token_urlsafe(40)
@@ -155,7 +159,7 @@ def begin_gmail_connection() -> dict[str, str]:
             """INSERT INTO finva_gmail_oauth_states(
                    state_hash,account_id,workspace_id,legacy_user_id,expires_at
                ) VALUES(%s,%s,%s,%s,%s)""",
-            (_state_hash(state), account_id, workspace_id, int(user["id"]), expires_at),
+            (_state_hash(state), account_id, workspace_id, legacy_user_id, expires_at),
         )
         conn.commit()
 

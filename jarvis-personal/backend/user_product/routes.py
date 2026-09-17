@@ -27,6 +27,11 @@ from backend.user_product.free_service import (
     list_free_movements, update_free_movement,
 )
 from backend.user_product.vip_service import get_vip_command_center
+from backend.ai.strategy_dashboard import get_premium_strategy_dashboard
+from backend.finance.emergency_fund import get_salvavidas_state, update_salvavidas
+from backend.finance.intelligence import get_debt_advisory
+from backend.finance.models import SalvavidasUpdateRequest
+from backend.finance.strategic_engine import calculate_debt_strategies
 from backend.user_product.gmail_service import (
     begin_gmail_connection,
     disconnect_gmail,
@@ -203,6 +208,27 @@ def strategy_vip_simulate(request: VipSimulationRequest):
 @router.get("/vip/command-center")
 def vip_command_center():
     require_feature("strategy_vip"); return get_vip_command_center()
+
+@router.get("/vip/strategy-dashboard")
+def vip_strategy_dashboard():
+    """Motor determinístico probado en JARVIS, aislado al workspace FINVA activo."""
+    require_feature("strategy_vip"); return get_premium_strategy_dashboard()
+
+@router.get("/vip/debt-advisory")
+def vip_debt_advisory(extra_cash: float | None = None):
+    require_feature("strategy_vip"); return get_debt_advisory(extra_cash=extra_cash)
+
+@router.get("/vip/debt-strategies")
+def vip_debt_strategies():
+    require_feature("strategy_vip"); return calculate_debt_strategies()
+
+@router.get("/vip/salvavidas")
+def vip_salvavidas():
+    require_feature("strategy_vip"); return get_salvavidas_state()
+
+@router.put("/vip/salvavidas")
+def vip_salvavidas_update(request: SalvavidasUpdateRequest):
+    require_feature("strategy_vip"); return update_salvavidas(**request.model_dump(exclude_unset=True))
 
 @router.get("/vip/gmail/status")
 def vip_gmail_status():
