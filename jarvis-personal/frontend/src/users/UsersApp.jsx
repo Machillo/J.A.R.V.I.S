@@ -1,23 +1,11 @@
 import { useEffect, useState } from "react";
-import Sidebar from "./components/Sidebar";
-import Dashboard from "./pages/Dashboard";
-import Finance from "./pages/Finance";
-import Debts from "./pages/Debts";
-import StrategyBasic from "./pages/StrategyBasic";
-import Goals from "./pages/Goals";
-import Transactions from "./pages/Transactions";
-import SettingsPage from "./pages/Settings";
-import FinancialSituation from "./pages/FinancialSituation";
-import Budget from "./pages/Budget";
-import FinancialCalendar from "./pages/Calendar";
-import Recurring from "./pages/Recurring";
-import Reports from "./pages/Reports";
-import MonthlySummary from "./pages/MonthlySummary";
-import VipStrategy from "./pages/VipStrategy";
-import GmailAutomation from "./pages/GmailAutomation";
-import Feedback from "./pages/Feedback";
 import AppErrorBoundary from "../components/AppErrorBoundary";
 import { openSupport } from "../lib/apiErrors";
+import NativeProductHeader from "../ui/native/NativeProductHeader";
+import NativeProductShell from "../ui/native/NativeProductShell";
+import { detectNativePlatform } from "../ui/native/platform";
+import { createFinvaFeatureRegistry } from "../products/finva/features/registry";
+import FinvaNavigation from "../products/finva/navigation/FinvaNavigation";
 import { trackProductEvent } from "./services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { trackScreen } from "../lib/telemetry";
@@ -29,6 +17,7 @@ export default function UsersApp({ user, onUserChange }) {
   const [accessNotice, setAccessNotice] = useState(user?.subscription?.access_notice || null);
   const [apiIssue, setApiIssue] = useState(null);
   const plan = user?.subscription?.plan || "free";
+  const platform = detectNativePlatform();
 
   useEffect(() => {
     const scroller = document.querySelector(".users-app");
@@ -54,37 +43,18 @@ export default function UsersApp({ user, onUserChange }) {
     if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice);
   }, [user?.subscription?.access_notice]);
 
-  const pages = {
-    overview: <Dashboard user={user} plan={plan} onNavigate={setPage} />,
-    finance: <Finance />,
-    debts: <Debts plan={plan} />,
-    strategy: plan === "vip" ? <VipStrategy /> : <StrategyBasic plan={plan} />,
-    gmail: plan === "vip" ? <GmailAutomation /> : <SettingsPage user={user} onUserChange={onUserChange} />,
-    goals: <Goals plan={plan} />,
-    transactions: <Transactions />,
-    situation: <FinancialSituation plan={plan} onNavigate={setPage} />,
-    settings: <SettingsPage user={user} onUserChange={onUserChange} />,
-    budget: <Budget />,
-    calendar: <FinancialCalendar />,
-    recurring: <Recurring />,
-    reports: <Reports />,
-    monthly: <MonthlySummary />,
-    feedback: <Feedback />,
-  };
+  const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange });
 
   return (
-    <div className="users-app">
+    <NativeProductShell product="finva" platform={platform} className="users-app">
       <div className="app mobile-app-shell">
-        <main className="content mobile-content">
-          <header className="mobile-app-header">
-            <div>
-              <strong>FINVA</strong>
-              <small>{plan === "free" ? "Gratis" : plan.toUpperCase()}</small>
-            </div>
-            <button className="profile-chip" type="button" onClick={() => setPage("settings")}>
-              {(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()}
-            </button>
-          </header>
+        <NativeProductHeader
+          product="FINVA"
+          subtitle={plan === "free" ? "Gratis" : plan.toUpperCase()}
+          avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()}
+          onProfile={() => setPage("settings")}
+        />
+        <main className="content mobile-content native-scroll-content">
           {accessNotice && <aside className="subscription-ended-banner" role="status">
             <div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div>
             <button type="button" onClick={() => setAccessNotice(null)}>Entendido</button>
@@ -98,13 +68,13 @@ export default function UsersApp({ user, onUserChange }) {
             {pages[page] || pages.overview}
           </AppErrorBoundary>
         </main>
-        <Sidebar
+        <FinvaNavigation
           page={page}
           plan={plan}
           onNavigate={setPage}
           onLogout={() => supabase.auth.signOut()}
         />
       </div>
-    </div>
+    </NativeProductShell>
   );
 }

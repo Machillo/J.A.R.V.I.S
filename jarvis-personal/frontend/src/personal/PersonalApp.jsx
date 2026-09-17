@@ -5,22 +5,15 @@ import {
   Camera,
   ChevronRight,
   CreditCard,
-  ChartNoAxesCombined,
   LogOut,
   MailSearch,
-  HandCoins,
   Mic,
-  Bot,
   ReceiptText,
   Send,
   Settings as SettingsIcon,
   Target,
-  UserRound,
   UsersRound,
   Activity,
-  Landmark,
-  PiggyBank,
-  Gem,
 } from "lucide-react";
 import Dashboard from "../pages/Dashboard";
 import Finance from "../pages/Finance";
@@ -46,10 +39,13 @@ import UnifiedOnboarding from "../pages/UnifiedOnboarding";
 import ProfileSetup from "../pages/ProfileSetup";
 import ProductOperations from "../pages/ProductOperations";
 
-import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "../services/jarvisApi";
+import { askJarvis, getFinanceDashboard, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { recordError, trackScreen } from "../lib/telemetry";
 import AppearanceSelector from "../components/AppearanceSelector";
+import NativeProductShell from "../ui/native/NativeProductShell";
+import { detectNativePlatform } from "../ui/native/platform";
+import JarvisNavigation from "../products/jarvis/navigation/JarvisNavigation";
 
 const sanitizeCourtesy = (text = "") =>
   String(text || "")
@@ -167,50 +163,9 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
   );
 }
 
-function BottomNavigation({ activePage, navigatePage, currentUser, userName, profilePreferences }) {
-  const activeGroup = getBottomGroup(activePage);
-  const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
-  const items = [
-    { id: "dashboard", label: "JARVIS", icon: Bot },
-    { id: "strategy", label: "Strategy", icon: ChartNoAxesCombined },
-    { id: "finance", label: "Finance", icon: Landmark },
-    { id: "receivables", label: "Receivables", icon: HandCoins },
-    { id: "wealth", label: "Patrimonio", icon: Gem },
-    { id: "profile", label: "Settings", icon: UserRound, avatar: true },
-  ];
-
-  return (
-    <nav className="bottom-app-nav" aria-label="Navegación principal">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const isActive = activeGroup === item.id;
-
-        return (
-          <button
-            key={item.id}
-            className={`bottom-nav-item ${isActive ? "active" : ""}`}
-            onClick={() => navigatePage(item.id)}
-          >
-            <span className="bottom-nav-icon">
-              {item.avatar ? (
-                <span className="profile-avatar small">
-                  {avatarUrl ? <img src={avatarUrl} alt="Perfil" /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
-                </span>
-              ) : (
-                <Icon size={27} />
-              )}
-            </span>
-            <span>{item.label}</span>
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
-
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
-  const [pageStack, setPageStack] = useState([]);
+  const [, setPageStack] = useState([]);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [commandInputFocused, setCommandInputFocused] = useState(false);
   const [status, setStatus] = useState(null);
@@ -224,7 +179,6 @@ export default function App() {
   const [ownerBridgeMode, setOwnerBridgeMode] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [aiUsage, setAiUsage] = useState(null);
-  const [strategySummary, setStrategySummary] = useState(null);
   const [profilePreferences, setProfilePreferences] = useState(null);
   const recognitionRef = useRef(null);
 
@@ -297,7 +251,6 @@ export default function App() {
         setChatHistory([]);
         setCurrentUser(null);
         setAiUsage(null);
-        setStrategySummary(null);
         setProfilePreferences(null);
       }
     });
@@ -317,17 +270,15 @@ export default function App() {
         return;
       }
 
-      const [statusData, dashboardData, usageData, strategyData, profileData] = await Promise.all([
+      const [statusData, dashboardData, usageData, profileData] = await Promise.all([
         getStatus(),
         getFinanceDashboard(),
         getJarvisUsageToday(),
-        getJarvisPremiumStrategySummary().catch(() => null),
         getProfilePreferences().catch(() => null),
       ]);
       setStatus(statusData);
       setFinanceDashboard(dashboardData);
       setAiUsage(usageData);
-      setStrategySummary(strategyData);
       setProfilePreferences(profileData?.value || profileData || null);
     } catch (error) {
       console.error(error);
@@ -370,7 +321,6 @@ export default function App() {
     setChatHistory([]);
     setCurrentUser(null);
     setAiUsage(null);
-    setStrategySummary(null);
     setProfilePreferences(null);
   };
 
@@ -671,9 +621,10 @@ export default function App() {
 
   const currentSection = appSections[activePage] || appSections[getBottomGroup(activePage)] || appSections.dashboard;
   const showHeader = activePage !== "dashboard";
+  const platform = detectNativePlatform();
 
   return (
-    <div className={`jarvis-app app-shell-v2 ${(keyboardOpen || commandInputFocused) ? "keyboard-open" : ""}`}>
+    <NativeProductShell product="jarvis" platform={platform} className={`jarvis-app app-shell-v2 ${(keyboardOpen || commandInputFocused) ? "keyboard-open" : ""}`}>
       <main className={`main-shell app-main-v2 ${activePage === "dashboard" ? "home-mode" : ""}`}>
         {showHeader && (
           <header className="app-top-bar">
@@ -723,7 +674,7 @@ export default function App() {
         )}
       </main>
 
-      <BottomNavigation activePage={activePage} navigatePage={navigatePage} currentUser={currentUser} userName={userName} profilePreferences={profilePreferences} />
-    </div>
+      <JarvisNavigation activePage={activePage} onNavigate={navigatePage} currentUser={currentUser} userName={userName} profilePreferences={profilePreferences} />
+    </NativeProductShell>
   );
 }
