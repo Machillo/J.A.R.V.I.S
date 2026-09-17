@@ -43,6 +43,7 @@ import FinancialDeterioration from "../pages/FinancialDeterioration";
 import Login from "../pages/Login";
 import UserManagement from "../pages/UserManagement";
 import UnifiedOnboarding from "../pages/UnifiedOnboarding";
+import ProfileSetup from "../pages/ProfileSetup";
 import ProductOperations from "../pages/ProductOperations";
 
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "../services/jarvisApi";
@@ -594,6 +595,10 @@ export default function App() {
 
   if (!currentUser) {
     return <div className="jarvis-app"><main className="main-shell home-mode"><section className="jarvis-home chat-home idle"><h1>J.A.R.V.I.S.</h1><p className="home-subtitle">Preparando tu espacio...</p></section></main></div>;
+  }
+
+  if (!currentUser.profile_setup_completed) {
+    return <ProfileSetup user={currentUser} onComplete={(profile) => { setCurrentUser(profile); refreshAppData(); }} />;
   }
 
   if (currentUser.role !== "owner" && (!currentUser.plan_selected || !currentUser.onboarding_completed)) {

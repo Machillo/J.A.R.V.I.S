@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class AllowedUserRequest(BaseModel):
@@ -8,9 +10,6 @@ class AllowedUserRequest(BaseModel):
 
 class CheckAccessRequest(BaseModel):
     email: str
-
-from typing import Literal
-from pydantic import Field, model_validator
 
 
 class PlanSelectionRequest(BaseModel):
@@ -46,4 +45,23 @@ class UnifiedOnboardingRequest(BaseModel):
             raise ValueError("Indicá el salario que realmente te llega al mes.")
         if self.income_type == "hourly" and (self.hourly_rate is None or self.hours_per_day is None):
             raise ValueError("Indicá cuánto te pagan por hora y cuántas horas trabajás normalmente por día.")
+        return self
+
+
+class ProfileSetupRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=80)
+    usage_goal: Literal["debt", "save", "partner", "life_change", "control", "explore"]
+    base_currency: Literal["CRC", "USD", "ARS", "EUR", "MXN", "COP", "GTQ", "PAB"] = "CRC"
+    enabled_currencies: list[Literal["CRC", "USD", "ARS", "EUR", "MXN", "COP", "GTQ", "PAB"]] = Field(default_factory=lambda: ["CRC"], min_length=1, max_length=8)
+    number_format: Literal["dot_comma", "comma_dot"] = "dot_comma"
+    currency_placement: Literal["before", "after"] = "before"
+
+    @model_validator(mode="after")
+    def normalize_preferences(self):
+        self.display_name = " ".join(self.display_name.split())
+        if not self.display_name:
+            raise ValueError("Indicá cómo querés que te llamemos.")
+        self.enabled_currencies = list(dict.fromkeys([self.base_currency, *self.enabled_currencies]))
+        if len(self.enabled_currencies) > 8:
+            raise ValueError("Podés activar hasta ocho monedas.")
         return self

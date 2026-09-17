@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import Login from "./pages/Login";
 import UnifiedOnboarding from "./pages/UnifiedOnboarding";
+import ProfileSetup from "./pages/ProfileSetup";
 import LegalConsent from "./pages/LegalConsent";
 import PersonalApp from "./personal/PersonalApp";
 import UsersApp from "./users/UsersApp";
@@ -112,7 +113,7 @@ export default function App() {
 
     const profileChanged = (previous, next) => {
       if (!previous) return true;
-      const fields = ["id", "role", "plan", "plan_selected", "onboarding_completed", "subscription_status"];
+      const fields = ["id", "role", "plan", "plan_selected", "profile_setup_completed", "display_name", "base_currency", "onboarding_completed", "subscription_status"];
       return fields.some((field) => previous?.[field] !== next?.[field])
         || previous?.subscription?.plan !== next?.subscription?.plan
         || previous?.subscription?.status !== next?.subscription?.status;
@@ -183,6 +184,10 @@ export default function App() {
 
   if (currentUser.role !== "owner" && currentUser.role !== "admin" && currentUser.legal?.required) {
     return <LegalConsent user={currentUser} onAccepted={setCurrentUser} />;
+  }
+
+  if (!currentUser.profile_setup_completed) {
+    return <ProfileSetup user={currentUser} onComplete={setCurrentUser} />;
   }
 
   if (currentUser.role === "owner" || currentUser.role === "admin") {

@@ -170,7 +170,10 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
     account_id = str(user["account_id"])
     with get_connection() as conn:
         account = conn.execute(
-            """SELECT onboarding_completed,onboarding_level,plan_selected,display_name FROM accounts WHERE id=%s""",
+            """SELECT onboarding_completed,onboarding_level,plan_selected,display_name,
+                      usage_goal,base_currency,enabled_currencies,number_format,
+                      currency_placement,profile_setup_completed
+               FROM accounts WHERE id=%s""",
             (account_id,),
         ).fetchone()
         subscription = ensure_default_subscription(conn, account_id, user.get("role") or "user")
@@ -181,12 +184,41 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
     return {
         **user,
         "display_name": (account or {}).get("display_name"),
+        "usage_goal": (account or {}).get("usage_goal"),
+        "base_currency": (account or {}).get("base_currency") or "CRC",
+        "enabled_currencies": (account or {}).get("enabled_currencies") or ["CRC"],
+        "number_format": (account or {}).get("number_format") or "dot_comma",
+        "currency_placement": (account or {}).get("currency_placement") or "before",
+        "profile_setup_completed": bool((account or {}).get("profile_setup_completed")),
         "onboarding_completed": bool((account or {}).get("onboarding_completed")),
         "onboarding_level": (account or {}).get("onboarding_level"),
         "plan_selected": bool((account or {}).get("plan_selected")),
         "subscription": subscription,
         "legal": legal,
     }
+
+
+def complete_profile_setup(payload):
+    user = get_current_user()
+    account_id = get_current_account_id()
+    with get_connection() as conn:
+        conn.execute(
+            """UPDATE accounts
+               SET display_name=%s,usage_goal=%s,base_currency=%s,enabled_currencies=%s,
+                   number_format=%s,currency_placement=%s,profile_setup_completed=TRUE,updated_at=NOW()
+               WHERE id=%s""",
+            (
+                payload.display_name,
+                payload.usage_goal,
+                payload.base_currency,
+                payload.enabled_currencies,
+                payload.number_format,
+                payload.currency_placement,
+                account_id,
+            ),
+        )
+        conn.commit()
+    return {"status": "ok", "profile": enrich_identity(user)}
 
 
 def get_available_plans():

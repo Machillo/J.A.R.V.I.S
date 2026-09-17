@@ -19,6 +19,7 @@ import "./styles/12-mobile-native-compat.css";
 import "./pages/PublicInfoPage.css";
 import "./pages/UnifiedOnboarding.css";
 import "./pages/LegalConsent.css";
+import "./pages/ProfileSetup.css";
 import { registerJarvisServiceWorker } from "./pushNotifications";
 import { initializeTelemetry } from "./lib/telemetry";
 import { initializeColorMode } from "./lib/colorMode";

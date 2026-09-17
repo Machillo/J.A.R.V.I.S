@@ -46,6 +46,7 @@ const jsonRequest = (endpoint, method, payload) =>
 
 export const getStatus = () => request("/status");
 export const getMe = () => request("/auth/me");
+export const completeProfileSetup = (payload) => jsonRequest("/auth/profile-setup", "POST", payload);
 export const acceptLegal = async (payload) => {
   await jsonRequest("/auth/legal/accept", "POST", payload);
   return getMe();
