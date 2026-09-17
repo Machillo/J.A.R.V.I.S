@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
+  Gift,
   LifeBuoy,
   RefreshCw,
   Save,
@@ -14,6 +15,7 @@ import {
 import {
   getDebtAdvisory,
   getDebtStrategies,
+  getAguinaldo,
   getJarvisPremiumStrategyDashboard,
   getSalvavidas,
   updateSalvavidas,
@@ -82,6 +84,11 @@ const optionCopy = {
     subtitle: "Repartí únicamente el sobrante real del ciclo.",
     icon: CircleDollarSign,
   },
+  aguinaldo: {
+    title: "Aguinaldo",
+    subtitle: "Calculá lo acumulado con tus salarios oficiales de la CCSS.",
+    icon: Gift,
+  },
 };
 
 export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
@@ -91,6 +98,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     getDebtStrategies,
     getSalvavidas,
     updateSalvavidas,
+    getAguinaldo,
   };
   const [state, setState] = useState({ loading: true, data: null, debtAdvice: null, debtStrategies: null, error: "", running: false });
   const [activeSection, setActiveSection] = useState(null);
@@ -98,6 +106,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   const [salvavidasAmount, setSalvavidasAmount] = useState("");
   const [salvavidasTargetMonths, setSalvavidasTargetMonths] = useState(6);
   const [protectedExpenseIds, setProtectedExpenseIds] = useState([]);
+  const [aguinaldoState, setAguinaldoState] = useState({ loading: true, data: null, error: "" });
 
   const load = async ({ keepPage = false } = {}) => {
     setState((current) => ({ ...current, loading: keepPage ? current.loading : true, running: keepPage, error: "" }));
@@ -131,7 +140,20 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   };
 
   const runStrategy = async () => {
-    await Promise.all([load({ keepPage: true }), loadSalvavidas()]);
+    await Promise.all([load({ keepPage: true }), loadSalvavidas(), loadAguinaldo()]);
+  };
+
+  const loadAguinaldo = async () => {
+    if (!strategyApi.getAguinaldo) return null;
+    setAguinaldoState((current) => ({ ...current, loading: true, error: "" }));
+    try {
+      const data = await strategyApi.getAguinaldo();
+      setAguinaldoState({ loading: false, data, error: "" });
+      return data;
+    } catch (error) {
+      setAguinaldoState({ loading: false, data: null, error: error.message || "No pude calcular el aguinaldo." });
+      return null;
+    }
   };
 
   const loadSalvavidas = async () => {
@@ -182,6 +204,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   useEffect(() => {
     load();
     loadSalvavidas();
+    loadAguinaldo();
   }, []);
 
   const payload = state.data || {};
@@ -563,17 +586,33 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     </div>
   );
 
+  const renderAguinaldo = () => {
+    const aguinaldo = aguinaldoState.data || {};
+    const months = Array.isArray(aguinaldo.months) ? aguinaldo.months : [];
+    return <div className="strategy-detail-panel strategy-v3-detail">
+      <div className="strategy-detail-heading">
+        <div className="strategy-title-row"><Gift size={22}/><div><h3>Aguinaldo</h3><p>Estimación basada en salarios reportados oficialmente, divididos entre 12.</p></div></div>
+      </div>
+      {aguinaldoState.loading ? <p className="muted-text">Calculando tu aguinaldo…</p> : aguinaldoState.error ? <div className="alert-card"><AlertTriangle size={18}/>{aguinaldoState.error}</div> : <>
+        <div className="strategy-surplus-card"><span>AGUINALDO ACUMULADO</span><strong>{money(aguinaldo.accrued_aguinaldo)}</strong><small>Salarios contabilizados: {money(aguinaldo.earned_salary_total)}</small></div>
+        <div className="strategy-v3-note"><Shield size={17}/><span>Período {aguinaldo.period?.start || "—"} al {aguinaldo.period?.end || "—"}. No incluye meses que todavía no tienen información salarial.</span></div>
+        {months.filter((item) => Number(item.total_earned || 0) > 0).length ? <div className="strategy-allocation-v3">{months.filter((item) => Number(item.total_earned || 0) > 0).map((item) => <div className="strategy-allocation-row-v3" key={item.month}><div><span>{item.month}</span><small>{item.entries} registro(s)</small></div><strong>{money(item.total_earned)}</strong></div>)}</div> : <p className="muted-text">Todavía no hay salarios oficiales importados para este período.</p>}
+      </>}
+    </div>;
+  };
+
   const detailRenderers = {
     salvavidas: renderSalvavidas,
     investments: renderInvestments,
     debts: renderDebtAdvice,
     distribution: renderDistribution,
+    aguinaldo: renderAguinaldo,
   };
 
   return (
     <section className="page premium-strategy-page strategy-v3-page">
       <div className="page-section-header strategy-hero strategy-v3-hero">
-        <div><span className="eyebrow">Director Financiero</span><h2>Strategy</h2><p>Una prioridad clara y cuatro herramientas. Nada más hasta que decidás qué querés revisar.</p></div>
+        <div><span className="eyebrow">Director Financiero</span><h2>Strategy</h2><p>Una prioridad clara y herramientas financieras probadas. Elegí qué querés revisar.</p></div>
         <button className="primary-action-button" onClick={runStrategy} disabled={state.running}>
           <RefreshCw size={18} className={state.running ? "spin" : ""} />
           {state.running ? "Recalculando..." : "Recalcular estrategia"}

@@ -60,6 +60,7 @@ export const getVipDebtAdvisory = (extraCash = null) => request(`/user-product/v
 export const getVipDebtStrategies = () => request("/user-product/vip/debt-strategies");
 export const getVipSalvavidas = () => request("/user-product/vip/salvavidas");
 export const updateVipSalvavidas = (payload) => json("/user-product/vip/salvavidas", "PUT", payload);
+export const getVipAguinaldo = () => request("/user-product/vip/aguinaldo");
 export const getVipGmailStatus = () => request("/user-product/vip/gmail/status");
 export const connectVipGmail = () => request("/user-product/vip/gmail/connect", { method: "POST" });
 export const syncVipGmail = () => request("/user-product/vip/gmail/sync", { method: "POST" });

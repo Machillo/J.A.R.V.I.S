@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import html
 import json
 import os
@@ -24,7 +25,6 @@ from backend.auth.current_user import (
 from backend.core.database import get_connection
 from backend.email_monitor.parser import parse_financial_email
 from backend.finance.category_catalog import normalize_category
-from backend.user_product.service import _legacy_financial_user_id
 
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
@@ -56,8 +56,63 @@ def _return_url(status: str) -> str:
     return f"{base}{separator}{urlencode({'gmail': status})}"
 
 
-def _state_hash(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+def _oauth_state_key() -> bytes:
+    _, client_secret, _ = _google_config()
+    return client_secret.encode("utf-8")
+
+
+def _encode_oauth_state(account_id: str, workspace_id: str) -> str:
+    payload = {
+        "account_id": account_id,
+        "workspace_id": workspace_id,
+        "expires_at": int((datetime.now(timezone.utc) + timedelta(minutes=10)).timestamp()),
+        "nonce": secrets.token_urlsafe(16),
+    }
+    raw = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ).decode("ascii").rstrip("=")
+    signature = hmac.new(_oauth_state_key(), raw.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{raw}.{signature}"
+
+
+def _decode_oauth_state(state: str) -> dict[str, Any] | None:
+    try:
+        raw, signature = state.rsplit(".", 1)
+        expected = hmac.new(_oauth_state_key(), raw.encode("ascii"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            return None
+        padded = raw + "=" * (-len(raw) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        if int(payload.get("expires_at") or 0) < int(datetime.now(timezone.utc).timestamp()):
+            return None
+        if not payload.get("account_id") or not payload.get("workspace_id"):
+            return None
+        return payload
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _financial_user_id_for_account(account_id: str) -> int:
+    with get_connection() as conn:
+        account = conn.execute(
+            "SELECT primary_email,display_name FROM accounts WHERE id=%s",
+            (account_id,),
+        ).fetchone()
+        if not account or not account.get("primary_email"):
+            raise RuntimeError("La cuenta FINVA no tiene una identidad financiera válida.")
+        existing = conn.execute(
+            "SELECT id FROM users WHERE lower(email)=lower(%s) ORDER BY id LIMIT 1",
+            (account["primary_email"],),
+        ).fetchone()
+        if existing:
+            return int(existing["id"])
+        created = conn.execute(
+            """INSERT INTO users(email,name,country,timezone,created_at)
+               VALUES(%s,%s,'Costa Rica','America/Costa_Rica',NOW()) RETURNING id""",
+            (account["primary_email"], account.get("display_name") or "Usuario FINVA"),
+        ).fetchone()
+        conn.commit()
+        return int(created["id"])
 
 
 def _vault_create(conn, token: str, account_id: str) -> str:
@@ -145,23 +200,9 @@ def gmail_status() -> dict[str, Any]:
 def begin_gmail_connection() -> dict[str, str]:
     client_id, _, redirect_uri = _google_config()
     user = get_current_user()
-    # Gmail candidates ultimately write to legacy financial tables whose FK is
-    # users.id, not allowed_users.id. They are different identity namespaces.
-    legacy_user_id = _legacy_financial_user_id()
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
-    state = secrets.token_urlsafe(40)
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-
-    with get_connection() as conn:
-        conn.execute("DELETE FROM finva_gmail_oauth_states WHERE expires_at<NOW() OR account_id=%s", (account_id,))
-        conn.execute(
-            """INSERT INTO finva_gmail_oauth_states(
-                   state_hash,account_id,workspace_id,legacy_user_id,expires_at
-               ) VALUES(%s,%s,%s,%s,%s)""",
-            (_state_hash(state), account_id, workspace_id, legacy_user_id, expires_at),
-        )
-        conn.commit()
+    state = _encode_oauth_state(account_id, workspace_id)
 
     params = {
         "client_id": client_id,
@@ -181,16 +222,9 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     if error or not code or not state:
         return RedirectResponse(_return_url("denied"), status_code=302)
 
-    with get_connection() as conn:
-        oauth_state = conn.execute(
-            """SELECT account_id,workspace_id,legacy_user_id
-               FROM finva_gmail_oauth_states
-               WHERE state_hash=%s AND expires_at>NOW()
-               FOR UPDATE""",
-            (_state_hash(state),),
-        ).fetchone()
-        if not oauth_state:
-            return RedirectResponse(_return_url("invalid_state"), status_code=302)
+    oauth_state = _decode_oauth_state(state)
+    if not oauth_state:
+        return RedirectResponse(_return_url("invalid_state"), status_code=302)
 
     client_id, client_secret, redirect_uri = _google_config()
     response = requests.post(
@@ -222,6 +256,10 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
 
     account_id = str(oauth_state["account_id"])
     workspace_id = str(oauth_state["workspace_id"])
+    try:
+        legacy_user_id = _financial_user_id_for_account(account_id)
+    except Exception:
+        return RedirectResponse(_return_url("identity_failed"), status_code=302)
     with get_connection() as conn:
         current = conn.execute(
             "SELECT refresh_token_secret_id FROM finva_gmail_connections WHERE account_id=%s FOR UPDATE",
@@ -239,12 +277,11 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
                    granted_scopes=EXCLUDED.granted_scopes,status='active',last_error=NULL,
                    connected_at=NOW(),updated_at=NOW()
                RETURNING id""",
-            (account_id, workspace_id, int(oauth_state["legacy_user_id"]), google_email, secret_id, [GMAIL_SCOPE]),
+            (account_id, workspace_id, legacy_user_id, google_email, secret_id, [GMAIL_SCOPE]),
         ).fetchone()
         old_secret = (current or {}).get("refresh_token_secret_id")
         if old_secret and str(old_secret) != secret_id:
             _vault_delete(conn, str(old_secret))
-        conn.execute("DELETE FROM finva_gmail_oauth_states WHERE state_hash=%s", (_state_hash(state),))
         conn.commit()
 
     _start_watch(int(row["id"]), service, suppress_errors=True)

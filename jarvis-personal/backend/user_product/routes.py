@@ -32,6 +32,7 @@ from backend.finance.emergency_fund import get_salvavidas_state, update_salvavid
 from backend.finance.intelligence import get_debt_advisory
 from backend.finance.models import SalvavidasUpdateRequest
 from backend.finance.strategic_engine import calculate_debt_strategies
+from backend.finance.service import calculate_aguinaldo
 from backend.user_product.gmail_service import (
     begin_gmail_connection,
     disconnect_gmail,
@@ -229,6 +230,10 @@ def vip_salvavidas():
 @router.put("/vip/salvavidas")
 def vip_salvavidas_update(request: SalvavidasUpdateRequest):
     require_feature("strategy_vip"); return update_salvavidas(**request.model_dump(exclude_unset=True))
+
+@router.get("/vip/aguinaldo")
+def vip_aguinaldo():
+    require_feature("strategy_vip"); return calculate_aguinaldo()
 
 @router.get("/vip/gmail/status")
 def vip_gmail_status():
