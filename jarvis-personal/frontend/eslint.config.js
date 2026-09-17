@@ -5,7 +5,15 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'android/app/src/main/assets/public']),
+  // Generated output is copied/compiled from Vite and Capacitor dependencies.
+  // Lint source files only; never lint Android build intermediates or packaged assets.
+  globalIgnores([
+    'dist/**',
+    'android/app/src/main/assets/public/**',
+    'android/app/build/**',
+    'android/build/**',
+    'android/.gradle/**',
+  ]),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
