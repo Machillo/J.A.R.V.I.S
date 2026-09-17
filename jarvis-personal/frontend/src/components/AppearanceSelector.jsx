@@ -1,46 +1,26 @@
 import { Laptop, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
+import { applyColorMode, COLOR_MODE_STORAGE_KEY, getSavedColorMode } from "../lib/colorMode";
 
-const STORAGE_KEY = "finva-color-mode";
 const OPTIONS = [
   { id: "dark", label: "Oscuro", icon: Moon },
   { id: "light", label: "Claro", icon: Sun },
   { id: "system", label: "Automático", icon: Laptop },
 ];
 
-const resolveMode = (mode) => (
-  mode === "system"
-    ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
-    : mode
-);
-
-const applyMode = (mode) => {
-  document.documentElement.dataset.colorMode = mode;
-  document.documentElement.dataset.colorModeResolved = resolveMode(mode);
-  document.documentElement.style.colorScheme = resolveMode(mode);
-};
-
-export function initializeColorMode() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  applyMode(OPTIONS.some(({ id }) => id === saved) ? saved : "system");
-}
-
 export default function AppearanceSelector({ compact = false }) {
-  const [mode, setMode] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return OPTIONS.some(({ id }) => id === saved) ? saved : "system";
-  });
+  const [mode, setMode] = useState(getSavedColorMode);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: light)");
-    const sync = () => applyMode(mode);
+    const sync = () => applyColorMode(mode);
     sync();
     media.addEventListener?.("change", sync);
     return () => media.removeEventListener?.("change", sync);
   }, [mode]);
 
   const choose = (nextMode) => {
-    localStorage.setItem(STORAGE_KEY, nextMode);
+    localStorage.setItem(COLOR_MODE_STORAGE_KEY, nextMode);
     setMode(nextMode);
   };
 
