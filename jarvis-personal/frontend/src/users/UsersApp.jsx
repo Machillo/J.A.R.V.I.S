@@ -16,6 +16,8 @@ import MonthlySummary from "./pages/MonthlySummary";
 import VipStrategy from "./pages/VipStrategy";
 import GmailAutomation from "./pages/GmailAutomation";
 import Feedback from "./pages/Feedback";
+import AppErrorBoundary from "../components/AppErrorBoundary";
+import { openSupport } from "../lib/apiErrors";
 import { trackProductEvent } from "./services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { trackScreen } from "../lib/telemetry";
@@ -23,7 +25,9 @@ import "./users.css";
 import "./finva-theme.css";
 
 export default function UsersApp({ user, onUserChange }) {
-  const [page, setPage] = useState("overview");
+  const [page, setPage] = useState(() => window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview");
+  const [accessNotice, setAccessNotice] = useState(user?.subscription?.access_notice || null);
+  const [apiIssue, setApiIssue] = useState(null);
   const plan = user?.subscription?.plan || "free";
 
   useEffect(() => {
@@ -34,6 +38,21 @@ export default function UsersApp({ user, onUserChange }) {
     if (eventMap[page]) trackProductEvent({ event_name:eventMap[page], surface:page, success:true }).catch(()=>{});
     trackScreen(`finva_${page}`, "FinvaPage");
   }, [page]);
+
+  useEffect(() => {
+    const open = () => setPage("feedback");
+    const failed = (event) => setApiIssue(event.detail || {});
+    window.addEventListener("finva:open-support", open);
+    window.addEventListener("finva:api-error", failed);
+    return () => {
+      window.removeEventListener("finva:open-support", open);
+      window.removeEventListener("finva:api-error", failed);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice);
+  }, [user?.subscription?.access_notice]);
 
   const pages = {
     overview: <Dashboard user={user} plan={plan} onNavigate={setPage} />,
@@ -66,7 +85,18 @@ export default function UsersApp({ user, onUserChange }) {
               {(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()}
             </button>
           </header>
-          {pages[page] || pages.overview}
+          {accessNotice && <aside className="subscription-ended-banner" role="status">
+            <div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div>
+            <button type="button" onClick={() => setAccessNotice(null)}>Entendido</button>
+          </aside>}
+          {apiIssue && <aside className="finva-api-help" role="alert">
+            <div><strong>No pudimos completar esa acción</strong><span>Intentá nuevamente o envianos un reporte; agregaremos la referencia técnica automáticamente.</span></div>
+            <button type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>Contactar soporte</button>
+            <button type="button" aria-label="Cerrar aviso" onClick={() => setApiIssue(null)}>×</button>
+          </aside>}
+          <AppErrorBoundary resetKey={page} screen={page}>
+            {pages[page] || pages.overview}
+          </AppErrorBoundary>
         </main>
         <Sidebar
           page={page}

@@ -9,6 +9,7 @@ import { getMe, getOwnerBridgeToken, setOwnerBridgeToken } from "./services/jarv
 import { supabase } from "./lib/supabase";
 import { registerNativeAuthListener } from "./lib/nativeAuth";
 import { identifyTelemetryUser, trackEvent } from "./lib/telemetry";
+import { openSupport } from "./lib/apiErrors";
 
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
@@ -166,8 +167,12 @@ export default function App() {
     return (
       <main className="unified-router-boot">
         <strong>No pudimos cargar tu cuenta.</strong>
-        <span>{identityError}</span>
-        <button type="button" onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+        <span>{identityError || "Intentá nuevamente o escribinos desde soporte."}</span>
+        <div className="boot-actions">
+          <button type="button" onClick={() => window.location.reload()}>Intentar de nuevo</button>
+          <button type="button" onClick={() => { openSupport({ kind: "problem", screen: "inicio", summary: "No se pudo cargar la cuenta." }); window.location.reload(); }}>Abrir soporte</button>
+          <button type="button" onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+        </div>
       </main>
     );
   }

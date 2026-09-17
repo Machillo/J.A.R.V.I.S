@@ -1,10 +1,11 @@
 import { API_URL } from "../../lib/apiUrl";
 import { authenticatedFetch } from "../../lib/authenticatedFetch";
+import { apiError } from "../../lib/apiErrors";
 
 async function request(path, options = {}) {
   const response = await authenticatedFetch(`${API_URL}${path}`, options);
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`Error ${response.status} en ${path}: ${payload?.detail || payload?.error || "Error de API"}`);
+  if (!response.ok) throw apiError(response, payload, path);
   return payload;
 }
 
