@@ -5,27 +5,28 @@
 
 .native-platform--android .native-product-header,
 .native-platform--web .native-product-header {
-  min-height: 68px;
-  padding-inline: 16px;
-  background: color-mix(in srgb, var(--native-accent) 48%, var(--native-bg));
+  min-height: 76px;
+  padding-inline: 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--native-bg) 86%, transparent), transparent);
   border-bottom: 1px solid rgba(255,255,255,.08);
-  box-shadow: 0 6px 20px rgba(0,0,0,.16);
+  box-shadow: none;
+  backdrop-filter: blur(20px) saturate(140%);
 }
 
 .native-platform--android .native-product-title strong,
-.native-platform--web .native-product-title strong { font-size: 1.03rem; letter-spacing: 0; }
+.native-platform--web .native-product-title strong { font-size: 1.3rem; letter-spacing: .08em; }
 .native-platform--android .native-product-title small,
-.native-platform--web .native-product-title small { color: rgba(255,255,255,.76); margin-top: 3px; font-size: .63rem; }
+.native-platform--web .native-product-title small { color: var(--native-accent-2); margin-top: 5px; font-size: .66rem; }
 .native-platform--android .native-profile-button,
-.native-platform--web .native-profile-button { width: 42px; height: 42px; border: 0; border-radius: 50%; background: rgba(0,0,0,.18); box-shadow: none; }
+.native-platform--web .native-profile-button { width: 44px; height: 44px; border: 1px solid var(--native-border); border-radius: 15px; background: var(--native-surface-raised); box-shadow: 0 10px 24px rgba(0,0,0,.16); }
 
 .native-platform--android .app-top-bar,
 .native-platform--web .app-top-bar {
-  margin: 0 -14px 12px;
-  border: 0;
-  border-radius: 0;
-  background: color-mix(in srgb, var(--native-accent) 42%, var(--native-bg));
-  box-shadow: 0 6px 20px rgba(0,0,0,.16);
+  margin: 10px 16px 16px;
+  border: 1px solid var(--native-border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--native-surface) 88%, transparent);
+  box-shadow: 0 12px 28px rgba(0,0,0,.16);
 }
 
 .native-platform--android .native-bottom-nav,

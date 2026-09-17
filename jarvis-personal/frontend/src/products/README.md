@@ -14,7 +14,15 @@ Cada función nueva debe vivir en `products/<producto>/features/<función>/`. El
 Los componentes y estilos que cambian por sistema operativo viven en `ui/native/`:
 
 - `styles/ios.css`: superficies flotantes, navegación tipo cápsula y mayor desenfoque.
-- `styles/android.css`: encabezado plano y navegación inferior pegada al borde.
+- `styles/android.css`: navegación inferior pegada al borde y ajustes táctiles de Android.
 - `styles/tokens.css`: medidas y comportamiento compartido.
+- `styles/sheets.css`: hojas de navegación y menús secundarios compartidos.
 
 La lógica financiera nunca debe duplicarse por plataforma. Android y iOS comparten datos y funciones; solo cambia la presentación nativa.
+
+## Sistema visual
+
+- JARVIS y FINVA comparten tarjetas, formularios, encabezados, hojas y espaciado desde `ui/native`.
+- Los archivos de cada producto solo definen color y compatibilidad con sus pantallas existentes.
+- FINVA aplica una variante de color por plan: `free`, `basic` o `vip`.
+- Cada producto mantiene cinco accesos principales. Las funciones secundarias se organizan en **Más** para que ninguna ruta desaparezca cuando la app crezca.

@@ -10,14 +10,15 @@
   --native-space-5: 24px;
   --native-nav-height: 76px;
   --native-max-width: 560px;
+  --native-content-width: 560px;
 }
 
 .native-product {
-  --native-bg: #07091a;
-  --native-bg-soft: #11142d;
-  --native-surface: rgba(18, 22, 49, .94);
-  --native-surface-raised: rgba(28, 32, 67, .96);
-  --native-border: rgba(174, 184, 228, .15);
+  --native-bg: #060b1e;
+  --native-bg-soft: #10182e;
+  --native-surface: rgba(15, 27, 52, .9);
+  --native-surface-raised: rgba(27, 39, 70, .88);
+  --native-border: rgba(150, 181, 219, .19);
   --native-text: #f8fafc;
   --native-muted: #a6abc1;
   --native-accent: #5b5cf6;
@@ -32,8 +33,8 @@
   overflow-y: auto;
   color: var(--native-text);
   background:
-    radial-gradient(circle at 92% -4%, color-mix(in srgb, var(--native-accent-2) 34%, transparent), transparent 29rem),
-    radial-gradient(circle at -8% 8%, color-mix(in srgb, var(--native-accent) 42%, transparent), transparent 31rem),
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--native-accent-2) 25%, transparent), transparent 34rem),
+    radial-gradient(circle at 0% 24%, color-mix(in srgb, var(--native-accent) 28%, transparent), transparent 31rem),
     var(--native-bg);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: dark;
@@ -57,7 +58,7 @@
   top: 0;
   z-index: 45;
   width: min(100%, var(--native-max-width));
-  min-height: 76px;
+  min-height: 82px;
   margin: 0 auto;
   padding: max(12px, env(safe-area-inset-top)) 18px 10px;
   display: flex;
@@ -110,6 +111,26 @@
   animation: native-screen-enter .22s ease-out;
 }
 
+.native-screen-content {
+  width: min(100%, var(--native-content-width));
+  margin-inline: auto;
+  padding: 0 16px 28px;
+}
+
+.native-screen-content > :first-child { width: 100%; max-width: none; margin-inline: 0; }
+
+.native-more-profile {
+  display: grid !important;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px !important;
+}
+.native-more-profile > span:last-child { min-width: 0; }
+.native-more-profile small,.native-more-profile strong { display: block; }
+.native-more-profile strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.native-more-avatar { width: 52px; height: 52px; display: grid; place-items: center; overflow: hidden; border: 2px solid color-mix(in srgb, var(--native-accent-2) 68%, white); border-radius: 18px; color: var(--native-bg); background: var(--native-accent-2); font-weight: 950; }
+.native-more-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
 @keyframes native-screen-enter {
   from { opacity: 0; transform: translateY(7px); }
   to { opacity: 1; transform: translateY(0); }
@@ -122,8 +143,8 @@
 html[data-color-mode-resolved="light"] .native-product {
   --native-bg: #f3f7f8;
   --native-bg-soft: #eaf1f3;
-  --native-surface: rgba(255, 255, 255, .94);
-  --native-surface-raised: rgba(255, 255, 255, .98);
+  --native-surface: rgba(255, 255, 255, .9);
+  --native-surface-raised: rgba(255, 255, 255, .96);
   --native-border: rgba(27, 55, 73, .13);
   --native-text: #10232f;
   --native-muted: #637682;
