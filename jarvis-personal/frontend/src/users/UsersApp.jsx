@@ -46,7 +46,7 @@ export default function UsersApp({ user, onUserChange }) {
   const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange });
 
   return (
-    <NativeProductShell product="finva" platform={platform} className="users-app">
+    <NativeProductShell product="finva" platform={platform} plan={plan} className="users-app">
       <div className="app mobile-app-shell">
         <NativeProductHeader
           product="FINVA"

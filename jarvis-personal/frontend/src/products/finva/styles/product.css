@@ -1,17 +1,30 @@
 .native-product--finva {
-  --native-accent: #514ed8;
-  --native-accent-2: #19c9aa;
-  --native-bg: #080b20;
-  --native-bg-soft: #14172f;
-  --native-surface: rgba(18, 23, 50, .94);
-  --native-surface-raised: rgba(30, 35, 71, .96);
+  --native-accent: #5d58f4;
+  --native-accent-2: #21d2bd;
+  --native-bg: #060b1e;
+  --native-bg-soft: #101a32;
+  --native-surface: rgba(15, 27, 52, .9);
+  --native-surface-raised: rgba(27, 39, 70, .88);
+}
+
+.native-product--finva.native-plan--basic {
+  --native-accent: #3f74e8;
+  --native-accent-2: #48d6e8;
+}
+
+.native-product--finva.native-plan--vip {
+  --native-accent: #9a7a2d;
+  --native-accent-2: #e8ca68;
+  --native-bg-soft: #181b2c;
+  --native-surface: rgba(24, 29, 48, .92);
+  --native-surface-raised: rgba(38, 42, 61, .9);
 }
 
 .native-product--finva .mobile-app-shell {
   width: min(100%, var(--native-max-width));
   min-height: 100%;
   margin: 0 auto;
-  border-inline: 1px solid rgba(255,255,255,.035);
+  border-inline: 1px solid rgba(255,255,255,.04);
   background: transparent;
   box-shadow: 0 0 80px rgba(0,0,0,.2);
 }
@@ -22,10 +35,18 @@
   background: transparent;
 }
 
+.native-product--finva .mobile-page,
+.native-product--finva .dashboard-plan { padding-top: 10px; }
+
 .native-product--finva :is(.panel,.card,.mobile-panel,.account-card,.current-plan-card,.settings-plan-row,.profile-completeness-card,.situation-card) {
   border-color: var(--native-border);
   background: linear-gradient(145deg, color-mix(in srgb, var(--native-surface-raised) 93%, transparent), var(--native-surface));
   color: var(--native-text);
+}
+
+.native-product--finva :is(.panel,.card,.mobile-panel,.account-card,.current-plan-card,.settings-plan-row,.profile-completeness-card,.situation-card) {
+  border-radius: 26px;
+  box-shadow: 0 18px 46px rgba(0,0,0,.2), inset 0 1px rgba(255,255,255,.04);
 }
 
 .native-product--finva :is(.hero h1,.mobile-page-heading h1,.section-heading h2) { color: var(--native-text); }
@@ -35,20 +56,11 @@
 .native-product--finva :is(.form input,.form select,.form textarea,input,select,textarea):focus { border-color: var(--native-accent-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--native-accent-2) 14%, transparent); }
 .native-product--finva :is(.primary-button,.finva-button-primary,.entry-save-button,.confirm-plan-button) { border: 0; color: #041915; background: linear-gradient(135deg, var(--native-accent-2), #0da18d); box-shadow: 0 10px 24px rgba(14, 168, 143, .22); }
 
-.native-more-backdrop { position: fixed; inset: 0; z-index: 65; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.6); backdrop-filter: blur(7px); }
-.native-more-sheet { width: min(100%, var(--native-max-width)); max-height: min(78dvh, 720px); overflow-y: auto; padding: 10px 18px calc(96px + env(safe-area-inset-bottom)); border: 1px solid var(--native-border); border-bottom: 0; border-radius: 30px 30px 0 0; color: var(--native-text); background: var(--native-bg-soft); box-shadow: 0 -26px 70px rgba(0,0,0,.44); }
-.native-platform--ios .native-more-sheet { margin: 0 10px 88px; padding-bottom: 22px; border: 1px solid var(--native-border); border-radius: 30px; }
-.native-sheet-handle { width: 46px; height: 5px; margin: 0 auto 16px; border-radius: 99px; background: color-mix(in srgb, var(--native-muted) 45%, transparent); }
-.native-more-sheet header { display: grid; gap: 3px; margin-bottom: 15px; }
-.native-more-sheet header small { color: var(--native-accent-2); font-weight: 850; letter-spacing: .13em; }
-.native-more-sheet header strong { font-size: 1.65rem; }
-.native-sheet-groups { display: grid; gap: 16px; }
-.native-sheet-group { display: grid; gap: 7px; }
-.native-sheet-group > small { color: var(--native-muted); font-size: .7rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
-.native-sheet-group button,.native-sheet-logout { min-height: 52px; padding: 8px 12px; display: grid; grid-template-columns: 38px minmax(0,1fr); align-items: center; gap: 10px; border: 1px solid var(--native-border); border-radius: 16px; color: var(--native-text); text-align: left; background: var(--native-surface); }
-.native-sheet-group button > span { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; color: var(--native-accent-2); background: color-mix(in srgb, var(--native-accent-2) 12%, transparent); }
-.native-sheet-group button.active { border-color: color-mix(in srgb, var(--native-accent-2) 45%, transparent); background: color-mix(in srgb, var(--native-accent-2) 11%, var(--native-surface)); }
-.native-sheet-logout { width: 100%; color: #fecdd3; border-color: rgba(251,113,133,.25); background: rgba(127,29,52,.25); }
+.native-product--finva.native-plan--vip :is(.primary-button,.finva-button-primary,.entry-save-button,.confirm-plan-button) {
+  color: #241c06;
+  background: linear-gradient(135deg, #f2da7f, #b8953f);
+  box-shadow: 0 10px 24px rgba(194, 158, 68, .2);
+}
 
 html[data-color-mode-resolved="light"] .native-product--finva {
   --native-accent: #4f46e5;
@@ -57,6 +69,13 @@ html[data-color-mode-resolved="light"] .native-product--finva {
   --native-bg-soft: #e8f0f2;
   --native-surface: rgba(255,255,255,.96);
   --native-surface-raised: rgba(255,255,255,.99);
+}
+
+html[data-color-mode-resolved="light"] .native-product--finva.native-plan--vip {
+  --native-accent: #846518;
+  --native-accent-2: #9b7417;
+  --native-bg: #faf8f1;
+  --native-bg-soft: #f3eee1;
 }
 
 html[data-color-mode-resolved="light"] .native-product--finva :is(.form input,.form select,.form textarea,input,select,textarea) { color: #10232f; background: #f8fbfc; }

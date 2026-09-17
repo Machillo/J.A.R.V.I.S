@@ -232,7 +232,7 @@
 .profile-setup--android .profile-settings-card,
 .profile-setup--android .profile-extra-currencies { border-radius: 1.3rem; }
 
-html[data-color-mode="light"] .profile-setup,
+html[data-color-mode-resolved="light"] .profile-setup,
 html[data-theme="light"] .profile-setup {
   --setup-ink: #102431;
   --setup-muted: #5f7480;
@@ -244,17 +244,17 @@ html[data-theme="light"] .profile-setup {
     radial-gradient(circle at 0% 24%, rgba(101, 95, 255, 0.15), transparent 31rem),
     #edf7f8;
 }
-html[data-color-mode="light"] .profile-setup-shell,
+html[data-color-mode-resolved="light"] .profile-setup-shell,
 html[data-theme="light"] .profile-setup-shell { background: rgba(245, 252, 252, 0.42); }
-html[data-color-mode="light"] .profile-setup-back,
+html[data-color-mode-resolved="light"] .profile-setup-back,
 html[data-theme="light"] .profile-setup-back,
-html[data-color-mode="light"] .profile-setup-footer,
+html[data-color-mode-resolved="light"] .profile-setup-footer,
 html[data-theme="light"] .profile-setup-footer { background: rgba(244, 251, 252, 0.9); }
-html[data-color-mode="light"] .profile-settings-card select,
+html[data-color-mode-resolved="light"] .profile-settings-card select,
 html[data-theme="light"] .profile-settings-card select,
-html[data-color-mode="light"] .profile-segmented-control,
+html[data-color-mode-resolved="light"] .profile-segmented-control,
 html[data-theme="light"] .profile-segmented-control { color: #102431; background-color: #e3eff1; }
-html[data-color-mode="light"] .profile-extra-currencies button,
+html[data-color-mode-resolved="light"] .profile-extra-currencies button,
 html[data-theme="light"] .profile-extra-currencies button { color: #102431; background: rgba(238, 247, 249, 0.95); }
 
 @media (min-width: 48rem) {

@@ -8,6 +8,8 @@
   backdrop-filter: blur(var(--native-header-blur)) saturate(145%);
 }
 
+.native-platform--ios .native-profile-button { border-radius: 18px; }
+
 .native-platform--ios .app-top-bar {
   margin: 6px 12px 12px;
   border: 1px solid var(--native-border);
@@ -28,7 +30,7 @@
   padding: 6px;
   border: 1px solid rgba(192, 202, 235, .18);
   border-radius: 30px;
-  background: color-mix(in srgb, var(--native-surface-raised) 74%, transparent);
+  background: color-mix(in srgb, var(--native-surface-raised) 80%, transparent);
   box-shadow: 0 16px 44px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.07);
   backdrop-filter: blur(28px) saturate(165%);
 }

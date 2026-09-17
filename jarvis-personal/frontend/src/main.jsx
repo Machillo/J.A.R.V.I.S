@@ -23,6 +23,7 @@ import "./pages/ProfileSetup.css";
 import "./ui/native/styles/tokens.css";
 import "./ui/native/styles/ios.css";
 import "./ui/native/styles/android.css";
+import "./ui/native/styles/sheets.css";
 import "./products/finva/styles/product.css";
 import "./products/jarvis/styles/product.css";
 import { registerJarvisServiceWorker } from "./pushNotifications";

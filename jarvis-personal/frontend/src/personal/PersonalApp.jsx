@@ -624,7 +624,7 @@ export default function App() {
   const platform = detectNativePlatform();
 
   return (
-    <NativeProductShell product="jarvis" platform={platform} className={`jarvis-app app-shell-v2 ${(keyboardOpen || commandInputFocused) ? "keyboard-open" : ""}`}>
+    <NativeProductShell product="jarvis" platform={platform} plan="personal" className={`jarvis-app app-shell-v2 ${(keyboardOpen || commandInputFocused) ? "keyboard-open" : ""}`}>
       <main className={`main-shell app-main-v2 ${activePage === "dashboard" ? "home-mode" : ""}`}>
         {showHeader && (
           <header className="app-top-bar">
@@ -641,7 +641,11 @@ export default function App() {
           </header>
         )}
 
-        {renderPage()}
+        {showHeader ? (
+          <div className={`native-screen-content native-screen-content--${activePage}`}>
+            {renderPage()}
+          </div>
+        ) : renderPage()}
 
         {activePage === "dashboard" && (
           <section className="jarvis-command-center" aria-label="Comando principal de Jarvis">
@@ -674,7 +678,7 @@ export default function App() {
         )}
       </main>
 
-      <JarvisNavigation activePage={activePage} onNavigate={navigatePage} currentUser={currentUser} userName={userName} profilePreferences={profilePreferences} />
+      <JarvisNavigation activePage={activePage} onNavigate={navigatePage} currentUser={currentUser} userName={userName} profilePreferences={profilePreferences} onLogout={handleLogout} />
     </NativeProductShell>
   );
 }
