@@ -48,6 +48,7 @@ import ProductOperations from "../pages/ProductOperations";
 import { askJarvis, getFinanceDashboard, getJarvisPremiumStrategySummary, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { recordError, trackScreen } from "../lib/telemetry";
+import AppearanceSelector from "../components/AppearanceSelector";
 
 const sanitizeCourtesy = (text = "") =>
   String(text || "")
@@ -129,6 +130,12 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
       </div>
 
       <div className="app-section-card">
+        <div className="app-group-heading"><strong>Personalización</strong><small>Apariencia y preferencias</small></div>
+        <AppearanceSelector compact />
+      </div>
+
+      <div className="app-section-card">
+        <div className="app-group-heading"><strong>JARVIS personal</strong><small>Memoria, metas y sistema</small></div>
         <AppListItem icon={Brain} title="Memory Core" subtitle="Memoria y contexto personal" onClick={() => navigatePage("memory")} />
         <AppListItem icon={Target} title="Goals" subtitle="Objetivos y prioridades" onClick={() => navigatePage("goals")} />
         <AppListItem icon={SettingsIcon} title="System Settings" subtitle="Preferencias de JARVIS" onClick={() => navigatePage("settings")} />
@@ -139,6 +146,7 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
       </div>
 
       <div className="app-section-card">
+        <div className="app-group-heading"><strong>Datos financieros</strong><small>Entradas, movimientos y tarjetas</small></div>
         <AppListItem icon={MailSearch} title="Email Monitor" subtitle="Correos bancarios detectados" onClick={() => navigatePage("emails")} />
         <AppListItem icon={ReceiptText} title="Transactions" subtitle="Historial completo e importaciones" onClick={() => navigatePage("transactions")} />
         <AppListItem icon={CreditCard} title="Additional Cards" subtitle="Tarjetas asociadas por persona" onClick={() => navigatePage("additionalCards")} />
@@ -220,8 +228,6 @@ export default function App() {
   const recognitionRef = useRef(null);
 
   useEffect(() => {
-    // JARVIS keeps one visual identity. Theme switching was removed on purpose.
-    localStorage.removeItem("jarvis-theme");
     document.documentElement.setAttribute("data-theme", "classic");
   }, []);
 

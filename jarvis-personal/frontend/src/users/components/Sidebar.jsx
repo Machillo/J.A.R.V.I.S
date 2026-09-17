@@ -10,16 +10,35 @@ const mainItems = [
 
 export default function Sidebar({ page, plan, onNavigate, onLogout }) {
   const [moreOpen, setMoreOpen] = useState(false);
-  const secondaryItems = [
-    ["situation", "Mi situación financiera", Landmark],
-    ...(plan === "free" ? [] : [["strategy", plan === "vip" ? "Dirección VIP" : "Estrategia", Sparkles]]),
-    ...(plan === "vip" ? [["gmail", "Correo automático", Mail]] : []),
-    ...(plan === "free" ? [] : [["budget", "Presupuesto", WalletCards], ["calendar", "Calendario", CalendarDays], ["recurring", "Recurrentes", Repeat2], ["reports", "Reportes", BarChart3]]),
-    ["transactions", "Historial", ReceiptText],
-    ["monthly", "Resumen mensual", BarChart3],
-    ["settings", "Cuenta y plan", Settings],
-    ["feedback", "Ayuda y sugerencias", LifeBuoy],
+  const secondaryGroups = [
+    {
+      title: "Mi dinero",
+      items: [
+        ["situation", "Mi situación financiera", Landmark],
+        ["transactions", "Historial completo", ReceiptText],
+        ["monthly", "Resumen mensual", BarChart3],
+      ],
+    },
+    ...(plan === "free" ? [] : [{
+      title: "Planificación",
+      items: [
+        ["strategy", plan === "vip" ? "Dirección VIP" : "Estrategia", Sparkles],
+        ["budget", "Presupuesto", WalletCards],
+        ["calendar", "Calendario", CalendarDays],
+        ["recurring", "Pagos recurrentes", Repeat2],
+        ["reports", "Reportes", BarChart3],
+      ],
+    }]),
+    ...(plan === "vip" ? [{ title: "Automatización", items: [["gmail", "Movimientos desde Gmail", Mail]] }] : []),
+    {
+      title: "Cuenta y soporte",
+      items: [
+        ["settings", "Cuenta, apariencia y plan", Settings],
+        ["feedback", "Ayuda y sugerencias", LifeBuoy],
+      ],
+    },
   ];
+  const secondaryItems = secondaryGroups.flatMap((group) => group.items);
   const secondaryKeys = secondaryItems.map(([key]) => key);
 
   const navigate = (key) => {
@@ -33,13 +52,18 @@ export default function Sidebar({ page, plan, onNavigate, onLogout }) {
         <div className="mobile-more-backdrop" onClick={() => setMoreOpen(false)}>
           <section className="mobile-more-sheet" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
-            <strong>Más opciones</strong>
+            <strong>Explorar FINVA</strong>
             <div className="sheet-actions">
-              {secondaryItems.map(([key, label, Icon]) => (
-                <button type="button" key={key} className={page === key ? "active" : ""} onClick={() => navigate(key)}>
-                  <Icon size={20} />
-                  <span>{label}</span>
-                </button>
+              {secondaryGroups.map((group) => (
+                <div className="sheet-action-group" key={group.title}>
+                  <small>{group.title}</small>
+                  {group.items.map(([key, label, Icon]) => (
+                    <button type="button" key={key} className={page === key ? "active" : ""} onClick={() => navigate(key)}>
+                      <Icon size={20} />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
               ))}
               <button type="button" className="sheet-logout" onClick={onLogout}>
                 <LogOut size={20} />

@@ -1346,3 +1346,62 @@ body:has(.users-app),
 .users-app .premium-strategy-page {
   padding-bottom: calc(7rem + env(safe-area-inset-bottom));
 }
+
+.users-app .sheet-action-group { display: grid; gap: 6px; }
+.users-app .sheet-action-group + .sheet-action-group { margin-top: 8px; }
+.users-app .sheet-action-group > small {
+  padding: 8px 8px 2px;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+html[data-color-mode-resolved="light"] .users-app {
+  color-scheme: light;
+  --bg: #edf5f6;
+  --surface: #ffffff;
+  --surface-2: #e7f1f3;
+  --surface-3: #d9e9ec;
+  --border: rgba(15, 74, 82, .15);
+  --border-strong: rgba(13, 148, 136, .36);
+  --text: #102a30;
+  --muted: #5f7780;
+  --muted-2: #344f58;
+  --accent: #0f9f91;
+  --accent-soft: rgba(15,159,145,.11);
+  background: radial-gradient(circle at 50% -10%,rgba(20,184,166,.12),transparent 30rem),#edf5f6;
+}
+html[data-color-mode-resolved="light"] .users-app :is(.app,.mobile-app-shell) {
+  background: linear-gradient(180deg,#f8fcfc 0%,#edf5f6 100%);
+  box-shadow: 0 0 60px rgba(31,72,78,.12);
+}
+html[data-color-mode-resolved="light"] .users-app .mobile-app-header,
+html[data-color-mode-resolved="light"] .users-app .mobile-bottom-nav {
+  background: rgba(248,252,252,.94);
+  border-color: rgba(15,74,82,.14);
+  box-shadow: 0 8px 24px rgba(31,72,78,.08);
+}
+html[data-color-mode-resolved="light"] .users-app :is(.panel,.card,.mobile-panel,.account-card,.current-plan-card,.settings-plan-row,.profile-completeness-card,.situation-card,.mobile-more-sheet,.plan-dialog) {
+  color: var(--text);
+  border-color: var(--border);
+  background: linear-gradient(145deg,#ffffff,#f1f7f8);
+  box-shadow: 0 10px 26px rgba(31,72,78,.09);
+}
+html[data-color-mode-resolved="light"] .users-app :is(.form input,.form select,.form textarea,.onboarding-field input,.onboarding-field select,.situation-form-grid input,.situation-form-grid select,.situation-single-field input,.vip-scenario-fields input,.simulator-controls input) {
+  color-scheme: light;
+  color: #102a30;
+  background: #ffffff;
+  border-color: rgba(15,74,82,.22);
+}
+html[data-color-mode-resolved="light"] .users-app :is(input::placeholder,textarea::placeholder) { color: #71868d; }
+html[data-color-mode-resolved="light"] .users-app .profile-chip,
+html[data-color-mode-resolved="light"] .users-app .sheet-actions button,
+html[data-color-mode-resolved="light"] .users-app .plan-dialog-cancel {
+  color: #18343b;
+  background: #e4eff1;
+  border-color: rgba(15,74,82,.18);
+}
+html[data-color-mode-resolved="light"] .users-app .mobile-bottom-nav button { color: #667d85; }
+html[data-color-mode-resolved="light"] .users-app .mobile-bottom-nav button.active { color: #087c72; background: rgba(15,159,145,.12); }

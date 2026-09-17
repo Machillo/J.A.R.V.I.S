@@ -301,3 +301,68 @@
     -webkit-backdrop-filter: blur(24px) saturate(145%);
   }
 }
+
+/* Shared appearance selector — JARVIS and FINVA keep their own brand colors. */
+.appearance-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent, var(--cyan)) 24%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel, var(--surface)) 92%, transparent);
+}
+.appearance-card.compact { margin: 0; background: transparent; border: 0; }
+.appearance-copy { display: grid; gap: 3px; }
+.appearance-copy small { color: var(--muted); line-height: 1.4; }
+.appearance-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.appearance-options button {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 14px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel-strong, var(--surface-2)) 88%, transparent);
+}
+.appearance-options button.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent, var(--cyan)) 65%, transparent);
+  background: color-mix(in srgb, var(--accent, var(--cyan)) 15%, var(--panel-strong, var(--surface-2)));
+}
+.appearance-options span { font-size: clamp(.7rem, 3.2vw, .82rem); font-weight: 700; }
+.app-group-heading { display: grid; gap: 2px; padding: 4px 8px 12px; }
+.app-group-heading small { color: var(--muted); }
+
+html[data-color-mode-resolved="light"] {
+  --bg: #eef4f6;
+  --panel: rgba(255,255,255,.86);
+  --panel-strong: rgba(255,255,255,.97);
+  --text: #12242c;
+  --muted: #607985;
+  --app-surface: rgba(255,255,255,.82);
+  --app-surface-strong: rgba(255,255,255,.96);
+  --app-border: rgba(30,111,137,.18);
+  --app-shadow: 0 16px 40px rgba(25,55,66,.12);
+}
+html[data-color-mode-resolved="light"] body {
+  background: radial-gradient(circle at top right, rgba(41,180,205,.13), transparent 34%), linear-gradient(145deg,#f7fbfc,#e8f1f4);
+}
+html[data-color-mode-resolved="light"] :is(.hud-card,.hud-panel,.jarvis-panel,.finance-mini-kpi,.home-status-card,.empty-state,.app-section-card,.profile-hero) {
+  color: var(--text);
+  background: linear-gradient(145deg,rgba(255,255,255,.98),rgba(240,247,249,.96));
+  box-shadow: var(--app-shadow);
+}
+html[data-color-mode-resolved="light"] :is(.app-top-bar,.bottom-app-nav,.jarvis-command-center) {
+  color: var(--text);
+  background: rgba(247,251,252,.94);
+  border-color: rgba(30,111,137,.16);
+}
+html[data-color-mode-resolved="light"] :is(input,select,textarea) { color-scheme: light; }
+
+@media (max-width: 360px) {
+  .appearance-options { grid-template-columns: 1fr; }
+  .appearance-options button { min-height: 48px; grid-template-columns: auto 1fr; justify-items: start; padding-inline: 14px; }
+}
