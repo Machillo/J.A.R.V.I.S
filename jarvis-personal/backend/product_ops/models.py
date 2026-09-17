@@ -20,6 +20,9 @@ class FeedbackCreate(BaseModel):
     category: Literal["error", "improvement", "payment", "security", "support"]
     subject: str = Field(min_length=3, max_length=140)
     message: str = Field(min_length=5, max_length=4000)
+    app_version: str | None = Field(default=None, max_length=30)
+    screen: str | None = Field(default=None, max_length=80)
+    error_reference: str | None = Field(default=None, max_length=80)
 
 
 class FeedbackUpdate(BaseModel):
