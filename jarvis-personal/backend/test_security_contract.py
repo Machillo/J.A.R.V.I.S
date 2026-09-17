@@ -140,6 +140,12 @@ def test_finva_gmail_scope_is_read_only_and_identity_adapter_is_user_specific():
     assert "Kenneth" in text
 
 
+def test_finva_gmail_oauth_uses_financial_user_identity_bridge():
+    source = Path(gmail_service.__file__).read_text(encoding="utf-8")
+    assert "legacy_user_id = _legacy_financial_user_id()" in source
+    assert 'int(user["id"])' not in source
+
+
 def test_overtime_accepts_decimal_hours_and_common_multipliers():
     overtime = OvertimeCreateRequest(hours=2.5, hourly_rate=2500, multiplier=1.5)
     assert overtime.hours * overtime.hourly_rate * overtime.multiplier == 9375

@@ -13,7 +13,8 @@ import FinancialCalendar from "./pages/Calendar";
 import Recurring from "./pages/Recurring";
 import Reports from "./pages/Reports";
 import MonthlySummary from "./pages/MonthlySummary";
-import VipCenter from "./pages/VipCenter";
+import VipStrategy from "./pages/VipStrategy";
+import GmailAutomation from "./pages/GmailAutomation";
 import Feedback from "./pages/Feedback";
 import { trackProductEvent } from "./services/jarvisApi";
 import { supabase } from "../lib/supabase";
@@ -29,7 +30,7 @@ export default function UsersApp({ user, onUserChange }) {
     const scroller = document.querySelector(".users-app");
     if (scroller) scroller.scrollTo({ top: 0, left: 0, behavior: "auto" });
     else window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    const eventMap = { overview:"dashboard_opened", finance:"finance_opened", debts:"debts_opened", goals:"goals_opened", transactions:"transactions_opened", strategy:"strategy_opened", budget:"budget_opened", calendar:"calendar_opened", recurring:"recurring_opened", reports:"reports_opened", settings:"settings_opened" };
+    const eventMap = { overview:"dashboard_opened", finance:"finance_opened", debts:"debts_opened", goals:"goals_opened", transactions:"transactions_opened", strategy:"strategy_opened", gmail:"gmail_automation_opened", budget:"budget_opened", calendar:"calendar_opened", recurring:"recurring_opened", reports:"reports_opened", settings:"settings_opened" };
     if (eventMap[page]) trackProductEvent({ event_name:eventMap[page], surface:page, success:true }).catch(()=>{});
     trackScreen(`finva_${page}`, "FinvaPage");
   }, [page]);
@@ -38,7 +39,8 @@ export default function UsersApp({ user, onUserChange }) {
     overview: <Dashboard user={user} plan={plan} onNavigate={setPage} />,
     finance: <Finance />,
     debts: <Debts plan={plan} />,
-    strategy: plan === "vip" ? <VipCenter /> : <StrategyBasic plan={plan} />,
+    strategy: plan === "vip" ? <VipStrategy /> : <StrategyBasic plan={plan} />,
+    gmail: plan === "vip" ? <GmailAutomation /> : <SettingsPage user={user} onUserChange={onUserChange} />,
     goals: <Goals plan={plan} />,
     transactions: <Transactions />,
     situation: <FinancialSituation plan={plan} onNavigate={setPage} />,
