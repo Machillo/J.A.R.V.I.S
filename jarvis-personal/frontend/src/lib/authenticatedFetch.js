@@ -26,7 +26,10 @@ async function withToken(url, options, token) {
     else upstreamSignal.addEventListener("abort", abortFromUpstream, { once: true });
   }
 
-  const timeout = window.setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), REQUEST_TIMEOUT_MS);
+  const timeout = window.setTimeout(
+    () => controller.abort(new DOMException("Request timed out", "TimeoutError")),
+    REQUEST_TIMEOUT_MS,
+  );
   try {
     return await fetch(url, {
       ...options,
@@ -38,7 +41,7 @@ async function withToken(url, options, token) {
     });
   } catch (error) {
     if (controller.signal.aborted && !upstreamSignal?.aborted) {
-      throw new Error("La solicitud tardó demasiado. Volvé a intentarlo.");
+      throw new Error("La solicitud tardó demasiado. Volvé a intentarlo.", { cause: error });
     }
     throw error;
   } finally {
