@@ -140,10 +140,17 @@ def test_finva_gmail_scope_is_read_only_and_identity_adapter_is_user_specific():
     assert "Kenneth" in text
 
 
-def test_finva_gmail_oauth_uses_financial_user_identity_bridge():
+def test_finva_gmail_oauth_state_is_signed_and_does_not_require_database(monkeypatch):
+    monkeypatch.setenv("FINVA_GMAIL_CLIENT_ID", "client")
+    monkeypatch.setenv("FINVA_GMAIL_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("FINVA_GMAIL_REDIRECT_URI", "https://example.test/callback")
+    state = gmail_service._encode_oauth_state("account-1", "workspace-1")
+    assert gmail_service._decode_oauth_state(state)["account_id"] == "account-1"
+    assert gmail_service._decode_oauth_state(f"{state}tampered") is None
+
     source = Path(gmail_service.__file__).read_text(encoding="utf-8")
-    assert "legacy_user_id = _legacy_financial_user_id()" in source
-    assert 'int(user["id"])' not in source
+    connect_source = source.split("def begin_gmail_connection", 1)[1].split("def finish_gmail_connection", 1)[0]
+    assert "finva_gmail_oauth_states" not in connect_source
 
 
 def test_overtime_accepts_decimal_hours_and_common_multipliers():
