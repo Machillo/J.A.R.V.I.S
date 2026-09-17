@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   CircleDollarSign,
@@ -99,6 +100,22 @@ function EmptyPanel({ title, description }) {
       <h3>{title}</h3>
       {description ? <p>{description}</p> : null}
     </div>
+  );
+}
+
+function JarvisActionSheet({ title, onClose, children, className = "" }) {
+  return createPortal(
+    <div className="jarvis-action-sheet-backdrop" onClick={onClose}>
+      <section className={`jarvis-action-sheet ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
+        <header className="jarvis-action-sheet-header">
+          <div className="jarvis-action-sheet-handle" aria-hidden="true" />
+          <h3>{title}</h3>
+          <button type="button" className="ghost-button" onClick={onClose}>Cerrar</button>
+        </header>
+        <div className="jarvis-action-sheet-body">{children}</div>
+      </section>
+    </div>,
+    document.body
   );
 }
 
@@ -949,13 +966,7 @@ function DebtFormModal({ debt, onClose, onSaved }) {
   };
 
   return (
-    <div className="finance-detail-modal-backdrop" onClick={onClose}>
-      <article className="hud-panel finance-detail-modal debt-editor-modal" onClick={(event) => event.stopPropagation()}>
-        <div className="panel-title">
-          <div><h3>{debt ? "EDITAR DEUDA" : "AGREGAR DEUDA"}</h3></div>
-          <button className="ghost-button" onClick={onClose}>Cerrar</button>
-        </div>
-
+    <JarvisActionSheet title={debt ? "EDITAR DEUDA" : "AGREGAR DEUDA"} onClose={onClose} className="debt-editor-sheet">
         <form className="debt-form-grid" onSubmit={submit}>
           <label>
             Nombre
@@ -1035,8 +1046,7 @@ function DebtFormModal({ debt, onClose, onSaved }) {
             {saving ? "Guardando..." : debt ? "Guardar cambios" : "Agregar deuda"}
           </button>
         </form>
-      </article>
-    </div>
+    </JarvisActionSheet>
   );
 }
 
@@ -1075,12 +1085,7 @@ function DebtPaymentModal({ debt, onClose, onSaved }) {
   };
 
   return (
-    <div className="finance-detail-modal-backdrop" onClick={onClose}>
-      <article className="hud-panel finance-detail-modal debt-editor-modal" onClick={(event) => event.stopPropagation()}>
-        <div className="panel-title">
-          <div><h3>REGISTRAR PAGO · {debt.name}</h3></div>
-          <button className="ghost-button" onClick={onClose}>Cerrar</button>
-        </div>
+    <JarvisActionSheet title={`REGISTRAR PAGO · ${debt.name}`} onClose={onClose} className="debt-editor-sheet">
         <form className="debt-form-grid" onSubmit={submit}>
           <label>
             Pago realizado
@@ -1118,8 +1123,7 @@ function DebtPaymentModal({ debt, onClose, onSaved }) {
             {saving ? "Calculando..." : "Registrar pago"}
           </button>
         </form>
-      </article>
-    </div>
+    </JarvisActionSheet>
   );
 }
 
