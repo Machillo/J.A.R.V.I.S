@@ -29,6 +29,8 @@ import "./products/jarvis/styles/product.css";
 // Final JARVIS-only normalization. Must stay after product.css so legacy modules
 // cannot reintroduce oversized spacing or mixed card geometry on Personal.
 import "./styles/13-jarvis-personal-density.css";
+// JARVIS v2 primitives/tokens. Screens migrate onto this layer incrementally.
+import "./styles/14-jarvis-design-system-v2.css";
 import { registerJarvisServiceWorker } from "./pushNotifications";
 import { initializeTelemetry } from "./lib/telemetry";
 import { initializeColorMode } from "./lib/colorMode";
