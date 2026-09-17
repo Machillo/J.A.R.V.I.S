@@ -1,0 +1,49 @@
+.native-platform--ios {
+  --native-radius-card: 28px;
+  --native-header-blur: 24px;
+}
+
+.native-platform--ios .native-product-header {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--native-bg) 78%, transparent), transparent);
+  backdrop-filter: blur(var(--native-header-blur)) saturate(145%);
+}
+
+.native-platform--ios .app-top-bar {
+  margin: 6px 12px 12px;
+  border: 1px solid var(--native-border);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--native-surface-raised) 72%, transparent);
+  box-shadow: 0 14px 34px rgba(0,0,0,.22);
+  backdrop-filter: blur(24px) saturate(150%);
+}
+
+.native-platform--ios .native-bottom-nav {
+  --native-nav-count: 5;
+  left: max(14px, env(safe-area-inset-left));
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(9px, env(safe-area-inset-bottom));
+  width: min(calc(100% - 28px), 520px);
+  min-height: 72px;
+  margin-inline: auto;
+  padding: 6px;
+  border: 1px solid rgba(192, 202, 235, .18);
+  border-radius: 30px;
+  background: color-mix(in srgb, var(--native-surface-raised) 74%, transparent);
+  box-shadow: 0 16px 44px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.07);
+  backdrop-filter: blur(28px) saturate(165%);
+}
+
+.native-platform--ios .native-bottom-nav > button.active {
+  background: color-mix(in srgb, var(--native-accent) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--native-accent) 25%, transparent);
+}
+
+.native-platform--ios :is(.panel,.card,.mobile-panel,.jarvis-panel,.hud-card,.hud-panel,.app-section-card,.account-card,.current-plan-card,.settings-plan-row) {
+  border-radius: var(--native-radius-card);
+  box-shadow: 0 18px 46px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.045);
+}
+
+.native-platform--ios :is(input,select,textarea) { border-radius: 16px; }
+.native-platform--ios :is(.primary-button,.finva-button,.jarvis-action-button,.action-primary) { border-radius: 18px; }
+
+.native-platform--ios .native-scroll-content { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
