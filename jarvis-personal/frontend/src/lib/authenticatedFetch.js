@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 
 const SESSION_EXPIRED_MESSAGE = "Tu sesión venció. Iniciá sesión nuevamente.";
+const REQUEST_TIMEOUT_MS = 20_000;
 
 async function activeToken(forceRefresh = false) {
   const result = forceRefresh
@@ -17,13 +18,36 @@ async function activeToken(forceRefresh = false) {
 }
 
 async function withToken(url, options, token) {
-  return fetch(url, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const controller = new AbortController();
+  const upstreamSignal = options.signal;
+  const abortFromUpstream = () => controller.abort(upstreamSignal?.reason);
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted) abortFromUpstream();
+    else upstreamSignal.addEventListener("abort", abortFromUpstream, { once: true });
+  }
+
+  const timeout = window.setTimeout(
+    () => controller.abort(new DOMException("Request timed out", "TimeoutError")),
+    REQUEST_TIMEOUT_MS,
+  );
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch (error) {
+    if (controller.signal.aborted && !upstreamSignal?.aborted) {
+      throw new Error("La solicitud tardó demasiado. Volvé a intentarlo.", { cause: error });
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    upstreamSignal?.removeEventListener?.("abort", abortFromUpstream);
+  }
 }
 
 export async function authenticatedFetch(url, options = {}) {
