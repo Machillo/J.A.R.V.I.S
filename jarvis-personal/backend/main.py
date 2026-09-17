@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import logging
 from uuid import uuid4
@@ -83,6 +83,22 @@ def _internal_error_payload(error_id: str) -> dict[str, str]:
         "detail": "Ocurrió un error interno. Intentá nuevamente.",
         "error_id": error_id,
     }
+
+
+@app.exception_handler(HTTPException)
+async def safe_http_error_handler(request: Request, exc: HTTPException):
+    if exc.status_code < 500:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    error_id = uuid4().hex
+    logger.error("Internal HTTP error id=%s path=%s", error_id, request.url.path)
+    return JSONResponse(status_code=exc.status_code, content=_internal_error_payload(error_id))
+
+
+@app.exception_handler(Exception)
+async def safe_unhandled_error_handler(request: Request, exc: Exception):
+    error_id = uuid4().hex
+    logger.exception("Unhandled API error id=%s path=%s", error_id, request.url.path, exc_info=exc)
+    return JSONResponse(status_code=500, content=_internal_error_payload(error_id))
 
 
 @app.middleware("http")
