@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import re
 import secrets
@@ -20,6 +21,7 @@ PRICES = {
 PAYMENT_CODE_PATTERN = re.compile(r"\bFINVA-[A-Z0-9]{6}\b", re.I)
 RECEIPT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 MAX_RECEIPT_BYTES = 5 * 1024 * 1024
+logger = logging.getLogger(__name__)
 
 
 def launch_promotion_status(now: datetime | None = None):
@@ -220,23 +222,30 @@ def _counts(conn):
 
 def catalog():
     account_id = get_current_account_id()
-    with get_connection() as conn:
-        ensure_schema(conn)
-        promotion = launch_promotion_status()
-        if promotion["active"]:
-            conn.execute("""UPDATE billing_orders SET status='canceled',updated_at=NOW()
-              WHERE account_id=%s AND status='payment_pending'""", (account_id,))
-        order = conn.execute("""SELECT id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
-          receipt_submitted_at,receipt_status,verified_at,verification_source,created_at,updated_at FROM billing_orders
-          WHERE account_id=%s ORDER BY created_at DESC LIMIT 1""", (account_id,)).fetchone()
-        if order and order["status"] == "payment_pending" and not order.get("payment_code"):
-            order = conn.execute("""UPDATE billing_orders SET provider='sinpe_mobile',payment_code=%s,
-              code_expires_at=NOW()+INTERVAL '2 hours',updated_at=NOW() WHERE id=%s
-              RETURNING id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
-                receipt_submitted_at,receipt_status,verified_at,verification_source,created_at,updated_at""",
-              (_new_payment_code(conn), order["id"])).fetchone()
-        subscription = conn.execute("SELECT * FROM billing_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
-        conn.commit()
+    promotion = launch_promotion_status()
+    order = None
+    subscription = None
+    try:
+        with get_connection() as conn:
+            ensure_schema(conn)
+            if promotion["active"]:
+                conn.execute("""UPDATE billing_orders SET status='canceled',updated_at=NOW()
+                  WHERE account_id=%s AND status='payment_pending'""", (account_id,))
+            order = conn.execute("""SELECT id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
+              receipt_submitted_at,receipt_status,verified_at,verification_source,created_at,updated_at FROM billing_orders
+              WHERE account_id=%s ORDER BY created_at DESC LIMIT 1""", (account_id,)).fetchone()
+            if order and order["status"] == "payment_pending" and not order.get("payment_code"):
+                order = conn.execute("""UPDATE billing_orders SET provider='sinpe_mobile',payment_code=%s,
+                  code_expires_at=NOW()+INTERVAL '2 hours',updated_at=NOW() WHERE id=%s
+                  RETURNING id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
+                    receipt_submitted_at,receipt_status,verified_at,verification_source,created_at,updated_at""",
+                  (_new_payment_code(conn), order["id"])).fetchone()
+            subscription = conn.execute("SELECT * FROM billing_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
+            conn.commit()
+    except Exception:
+        # The plan screen should remain usable even if the optional billing
+        # state cannot be read. Keep the full exception in backend logs.
+        logger.exception("Could not load the FINVA billing state")
     plans = []
     for code, info in PRICES.items():
         plans.append({"code": code, "regular_price_crc": info["regular"]})
