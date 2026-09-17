@@ -208,3 +208,137 @@
 @media (max-width:350px) {
   .native-product--jarvis :is(.finance-main-cards,.finance-income-cards,.financial-account-kpis,.net-worth-kpis,.timeline-kpis,.reconciliation-kpis,.deterioration-kpis,.investment-kpi-grid,.data-kpi-grid) { grid-template-columns:1fr !important; }
 }
+
+
+/* Mobile action sheets -------------------------------------------------------
+   YNAB-inspired behavior: actions live in a bounded surface. The sheet never
+   grows past the usable viewport; only its body scrolls, while header/actions
+   remain reachable above the keyboard and iOS/Android safe areas. */
+.native-product--jarvis .finance-detail-modal-backdrop {
+  position:fixed !important;
+  inset:0 !important;
+  z-index:120 !important;
+  display:flex !important;
+  align-items:flex-end !important;
+  justify-content:center !important;
+  padding:max(10px,env(safe-area-inset-top,0px)) 10px
+    max(10px,env(safe-area-inset-bottom,0px)) !important;
+  overflow:hidden !important;
+  background:rgba(2,5,12,.72) !important;
+  backdrop-filter:blur(10px);
+  overscroll-behavior:contain;
+}
+
+.native-product--jarvis .finance-detail-modal {
+  display:flex !important;
+  flex-direction:column !important;
+  width:min(100%,620px) !important;
+  max-width:620px !important;
+  max-height:min(86dvh,760px) !important;
+  max-height:min(calc(var(--app-vh,100dvh) - var(--keyboard-offset,0px) - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 18px),760px) !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow:hidden !important;
+  border-radius:24px 24px 18px 18px !important;
+  background:rgba(15,21,36,.99) !important;
+  box-shadow:0 -18px 60px rgba(0,0,0,.42) !important;
+}
+
+.native-product--jarvis .finance-detail-modal > .panel-title {
+  position:relative;
+  z-index:2;
+  flex:0 0 auto;
+  min-height:58px;
+  margin:0 !important;
+  padding:12px 14px !important;
+  align-items:center !important;
+  border-bottom:1px solid var(--jp-border);
+  background:rgba(15,21,36,.99);
+}
+.native-product--jarvis .finance-detail-modal > .panel-title h3 {
+  margin:0;
+  font-size:.95rem;
+  line-height:1.2;
+}
+.native-product--jarvis .finance-detail-modal > .panel-title .ghost-button {
+  min-height:36px;
+  padding:7px 10px;
+}
+
+/* Forms are the scrollable body. Submit remains sticky like a mobile sheet
+   footer, so a long debt form can always be completed. */
+.native-product--jarvis .finance-detail-modal > form {
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px)) !important;
+  scroll-padding:16px 0 82px;
+}
+.native-product--jarvis .finance-detail-modal > :not(.panel-title):not(form) {
+  min-height:0;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.native-product--jarvis .debt-editor-modal .debt-form-grid {
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:10px !important;
+}
+.native-product--jarvis .debt-editor-modal .debt-form-grid > label {
+  min-width:0;
+}
+.native-product--jarvis .debt-editor-modal .debt-form-grid input,
+.native-product--jarvis .debt-editor-modal .debt-form-grid select {
+  width:100%;
+  min-width:0;
+}
+.native-product--jarvis .debt-editor-modal .debt-auto-update-toggle,
+.native-product--jarvis .debt-editor-modal .debt-form-preview,
+.native-product--jarvis .debt-editor-modal .finance-input-message,
+.native-product--jarvis .debt-editor-modal .debt-form-submit {
+  grid-column:1 / -1;
+}
+.native-product--jarvis .debt-editor-modal .debt-form-submit {
+  position:sticky;
+  bottom:0;
+  z-index:4;
+  width:100%;
+  min-height:48px;
+  margin-top:2px;
+  box-shadow:0 -10px 24px rgba(15,21,36,.94);
+}
+
+/* When the software keyboard is visible, use nearly the whole remaining
+   visual viewport instead of letting inputs/actions disappear behind it. */
+.native-product--jarvis.keyboard-open .finance-detail-modal-backdrop {
+  padding-top:4px !important;
+  padding-bottom:4px !important;
+}
+.native-product--jarvis.keyboard-open .finance-detail-modal {
+  max-height:calc(var(--app-vh,100dvh) - 8px) !important;
+  border-radius:18px !important;
+}
+
+@media (max-width:520px) {
+  .native-product--jarvis .finance-detail-modal-backdrop {
+    padding-inline:0 !important;
+    padding-bottom:0 !important;
+  }
+  .native-product--jarvis .finance-detail-modal {
+    width:100% !important;
+    max-width:none !important;
+    max-height:min(88dvh,760px) !important;
+    border-radius:24px 24px 0 0 !important;
+  }
+  .native-product--jarvis .debt-editor-modal .debt-form-grid {
+    grid-template-columns:1fr !important;
+  }
+  .native-product--jarvis .debt-editor-modal .debt-auto-update-toggle,
+  .native-product--jarvis .debt-editor-modal .debt-form-preview,
+  .native-product--jarvis .debt-editor-modal .finance-input-message,
+  .native-product--jarvis .debt-editor-modal .debt-form-submit {
+    grid-column:1;
+  }
+}
