@@ -3,8 +3,10 @@ import logging
 import os
 import re
 import secrets
+import smtplib
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from email.message import EmailMessage
 
 from fastapi import HTTPException
 
@@ -22,6 +24,44 @@ PAYMENT_CODE_PATTERN = re.compile(r"\bFINVA-[A-Z0-9]{6}\b", re.I)
 RECEIPT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 MAX_RECEIPT_BYTES = 5 * 1024 * 1024
 logger = logging.getLogger(__name__)
+
+
+def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bool:
+    """Best-effort support notification. The database ticket remains canonical."""
+    host = os.getenv("SUPPORT_SMTP_HOST", "smtp.gmail.com").strip()
+    port = int(os.getenv("SUPPORT_SMTP_PORT", "465"))
+    username = os.getenv("SUPPORT_SMTP_USER", "").strip()
+    password = os.getenv("SUPPORT_SMTP_APP_PASSWORD", "").strip()
+    recipient = os.getenv("SUPPORT_EMAIL_TO", "soporte.finva@gmail.com").strip()
+    if not username or not password or not recipient:
+        logger.warning("Support email not sent for %s: SMTP credentials are not configured", public_id)
+        return False
+
+    message = EmailMessage()
+    message["Subject"] = f"[{public_id}] {payload.category.upper()}: {payload.subject.strip()}"
+    message["From"] = username
+    message["To"] = recipient
+    message.set_content(
+        "\n".join([
+            f"Ticket: {public_id}",
+            f"Tipo: {payload.category}",
+            f"Usuario: {email}",
+            f"Plan: {plan or 'desconocido'}",
+            f"Versión: {payload.app_version or 'no indicada'}",
+            f"Pantalla: {payload.screen or 'no indicada'}",
+            f"Referencia del error: {payload.error_reference or 'ninguna'}",
+            "",
+            payload.message.strip(),
+        ])
+    )
+    try:
+        with smtplib.SMTP_SSL(host, port, timeout=8) as smtp:
+            smtp.login(username, password)
+            smtp.send_message(message)
+        return True
+    except Exception:
+        logger.exception("Support email delivery failed for %s", public_id)
+        return False
 
 
 def launch_promotion_status(now: datetime | None = None):
@@ -303,7 +343,12 @@ def has_active_payment(conn, account_id: str, plan_code: str | None = None):
     if plan_code:
         extra = " AND plan_code=%s"
         params.append(plan_code)
-    return bool(conn.execute(f"SELECT 1 FROM billing_subscriptions WHERE account_id=%s AND status='active'{extra}", tuple(params)).fetchone())
+    return bool(conn.execute(
+        f"""SELECT 1 FROM billing_subscriptions
+            WHERE account_id=%s AND status='active'
+              AND (current_period_end IS NULL OR current_period_end>NOW()){extra}""",
+        tuple(params),
+    ).fetchone())
 
 
 def record_event(event_name, surface, success=True, duration_bucket=None, app_version=None):
@@ -322,13 +367,25 @@ def create_feedback(payload):
     user = get_current_user()
     with get_connection() as conn:
         ensure_schema(conn)
-        plan = conn.execute("""SELECT p.code FROM account_subscriptions s JOIN plans p ON p.id=s.plan_id WHERE s.account_id=%s""", (user["account_id"],)).fetchone()
-        row = conn.execute("""INSERT INTO feedback_reports(account_id,workspace_id,category,subject,message,plan_code)
-          VALUES(%s,%s,%s,%s,%s,%s) RETURNING id,category,subject,status,created_at""", (user["account_id"], user.get("workspace_id"),
-          payload.category, payload.subject.strip(), payload.message.strip(), (plan or {}).get("code"))).fetchone()
+        identity = conn.execute(
+            """SELECT a.primary_email,p.code AS plan_code FROM accounts a
+               LEFT JOIN account_subscriptions s ON s.account_id=a.id
+               LEFT JOIN plans p ON p.id=s.plan_id WHERE a.id=%s""",
+            (user["account_id"],),
+        ).fetchone() or {}
+        row = conn.execute("""INSERT INTO feedback_reports(account_id,workspace_id,category,subject,message,plan_code,app_version)
+          VALUES(%s,%s,%s,%s,%s,%s,%s) RETURNING id,category,subject,status,created_at""", (user["account_id"], user.get("workspace_id"),
+          payload.category, payload.subject.strip(), payload.message.strip(), identity.get("plan_code"), payload.app_version)).fetchone()
         conn.commit()
     record_event("feedback_submitted", "feedback")
-    return {**row, "public_id": f"FINVA-{int(row['id']):06d}"}
+    public_id = f"FINVA-{int(row['id']):06d}"
+    email_sent = _send_support_email(
+        public_id=public_id,
+        email=identity.get("primary_email") or "no disponible",
+        plan=identity.get("plan_code") or "",
+        payload=payload,
+    )
+    return {**row, "public_id": public_id, "email_sent": email_sent}
 
 
 def list_feedback():
