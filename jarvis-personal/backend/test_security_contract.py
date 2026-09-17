@@ -3,6 +3,7 @@ from pathlib import Path
 
 from backend import main
 from backend.auth import legal
+from backend.auth.models import ProfileSetupRequest
 from backend.notifications import routes as notification_routes
 from backend.product_ops import service as product_ops_service
 from backend.user_product import gmail_service
@@ -156,3 +157,29 @@ def test_finva_gmail_oauth_state_is_signed_and_does_not_require_database(monkeyp
 def test_overtime_accepts_decimal_hours_and_common_multipliers():
     overtime = OvertimeCreateRequest(hours=2.5, hourly_rate=2500, multiplier=1.5)
     assert overtime.hours * overtime.hourly_rate * overtime.multiplier == 9375
+
+
+def test_profile_setup_normalizes_name_and_preserves_base_currency():
+    request = ProfileSetupRequest(
+        display_name="  Ana   María  ",
+        usage_goal="save",
+        base_currency="USD",
+        enabled_currencies=["ARS", "USD", "ARS"],
+    )
+
+    assert request.display_name == "Ana María"
+    assert request.enabled_currencies == ["USD", "ARS"]
+
+
+def test_profile_setup_migration_does_not_modify_financial_records():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260917174227_finva_profile_onboarding.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "ALTER TABLE public.accounts" in migration
+    assert "profile_setup_completed" in migration
+    assert "ALTER TABLE public.financial_profiles" not in migration
+    assert "UPDATE public.financial_profiles" not in migration

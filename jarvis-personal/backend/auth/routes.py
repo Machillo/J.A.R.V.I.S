@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 
-from backend.auth.models import AllowedUserRequest, CheckAccessRequest, LegalAcceptanceRequest, PlanSelectionRequest, UnifiedOnboardingRequest
+from backend.auth.models import AllowedUserRequest, CheckAccessRequest, LegalAcceptanceRequest, PlanSelectionRequest, ProfileSetupRequest, UnifiedOnboardingRequest
 from backend.auth.legal import accept_legal_documents
 from backend.auth.service import (
     get_allowed_users,
@@ -9,7 +9,7 @@ from backend.auth.service import (
     check_user_access,
 )
 from backend.auth.current_user import get_current_user, require_roles
-from backend.auth.saas import complete_onboarding, enrich_identity, get_available_plans, get_onboarding_status, select_plan
+from backend.auth.saas import complete_onboarding, complete_profile_setup, enrich_identity, get_available_plans, get_onboarding_status, select_plan
 
 
 router = APIRouter(
@@ -66,6 +66,11 @@ def accept_legal(request_body: LegalAcceptanceRequest, request: Request):
 @router.get("/plans")
 def plans():
     return get_available_plans()
+
+
+@router.post("/profile-setup")
+def profile_setup(request: ProfileSetupRequest):
+    return complete_profile_setup(request)
 
 
 @router.post("/plan")
