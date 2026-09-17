@@ -1,5 +1,5 @@
 /* JARVIS Personal final visual layer.
-   Purpose: one compact, continuous mobile hierarchy over legacy feature CSS.
+   Compact, continuous mobile hierarchy over legacy feature CSS.
    Scoped to JARVIS only; FINVA Users remains untouched. */
 .native-product--jarvis {
   --jp-gap: 10px;
@@ -7,54 +7,64 @@
   --jp-card: rgba(19,25,42,.94);
   --jp-card-2: rgba(24,32,52,.96);
   --jp-border: rgba(255,255,255,.075);
+  --jp-nav: 64px;
 }
 
 .native-product--jarvis.jarvis-app.app-shell-v2 {
   background: linear-gradient(180deg,#070914 0%,#0a0e1a 48%,#070914 100%);
 }
 
+/* One safe-area calculation only. Legacy layers used to stack top padding. */
 .native-product--jarvis .main-shell.app-main-v2,
 .native-product--jarvis .main-shell.app-main-v2.expanded {
-  width: min(100%, 760px);
+  width: min(100%,760px);
   min-height: 100%;
   margin-inline: auto;
-  padding: max(8px,env(safe-area-inset-top,0px)) 12px calc(88px + env(safe-area-inset-bottom,0px));
+  padding: 0 12px calc(var(--jp-nav) + 24px + env(safe-area-inset-bottom,0px)) !important;
+}
+.native-product--jarvis .main-shell.app-main-v2.home-mode {
+  padding-top: max(8px,env(safe-area-inset-top,0px)) !important;
+  padding-bottom: calc(var(--jp-nav) + 92px + env(safe-area-inset-bottom,0px)) !important;
 }
 
 .native-product--jarvis .native-screen-content {
-  display: grid;
-  gap: var(--jp-gap);
-  width: 100%;
-  min-width: 0;
-  padding: 0;
+  display:grid;
+  gap:var(--jp-gap);
+  width:100%;
+  min-width:0;
+  padding:0 0 12px;
 }
 
 .native-product--jarvis .app-top-bar {
-  position: sticky;
-  top: 0;
-  z-index: 25;
-  grid-template-columns: 40px minmax(0,1fr) 40px;
-  min-height: 58px;
-  margin: 0 -12px 8px;
-  padding: 8px 12px;
-  border: 0;
-  border-bottom: 1px solid var(--jp-border);
-  border-radius: 0;
-  background: rgba(7,9,20,.91);
-  box-shadow: none;
-  backdrop-filter: blur(18px) saturate(130%);
+  position:sticky;
+  top:0;
+  z-index:25;
+  grid-template-columns:40px minmax(0,1fr) 40px;
+  min-height:calc(56px + env(safe-area-inset-top,0px));
+  margin:0 -12px 8px !important;
+  padding:max(7px,env(safe-area-inset-top,0px)) 12px 7px !important;
+  border:0;
+  border-bottom:1px solid var(--jp-border);
+  border-radius:0;
+  background:rgba(7,9,20,.96);
+  box-shadow:none;
+  backdrop-filter:blur(18px) saturate(130%);
 }
 .native-product--jarvis .app-top-bar > div { min-width:0; }
 .native-product--jarvis .app-top-bar span { margin:0 0 2px; font-size:.58rem; letter-spacing:.12em; }
-.native-product--jarvis .app-top-bar h1 { margin:0; font-size:clamp(1.35rem,6vw,1.7rem); line-height:1.05; letter-spacing:-.035em; }
+.native-product--jarvis .app-top-bar h1 { margin:0; font-size:clamp(1.3rem,6vw,1.65rem); line-height:1.05; letter-spacing:-.035em; }
 .native-product--jarvis :is(.app-back-button,.app-logout-button) { width:38px; height:38px; min-width:38px; border-radius:13px; box-shadow:none; }
 
-/* Remove the giant dead zones caused by stacked page/shell spacing. */
+/* Remove stacked page spacing / black dead zones. */
 .native-product--jarvis :is(.page,.dashboard-page,.app-hub-page,.wealth-hub-page,.premium-strategy-page,.strategy-v3-page,.net-worth-page,.financial-accounts-page,.financial-timeline-page,.reconciliation-page,.deterioration-page,.investments-page,.business-page) {
-  width:100%; max-width:100%; min-width:0; margin:0; padding-top:0; gap:var(--jp-gap);
+  width:100%; max-width:100%; min-width:0; margin:0 !important; padding-top:0 !important; gap:var(--jp-gap);
 }
+.native-product--jarvis .native-screen-content > :first-child { margin-top:0 !important; }
 .native-product--jarvis .strategy-v3-page { padding-bottom:12px; }
 .native-product--jarvis :is(.page-section-header,.page-heading-row,.wealth-hub-intro) { margin:0 0 8px; }
+
+/* The shell already names Patrimonio; do not repeat the same hero inside Wealth. */
+.native-product--jarvis .native-screen-content--wealth .wealth-hub-intro { display:none !important; }
 
 /* YNAB-like information density: flatter surfaces, less nested glass. */
 .native-product--jarvis :is(.hud-card,.hud-panel,.jarvis-panel,.app-section-card,.app-list-group,.finance-card,.metric-card,.goal-card,.empty-state,.strategy-priority-v3,.strategy-debt-progress-v3,.strategy-options-v3,.strategy-detail-panel.strategy-v3-detail) {
@@ -67,40 +77,30 @@
 .native-product--jarvis :is(.hud-card,.hud-panel,.jarvis-panel,.finance-card,.metric-card,.empty-state) { padding:14px !important; }
 .native-product--jarvis :is(.app-section-card,.app-list-group) { margin:0 0 10px; }
 .native-product--jarvis .app-section-card + .app-section-card { margin-top:0; }
-
-.native-product--jarvis .app-list-item {
-  grid-template-columns:38px minmax(0,1fr) auto;
-  gap:10px;
-  min-height:60px;
-  padding:10px 12px;
-}
+.native-product--jarvis .app-list-item { grid-template-columns:38px minmax(0,1fr) auto; gap:10px; min-height:60px; padding:10px 12px; }
 .native-product--jarvis .app-list-icon { width:36px; height:36px; border-radius:12px; }
 .native-product--jarvis .app-list-copy { gap:2px; }
 .native-product--jarvis .app-list-copy strong { font-size:.9rem; line-height:1.2; }
 .native-product--jarvis .app-list-copy small { font-size:.7rem; line-height:1.3; }
 .native-product--jarvis .app-group-heading { padding:11px 12px 7px; }
 
-/* Wealth should read as a real center, not an empty intermediary screen. */
-.native-product--jarvis .wealth-hub-intro {
-  display:grid;
-  gap:4px;
-  padding:4px 2px 6px;
-}
+/* Wealth center. */
+.native-product--jarvis .wealth-hub-intro { display:grid; gap:4px; padding:4px 2px 6px; }
 .native-product--jarvis .wealth-hub-intro h2 { margin:0; font-size:1.75rem; line-height:1; }
 .native-product--jarvis .wealth-hub-intro p { margin:0; max-width:36rem; color:var(--native-muted); font-size:.78rem; line-height:1.4; }
 .native-product--jarvis .wealth-options-group { display:grid; overflow:hidden; }
 
-/* Strategy: compact top and visible content immediately below it. */
+/* Strategy overview: executive summary first. */
 .native-product--jarvis .strategy-v3-hero {
   grid-template-columns:minmax(0,1fr) auto;
   align-items:center;
   gap:10px;
-  padding:13px !important;
+  padding:12px !important;
   margin:0;
   border-radius:var(--jp-radius) !important;
   box-shadow:none !important;
 }
-.native-product--jarvis .strategy-v3-hero h2 { margin:1px 0 3px; font-size:1.35rem; }
+.native-product--jarvis .strategy-v3-hero h2 { margin:1px 0 3px; font-size:1.3rem; }
 .native-product--jarvis .strategy-v3-hero p { font-size:.72rem; line-height:1.35; }
 .native-product--jarvis .strategy-v3-hero .primary-action-button { width:auto; min-height:38px; padding:8px 10px; font-size:.72rem; }
 .native-product--jarvis :is(.strategy-priority-v3,.strategy-debt-progress-v3,.strategy-options-v3,.strategy-detail-panel.strategy-v3-detail) { padding:12px; }
@@ -109,43 +109,102 @@
 .native-product--jarvis .strategy-debt-progress-stats { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:7px; }
 .native-product--jarvis .strategy-debt-progress-stats > div { padding:9px 10px; border-radius:12px; }
 
-/* Finance: preserve useful two-up KPIs on phones instead of turning every card into a long single column. */
-.native-product--jarvis :is(.finance-dashboard-grid,.finance-overview-grid,.finance-analytics-grid,.dashboard-grid,.data-kpi-grid,.financial-account-kpis,.net-worth-kpis,.timeline-kpis,.reconciliation-kpis,.deterioration-kpis,.investment-kpi-grid) {
+/* Strategy drill-down. Selecting Salvavidas/Deudas/etc becomes its own view rather
+   than appending a second page under the overview. The selected row doubles as
+   the back/close affordance: tap it again to return to Strategy. */
+.native-product--jarvis .strategy-v3-page:has(> .strategy-detail-panel) > :is(.strategy-v3-hero,.strategy-priority-v3,.strategy-debt-progress-v3) {
+  display:none !important;
+}
+.native-product--jarvis .strategy-v3-page:has(> .strategy-detail-panel) .strategy-options-v3 {
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+.native-product--jarvis .strategy-v3-page:has(> .strategy-detail-panel) .strategy-options-v3 > .strategy-v3-label,
+.native-product--jarvis .strategy-v3-page:has(> .strategy-detail-panel) .strategy-option-card-v3:not(.active) {
+  display:none !important;
+}
+.native-product--jarvis .strategy-v3-page:has(> .strategy-detail-panel) .strategy-option-card-v3.active {
+  position:sticky;
+  top:calc(56px + env(safe-area-inset-top,0px));
+  z-index:18;
+  width:100%;
+  min-height:52px;
+  border-color:rgba(81,203,238,.25);
+  background:rgba(13,19,33,.98);
+}
+.native-product--jarvis .strategy-v3-page:has(> .strategy-detail-panel) .strategy-option-card-v3.active svg:last-child {
+  transform:rotate(180deg);
+}
+.native-product--jarvis .strategy-v3-page:has(> .strategy-detail-panel) > .strategy-detail-panel {
+  margin:0 !important;
+  min-height:0 !important;
+}
+
+/* Finance: KPI cards may be two-up; information panels must use full mobile width. */
+.native-product--jarvis :is(.finance-main-cards,.finance-income-cards,.financial-account-kpis,.net-worth-kpis,.timeline-kpis,.reconciliation-kpis,.deterioration-kpis,.investment-kpi-grid,.data-kpi-grid) {
   grid-template-columns:repeat(2,minmax(0,1fr)) !important;
   gap:8px !important;
 }
-.native-product--jarvis :is(.finance-dashboard-grid,.finance-overview-grid,.finance-analytics-grid) > * { min-width:0; }
+.native-product--jarvis :is(.finance-dashboard-grid,.finance-overview-grid,.finance-analytics-grid,.finance-spending-grid,.dashboard-grid) {
+  grid-template-columns:minmax(0,1fr) !important;
+  gap:10px !important;
+}
+.native-product--jarvis :is(.finance-dashboard-grid,.finance-overview-grid,.finance-analytics-grid,.finance-spending-grid) > * { min-width:0; width:100%; }
+.native-product--jarvis .finance-workspace :is(.panel-title h3,.panel-title span) {
+  overflow-wrap:normal;
+  word-break:normal;
+  hyphens:none;
+}
+.native-product--jarvis .finance-workspace .panel-title h3 { font-size:clamp(.88rem,4vw,1.02rem); line-height:1.2; letter-spacing:.01em; }
+.native-product--jarvis .finance-workspace .panel-title { gap:8px; align-items:flex-start; }
 .native-product--jarvis .jarvis-flow-chart { min-height:150px; height:150px; }
 .native-product--jarvis :is(.finance-section,.finance-dashboard-section,.finance-cycle-section) { margin-block:0 10px; }
+.native-product--jarvis .finance-tab-bar { margin-top:0 !important; }
 
-/* Prevent legacy min-heights from rendering black empty slabs. */
+/* Loading states should read as intentional screens, not a message floating in a void. */
+.native-product--jarvis .native-screen-content :is(.loading-panel,.loading-state,.reconciliation-loading,.salvavidas-loading) {
+  min-height:180px !important;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  text-align:center;
+  padding:24px 16px !important;
+  border:1px solid var(--jp-border);
+  border-radius:var(--jp-radius);
+  background:var(--jp-card);
+}
+
+/* Prevent legacy min-heights from rendering empty black slabs. */
 .native-product--jarvis .native-screen-content :is(.hud-card,.hud-panel,.finance-card,.metric-card,.empty-state,.app-section-card,.app-list-group) { min-height:0 !important; }
 .native-product--jarvis .native-screen-content > :empty { display:none !important; }
 
-/* Bottom navigation becomes a compact app bar instead of a floating pill that consumes content space. */
+/* Bottom navigation: fixed compact bar with guaranteed content clearance. */
 .native-product--jarvis .bottom-app-nav {
   bottom:0;
   width:min(760px,100vw);
-  min-height:64px;
+  min-height:var(--jp-nav);
   padding:5px 6px calc(5px + env(safe-area-inset-bottom,0px));
   border-width:1px 0 0;
   border-radius:0;
-  background:rgba(10,14,26,.96);
+  background:rgba(10,14,26,.97);
   box-shadow:0 -8px 24px rgba(0,0,0,.18);
   backdrop-filter:blur(18px);
 }
 .native-product--jarvis .bottom-nav-item { min-height:48px; padding:5px 2px; border-radius:12px; }
 .native-product--jarvis .bottom-nav-item span:last-child { font-size:.62rem; }
+.native-product--jarvis .native-screen-content { scroll-margin-bottom:calc(var(--jp-nav) + 20px); }
 
 @media (max-width:430px) {
   .native-product--jarvis .main-shell.app-main-v2,
-  .native-product--jarvis .main-shell.app-main-v2.expanded { padding-inline:10px; }
-  .native-product--jarvis .app-top-bar { margin-inline:-10px; padding-inline:10px; }
+  .native-product--jarvis .main-shell.app-main-v2.expanded { padding-inline:10px !important; }
+  .native-product--jarvis .app-top-bar { margin-inline:-10px !important; padding-inline:10px !important; }
   .native-product--jarvis .strategy-v3-hero { grid-template-columns:1fr; }
   .native-product--jarvis .strategy-v3-hero .primary-action-button { width:100%; }
-  .native-product--jarvis :is(.finance-dashboard-grid,.finance-overview-grid,.finance-analytics-grid,.dashboard-grid,.data-kpi-grid,.financial-account-kpis,.net-worth-kpis,.timeline-kpis,.reconciliation-kpis,.deterioration-kpis,.investment-kpi-grid) { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  .native-product--jarvis .finance-main-cards { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
 }
 
 @media (max-width:350px) {
-  .native-product--jarvis :is(.finance-dashboard-grid,.finance-overview-grid,.finance-analytics-grid,.dashboard-grid,.data-kpi-grid,.financial-account-kpis,.net-worth-kpis,.timeline-kpis,.reconciliation-kpis,.deterioration-kpis,.investment-kpi-grid) { grid-template-columns:1fr !important; }
+  .native-product--jarvis :is(.finance-main-cards,.finance-income-cards,.financial-account-kpis,.net-worth-kpis,.timeline-kpis,.reconciliation-kpis,.deterioration-kpis,.investment-kpi-grid,.data-kpi-grid) { grid-template-columns:1fr !important; }
 }
