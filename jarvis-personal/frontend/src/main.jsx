@@ -21,7 +21,7 @@ import "./pages/UnifiedOnboarding.css";
 import "./pages/LegalConsent.css";
 import { registerJarvisServiceWorker } from "./pushNotifications";
 import { initializeTelemetry } from "./lib/telemetry";
-import { initializeColorMode } from "./components/AppearanceSelector";
+import { initializeColorMode } from "./lib/colorMode";
 
 const publicPages = new Set(["/about", "/privacy", "/terms"]);
 const isPublicPage = publicPages.has(window.location.pathname);
