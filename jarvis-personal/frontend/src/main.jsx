@@ -21,10 +21,12 @@ import "./pages/UnifiedOnboarding.css";
 import "./pages/LegalConsent.css";
 import { registerJarvisServiceWorker } from "./pushNotifications";
 import { initializeTelemetry } from "./lib/telemetry";
+import { initializeColorMode } from "./components/AppearanceSelector";
 
 const publicPages = new Set(["/about", "/privacy", "/terms"]);
 const isPublicPage = publicPages.has(window.location.pathname);
 initializeTelemetry();
+initializeColorMode();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

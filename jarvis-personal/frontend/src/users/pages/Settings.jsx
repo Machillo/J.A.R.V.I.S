@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getBillingCatalog, getMe, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
 import AccountSecurity from "../components/AccountSecurity";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../../lib/receiptPicker";
+import AppearanceSelector from "../../components/AppearanceSelector";
 
 const icons = { free: WalletCards, basic: Sparkles, vip: Crown };
 
@@ -170,6 +171,8 @@ export default function Settings({ user, onUserChange }) {
       </div>
 
       <AccountSecurity user={user} />
+
+      <AppearanceSelector />
 
       <article className="account-card">
         <div><strong>Información legal</strong><small>Consultá los documentos vigentes cuando querás.</small></div>
