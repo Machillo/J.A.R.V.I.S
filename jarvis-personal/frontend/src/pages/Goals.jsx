@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react";
 import { Calendar, Edit3, RefreshCw, Save, Target, X } from "lucide-react";
 import { getGoals, updateGoal } from "../services/jarvisApi";
+import { deviceLanguage, localeTag } from "../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
 const formatCRC = (value = 0) =>
-  new Intl.NumberFormat("es-CR", {
+  new Intl.NumberFormat(localeTag(language), {
     style: "currency",
     currency: "CRC",
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
 
 const priorityLabels = {
-  low: "BAJA",
-  medium: "MEDIA",
-  high: "ALTA",
-  critical: "PRIORITARIA",
+  low: tx("BAJA", "LOW"),
+  medium: tx("MEDIA", "MEDIUM"),
+  high: tx("ALTA", "HIGH"),
+  critical: tx("PRIORITARIA", "PRIORITY"),
 };
 
 export default function Goals() {
@@ -108,13 +111,13 @@ export default function Goals() {
     <section className="data-page jarvis-v2-screen goals-v2">
       <div className="page-section-header goals-v2-header">
         <div>
-          <h2>Metas Estratégicas</h2>
-          <p>Viajes, ahorro, deuda y objetivos personales.</p>
+          <h2>{tx("Metas Estratégicas", "Strategic Goals")}</h2>
+          <p>{tx("Viajes, ahorro, deuda y objetivos personales.", "Travel, savings, debt, and personal goals.")}</p>
         </div>
 
         <button className="hud-action-button" onClick={loadGoals}>
           <RefreshCw size={16} />
-          Actualizar
+          {tx("Actualizar", "Refresh")}
         </button>
       </div>
 
@@ -123,8 +126,8 @@ export default function Goals() {
       {goals.length === 0 ? (
         <div className="empty-state full-width">
           <Target size={36} />
-          <h3>No hay metas activas todavía</h3>
-          <p>Cuando agreguemos metas desde la interfaz o por chat, se mostrarán aquí con progreso, fecha objetivo y prioridad.</p>
+          <h3>{tx("No hay metas activas todavía", "No active goals yet")}</h3>
+          <p>{tx("Cuando agreguemos metas desde la interfaz o por chat, se mostrarán aquí con progreso, fecha objetivo y prioridad.", "Goals added from the interface or chat will appear here with progress, target date, and priority.")}</p>
         </div>
       ) : (
         <div className="goals-grid goals-v2-list">
@@ -181,11 +184,11 @@ export default function Goals() {
                     <div className="goal-progress"><div className="goal-progress-fill" style={{ width: `${progress}%` }} /></div>
                     <div className="goal-percent">{progress}%</div>
                     <div className="goal-money">{formatCRC(goal.current_amount)} / {formatCRC(goal.target_amount)}</div>
-                    <div className="goal-remaining">Faltan {formatCRC(remaining)}</div>
-                    <div className="goal-date"><Calendar size={14} />{goal.target_date || "Sin fecha"}</div>
+                    <div className="goal-remaining">{tx("Faltan", "Remaining")} {formatCRC(remaining)}</div>
+                    <div className="goal-date"><Calendar size={14} />{goal.target_date || tx("Sin fecha", "No date")}</div>
                     {goal.alternative_group && <div className="goal-date">{goal.is_selected ? "Alternativa elegida" : "Alternativa en comparación"} · {goal.alternative_group}</div>}
                     {goal.depends_on_group && <div className="goal-date">Se activa después de {goal.depends_on_group}</div>}
-                    <button className="goal-edit-button" onClick={() => startEdit(goal)}><Edit3 size={15} /> Editar</button>
+                    <button className="goal-edit-button" onClick={() => startEdit(goal)}><Edit3 size={15} /> {tx("Editar", "Edit")}</button>
                   </>
                 )}
               </div>
