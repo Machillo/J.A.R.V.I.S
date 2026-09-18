@@ -1,0 +1,167 @@
+/* JARVIS Home owns its layout here. Keep legacy compatibility out of this file. */
+.native-product--jarvis .main-shell.home-mode {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: var(--app-vh, 100dvh);
+  min-height: 0;
+  margin: 0;
+  padding: 0 0 calc(78px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+
+.native-product--jarvis .jarvis-home-v2 {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: calc(24px + env(safe-area-inset-top)) 18px 96px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.native-product--jarvis .jarvis-home-v2.idle {
+  justify-content: center;
+}
+
+.native-product--jarvis .jarvis-home-v2-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.native-product--jarvis .jarvis-home-v2-mark {
+  display: grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--native-border);
+  border-radius: 14px;
+  color: var(--native-accent-2);
+  background: var(--native-bg-soft);
+}
+
+.native-product--jarvis .jarvis-home-v2-hero p,
+.native-product--jarvis .jarvis-home-v2-hero h1,
+.native-product--jarvis .jarvis-home-v2-hero span {
+  margin: 0;
+}
+
+.native-product--jarvis .jarvis-home-v2-hero p,
+.native-product--jarvis .jarvis-home-v2-hero span {
+  color: var(--native-muted);
+  font-size: .82rem;
+  line-height: 1.35;
+}
+
+.native-product--jarvis .jarvis-home-v2-hero h1 {
+  color: var(--native-text);
+  font-size: 1.45rem;
+  line-height: 1.1;
+  letter-spacing: -.035em;
+}
+
+.native-product--jarvis .jarvis-home-v2-idle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 28px;
+  color: var(--native-muted);
+  font-size: .86rem;
+}
+
+.native-product--jarvis .jarvis-home-v2-session {
+  width: 100%;
+  margin-top: 24px;
+}
+
+.native-product--jarvis .jarvis-home-v2-feed {
+  display: grid;
+  gap: 10px;
+}
+
+.native-product--jarvis .jarvis-home-v2-message {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--native-border);
+  border-radius: 14px;
+  background: var(--native-bg-soft);
+}
+
+.native-product--jarvis .jarvis-home-v2-message p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.native-product--jarvis .jarvis-command-center {
+  position: absolute;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 44px;
+  gap: 6px;
+  align-items: center;
+  width: min(calc(100% - 24px), 696px);
+  min-height: 56px;
+  padding: 6px;
+  transform: translateX(-50%);
+  border: 1px solid var(--native-border);
+  border-radius: 18px;
+  background: var(--native-surface);
+  box-shadow: 0 12px 32px rgba(0,0,0,.24);
+  backdrop-filter: none;
+}
+
+.native-product--jarvis .jarvis-command-center input {
+  min-width: 0;
+  width: 100%;
+  height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  outline: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.native-product--jarvis .jarvis-command-center :is(.command-button,.voice-orb) {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  border-radius: 12px;
+}
+
+.native-product--jarvis.keyboard-open .jarvis-command-center {
+  bottom: calc(8px + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 430px) {
+  .native-product--jarvis .jarvis-home-v2 {
+    padding-inline: 16px;
+  }
+
+  .native-product--jarvis .jarvis-command-center {
+    width: calc(100% - 20px);
+  }
+}
