@@ -8,6 +8,8 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
+  Landmark,
+  ChevronDown,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import {
@@ -32,7 +34,6 @@ import {
   syncAguinaldoFromCcss,
 } from "../services/jarvisApi";
 import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
-
 const formatCRC = (value = 0) =>
   new Intl.NumberFormat("es-CR", {
     style: "currency",
@@ -1146,10 +1147,10 @@ function DebtsPanel({ sortedDebts, loading = false, debtSort, setDebtSort, onCha
   };
 
   return (
-    <article className="hud-panel large debt-panel-v2">
-      <div className="panel-title debts-panel-title">
-        <div><h3>DEUDAS</h3><span>{sortedDebts.length} registradas</span></div>
-        <div className="debt-panel-actions">
+    <article className="jarvis-debts-panel">
+      <div className="jarvis-debts-toolbar">
+        <div><h3>Deudas</h3><span>{sortedDebts.length} registradas</span></div>
+        <div className="jarvis-debts-toolbar__actions">
           <button className="hud-action-button small" onClick={() => setAdding(true)}>+ Agregar</button>
           <select aria-label="Ordenar deudas" value={debtSort} onChange={(event) => setDebtSort(event.target.value)}>
             <option value="saldo">Saldo</option><option value="interes">Interés</option><option value="cuota">Cuota</option><option value="fecha">Fecha</option>
@@ -1158,40 +1159,67 @@ function DebtsPanel({ sortedDebts, loading = false, debtSort, setDebtSort, onCha
       </div>
 
       {message && <p className="finance-input-message">{message}</p>}
-      <div className="debt-list debt-list-v2">
-        {loading ? <div className="jarvis-v2-state debt-loading-v2">Cargando deudas...</div> : sortedDebts.length === 0 ? <EmptyPanel title="Sin deudas registradas" description="" /> : sortedDebts.map((debt) => {
+      <div className="jarvis-debt-list">
+        {loading ? <div className="jarvis-debt-state">Cargando deudas...</div> : sortedDebts.length === 0 ? <EmptyPanel title="Sin deudas registradas" description="" /> : sortedDebts.map((debt) => {
           const paid = Number(debt.installments_paid ?? debt.paid_installments ?? 0);
           const total = Number(debt.term_months ?? debt.total_installments ?? 0);
           const remaining = total > 0 ? Math.max(total - paid, 0) : null;
           const progress = total > 0 ? Math.min((paid / total) * 100, 100) : 0;
           const isPaid = Number(debt.remaining_amount || 0) <= 0 || (total > 0 && paid >= total);
           const expanded = expandedDebtId === debt.id;
+          const totalAmount = Number(debt.total_amount || debt.original_amount || debt.remaining_amount || 0);
+          const paidAmount = Math.max(totalAmount - Number(debt.remaining_amount || 0), 0);
+          const debtType = String(debt.debt_type || "other").replaceAll("_", " ");
           return (
-            <div className={`debt-row-v2 ${isPaid ? "is-paid" : ""} ${expanded ? "is-expanded" : ""}`} key={debt.id}>
-              <button className="debt-row-v2-main" type="button" aria-expanded={expanded} onClick={() => setExpandedDebtId(expanded ? null : debt.id)}>
-                <span className="debt-row-v2-copy"><strong>{debt.name}</strong><small>{isPaid ? "Pagada" : total > 0 ? `${paid}/${total} cuotas · ${remaining} restantes` : "Pago libre"}</small></span>
-                <span className="debt-row-v2-money"><strong>{formatCRC(debt.remaining_amount)}</strong><small>{Number(debt.interest_rate || 0)}% · {formatCRC(debt.monthly_payment || 0)}/mes</small></span>
-                <span className="debt-row-v2-chevron" aria-hidden="true">⌄</span>
+            <section className={`jarvis-debt-card ${isPaid ? "is-paid" : ""} ${expanded ? "is-expanded" : ""}`} key={debt.id}>
+              <button className="jarvis-debt-summary" type="button" aria-expanded={expanded} onClick={() => setExpandedDebtId(expanded ? null : debt.id)}>
+                <span className="jarvis-debt-summary__icon"><Landmark size={20} /></span>
+                <span className="jarvis-debt-summary__copy">
+                  <strong>{debt.name}</strong>
+                  <small>{isPaid ? "Pagada" : total > 0 ? `${paid}/${total} cuotas · ${remaining} restantes` : "Pago libre"}</small>
+                </span>
+                <span className="jarvis-debt-summary__money">
+                  <strong>{formatCRC(debt.remaining_amount)}</strong>
+                  <small>{formatCRC(debt.monthly_payment || 0)}/mes</small>
+                </span>
+                <ChevronDown className="jarvis-debt-summary__chevron" size={20} />
               </button>
-              {total > 0 && <div className="debt-row-v2-progress" aria-label={`${Math.round(progress)}% pagado`}><span style={{ width: `${progress}%` }} /></div>}
-              {expanded && (
-                <div className="debt-row-v2-detail">
-                  <div className="debt-row-v2-facts">
-                    <span><small>Tipo</small><b>{String(debt.debt_type || "other").replaceAll("_", " ")}</b></span>
-                    <span><small>Cargo fijo</small><b>{formatCRC(debt.fixed_fee_amount || 0)}</b></span>
-                    <span><small>Método</small><b>{debt.interest_method === "daily_365" ? "Diario / 365" : "Mensual"}</b></span>
-                    <span><small>Próximo pago</small><b>{isPaid ? "Finalizada" : debt.next_payment_date || "Sin fecha"}</b></span>
-                    <span><small>Último pago</small><b>{debt.last_payment_date || "Sin registrar"}</b></span>
-                    <span><small>Inicio</small><b>{debt.start_date || "--"}</b></span>
+              <div className="jarvis-debt-expand" inert={!expanded ? true : undefined}>
+                <div className="jarvis-debt-detail">
+                  <div className="jarvis-debt-overview">
+                    <div className="jarvis-debt-overview__heading">
+                      <span><Landmark size={24} /></span>
+                      <strong>{debt.name}</strong>
+                      <small>{total > 0 ? `${paid}/${total} cuotas · ${remaining} restantes` : "Plan de pago libre"}</small>
+                      <p>Tasa: <b>{Number(debt.interest_rate || 0)}%</b> · Pago: <b>{formatCRC(debt.monthly_payment || 0)}/mes</b></p>
+                    </div>
+                    <div className="jarvis-debt-ring" style={{ "--debt-progress": `${progress * 3.6}deg` }} aria-label={`${Math.round(progress)}% pagado`}>
+                      <span><strong>{Math.round(progress)}%</strong><small>Completo</small></span>
+                    </div>
+                    <div className="jarvis-debt-amounts">
+                      <span><small>Pagado</small><strong>{formatCRC(paidAmount)}</strong></span>
+                      <span><small>Restante</small><strong>{formatCRC(debt.remaining_amount)}</strong></span>
+                    </div>
                   </div>
-                  <div className="debt-row-actions">
+                  <div className="jarvis-debt-facts">
+                    <h4>Información adicional</h4>
+                    <dl>
+                      <div><dt>Tipo</dt><dd>{debtType}</dd></div>
+                      <div><dt>Cargo fijo</dt><dd>{formatCRC(debt.fixed_fee_amount || 0)}</dd></div>
+                      <div><dt>Método</dt><dd>{debt.interest_method === "daily_365" ? "Diario / 365" : "Mensual"}</dd></div>
+                      <div><dt>Próximo pago</dt><dd>{isPaid ? "Finalizada" : debt.next_payment_date || "Sin fecha"}</dd></div>
+                      <div><dt>Último pago</dt><dd>{debt.last_payment_date || "Sin registrar"}</dd></div>
+                      <div><dt>Inicio</dt><dd>{debt.start_date || "Sin fecha"}</dd></div>
+                    </dl>
+                  </div>
+                  <div className="jarvis-debt-actions">
                     {!isPaid && <button className="ghost-button" onClick={() => setPayingDebt(debt)}>Registrar pago</button>}
                     <button className="ghost-button" onClick={() => setEditingDebt(debt)}>Editar</button>
                     <button className="ghost-button danger" onClick={() => removeDebt(debt)}>Eliminar</button>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            </section>
           );
         })}
       </div>

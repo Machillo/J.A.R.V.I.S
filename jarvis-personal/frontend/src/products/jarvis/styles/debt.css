@@ -1,0 +1,71 @@
+/* Finance / debts owns every selector in this file. */
+.native-product--jarvis .jarvis-debts-panel { width: 100%; min-width: 0; }
+.native-product--jarvis .jarvis-debts-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 2px 0 16px; }
+.native-product--jarvis .jarvis-debts-toolbar h3 { margin: 0; font-size: 1.15rem; text-transform: none; }
+.native-product--jarvis .jarvis-debts-toolbar > div > span { display: block; margin-top: 3px; color: var(--jarvis-text-3); font-size: .78rem; }
+.native-product--jarvis .jarvis-debts-toolbar__actions { display: flex; align-items: center; gap: 9px; }
+.native-product--jarvis .jarvis-debts-toolbar__actions .hud-action-button { min-height: 44px; border-radius: 15px; }
+.native-product--jarvis .jarvis-debts-toolbar__actions select { width: auto; min-height: 44px; padding: 0 36px 0 13px; border-radius: 15px; }
+.native-product--jarvis .jarvis-debt-list { display: flex; flex-direction: column; gap: 12px; }
+.native-product--jarvis .jarvis-debt-state { display: grid; min-height: 140px; place-items: center; color: var(--jarvis-text-3); }
+
+.native-product--jarvis .jarvis-debt-card { width: 100%; overflow: hidden; border: 1px solid var(--jarvis-line); border-radius: 22px; background: var(--jarvis-surface-2); transition: border-color .2s ease, background .2s ease; }
+.native-product--jarvis .jarvis-debt-card.is-expanded { border-color: color-mix(in srgb, var(--jarvis-primary) 42%, var(--jarvis-line)); background: var(--jarvis-surface); }
+.native-product--jarvis .jarvis-debt-card.is-paid { border-color: color-mix(in srgb, var(--jarvis-good) 35%, var(--jarvis-line)); }
+.native-product--jarvis .jarvis-debt-summary { display: grid; grid-template-columns: 42px minmax(0,1fr) auto 20px; align-items: center; gap: 12px; width: 100%; min-height: 82px; padding: 13px 16px; border: 0; color: var(--jarvis-text); background: transparent; text-align: left; }
+.native-product--jarvis .jarvis-debt-summary__icon { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 14px; color: var(--jarvis-secondary); background: color-mix(in srgb, var(--jarvis-secondary) 11%, transparent); }
+.native-product--jarvis .jarvis-debt-summary__copy { min-width: 0; }
+.native-product--jarvis .jarvis-debt-summary__copy strong { display: block; overflow: hidden; font-size: .96rem; text-overflow: ellipsis; white-space: nowrap; }
+.native-product--jarvis .jarvis-debt-summary__copy small { display: block; margin-top: 4px; color: var(--jarvis-text-3); font-size: .74rem; }
+.native-product--jarvis .jarvis-debt-summary__money { min-width: 0; text-align: right; }
+.native-product--jarvis .jarvis-debt-summary__money strong { display: block; font-size: .9rem; }
+.native-product--jarvis .jarvis-debt-summary__money small { display: block; margin-top: 4px; color: var(--jarvis-text-3); font-size: .7rem; }
+.native-product--jarvis .jarvis-debt-summary__chevron { color: var(--jarvis-text-3); transition: transform .28s ease; }
+.native-product--jarvis .jarvis-debt-card.is-expanded .jarvis-debt-summary__chevron { transform: rotate(180deg); }
+
+.native-product--jarvis .jarvis-debt-expand { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .34s cubic-bezier(.2,.8,.2,1), opacity .2s ease; }
+.native-product--jarvis .jarvis-debt-card.is-expanded .jarvis-debt-expand { grid-template-rows: 1fr; opacity: 1; }
+.native-product--jarvis .jarvis-debt-detail { min-height: 0; overflow: hidden; border-top: 1px solid var(--jarvis-line); }
+.native-product--jarvis .jarvis-debt-overview { padding: 20px 18px 18px; }
+.native-product--jarvis .jarvis-debt-overview__heading { text-align: center; }
+.native-product--jarvis .jarvis-debt-overview__heading > span { display: grid; width: 44px; height: 44px; margin: 0 auto 7px; place-items: center; border-radius: 15px; color: var(--jarvis-secondary); background: color-mix(in srgb, var(--jarvis-secondary) 11%, transparent); }
+.native-product--jarvis .jarvis-debt-overview__heading > strong { display: block; font-size: 1.2rem; }
+.native-product--jarvis .jarvis-debt-overview__heading > small { display: block; margin-top: 5px; color: var(--jarvis-text-2); font-size: .82rem; }
+.native-product--jarvis .jarvis-debt-overview__heading p { margin: 7px 0 0; color: var(--jarvis-text-2); font-size: .84rem; }
+.native-product--jarvis .jarvis-debt-ring { display: grid; width: 190px; aspect-ratio: 1; margin: 22px auto; place-items: center; border-radius: 50%; background: conic-gradient(var(--jarvis-secondary) var(--debt-progress), var(--jarvis-surface-3) 0); }
+.native-product--jarvis .jarvis-debt-ring::before { content: ""; grid-area: 1/1; width: 150px; aspect-ratio: 1; border-radius: 50%; background: var(--jarvis-surface); }
+.native-product--jarvis .jarvis-debt-ring > span { z-index: 1; grid-area: 1/1; text-align: center; }
+.native-product--jarvis .jarvis-debt-ring strong { display: block; font-size: 2rem; line-height: 1; }
+.native-product--jarvis .jarvis-debt-ring small { display: block; margin-top: 7px; color: var(--jarvis-text-2); font-size: .9rem; }
+.native-product--jarvis .jarvis-debt-amounts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.native-product--jarvis .jarvis-debt-amounts > span { min-width: 0; text-align: center; }
+.native-product--jarvis .jarvis-debt-amounts small { display: block; color: var(--jarvis-text-3); font-size: .78rem; }
+.native-product--jarvis .jarvis-debt-amounts strong { display: block; margin-top: 4px; overflow-wrap: anywhere; font-size: 1rem; }
+.native-product--jarvis .jarvis-debt-facts { padding: 18px; border-top: 1px solid var(--jarvis-line); background: color-mix(in srgb, var(--jarvis-surface-2) 70%, transparent); }
+.native-product--jarvis .jarvis-debt-facts h4 { margin: 0 0 14px; text-align: center; font-size: .95rem; }
+.native-product--jarvis .jarvis-debt-facts dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px 18px; margin: 0; }
+.native-product--jarvis .jarvis-debt-facts dl > div { min-width: 0; }
+.native-product--jarvis .jarvis-debt-facts dt { color: var(--jarvis-text-3); font-size: .7rem; }
+.native-product--jarvis .jarvis-debt-facts dd { margin: 4px 0 0; overflow-wrap: anywhere; color: var(--jarvis-text); font-size: .82rem; font-weight: 700; text-transform: capitalize; }
+.native-product--jarvis .jarvis-debt-actions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; padding: 16px 18px 18px; }
+.native-product--jarvis .jarvis-debt-actions .ghost-button { min-width: 0; min-height: 46px; padding: 8px; border: 1px solid var(--jarvis-line); border-radius: 15px; color: var(--jarvis-text); background: var(--jarvis-surface-2); font-size: .76rem; }
+.native-product--jarvis .jarvis-debt-actions .danger { color: var(--jarvis-danger); border-color: color-mix(in srgb, var(--jarvis-danger) 28%, var(--jarvis-line)); }
+
+@media (max-width: 430px) {
+  .native-product--jarvis .jarvis-debts-toolbar { align-items: flex-start; flex-direction: column; }
+  .native-product--jarvis .jarvis-debts-toolbar__actions { width: 100%; }
+  .native-product--jarvis .jarvis-debts-toolbar__actions > * { flex: 1; }
+  .native-product--jarvis .jarvis-debt-summary { grid-template-columns: 38px minmax(0,1fr) 18px; gap: 10px; padding: 12px; }
+  .native-product--jarvis .jarvis-debt-summary__icon { width: 38px; height: 38px; border-radius: 12px; }
+  .native-product--jarvis .jarvis-debt-summary__money { grid-column: 2; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; text-align: left; }
+  .native-product--jarvis .jarvis-debt-summary__chevron { grid-column: 3; grid-row: 1 / span 2; }
+  .native-product--jarvis .jarvis-debt-ring { width: 168px; }
+  .native-product--jarvis .jarvis-debt-ring::before { width: 132px; }
+  .native-product--jarvis .jarvis-debt-actions { grid-template-columns: 1fr 1fr; }
+  .native-product--jarvis .jarvis-debt-actions .ghost-button:first-child { grid-column: 1 / -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-product--jarvis .jarvis-debt-expand,
+  .native-product--jarvis .jarvis-debt-summary__chevron { transition: none; }
+}

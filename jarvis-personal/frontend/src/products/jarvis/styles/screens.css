@@ -57,9 +57,9 @@
 .native-product--jarvis .finance-disclosure-content { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
 .native-product--jarvis .finance-disclosure > .jarvis-disclosure__region > .jarvis-disclosure__body > .hud-panel { padding: 18px; border: 0; border-radius: 0; background: transparent; }
 .native-product--jarvis .finance-overview-grid > .finance-disclosure { align-self: start; }
-.native-product--jarvis .debt-panel-v2, .native-product--jarvis .fixed-expenses-panel, .native-product--jarvis .currency-alert-panel { width: 100%; }
-.native-product--jarvis :is(.debt-row-v2-main, .finance-detail-row, .alert-item) { min-height: 58px; border-bottom: 1px solid var(--jarvis-line); }
-.native-product--jarvis :is(.debt-row-v2-main, .finance-detail-row):last-child { border-bottom: 0; }
+.native-product--jarvis :is(.fixed-expenses-panel, .currency-alert-panel) { width: 100%; }
+.native-product--jarvis :is(.finance-detail-row, .alert-item) { min-height: 58px; border-bottom: 1px solid var(--jarvis-line); }
+.native-product--jarvis .finance-detail-row:last-child { border-bottom: 0; }
 .native-product--jarvis .finance-input-grid { grid-template-columns: 1fr; }
 .native-product--jarvis .finance-detail-modal-backdrop { position: fixed; inset: 0; z-index: 1300; display: grid; place-items: end center; padding: 12px; background: rgba(2,3,9,.7); backdrop-filter: blur(8px); }
 .native-product--jarvis .finance-detail-modal { width: min(100%, 620px); max-height: 82dvh; overflow-y: auto; border-radius: 28px; animation: jarvis-sheet-in .3s ease both; }
