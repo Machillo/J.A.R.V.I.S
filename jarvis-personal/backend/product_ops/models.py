@@ -8,7 +8,7 @@ class ProductEvent(BaseModel):
         "dashboard_opened", "finance_opened", "debts_opened", "goals_opened",
         "transactions_opened", "strategy_opened", "budget_opened", "calendar_opened",
         "recurring_opened", "reports_opened", "settings_opened", "feedback_submitted",
-        "checkout_started", "onboarding_completed", "api_error",
+        "checkout_started", "onboarding_completed", "api_error", "subscription_lifecycle",
     ]
     surface: str = Field(max_length=60)
     success: bool = True
@@ -32,3 +32,12 @@ class FeedbackUpdate(BaseModel):
 
 class TestPaymentUpdate(BaseModel):
     action: Literal["confirm", "reject"] = "confirm"
+
+
+class StoreLifecycleSimulation(BaseModel):
+    plan_code: Literal["basic", "vip"]
+    billing_period: Literal["monthly", "annual"]
+    event_type: Literal[
+        "trial_started", "purchased", "renewed", "upgrade", "downgrade",
+        "cancel_requested", "restored", "expired", "revoked",
+    ]
