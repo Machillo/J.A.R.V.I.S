@@ -22,6 +22,11 @@ def billing_store_restore_owner_access():
     require_roles("owner")
     return restore_owner_access()
 
+@router.post("/owner/billing/store/simulate/{target_account_id}")
+def billing_store_simulate_account(target_account_id: str, payload: StoreLifecycleSimulation):
+    require_roles("owner")
+    return simulate_lifecycle(**payload.model_dump(), target_account_id=target_account_id)
+
 @router.post("/owner/billing/store/simulate")
 def billing_store_simulate(payload: StoreLifecycleSimulation):
     require_roles("owner")
