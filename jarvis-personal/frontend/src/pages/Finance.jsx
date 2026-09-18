@@ -1130,6 +1130,7 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
   const [editingDebt, setEditingDebt] = useState(null);
   const [adding, setAdding] = useState(false);
   const [payingDebt, setPayingDebt] = useState(null);
+  const [expandedDebtId, setExpandedDebtId] = useState(null);
   const [message, setMessage] = useState("");
 
   const removeDebt = async (debt) => {
@@ -1144,99 +1145,58 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
   };
 
   return (
-    <article className="hud-panel large">
+    <article className="hud-panel large debt-panel-v2">
       <div className="panel-title debts-panel-title">
-        <div><h3>RESUMEN DE DEUDAS</h3></div>
+        <div><h3>DEUDAS</h3><span>{sortedDebts.length} registradas</span></div>
         <div className="debt-panel-actions">
           <button className="hud-action-button small" onClick={() => setAdding(true)}>+ Agregar</button>
-          <select value={debtSort} onChange={(event) => setDebtSort(event.target.value)}>
-            <option value="saldo">Saldo</option>
-            <option value="interes">Interés</option>
-            <option value="cuota">Cuota</option>
-            <option value="fecha">Fecha de pago</option>
+          <select aria-label="Ordenar deudas" value={debtSort} onChange={(event) => setDebtSort(event.target.value)}>
+            <option value="saldo">Saldo</option><option value="interes">Interés</option><option value="cuota">Cuota</option><option value="fecha">Fecha</option>
           </select>
         </div>
       </div>
 
       {message && <p className="finance-input-message">{message}</p>}
-
-      <div className="debt-list full-debt-list">
-        {sortedDebts.length === 0 ? (
-          <EmptyPanel title="Sin deudas registradas" description="" />
-        ) : (
-          sortedDebts.map((debt) => {
-            const paid = Number(debt.installments_paid ?? debt.paid_installments ?? 0);
-            const total = Number(debt.term_months ?? debt.total_installments ?? 0);
-            const remaining = total > 0 ? Math.max(total - paid, 0) : null;
-            const progress = total > 0 ? Math.min((paid / total) * 100, 100) : 0;
-            const isPaid = Number(debt.remaining_amount || 0) <= 0 || (total > 0 && paid >= total);
-            const scheduleLabel = total > 0 ? `${paid}/${total}` : "Pago libre";
-            return (
-              <div className={`debt-item debt-card-v2 ${isPaid ? "is-paid" : ""}`} key={debt.id}>
-                <div className="debt-card-top">
-                  <div>
-                    <strong className="debt-card-name">{debt.name}</strong>
-                    <span className="debt-card-type">{String(debt.debt_type || "other").replaceAll("_", " ")}</span>
+      <div className="debt-list debt-list-v2">
+        {sortedDebts.length === 0 ? <EmptyPanel title="Sin deudas registradas" description="" /> : sortedDebts.map((debt) => {
+          const paid = Number(debt.installments_paid ?? debt.paid_installments ?? 0);
+          const total = Number(debt.term_months ?? debt.total_installments ?? 0);
+          const remaining = total > 0 ? Math.max(total - paid, 0) : null;
+          const progress = total > 0 ? Math.min((paid / total) * 100, 100) : 0;
+          const isPaid = Number(debt.remaining_amount || 0) <= 0 || (total > 0 && paid >= total);
+          const expanded = expandedDebtId === debt.id;
+          return (
+            <div className={`debt-row-v2 ${isPaid ? "is-paid" : ""} ${expanded ? "is-expanded" : ""}`} key={debt.id}>
+              <button className="debt-row-v2-main" type="button" aria-expanded={expanded} onClick={() => setExpandedDebtId(expanded ? null : debt.id)}>
+                <span className="debt-row-v2-copy"><strong>{debt.name}</strong><small>{isPaid ? "Pagada" : total > 0 ? `${paid}/${total} cuotas · ${remaining} restantes` : "Pago libre"}</small></span>
+                <span className="debt-row-v2-money"><strong>{formatCRC(debt.remaining_amount)}</strong><small>{Number(debt.interest_rate || 0)}% · {formatCRC(debt.monthly_payment || 0)}/mes</small></span>
+                <span className="debt-row-v2-chevron" aria-hidden="true">⌄</span>
+              </button>
+              {total > 0 && <div className="debt-row-v2-progress" aria-label={`${Math.round(progress)}% pagado`}><span style={{ width: `${progress}%` }} /></div>}
+              {expanded && (
+                <div className="debt-row-v2-detail">
+                  <div className="debt-row-v2-facts">
+                    <span><small>Tipo</small><b>{String(debt.debt_type || "other").replaceAll("_", " ")}</b></span>
+                    <span><small>Cargo fijo</small><b>{formatCRC(debt.fixed_fee_amount || 0)}</b></span>
+                    <span><small>Método</small><b>{debt.interest_method === "daily_365" ? "Diario / 365" : "Mensual"}</b></span>
+                    <span><small>Próximo pago</small><b>{isPaid ? "Finalizada" : debt.next_payment_date || "Sin fecha"}</b></span>
+                    <span><small>Último pago</small><b>{debt.last_payment_date || "Sin registrar"}</b></span>
+                    <span><small>Inicio</small><b>{debt.start_date || "--"}</b></span>
                   </div>
-                  <div className="debt-card-balance">
-                    <small>Saldo</small>
-                    <b>{formatCRC(debt.remaining_amount)}</b>
+                  <div className="debt-row-actions">
+                    {!isPaid && <button className="ghost-button" onClick={() => setPayingDebt(debt)}>Registrar pago</button>}
+                    <button className="ghost-button" onClick={() => setEditingDebt(debt)}>Editar</button>
+                    <button className="ghost-button danger" onClick={() => removeDebt(debt)}>Eliminar</button>
                   </div>
                 </div>
-
-                <div className="debt-progress-copy">
-                  <strong>{scheduleLabel}{total > 0 ? " cuotas" : ""}</strong>
-                  <span>{isPaid ? "Pagada" : remaining == null ? "Sin calendario automático" : remaining === 1 ? "Resta 1 cuota" : `Restan ${remaining} cuotas`}</span>
-                </div>
-                <div className="debt-bar debt-progress-bar" aria-label={`${Math.round(progress)}% pagado`}>
-                  <span style={{ width: `${progress}%` }} />
-                </div>
-
-                <div className="debt-metrics-grid">
-                  <span><small>Cuota mensual</small><b>{formatCRC(debt.monthly_payment || 0)}</b></span>
-                  <span><small>Interés</small><b>{Number(debt.interest_rate || 0)}%</b></span>
-                  <span><small>Cargo fijo</small><b>{formatCRC(debt.fixed_fee_amount || 0)}</b></span>
-                  <span><small>Método</small><b>{debt.interest_method === "daily_365" ? "Diario / 365" : "Mensual"}</b></span>
-                  <span><small>Próximo pago</small><b>{isPaid ? "Finalizada" : debt.next_payment_date || "Sin fecha"}</b></span>
-                  <span><small>Último pago</small><b>{debt.last_payment_date || "Sin registrar"}</b></span>
-                </div>
-
-                <details className="debt-schedule-details">
-                  <summary>Ver calendario</summary>
-                  <div className="debt-date-grid">
-                    <span><b>Registrada</b>{debt.registered_date || debt.start_date || "--"}</span>
-                    <span><b>Inicio</b>{debt.start_date || "--"}</span>
-                    <span><b>Primera cuota</b>{debt.first_payment_date || "--"}</span>
-                    <span><b>Hoy</b>{debt.current_date || "--"}</span>
-                  </div>
-                </details>
-
-                <div className="debt-row-actions">
-                  {!isPaid && <button className="ghost-button" onClick={() => setPayingDebt(debt)}>Registrar pago</button>}
-                  <button className="ghost-button" onClick={() => setEditingDebt(debt)}>Editar</button>
-                  <button className="ghost-button danger" onClick={() => removeDebt(debt)}>Eliminar</button>
-                </div>
-              </div>
-            );
-          })
-        )}
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {payingDebt && (
-        <DebtPaymentModal
-          debt={payingDebt}
-          onClose={() => setPayingDebt(null)}
-          onSaved={onChanged}
-        />
-      )}
-
-      {(adding || editingDebt) && (
-        <DebtFormModal
-          debt={editingDebt}
-          onClose={() => { setAdding(false); setEditingDebt(null); }}
-          onSaved={onChanged}
-        />
-      )}
+      {payingDebt && <DebtPaymentModal debt={payingDebt} onClose={() => setPayingDebt(null)} onSaved={onChanged} />}
+      {(adding || editingDebt) && <DebtFormModal debt={editingDebt} onClose={() => { setAdding(false); setEditingDebt(null); }} onSaved={onChanged} />}
     </article>
   );
 }
