@@ -4,15 +4,15 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    IncomeUpdateRequest, MovementUpdateRequest, OvertimeCreateRequest, RecurringItemRequest, TransactionCreateRequest,
+    IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
 from backend.user_product.service import (
-    create_expense_entry, create_income, create_overtime, create_user_debt, create_user_goal,
+    create_expense_entry, create_income, create_user_debt, create_user_goal,
     create_user_transaction, delete_expense, delete_income, delete_user_debt, delete_user_goal, delete_user_transaction,
     get_financial_situation, get_strategy_basic, get_strategy_vip, get_user_finance_summary,
-    list_expenses, list_income, list_overtime, list_user_debts, list_user_goals, list_user_transactions,
+    list_expenses, list_income, list_user_debts, list_user_goals, list_user_transactions,
     pay_user_debt, simulate_strategy_vip, update_expense, update_financial_situation, update_income,
     update_user_debt, update_user_goal, contribute_user_goal, create_savings_plan,
     delete_savings_plan, contribute_savings_plan, list_savings_plans, update_savings_plan,
@@ -80,14 +80,6 @@ def expenses_update(expense_id: int, request: ExpenseUpdateRequest):
 @router.delete("/finance/expenses/{expense_id}")
 def expenses_delete(expense_id: int):
     require_feature("spending"); return delete_expense(expense_id)
-
-@router.get("/finance/overtime")
-def overtime_list():
-    require_feature("overtime"); return list_overtime()
-
-@router.post("/finance/overtime")
-def overtime_create(request: OvertimeCreateRequest):
-    require_feature("overtime"); return create_overtime(request)
 
 @router.get("/finance/debts")
 def debts_list():
