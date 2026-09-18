@@ -26,6 +26,7 @@ import "./ui/native/styles/android.css";
 import "./ui/native/styles/sheets.css";
 import "./products/finva/styles/product.css";
 import "./products/jarvis/styles/product.css";
+import "./products/jarvis/styles/home.css";
 // Final JARVIS-only normalization. Must stay after product.css so legacy modules
 // cannot reintroduce oversized spacing or mixed card geometry on Personal.
 import "./styles/13-jarvis-personal-density.css";
