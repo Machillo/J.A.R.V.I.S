@@ -10,8 +10,13 @@ export default function Investments() {
   const load = async () => {
     setState((s) => ({ ...s, loading: true, error: "" }));
     try {
-      const [center, strategy] = await Promise.all([getInvestmentCenter(), getJarvisPremiumStrategyDashboard()]);
-      setState({ loading: false, center, strategy, error: "" });
+      // The portfolio is the primary payload. Strategy can be considerably
+      // slower, so it must not hold the whole Investments screen hostage.
+      const center = await getInvestmentCenter();
+      setState((s) => ({ ...s, loading: false, center, error: "" }));
+      getJarvisPremiumStrategyDashboard()
+        .then((strategy) => setState((s) => ({ ...s, strategy })))
+        .catch(() => {});
     } catch (e) { setState((s) => ({ ...s, loading: false, error: e.message || "No pude cargar inversiones." })); }
   };
   useEffect(() => { load(); }, []);
