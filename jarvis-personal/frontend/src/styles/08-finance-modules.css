@@ -312,25 +312,10 @@
   }
 }
 
-.debt-panel-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
 .hud-action-button.small {
   min-height: 38px;
   padding: 9px 14px;
   font-size: 0.82rem;
-}
-
-.debt-row-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 12px;
-  flex-wrap: wrap;
 }
 
 .ghost-button.danger {
@@ -410,14 +395,6 @@
     grid-template-columns: 1fr;
   }
 
-  .debt-panel-actions {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .debt-panel-actions > * {
-    flex: 1;
-  }
 }
 
 
