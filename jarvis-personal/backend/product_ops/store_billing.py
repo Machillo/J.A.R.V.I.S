@@ -166,7 +166,7 @@ def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str):
               product_id=EXCLUDED.product_id,status=EXCLUDED.status,
               trial_ends_at=EXCLUDED.trial_ends_at,current_period_start=NOW(),
               current_period_end=EXCLUDED.current_period_end,cancel_at_period_end=EXCLUDED.cancel_at_period_end,
-              auto_renew=EXCLUDED.auto_renew,last_verified_at=NOW(),updated_at=NOW()""",
+              auto_renew=EXCLUDED.auto_renew,last_verified_at=NOW(),updated_at=NOW()\n            RETURNING account_id""",
             (account_id, workspace_id, plan_code, billing_period, product["product_id"], status, cancel_at_end, auto_renew),
         )
         conn.execute(
