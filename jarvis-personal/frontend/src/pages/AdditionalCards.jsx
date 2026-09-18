@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { UserRound } from "lucide-react";
 import { getAdditionalCardsReport } from "../services/jarvisApi";
+import { deviceLanguage, localeTag } from "../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
-const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
+const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString(localeTag(language))}`;
 
 const OWNER_ORDER = ["Emily", "Sidey"];
 
@@ -31,14 +34,14 @@ export default function AdditionalCards() {
   }, [state.data]);
 
   if (state.loading) {
-    return <section className="page"><div className="hud-card">Cargando tarjetas...</div></section>;
+    return <section className="page"><div className="hud-card">{tx("Cargando tarjetas...", "Loading cards...")}</div></section>;
   }
 
   return (
     <section className="page additional-cards-page additional-cards-clean-page">
       <div className="page-section-header">
         <div>
-          <h2>Tarjetas adicionales</h2>
+          <h2>{tx("Tarjetas adicionales", "Additional cards")}</h2>
         </div>
       </div>
 
@@ -51,16 +54,16 @@ export default function AdditionalCards() {
               <UserRound size={22} />
               <div>
                 <strong>{card.owner}</strong>
-                <span>{card.cards.length ? card.cards.map((last4) => `****${last4}`).join(" · ") : "Sin tarjetas asociadas"}</span>
+                <span>{card.cards.length ? card.cards.map((last4) => `****${last4}`).join(" · ") : "{tx("Sin tarjetas asociadas", "No linked cards")}"}</span>
               </div>
             </div>
 
             <h3>{money(card.total)}</h3>
-            <p>{card.count} compras</p>
+            <p>{card.count} {tx("compras", "purchases")}</p>
 
             <div className="mini-transaction-list additional-full-list">
               {card.items.length === 0 ? (
-                <div className="additional-empty-row"><span>Sin compras aceptadas</span><b>{money(0)}</b></div>
+                <div className="additional-empty-row"><span>Sin {tx("compras", "purchases")} aceptadas</span><b>{money(0)}</b></div>
               ) : (
                 card.items.map((item) => (
                   <div key={item.id}>
