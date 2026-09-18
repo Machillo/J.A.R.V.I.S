@@ -112,19 +112,20 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
     setState((current) => ({ ...current, loading: keepPage ? current.loading : true, running: keepPage, error: "" }));
     try {
       const strategyResult = await strategyApi.getStrategyDashboard();
+      // Paint the useful strategy immediately. Debt simulations are secondary
+      // and can be slow on a cold backend, so they hydrate progressively.
+      setState((current) => ({ ...current, loading: false, data: strategyResult, error: "", running: false }));
       const strategyPayload = strategyResult?.strategy || {};
-      let debtAdvice = null;
-      let debtStrategies = null;
-      try {
-        [debtAdvice, debtStrategies] = await Promise.all([
-          strategyApi.getDebtAdvisory(Number(strategyPayload.debt_attack_extra || 0)),
-          strategyApi.getDebtStrategies(),
-        ]);
-      } catch {
-        debtAdvice = null;
-        debtStrategies = null;
-      }
-      setState({ loading: false, data: strategyResult, debtAdvice, debtStrategies, error: "", running: false });
+      Promise.allSettled([
+        strategyApi.getDebtAdvisory(Number(strategyPayload.debt_attack_extra || 0)),
+        strategyApi.getDebtStrategies(),
+      ]).then(([adviceResult, strategiesResult]) => {
+        setState((current) => ({
+          ...current,
+          debtAdvice: adviceResult.status === "fulfilled" ? adviceResult.value : current.debtAdvice,
+          debtStrategies: strategiesResult.status === "fulfilled" ? strategiesResult.value : current.debtStrategies,
+        }));
+      });
       return strategyResult;
     } catch (error) {
       setState((current) => ({
