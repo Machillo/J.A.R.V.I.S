@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import {
   getDebtAdvisory,
-  getDebtStrategies,
   getAguinaldo,
   getJarvisPremiumStrategyDashboard,
   getSalvavidas,
@@ -95,12 +94,11 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   const strategyApi = api || {
     getStrategyDashboard: getJarvisPremiumStrategyDashboard,
     getDebtAdvisory,
-    getDebtStrategies,
     getSalvavidas,
     updateSalvavidas,
     getAguinaldo,
   };
-  const [state, setState] = useState({ loading: true, data: null, debtAdvice: null, debtStrategies: null, error: "", running: false });
+  const [state, setState] = useState({ loading: true, data: null, debtAdvice: null, error: "", running: false });
   const [activeSection, setActiveSection] = useState(null);
   const [salvavidasState, setSalvavidasState] = useState({ loading: true, saving: false, data: null, error: "" });
   const [salvavidasAmount, setSalvavidasAmount] = useState("");
@@ -116,23 +114,15 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
       // and can be slow on a cold backend, so they hydrate progressively.
       setState((current) => ({ ...current, loading: false, data: strategyResult, error: "", running: false }));
       const strategyPayload = strategyResult?.strategy || {};
-      Promise.allSettled([
-        strategyApi.getDebtAdvisory(Number(strategyPayload.debt_attack_extra || 0)),
-        strategyApi.getDebtStrategies(),
-      ]).then(([adviceResult, strategiesResult]) => {
-        setState((current) => ({
-          ...current,
-          debtAdvice: adviceResult.status === "fulfilled" ? adviceResult.value : current.debtAdvice,
-          debtStrategies: strategiesResult.status === "fulfilled" ? strategiesResult.value : current.debtStrategies,
-        }));
-      });
+      strategyApi.getDebtAdvisory(Number(strategyPayload.debt_attack_extra || 0))
+        .then((debtAdvice) => setState((current) => ({ ...current, debtAdvice })))
+        .catch(() => {});
       return strategyResult;
     } catch (error) {
       setState((current) => ({
         loading: false,
         data: current.data,
         debtAdvice: current.debtAdvice,
-        debtStrategies: current.debtStrategies,
         error: error.message || "No pude cargar la estrategia.",
         running: false,
       }));
@@ -224,8 +214,6 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   const allocationTotal = Number(strategy.allocation_total || allocationItems.reduce((sum, item) => sum + Number(item.amount || 0), 0));
   const progress = Math.max(0, Math.min(100, Number(strategy.debt_progress_percent || 0)));
   const debtAdvice = state.debtAdvice || {};
-  const doctorStrange = state.debtStrategies?.doctor_strange || {};
-  const doctorStrategies = doctorStrange.strategies || {};
   const adviceScenarios = useMemo(
     () => (Array.isArray(debtAdvice.scenarios) ? debtAdvice.scenarios : []),
     [debtAdvice.scenarios]
@@ -456,37 +444,6 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
         <div className="strategy-title-row"><Activity size={22} /><div><h3>Asesoría de deudas</h3><p>Qué atacar, cuánto cambia el tiempo y qué ruta sigue cada deuda activa.</p></div></div>
       </div>
 
-      {doctorStrange.status === "OK" && (
-        <div className="doctor-strange-panel">
-          <div className="salvavidas-section-copy">
-            <strong>Doctor Strange</strong>
-            <small>{doctorStrange.permutations_evaluated.toLocaleString("es-CR")} rutas simuladas con interés diario, cargos y cuotas mínimas.</small>
-          </div>
-          <div className="doctor-strange-grid">
-            {[
-              ["cheapest", "Más barata"],
-              ["fastest", "Más rápida"],
-              ["motivational", "Motivacional"],
-              ["balanced", "Balanceada"],
-            ].map(([key, label]) => {
-              const route = doctorStrategies[key];
-              if (!route) return null;
-              return (
-                <article key={key} className={key === "balanced" ? "recommended" : ""}>
-                  <span>{label}</span>
-                  <strong>{route.order?.map((item) => item.name).join(" → ")}</strong>
-                  <small>{monthsText(route.months)} · costo {money(route.total_cost)}</small>
-                  <small>Libre aprox. {formatDate(route.payoff_date)}</small>
-                </article>
-              );
-            })}
-          </div>
-          {(doctorStrange.data_quality?.prepayment_penalties_assumed_zero || []).length > 0 && (
-            <p className="strategy-v3-note"><AlertTriangle size={16} /> Penalización de prepago asumida en ₡0 donde todavía no está registrada.</p>
-          )}
-        </div>
-      )}
-
       <div className="strategy-debt-advice-summary">
         <span>Extra asignado a deuda este ciclo</span>
         <strong>{money(strategy.debt_attack_extra)}</strong>
@@ -612,8 +569,8 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
 
   return (
     <section className="page premium-strategy-page strategy-v3-page strategy-v2">
-      <header className="strategy-v2-header">
-        <div><span className="eyebrow">Director Financiero</span><h2>Strategy</h2><p>Una prioridad clara y herramientas financieras probadas. Elegí qué querés revisar.</p></div>
+      <header className={`strategy-v2-header ${brandName === "JARVIS" ? "strategy-v2-header--jarvis" : ""}`}>
+        {brandName !== "JARVIS" && <div><span className="eyebrow">Director Financiero</span><h2>Strategy</h2><p>Una prioridad clara y herramientas financieras probadas. Elegí qué querés revisar.</p></div>}
         <button className="primary-action-button" onClick={runStrategy} disabled={state.running}>
           <RefreshCw size={18} className={state.running ? "spin" : ""} />
           {state.running ? "Recalculando..." : "Recalcular estrategia"}
