@@ -1,48 +1,48 @@
 import { AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronRight, Gem, Landmark, TrendingUp } from "lucide-react";
 
+const wealthGroups = [
+  {
+    title: "Patrimonio",
+    items: [
+      ["netWorth", Gem, "Patrimonio neto", "Activos, inversiones y deudas consolidados"],
+      ["financialAccounts", Landmark, "Cuentas", "Saldos reales, efectivo y cuentas financieras"],
+      ["investments", TrendingUp, "Inversiones", "Aportes, rendimiento, dividendos y costos"],
+      ["businesses", BriefcaseBusiness, "Negocios", "Proyectos, sociedades e ingresos extra"],
+    ],
+  },
+  {
+    title: "Control",
+    items: [
+      ["financialTimeline", CalendarDays, "Timeline financiero", "Ingresos, cuotas y compromisos próximos"],
+      ["reconciliation", CheckCircle2, "Conciliación", "Diferencias, gastos olvidados y duplicados"],
+      ["deterioration", AlertTriangle, "Deterioro financiero", "Alertas tempranas y cambios negativos"],
+    ],
+  },
+];
+
 export default function Wealth({ navigatePage }) {
-  return <section className="app-hub-page wealth-hub-page">
-    <div className="wealth-hub-intro">
-      <span className="strategy-eyebrow">WEALTH CENTER</span>
-      <h2>Patrimonio</h2>
-      <p>Inversiones, negocios e ingresos que construyen patrimonio fuera de tu salario.</p>
-    </div>
-    <div className="app-list-group wealth-options-group">
-      <button className="app-list-item" onClick={() => navigatePage("deterioration")}>
-        <span className="app-list-icon"><AlertTriangle size={24}/></span>
-        <span className="app-list-copy"><strong>Deterioro financiero</strong><small>Alertas tempranas y causas de cambios negativos</small></span>
-        <ChevronRight size={22} className="app-list-chevron" />
-      </button>
-      <button className="app-list-item" onClick={() => navigatePage("reconciliation")}>
-        <span className="app-list-icon"><CheckCircle2 size={24}/></span>
-        <span className="app-list-copy"><strong>Conciliación financiera</strong><small>Detectar diferencias, gastos olvidados y posibles duplicados</small></span>
-        <ChevronRight size={22} className="app-list-chevron" />
-      </button>
-      <button className="app-list-item" onClick={() => navigatePage("financialTimeline")}>
-        <span className="app-list-icon"><CalendarDays size={24}/></span>
-        <span className="app-list-copy"><strong>Timeline financiero</strong><small>Liquidez móvil, ingresos, cuotas y compromisos próximos</small></span>
-        <ChevronRight size={22} className="app-list-chevron" />
-      </button>
-      <button className="app-list-item" onClick={() => navigatePage("netWorth")}>
-        <span className="app-list-icon"><Gem size={24}/></span>
-        <span className="app-list-copy"><strong>Patrimonio neto en vivo</strong><small>Activos, inversiones, deudas e historial consolidado</small></span>
-        <ChevronRight size={22} className="app-list-chevron" />
-      </button>
-      <button className="app-list-item" onClick={() => navigatePage("financialAccounts")}>
-        <span className="app-list-icon"><Landmark size={24}/></span>
-        <span className="app-list-copy"><strong>Cuentas financieras</strong><small>BAC, MultiMoney, efectivo, Salvavidas y saldos reales</small></span>
-        <ChevronRight size={22} className="app-list-chevron" />
-      </button>
-      <button className="app-list-item" onClick={() => navigatePage("investments")}>
-        <span className="app-list-icon"><TrendingUp size={24}/></span>
-        <span className="app-list-copy"><strong>Inversiones</strong><small>IBKR, aportes, rendimiento, dividendos y costos</small></span>
-        <ChevronRight size={22} className="app-list-chevron" />
-      </button>
-      <button className="app-list-item" onClick={() => navigatePage("businesses")}>
-        <span className="app-list-icon"><BriefcaseBusiness size={24}/></span>
-        <span className="app-list-copy"><strong>Negocios</strong><small>JARVIS, bot, sociedades e ingresos extra</small></span>
-        <ChevronRight size={22} className="app-list-chevron" />
-      </button>
-    </div>
-  </section>;
+  return (
+    <section className="jarvis-v2-screen wealth-v2">
+      <header className="wealth-v2-intro">
+        <span>WEALTH CENTER</span>
+        <h2>Patrimonio</h2>
+        <p>Una vista ordenada de lo que tenés, lo que debés y lo que está construyendo valor.</p>
+      </header>
+
+      {wealthGroups.map((group) => (
+        <section className="jarvis-v2-section" key={group.title}>
+          <div className="jarvis-v2-section-title"><h2>{group.title}</h2></div>
+          <div className="jarvis-v2-group">
+            {group.items.map(([page, Icon, title, subtitle]) => (
+              <button className="jarvis-v2-row" type="button" key={page} onClick={() => navigatePage(page)}>
+                <span className="jarvis-v2-row-icon"><Icon size={18} /></span>
+                <span className="jarvis-v2-row-copy"><strong>{title}</strong><small>{subtitle}</small></span>
+                <ChevronRight size={17} className="wealth-v2-chevron" />
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </section>
+  );
 }
