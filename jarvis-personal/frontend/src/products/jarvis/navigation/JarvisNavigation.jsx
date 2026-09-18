@@ -6,6 +6,7 @@ import {
   UserRound, UsersRound, WalletCards,
 } from "lucide-react";
 import NativeBottomBar from "../../../ui/native/NativeBottomBar";
+import JarvisDisclosure from "../components/JarvisDisclosure";
 
 const wealthKeys = ["wealth", "investments", "businesses", "financialAccounts", "netWorth", "financialTimeline", "reconciliation", "deterioration"];
 const moreKeys = ["receivables", "emails", "transactions", "additionalCards", "chats", "goals", "memory", "settings", "profile", "userManagement", "productOperations"];
@@ -91,14 +92,15 @@ export default function JarvisNavigation({ activePage, onNavigate, userName, pro
             </header>
             <div className="native-sheet-groups">
               {groups.map((group) => (
-                <div className="native-sheet-group" key={group.title}>
-                  <small>{group.title}</small>
+                <JarvisDisclosure title={group.title} className="native-sheet-group" key={group.title}>
+                  <div className="native-sheet-group__items">
                   {group.items.map(([key, label, Icon]) => (
                     <button type="button" key={key} className={activePage === key ? "active" : ""} onClick={() => navigate(key)}>
                       <span><Icon size={20} /></span><strong>{label}</strong>
                     </button>
                   ))}
-                </div>
+                  </div>
+                </JarvisDisclosure>
               ))}
               <button type="button" className="native-sheet-logout" onClick={onLogout}><LogOut size={20} /><strong>Cerrar sesión</strong></button>
             </div>

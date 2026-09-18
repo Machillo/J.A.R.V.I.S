@@ -1,0 +1,141 @@
+/* Canonical JARVIS visual foundation. Product-specific, never shared with FINVA. */
+.native-product--jarvis {
+  --jarvis-bg: #070812;
+  --jarvis-surface: #111326;
+  --jarvis-surface-2: #1b1d34;
+  --jarvis-surface-3: #252741;
+  --jarvis-line: rgba(188, 193, 232, .14);
+  --jarvis-text: #f7f7ff;
+  --jarvis-text-2: #c7c9dc;
+  --jarvis-text-3: #8d91aa;
+  --jarvis-primary: #655cff;
+  --jarvis-secondary: #56d6e9;
+  --jarvis-good: #57d99a;
+  --jarvis-danger: #ff758f;
+  --jarvis-page: 760px;
+  --jarvis-space: 16px;
+  --jarvis-radius: 24px;
+  --jarvis-control: 52px;
+  color: var(--jarvis-text);
+  background: var(--jarvis-bg);
+}
+
+.native-product--jarvis *,
+.native-product--jarvis *::before,
+.native-product--jarvis *::after { box-sizing: border-box; }
+
+.native-product--jarvis > .main-shell.app-main-v2 {
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  margin: 0;
+  padding: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) calc(118px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 92% -5%, rgba(70, 213, 174, .16), transparent 25rem),
+    radial-gradient(circle at -10% 3%, rgba(91, 83, 255, .22), transparent 28rem),
+    var(--jarvis-bg);
+}
+
+.native-product--jarvis .native-screen-content {
+  width: min(100%, var(--jarvis-page));
+  min-width: 0;
+  margin-inline: auto;
+  padding: 0;
+}
+
+.native-product--jarvis .native-screen-content > section {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.native-product--jarvis :is(button, input, select, textarea) { font: inherit; }
+.native-product--jarvis button { -webkit-tap-highlight-color: transparent; }
+
+.native-product--jarvis :is(input, select, textarea) {
+  min-height: var(--jarvis-control);
+  border: 1px solid var(--jarvis-line);
+  border-radius: 15px;
+  color: var(--jarvis-text);
+  background: var(--jarvis-surface-2);
+}
+
+.native-product--jarvis :is(input, select, textarea):focus {
+  border-color: var(--jarvis-primary);
+  outline: 3px solid color-mix(in srgb, var(--jarvis-primary) 22%, transparent);
+  box-shadow: none;
+}
+
+.native-product--jarvis :is(.primary-action-button, .hud-action-button, .action-primary, .primary-button) {
+  min-height: var(--jarvis-control);
+  padding: 0 20px;
+  border: 0;
+  border-radius: 18px;
+  color: white;
+  background: linear-gradient(135deg, #755dff, #515bff);
+  box-shadow: none;
+  font-weight: 800;
+  transition: transform .18s ease, filter .18s ease;
+}
+
+.native-product--jarvis :is(.primary-action-button, .hud-action-button, .action-primary, .primary-button):active {
+  transform: scale(.98);
+  filter: brightness(.92);
+}
+
+.native-product--jarvis :is(.hud-panel, .hud-card, .jarvis-panel, .app-section-card, .app-list-group) {
+  min-width: 0;
+  border: 1px solid var(--jarvis-line);
+  border-radius: var(--jarvis-radius);
+  color: var(--jarvis-text);
+  background: var(--jarvis-surface);
+  box-shadow: none;
+}
+
+.native-product--jarvis :is(.page, .dashboard-page, .jarvis-v2-screen, .app-hub-page, .app-profile-page) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jarvis-space);
+  min-width: 0;
+}
+
+.native-product--jarvis .app-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  width: min(100%, var(--jarvis-page));
+  min-height: 72px;
+  margin: 0 auto 14px;
+  padding: 10px 0;
+  border: 0;
+  background: linear-gradient(180deg, var(--jarvis-bg) 74%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.native-product--jarvis .app-top-bar > div span {
+  color: var(--jarvis-secondary);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.native-product--jarvis .app-top-bar h1 { margin: 2px 0 0; font-size: clamp(1.55rem, 7vw, 2rem); letter-spacing: -.04em; }
+.native-product--jarvis :is(.app-back-button, .app-logout-button) { width: 44px; height: 44px; border: 1px solid var(--jarvis-line); border-radius: 50%; color: var(--jarvis-text); background: var(--jarvis-surface-2); }
+
+html[data-color-mode-resolved="light"] .native-product--jarvis {
+  --jarvis-bg: #f3f5f8;
+  --jarvis-surface: #ffffff;
+  --jarvis-surface-2: #eceff5;
+  --jarvis-surface-3: #e3e7ef;
+  --jarvis-line: rgba(29, 35, 59, .12);
+  --jarvis-text: #121525;
+  --jarvis-text-2: #454b61;
+  --jarvis-text-3: #747b90;
+}
+
+@media (min-width: 720px) {
+  .native-product--jarvis { --jarvis-space: 20px; }
+  .native-product--jarvis > .main-shell.app-main-v2 { padding-inline: 24px; }
+}

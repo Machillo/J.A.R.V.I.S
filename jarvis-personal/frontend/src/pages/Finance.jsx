@@ -31,6 +31,7 @@ import {
   getAguinaldo,
   syncAguinaldoFromCcss,
 } from "../services/jarvisApi";
+import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
 
 const formatCRC = (value = 0) =>
   new Intl.NumberFormat("es-CR", {
@@ -1434,6 +1435,8 @@ export default function Finance({
       </div>
 
       {activeTab === "overview" && <>
+        <JarvisDisclosure title="Resumen del ciclo" summary={`${cycleLabel} · ${expenseCycleLabel}`} className="finance-disclosure">
+        <div className="finance-disclosure-content">
         <div className="finance-period-controls">
           <div className="finance-period-pill">Financial cycle: {cycleLabel} · Expense cutoff: {expenseCycleLabel}{cycleReport?.expense_cycle?.closed ? " · Closed" : " · Open"}</div>
           <label className="finance-asof-picker">View as of <input type="date" value={financeAsOf} onChange={(e) => setFinanceAsOf(e.target.value)} /></label>
@@ -1444,14 +1447,22 @@ export default function Finance({
           <button className="jarvis-v2-metric" onClick={() => openDetail("Balance real", balanceItems)}><small>Balance real</small><strong className={realBalance < 0 ? "danger-text" : realBalance > 0 ? "good-text" : ""}>{formatSignedCRC(realBalance)}</strong></button>
           <button className="jarvis-v2-metric" onClick={() => openDetail("Deuda total", debtItems)}><small>Deuda total</small><strong>{formatCRC(debtTotal)}</strong></button>
         </div>
+        </div>
+        </JarvisDisclosure>
         <div className="dashboard-grid finance-dashboard-grid finance-overview-grid">
+          <JarvisDisclosure title="Deudas" summary={`${sortedDebts.length} registradas`} className="finance-disclosure">
           <DebtsPanel sortedDebts={sortedDebts} loading={debtsLoading} debtSort={debtSort} setDebtSort={setDebtSort} onChanged={async () => { await loadSupportingData(); await onRefresh?.(); }} />
+          </JarvisDisclosure>
+          <JarvisDisclosure title="Alertas" summary={alerts.length ? `${alerts.length} por revisar` : "Todo bajo control"} defaultOpen={alerts.length > 0} className="finance-disclosure">
           <article className="hud-panel"><div className="panel-title"><div><h3>ALERTS</h3></div></div><div className="alert-list">{alerts.length === 0 ? <EmptyPanel title="No critical alerts" description="JARVIS will flag cash-flow and debt risks here." /> : alerts.map((alert, index) => <div className={`alert-item ${alert.level}`} key={index}><AlertTriangle size={18} /><span>{alert.message}</span></div>)}</div></article>
+          </JarvisDisclosure>
         </div>
       </>}
 
       {activeTab === "analytics" && <div className="dashboard-grid finance-dashboard-grid finance-analytics-grid">
+        <JarvisDisclosure title="Tendencia financiera mensual" summary="Ingresos frente a gastos" className="finance-disclosure">
         <article className="hud-panel large finance-trend-panel"><div className="panel-title"><div><h3>MONTHLY FINANCIAL TREND</h3></div><span>INCOME VS EXPENSES</span></div><MonthlyFinanceTrendChart monthly={monthlyFlow} /></article>
+        </JarvisDisclosure>
       </div>}
 
       {activeTab === "spending" && <div className="dashboard-grid finance-dashboard-grid finance-spending-grid">

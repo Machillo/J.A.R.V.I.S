@@ -20,6 +20,7 @@ import {
   updateSalvavidas,
 } from "../services/jarvisApi";
 import { trackEvent } from "../lib/telemetry";
+import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
 
 const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
 
@@ -579,11 +580,11 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
 
       {state.error && <div className="alert-card"><AlertTriangle size={18} /> {state.error}</div>}
 
-      <section className="strategy-priority-v3 strategy-v2-priority">
-        <span className="strategy-v3-label">PRIORIDAD ACTUAL</span>
-        <div className="strategy-title-row"><Shield size={22} /><div><h3>{priority.title || "Mantener control del flujo"}</h3><p>{priority.detail || strategy.mode_reason || strategy.objective}</p></div></div>
-      </section>
+      <JarvisDisclosure title={priority.title || "Mantener control del flujo"} eyebrow="Prioridad actual" icon={Shield}>
+        <div className="strategy-priority-v3 strategy-v2-priority"><p>{priority.detail || strategy.mode_reason || strategy.objective}</p></div>
+      </JarvisDisclosure>
 
+      <JarvisDisclosure title="Progreso de deudas" summary={`${progress.toFixed(1)}% completado`} icon={Activity}>
       <section className="strategy-debt-progress-v3 strategy-v2-debt-summary">
         <div className="progress-label-row"><span>Progreso de deudas</span><strong>{progress.toFixed(1)}%</strong></div>
         <div className="progress-track"><div style={{ width: `${progress}%` }} /></div>
@@ -594,9 +595,10 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
           <div><span>Libre aprox.</span><strong>{strategy.estimated_debt_free_date ? formatDate(strategy.estimated_debt_free_date) : strategy.total_debt > 0 ? "Revisar cuota" : "Sin deuda"}</strong></div>
         </div>
       </section>
+      </JarvisDisclosure>
 
+      <JarvisDisclosure title="Herramientas financieras" summary="Elegí qué querés revisar" icon={CircleDollarSign}>
       <section className="strategy-options-v3 strategy-v2-tools">
-        <span className="strategy-v3-label">¿QUÉ QUERÉS REVISAR?</span>
         {Object.entries(optionCopy).map(([key, option]) => {
           const Icon = option.icon;
           const active = activeSection === key;
@@ -615,6 +617,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
           );
         })}
       </section>
+      </JarvisDisclosure>
 
       {activeSection && <section className="strategy-v2-active-detail">{detailRenderers[activeSection]?.()}</section>}
     </section>

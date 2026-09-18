@@ -1,0 +1,105 @@
+/* Shared screen geometry --------------------------------------------------- */
+.native-product--jarvis :is(.premium-strategy-page, .finance-workspace, .wealth-v2, .net-worth-v2, .financial-accounts-v2, .goals-v2, .investments-page, .data-page, .reconciliation-page, .financial-timeline-page, .financial-deterioration-page) {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  gap: var(--jarvis-space);
+  padding: 0;
+}
+
+.native-product--jarvis :is(.panel-heading, .panel-title, .progress-label-row) { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.native-product--jarvis :is(.panel-heading, .panel-title) h3 { margin: 0; font-size: 1rem; }
+.native-product--jarvis :is(.strategy-eyebrow, .strategy-v3-label) { color: var(--jarvis-secondary); font-size: .67rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.native-product--jarvis :is(.muted-text, .hud-card small, .hud-panel small) { color: var(--jarvis-text-3); }
+.native-product--jarvis .good-text, .native-product--jarvis .positive { color: var(--jarvis-good); }
+.native-product--jarvis .danger-text, .native-product--jarvis .negative { color: var(--jarvis-danger); }
+
+/* Strategy ---------------------------------------------------------------- */
+.native-product--jarvis .strategy-v2-header--jarvis { display: flex; justify-content: stretch; }
+.native-product--jarvis .strategy-v2-header--jarvis .primary-action-button { width: 100%; }
+.native-product--jarvis .strategy-v2-priority { padding: 18px; border: 0; border-radius: 0; background: transparent; }
+.native-product--jarvis .strategy-v2-priority p { margin: 0; color: var(--jarvis-text-2); font-size: .9rem; line-height: 1.55; }
+.native-product--jarvis .strategy-v2-debt-summary { padding: 18px; border: 0; background: transparent; }
+.native-product--jarvis .strategy-v2-debt-summary .progress-label-row { display: none; }
+.native-product--jarvis .progress-track { height: 7px; overflow: hidden; border-radius: 999px; background: var(--jarvis-surface-3); }
+.native-product--jarvis .progress-track > div { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--jarvis-primary), var(--jarvis-secondary)); }
+.native-product--jarvis .strategy-debt-progress-stats { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-top: 16px; }
+.native-product--jarvis .strategy-debt-progress-stats > div { min-height: 82px; padding: 14px; border-radius: 18px; background: var(--jarvis-surface-2); }
+.native-product--jarvis .strategy-debt-progress-stats span { display: block; color: var(--jarvis-text-3); font-size: .72rem; }
+.native-product--jarvis .strategy-debt-progress-stats strong { display: block; margin-top: 7px; font-size: .92rem; }
+.native-product--jarvis .strategy-v2-tools { border: 0; background: transparent; }
+.native-product--jarvis .strategy-v2-tools > .strategy-v3-label { display: none; }
+.native-product--jarvis .strategy-option-card-v3 { display: grid; grid-template-columns: 44px minmax(0,1fr) 20px; align-items: center; gap: 12px; width: 100%; min-height: 72px; padding: 12px 18px; border: 0; border-bottom: 1px solid var(--jarvis-line); color: var(--jarvis-text); background: transparent; text-align: left; }
+.native-product--jarvis .strategy-option-card-v3:last-child { border-bottom: 0; }
+.native-product--jarvis .strategy-option-card-v3.active { background: color-mix(in srgb, var(--jarvis-primary) 10%, transparent); }
+.native-product--jarvis .strategy-option-icon-v3 { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 14px; color: var(--jarvis-secondary); background: color-mix(in srgb, var(--jarvis-secondary) 11%, transparent); }
+.native-product--jarvis .strategy-option-card-v3 strong { display: block; font-size: .92rem; }
+.native-product--jarvis .strategy-option-card-v3 small { display: block; margin-top: 3px; color: var(--jarvis-text-3); font-size: .74rem; line-height: 1.35; }
+.native-product--jarvis .strategy-option-card-v3 > svg { color: var(--jarvis-text-3); transition: transform .2s ease; }
+.native-product--jarvis .strategy-option-card-v3 > svg.open { transform: rotate(90deg); }
+.native-product--jarvis .strategy-v2-active-detail { animation: jarvis-content-in .28s ease both; }
+.native-product--jarvis .strategy-detail-panel { padding: 18px; border: 1px solid var(--jarvis-line); border-radius: var(--jarvis-radius); background: var(--jarvis-surface); }
+
+/* Finance ----------------------------------------------------------------- */
+.native-product--jarvis .finance-tab-bar { position: sticky; top: 70px; z-index: 16; display: flex; gap: 5px; width: 100%; padding: 5px; overflow-x: auto; border: 1px solid var(--jarvis-line); border-radius: 20px; background: color-mix(in srgb, var(--jarvis-surface) 90%, transparent); backdrop-filter: blur(18px); scrollbar-width: none; }
+.native-product--jarvis .finance-tab-bar::-webkit-scrollbar { display: none; }
+.native-product--jarvis .finance-tab-bar button { flex: 1 0 auto; min-height: 44px; padding: 0 15px; border: 0; border-radius: 15px; color: var(--jarvis-text-3); background: transparent; font-size: .78rem; font-weight: 750; }
+.native-product--jarvis .finance-tab-bar button.active { color: white; background: var(--jarvis-primary); }
+.native-product--jarvis .finance-period-controls { display: flex; flex-wrap: wrap; gap: 10px; }
+.native-product--jarvis .finance-period-pill, .native-product--jarvis .finance-asof-picker { flex: 1 1 260px; padding: 12px 14px; border: 1px solid var(--jarvis-line); border-radius: 16px; color: var(--jarvis-text-3); background: var(--jarvis-surface); font-size: .75rem; }
+.native-product--jarvis .finance-asof-picker input { width: 100%; margin-top: 7px; }
+.native-product--jarvis .jarvis-v2-metrics { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.native-product--jarvis .jarvis-v2-metric { min-width: 0; min-height: 112px; padding: 16px; border: 1px solid var(--jarvis-line); border-radius: 22px; color: var(--jarvis-text); background: var(--jarvis-surface); text-align: left; }
+.native-product--jarvis .jarvis-v2-metric small { display: block; color: var(--jarvis-text-3); font-size: .73rem; }
+.native-product--jarvis .jarvis-v2-metric strong { display: block; margin-top: 10px; overflow-wrap: anywhere; font-size: clamp(1.05rem, 5vw, 1.45rem); }
+.native-product--jarvis .dashboard-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--jarvis-space); }
+.native-product--jarvis .finance-workspace .hud-panel { padding: 18px; }
+.native-product--jarvis .finance-disclosure-content { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
+.native-product--jarvis .finance-disclosure > .jarvis-disclosure__region > .jarvis-disclosure__body > .hud-panel { padding: 18px; border: 0; border-radius: 0; background: transparent; }
+.native-product--jarvis .finance-overview-grid > .finance-disclosure { align-self: start; }
+.native-product--jarvis .debt-panel-v2, .native-product--jarvis .fixed-expenses-panel, .native-product--jarvis .currency-alert-panel { width: 100%; }
+.native-product--jarvis :is(.debt-row-v2-main, .finance-detail-row, .alert-item) { min-height: 58px; border-bottom: 1px solid var(--jarvis-line); }
+.native-product--jarvis :is(.debt-row-v2-main, .finance-detail-row):last-child { border-bottom: 0; }
+.native-product--jarvis .finance-input-grid { grid-template-columns: 1fr; }
+.native-product--jarvis .finance-detail-modal-backdrop { position: fixed; inset: 0; z-index: 1300; display: grid; place-items: end center; padding: 12px; background: rgba(2,3,9,.7); backdrop-filter: blur(8px); }
+.native-product--jarvis .finance-detail-modal { width: min(100%, 620px); max-height: 82dvh; overflow-y: auto; border-radius: 28px; animation: jarvis-sheet-in .3s ease both; }
+
+/* Wealth and list hubs ---------------------------------------------------- */
+.native-product--jarvis .wealth-v2-intro { padding: 8px 4px 4px; }
+.native-product--jarvis .wealth-v2-intro > span { color: var(--jarvis-secondary); font-size: .68rem; font-weight: 800; letter-spacing: .12em; }
+.native-product--jarvis .wealth-v2-intro h2 { margin: 6px 0; font-size: clamp(2rem, 10vw, 3.4rem); letter-spacing: -.055em; }
+.native-product--jarvis .wealth-v2-intro p { max-width: 36rem; margin: 0; color: var(--jarvis-text-2); line-height: 1.5; }
+.native-product--jarvis .wealth-v2-group .jarvis-disclosure__body { padding: 0; }
+.native-product--jarvis .jarvis-v2-group { overflow: hidden; border: 0; border-radius: 0; background: transparent; }
+.native-product--jarvis .jarvis-v2-row, .native-product--jarvis .app-list-item { display: grid; grid-template-columns: 46px minmax(0,1fr) 20px; align-items: center; gap: 13px; width: 100%; min-height: 76px; padding: 12px 18px; border: 0; border-bottom: 1px solid var(--jarvis-line); color: var(--jarvis-text); background: transparent; text-align: left; }
+.native-product--jarvis .jarvis-v2-row:last-child, .native-product--jarvis .app-list-item:last-child { border-bottom: 0; }
+.native-product--jarvis .jarvis-v2-row-icon, .native-product--jarvis .app-list-icon { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 14px; color: var(--jarvis-secondary); background: color-mix(in srgb, var(--jarvis-secondary) 11%, transparent); }
+.native-product--jarvis .jarvis-v2-row-copy strong { display: block; font-size: .95rem; }
+.native-product--jarvis .jarvis-v2-row-copy small { display: block; margin-top: 4px; color: var(--jarvis-text-3); font-size: .75rem; line-height: 1.35; }
+.native-product--jarvis .wealth-v2-chevron { color: var(--jarvis-text-3); }
+
+/* Data-heavy screens ------------------------------------------------------ */
+.native-product--jarvis :is(.net-worth-kpis, .financial-account-kpis, .investment-kpi-grid, .data-kpi-grid, .timeline-kpis, .reconciliation-kpis, .deterioration-kpis) { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.native-product--jarvis :is(.net-worth-chart-panel, .net-worth-columns > .hud-panel, .financial-account-form) { padding: 18px; }
+.native-product--jarvis .net-worth-columns, .native-product--jarvis .investment-two-col { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--jarvis-space); }
+.native-product--jarvis .net-worth-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 58px; border-bottom: 1px solid var(--jarvis-line); }
+.native-product--jarvis .net-worth-list > div:last-child { border-bottom: 0; }
+
+/* Intentional loading instead of text floating in empty space. */
+.native-product--jarvis :is(.dashboard-page, .page, .jarvis-v2-screen) > .hud-card:only-child,
+.native-product--jarvis > .main-shell .hud-panel:only-child { display: grid; min-height: 180px; place-items: center; color: var(--jarvis-text-3); text-align: center; }
+
+@keyframes jarvis-content-in { from { opacity: 0; transform: translateY(8px); } }
+
+@media (min-width: 760px) {
+  .native-product--jarvis .dashboard-grid.finance-overview-grid,
+  .native-product--jarvis .net-worth-columns,
+  .native-product--jarvis .investment-two-col { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .native-product--jarvis .strategy-v2-header--jarvis { justify-content: flex-end; }
+  .native-product--jarvis .strategy-v2-header--jarvis .primary-action-button { width: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-product--jarvis .strategy-v2-active-detail,
+  .native-product--jarvis .finance-detail-modal { animation: none; }
+}
