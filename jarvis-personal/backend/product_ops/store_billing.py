@@ -193,10 +193,12 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
             ON CONFLICT(account_id) DO UPDATE SET
               provider=EXCLUDED.provider,plan_code=EXCLUDED.plan_code,billing_period=EXCLUDED.billing_period,
               product_id=EXCLUDED.product_id,status=EXCLUDED.status,
-              trial_ends_at=EXCLUDED.trial_ends_at,current_period_start=NOW(),
-              current_period_end=EXCLUDED.current_period_end,cancel_at_period_end=EXCLUDED.cancel_at_period_end,
+              trial_ends_at=CASE WHEN %s='cancel_requested' THEN store_subscriptions.trial_ends_at ELSE EXCLUDED.trial_ends_at END,
+              current_period_start=CASE WHEN %s='cancel_requested' THEN store_subscriptions.current_period_start ELSE NOW() END,
+              current_period_end=CASE WHEN %s='cancel_requested' THEN store_subscriptions.current_period_end ELSE EXCLUDED.current_period_end END,
+              cancel_at_period_end=EXCLUDED.cancel_at_period_end,
               auto_renew=EXCLUDED.auto_renew,last_verified_at=NOW(),updated_at=NOW()\n            RETURNING account_id""",
-            (account_id, workspace_id, provider, plan_code, billing_period, product["product_id"], status, cancel_at_end, auto_renew),
+            (account_id, workspace_id, provider, plan_code, billing_period, product["product_id"], status, cancel_at_end, auto_renew, event_type, event_type, event_type),
         )
         conn.execute(
             """INSERT INTO store_subscription_events(account_id,provider,event_type,plan_code,billing_period)
