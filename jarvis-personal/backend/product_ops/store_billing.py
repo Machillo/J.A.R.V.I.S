@@ -232,6 +232,17 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
             row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
             conn.commit()
             return {"event": event_type, "target_account_id": account_id, "subscription": _public_state(row)}
+        if event_type == "renewed":
+            existing_store = conn.execute(
+                "SELECT * FROM store_subscriptions WHERE account_id=%s",
+                (account_id,),
+            ).fetchone()
+            if existing_store and existing_store.get("pending_plan_code"):
+                plan_code = existing_store["pending_plan_code"]
+                billing_period = existing_store["pending_billing_period"]
+                product = _product(plan_code, billing_period)
+                period = "1 month" if billing_period == "monthly" else "1 year"
+
         conn.execute(
             f"""INSERT INTO store_subscriptions(
               account_id,workspace_id,provider,plan_code,billing_period,product_id,status,
