@@ -26,18 +26,18 @@ export default function NetWorth() {
   const positiveChange = Number(change.amount || 0) >= 0;
   const history = data.history || [];
 
-  return <section className="net-worth-page">
-    <div className="hud-panel net-worth-hero">
+  return <section className="net-worth-page jarvis-v2-screen net-worth-v2">
+    <div className="net-worth-hero net-worth-v2-hero">
       <div><span className="strategy-eyebrow">JARVIS 06 · LIVE WEALTH</span><h2>Patrimonio neto</h2><p>Todo lo que tenés menos todo lo que debés, usando únicamente saldos reales.</p></div>
       <button className="strategy-refresh-btn" onClick={load}><RefreshCw size={17}/> Actualizar</button>
       <div className="net-worth-total"><span>Patrimonio actual</span><strong className={Number(data.net_worth) < 0 ? "negative" : "positive"}>{crc(data.net_worth)}</strong><small>{data.interpretation}</small></div>
     </div>
 
-    <div className="net-worth-kpis">
-      <article className="hud-card"><WalletCards/><span>Activos líquidos</span><strong>{crc(assets.savings_total)}</strong><small>MultiMoney, Salvavidas, efectivo y cuentas</small></article>
-      <article className="hud-card"><TrendingUp/><span>Inversiones</span><strong>{crc(assets.investments_total)}</strong><small>IBKR y otras inversiones verificadas</small></article>
-      <article className="hud-card"><TrendingDown/><span>Pasivos</span><strong className="negative">{crc(liabilities.debt_total)}</strong><small>Préstamos, deudas y cuentas negativas</small></article>
-      <article className="hud-card"><Scale/><span>Cambio</span><strong className={positiveChange ? "positive" : "negative"}>{positiveChange ? "+" : ""}{crc(change.amount)}</strong><small>{change.compared_with ? `Desde ${change.compared_with}` : "Primer snapshot registrado"}</small></article>
+    <div className="net-worth-kpis jarvis-v2-metrics">
+      <article className="jarvis-v2-metric"><WalletCards/><span>Activos líquidos</span><strong>{crc(assets.savings_total)}</strong><small>MultiMoney, Salvavidas, efectivo y cuentas</small></article>
+      <article className="jarvis-v2-metric"><TrendingUp/><span>Inversiones</span><strong>{crc(assets.investments_total)}</strong><small>IBKR y otras inversiones verificadas</small></article>
+      <article className="jarvis-v2-metric"><TrendingDown/><span>Pasivos</span><strong className="negative">{crc(liabilities.debt_total)}</strong><small>Préstamos, deudas y cuentas negativas</small></article>
+      <article className="jarvis-v2-metric"><Scale/><span>Cambio</span><strong className={positiveChange ? "positive" : "negative"}>{positiveChange ? "+" : ""}{crc(change.amount)}</strong><small>{change.compared_with ? `Desde ${change.compared_with}` : "Primer snapshot registrado"}</small></article>
     </div>
 
     <article className="hud-panel net-worth-chart-panel">
