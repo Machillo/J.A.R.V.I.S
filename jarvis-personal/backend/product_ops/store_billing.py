@@ -174,6 +174,21 @@ def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str):
                VALUES(%s,'sandbox',%s,%s,%s)""",
             (account_id, event_type, plan_code, billing_period),
         )
+        plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
+        if not plan:
+            raise HTTPException(404, "Plan FINVA no disponible.")
+        if status in ACTIVE_STATES:
+            conn.execute("""INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,created_at,updated_at)
+              VALUES(%s,%s,'active','store',NOW(),NOW(),NOW())
+              ON CONFLICT(account_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status='active',access_source='store',updated_at=NOW()""",
+              (account_id, plan["id"]))
+        else:
+            free_plan = conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
+            if free_plan:
+                conn.execute("""INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,created_at,updated_at)
+                  VALUES(%s,%s,'active','self_service',NOW(),NOW(),NOW())
+                  ON CONFLICT(account_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status='active',access_source='self_service',updated_at=NOW()""",
+                  (account_id, free_plan["id"]))
         row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
         conn.commit()
     record_event("subscription_lifecycle", "billing")
