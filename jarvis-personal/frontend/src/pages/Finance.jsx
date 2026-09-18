@@ -43,7 +43,6 @@ const formatCRC = (value = 0) =>
     currency: "CRC",
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
-
 // Real Balance must never hide its sign.  Formatting the absolute value and
 // adding the sign ourselves makes a deficit unambiguous in every browser.
 const formatSignedCRC = (value = 0) => {
@@ -51,14 +50,11 @@ const formatSignedCRC = (value = 0) => {
   if (number < 0) return `-${formatCRC(Math.abs(number))}`;
   return formatCRC(number);
 };
-
 const shortCRC = (value = 0) => {
   const number = Number(value) || 0;
-
   if (Math.abs(number) >= 1_000_000) {
     return `₡${(number / 1_000_000).toFixed(1)}M`;
   }
-
   if (Math.abs(number) >= 1_000) {
     return `₡${Math.round(number / 1_000)}k`;
   }
