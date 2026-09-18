@@ -34,7 +34,6 @@ import {
   syncAguinaldoFromCcss,
 } from "../services/jarvisApi";
 import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
-
 const formatCRC = (value = 0) =>
   new Intl.NumberFormat("es-CR", {
     style: "currency",
