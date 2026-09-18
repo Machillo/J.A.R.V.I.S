@@ -82,3 +82,17 @@ def test_grace_period_keeps_entitlement_temporarily():
 def test_monthly_and_annual_entitlements_report_period():
     assert _public_state(_row(period="monthly"))["billing_period"] == "monthly"
     assert _public_state(_row(period="annual", end_delta_days=365))["billing_period"] == "annual"
+
+
+def test_active_entitlement_accepts_database_serialized_timestamp():
+    row = _row(plan="basic")
+    row["current_period_end"] = row["current_period_end"].isoformat()
+    state = _public_state(row)
+    assert state["entitlement"] == "basic"
+
+
+def test_expired_entitlement_accepts_database_serialized_timestamp():
+    row = _row(plan="vip", end_delta_days=-1)
+    row["current_period_end"] = row["current_period_end"].isoformat()
+    state = _public_state(row)
+    assert state["entitlement"] == "free"

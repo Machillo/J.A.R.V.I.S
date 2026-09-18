@@ -95,8 +95,14 @@ def _public_state(row):
             "auto_renew": False,
         }
     row = dict(row)
+    period_end = row.get("current_period_end")
+    if isinstance(period_end, str):
+        try:
+            period_end = datetime.fromisoformat(period_end.replace("Z", "+00:00"))
+        except ValueError:
+            period_end = None
     active = row["status"] in ACTIVE_STATES and (
-        row.get("current_period_end") is None or row["current_period_end"] > datetime.now(timezone.utc)
+        period_end is None or period_end > datetime.now(timezone.utc)
     )
     return {
         "plan": row["plan_code"] if active else "free",
