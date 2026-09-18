@@ -124,3 +124,18 @@
 .native-product--jarvis.jarvis-pwa-standalone .alert-list .alert-item{padding:9px 4px!important;border-radius:0!important;background:transparent!important;border-bottom:1px solid var(--j2-line)}
 .native-product--jarvis.jarvis-pwa-standalone .premium-strategy-page .hud-card{padding:12px!important}
 @media(max-width:430px){.native-product--jarvis.jarvis-pwa-standalone>.main-shell.app-main-v2{padding-inline:10px}.native-product--jarvis.jarvis-pwa-standalone .finance-workspace .finance-tabs{overflow-x:auto;scrollbar-width:none}.native-product--jarvis.jarvis-pwa-standalone .finance-workspace .finance-tabs::-webkit-scrollbar{display:none}}
+
+/* PWA v3: one visual language, fewer nested cards, readable compact rows. */
+.native-product--jarvis.jarvis-pwa-standalone{--j2-radius-sm:10px;--j2-radius-md:12px;--j2-radius-lg:16px}
+.native-product--jarvis.jarvis-pwa-standalone .native-screen-content>section{width:100%;max-width:100%;margin:0 auto}
+.native-product--jarvis.jarvis-pwa-standalone :is(.jarvis-v2-group,.app-list-group,.app-section-card,.hud-panel,.hud-card){box-shadow:none!important}
+.native-product--jarvis.jarvis-pwa-standalone :is(.jarvis-v2-group,.app-list-group){border-radius:12px!important}
+.native-product--jarvis.jarvis-pwa-standalone .jarvis-v2-row{min-height:54px;padding:8px 10px}
+.native-product--jarvis.jarvis-pwa-standalone .jarvis-v2-row-copy strong{font-size:.88rem}.native-product--jarvis.jarvis-pwa-standalone .jarvis-v2-row-copy small{font-size:.72rem;line-height:1.3}
+.native-product--jarvis.jarvis-pwa-standalone .jarvis-v2-section{gap:7px}.native-product--jarvis.jarvis-pwa-standalone .jarvis-v2-section-title{margin:0;padding:2px 2px 0;font-size:.68rem}
+.native-product--jarvis.jarvis-pwa-standalone .jarvis-v2-metric{padding:10px;border-radius:10px}.native-product--jarvis.jarvis-pwa-standalone .jarvis-v2-metric strong{font-size:clamp(.95rem,4.3vw,1.2rem)}
+.native-product--jarvis.jarvis-pwa-standalone :is(.premium-strategy-page,.finance-workspace,.wealth-v2,.net-worth-v2,.financial-accounts-v2,.goals-v2){padding:0!important}
+.native-product--jarvis.jarvis-pwa-standalone .premium-strategy-page>.hud-card:first-child{min-height:64px;display:grid;align-items:center}
+.native-product--jarvis.jarvis-pwa-standalone .finance-tab-bar{position:sticky;top:0;z-index:5;margin:0 -2px 8px;padding:3px;background:color-mix(in srgb,var(--j2-bg) 92%,transparent);backdrop-filter:blur(14px)}
+.native-product--jarvis.jarvis-pwa-standalone .finance-tab-bar button{min-height:38px;padding:7px 10px;font-size:.72rem;white-space:nowrap}
+.native-product--jarvis.jarvis-pwa-standalone :is(.finance-panel,.finance-card,.finance-module,.hud-panel.large){max-width:100%;min-width:0}
