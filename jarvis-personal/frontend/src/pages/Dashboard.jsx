@@ -1,9 +1,12 @@
 import { Brain, Send, Sparkles } from "lucide-react";
+import { deviceLanguage } from "../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
 function formatJarvisResponse(data) {
   if (!data) return null;
   if (data.message) return data.message;
-  return "Señor, análisis completado.";
+  return tx("Señor, análisis completado.", "Sir, analysis complete.");
 }
 
 export default function Dashboard({ jarvisResponse, chatHistory = [], userName = "Kenneth" }) {
@@ -16,16 +19,16 @@ export default function Dashboard({ jarvisResponse, chatHistory = [], userName =
       <header className="jarvis-home-v2-hero">
         <div className="jarvis-home-v2-mark" aria-hidden="true"><Brain size={24} /></div>
         <div>
-          <p>Hola {userName || "Kenneth"}</p>
+          <p>{tx("Hola", "Hello")} {userName || "Kenneth"}</p>
           <h1>J.A.R.V.I.S.</h1>
-          <span>¿Qué hacemos ahora?</span>
+          <span>{tx("¿Qué hacemos ahora?", "What shall we do now?")}</span>
         </div>
       </header>
 
       {hasResponse ? (
         <section className="jarvis-v2-section jarvis-home-v2-session">
           <div className="jarvis-v2-section-title">
-            <h2>Sesión actual</h2>
+            <h2>{tx("Sesión actual", "Current session")}</h2>
             <Sparkles size={15} />
           </div>
           <div className="jarvis-home-v2-feed">
@@ -45,7 +48,7 @@ export default function Dashboard({ jarvisResponse, chatHistory = [], userName =
       ) : (
         <div className="jarvis-home-v2-idle">
           <Sparkles size={16} />
-          <span>Listo cuando usted lo esté.</span>
+          <span>{tx("Listo cuando usted lo esté.", "Ready when you are.")}</span>
         </div>
       )}
     </section>
