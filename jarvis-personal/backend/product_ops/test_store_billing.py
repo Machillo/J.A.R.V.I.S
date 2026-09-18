@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from backend.product_ops.store_billing import PRODUCTS, _public_state, store_catalog
+from backend.product_ops.store_billing import PRODUCTS, _claim_store_event, _public_state, store_catalog
 
 
 def test_store_catalog_has_monthly_and_annual_products():
@@ -128,3 +128,37 @@ def test_public_state_reports_scheduled_downgrade_without_losing_vip():
     assert state["pending_plan"] == "basic"
     assert state["pending_billing_period"] == "annual"
     assert state["pending_effective_at"] == row["current_period_end"]
+
+
+class _ClaimResult:
+    def __init__(self, row):
+        self.row = row
+
+    def fetchone(self):
+        return self.row
+
+
+class _ClaimConnection:
+    def __init__(self, row):
+        self.row = row
+        self.query = None
+        self.params = None
+
+    def execute(self, query, params=()):
+        self.query = query
+        self.params = params
+        return _ClaimResult(self.row)
+
+
+def test_claim_store_event_binds_provider_id_and_uses_atomic_conflict_guard():
+    conn = _ClaimConnection({"id": 123})
+    claimed = _claim_store_event(conn, "acct", "google", "renewed", "evt-001", "basic", "monthly")
+    assert claimed is True
+    assert "ON CONFLICT DO NOTHING" in conn.query
+    assert conn.params == ("acct", "google", "renewed", "evt-001", "basic", "monthly")
+
+
+def test_claim_store_event_reports_duplicate_when_conflict_returns_no_row():
+    conn = _ClaimConnection(None)
+    claimed = _claim_store_event(conn, "acct", "apple", "renewed", "evt-duplicate", "vip", "annual")
+    assert claimed is False
