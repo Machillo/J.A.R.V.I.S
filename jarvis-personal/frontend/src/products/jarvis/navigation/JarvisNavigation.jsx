@@ -8,7 +8,7 @@ import {
 import NativeBottomBar from "../../../ui/native/NativeBottomBar";
 import JarvisDisclosure from "../components/JarvisDisclosure";
 
-const wealthKeys = ["wealth", "investments", "businesses", "financialAccounts", "netWorth", "financialTimeline", "reconciliation", "deterioration"];
+const wealthKeys = ["wealth", "investments", "businesses", "netWorth", "financialTimeline", "reconciliation", "deterioration"];
 const moreKeys = ["receivables", "emails", "transactions", "additionalCards", "chats", "goals", "memory", "settings", "profile", "userManagement", "productOperations"];
 
 const groupFor = (page) => {
@@ -36,7 +36,6 @@ export default function JarvisNavigation({ activePage, onNavigate, userName, pro
       items: [
         ["investments", "Inversiones", TrendingUp],
         ["businesses", "Negocios", BriefcaseBusiness],
-        ["financialAccounts", "Cuentas financieras", WalletCards],
         ["netWorth", "Patrimonio neto", Gem],
         ["financialTimeline", "Timeline financiero", CalendarDays],
         ["reconciliation", "Conciliación", CheckCircle2],
@@ -74,6 +73,7 @@ export default function JarvisNavigation({ activePage, onNavigate, userName, pro
     { key: "dashboard", label: "JARVIS", icon: Bot },
     { key: "strategy", label: "Strategy", icon: ChartNoAxesCombined },
     { key: "finance", label: "Finance", icon: Landmark },
+    { key: "financialAccounts", label: "Cuentas", icon: WalletCards },
     { key: "wealth", label: "Patrimonio", icon: Gem },
     { key: "more", label: "Más", icon: MoreHorizontal, activeKeys: ["more", ...moreKeys] },
   ];

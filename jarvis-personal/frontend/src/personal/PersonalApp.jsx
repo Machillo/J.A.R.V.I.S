@@ -80,7 +80,7 @@ const appSections = {
 const getBottomGroup = (page) => {
   if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "profile";
   if (["memory", "settings", "goals", "profile", "userManagement", "productOperations"].includes(page)) return "profile";
-  if (["investments", "businesses", "financialAccounts", "netWorth", "financialTimeline", "reconciliation", "deterioration", "wealth"].includes(page)) return "wealth";
+  if (["investments", "businesses", "netWorth", "financialTimeline", "reconciliation", "deterioration", "wealth"].includes(page)) return "wealth";
   return page;
 };
 
