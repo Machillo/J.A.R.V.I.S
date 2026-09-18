@@ -46,37 +46,37 @@ import AppearanceSelector from "../components/AppearanceSelector";
 import NativeProductShell from "../ui/native/NativeProductShell";
 import { detectNativePlatform } from "../ui/native/platform";
 import JarvisNavigation from "../products/jarvis/navigation/JarvisNavigation";
-import { applyDocumentLanguage, deviceLanguage } from "../lib/locale";
+import { applyDocumentLanguage, deviceLanguage, t } from "../lib/locale";
 
 const sanitizeCourtesy = (text = "") =>
   String(text || "")
     .replace(/Señor\s+[A-ZÁÉÍÓÚÑa-záéíóúñ0-9._%+-]+(?:@[A-ZÁÉÍÓÚÑa-záéíóúñ0-9.-]+)?[,:\s]*/gi, "Señor, ")
     .replace(/Señor,\s*Señor,\s*/gi, "Señor, ");
 
-const appSections = {
+const appSectionsFor = (language) => ({
   dashboard: { title: "J.A.R.V.I.S.", eyebrow: "Assistant" },
-  strategy: { title: "Strategy", eyebrow: "Financial Director" },
-  finance: { title: "Finance", eyebrow: "Financial Center" },
+  strategy: { title: t("nav.strategy", language), eyebrow: language === "es" ? "Director financiero" : "Financial Director" },
+  finance: { title: t("nav.finance", language), eyebrow: language === "es" ? "Centro financiero" : "Financial Center" },
   receivables: { title: "Receivables", eyebrow: "People & Payments" },
-  wealth: { title: "Patrimonio", eyebrow: "Wealth Center" },
-  investments: { title: "Inversiones", eyebrow: "Wealth Building" },
-  businesses: { title: "Negocios", eyebrow: "Wealth Building" },
-  financialAccounts: { title: "Cuentas", eyebrow: "Financial Ledger" },
-  netWorth: { title: "Patrimonio neto", eyebrow: "Live Wealth" },
+  wealth: { title: t("nav.wealth", language), eyebrow: t("wealth.eyebrow", language) },
+  investments: { title: t("nav.investments", language), eyebrow: language === "es" ? "Construcción patrimonial" : "Wealth Building" },
+  businesses: { title: t("nav.businesses", language), eyebrow: language === "es" ? "Construcción patrimonial" : "Wealth Building" },
+  financialAccounts: { title: t("nav.accounts", language), eyebrow: language === "es" ? "Registro financiero" : "Financial Ledger" },
+  netWorth: { title: t("nav.netWorth", language), eyebrow: language === "es" ? "Patrimonio actual" : "Live Wealth" },
   financialTimeline: { title: "Timeline financiero", eyebrow: "Liquidity Map" },
-  reconciliation: { title: "Conciliación", eyebrow: "Financial Control" },
-  deterioration: { title: "Deterioro financiero", eyebrow: "Early Warning" },
+  reconciliation: { title: t("nav.reconciliation", language), eyebrow: language === "es" ? "Control financiero" : "Financial Control" },
+  deterioration: { title: t("nav.deterioration", language), eyebrow: language === "es" ? "Alerta temprana" : "Early Warning" },
   chats: { title: "Data Tools", eyebrow: "Imports & Movements" },
   emails: { title: "Correos", eyebrow: "Chats" },
   transactions: { title: "Transacciones", eyebrow: "Chats" },
   additionalCards: { title: "Tarjetas", eyebrow: "Chats" },
   profile: { title: "Settings", eyebrow: "Profile" },
-  memory: { title: "Memory Core", eyebrow: "Config" },
-  settings: { title: "Configuración", eyebrow: "Config" },
-  goals: { title: "Metas", eyebrow: "Config" },
+  memory: { title: t("nav.memory", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
+  settings: { title: t("nav.settings", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
+  goals: { title: t("nav.goals", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   userManagement: { title: "Usuarios", eyebrow: "Owner Control" },
   productOperations: { title: "Operaciones", eyebrow: "FINVA Beta" },
-};
+});
 
 const getBottomGroup = (page) => {
   if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "profile";
@@ -165,6 +165,8 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
 }
 
 export default function App() {
+  const language = deviceLanguage();
+  const appSections = appSectionsFor(language);
   const [activePage, setActivePage] = useState("dashboard");
   const [, setPageStack] = useState([]);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
