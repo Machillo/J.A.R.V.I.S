@@ -1,33 +1,36 @@
 import { AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronRight, Gem, Landmark, TrendingUp } from "lucide-react";
 import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
-
-const wealthGroups = [
-  {
-    title: "Patrimonio",
-    items: [
-      ["netWorth", Gem, "Patrimonio neto", "Activos, inversiones y deudas consolidados"],
-      ["financialAccounts", Landmark, "Cuentas", "Saldos reales, efectivo y cuentas financieras"],
-      ["investments", TrendingUp, "Inversiones", "Aportes, rendimiento, dividendos y costos"],
-      ["businesses", BriefcaseBusiness, "Negocios", "Proyectos, sociedades e ingresos extra"],
-    ],
-  },
-  {
-    title: "Control",
-    items: [
-      ["financialTimeline", CalendarDays, "Timeline financiero", "Ingresos, cuotas y compromisos próximos"],
-      ["reconciliation", CheckCircle2, "Conciliación", "Diferencias, gastos olvidados y duplicados"],
-      ["deterioration", AlertTriangle, "Deterioro financiero", "Alertas tempranas y cambios negativos"],
-    ],
-  },
-];
+import { deviceLanguage, t } from "../lib/locale";
 
 export default function Wealth({ navigatePage }) {
+  const language = deviceLanguage();
+  const tr = (key) => t(key, language);
+  const wealthGroups = [
+    {
+      title: tr("nav.wealth"),
+      items: [
+        ["netWorth", Gem, tr("nav.netWorth"), tr("wealth.netWorthHelp")],
+        ["financialAccounts", Landmark, tr("nav.accounts"), language === "es" ? "Saldos reales, efectivo y cuentas financieras" : "Real balances, cash, and financial accounts"],
+        ["investments", TrendingUp, tr("nav.investments"), tr("wealth.investmentsHelp")],
+        ["businesses", BriefcaseBusiness, tr("nav.businesses"), tr("wealth.businessesHelp")],
+      ],
+    },
+    {
+      title: tr("wealth.control"),
+      items: [
+        ["financialTimeline", CalendarDays, tr("nav.financialTimeline"), tr("wealth.timelineHelp")],
+        ["reconciliation", CheckCircle2, tr("nav.reconciliation"), tr("wealth.reconciliationHelp")],
+        ["deterioration", AlertTriangle, tr("nav.deterioration"), tr("wealth.deteriorationHelp")],
+      ],
+    },
+  ];
+
   return (
     <section className="jarvis-v2-screen wealth-v2">
       <header className="wealth-v2-intro">
-        <span>WEALTH CENTER</span>
-        <h2>Patrimonio</h2>
-        <p>Una vista ordenada de lo que tenés, lo que debés y lo que está construyendo valor.</p>
+        <span>{tr("wealth.eyebrow")}</span>
+        <h2>{tr("wealth.title")}</h2>
+        <p>{tr("wealth.intro")}</p>
       </header>
 
       {wealthGroups.map((group) => (
