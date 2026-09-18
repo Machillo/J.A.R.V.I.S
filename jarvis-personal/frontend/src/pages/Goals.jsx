@@ -94,7 +94,7 @@ export default function Goals() {
 
   if (loading) {
     return (
-      <section className="data-page">
+      <section className="data-page jarvis-v2-screen goals-v2">
         <div className="empty-state full-width">
           <div className="jarvis-loader"></div>
           <h3>Cargando metas...</h3>
@@ -105,8 +105,8 @@ export default function Goals() {
   }
 
   return (
-    <section className="data-page">
-      <div className="page-section-header">
+    <section className="data-page jarvis-v2-screen goals-v2">
+      <div className="page-section-header goals-v2-header">
         <div>
           <h2>Metas Estratégicas</h2>
           <p>Viajes, ahorro, deuda y objetivos personales.</p>
@@ -127,14 +127,14 @@ export default function Goals() {
           <p>Cuando agreguemos metas desde la interfaz o por chat, se mostrarán aquí con progreso, fecha objetivo y prioridad.</p>
         </div>
       ) : (
-        <div className="goals-grid">
+        <div className="goals-grid goals-v2-list">
           {goals.map((goal) => {
             const progress = calculateProgress(goal);
             const remaining = Math.max(Number(goal.target_amount || 0) - Number(goal.current_amount || 0), 0);
             const isEditing = editingId === goal.id;
 
             return (
-              <div key={goal.id} className={`goal-card ${goal.priority || "medium"}`}>
+              <div key={goal.id} className={`goal-card goal-row-v2 ${goal.priority || "medium"} ${isEditing ? "is-editing" : ""}`}>
                 <div className="goal-header">
                   <Target size={20} />
                   <span>{priorityLabels[goal.priority] || "MEDIA"}</span>
