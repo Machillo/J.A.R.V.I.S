@@ -622,9 +622,10 @@ export default function App() {
   const currentSection = appSections[activePage] || appSections[getBottomGroup(activePage)] || appSections.dashboard;
   const showHeader = activePage !== "dashboard";
   const platform = detectNativePlatform();
+  const isStandalonePwa = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
 
   return (
-    <NativeProductShell product="jarvis" platform={platform} plan="personal" className={`jarvis-app app-shell-v2 ${(keyboardOpen || commandInputFocused) ? "keyboard-open" : ""}`}>
+    <NativeProductShell product="jarvis" platform={platform} plan="personal" className={`jarvis-app app-shell-v2 ${isStandalonePwa ? "jarvis-pwa-standalone" : ""} ${(keyboardOpen || commandInputFocused) ? "keyboard-open" : ""}`}>
       <main className={`main-shell app-main-v2 ${activePage === "dashboard" ? "home-mode" : ""}`}>
         {showHeader && (
           <header className="app-top-bar">
