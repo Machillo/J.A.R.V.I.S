@@ -177,6 +177,7 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
         "upgrade": ("active", False, True),
         "downgrade": ("active", False, True),
         "cancel_requested": ("active", True, False),
+        "grace_period": ("grace_period", False, False),
         "restored": ("active", False, True),
         "expired": ("expired", False, False),
         "revoked": ("revoked", False, False),
@@ -200,14 +201,14 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
             ON CONFLICT(account_id) DO UPDATE SET
               provider=EXCLUDED.provider,plan_code=EXCLUDED.plan_code,billing_period=EXCLUDED.billing_period,
               product_id=EXCLUDED.product_id,status=EXCLUDED.status,
-              trial_ends_at=CASE WHEN %s='cancel_requested' THEN store_subscriptions.trial_ends_at ELSE EXCLUDED.trial_ends_at END,
+              trial_ends_at=CASE WHEN %s IN ('cancel_requested','grace_period') THEN store_subscriptions.trial_ends_at ELSE EXCLUDED.trial_ends_at END,
               current_period_start=CASE
-                WHEN %s='cancel_requested' THEN store_subscriptions.current_period_start
+                WHEN %s IN ('cancel_requested','grace_period') THEN store_subscriptions.current_period_start
                 WHEN %s='renewed' THEN GREATEST(COALESCE(store_subscriptions.current_period_end,NOW()),NOW())
                 ELSE NOW()
               END,
               current_period_end=CASE
-                WHEN %s IN ('cancel_requested','expired','revoked') THEN store_subscriptions.current_period_end
+                WHEN %s IN ('cancel_requested','grace_period','expired','revoked') THEN store_subscriptions.current_period_end
                 WHEN %s='renewed' THEN GREATEST(COALESCE(store_subscriptions.current_period_end,NOW()),NOW())+INTERVAL '{period}'
                 ELSE EXCLUDED.current_period_end
               END,

@@ -39,5 +39,5 @@ class StoreLifecycleSimulation(BaseModel):
     billing_period: Literal["monthly", "annual"]
     event_type: Literal[
         "trial_started", "purchased", "renewed", "upgrade", "downgrade",
-        "cancel_requested", "restored", "expired", "revoked",
+        "cancel_requested", "grace_period", "restored", "expired", "revoked",
     ]
