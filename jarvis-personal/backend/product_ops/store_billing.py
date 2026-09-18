@@ -177,7 +177,7 @@ def _product(plan_code, billing_period):
         raise HTTPException(422, "Plan o periodo de facturación no válido.") from exc
 
 
-def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str, billing_period: str, event_type: str, *, provider: str = "sandbox"):
+def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str, billing_period: str, event_type: str, *, provider: str = "sandbox", provider_event_id: str | None = None):
     """Apply an already-verified store lifecycle event.
 
     Authentication and provider verification belong to the caller. This is the
@@ -204,6 +204,15 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
     with get_connection() as conn:
         ensure_store_schema(conn)
         target = conn.execute("SELECT id FROM accounts WHERE id=%s", (account_id,)).fetchone()
+        if provider_event_id:
+            duplicate = conn.execute(
+                "SELECT id FROM store_subscription_events WHERE provider=%s AND provider_event_id=%s",
+                (provider, provider_event_id),
+            ).fetchone()
+            if duplicate:
+                row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
+                conn.commit()
+                return {"event": event_type, "target_account_id": account_id, "duplicate": True, "subscription": _public_state(row)}
         if not target:
             raise HTTPException(404, "Cuenta objetivo no encontrada.")
         if event_type == "downgrade":
@@ -224,10 +233,10 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
                 (plan_code, billing_period, product["product_id"], account_id),
             )
             conn.execute(
-                """INSERT INTO store_subscription_events(account_id,provider,event_type,plan_code,billing_period)
-                   VALUES(%s,%s,%s,%s,%s)
+                """INSERT INTO store_subscription_events(account_id,provider,event_type,provider_event_id,plan_code,billing_period)
+                   VALUES(%s,%s,%s,%s,%s,%s)
                    RETURNING id""",
-                (account_id, provider, event_type, plan_code, billing_period),
+                (account_id, provider, event_type, provider_event_id, plan_code, billing_period),
             )
             row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
             conn.commit()
@@ -273,8 +282,8 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
             (account_id, workspace_id, provider, plan_code, billing_period, product["product_id"], status, cancel_at_end, auto_renew, event_type, event_type, event_type, event_type, event_type, event_type, event_type, event_type, event_type),
         )
         conn.execute(
-            """INSERT INTO store_subscription_events(account_id,provider,event_type,plan_code,billing_period)
-               VALUES(%s,%s,%s,%s,%s)
+            """INSERT INTO store_subscription_events(account_id,provider,event_type,provider_event_id,plan_code,billing_period)
+               VALUES(%s,%s,%s,%s,%s,%s)
                RETURNING id""",
             (account_id, provider, event_type, plan_code, billing_period),
         )
@@ -309,9 +318,9 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
     return {"event": event_type, "target_account_id": account_id, "subscription": _public_state(row)}
 
 
-def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str, *, target_account_id: str | None = None):
+def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str, *, target_account_id: str | None = None, provider_event_id: str | None = None):
     """Owner-only QA adapter. Not part of the customer purchase flow."""
     actor_account_id = get_current_account_id()
     account_id = target_account_id or actor_account_id
     workspace_id = get_current_workspace_id() if not target_account_id else None
-    return apply_store_event(account_id, workspace_id, plan_code, billing_period, event_type, provider="sandbox")
+    return apply_store_event(account_id, workspace_id, plan_code, billing_period, event_type, provider="sandbox", provider_event_id=provider_event_id)
