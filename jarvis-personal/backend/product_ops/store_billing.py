@@ -285,7 +285,7 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
             """INSERT INTO store_subscription_events(account_id,provider,event_type,provider_event_id,plan_code,billing_period)
                VALUES(%s,%s,%s,%s,%s,%s)
                RETURNING id""",
-            (account_id, provider, event_type, plan_code, billing_period),
+            (account_id, provider, event_type, provider_event_id, plan_code, billing_period),
         )
         plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
         if not plan:
