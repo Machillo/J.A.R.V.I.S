@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+from time import perf_counter
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -8,11 +10,11 @@ from backend.auth.current_user import get_current_user, get_current_user_id, get
 from backend.core.database import get_connection
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.emergency_fund import get_salvavidas_state
-from backend.finance.doctor_strange import calculate_doctor_strange
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.ai.openai_client import get_active_premium_guides
-from backend.integrations.ibkr_readonly import ensure_ibkr_tables
 from backend.goals.strategy import build_goal_portfolio
+
+logger = logging.getLogger("jarvis.strategy")
 
 
 def _f(value: Any) -> float:
@@ -432,27 +434,7 @@ def _fetch_investment_portfolio(workspace_id: str) -> dict[str, Any]:
                 (workspace_id,),
             ).fetchone()
             legacy_value = _f(legacy["total"] if legacy else 0)
-            # Las tablas nuevas son aditivas y no rompen instalaciones existentes.
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS investment_cashflows (
-                    id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
-                    flow_date DATE NOT NULL DEFAULT CURRENT_DATE, flow_type TEXT NOT NULL,
-                    amount NUMERIC(14,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
-                    source TEXT NOT NULL DEFAULT 'manual', description TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS investment_portfolio_snapshots (
-                    id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
-                    snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE, market_value NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    contributed_capital NUMERIC(14,2) NOT NULL DEFAULT 0, realized_pnl NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    unrealized_pnl NUMERIC(14,2) NOT NULL DEFAULT 0, dividends NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    taxes NUMERIC(14,2) NOT NULL DEFAULT 0, commissions NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    funding_fees NUMERIC(14,2) NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'USD',
-                    source TEXT NOT NULL DEFAULT 'manual', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-            """)
-            ensure_ibkr_tables(conn)
+            # Schema creation belongs to migrations/startup, never to this hot read path.
             snap = conn.execute("""
                 SELECT * FROM investment_portfolio_snapshots
                 WHERE workspace_id=%s AND included_in_net_worth=TRUE
@@ -834,16 +816,12 @@ def _simulate_debt_cascade(
 ) -> tuple[list[dict[str, Any]], int, float]:
     """Simulate an active-debt cascade without keeping cancelled/paid rows in the route."""
     candidates = [debt for debt in debts if _f(debt.get("remaining_amount")) > 0.01]
-    multiverse = calculate_doctor_strange(
-        candidates,
-        extra_payment=max(_f(recurring_monthly_extra) + _f(first_month_extra), 0.0),
-    )
-    balanced = (multiverse.get("strategies") or {}).get("balanced") or {}
-    ordered_ids = [item.get("id") for item in balanced.get("order") or []]
-    by_id = {item.get("id"): item for item in candidates}
-    ordered_active = [by_id[item_id] for item_id in ordered_ids if item_id in by_id]
-    if len(ordered_active) != len(candidates):
-        ordered_active = _sort_debts_for_director(candidates)
+    # The live dashboard only needs a stable payoff order. Running Doctor
+    # Strange here was factorial (6 debts = 720 full simulations, 8 = 40,320)
+    # and this function is called twice per dashboard request. That saturated the
+    # small Render instance and caused the browser's 20s timeout. Keep the
+    # exhaustive simulator for the explicit debt-strategy tool, not this hot path.
+    ordered_active = _sort_debts_for_director(candidates)
     active: list[dict[str, Any]] = []
     for debt in ordered_active:
         balance = _f(debt.get("remaining_amount"))
@@ -1231,7 +1209,10 @@ def get_premium_strategy_dashboard() -> dict[str, Any]:
     data changed.
     """
     user = get_current_user()
+    started = perf_counter()
     strategy = build_local_strategy_blueprint()
+    elapsed_ms = round((perf_counter() - started) * 1000, 1)
+    logger.info("strategy_dashboard_complete elapsed_ms=%s workspace_id=%s", elapsed_ms, get_current_workspace_id())
     return {
         "status": "OK",
         "user_role": user.get("role"),
