@@ -54,7 +54,7 @@ export default function AdditionalCards() {
               <UserRound size={22} />
               <div>
                 <strong>{card.owner}</strong>
-                <span>{card.cards.length ? card.cards.map((last4) => `****${last4}`).join(" · ") : "{tx("Sin tarjetas asociadas", "No linked cards")}"}</span>
+                <span>{card.cards.length ? card.cards.map((last4) => `****${last4}`).join(" · ") : tx("Sin tarjetas asociadas", "No linked cards")}</span>
               </div>
             </div>
 
