@@ -1,0 +1,28 @@
+.native-product--jarvis .jarvis-disclosure {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--jarvis-line);
+  border-radius: var(--jarvis-radius);
+  background: var(--jarvis-surface);
+}
+
+.native-product--jarvis .jarvis-disclosure__header { display: flex; align-items: center; min-height: 74px; }
+.native-product--jarvis .jarvis-disclosure__toggle { display: flex; flex: 1; align-items: center; gap: 13px; min-width: 0; min-height: 74px; padding: 14px 18px; border: 0; color: inherit; background: transparent; text-align: left; }
+.native-product--jarvis .jarvis-disclosure__icon { display: grid; flex: 0 0 42px; width: 42px; height: 42px; place-items: center; border-radius: 14px; color: var(--jarvis-secondary); background: color-mix(in srgb, var(--jarvis-secondary) 12%, transparent); }
+.native-product--jarvis .jarvis-disclosure__copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.native-product--jarvis .jarvis-disclosure__copy small { color: var(--jarvis-secondary); font-size: .66rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.native-product--jarvis .jarvis-disclosure__copy strong { color: var(--jarvis-text); font-size: 1.02rem; line-height: 1.2; }
+.native-product--jarvis .jarvis-disclosure__copy > span { color: var(--jarvis-text-3); font-size: .78rem; line-height: 1.35; }
+.native-product--jarvis .jarvis-disclosure__chevron { flex: 0 0 auto; color: var(--jarvis-text-3); transition: transform .28s ease; }
+.native-product--jarvis .jarvis-disclosure.is-open .jarvis-disclosure__chevron { transform: rotate(180deg); }
+.native-product--jarvis .jarvis-disclosure__actions { flex: 0 0 auto; padding-right: 14px; }
+.native-product--jarvis .jarvis-disclosure__region { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows .3s ease, opacity .22s ease; }
+.native-product--jarvis .jarvis-disclosure.is-closed .jarvis-disclosure__region { grid-template-rows: 0fr; opacity: 0; }
+.native-product--jarvis .jarvis-disclosure__body { min-height: 0; overflow: hidden; }
+.native-product--jarvis .jarvis-disclosure.is-open .jarvis-disclosure__body { border-top: 1px solid var(--jarvis-line); }
+.native-product--jarvis .jarvis-disclosure__body > :first-child { margin-top: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .native-product--jarvis .jarvis-disclosure__region,
+  .native-product--jarvis .jarvis-disclosure__chevron { transition: none; }
+}

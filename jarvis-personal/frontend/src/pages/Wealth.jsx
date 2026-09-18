@@ -1,4 +1,5 @@
 import { AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronRight, Gem, Landmark, TrendingUp } from "lucide-react";
+import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
 
 const wealthGroups = [
   {
@@ -30,8 +31,7 @@ export default function Wealth({ navigatePage }) {
       </header>
 
       {wealthGroups.map((group) => (
-        <section className="jarvis-v2-section" key={group.title}>
-          <div className="jarvis-v2-section-title"><h2>{group.title}</h2></div>
+        <JarvisDisclosure title={group.title} key={group.title} className="wealth-v2-group">
           <div className="jarvis-v2-group">
             {group.items.map(([page, Icon, title, subtitle]) => (
               <button className="jarvis-v2-row" type="button" key={page} onClick={() => navigatePage(page)}>
@@ -41,7 +41,7 @@ export default function Wealth({ navigatePage }) {
               </button>
             ))}
           </div>
-        </section>
+        </JarvisDisclosure>
       ))}
     </section>
   );

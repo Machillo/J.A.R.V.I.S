@@ -1,0 +1,45 @@
+/* JARVIS navigation: one implementation for PWA, Android and iOS shells. */
+.native-product--jarvis .jarvis-native-nav {
+  position: fixed;
+  left: 50%;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 1000;
+  width: min(calc(100% - 20px), 560px);
+  min-height: 72px;
+  padding: 7px;
+  transform: translateX(-50%);
+  border: 1px solid var(--jarvis-line);
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--jarvis-surface-2) 88%, transparent);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .35);
+  backdrop-filter: blur(24px) saturate(150%);
+}
+
+.native-product--jarvis .jarvis-native-nav button { min-width: 0; min-height: 58px; padding: 6px 2px; border: 0; border-radius: 20px; color: var(--jarvis-text-3); background: transparent; }
+.native-product--jarvis .jarvis-native-nav button.active { color: var(--jarvis-text); background: color-mix(in srgb, var(--jarvis-primary) 23%, transparent); }
+.native-product--jarvis .jarvis-native-nav .native-nav-icon { min-height: 27px; }
+.native-product--jarvis .jarvis-native-nav .native-nav-label { font-size: clamp(.58rem, 2.5vw, .7rem); font-weight: 750; }
+
+.native-product--jarvis .native-more-backdrop { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: flex-end; justify-content: center; padding: 12px; background: rgba(2, 3, 9, .64); backdrop-filter: blur(8px); animation: jarvis-fade-in .2s ease both; }
+.native-product--jarvis .jarvis-more-sheet { width: min(100%, 620px); max-height: min(88dvh, 820px); padding: 10px 14px calc(16px + env(safe-area-inset-bottom)); overflow-y: auto; border: 1px solid var(--jarvis-line); border-radius: 32px; background: var(--jarvis-bg); animation: jarvis-sheet-in .32s cubic-bezier(.2,.8,.2,1) both; }
+.native-product--jarvis .native-sheet-handle { width: 42px; height: 5px; margin: 2px auto 14px; border-radius: 999px; background: var(--jarvis-text-3); opacity: .55; }
+.native-product--jarvis .native-more-profile { display: flex; align-items: center; gap: 13px; padding: 4px 4px 18px; }
+.native-product--jarvis .native-more-avatar { display: grid; width: 52px; height: 52px; place-items: center; overflow: hidden; border-radius: 18px; background: var(--jarvis-surface-2); font-size: 1.1rem; font-weight: 900; }
+.native-product--jarvis .native-more-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.native-product--jarvis .native-more-profile small { display: block; color: var(--jarvis-secondary); font-size: .65rem; font-weight: 800; letter-spacing: .12em; }
+.native-product--jarvis .native-more-profile strong { font-size: 1.4rem; }
+.native-product--jarvis .native-sheet-groups { display: flex; flex-direction: column; gap: 12px; }
+.native-product--jarvis .native-sheet-group__items { display: flex; flex-direction: column; }
+.native-product--jarvis .native-sheet-group__items button { display: grid; grid-template-columns: 42px minmax(0,1fr); align-items: center; gap: 12px; min-height: 62px; padding: 9px 16px; border: 0; border-bottom: 1px solid var(--jarvis-line); color: var(--jarvis-text); background: transparent; text-align: left; }
+.native-product--jarvis .native-sheet-group__items button:last-child { border-bottom: 0; }
+.native-product--jarvis .native-sheet-group__items button > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 12px; color: var(--jarvis-secondary); background: color-mix(in srgb, var(--jarvis-secondary) 11%, transparent); }
+.native-product--jarvis .native-sheet-group__items button.active { background: color-mix(in srgb, var(--jarvis-primary) 10%, transparent); }
+.native-product--jarvis .native-sheet-logout { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 18px; border: 1px solid color-mix(in srgb, var(--jarvis-danger) 25%, transparent); border-radius: 18px; color: var(--jarvis-danger); background: color-mix(in srgb, var(--jarvis-danger) 9%, transparent); }
+
+@keyframes jarvis-fade-in { from { opacity: 0; } }
+@keyframes jarvis-sheet-in { from { opacity: 0; transform: translateY(30px) scale(.98); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .native-product--jarvis .native-more-backdrop,
+  .native-product--jarvis .jarvis-more-sheet { animation: none; }
+}
