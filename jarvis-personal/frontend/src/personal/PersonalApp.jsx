@@ -46,6 +46,7 @@ import AppearanceSelector from "../components/AppearanceSelector";
 import NativeProductShell from "../ui/native/NativeProductShell";
 import { detectNativePlatform } from "../ui/native/platform";
 import JarvisNavigation from "../products/jarvis/navigation/JarvisNavigation";
+import { applyDocumentLanguage, deviceLanguage } from "../lib/locale";
 
 const sanitizeCourtesy = (text = "") =>
   String(text || "")
@@ -184,6 +185,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", "classic");
+    applyDocumentLanguage(deviceLanguage());
   }, []);
 
   useEffect(() => {
