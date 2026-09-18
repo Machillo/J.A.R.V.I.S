@@ -1463,12 +1463,12 @@ export default function Finance({
   const openDetail = (title, items = [], empty = "No movements to display.") => setDetail({ title, items, empty });
 
   return (
-    <section className="dashboard-page finance-workspace">
-      <div className="finance-tab-bar" role="tablist" aria-label="Finance sections">
-        <button className={activeTab === "overview" ? "active" : ""} onClick={() => setActiveTab("overview")}>Overview</button>
-        <button className={activeTab === "analytics" ? "active" : ""} onClick={() => setActiveTab("analytics")}>Analytics</button>
-        <button className={activeTab === "spending" ? "active" : ""} onClick={() => setActiveTab("spending")}>Spending</button>
-        <button className={activeTab === "income" ? "active" : ""} onClick={() => setActiveTab("income")}>Income</button>
+    <section className="dashboard-page finance-workspace jarvis-finance-v2">
+      <div className="finance-tab-bar" role="tablist" aria-label="Secciones de finanzas">
+        <button className={activeTab === "overview" ? "active" : ""} onClick={() => setActiveTab("overview")}>Resumen</button>
+        <button className={activeTab === "spending" ? "active" : ""} onClick={() => setActiveTab("spending")}>Gastos</button>
+        <button className={activeTab === "income" ? "active" : ""} onClick={() => setActiveTab("income")}>Ingresos</button>
+        <button className={activeTab === "analytics" ? "active" : ""} onClick={() => setActiveTab("analytics")}>Análisis</button>
         <button className={activeTab === "aguinaldo" ? "active" : ""} onClick={() => setActiveTab("aguinaldo")}>Aguinaldo</button>
       </div>
 
@@ -1477,11 +1477,11 @@ export default function Finance({
           <div className="finance-period-pill">Financial cycle: {cycleLabel} · Expense cutoff: {expenseCycleLabel}{cycleReport?.expense_cycle?.closed ? " · Closed" : " · Open"}</div>
           <label className="finance-asof-picker">View as of <input type="date" value={financeAsOf} onChange={(e) => setFinanceAsOf(e.target.value)} /></label>
         </div>
-        <div className="cards-grid finance-main-cards finance-main-cards-clean">
-          <button className="hud-card finance-click-card finance-simple-kpi glow-green" onClick={() => openDetail("Net income", incomeItems)}><span>NET INCOME</span><h2>{formatCRC(incomeNet)}</h2></button>
-          <button className="hud-card finance-click-card finance-simple-kpi glow-red" onClick={() => openDetail("Net expenses", expenseItems)}><span>NET EXPENSES</span><h2>{expenseNet === null ? "—" : formatCRC(expenseNet)}</h2>{cycleReportError ? <small className="danger-text">Cycle report unavailable</small> : null}</button>
-          <button className="hud-card finance-click-card finance-simple-kpi" onClick={() => openDetail("Real balance", balanceItems)}><span>REAL BALANCE</span><h2 className={realBalance < 0 ? "danger-text" : realBalance > 0 ? "good-text" : ""}>{formatSignedCRC(realBalance)}</h2></button>
-          <button className="hud-card finance-click-card finance-simple-kpi glow-purple" onClick={() => openDetail("Total debt", debtItems)}><span>TOTAL DEBT</span><h2>{formatCRC(debtTotal)}</h2></button>
+        <div className="jarvis-v2-metrics finance-v2-summary">
+          <button className="jarvis-v2-metric" onClick={() => openDetail("Ingresos", incomeItems)}><small>Ingresos</small><strong>{formatCRC(incomeNet)}</strong></button>
+          <button className="jarvis-v2-metric" onClick={() => openDetail("Gastos", expenseItems)}><small>Gastos</small><strong>{expenseNet === null ? "—" : formatCRC(expenseNet)}</strong>{cycleReportError ? <span className="danger-text">Sin ciclo</span> : null}</button>
+          <button className="jarvis-v2-metric" onClick={() => openDetail("Balance real", balanceItems)}><small>Balance real</small><strong className={realBalance < 0 ? "danger-text" : realBalance > 0 ? "good-text" : ""}>{formatSignedCRC(realBalance)}</strong></button>
+          <button className="jarvis-v2-metric" onClick={() => openDetail("Deuda total", debtItems)}><small>Deuda total</small><strong>{formatCRC(debtTotal)}</strong></button>
         </div>
         <div className="dashboard-grid finance-dashboard-grid finance-overview-grid">
           <DebtsPanel sortedDebts={sortedDebts} debtSort={debtSort} setDebtSort={setDebtSort} onChanged={async () => { await loadSupportingData(); await onRefresh?.(); }} />
