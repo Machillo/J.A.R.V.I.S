@@ -1348,21 +1348,15 @@ export default function Finance({
       .then((value) => setDebts(Array.isArray(value) ? value : []))
       .catch(() => setDebts([]))
       .finally(() => setDebtsLoading(false));
-    const [analysisResult, fixedResult, cycleResult, currencyResult, aguinaldoResult] = await Promise.allSettled([
-      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(financeAsOf), getCurrencyAlerts(), getAguinaldo(),
-    ]);
-    setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
-    setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
-    if (cycleResult.status === "fulfilled") {
-      setCycleReport(cycleResult.value);
-      setCycleReportError("");
-    } else {
-      setCycleReport(null);
-      setCycleReportError(cycleResult.reason?.message || "Finance cycle could not be loaded.");
-    }
-    setCurrencyAlerts(currencyResult.status === "fulfilled" ? currencyResult.value : null);
-    setAguinaldo(aguinaldoResult.status === "fulfilled" ? aguinaldoResult.value : null);
-    setAguinaldoError(aguinaldoResult.status === "rejected" ? (aguinaldoResult.reason?.message || "No pude calcular el aguinaldo.") : "");
+    getTransactionAnalysis().then(setTransactionAnalysis).catch(() => setTransactionAnalysis(null));
+    getFixedExpenseStatus().then(setFixedStatus).catch(() => setFixedStatus(null));
+    getFinanceCycleReport(financeAsOf)
+      .then((value) => { setCycleReport(value); setCycleReportError(""); })
+      .catch((reason) => { setCycleReport(null); setCycleReportError(reason?.message || "Finance cycle could not be loaded."); });
+    getCurrencyAlerts().then(setCurrencyAlerts).catch(() => setCurrencyAlerts(null));
+    getAguinaldo()
+      .then((value) => { setAguinaldo(value); setAguinaldoError(""); })
+      .catch((reason) => { setAguinaldo(null); setAguinaldoError(reason?.message || "No pude calcular el aguinaldo."); });
   };
 
   const refreshAguinaldoFromCcss = async () => {

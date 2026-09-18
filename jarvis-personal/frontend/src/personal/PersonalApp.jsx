@@ -270,16 +270,14 @@ export default function App() {
         return;
       }
 
-      const [statusData, dashboardData, usageData, profileData] = await Promise.all([
-        getStatus(),
-        getFinanceDashboard(),
-        getJarvisUsageToday(),
-        getProfilePreferences().catch(() => null),
-      ]);
-      setStatus(statusData);
-      setFinanceDashboard(dashboardData);
-      setAiUsage(usageData);
-      setProfilePreferences(profileData?.value || profileData || null);
+      // Hydrate independent surfaces independently. A slow analytics/profile
+      // request must never hold Finance or the shell hostage.
+      getStatus().then(setStatus).catch((error) => recordError(error, "jarvis_status"));
+      getFinanceDashboard().then(setFinanceDashboard).catch((error) => recordError(error, "jarvis_finance_dashboard"));
+      getJarvisUsageToday().then(setAiUsage).catch((error) => recordError(error, "jarvis_usage"));
+      getProfilePreferences()
+        .then((profileData) => setProfilePreferences(profileData?.value || profileData || null))
+        .catch(() => setProfilePreferences(null));
     } catch (error) {
       console.error(error);
       recordError(error, "jarvis_refresh_app_data");
