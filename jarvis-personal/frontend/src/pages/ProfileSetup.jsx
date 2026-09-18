@@ -15,13 +15,16 @@ import {
   WalletCards,
 } from "lucide-react";
 import { completeProfileSetup } from "../services/jarvisApi";
+import { deviceLanguage } from "../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
 const GOALS = [
-  { id: "debt", icon: WalletCards, label: "Salir de deudas", detail: "Ordenar pagos y avanzar con un plan claro." },
-  { id: "save", icon: PiggyBank, label: "Ahorrar para algo importante", detail: "Convertir una meta en aportes alcanzables." },
+  { id: "debt", icon: WalletCards, label: tx("Salir de deudas", "Pay off debt"), detail: tx("Ordenar pagos y avanzar con un plan claro.", "Organize payments and move forward with a clear plan.") },
+  { id: "save", icon: PiggyBank, label: tx("Ahorrar para algo importante", "Save for something important"), detail: tx("Convertir una meta en aportes alcanzables.", "Turn a goal into achievable contributions.") },
   { id: "partner", icon: HeartHandshake, label: "Organizar dinero en pareja o familia", detail: "Entender juntos qué entra, qué sale y qué sigue." },
   { id: "life_change", icon: Sparkles, label: "Prepararme para un cambio importante", detail: "Planear una mudanza, viaje, estudio u otra etapa." },
-  { id: "control", icon: Target, label: "Tomar control de mis finanzas", detail: "Ver mis números con claridad y tomar mejores decisiones." },
+  { id: "control", icon: Target, label: tx("Tomar control de mis finanzas", "Take control of my finances"), detail: tx("Ver mis números con claridad y tomar mejores decisiones.", "See my numbers clearly and make better decisions.") },
   { id: "explore", icon: LifeBuoy, label: "Todavía no estoy seguro", detail: "Explorar la app y descubrir por dónde empezar." },
 ];
 
@@ -141,13 +144,13 @@ export default function ProfileSetup({ user, onComplete }) {
           <button
             type="button"
             className="profile-setup-back"
-            aria-label="Volver"
+            aria-label={tx("Volver", "Back")}
             onClick={() => setStep((current) => Math.max(0, current - 1))}
             disabled={step === 0 || saving}
           >
             <ArrowLeft />
           </button>
-          <div className="profile-setup-progress" aria-label={`Paso ${step + 1} de 4`}>
+          <div className="profile-setup-progress" aria-label={`${tx("Paso", "Step")} ${step + 1} ${tx("de", "of")} 4`}>
             {[0, 1, 2, 3].map((item) => <span key={item} className={item <= step ? "active" : ""} />)}
           </div>
           <span className="profile-setup-counter">{step + 1}/4</span>
@@ -158,12 +161,12 @@ export default function ProfileSetup({ user, onComplete }) {
             <section className="profile-setup-step intro-step">
               <BrandArt isJarvis={isJarvis} />
               <div className="profile-setup-title">
-                <span>EMPECEMOS</span>
-                <h1>¿Cómo querés que te llamemos?</h1>
+                <span>{tx("EMPECEMOS", "LET’S GET STARTED")}</span>
+                <h1>{tx("¿Cómo querés que te llamemos?", "What would you like us to call you?")}</h1>
                 <p>Usaremos este nombre para acompañarte dentro de {product}. Podés cambiarlo después.</p>
               </div>
               <label className="profile-setup-field">
-                <span>Tu nombre</span>
+                <span>{tx("Tu nombre", "Your name")}</span>
                 <input
                   type="text"
                   value={name}
@@ -172,7 +175,7 @@ export default function ProfileSetup({ user, onComplete }) {
                   enterKeyHint="next"
                   onChange={(event) => setName(event.target.value)}
                   onKeyDown={(event) => { if (event.key === "Enter" && name.trim()) next(); }}
-                  placeholder="Ejemplo: Ana"
+                  placeholder={tx("Ejemplo: Ana", "Example: Ana")}
                 />
               </label>
             </section>
@@ -181,8 +184,8 @@ export default function ProfileSetup({ user, onComplete }) {
           {step === 1 && (
             <section className="profile-setup-step">
               <div className="profile-setup-title centered">
-                <span>PERSONALICEMOS TU EXPERIENCIA</span>
-                <h1>¿Qué es lo principal que querés lograr?</h1>
+                <span>{tx("PERSONALICEMOS TU EXPERIENCIA", "LET’S PERSONALIZE YOUR EXPERIENCE")}</span>
+                <h1>{tx("¿Qué es lo principal que querés lograr?", "What is the main thing you want to achieve?")}</h1>
                 <p>No hay una respuesta incorrecta. Esto nos ayuda a mostrarte primero lo que más te sirve.</p>
               </div>
               <div className="profile-goal-list" role="radiogroup" aria-label="Motivo principal">
@@ -207,14 +210,14 @@ export default function ProfileSetup({ user, onComplete }) {
           {step === 2 && (
             <section className="profile-setup-step">
               <div className="profile-setup-title">
-                <span>TUS MONEDAS</span>
-                <h1>Configurá cómo ves tu dinero</h1>
+                <span>{tx("TUS MONEDAS", "YOUR CURRENCIES")}</span>
+                <h1>{tx("Configurá cómo ves tu dinero", "Set how you view your money")}</h1>
                 <p>Elegí una moneda principal y agregá las que también usás. No convertiremos montos sin avisarte.</p>
               </div>
 
               <div className="profile-settings-card">
                 <label>
-                  <span>Moneda principal</span>
+                  <span>{tx("Moneda principal", "Primary currency")}</span>
                   <select value={baseCurrency} onChange={(event) => chooseBaseCurrency(event.target.value)}>
                     {CURRENCIES.map((currency) => (
                       <option value={currency.code} key={currency.code}>{currency.name} · {currency.code}</option>
@@ -222,24 +225,24 @@ export default function ProfileSetup({ user, onComplete }) {
                   </select>
                 </label>
                 <fieldset>
-                  <legend>Formato de números</legend>
+                  <legend>{tx("Formato de números", "Number format")}</legend>
                   <div className="profile-segmented-control">
                     <button type="button" className={numberFormat === "dot_comma" ? "active" : ""} onClick={() => setNumberFormat("dot_comma")}>123.456,78</button>
                     <button type="button" className={numberFormat === "comma_dot" ? "active" : ""} onClick={() => setNumberFormat("comma_dot")}>123,456.78</button>
                   </div>
                 </fieldset>
                 <fieldset>
-                  <legend>Posición del símbolo</legend>
+                  <legend>{tx("Posición del símbolo", "Symbol position")}</legend>
                   <div className="profile-segmented-control">
-                    <button type="button" className={currencyPlacement === "before" ? "active" : ""} onClick={() => setCurrencyPlacement("before")}>Antes</button>
-                    <button type="button" className={currencyPlacement === "after" ? "active" : ""} onClick={() => setCurrencyPlacement("after")}>Después</button>
+                    <button type="button" className={currencyPlacement === "before" ? "active" : ""} onClick={() => setCurrencyPlacement("before")}>{tx("Antes", "Before")}</button>
+                    <button type="button" className={currencyPlacement === "after" ? "active" : ""} onClick={() => setCurrencyPlacement("after")}>{tx("Después", "After")}</button>
                   </div>
                 </fieldset>
-                <div className="profile-currency-preview"><small>Así se verá</small><strong>{preview}</strong></div>
+                <div className="profile-currency-preview"><small>{tx("Así se verá", "Preview")}</small><strong>{preview}</strong></div>
               </div>
 
               <div className="profile-extra-currencies">
-                <h2>Otras monedas que utilizás</h2>
+                <h2>{tx("Otras monedas que utilizás", "Other currencies you use")}</h2>
                 <p>Podés elegir varias y modificarlas luego en Configuración.</p>
                 <div>
                   {CURRENCIES.map((currency) => {
@@ -264,18 +267,18 @@ export default function ProfileSetup({ user, onComplete }) {
           {step === 3 && (
             <section className="profile-setup-step bank-step">
               <div className="profile-setup-title">
-                <span>PRÓXIMAMENTE EN COSTA RICA</span>
-                <h1>Tus bancos en un solo lugar</h1>
+                <span>{tx("PRÓXIMAMENTE EN COSTA RICA", "COMING SOON IN COSTA RICA")}</span>
+                <h1>{tx("Tus bancos en un solo lugar", "Your banks in one place")}</h1>
                 <p>Esta es una vista previa. Hoy podés registrar movimientos manualmente y, cuando habilitemos conexiones, te pediremos permiso de solo lectura.</p>
               </div>
               <div className="profile-bank-security"><ShieldCheck /><span><strong>Tu seguridad primero</strong><small>{product} nunca te pedirá la contraseña de tu banco.</small></span></div>
-              <label className="profile-bank-search"><Search /><input value={bankSearch} onChange={(event) => setBankSearch(event.target.value)} placeholder="Buscar banco" /></label>
+              <label className="profile-bank-search"><Search /><input value={bankSearch} onChange={(event) => setBankSearch(event.target.value)} placeholder={tx("Buscar banco", "Search bank")} /></label>
               <div className="profile-bank-grid">
                 {filteredBanks.map((bank) => (
                   <div className="profile-bank-card" key={bank.name}>
                     <span className={`bank-mark bank-mark--${bank.tone}`}>{bank.short}</span>
                     <strong>{bank.name}</strong>
-                    <small>Próximamente</small>
+                    <small>{tx("Próximamente", "Coming soon")}</small>
                   </div>
                 ))}
               </div>
@@ -289,7 +292,7 @@ export default function ProfileSetup({ user, onComplete }) {
 
         <footer className="profile-setup-footer">
           <button type="button" disabled={!canContinue || saving} onClick={step === 3 ? finish : next}>
-            {saving ? "Guardando..." : step === 3 ? `Entrar a ${product}` : "Continuar"}
+            {saving ? tx("Guardando...", "Saving...") : step === 3 ? `${tx("Entrar a", "Enter")} ${product}` : tx("Continuar", "Continue")}
             {!saving && <ChevronRight />}
           </button>
           <small>{step === 3 ? "Estas preferencias quedarán guardadas en tu cuenta." : "Tus datos se guardarán cuando terminés los cuatro pasos."}</small>
