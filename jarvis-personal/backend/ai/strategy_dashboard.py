@@ -434,7 +434,8 @@ def _fetch_investment_portfolio(workspace_id: str) -> dict[str, Any]:
                 (workspace_id,),
             ).fetchone()
             legacy_value = _f(legacy["total"] if legacy else 0)
-            # Schema creation belongs to migrations/startup, never to this hot read path.\n            snap = conn.execute("""
+            # Schema creation belongs to migrations/startup, never to this hot read path.
+            snap = conn.execute("""
                 SELECT * FROM investment_portfolio_snapshots
                 WHERE workspace_id=%s AND included_in_net_worth=TRUE
                 ORDER BY snapshot_at DESC NULLS LAST, snapshot_date DESC, id DESC LIMIT 1
