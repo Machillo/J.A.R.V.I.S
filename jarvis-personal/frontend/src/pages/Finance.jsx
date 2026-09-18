@@ -1340,8 +1340,13 @@ export default function Finance({
   const [financeAsOf, setFinanceAsOf] = useState(() => new Date().toISOString().slice(0, 10));
 
   const loadSupportingData = async () => {
-    const [analysisResult, fixedResult, cycleResult, debtsResult, currencyResult, aguinaldoResult] = await Promise.allSettled([
-      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(financeAsOf), getDebts(), getCurrencyAlerts(), getAguinaldo(),
+    // Debts are visible above the fold; do not make them wait for slower
+    // supporting calls such as Aguinaldo/Gmail-backed data.
+    getDebts()
+      .then((value) => setDebts(Array.isArray(value) ? value : []))
+      .catch(() => setDebts([]));
+    const [analysisResult, fixedResult, cycleResult, currencyResult, aguinaldoResult] = await Promise.allSettled([
+      getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(financeAsOf), getCurrencyAlerts(), getAguinaldo(),
     ]);
     setTransactionAnalysis(analysisResult.status === "fulfilled" ? analysisResult.value : null);
     setFixedStatus(fixedResult.status === "fulfilled" ? fixedResult.value : null);
@@ -1352,7 +1357,6 @@ export default function Finance({
       setCycleReport(null);
       setCycleReportError(cycleResult.reason?.message || "Finance cycle could not be loaded.");
     }
-    setDebts(debtsResult.status === "fulfilled" && Array.isArray(debtsResult.value) ? debtsResult.value : []);
     setCurrencyAlerts(currencyResult.status === "fulfilled" ? currencyResult.value : null);
     setAguinaldo(aguinaldoResult.status === "fulfilled" ? aguinaldoResult.value : null);
     setAguinaldoError(aguinaldoResult.status === "rejected" ? (aguinaldoResult.reason?.message || "No pude calcular el aguinaldo.") : "");
