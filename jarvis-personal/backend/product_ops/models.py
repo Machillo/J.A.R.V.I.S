@@ -36,6 +36,7 @@ class TestPaymentUpdate(BaseModel):
 
 class StoreLifecycleSimulation(BaseModel):
     plan_code: Literal["basic", "vip"]
+    provider_event_id: str | None = Field(default=None, min_length=1, max_length=255)
     billing_period: Literal["monthly", "annual"]
     event_type: Literal[
         "trial_started", "purchased", "renewed", "upgrade", "downgrade",
