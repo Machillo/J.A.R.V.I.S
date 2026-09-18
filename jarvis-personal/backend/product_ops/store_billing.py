@@ -185,7 +185,7 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
               auto_renew,last_verified_at,created_at,updated_at)
             VALUES(%s,%s,%s,%s,%s,%s,%s,{trial_sql},NOW(),NOW()+INTERVAL '{period}',%s,%s,NOW(),NOW(),NOW())
             ON CONFLICT(account_id) DO UPDATE SET
-              provider='sandbox',plan_code=EXCLUDED.plan_code,billing_period=EXCLUDED.billing_period,
+              provider=EXCLUDED.provider,plan_code=EXCLUDED.plan_code,billing_period=EXCLUDED.billing_period,
               product_id=EXCLUDED.product_id,status=EXCLUDED.status,
               trial_ends_at=EXCLUDED.trial_ends_at,current_period_start=NOW(),
               current_period_end=EXCLUDED.current_period_end,cancel_at_period_end=EXCLUDED.cancel_at_period_end,
@@ -194,7 +194,8 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
         )
         conn.execute(
             """INSERT INTO store_subscription_events(account_id,provider,event_type,plan_code,billing_period)
-               VALUES(%s,%s,%s,%s,%s)""",
+               VALUES(%s,%s,%s,%s,%s)
+               RETURNING id""",
             (account_id, provider, event_type, plan_code, billing_period),
         )
         plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
