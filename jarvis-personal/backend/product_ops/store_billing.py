@@ -177,6 +177,18 @@ def _product(plan_code, billing_period):
         raise HTTPException(422, "Plan o periodo de facturación no válido.") from exc
 
 
+def _claim_store_event(conn, account_id: str, provider: str, event_type: str, provider_event_id: str | None, plan_code: str, billing_period: str) -> bool:
+    """Atomically reserve a provider event before mutating subscription state."""
+    claimed = conn.execute(
+        """INSERT INTO store_subscription_events(account_id,provider,event_type,provider_event_id,plan_code,billing_period)
+           VALUES(%s,%s,%s,%s,%s,%s)
+           ON CONFLICT DO NOTHING
+           RETURNING id""",
+        (account_id, provider, event_type, provider_event_id, plan_code, billing_period),
+    ).fetchone()
+    return bool(claimed)
+
+
 def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str, billing_period: str, event_type: str, *, provider: str = "sandbox", provider_event_id: str | None = None):
     """Apply an already-verified store lifecycle event.
 
@@ -204,17 +216,13 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
     with get_connection() as conn:
         ensure_store_schema(conn)
         target = conn.execute("SELECT id FROM accounts WHERE id=%s", (account_id,)).fetchone()
-        if provider_event_id:
-            duplicate = conn.execute(
-                "SELECT id FROM store_subscription_events WHERE provider=%s AND provider_event_id=%s",
-                (provider, provider_event_id),
-            ).fetchone()
-            if duplicate:
-                row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
-                conn.commit()
-                return {"event": event_type, "target_account_id": account_id, "duplicate": True, "subscription": _public_state(row)}
         if not target:
             raise HTTPException(404, "Cuenta objetivo no encontrada.")
+        claimed = _claim_store_event(conn, account_id, provider, event_type, provider_event_id, plan_code, billing_period)
+        if provider_event_id and not claimed:
+            row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
+            conn.commit()
+            return {"event": event_type, "target_account_id": account_id, "duplicate": True, "subscription": _public_state(row)}
         if event_type == "downgrade":
             existing_store = conn.execute(
                 "SELECT * FROM store_subscriptions WHERE account_id=%s",
@@ -231,12 +239,6 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
                    WHERE account_id=%s
                    RETURNING account_id""",
                 (plan_code, billing_period, product["product_id"], account_id),
-            )
-            conn.execute(
-                """INSERT INTO store_subscription_events(account_id,provider,event_type,provider_event_id,plan_code,billing_period)
-                   VALUES(%s,%s,%s,%s,%s,%s)
-                   RETURNING id""",
-                (account_id, provider, event_type, provider_event_id, plan_code, billing_period),
             )
             row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
             conn.commit()
@@ -280,12 +282,6 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
               pending_effective_at=CASE WHEN %s IN ('cancel_requested','grace_period') THEN store_subscriptions.pending_effective_at ELSE NULL END,
               last_verified_at=NOW(),updated_at=NOW()\n            RETURNING account_id""",
             (account_id, workspace_id, provider, plan_code, billing_period, product["product_id"], status, cancel_at_end, auto_renew, event_type, event_type, event_type, event_type, event_type, event_type, event_type, event_type, event_type),
-        )
-        conn.execute(
-            """INSERT INTO store_subscription_events(account_id,provider,event_type,provider_event_id,plan_code,billing_period)
-               VALUES(%s,%s,%s,%s,%s,%s)
-               RETURNING id""",
-            (account_id, provider, event_type, provider_event_id, plan_code, billing_period),
         )
         plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
         if not plan:
