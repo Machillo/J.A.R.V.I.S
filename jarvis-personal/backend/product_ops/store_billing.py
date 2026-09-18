@@ -113,6 +113,27 @@ def _public_state(row):
     }
 
 
+
+def restore_owner_access():
+    """Repair an owner account if a sandbox billing test overwrote its access."""
+    account_id = get_current_account_id()
+    with get_connection() as conn:
+        vip = conn.execute("SELECT id FROM plans WHERE code='vip' AND is_active=TRUE", ()).fetchone()
+        if not vip:
+            raise HTTPException(404, "Plan VIP no disponible.")
+        conn.execute(
+            """INSERT INTO account_subscriptions(
+                 account_id,plan_id,status,access_source,started_at,created_at,updated_at)
+               VALUES(%s,%s,'active','owner',NOW(),NOW(),NOW())
+               ON CONFLICT(account_id) DO UPDATE SET
+                 plan_id=EXCLUDED.plan_id,status='active',access_source='owner',
+                 expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()
+               RETURNING account_id""",
+            (account_id, vip["id"]),
+        )
+        conn.commit()
+    return {"status": "restored", "plan": "vip", "access_source": "owner"}
+
 def entitlement_state():
     account_id = get_current_account_id()
     with get_connection() as conn:
