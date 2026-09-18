@@ -172,12 +172,11 @@ export default function Settings({ status }) {
   };
 
   return (
-    <section className="page settings-page">
-      <h1>Configuración</h1>
-      <p className="subtitle">Perfil, permisos, IA, notificaciones y preferencias personales.</p>
+    <section className="page settings-page jarvis-v2-screen settings-v2">
+      <header className="settings-v2-header"><h1>Configuración</h1><p className="subtitle">Perfil, permisos, IA, notificaciones y preferencias personales.</p></header>
 
       <div className="settings-grid">
-        <div className="jarvis-panel settings-card">
+        <div className="jarvis-panel settings-card settings-v2-card">
           <h2>Usuario actual</h2>
           <p><strong>Email:</strong> {me?.email || "—"}</p>
           <p><strong>Rol:</strong> {me?.role || "—"}</p>
@@ -185,7 +184,7 @@ export default function Settings({ status }) {
           {isOwner && <p className="owner-badge">Acceso owner: internet + administración completa</p>}
         </div>
 
-        <div className="jarvis-panel settings-card">
+        <div className="jarvis-panel settings-card settings-v2-card">
           <h2>Consumo IA de hoy</h2>
           <p><strong>Tokens:</strong> {usage?.total_tokens?.toLocaleString("es-CR") || 0}</p>
           <p><strong>Límite:</strong> {usage?.daily_limit?.toLocaleString("es-CR") || "—"}</p>
@@ -199,7 +198,7 @@ export default function Settings({ status }) {
 
 
       {isOwner && (
-        <div className="jarvis-panel settings-card">
+        <div className="jarvis-panel settings-card settings-v2-card">
           <h2>Identidad JARVIS</h2>
           <p>Vinculá esta identidad privada con tu cuenta owner de JARVIS Users. El vínculo usa los UUID verificados de ambos Supabase, no el correo.</p>
           <button className="jarvis-action-button" type="button" onClick={handleLinkOwnerBridge} disabled={ownerBridgeBusy}>
@@ -211,7 +210,7 @@ export default function Settings({ status }) {
       )}
 
       {isOwner && (
-        <div className="jarvis-panel settings-card deployment-monitor-card">
+        <div className="jarvis-panel settings-card settings-v2-card deployment-monitor-card">
           <h2>Monitor de despliegues</h2>
           <p>Vercel y Render, con commit, estado y acceso al error original.</p>
           <div className="deployment-status-grid">
@@ -238,7 +237,7 @@ export default function Settings({ status }) {
       )}
 
       {isOwner && (
-        <div className="jarvis-panel settings-card premium-ai-card">
+        <div className="jarvis-panel settings-card settings-v2-card premium-ai-card">
           <h2>ChatGPT Premium</h2>
           <p><strong>Estado:</strong> {premiumStatus?.configured ? "Conectado" : "Falta OPENAI_API_KEY"}</p>
           <p><strong>Modelo:</strong> {premiumStatus?.model || "—"}</p>
@@ -266,7 +265,7 @@ export default function Settings({ status }) {
       )}
 
       <div className="settings-grid">
-        <div className="jarvis-panel settings-card">
+        <div className="jarvis-panel settings-card settings-v2-card">
           <h2>Notificaciones reales</h2>
           <p>Permiso navegador: <strong>{notificationStatus}</strong></p>
           <p>Web Push: <strong>{pushInfo?.vapid_ready ? "Listo" : "Faltan llaves VAPID"}</strong></p>
@@ -284,7 +283,7 @@ export default function Settings({ status }) {
           {pushMessage && <small className="email-sync-status">{pushMessage}</small>}
         </div>
 
-        <div className="jarvis-panel settings-card">
+        <div className="jarvis-panel settings-card settings-v2-card">
           <h2>Calendario próximo</h2>
           {calendar.length === 0 ? (
             <p>No hay compromisos próximos.</p>
@@ -304,7 +303,7 @@ export default function Settings({ status }) {
 
 
 
-      <div className="jarvis-panel settings-card">
+      <div className="jarvis-panel settings-card settings-v2-card">
         <h2>Preferencias deportivas</h2>
         <label className="settings-check">
           <input
@@ -336,7 +335,7 @@ export default function Settings({ status }) {
       </div>
 
       {adminUsage?.users?.length > 0 && (
-        <div className="jarvis-panel admin-panel">
+        <div className="jarvis-panel admin-panel settings-v2-card">
           <h2>Panel admin · consumo por usuario</h2>
           <div className="admin-usage-list">
             {adminUsage.users.map((user) => (
@@ -350,7 +349,7 @@ export default function Settings({ status }) {
         </div>
       )}
 
-      <div className="jarvis-panel settings-card">
+      <div className="jarvis-panel settings-card settings-v2-card">
         <h2>Config sistema</h2>
         <pre>{JSON.stringify(status?.config || {}, null, 2)}</pre>
       </div>
