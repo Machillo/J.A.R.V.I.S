@@ -610,23 +610,23 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   };
 
   return (
-    <section className="page premium-strategy-page strategy-v3-page">
-      <div className="page-section-header strategy-hero strategy-v3-hero">
+    <section className="page premium-strategy-page strategy-v3-page strategy-v2">
+      <header className="strategy-v2-header">
         <div><span className="eyebrow">Director Financiero</span><h2>Strategy</h2><p>Una prioridad clara y herramientas financieras probadas. Elegí qué querés revisar.</p></div>
         <button className="primary-action-button" onClick={runStrategy} disabled={state.running}>
           <RefreshCw size={18} className={state.running ? "spin" : ""} />
           {state.running ? "Recalculando..." : "Recalcular estrategia"}
         </button>
-      </div>
+      </header>
 
       {state.error && <div className="alert-card"><AlertTriangle size={18} /> {state.error}</div>}
 
-      <div className="strategy-priority-v3">
+      <section className="strategy-priority-v3 strategy-v2-priority">
         <span className="strategy-v3-label">PRIORIDAD ACTUAL</span>
         <div className="strategy-title-row"><Shield size={22} /><div><h3>{priority.title || "Mantener control del flujo"}</h3><p>{priority.detail || strategy.mode_reason || strategy.objective}</p></div></div>
-      </div>
+      </section>
 
-      <div className="strategy-debt-progress-v3">
+      <section className="strategy-debt-progress-v3 strategy-v2-debt-summary">
         <div className="progress-label-row"><span>Progreso de deudas</span><strong>{progress.toFixed(1)}%</strong></div>
         <div className="progress-track"><div style={{ width: `${progress}%` }} /></div>
         <div className="strategy-debt-progress-stats">
@@ -635,9 +635,9 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
           <div><span>Tiempo estimado</span><strong>{monthsText(strategy.estimated_total_months)}</strong></div>
           <div><span>Libre aprox.</span><strong>{strategy.estimated_debt_free_date ? formatDate(strategy.estimated_debt_free_date) : strategy.total_debt > 0 ? "Revisar cuota" : "Sin deuda"}</strong></div>
         </div>
-      </div>
+      </section>
 
-      <div className="strategy-options-v3">
+      <section className="strategy-options-v3 strategy-v2-tools">
         <span className="strategy-v3-label">¿QUÉ QUERÉS REVISAR?</span>
         {Object.entries(optionCopy).map(([key, option]) => {
           const Icon = option.icon;
@@ -656,9 +656,9 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
             </button>
           );
         })}
-      </div>
+      </section>
 
-      {activeSection && detailRenderers[activeSection]?.()}
+      {activeSection && <section className="strategy-v2-active-detail">{detailRenderers[activeSection]?.()}</section>}
     </section>
   );
 }
