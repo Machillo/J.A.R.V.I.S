@@ -75,6 +75,22 @@ def test_trial_grants_selected_plan_until_trial_end():
     assert state["status"] == "trialing"
 
 
+def test_trial_returns_free_after_trial_end_even_if_period_is_still_future():
+    row = _row(status="trialing", plan="vip", end_delta_days=30)
+    row["trial_ends_at"] = datetime.now(timezone.utc) - timedelta(seconds=1)
+    state = _public_state(row)
+    assert state["entitlement"] == "free"
+    assert state["plan"] == "free"
+    assert state["status"] == "trialing"
+
+
+def test_trial_accepts_database_serialized_trial_timestamp():
+    row = _row(status="trialing", plan="basic", end_delta_days=30)
+    row["trial_ends_at"] = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    state = _public_state(row)
+    assert state["entitlement"] == "basic"
+
+
 def test_grace_period_keeps_entitlement_temporarily():
     assert _public_state(_row(status="grace_period", plan="vip"))["entitlement"] == "vip"
 
