@@ -555,7 +555,7 @@ export default function App() {
       case "wealth":
         return <Wealth navigatePage={navigatePage} />;
       case "financialAccounts":
-        return <FinancialAccounts />;
+        return <FinancialAccounts onFinanceChanged={refreshAppData} />;
       case "netWorth":
         return <NetWorth />;
       case "financialTimeline":
