@@ -101,8 +101,15 @@ def _public_state(row):
             period_end = datetime.fromisoformat(period_end.replace("Z", "+00:00"))
         except ValueError:
             period_end = None
+    trial_end = row.get("trial_ends_at")
+    if isinstance(trial_end, str):
+        try:
+            trial_end = datetime.fromisoformat(trial_end.replace("Z", "+00:00"))
+        except ValueError:
+            trial_end = None
+    entitlement_end = trial_end if row["status"] == "trialing" else period_end
     active = row["status"] in ACTIVE_STATES and (
-        period_end is None or period_end > datetime.now(timezone.utc)
+        entitlement_end is None or entitlement_end > datetime.now(timezone.utc)
     )
     return {
         "plan": row["plan_code"] if active else "free",
