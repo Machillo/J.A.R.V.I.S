@@ -16,41 +16,44 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import NativeBottomBar from "../../../ui/native/NativeBottomBar";
+import { deviceLanguage } from "../../../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
 const primaryItems = [
-  { key: "overview", label: "Resumen", icon: BarChart3 },
-  { key: "finance", label: "Movimientos", icon: WalletCards },
-  { key: "debts", label: "Deudas", icon: CreditCard },
-  { key: "goals", label: "Metas", icon: Target },
+  { key: "overview", label: tx("Resumen", "Overview"), icon: BarChart3 },
+  { key: "finance", label: tx("Movimientos", "Transactions"), icon: WalletCards },
+  { key: "debts", label: tx("Deudas", "Debts"), icon: CreditCard },
+  { key: "goals", label: tx("Metas", "Goals"), icon: Target },
 ];
 
 export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const groups = [
     {
-      title: "Mi dinero",
+      title: tx("Mi dinero", "My money"),
       items: [
-        ["situation", "Mi situación financiera", Landmark],
-        ["transactions", "Historial completo", ReceiptText],
-        ["monthly", "Resumen mensual", BarChart3],
+        ["situation", tx("Mi situación financiera", "My financial situation"), Landmark],
+        ["transactions", tx("Historial completo", "Full history"), ReceiptText],
+        ["monthly", tx("Resumen mensual", "Monthly summary"), BarChart3],
       ],
     },
     ...(plan === "free" ? [] : [{
-      title: "Planificación",
+      title: tx("Planificación", "Planning"),
       items: [
-        ["strategy", plan === "vip" ? "Dirección VIP" : "Estrategia", Sparkles],
-        ["budget", "Presupuesto", WalletCards],
-        ["calendar", "Calendario", CalendarDays],
-        ["recurring", "Pagos recurrentes", Repeat2],
-        ["reports", "Reportes", BarChart3],
+        ["strategy", plan === "vip" ? tx("Dirección VIP", "VIP Direction") : tx("Estrategia", "Strategy"), Sparkles],
+        ["budget", tx("Presupuesto", "Budget"), WalletCards],
+        ["calendar", tx("Calendario", "Calendar"), CalendarDays],
+        ["recurring", tx("Pagos recurrentes", "Recurring payments"), Repeat2],
+        ["reports", tx("Reportes", "Reports"), BarChart3],
       ],
     }]),
-    ...(plan === "vip" ? [{ title: "Automatización", items: [["gmail", "Movimientos desde Gmail", Mail]] }] : []),
+    ...(plan === "vip" ? [{ title: tx("Automatización", "Automation"), items: [["gmail", tx("Movimientos desde Gmail", "Transactions from Gmail"), Mail]] }] : []),
     {
-      title: "Cuenta y soporte",
+      title: tx("Cuenta y soporte", "Account & support"),
       items: [
-        ["settings", "Cuenta, apariencia y plan", Settings],
-        ["feedback", "Ayuda y sugerencias", LifeBuoy],
+        ["settings", tx("Cuenta, apariencia y plan", "Account, appearance & plan"), Settings],
+        ["feedback", tx("Ayuda y sugerencias", "Help & feedback"), LifeBuoy],
       ],
     },
   ];
@@ -67,7 +70,7 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
 
   const items = [
     ...primaryItems,
-    { key: "more", label: "Más", icon: MoreHorizontal, activeKeys: moreOpen ? ["more", ...secondaryKeys] : secondaryKeys },
+    { key: "more", label: tx("Más", "More"), icon: MoreHorizontal, activeKeys: moreOpen ? ["more", ...secondaryKeys] : secondaryKeys },
   ];
 
   return (
@@ -76,7 +79,7 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
         <div className="native-more-backdrop" onClick={() => setMoreOpen(false)}>
           <section className="native-more-sheet" onClick={(event) => event.stopPropagation()}>
             <div className="native-sheet-handle" />
-            <header><small>FINVA</small><strong>Explorar</strong></header>
+            <header><small>FINVA</small><strong>{tx("Explorar", "Explore")}</strong></header>
             <div className="native-sheet-groups">
               {groups.map((group) => (
                 <div className="native-sheet-group" key={group.title}>
@@ -88,7 +91,7 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
                   ))}
                 </div>
               ))}
-              <button type="button" className="native-sheet-logout" onClick={onLogout}><LogOut size={20} /><strong>Cerrar sesión</strong></button>
+              <button type="button" className="native-sheet-logout" onClick={onLogout}><LogOut size={20} /><strong>{tx("Cerrar sesión", "Log out")}</strong></button>
             </div>
           </section>
         </div>
