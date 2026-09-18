@@ -1126,7 +1126,7 @@ function DebtPaymentModal({ debt, onClose, onSaved }) {
   );
 }
 
-function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
+function DebtsPanel({ sortedDebts, loading = false, debtSort, setDebtSort, onChanged }) {
   const [editingDebt, setEditingDebt] = useState(null);
   const [adding, setAdding] = useState(false);
   const [payingDebt, setPayingDebt] = useState(null);
@@ -1158,7 +1158,7 @@ function DebtsPanel({ sortedDebts, debtSort, setDebtSort, onChanged }) {
 
       {message && <p className="finance-input-message">{message}</p>}
       <div className="debt-list debt-list-v2">
-        {sortedDebts.length === 0 ? <EmptyPanel title="Sin deudas registradas" description="" /> : sortedDebts.map((debt) => {
+        {loading ? <div className="jarvis-v2-state debt-loading-v2">Cargando deudas...</div> : sortedDebts.length === 0 ? <EmptyPanel title="Sin deudas registradas" description="" /> : sortedDebts.map((debt) => {
           const paid = Number(debt.installments_paid ?? debt.paid_installments ?? 0);
           const total = Number(debt.term_months ?? debt.total_installments ?? 0);
           const remaining = total > 0 ? Math.max(total - paid, 0) : null;
@@ -1330,6 +1330,7 @@ export default function Finance({
   const [cycleReport, setCycleReport] = useState(null);
   const [cycleReportError, setCycleReportError] = useState("");
   const [debts, setDebts] = useState([]);
+  const [debtsLoading, setDebtsLoading] = useState(true);
   const [debtSort, setDebtSort] = useState("saldo");
   const [detail, setDetail] = useState(null);
   const [currencyAlerts, setCurrencyAlerts] = useState(null);
@@ -1342,9 +1343,11 @@ export default function Finance({
   const loadSupportingData = async () => {
     // Debts are visible above the fold; do not make them wait for slower
     // supporting calls such as Aguinaldo/Gmail-backed data.
+    setDebtsLoading(true);
     getDebts()
       .then((value) => setDebts(Array.isArray(value) ? value : []))
-      .catch(() => setDebts([]));
+      .catch(() => setDebts([]))
+      .finally(() => setDebtsLoading(false));
     const [analysisResult, fixedResult, cycleResult, currencyResult, aguinaldoResult] = await Promise.allSettled([
       getTransactionAnalysis(), getFixedExpenseStatus(), getFinanceCycleReport(financeAsOf), getCurrencyAlerts(), getAguinaldo(),
     ]);
@@ -1448,7 +1451,7 @@ export default function Finance({
           <button className="jarvis-v2-metric" onClick={() => openDetail("Deuda total", debtItems)}><small>Deuda total</small><strong>{formatCRC(debtTotal)}</strong></button>
         </div>
         <div className="dashboard-grid finance-dashboard-grid finance-overview-grid">
-          <DebtsPanel sortedDebts={sortedDebts} debtSort={debtSort} setDebtSort={setDebtSort} onChanged={async () => { await loadSupportingData(); await onRefresh?.(); }} />
+          <DebtsPanel sortedDebts={sortedDebts} loading={debtsLoading} debtSort={debtSort} setDebtSort={setDebtSort} onChanged={async () => { await loadSupportingData(); await onRefresh?.(); }} />
           <article className="hud-panel"><div className="panel-title"><div><h3>ALERTS</h3></div></div><div className="alert-list">{alerts.length === 0 ? <EmptyPanel title="No critical alerts" description="JARVIS will flag cash-flow and debt risks here." /> : alerts.map((alert, index) => <div className={`alert-item ${alert.level}`} key={index}><AlertTriangle size={18} /><span>{alert.message}</span></div>)}</div></article>
         </div>
       </>}
