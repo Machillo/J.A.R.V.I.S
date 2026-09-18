@@ -4,6 +4,9 @@ import { getBillingCatalog, getMe, getPlans, selectPlan, uploadPaymentReceipt } 
 import AccountSecurity from "../components/AccountSecurity";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../../lib/receiptPicker";
 import AppearanceSelector from "../../components/AppearanceSelector";
+import { deviceLanguage, localeTag } from "../../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
 const icons = { free: WalletCards, basic: Sparkles, vip: Crown };
 
@@ -157,8 +160,8 @@ export default function Settings({ user, onUserChange }) {
   return (
     <section className="mobile-page settings-page">
       <div className="mobile-page-heading">
-        <p className="eyebrow">Cuenta</p>
-        <h1>Mi Finva</h1>
+        <p className="eyebrow">{tx("Cuenta","Account")}</p>
+        <h1>{tx("Mi Finva","My Finva")}</h1>
         <span>Administrá tu perfil y el plan que querés probar.</span>
       </div>
 
@@ -175,14 +178,14 @@ export default function Settings({ user, onUserChange }) {
       <AppearanceSelector />
 
       <article className="account-card">
-        <div><strong>Información legal</strong><small>Consultá los documentos vigentes cuando querás.</small></div>
-        <span><a href="/terms" target="_blank" rel="noreferrer">Términos</a> · <a href="/privacy" target="_blank" rel="noreferrer">Privacidad</a></span>
+        <div><strong>{tx("Información legal","Legal information")}</strong><small>Consultá los documentos vigentes cuando querás.</small></div>
+        <span><a href="/terms" target="_blank" rel="noreferrer">{tx("Términos","Terms")}</a> · <a href="/privacy" target="_blank" rel="noreferrer">{tx("Privacidad","Privacy")}</a></span>
       </article>
 
       <div className="section-heading compact">
         <div>
-          <p className="eyebrow">Suscripción</p>
-          <h2>Tu plan actual</h2>
+          <p className="eyebrow">{tx("Suscripción","Subscription")}</p>
+          <h2>{tx("Tu plan actual","Your current plan")}</h2>
         </div>
       </div>
 
@@ -194,19 +197,19 @@ export default function Settings({ user, onUserChange }) {
           <strong>{currentPlanInfo?.name || currentPlan.toUpperCase()}</strong>
           <span>{currentPlanInfo?.tagline || "Plan personal Finva"}</span>
         </div>
-        <span className="plan-status-pill">Actual</span>
+        <span className="plan-status-pill">{tx("Actual","Current")}</span>
       </article>
 
       <div className="section-heading compact plan-change-heading">
         <div>
           <p className="eyebrow">Desarrollo</p>
-          <h2>Cambiar de plan</h2>
+          <h2>{tx("Cambiar de plan","Change plan")}</h2>
           <span>{promotionActive ? "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático." : "Basic y VIP utilizan sus precios normales y se activan al confirmar el SINPE."}</span>
         </div>
       </div>
 
       {loading ? (
-        <div className="mobile-panel"><p>Cargando planes...</p></div>
+        <div className="mobile-panel"><p>{tx("Cargando planes...","Loading plans...")}</p></div>
       ) : (
         <div className="settings-plan-list">
           {plans.map((plan) => {
@@ -223,7 +226,7 @@ export default function Settings({ user, onUserChange }) {
                 </div>
 
                 {isCurrent ? (
-                  <span className="selected-plan-label"><Check size={16} /> Seleccionado</span>
+                  <span className="selected-plan-label"><Check size={16} /> {tx("Seleccionado","Selected")}</span>
                 ) : (
                   <button
                     type="button"
@@ -231,7 +234,7 @@ export default function Settings({ user, onUserChange }) {
                     disabled={Boolean(changing)}
                     onClick={() => openPlanDialog(plan.code)}
                   >
-                    <>Elegir <ChevronRight size={17} /></>
+                    <>{tx("Elegir","Choose")} <ChevronRight size={17} /></>
                   </button>
                 )}
               </article>
@@ -247,7 +250,7 @@ export default function Settings({ user, onUserChange }) {
             <strong>Pago {pendingOrder.plan_code.toUpperCase()} pendiente</strong>
             <small>Continuá el SINPE con el código {pendingOrder.payment_code}.</small>
           </div>
-          <button type="button" onClick={() => setPaymentFlow({ order: pendingOrder, payment: billing?.payment })}>Continuar</button>
+          <button type="button" onClick={() => setPaymentFlow({ order: pendingOrder, payment: billing?.payment })}>{tx("Continuar","Continue")}</button>
         </article>
       )}
 
@@ -259,14 +262,14 @@ export default function Settings({ user, onUserChange }) {
         const SelectedIcon = icons[confirming] || WalletCards;
         return <div className="plan-dialog-backdrop" role="presentation" onMouseDown={(event)=>{if(event.target===event.currentTarget&&!changing)setConfirming("");}}>
           <section className={`plan-dialog plan-${confirming}`} role="dialog" aria-modal="true" aria-labelledby="plan-dialog-title">
-            <button className="plan-dialog-close" type="button" aria-label="Cerrar" disabled={Boolean(changing)} onClick={()=>setConfirming("")}><X size={20}/></button>
+            <button className="plan-dialog-close" type="button" aria-label={tx("Cerrar","Close")} disabled={Boolean(changing)} onClick={()=>setConfirming("")}><X size={20}/></button>
             <div className="plan-dialog-icon"><SelectedIcon size={28}/></div>
-            <p className="eyebrow">Confirmar cambio</p>
+            <p className="eyebrow">{tx("Confirmar cambio","Confirm change")}</p>
             <h2 id="plan-dialog-title">Cambiar a {selected?.name || confirming.toUpperCase()}</h2>
             <p>{selected?.tagline || "Tu nuevo plan FINVA"}</p>
             {confirming !== "free" && (promotionActive ? <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio normal será {confirming === "basic" ? "₡2.990" : "₡5.990"}/mes, sin cobro automático.</span></div> : <><div className="plan-payment-notice"><Smartphone size={19}/><span>Al continuar, FINVA generará un código para el detalle del SINPE. El plan se activa cuando confirmemos el depósito.</span></div><label className="beta-consent dialog-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>{setBetaAccepted(e.target.checked);setError("");}}/><span>Acepto el precio normal de {confirming === "basic" ? "₡2.990" : "₡5.990"} al mes.</span></label></>)}
             {error && <div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
-            <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>Cancelar</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? "Procesando..." : `Confirmar ${selected?.name || confirming.toUpperCase()}`}</button></div>
+            <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>{tx("Cancelar","Cancel")}</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? "Procesando..." : `Confirmar ${selected?.name || confirming.toUpperCase()}`}</button></div>
           </section>
         </div>;
       })()}
@@ -277,33 +280,33 @@ export default function Settings({ user, onUserChange }) {
         const submitted = Boolean(order?.receipt_submitted_at);
         return <div className="plan-dialog-backdrop" role="presentation">
           <section className={`plan-dialog payment-dialog plan-${order?.plan_code || "basic"}`} role="dialog" aria-modal="true" aria-labelledby="payment-dialog-title">
-            <button className="plan-dialog-close" type="button" aria-label="Cerrar" disabled={uploading} onClick={()=>{setPaymentFlow(null);setReceipt(null);setError("");}}><X size={20}/></button>
+            <button className="plan-dialog-close" type="button" aria-label={tx("Cerrar","Close")} disabled={uploading} onClick={()=>{setPaymentFlow(null);setReceipt(null);setError("");}}><X size={20}/></button>
             <div className="plan-dialog-icon"><Smartphone size={26}/></div>
-            <p className="eyebrow">Pago mensual por SINPE</p>
+            <p className="eyebrow">{tx("Pago mensual por SINPE","Monthly payment by SINPE")}</p>
             <h2 id="payment-dialog-title">Activar {order?.plan_code?.toUpperCase()}</h2>
             {!submitted ? <>
               <p>Realizá el SINPE con estos datos. El código debe ir completo en el detalle del pago.</p>
               <div className="sinpe-payment-data">
-                <div><span>Monto exacto</span><strong>₡{Number(order?.amount || 0).toLocaleString("es-CR")}</strong></div>
-                <div><span>Número SINPE</span><strong>{payment.phone || "Pendiente de configurar"}</strong>{payment.phone&&<button type="button" onClick={()=>copyValue(payment.phone,"phone")}><Copy size={16}/>{copied==="phone"?"Copiado":"Copiar"}</button>}</div>
-                {payment.recipient&&<div><span>Destinatario</span><strong>{payment.recipient}</strong></div>}
-                <div className="payment-code-row"><span>Código para el detalle</span><strong>{order?.payment_code}</strong><button type="button" onClick={()=>copyValue(order?.payment_code,"code")}><Copy size={16}/>{copied==="code"?"Copiado":"Copiar código"}</button></div>
+                <div><span>{tx("Monto exacto","Exact amount")}</span><strong>₡{Number(order?.amount || 0).toLocaleString(localeTag(language))}</strong></div>
+                <div><span>{tx("Número SINPE","SINPE number")}</span><strong>{payment.phone || "Pendiente de configurar"}</strong>{payment.phone&&<button type="button" onClick={()=>copyValue(payment.phone,"phone")}><Copy size={16}/>{copied==="phone"?tx("Copiado","Copied"):tx("Copiar","Copy")}</button>}</div>
+                {payment.recipient&&<div><span>{tx("Destinatario","Recipient")}</span><strong>{payment.recipient}</strong></div>}
+                <div className="payment-code-row"><span>{tx("Código para el detalle","Payment detail code")}</span><strong>{order?.payment_code}</strong><button type="button" onClick={()=>copyValue(order?.payment_code,"code")}><Copy size={16}/>{copied==="code"?tx("Copiado","Copied"):tx("Copiar código","Copy code")}</button></div>
               </div>
-              <small className="payment-expiry-note">Código válido hasta {order?.code_expires_at ? new Date(order.code_expires_at).toLocaleTimeString("es-CR", { hour: "2-digit", minute: "2-digit" }) : "dentro de 2 horas"}.</small>
+              <small className="payment-expiry-note">Código válido hasta {order?.code_expires_at ? new Date(order.code_expires_at).toLocaleTimeString(localeTag(language), { hour: "2-digit", minute: "2-digit" }) : "dentro de 2 horas"}.</small>
               {!payment.phone&&<div className="plan-dialog-error"><AlertTriangle size={18}/><span>El número SINPE todavía no está configurado. No realicés el pago hasta que aparezca.</span></div>}
               <div className="receipt-upload-field">
                 <Upload size={19}/>
                 <span>{receipt ? `Listo: ${receipt.name}` : "Seleccioná una imagen o PDF"}</span>
               </div>
               {hasNativeReceiptPicker
-                ? <button className="native-receipt-picker-button" type="button" onClick={chooseNativeReceipt}>{receipt ? "Cambiar comprobante" : "Abrir archivos del teléfono"}</button>
+                ? <button className="native-receipt-picker-button" type="button" onClick={chooseNativeReceipt}>{receipt ? tx("Cambiar comprobante","Change receipt") : tx("Abrir archivos del teléfono","Open phone files")}</button>
                 : <input className="native-receipt-input" type="file" accept="image/*,.pdf,application/pdf" onChange={(event)=>{try{setReceipt(receiptFromWebInput(event.currentTarget));setError("");}catch(err){setReceipt(null);setError(err.message);}}}/>
               }
               {error&&<div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
-              <button className="payment-submit-button" type="button" disabled={uploading||!receipt||!payment.phone} onClick={sendReceipt}>{uploading?"Subiendo...":"Enviar comprobante"}</button>
+              <button className="payment-submit-button" type="button" disabled={uploading||!receipt||!payment.phone} onClick={sendReceipt}>{uploading?tx("Subiendo...","Uploading..."):tx("Enviar comprobante","Send receipt")}</button>
             </> : <div className="payment-waiting-state">
               <CheckCircle2 size={34}/>
-              <strong>Comprobante recibido</strong>
+              <strong>{tx("Comprobante recibido","Receipt received")}</strong>
               <p>FINVA está esperando la confirmación del BAC. Cuando coincidan el código y el monto, tu plan se activará automáticamente.</p>
               <small>Podés cerrar esta pantalla; también volveremos a comprobarlo cuando abras la app.</small>
             </div>}
