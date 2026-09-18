@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { ArrowDownToLine, Banknote, CircleDollarSign, RefreshCw, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { getInvestmentCenter, getJarvisPremiumStrategyDashboard, syncInvestmentIbkr } from "../services/jarvisApi";
+import { deviceLanguage, localeTag } from "../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
-const crc = (v) => `₡${Math.round(Number(v || 0)).toLocaleString("es-CR")}`;
+const crc = (v) => `₡${Math.round(Number(v || 0)).toLocaleString(localeTag(language))}`;
 const usd = (v) => `$${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function Investments() {
@@ -25,7 +28,7 @@ export default function Investments() {
     try { await syncInvestmentIbkr(); await load(); }
     catch (e) { setState((s) => ({ ...s, loading: false, error: e.message || "No pude sincronizar IBKR." })); }
   };
-  if (state.loading) return <section className="investments-page"><div className="hud-panel"><RefreshCw className="spin" /> Cargando inversiones...</div></section>;
+  if (state.loading) return <section className="investments-page"><div className="hud-panel"><RefreshCw className="spin" /> {tx("Cargando inversiones...", "Loading investments...")}</div></section>;
   if (state.error) return <section className="investments-page"><div className="hud-panel strategy-warning">{state.error}</div></section>;
 
   const c = state.center || {}; const p = c.portfolio || {}; const s = state.strategy?.strategy || state.strategy || {};
@@ -36,7 +39,7 @@ export default function Investments() {
   const syncLabel = syncMethod === "flex" ? "FLEX DIARIO" : "PUENTE TWS";
   return <section className="investments-page">
     <div className="investment-hero hud-panel">
-      <div><span className="strategy-eyebrow">WEALTH BUILDING</span><h2>Inversiones</h2><p>JARVIS separa inversión de dinero libre y aumenta el aporte solo cuando tu flujo lo permite.</p>{c.read_only ? <small className={`ibkr-sync-badge ${c.sync_status}`}>IBKR READ-ONLY · {String(p.account_mode || "").toUpperCase()} · {syncLabel} · {c.sync_status === "current" ? "ACTUALIZADO" : "SIN ACTUALIZAR"} · {p.account_id_masked}</small> : null}</div>
+      <div><span className="strategy-eyebrow">WEALTH BUILDING</span><h2>{tx("Inversiones", "Investments")}</h2><p>JARVIS separa inversión de dinero libre y aumenta el aporte solo cuando tu flujo lo permite.</p>{c.read_only ? <small className={`ibkr-sync-badge ${c.sync_status}`}>IBKR READ-ONLY · {String(p.account_mode || "").toUpperCase()} · {syncLabel} · {c.sync_status === "current" ? "ACTUALIZADO" : "SIN ACTUALIZAR"} · {p.account_id_masked}</small> : null}</div>
       <button className="strategy-refresh-btn" onClick={c.flex_configured ? syncIbkr : load}><RefreshCw size={17}/> {c.flex_configured ? "Sincronizar IBKR" : "Actualizar"}</button>
     </div>
 
@@ -47,7 +50,7 @@ export default function Investments() {
       <div className="hud-card"><CircleDollarSign/><span>Reservado para invertir</span><strong>{crc(c.reserved_to_invest_crc)}</strong><small>No cuenta como dinero libre</small></div>
     </div>
 
-    {c.read_only ? <div className="hud-panel ibkr-positions-panel"><div className="panel-heading"><div><span className="strategy-eyebrow">IBKR READ-ONLY</span><h3>Posiciones</h3></div><strong>{positions.length}</strong></div>
+    {c.read_only ? <div className="hud-panel ibkr-positions-panel"><div className="panel-heading"><div><span className="strategy-eyebrow">IBKR READ-ONLY</span><h3>{tx("Posiciones", "Positions")}</h3></div><strong>{positions.length}</strong></div>
       {positions.length ? <div className="allocation-list">{positions.map((position) => <div className="allocation-row ibkr-position-row" key={`${position.symbol}-${position.sec_type}`}><span><b>{position.symbol}</b><small>{position.position} · {position.sec_type} · {position.currency}</small></span><strong>{usd(position.market_value)}<small className={Number(position.unrealized_pnl) < 0 ? "danger-text" : "good-text"}>{usd(position.unrealized_pnl)}</small></strong></div>)}</div> : <p className="muted-text">La cuenta no tiene posiciones abiertas.</p>}
       {p.account_mode === "paper" ? <small className="muted-text">Cuenta paper: se muestra para pruebas, pero no se suma a tu patrimonio real.</small> : null}
     </div> : null}
@@ -58,13 +61,13 @@ export default function Investments() {
     </div>
 
     <div className="investment-two-col">
-      <div className="hud-panel"><h3>Rendimiento</h3><div className="allocation-list">
+      <div className="hud-panel"><h3>{tx("Rendimiento", "Performance")}</h3><div className="allocation-list">
         <div className="allocation-row"><span>P&L realizado</span><strong>{usd(p.realized_pnl)}</strong></div>
         <div className="allocation-row"><span>P&L no realizado</span><strong>{usd(p.unrealized_pnl)}</strong></div>
         <div className="allocation-row"><span>Dividendos</span><strong>{usd(p.dividends)}</strong></div>
         <div className="allocation-row"><span>Rendimiento bruto</span><strong>{usd(gross)}</strong></div>
       </div></div>
-      <div className="hud-panel"><h3>Costos reales</h3><div className="allocation-list">
+      <div className="hud-panel"><h3>{tx("Costos reales", "Real costs")}</h3><div className="allocation-list">
         <div className="allocation-row"><span>Comisiones IBKR</span><strong>-{usd(p.commissions)}</strong></div>
         <div className="allocation-row"><span>Impuestos</span><strong>-{usd(p.taxes)}</strong></div>
         <div className="allocation-row"><span>Fondeo / Wise</span><strong>-{usd(p.funding_fees)}</strong></div>

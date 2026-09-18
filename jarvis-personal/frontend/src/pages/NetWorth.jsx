@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Landmark, RefreshCw, Scale, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { getNetWorth } from "../services/jarvisApi";
+import { deviceLanguage, localeTag } from "../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
-const crc = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
-const compact = (value) => new Intl.NumberFormat("es-CR", { notation: "compact", maximumFractionDigits: 1 }).format(Number(value || 0));
+const crc = (value) => `₡${Math.round(Number(value || 0)).toLocaleString(localeTag(language))}`;
+const compact = (value) => new Intl.NumberFormat(localeTag(language), { notation: "compact", maximumFractionDigits: 1 }).format(Number(value || 0));
 const day = (value) => String(value || "").slice(5).replace("-", "/");
 
 export default function NetWorth() {
@@ -16,7 +19,7 @@ export default function NetWorth() {
   };
   useEffect(() => { load(); }, []);
 
-  if (state.loading) return <section className="hud-panel">Calculando patrimonio real...</section>;
+  if (state.loading) return <section className="hud-panel">{tx("Calculando patrimonio real...", "Calculating real net worth...")}</section>;
   if (state.error) return <section className="hud-panel strategy-warning">{state.error}</section>;
 
   const data = state.data || {};
@@ -28,9 +31,9 @@ export default function NetWorth() {
 
   return <section className="net-worth-page jarvis-v2-screen net-worth-v2">
     <div className="net-worth-hero net-worth-v2-hero">
-      <div><span className="strategy-eyebrow">JARVIS 06 · LIVE WEALTH</span><h2>Patrimonio neto</h2><p>Todo lo que tenés menos todo lo que debés, usando únicamente saldos reales.</p></div>
-      <button className="strategy-refresh-btn" onClick={load}><RefreshCw size={17}/> Actualizar</button>
-      <div className="net-worth-total"><span>Patrimonio actual</span><strong className={Number(data.net_worth) < 0 ? "negative" : "positive"}>{crc(data.net_worth)}</strong><small>{data.interpretation}</small></div>
+      <div><span className="strategy-eyebrow">JARVIS 06 · LIVE WEALTH</span><h2>{tx("Patrimonio neto", "Net worth")}</h2><p>Todo lo que tenés menos todo lo que debés, usando únicamente saldos reales.</p></div>
+      <button className="strategy-refresh-btn" onClick={load}><RefreshCw size={17}/> {tx("Actualizar", "Refresh")}</button>
+      <div className="net-worth-total"><span>{tx("Patrimonio actual", "Current net worth")}</span><strong className={Number(data.net_worth) < 0 ? "negative" : "positive"}>{crc(data.net_worth)}</strong><small>{data.interpretation}</small></div>
     </div>
 
     <div className="net-worth-kpis jarvis-v2-metrics">
@@ -41,7 +44,7 @@ export default function NetWorth() {
     </div>
 
     <article className="hud-panel net-worth-chart-panel">
-      <div className="panel-heading"><div><span className="strategy-eyebrow">EVOLUCIÓN REAL</span><h3>Historial del patrimonio</h3></div><small>Un cierre automático por día</small></div>
+      <div className="panel-heading"><div><span className="strategy-eyebrow">EVOLUCIÓN REAL</span><h3>{tx("Historial del patrimonio", "Net worth history")}</h3></div><small>Un cierre automático por día</small></div>
       {history.length > 1 ? <div className="net-worth-chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={history}><defs><linearGradient id="wealthFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#72f2ae" stopOpacity={0.5}/><stop offset="95%" stopColor="#72f2ae" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="rgba(255,255,255,.07)" vertical={false}/><XAxis dataKey="snapshot_date" tickFormatter={day} stroke="#8da0a8"/><YAxis tickFormatter={compact} stroke="#8da0a8" width={58}/><Tooltip formatter={(value) => crc(value)} labelFormatter={(value) => `Fecha ${value}`}/><Area type="monotone" dataKey="net_worth" stroke="#72f2ae" fill="url(#wealthFill)" strokeWidth={3}/></AreaChart></ResponsiveContainer></div> : <div className="net-worth-empty-chart"><TrendingUp size={34}/><p>Hoy guardamos el primer punto. La gráfica crecerá automáticamente con cada día.</p></div>}
     </article>
 

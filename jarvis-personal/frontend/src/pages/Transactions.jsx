@@ -23,21 +23,24 @@ import {
   getTransactionAnalysis,
   getTransactions,
 } from "../services/jarvisApi";
+import { deviceLanguage, localeTag } from "../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
 const formatCRC = (value = 0) =>
-  new Intl.NumberFormat("es-CR", {
+  new Intl.NumberFormat(localeTag(language), {
     style: "currency",
     currency: "CRC",
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
 
 const formatDate = (value) => {
-  if (!value) return "Sin fecha";
+  if (!value) return tx("Sin fecha", "No date");
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  return new Intl.DateTimeFormat("es-CR", {
+  return new Intl.DateTimeFormat(localeTag(language), {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -59,7 +62,7 @@ function LoadingState() {
     <section className="data-page">
       <div className="empty-state full-width">
         <div className="jarvis-loader"></div>
-        <h3>Cargando transacciones...</h3>
+        <h3>{tx("Cargando transacciones...", "Loading transactions...")}</h3>
         <p>Consultando los movimientos registrados en Supabase.</p>
       </div>
     </section>
@@ -70,7 +73,7 @@ function EmptyState() {
   return (
     <div className="empty-state full-width">
       <Database size={34} />
-      <h3>No hay transacciones todavía</h3>
+      <h3>{tx("No hay transacciones todavía", "No transactions yet")}</h3>
       <p>
         Cuando importemos enero a mayo o agregues movimientos manuales, esta
         pantalla mostrará tabla, totales y categorías.
@@ -164,13 +167,13 @@ export default function Transactions() {
     <section className="data-page">
       <div className="page-section-header">
         <div>
-          <h2>Transacciones</h2>
-          <p>Movimientos reales registrados por usuario.</p>
+          <h2>{tx("Transacciones", "Transactions")}</h2>
+          <p>{tx("Movimientos reales registrados por usuario.", "Real transactions recorded by user.")}</p>
         </div>
 
         <button className="hud-action-button" onClick={loadTransactions}>
           <RefreshCw size={16} />
-          Actualizar
+          {tx("Actualizar", "Refresh")}
         </button>
       </div>
 
@@ -244,8 +247,8 @@ export default function Transactions() {
         <article className="hud-panel large">
           <div className="panel-title">
             <div>
-              <h3>GASTOS POR MES</h3>
-              <p>Basado en transacciones guardadas.</p>
+              <h3>{tx("GASTOS POR MES", "EXPENSES BY MONTH")}</h3>
+              <p>{tx("Basado en transacciones guardadas.", "Based on saved transactions.")}</p>
             </div>
           </div>
 
