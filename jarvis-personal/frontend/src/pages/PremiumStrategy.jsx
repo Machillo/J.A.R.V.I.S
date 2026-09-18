@@ -21,8 +21,12 @@ import {
 } from "../services/jarvisApi";
 import { trackEvent } from "../lib/telemetry";
 import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
+import { deviceLanguage, localeTag, t } from "../lib/locale";
 
-const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
+const language = deviceLanguage();
+const tr = (key) => t(key, language);
+
+const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString(localeTag(language))}`;
 
 const allocationLabels = {
   ataque_de_deuda: "Ataque extra a deuda",
@@ -50,42 +54,42 @@ const debtTypeLabels = {
 };
 
 const formatDate = (value) => {
-  if (!value) return "Sin fecha estimada";
+  if (!value) return tr("strategy.noDate");
   const parsed = new Date(`${String(value).slice(0, 10)}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return "Sin fecha estimada";
-  return new Intl.DateTimeFormat("es-CR", { month: "long", year: "numeric" }).format(parsed);
+  if (Number.isNaN(parsed.getTime())) return tr("strategy.noDate");
+  return new Intl.DateTimeFormat(localeTag(language), { month: "long", year: "numeric" }).format(parsed);
 };
 
 const monthsText = (value) => {
   const months = Number(value || 0);
   if (!months) return "--";
-  if (months >= 999) return "Revisar cuota";
-  return `${months} ${months === 1 ? "mes" : "meses"}`;
+  if (months >= 999) return tr("strategy.reviewPayment");
+  return `${months} ${tr(months === 1 ? "common.month" : "common.months")}`;
 };
 
 const optionCopy = {
   salvavidas: {
-    title: "Salvavidas",
+    title: tr("strategy.lifebuoy"),
     subtitle: "Elegí y construí 1, 3 o 6 meses de cobertura.",
     icon: LifeBuoy,
   },
   investments: {
-    title: "Inversiones",
+    title: tr("strategy.investments"),
     subtitle: "Mirá cuánto podés invertir sin tocar obligaciones.",
     icon: TrendingUp,
   },
   debts: {
-    title: "Asesoría de deudas",
+    title: tr("strategy.debtAdvice"),
     subtitle: "Analizá prioridad, impacto y ruta de salida.",
     icon: Activity,
   },
   distribution: {
-    title: "Distribución de dinero",
+    title: tr("strategy.distribution"),
     subtitle: "Repartí únicamente el sobrante real del ciclo.",
     icon: CircleDollarSign,
   },
   aguinaldo: {
-    title: "Aguinaldo",
+    title: tr("strategy.bonus"),
     subtitle: "Calculá lo acumulado con tus salarios oficiales de la CCSS.",
     icon: Gift,
   },
@@ -124,7 +128,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
         loading: false,
         data: current.data,
         debtAdvice: current.debtAdvice,
-        error: error.message || "No pude cargar la estrategia.",
+        error: error.message || tr("strategy.loadError"),
         running: false,
       }));
       return null;
@@ -239,7 +243,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   }, [adviceScenarios, timeline]);
 
   if (state.loading && !state.data) {
-    return <section className="page premium-strategy-page"><div className="hud-card">Cargando estrategia...</div></section>;
+    return <section className="page premium-strategy-page"><div className="hud-card">{tr("strategy.loading")}</div></section>;
   }
 
   const investmentRecommended = Number(strategy.investment_recommended || 0);

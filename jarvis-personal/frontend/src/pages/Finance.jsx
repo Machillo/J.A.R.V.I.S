@@ -34,13 +34,15 @@ import {
   syncAguinaldoFromCcss,
 } from "../services/jarvisApi";
 import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
+import { deviceLanguage, localeTag, t } from "../lib/locale";
+const language = deviceLanguage();
+const tr = (key) => t(key, language);
 const formatCRC = (value = 0) =>
-  new Intl.NumberFormat("es-CR", {
+  new Intl.NumberFormat(localeTag(language), {
     style: "currency",
     currency: "CRC",
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
-
 // Real Balance must never hide its sign.  Formatting the absolute value and
 // adding the sign ourselves makes a deficit unambiguous in every browser.
 const formatSignedCRC = (value = 0) => {
@@ -48,14 +50,11 @@ const formatSignedCRC = (value = 0) => {
   if (number < 0) return `-${formatCRC(Math.abs(number))}`;
   return formatCRC(number);
 };
-
 const shortCRC = (value = 0) => {
   const number = Number(value) || 0;
-
   if (Math.abs(number) >= 1_000_000) {
     return `₡${(number / 1_000_000).toFixed(1)}M`;
   }
-
   if (Math.abs(number) >= 1_000) {
     return `₡${Math.round(number / 1_000)}k`;
   }
@@ -66,13 +65,13 @@ const shortCRC = (value = 0) => {
 const clampPercent = (value) =>
   Math.min(Math.max(Math.round(Number(value) || 0), 0), 100);
 
-function LoadingPanel({ message = "Cargando núcleo financiero..." }) {
+function LoadingPanel({ message = tr("finance.loading") }) {
   return (
     <section className="dashboard-page">
       <div className="empty-state full-width">
         <div className="jarvis-loader"></div>
         <h3>{message}</h3>
-        <p>Estoy sincronizando los datos reales de Supabase.</p>
+        <p>{tr("finance.syncing")}</p>
       </div>
     </section>
   );
@@ -83,8 +82,8 @@ function ErrorPanel({ error, onRetry }) {
     <section className="dashboard-page">
       <div className="empty-state full-width danger">
         <AlertTriangle size={32} />
-        <h3>No pude cargar el dashboard financiero</h3>
-        <p>{error || "Revisa Render logs o vuelve a intentar."}</p>
+        <h3>{tr("finance.loadError")}</h3>
+        <p>{error || tr("finance.retryHelp")}</p>
         {onRetry && (
           <button className="hud-action-button" onClick={onRetry}>
             Reintentar
@@ -112,7 +111,7 @@ function JarvisActionSheet({ title, onClose, children, className = "" }) {
         <header className="jarvis-action-sheet-header">
           <div className="jarvis-action-sheet-handle" aria-hidden="true" />
           <h3>{title}</h3>
-          <button type="button" className="ghost-button" onClick={onClose}>Cerrar</button>
+          <button type="button" className="ghost-button" onClick={onClose}>{tr("common.close")}</button>
         </header>
         <div className="jarvis-action-sheet-body">{children}</div>
       </section>
@@ -141,8 +140,8 @@ function MonthlyFlowChart({ data = [] }) {
   if (rows.length === 0) {
     return (
       <EmptyPanel
-        title="Sin movimientos"
-        description="Cuando haya transacciones, el gráfico se activará."
+        title={tr("finance.noMovements")}
+        description={tr("finance.chartWhenTransactions")}
       />
     );
   }
@@ -159,13 +158,13 @@ function MonthlyFlowChart({ data = [] }) {
               <span
                 className="flow-bar income"
                 style={{ height: `${incomeHeight}%` }}
-                title={`Ingresos ${formatCRC(item.income)}`}
+                title={`${tr("finance.income")} ${formatCRC(item.income)}`}
               />
 
               <span
                 className="flow-bar outflow"
                 style={{ height: `${outflowHeight}%` }}
-                title={`Gastos/deuda ${formatCRC(item.outflow)}`}
+                title={`${tr("finance.expensesDebt")} ${formatCRC(item.outflow)}`}
               />
             </div>
             <strong>{formatMonthLabel(item.month)}</strong>
@@ -230,12 +229,12 @@ function FinanceInputPanel({ onSaved, compact = false }) {
   const startVoice = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setMessage("Este navegador no soporta reconocimiento de voz.");
+      setMessage(tr("finance.voiceUnsupported"));
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = "es-CR";
+    recognition.lang = localeTag(language);
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
@@ -245,7 +244,7 @@ function FinanceInputPanel({ onSaved, compact = false }) {
       setMode("text");
     };
 
-    recognition.onerror = () => setMessage("No pude escucharte bien.");
+    recognition.onerror = () => setMessage(tr("finance.voiceError"));
     recognition.start();
   };
 
@@ -278,18 +277,18 @@ function FinanceInputPanel({ onSaved, compact = false }) {
     <article className={`hud-panel finance-input-panel ${compact ? "compact-empty" : ""}`}>
       <div className="panel-title finance-input-title">
         <div>
-          <h3>AÑADIR FINANZAS</h3>
+          <h3>{tr("finance.addFinance")}</h3>
           
         </div>
-        <span>PREVIEW</span>
+        <span>{tr("finance.preview")}</span>
       </div>
 
       <div className="finance-input-actions">
         <button className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}>
-          <PlusCircle size={16} /> Escribir
+          <PlusCircle size={16} /> {tr("finance.write")}
         </button>
         <button onClick={startVoice}>
-          <Mic size={16} /> Hablar
+          <Mic size={16} /> {tr("finance.speak")}
         </button>
         <label className="finance-file-button">
           <FileText size={16} /> PDF
@@ -299,11 +298,11 @@ function FinanceInputPanel({ onSaved, compact = false }) {
 
       <div className="finance-input-grid">
         <label>
-          Mes base
+          {tr("finance.baseMonth")}
           <input value={month} onChange={(event) => setMonth(event.target.value)} placeholder="2026-06" />
         </label>
         <label>
-          Dólar
+          {tr("finance.dollar")}
           <input type="number" value={exchangeRate} onChange={(event) => setExchangeRate(event.target.value)} />
         </label>
       </div>
@@ -317,11 +316,11 @@ function FinanceInputPanel({ onSaved, compact = false }) {
 
       <div className="finance-input-footer">
         <button className="hud-action-button" onClick={runPreview} disabled={loading}>
-          Analizar
+          {tr("finance.analyze")}
         </button>
         {rows.length > 0 && (
           <button className="hud-action-button success" onClick={savePreview} disabled={loading}>
-            <CheckCircle2 size={16} /> Guardar {rows.length}
+            <CheckCircle2 size={16} /> {tr("finance.save")} {rows.length}
           </button>
         )}
       </div>
@@ -331,10 +330,10 @@ function FinanceInputPanel({ onSaved, compact = false }) {
       {preview && (
         <div className="finance-preview-box">
           <div className="finance-preview-summary">
-            <span>Ingresos: <strong>{formatCRC(summary.income)}</strong></span>
-            <span>Gastos: <strong>{formatCRC(summary.expenses)}</strong></span>
-            <span>Deudas: <strong>{formatCRC(summary.debt_payment)}</strong></span>
-            <span>Préstamos: <strong>{formatCRC(summary.loan_received)}</strong></span>
+            <span>{tr("finance.income")}: <strong>{formatCRC(summary.income)}</strong></span>
+            <span>{tr("finance.expenses")}: <strong>{formatCRC(summary.expenses)}</strong></span>
+            <span>{tr("finance.debts")}: <strong>{formatCRC(summary.debt_payment)}</strong></span>
+            <span>{tr("finance.loans")}: <strong>{formatCRC(summary.loan_received)}</strong></span>
           </div>
 
           {preview.needs_review?.length > 0 && (
@@ -385,7 +384,7 @@ function SpendingDonut({ breakdown }) {
   const palette = ["#ff445f", "#8b5cf6", "#22d3ee", "#f59e0b", "#10b981", "#ec4899", "#60a5fa", "#a3e635", "#f97316", "#14b8a6", "#c084fc", "#fb7185"];
 
   if (!categories.length) {
-    return <EmptyPanel title="Sin categorías todavía" description="Cuando haya gastos registrados, el gráfico se activará." />;
+    return <EmptyPanel title={tr("finance.noCategories")} description={tr("finance.chartWhenExpenses")} />;
   }
 
   const tooltipContent = ({ active, payload }) => {
@@ -432,10 +431,10 @@ function SpendingDonut({ breakdown }) {
               <Tooltip content={tooltipContent} />
             </PieChart>
           </ResponsiveContainer>
-          <button className="spending-donut-center" onClick={() => setSelectedCategory("")} title="Mostrar total">
-            <span>TOTAL YTD</span>
+          <button className="spending-donut-center" onClick={() => setSelectedCategory("")} title={tr("finance.showTotal")}>
+            <span>{tr("finance.totalYtd")}</span>
             <strong>{shortCRC(total)}</strong>
-            <small>{breakdown?.period?.label || "Año actual"}</small>
+            <small>{breakdown?.period?.label || tr("common.currentYear")}</small>
           </button>
         </div>
 
