@@ -21,6 +21,8 @@ export const getMe = () => request("/auth/me");
 export const getPlans = () => request("/auth/plans");
 export const selectPlan = (plan, accept_beta_terms = false) => json("/auth/plan", "POST", { plan, accept_beta_terms, consent_version: "regular-2027-v1" });
 export const getBillingCatalog = () => request("/product-ops/billing/catalog");
+export const getStoreBillingCatalog = () => request("/product-ops/billing/store/catalog");
+export const getStoreEntitlement = () => request("/product-ops/billing/store/entitlement");
 export const uploadPaymentReceipt = (orderId, file) => {
   const body = new FormData();
   body.append("receipt", file);
