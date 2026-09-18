@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { getReceivables } from "../services/jarvisApi";
+import { deviceLanguage, localeTag } from "../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 import { ReceivablesPanel } from "./Finance";
 
 export default function Receivables({ onRefresh }) {
