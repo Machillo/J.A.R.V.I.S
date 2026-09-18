@@ -2,8 +2,8 @@ from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import Response
 
 from backend.auth.current_user import require_roles
-from backend.product_ops.models import FeedbackCreate, FeedbackUpdate, ProductEvent, TestPaymentUpdate
-from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_feedback, get_receipt, list_feedback, owner_dashboard, record_event, resolve_test_order, submit_receipt, update_feedback
+from backend.product_ops.models import FeedbackCreate, FeedbackUpdate, ProductEvent, StoreLifecycleSimulation, TestPaymentUpdate
+from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_feedback, get_receipt, list_feedback, owner_dashboard, record_event, resolve_test_order, submit_receipt, update_feedback\nfrom backend.product_ops.store_billing import entitlement_state, simulate_lifecycle, store_catalog
 
 router = APIRouter(prefix="/product-ops", tags=["Product Operations"])
 
