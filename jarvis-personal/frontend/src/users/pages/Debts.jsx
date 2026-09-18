@@ -3,8 +3,11 @@ import { CreditCard, Plus } from "lucide-react";
 import { createDebt, deleteDebt, getDebts, payDebt, updateDebt } from "../services/jarvisApi";
 import { AmountDialog, ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
+import { deviceLanguage, localeTag } from "../../lib/locale";
+const language = deviceLanguage();
+const tx = (es, en) => language === "es" ? es : en;
 
-const money = (value) => value == null ? "Sin dato" : new Intl.NumberFormat("es-CR", { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
+const money = (value) => value == null ? tx("Sin dato", "No data") : new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
 const empty = { name:"", debt_type:"other", total_amount:"", remaining_amount:"", monthly_payment:"", interest_rate:"", term_months:"", payment_day:"", next_payment_date:"" };
 const opt = (value) => value === "" ? null : Number(value);
 const monthsLeft = (debt) => {
@@ -75,9 +78,9 @@ export default function Debts({ plan = "free" }) {
   };
 
   return <section className="content-first-page">
-    <div className="hero"><span>{advanced ? "BASIC 03" : "FREE 04"}</span><h1>Deudas</h1><p>{advanced ? "Gestión completa con tasa, plazo y finalización estimada." : "Saldos, pagos y progreso visual, sin recomendaciones."}</p></div>
+    <div className="hero"><span>{advanced ? "BASIC 03" : "FREE 04"}</span><h1>{tx("Deudas", "Debts")}</h1><p>{advanced ? "Gestión completa con tasa, plazo y finalización estimada." : "Saldos, pagos y progreso visual, sin recomendaciones."}</p></div>
     {error && <div className="panel error">{error}</div>}
-    <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><CreditCard size={20}/></span><div><strong>Agregar deuda</strong><small>Registrá una nueva obligación</small></div><Plus size={19}/></button>
+    <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><CreditCard size={20}/></span><div><strong>{tx("Agregar deuda", "Add debt")}</strong><small>Registrá una nueva obligación</small></div><Plus size={19}/></button>
 
     <div className="debt-grid content-first-grid">{rows.length ? rows.map((debt) => {
       const total = Math.max(Number(debt.total_amount) || Number(debt.remaining_amount) || 1,1);
@@ -89,20 +92,20 @@ export default function Debts({ plan = "free" }) {
         <p>{Number(progress).toFixed(1)}% pagado · cuota {money(debt.monthly_payment)}</p>
         {advanced && <div className="record-meta"><span>Próximo pago: {(debt.next_payment_date || debt.payment_day) ? `día ${debt.payment_day || String(debt.next_payment_date).slice(8,10)}` : "sin fecha"}</span><span>Finalización: {months ? `~${months} meses` : "faltan datos"}</span></div>}
         <div className="actions">
-          <button className="finva-button finva-button-primary" type="button" onClick={() => { setPayment(debt); setPaymentAmount(""); }}>Registrar pago</button>
-          {advanced && <button className="finva-button finva-button-secondary" type="button" onClick={() => setEdit({...debt})}>Editar</button>}
-          <button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(debt)}>Eliminar</button>
+          <button className="finva-button finva-button-primary" type="button" onClick={() => { setPayment(debt); setPaymentAmount(""); }}>{tx("Registrar pago", "Record payment")}</button>
+          {advanced && <button className="finva-button finva-button-secondary" type="button" onClick={() => setEdit({...debt})}>{tx("Editar", "Edit")}</button>}
+          <button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(debt)}>{tx("Eliminar", "Delete")}</button>
         </div>
       </article>;
     }) : <div className="panel finva-empty-state">No tenés deudas registradas.</div>}</div>
 
-    <FinvaFormSheet open={creating} eyebrow="Nueva deuda" title="Agregar deuda" onClose={() => setCreating(false)}>
-      <form className="form finva-sheet-form" onSubmit={submit}><DebtFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-primary">Guardar deuda</button></form>
+    <FinvaFormSheet open={creating} eyebrow="Nueva deuda" title={tx("Agregar deuda", "Add debt")} onClose={() => setCreating(false)}>
+      <form className="form finva-sheet-form" onSubmit={submit}><DebtFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar deuda", "Save debt")}</button></form>
     </FinvaFormSheet>
-    <FinvaFormSheet open={Boolean(edit)} eyebrow="Deuda" title="Editar deuda" onClose={() => setEdit(null)}>
-      {edit && <form className="form finva-sheet-form" onSubmit={save}><DebtFields value={edit} setValue={setEdit} advanced={advanced}/><button className="finva-button finva-button-primary">Guardar cambios</button></form>}
+    <FinvaFormSheet open={Boolean(edit)} eyebrow="Deuda" title={tx("Editar deuda", "Edit debt")} onClose={() => setEdit(null)}>
+      {edit && <form className="form finva-sheet-form" onSubmit={save}><DebtFields value={edit} setValue={setEdit} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}
     </FinvaFormSheet>
-    <AmountDialog open={Boolean(payment)} title="Registrar pago" description={payment ? `Aplicar un pago a ${payment.name}.` : ""} value={paymentAmount} onValueChange={setPaymentAmount} confirmLabel="Registrar pago" onConfirm={registerPayment} onClose={() => { if (!busyDialog) setPayment(null); }} busy={busyDialog}/>
-    <ConfirmDialog open={Boolean(deleting)} title="Eliminar deuda" description={deleting ? `Se eliminará ${deleting.name}. Esta acción no se puede deshacer.` : ""} onConfirm={removeDebt} onClose={() => { if (!busyDialog) setDeleting(null); }} busy={busyDialog}/>
+    <AmountDialog open={Boolean(payment)} title={tx("Registrar pago", "Record payment")} description={payment ? `Aplicar un pago a ${payment.name}.` : ""} value={paymentAmount} onValueChange={setPaymentAmount} confirmLabel={tx("Registrar pago", "Record payment")} onConfirm={registerPayment} onClose={() => { if (!busyDialog) setPayment(null); }} busy={busyDialog}/>
+    <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar deuda", "Delete debt")} description={deleting ? `Se eliminará ${deleting.name}. Esta acción no se puede deshacer.` : ""} onConfirm={removeDebt} onClose={() => { if (!busyDialog) setDeleting(null); }} busy={busyDialog}/>
   </section>;
 }
