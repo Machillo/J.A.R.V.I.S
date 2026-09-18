@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import NativeBottomBar from "../../../ui/native/NativeBottomBar";
 import JarvisDisclosure from "../components/JarvisDisclosure";
+import { deviceLanguage, t } from "../../../lib/locale";
 
 const wealthKeys = ["wealth", "investments", "businesses", "netWorth", "financialTimeline", "reconciliation", "deterioration"];
 const moreKeys = ["receivables", "emails", "transactions", "additionalCards", "chats", "goals", "memory", "settings", "profile", "userManagement", "productOperations"];
@@ -19,43 +20,45 @@ const groupFor = (page) => {
 
 export default function JarvisNavigation({ activePage, onNavigate, userName, profilePreferences, currentUser, onLogout }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const language = deviceLanguage();
+  const tr = (key) => t(`nav.${key}`, language);
   const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
   const owner = currentUser?.role === "owner" || currentUser?.role === "admin";
   const groups = [
     {
-      title: "Dinero y control",
+      title: tr("moneyControl"),
       items: [
-        ["receivables", "Cobros y cuentas por recibir", HandCoins],
-        ["transactions", "Transacciones", ReceiptText],
-        ["emails", "Monitor de correos", MailSearch],
-        ["additionalCards", "Tarjetas adicionales", CreditCard],
+        ["receivables", tr("receivables"), HandCoins],
+        ["transactions", tr("transactions"), ReceiptText],
+        ["emails", tr("emailMonitor"), MailSearch],
+        ["additionalCards", tr("additionalCards"), CreditCard],
       ],
     },
     {
-      title: "Patrimonio",
+      title: tr("wealth"),
       items: [
-        ["investments", "Inversiones", TrendingUp],
-        ["businesses", "Negocios", BriefcaseBusiness],
-        ["netWorth", "Patrimonio neto", Gem],
-        ["financialTimeline", "Timeline financiero", CalendarDays],
-        ["reconciliation", "Conciliación", CheckCircle2],
-        ["deterioration", "Deterioro financiero", Activity],
+        ["investments", tr("investments"), TrendingUp],
+        ["businesses", tr("businesses"), BriefcaseBusiness],
+        ["netWorth", tr("netWorth"), Gem],
+        ["financialTimeline", tr("financialTimeline"), CalendarDays],
+        ["reconciliation", tr("reconciliation"), CheckCircle2],
+        ["deterioration", tr("deterioration"), Activity],
       ],
     },
     {
-      title: "JARVIS personal",
+      title: tr("personal"),
       items: [
-        ["goals", "Metas", Target],
-        ["memory", "Memory Core", Brain],
-        ["settings", "Configuración", Settings],
-        ["profile", "Perfil y apariencia", UserRound],
+        ["goals", tr("goals"), Target],
+        ["memory", tr("memory"), Brain],
+        ["settings", tr("settings"), Settings],
+        ["profile", tr("profile"), UserRound],
       ],
     },
     ...(owner ? [{
-      title: "Administración",
+      title: tr("administration"),
       items: [
-        ["userManagement", "Administrar usuarios", UsersRound],
-        ["productOperations", "Operaciones FINVA", ListChecks],
+        ["userManagement", tr("manageUsers"), UsersRound],
+        ["productOperations", tr("finvaOperations"), ListChecks],
       ],
     }] : []),
   ];
@@ -71,11 +74,11 @@ export default function JarvisNavigation({ activePage, onNavigate, userName, pro
 
   const items = [
     { key: "dashboard", label: "JARVIS", icon: Bot },
-    { key: "strategy", label: "Strategy", icon: ChartNoAxesCombined },
-    { key: "finance", label: "Finance", icon: Landmark },
-    { key: "financialAccounts", label: "Cuentas", icon: WalletCards },
-    { key: "wealth", label: "Patrimonio", icon: Gem },
-    { key: "more", label: "Más", icon: MoreHorizontal, activeKeys: ["more", ...moreKeys] },
+    { key: "strategy", label: tr("strategy"), icon: ChartNoAxesCombined },
+    { key: "finance", label: tr("finance"), icon: Landmark },
+    { key: "financialAccounts", label: tr("accounts"), icon: WalletCards },
+    { key: "wealth", label: tr("wealth"), icon: Gem },
+    { key: "more", label: tr("more"), icon: MoreHorizontal, activeKeys: ["more", ...moreKeys] },
   ];
 
   return (
@@ -86,7 +89,7 @@ export default function JarvisNavigation({ activePage, onNavigate, userName, pro
             <div className="native-sheet-handle" />
             <header className="native-more-profile">
               <span className="native-more-avatar">
-                {avatarUrl ? <img src={avatarUrl} alt="Perfil" /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
+                {avatarUrl ? <img src={avatarUrl} alt={tr("profileAlt")} /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
               </span>
               <span><small>JARVIS</small><strong>{profilePreferences?.display_name || userName || "Kenneth"}</strong></span>
             </header>
@@ -102,7 +105,7 @@ export default function JarvisNavigation({ activePage, onNavigate, userName, pro
                   </div>
                 </JarvisDisclosure>
               ))}
-              <button type="button" className="native-sheet-logout" onClick={onLogout}><LogOut size={20} /><strong>Cerrar sesión</strong></button>
+              <button type="button" className="native-sheet-logout" onClick={onLogout}><LogOut size={20} /><strong>{tr("logout")}</strong></button>
             </div>
           </section>
         </div>
