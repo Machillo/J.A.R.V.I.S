@@ -44,8 +44,6 @@ export const getExpenses = () => request("/user-product/finance/expenses");
 export const createExpense = (payload) => json("/user-product/finance/expenses", "POST", payload);
 export const updateExpense = (id, payload) => json(`/user-product/finance/expenses/${id}`, "PUT", payload);
 export const deleteExpense = (id) => request(`/user-product/finance/expenses/${id}`, { method: "DELETE" });
-export const getOvertime = () => request("/user-product/finance/overtime");
-export const createOvertime = (payload) => json("/user-product/finance/overtime", "POST", payload);
 
 export const getDebts = () => request("/user-product/finance/debts");
 export const createDebt = (payload) => json("/user-product/finance/debts", "POST", payload);
