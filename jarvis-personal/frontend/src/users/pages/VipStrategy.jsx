@@ -1,7 +1,6 @@
 import PremiumStrategy from "../../pages/PremiumStrategy";
 import {
   getVipDebtAdvisory,
-  getVipDebtStrategies,
   getVipAguinaldo,
   getVipSalvavidas,
   getVipStrategyDashboard,
@@ -11,7 +10,6 @@ import {
 const finvaStrategyApi = {
   getStrategyDashboard: getVipStrategyDashboard,
   getDebtAdvisory: getVipDebtAdvisory,
-  getDebtStrategies: getVipDebtStrategies,
   getSalvavidas: getVipSalvavidas,
   updateSalvavidas: updateVipSalvavidas,
   getAguinaldo: getVipAguinaldo,
