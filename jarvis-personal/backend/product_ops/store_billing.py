@@ -179,8 +179,8 @@ def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str):
             raise HTTPException(404, "Plan FINVA no disponible.")
         if status in ACTIVE_STATES:
             conn.execute("""INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,created_at,updated_at)
-              VALUES(%s,%s,'active','store',NOW(),NOW(),NOW())
-              ON CONFLICT(account_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status='active',access_source='store',updated_at=NOW()""",
+              VALUES(%s,%s,'active','self_service',NOW(),NOW(),NOW())
+              ON CONFLICT(account_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status='active',access_source='self_service',updated_at=NOW()""",
               (account_id, plan["id"]))
         else:
             free_plan = conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
