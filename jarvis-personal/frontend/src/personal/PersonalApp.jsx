@@ -525,16 +525,7 @@ export default function App() {
   const userName = rawUserName.trim().split(/\s+/)[0] || "";
 
   if (!sessionLoaded) {
-    return (
-      <div className={`jarvis-app ${currentUser?.role === "owner" || currentUser?.role === "admin" ? "admin-user" : ""}`}>
-        <main className="main-shell home-mode">
-          <section className="jarvis-home chat-home idle">
-            <h1>J.A.R.V.I.S.</h1>
-            <p className="home-subtitle">Inicializando sesión...</p>
-          </section>
-        </main>
-      </div>
-    );
+    return <main className="jarvis-boot-screen"><strong>J.A.R.V.I.S.</strong><span>Inicializando sesión...</span></main>;
   }
 
   if (!session) {
@@ -542,7 +533,7 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <div className="jarvis-app"><main className="main-shell home-mode"><section className="jarvis-home chat-home idle"><h1>J.A.R.V.I.S.</h1><p className="home-subtitle">Preparando tu espacio...</p></section></main></div>;
+    return <main className="jarvis-boot-screen"><strong>J.A.R.V.I.S.</strong><span>Preparando tu espacio...</span></main>;
   }
 
   if (!currentUser.profile_setup_completed) {
@@ -624,7 +615,7 @@ export default function App() {
 
   return (
     <NativeProductShell product="jarvis" platform={platform} plan="personal" className={`jarvis-app app-shell-v2 ${isStandalonePwa ? "jarvis-pwa-standalone" : ""} ${(keyboardOpen || commandInputFocused) ? "keyboard-open" : ""}`}>
-      <main className={`main-shell app-main-v2 ${activePage === "dashboard" ? "home-mode" : ""}`}>
+      <main className={`main-shell app-main-v2 ${activePage === "dashboard" ? "jarvis-home-layout" : ""}`}>
         {showHeader && (
           <header className="app-top-bar">
             <button className="app-back-button" type="button" onClick={handleBack} aria-label="Volver">
@@ -647,7 +638,7 @@ export default function App() {
         ) : renderPage()}
 
         {activePage === "dashboard" && (
-          <section className="jarvis-command-center" aria-label="Comando principal de Jarvis">
+          <section className="jarvis-home-command" aria-label="Comando principal de Jarvis">
             <input
               value={jarvisInput}
               onChange={(event) => setJarvisInput(event.target.value)}
@@ -662,12 +653,12 @@ export default function App() {
               inputMode="text"
             />
 
-            <button className="command-button" onClick={handleAskJarvis} aria-label="Enviar mensaje">
+            <button className="jarvis-home-send" onClick={handleAskJarvis} aria-label="Enviar mensaje">
               <Send size={20} />
             </button>
 
             <button
-              className={`voice-orb ${isListening ? "listening" : ""}`}
+              className={`jarvis-home-voice ${isListening ? "listening" : ""}`}
               onClick={handleVoiceInput}
               aria-label="Hablar con Jarvis"
             >
