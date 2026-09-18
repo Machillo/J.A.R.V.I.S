@@ -46,7 +46,7 @@ export default function UsersApp({ user, onUserChange }) {
         <NativeProductHeader product="FINVA" subtitle={plan === "free" ? "Gratis" : plan.toUpperCase()} avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()} onProfile={() => setPage("settings")}/>
         <main className="content mobile-content native-scroll-content">
           {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>Entendido</button></aside>}
-          {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>No pudimos completar esa acción</strong><span>Intentá nuevamente o envianos un reporte; agregaremos la referencia técnica automáticamente.</span></div><button type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>Contactar soporte</button><button type="button" aria-label="Cerrar aviso" onClick={() => setApiIssue(null)}>×</button></aside>}
+          {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>Algo no cargó</strong><span>Podés intentar de nuevo o reportarlo.</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>Reportar</button><button className="finva-api-help-close" type="button" aria-label="Cerrar aviso" onClick={() => setApiIssue(null)}>×</button></aside>}
           <AppErrorBoundary resetKey={page} screen={page}>{pages[page] || pages.overview}</AppErrorBoundary>
         </main>
         <FinvaNavigation page={page} plan={plan} onNavigate={setPage} onLogout={() => supabase.auth.signOut()}/>

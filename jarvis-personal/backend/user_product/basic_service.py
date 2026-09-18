@@ -132,7 +132,9 @@ def get_basic_dashboard() -> dict:
     now, previous = months[-1], months[-2]
     debt_original, debt_remaining = _money(debts["original"]), _money(debts["remaining"])
     goal_target, goal_current = _money(goals["target"]), _money(goals["current"])
-    income = now["income"] or _estimated_income(profile)
+    # Dashboard is a ledger view: never present onboarding salary estimates as
+    # money already received. Projections belong in planning/budget surfaces.
+    income = now["income"]
     return {
         "month": current.strftime("%Y-%m"), "income": income, "recorded_income": now["income"],
         "expenses": now["expenses"], "debt_paid": now["debt_paid"], "balance": round(income-now["expenses"]-now["debt_paid"],2),
@@ -276,5 +278,6 @@ def get_basic_report(period: str | None = None) -> dict:
         debt=conn.execute("SELECT COALESCE(SUM(total_amount),0) original,COALESCE(SUM(remaining_amount),0) remaining FROM debts WHERE workspace_id=%s",(workspace_id,)).fetchone()
         goals=conn.execute("SELECT COALESCE(SUM(target_amount),0) target,COALESCE(SUM(current_amount),0) current FROM financial_goals WHERE workspace_id=%s",(workspace_id,)).fetchone()
         profile=_profile(conn,account_id,workspace_id)
-    income=current["income"] or _estimated_income(profile); balance=round(income-current["expenses"]-current["debt_paid"]-contributions,2)
+    # Reports describe recorded history, not projected salary from onboarding.
+    income=current["income"]; balance=round(income-current["expenses"]-current["debt_paid"]-contributions,2)
     return {"period":start.strftime("%Y-%m"),"income":income,"expenses":current["expenses"],"debt_paid":current["debt_paid"],"goal_contributions":contributions,"saved":max(balance,0),"balance":balance,"categories":[dict(r) for r in categories],"comparison":{"income":round(current["income"]-prior["income"],2),"expenses":round(current["expenses"]-prior["expenses"],2),"debt_paid":round(current["debt_paid"]-prior["debt_paid"],2)},"debt":{"remaining":_money(debt["remaining"]),"progress":round((1-_money(debt["remaining"])/_money(debt["original"]))*100,1) if _money(debt["original"]) else 0},"goals":{"current":_money(goals["current"]),"target":_money(goals["target"]),"progress":round(_money(goals["current"])/_money(goals["target"])*100,1) if _money(goals["target"]) else 0}}

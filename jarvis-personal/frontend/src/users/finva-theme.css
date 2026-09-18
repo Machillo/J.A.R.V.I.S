@@ -493,10 +493,13 @@ body:has(.users-app) { background: #0b132b; }
 .users-app .subscription-ended-banner div { display:grid; gap:4px; }
 .users-app .subscription-ended-banner span { color:var(--f-muted); font-size:.82rem; line-height:1.4; }
 .users-app .subscription-ended-banner button { border:0; border-radius:12px; padding:9px 11px; background:var(--accent); color:#032c2c; font-weight:800; }
-.users-app .finva-api-help { margin:14px 16px 0; padding:14px; border:1px solid rgba(251,113,133,.32); border-radius:18px; background:rgba(159,18,57,.16); display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px; }
-.users-app .finva-api-help div { display:grid; gap:4px; }
-.users-app .finva-api-help span { color:var(--f-muted); font-size:.8rem; line-height:1.4; }
-.users-app .finva-api-help button { border:0; border-radius:11px; padding:9px 10px; background:rgba(251,113,133,.18); color:var(--f-text); font-weight:780; }
+.users-app .finva-api-help { margin:10px 0 4px; padding:10px 10px 10px 12px; border:1px solid rgba(251,113,133,.22); border-radius:14px; background:rgba(80,28,42,.42); display:grid; grid-template-columns:minmax(0,1fr) auto 34px; align-items:center; gap:8px; }
+.users-app .finva-api-help div { display:grid; gap:2px; min-width:0; }
+.users-app .finva-api-help strong { font-size:.78rem; line-height:1.2; }
+.users-app .finva-api-help span { color:var(--f-muted); font-size:.68rem; line-height:1.3; }
+.users-app .finva-api-help button { border:0; min-height:34px; border-radius:10px; padding:7px 9px; color:var(--f-text); font-size:.7rem; font-weight:760; }
+.users-app .finva-api-help-support { background:rgba(251,113,133,.14); }
+.users-app .finva-api-help-close { width:34px; padding:0!important; background:rgba(255,255,255,.055); font-size:1rem!important; }
 .users-app .finva-error-fallback { margin:20px; display:grid; gap:12px; }
 .users-app .finva-error-fallback p { color:var(--f-muted); margin:0; line-height:1.5; }
 .users-app .finva-error-fallback > div { display:flex; flex-wrap:wrap; gap:10px; }

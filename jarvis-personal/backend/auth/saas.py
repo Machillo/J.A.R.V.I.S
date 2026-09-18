@@ -15,11 +15,20 @@ PLAN_COPY = {
 }
 PLAN_RANK = {"free": 1, "basic": 2, "vip": 3}
 BUILTIN_FEATURE_MIN_PLAN = {
+    # Core FINVA capabilities must follow the product plan even if a deployment
+    # has not yet synchronized plan_features rows.
+    "finance_overview": "free",
+    "spending": "free",
+    "debts": "free",
+    "goals": "free",
+    "transactions": "free",
+    "strategy_basic": "basic",
     "basic_dashboard": "basic",
     "guided_budget": "basic",
     "financial_calendar": "basic",
     "recurring_items": "basic",
     "basic_reports": "basic",
+    "strategy_vip": "vip",
 }
 
 
