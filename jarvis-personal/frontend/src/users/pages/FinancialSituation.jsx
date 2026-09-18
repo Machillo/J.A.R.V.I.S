@@ -141,10 +141,10 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
       </article>
 
       <div className="situation-card-list">
-        <SituationCard icon={CircleDollarSign} title="Ingresos" summary={form.income_type === "fixed" ? `${money(form.fixed_monthly_salary)} / mes` : `${money(form.hourly_rate)} / hora`} editing={editing === "income"} onEdit={() => setEditing(editing === "income" ? "" : "income")}>
+        <SituationCard icon={CircleDollarSign} title="Referencia de ingresos" summary="FINVA usa tus movimientos reales, no un salario proyectado" editing={editing === "income"} onEdit={() => setEditing(editing === "income" ? "" : "income")}>
           <div className="situation-form-grid">
             <label><FieldHelp label="¿Cómo te pagan?">Salario mensual es para un monto fijo o parecido cada mes. Pago por hora es cuando el ingreso depende de las horas trabajadas.</FieldHelp><select value={form.income_type} onChange={(e) => update("income_type", e.target.value)}><option value="fixed">Recibo un salario mensual</option><option value="hourly">Me pagan por hora trabajada</option></select></label>
-            {form.income_type === "fixed" ? <label><FieldHelp label="Salario que te llega al mes">Usá el monto neto: el dinero que realmente recibís después de rebajos.</FieldHelp><input type="number" min="0" step="0.01" inputMode="decimal" value={form.fixed_monthly_salary} onChange={(e) => update("fixed_monthly_salary", e.target.value)} /></label> : <label><FieldHelp label="Cuánto te pagan por hora">Es el pago de una hora normal, sin multiplicarlo por el día o el mes.</FieldHelp><input type="number" min="0" step="0.01" inputMode="decimal" value={form.hourly_rate} onChange={(e) => update("hourly_rate", e.target.value)} /></label>}
+            {form.income_type === "fixed" ? <label><FieldHelp label="Salario mensual de referencia">Este dato queda como referencia para estrategia. Tu dinero día a día se toma de los ingresos reales que registrás.</FieldHelp><input type="number" min="0" step="0.01" inputMode="decimal" value={form.fixed_monthly_salary} onChange={(e) => update("fixed_monthly_salary", e.target.value)} /></label> : <label><FieldHelp label="Cuánto te pagan por hora">Es el pago de una hora normal, sin multiplicarlo por el día o el mes.</FieldHelp><input type="number" min="0" step="0.01" inputMode="decimal" value={form.hourly_rate} onChange={(e) => update("hourly_rate", e.target.value)} /></label>}
           </div>
         </SituationCard>
 
