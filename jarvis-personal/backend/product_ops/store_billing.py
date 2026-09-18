@@ -150,15 +150,12 @@ def _product(plan_code, billing_period):
         raise HTTPException(422, "Plan o periodo de facturación no válido.") from exc
 
 
-def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str, *, target_account_id: str | None = None):
-    """Owner-only sandbox used before real store credentials exist.
+def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str, billing_period: str, event_type: str, *, provider: str = "sandbox"):
+    """Apply an already-verified store lifecycle event.
 
-    Production Apple/Google notifications must be cryptographically verified
-    before they call the same state transition logic.
+    Authentication and provider verification belong to the caller. This is the
+    shared state engine that sandbox QA and future Apple/Google handlers use.
     """
-    actor_account_id = get_current_account_id()
-    account_id = target_account_id or actor_account_id
-    workspace_id = get_current_workspace_id() if not target_account_id else None
     product = _product(plan_code, billing_period)
     transitions = {
         "trial_started": ("trialing", False, True),
@@ -178,33 +175,27 @@ def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str, *, 
     trial_sql = f"NOW()+INTERVAL '{TRIAL_DAYS} days'" if event_type == "trial_started" else "NULL"
     with get_connection() as conn:
         ensure_store_schema(conn)
-        if target_account_id:
-            target = conn.execute("SELECT id FROM accounts WHERE id=%s", (account_id,)).fetchone()
-            if not target:
-                raise HTTPException(404, "Cuenta QA objetivo no encontrada.")
-            existing_store = conn.execute(
-                "SELECT workspace_id FROM store_subscriptions WHERE account_id=%s",
-                (account_id,),
-            ).fetchone()
-            workspace_id = (existing_store or {}).get("workspace_id")
+        target = conn.execute("SELECT id FROM accounts WHERE id=%s", (account_id,)).fetchone()
+        if not target:
+            raise HTTPException(404, "Cuenta objetivo no encontrada.")
         conn.execute(
             f"""INSERT INTO store_subscriptions(
               account_id,workspace_id,provider,plan_code,billing_period,product_id,status,
               trial_ends_at,current_period_start,current_period_end,cancel_at_period_end,
               auto_renew,last_verified_at,created_at,updated_at)
-            VALUES(%s,%s,'sandbox',%s,%s,%s,%s,{trial_sql},NOW(),NOW()+INTERVAL '{period}',%s,%s,NOW(),NOW(),NOW())
+            VALUES(%s,%s,%s,%s,%s,%s,%s,{trial_sql},NOW(),NOW()+INTERVAL '{period}',%s,%s,NOW(),NOW(),NOW())
             ON CONFLICT(account_id) DO UPDATE SET
               provider='sandbox',plan_code=EXCLUDED.plan_code,billing_period=EXCLUDED.billing_period,
               product_id=EXCLUDED.product_id,status=EXCLUDED.status,
               trial_ends_at=EXCLUDED.trial_ends_at,current_period_start=NOW(),
               current_period_end=EXCLUDED.current_period_end,cancel_at_period_end=EXCLUDED.cancel_at_period_end,
               auto_renew=EXCLUDED.auto_renew,last_verified_at=NOW(),updated_at=NOW()\n            RETURNING account_id""",
-            (account_id, workspace_id, plan_code, billing_period, product["product_id"], status, cancel_at_end, auto_renew),
+            (account_id, workspace_id, provider, plan_code, billing_period, product["product_id"], status, cancel_at_end, auto_renew),
         )
         conn.execute(
             """INSERT INTO store_subscription_events(account_id,provider,event_type,plan_code,billing_period)
-               VALUES(%s,'sandbox',%s,%s,%s)""",
-            (account_id, event_type, plan_code, billing_period),
+               VALUES(%s,%s,%s,%s,%s)""",
+            (account_id, provider, event_type, plan_code, billing_period),
         )
         plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
         if not plan:
@@ -234,8 +225,12 @@ def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str, *, 
                       (account_id, free_plan["id"]))
         row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
         conn.commit()
-    # The store event ledger already records the target account. Avoid writing a
-    # product_event against the owner actor when simulating another QA account.
-    if not target_account_id:
-        record_event("subscription_lifecycle", "billing")
     return {"event": event_type, "target_account_id": account_id, "subscription": _public_state(row)}
+
+
+def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str, *, target_account_id: str | None = None):
+    """Owner-only QA adapter. Not part of the customer purchase flow."""
+    actor_account_id = get_current_account_id()
+    account_id = target_account_id or actor_account_id
+    workspace_id = get_current_workspace_id() if not target_account_id else None
+    return apply_store_event(account_id, workspace_id, plan_code, billing_period, event_type, provider="sandbox")
