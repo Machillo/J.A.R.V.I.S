@@ -253,8 +253,13 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
                 ELSE EXCLUDED.current_period_end
               END,
               cancel_at_period_end=EXCLUDED.cancel_at_period_end,
-              auto_renew=EXCLUDED.auto_renew,last_verified_at=NOW(),updated_at=NOW()\n            RETURNING account_id""",
-            (account_id, workspace_id, provider, plan_code, billing_period, product["product_id"], status, cancel_at_end, auto_renew, event_type, event_type, event_type, event_type, event_type),
+              auto_renew=EXCLUDED.auto_renew,
+              pending_plan_code=CASE WHEN %s IN ('cancel_requested','grace_period') THEN store_subscriptions.pending_plan_code ELSE NULL END,
+              pending_billing_period=CASE WHEN %s IN ('cancel_requested','grace_period') THEN store_subscriptions.pending_billing_period ELSE NULL END,
+              pending_product_id=CASE WHEN %s IN ('cancel_requested','grace_period') THEN store_subscriptions.pending_product_id ELSE NULL END,
+              pending_effective_at=CASE WHEN %s IN ('cancel_requested','grace_period') THEN store_subscriptions.pending_effective_at ELSE NULL END,
+              last_verified_at=NOW(),updated_at=NOW()\n            RETURNING account_id""",
+            (account_id, workspace_id, provider, plan_code, billing_period, product["product_id"], status, cancel_at_end, auto_renew, event_type, event_type, event_type, event_type, event_type, event_type, event_type, event_type, event_type),
         )
         conn.execute(
             """INSERT INTO store_subscription_events(account_id,provider,event_type,plan_code,billing_period)
