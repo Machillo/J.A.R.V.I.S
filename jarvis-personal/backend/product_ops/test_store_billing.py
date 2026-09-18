@@ -32,6 +32,9 @@ def _row(status="active", plan="basic", period="monthly", end_delta_days=30,
         "current_period_end": now + timedelta(days=end_delta_days),
         "cancel_at_period_end": cancel_at_period_end,
         "auto_renew": auto_renew,
+        "pending_plan_code": None,
+        "pending_billing_period": None,
+        "pending_effective_at": None,
         "last_verified_at": now,
     }
 
@@ -112,3 +115,16 @@ def test_expired_entitlement_accepts_database_serialized_timestamp():
     row["current_period_end"] = row["current_period_end"].isoformat()
     state = _public_state(row)
     assert state["entitlement"] == "free"
+
+
+def test_public_state_reports_scheduled_downgrade_without_losing_vip():
+    row = _row(status="active", plan="vip", period="annual", end_delta_days=365)
+    row["pending_plan_code"] = "basic"
+    row["pending_billing_period"] = "annual"
+    row["pending_effective_at"] = row["current_period_end"]
+    state = _public_state(row)
+    assert state["entitlement"] == "vip"
+    assert state["plan"] == "vip"
+    assert state["pending_plan"] == "basic"
+    assert state["pending_billing_period"] == "annual"
+    assert state["pending_effective_at"] == row["current_period_end"]

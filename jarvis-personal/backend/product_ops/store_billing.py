@@ -39,9 +39,17 @@ def ensure_store_schema(conn):
       current_period_end TIMESTAMPTZ,
       cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
       auto_renew BOOLEAN NOT NULL DEFAULT TRUE,
+      pending_plan_code TEXT CHECK(pending_plan_code IS NULL OR pending_plan_code IN ('basic','vip')),
+      pending_billing_period TEXT CHECK(pending_billing_period IS NULL OR pending_billing_period IN ('monthly','annual')),
+      pending_product_id TEXT,
+      pending_effective_at TIMESTAMPTZ,
       last_verified_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
+    conn.execute("ALTER TABLE store_subscriptions ADD COLUMN IF NOT EXISTS pending_plan_code TEXT")
+    conn.execute("ALTER TABLE store_subscriptions ADD COLUMN IF NOT EXISTS pending_billing_period TEXT")
+    conn.execute("ALTER TABLE store_subscriptions ADD COLUMN IF NOT EXISTS pending_product_id TEXT")
+    conn.execute("ALTER TABLE store_subscriptions ADD COLUMN IF NOT EXISTS pending_effective_at TIMESTAMPTZ")
     conn.execute("""CREATE TABLE IF NOT EXISTS store_subscription_events (
       id BIGSERIAL PRIMARY KEY,
       account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
@@ -93,6 +101,9 @@ def _public_state(row):
             "current_period_end": None,
             "cancel_at_period_end": False,
             "auto_renew": False,
+            "pending_plan": None,
+            "pending_billing_period": None,
+            "pending_effective_at": None,
         }
     row = dict(row)
     period_end = row.get("current_period_end")
@@ -122,6 +133,9 @@ def _public_state(row):
         "current_period_end": row.get("current_period_end"),
         "cancel_at_period_end": bool(row.get("cancel_at_period_end")),
         "auto_renew": bool(row.get("auto_renew")),
+        "pending_plan": row.get("pending_plan_code"),
+        "pending_billing_period": row.get("pending_billing_period"),
+        "pending_effective_at": row.get("pending_effective_at"),
         "last_verified_at": row.get("last_verified_at"),
     }
 
@@ -192,6 +206,32 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
         target = conn.execute("SELECT id FROM accounts WHERE id=%s", (account_id,)).fetchone()
         if not target:
             raise HTTPException(404, "Cuenta objetivo no encontrada.")
+        if event_type == "downgrade":
+            existing_store = conn.execute(
+                "SELECT * FROM store_subscriptions WHERE account_id=%s",
+                (account_id,),
+            ).fetchone()
+            if not existing_store or existing_store["status"] not in ACTIVE_STATES:
+                raise HTTPException(409, "No hay una suscripción activa para programar el downgrade.")
+            if existing_store["plan_code"] != "vip" or plan_code != "basic":
+                raise HTTPException(422, "El downgrade diferido soportado es VIP a Basic.")
+            conn.execute(
+                """UPDATE store_subscriptions SET
+                     pending_plan_code=%s,pending_billing_period=%s,pending_product_id=%s,
+                     pending_effective_at=current_period_end,last_verified_at=NOW(),updated_at=NOW()
+                   WHERE account_id=%s
+                   RETURNING account_id""",
+                (plan_code, billing_period, product["product_id"], account_id),
+            )
+            conn.execute(
+                """INSERT INTO store_subscription_events(account_id,provider,event_type,plan_code,billing_period)
+                   VALUES(%s,%s,%s,%s,%s)
+                   RETURNING id""",
+                (account_id, provider, event_type, plan_code, billing_period),
+            )
+            row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
+            conn.commit()
+            return {"event": event_type, "target_account_id": account_id, "subscription": _public_state(row)}
         conn.execute(
             f"""INSERT INTO store_subscriptions(
               account_id,workspace_id,provider,plan_code,billing_period,product_id,status,
