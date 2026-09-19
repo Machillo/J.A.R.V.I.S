@@ -1,4 +1,13 @@
 .native-product--finva {
+  --native-accent: #5d58f4;
+  --native-accent-2: #21d2bd;
+  --native-bg: #060b1e;
+  --native-bg-soft: #101a32;
+  --native-surface: rgba(15, 27, 52, .9);
+  --native-surface-raised: rgba(27, 39, 70, .88);
+}
+
+.native-product--finva.native-plan--free {
   --native-accent: #0ac7b2;
   --native-accent-2: #0ac7b2;
   --native-bg: #060e1a;
