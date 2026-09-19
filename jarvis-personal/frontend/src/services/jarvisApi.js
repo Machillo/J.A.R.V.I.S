@@ -268,5 +268,6 @@ export const openTestPaymentReceipt = async (orderId) => {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 export const updateProductFeedback = (ticketId, payload) => jsonRequest(`/product-ops/owner/feedback/${ticketId}`, "PATCH", payload);
+export const resendProductFeedback = (ticketId) => request(`/product-ops/owner/feedback/${ticketId}/resend`, { method: "POST" });
 export const getOnboarding = () => request("/auth/onboarding");
 export const completeOnboarding = (payload) => jsonRequest("/auth/onboarding", "POST", payload);

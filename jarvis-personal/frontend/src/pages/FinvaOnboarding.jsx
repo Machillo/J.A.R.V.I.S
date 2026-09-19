@@ -1,42 +1,15 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Crown, HelpCircle, LogOut, Smartphone, Sparkles, Upload, WalletCards } from "lucide-react";
-import { completeOnboarding, getBillingCatalog, getOnboarding, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Crown, LogOut, Smartphone, Sparkles, Upload, WalletCards } from "lucide-react";
+import { getBillingCatalog, getOnboarding, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../lib/receiptPicker";
 
 const iconMap = { free: WalletCards, basic: Sparkles, vip: Crown };
-const label = (p) => p === "free" ? "Gratis" : p?.toUpperCase();
-const rank = { free: 1, basic: 2, vip: 3 };
-
-const EMPTY_FORM = {
-  income_type: "fixed", fixed_monthly_salary: "", hourly_rate: "", hours_per_day: "8",
-  work_days_per_week: "5", pay_frequency: "monthly", payday_note: "",
-  essential_monthly_expenses: "", liquid_savings: "", emergency_fund_target: "",
-  strategy_preference: "balanced", discretionary_monthly_minimum: "",
-};
-
-const valueOrEmpty = (v) => v === null || v === undefined ? "" : String(v);
-
-function FieldHelp({ label, children }) {
-  const [open, setOpen] = useState(false);
-  return <span className="unified-field-label">
-    <span>{label}</span>
-    <button
-      type="button"
-      className="unified-help-button"
-      aria-label={`Ayuda sobre ${label}`}
-      aria-expanded={open}
-      onClick={(event) => { event.preventDefault(); event.stopPropagation(); setOpen((current) => !current); }}
-    ><HelpCircle size={16}/></button>
-    {open && <span className="unified-help-message" role="status">{children}</span>}
-  </span>;
-}
 
 export default function FinvaOnboarding({ user, onComplete }) {
+  const completedRef = useRef(false);
   const [profile, setProfile] = useState(user);
   const [plans, setPlans] = useState([]);
-  const [financialProfile, setFinancialProfile] = useState(null);
-  const [completedLevel, setCompletedLevel] = useState(user?.onboarding_level || null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -47,31 +20,10 @@ export default function FinvaOnboarding({ user, onComplete }) {
   const [receipt, setReceipt] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState("");
-  const [form, setForm] = useState(EMPTY_FORM);
 
   const hydrate = (data) => {
-    const fp = data?.financial_profile;
     const p = data?.profile;
-    if (p) {
-      setProfile(p);
-      setCompletedLevel(p.onboarding_level || null);
-    }
-    if (!fp) return;
-    setFinancialProfile(fp);
-    setForm({
-      income_type: fp.income_type || "fixed",
-      fixed_monthly_salary: valueOrEmpty(fp.fixed_monthly_salary),
-      hourly_rate: valueOrEmpty(fp.hourly_rate),
-      hours_per_day: valueOrEmpty(fp.hours_per_day ?? 8),
-      work_days_per_week: valueOrEmpty(fp.work_days_per_week ?? 5),
-      pay_frequency: fp.pay_frequency || "monthly",
-      payday_note: fp.payday_note || "",
-      essential_monthly_expenses: valueOrEmpty(fp.essential_monthly_expenses),
-      liquid_savings: valueOrEmpty(fp.liquid_savings),
-      emergency_fund_target: valueOrEmpty(fp.emergency_fund_target),
-      strategy_preference: fp.strategy_preference || "balanced",
-      discretionary_monthly_minimum: valueOrEmpty(fp.discretionary_monthly_minimum),
-    });
+    if (p) setProfile(p);
   };
 
   useEffect(() => {
@@ -111,12 +63,12 @@ export default function FinvaOnboarding({ user, onComplete }) {
     return () => window.clearInterval(timer);
   }, [receiptSubmittedAt]);
 
-  const plan = profile?.subscription?.plan || "free";
-  const completedRank = rank[completedLevel] || 0;
-  const numberOrNull = (v) => v === "" ? null : Number(v);
-  const baseAlreadyKnown = completedRank >= rank.free && !!financialProfile;
-  const basicAlreadyKnown = completedRank >= rank.basic && !!financialProfile;
-  const vipAlreadyKnown = completedRank >= rank.vip && !!financialProfile;
+  useEffect(() => {
+    if (profile?.plan_selected && !completedRef.current) {
+      completedRef.current = true;
+      onComplete(profile);
+    }
+  }, [profile, onComplete]);
 
   const choosePlan = async (code) => {
     setSaving(true); setError("");
@@ -179,28 +131,6 @@ export default function FinvaOnboarding({ user, onComplete }) {
         setError(e.message || "No pudimos abrir el comprobante.");
       }
     }
-  };
-
-  const submit = async (e) => {
-    e.preventDefault(); setSaving(true); setError("");
-    try {
-      const result = await completeOnboarding({
-        income_type: form.income_type,
-        fixed_monthly_salary: form.income_type === "fixed" ? numberOrNull(form.fixed_monthly_salary) : null,
-        hourly_rate: form.income_type === "hourly" ? numberOrNull(form.hourly_rate) : null,
-        hours_per_day: form.income_type === "hourly" ? numberOrNull(form.hours_per_day) : null,
-        work_days_per_week: Number(form.work_days_per_week),
-        pay_frequency: form.pay_frequency,
-        payday_note: form.payday_note || null,
-        essential_monthly_expenses: numberOrNull(form.essential_monthly_expenses),
-        liquid_savings: numberOrNull(form.liquid_savings),
-        emergency_fund_target: numberOrNull(form.emergency_fund_target),
-        strategy_preference: plan === "vip" ? form.strategy_preference : (financialProfile?.strategy_preference || null),
-        discretionary_monthly_minimum: numberOrNull(form.discretionary_monthly_minimum),
-      });
-      onComplete(result.profile);
-    } catch (e2) { setError(e2.message); }
-    finally { setSaving(false); }
   };
 
   if (!profile?.plan_selected && paymentFlow) {
@@ -268,49 +198,10 @@ export default function FinvaOnboarding({ user, onComplete }) {
     </section>
   </main>;
 
-  return <main className={`unified-onboarding-shell unified-plan-${plan}`}>
-    <form className="unified-onboarding-card unified-form-stage" onSubmit={submit}>
-      <div className="unified-onboarding-top">
-        <div><strong>FINVA</strong><small>Onboarding {label(plan)}</small></div>
-        <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> Salir</button>
-      </div>
-      <div className="unified-onboarding-intro">
-        <span className="unified-eyebrow">CONFIGURACIÓN INICIAL</span>
-        <h1>{completedRank ? "Completemos lo nuevo de tu plan" : "Contame cómo funcionan tus finanzas"}</h1>
-        <p>{completedRank ? "Finva conserva lo que ya respondiste. Solo te pedimos la información nueva de este nivel." : "Solo pedimos lo necesario para tu nivel. Después podés afinar todo dentro de Finva."}</p>
-      </div>
-
-      {baseAlreadyKnown && <div className="unified-saved-note"><Check size={17}/><span>Ingresos, jornada y frecuencia de pago ya están guardados.</span></div>}
-
-      <div className="unified-form-grid">
-        {!baseAlreadyKnown && <>
-          <fieldset className="unified-income-type">
-            <legend><FieldHelp label="¿Cómo te pagan?">Elegí salario mensual si recibís un monto parecido cada mes. Elegí pago por hora si tu ingreso depende de las horas trabajadas.</FieldHelp></legend>
-            <div>
-              <label className={form.income_type === "fixed" ? "is-selected" : ""}><input type="radio" name="income_type" value="fixed" checked={form.income_type === "fixed"} onChange={e=>setForm({...form,income_type:e.target.value})}/><span><strong>Salario mensual</strong><small>Recibo un monto fijo o parecido cada mes</small></span></label>
-              <label className={form.income_type === "hourly" ? "is-selected" : ""}><input type="radio" name="income_type" value="hourly" checked={form.income_type === "hourly"} onChange={e=>setForm({...form,income_type:e.target.value})}/><span><strong>Pago por hora</strong><small>Mi pago depende de cuántas horas trabajo</small></span></label>
-            </div>
-          </fieldset>
-          {form.income_type === "fixed" ? <label><FieldHelp label="Salario que te llega al mes (neto)">Es el dinero que realmente recibís después de rebajos. No escribás el salario bruto que aparece antes de deducciones.</FieldHelp><input required type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="Ej. 450000" value={form.fixed_monthly_salary} onChange={e=>setForm({...form,fixed_monthly_salary:e.target.value})}/></label> : <><label><FieldHelp label="Cuánto te pagan por hora">Escribí el monto que recibís por una hora normal de trabajo, sin multiplicarlo por el día o el mes.</FieldHelp><input required type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="Ej. 2400" value={form.hourly_rate} onChange={e=>setForm({...form,hourly_rate:e.target.value})}/></label><label><FieldHelp label="Horas que trabajás por día">Escribí tus horas normales de un día. Podés poner un número entero como 8 o un decimal como 7.5.</FieldHelp><input required type="number" min="0.25" max="24" step="0.25" inputMode="decimal" placeholder="Ej. 8" value={form.hours_per_day} onChange={e=>setForm({...form,hours_per_day:e.target.value})}/></label></>}
-          <label><FieldHelp label="Días que trabajás por semana">Indicá cuántos días trabajás normalmente en una semana, por ejemplo 5.</FieldHelp><input required type="number" min="1" max="7" step="1" inputMode="numeric" placeholder="Ej. 5" value={form.work_days_per_week} onChange={e=>setForm({...form,work_days_per_week:e.target.value})}/></label>
-          <label><FieldHelp label="Cada cuánto te pagan">Seleccioná si recibís dinero todas las semanas, dos veces al mes o una vez al mes.</FieldHelp><select value={form.pay_frequency} onChange={e=>setForm({...form,pay_frequency:e.target.value})}><option value="weekly">Cada semana</option><option value="biweekly">Dos veces al mes</option><option value="monthly">Una vez al mes</option></select></label>
-          <label><FieldHelp label="¿Qué día te pagan?">Podés escribir una fecha aproximada o una descripción sencilla. Esto ayuda a organizar el calendario.</FieldHelp><input value={form.payday_note} placeholder="Ej. cada jueves o 15 y 30" onChange={e=>setForm({...form,payday_note:e.target.value})}/></label>
-        </>}
-
-        {plan !== "free" && !basicAlreadyKnown && <>
-          <label><FieldHelp label="Gastos necesarios del mes">Sumá aproximadamente lo que necesitás para vivir: vivienda, comida, servicios, transporte, medicinas y pagos indispensables.</FieldHelp><input required type="number" min="0" step="0.01" inputMode="decimal" placeholder="Ej. 300000" value={form.essential_monthly_expenses} onChange={e=>setForm({...form,essential_monthly_expenses:e.target.value})}/></label>
-          <label><FieldHelp label="Ahorro disponible ahora">Dinero que ya tenés guardado y podés usar de inmediato sin vender nada: efectivo o saldo disponible en una cuenta. Antes lo llamábamos ahorro líquido.</FieldHelp><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Ej. 50000" value={form.liquid_savings} onChange={e=>setForm({...form,liquid_savings:e.target.value})}/></label>
-        </>}
-
-        {plan === "vip" && !vipAlreadyKnown && <>
-          <label><FieldHelp label="Cuánto querés guardar para emergencias">Es tu meta de dinero reservado para imprevistos, como una reparación, una enfermedad o perder temporalmente el ingreso.</FieldHelp><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Ej. 900000" value={form.emergency_fund_target} onChange={e=>setForm({...form,emergency_fund_target:e.target.value})}/></label>
-          <label><FieldHelp label="¿Qué querés priorizar?">FINVA usará esta elección para ordenar sus recomendaciones. Equilibrado reparte la atención entre deudas, seguridad y metas.</FieldHelp><select value={form.strategy_preference} onChange={e=>setForm({...form,strategy_preference:e.target.value})}><option value="balanced">Un poco de todo</option><option value="debt">Salir de deudas</option><option value="emergency">Crear ahorro de emergencia</option><option value="goals">Cumplir mis metas</option></select></label>
-          <label><FieldHelp label="Dinero mínimo para tus gustos">Monto mensual que querés conservar para salidas, entretenimiento o compras personales, sin asignarlo a deudas o ahorro.</FieldHelp><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Ej. 30000" value={form.discretionary_monthly_minimum} onChange={e=>setForm({...form,discretionary_monthly_minimum:e.target.value})}/></label>
-        </>}
-      </div>
-
-      <button className="unified-primary" disabled={saving}>{saving ? "Guardando..." : `Activar ${label(plan)}`}</button>
-      {error && <p className="unified-onboarding-error">{error}</p>}
-    </form>
+  return <main className="unified-onboarding-shell">
+    <section className="unified-onboarding-card unified-loading">
+      <div className="unified-spinner"/>
+      <span>Abriendo FINVA…</span>
+    </section>
   </main>;
 }

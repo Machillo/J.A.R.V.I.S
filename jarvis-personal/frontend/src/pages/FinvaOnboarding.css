@@ -210,7 +210,6 @@
 .beta-price { color: var(--onboarding-muted); line-height: 1.4; }
 
 .unified-payment-preview,
-.unified-saved-note,
 .unified-inline-error {
   display: flex;
   align-items: flex-start;
@@ -224,9 +223,7 @@
   line-height: 1.4;
 }
 
-.unified-payment-preview svg,
-.unified-saved-note svg { flex: 0 0 auto; color: var(--onboarding-accent); }
-.unified-saved-note { margin: 0 0 16px; }
+.unified-payment-preview svg { flex: 0 0 auto; color: var(--onboarding-accent); }
 .unified-inline-error { margin: 10px 0; border-color: #572335; color: #ffc3cb; background: #1f1217; }
 .unified-inline-error svg { flex: 0 0 auto; }
 
@@ -239,8 +236,7 @@
   line-height: 1.42;
 }
 
-.beta-consent input,
-.unified-income-type input {
+.beta-consent input {
   width: 20px;
   height: 20px;
   min-height: 20px;
@@ -266,49 +262,6 @@
 .unified-plan-card.vip .unified-plan-button { color: #241c06; background: #e8ca68; }
 .unified-plan-button:disabled,
 .unified-primary:disabled { opacity: .58; cursor: wait; }
-
-.unified-form-grid {
-  display: grid;
-  gap: 12px;
-  margin: 18px 0;
-}
-
-.unified-form-grid label { display: grid; gap: 7px; color: #dce7f0; font-size: .82rem; }
-
-.unified-form-grid input:not([type="radio"]):not([type="checkbox"]),
-.unified-form-grid select {
-  width: 100%;
-  min-height: 48px;
-  padding: 0 13px;
-  border: 1px solid var(--onboarding-border);
-  border-radius: 14px;
-  outline: none;
-  color: var(--onboarding-text);
-  -webkit-text-fill-color: var(--onboarding-text);
-  caret-color: var(--onboarding-accent);
-  background: var(--onboarding-raised);
-}
-
-.unified-form-grid input:focus,
-.unified-form-grid select:focus {
-  border-color: var(--onboarding-accent);
-  box-shadow: 0 0 0 3px rgba(10, 199, 178, .12);
-}
-
-.unified-form-grid select option { color: var(--onboarding-text); background: var(--onboarding-raised); }
-
-.unified-field-label { position: relative; display: flex; align-items: center; gap: 7px; min-width: 0; }
-.unified-help-button { width: 28px; height: 28px; display: inline-grid; place-items: center; flex: 0 0 28px; padding: 0; border: 1px solid var(--onboarding-border); border-radius: 50%; color: var(--onboarding-accent); background: #08292b; }
-.unified-help-message { position: absolute; z-index: 12; top: calc(100% + 7px); left: 0; width: min(310px, calc(100vw - 64px)); padding: 11px 12px; border: 1px solid var(--onboarding-accent); border-radius: 12px; color: var(--onboarding-text); background: var(--onboarding-raised); box-shadow: 0 14px 34px rgba(0, 0, 0, .38); font-size: .78rem; line-height: 1.45; }
-
-.unified-income-type { min-width: 0; margin: 0; padding: 0; border: 0; }
-.unified-income-type legend { width: 100%; margin-bottom: 8px; color: #dce7f0; font-size: .82rem; }
-.unified-income-type > div { display: grid; gap: 10px; }
-.unified-income-type label { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--onboarding-border); border-radius: 14px; background: var(--onboarding-raised); }
-.unified-income-type label.is-selected { border-color: var(--onboarding-accent); background: #08292b; }
-.unified-income-type label > span { display: grid; gap: 3px; }
-.unified-income-type strong { color: var(--onboarding-text); font-size: .9rem; }
-.unified-income-type small { color: var(--onboarding-muted); font-size: .75rem; line-height: 1.35; }
 
 .unified-onboarding-error {
   margin: 14px 0 0;

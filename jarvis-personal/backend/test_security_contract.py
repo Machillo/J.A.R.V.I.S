@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from pathlib import Path
+from types import SimpleNamespace
 
 from backend import main
 from backend.auth import legal
@@ -202,6 +203,48 @@ def test_self_deletion_fails_closed_without_server_admin_key(monkeypatch):
         assert exc.status_code == 503
     finally:
         reset_current_user(token)
+
+
+def test_supabase_admin_headers_support_current_secret_keys():
+    headers = auth_service._supabase_admin_headers("sb_secret_example")
+    assert headers == {"apikey": "sb_secret_example"}
+
+
+def test_supabase_admin_headers_keep_legacy_service_role_authorization():
+    headers = auth_service._supabase_admin_headers("legacy.service.role")
+    assert headers["apikey"] == "legacy.service.role"
+    assert headers["Authorization"] == "Bearer legacy.service.role"
+
+
+def test_support_email_normalizes_google_app_password(monkeypatch):
+    observed = {}
+
+    class FakeSmtp:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def login(self, username, password): observed.update(username=username, password=password)
+        def send_message(self, message): observed["recipient"] = message["To"]
+
+    monkeypatch.setenv("SUPPORT_SMTP_HOST", "smtp.gmail.com")
+    monkeypatch.setenv("SUPPORT_SMTP_PORT", "465")
+    monkeypatch.setenv("SUPPORT_SMTP_USER", "soporte.finva@gmail.com")
+    monkeypatch.setenv("SUPPORT_EMAIL_TO", "soporte.finva@gmail.com")
+    monkeypatch.setenv("SUPPORT_SMTP_APP_PASSWORD", "abcd efgh ijkl mnop")
+    monkeypatch.setattr(product_ops_service.smtplib, "SMTP_SSL", lambda *_args, **_kwargs: FakeSmtp())
+
+    sent = product_ops_service._send_support_email(
+        public_id="FINVA-000001",
+        email="person@example.com",
+        plan="vip",
+        payload=SimpleNamespace(
+            category="error", subject="Prueba", message="Mensaje",
+            app_version="1.9.5", screen="soporte", error_reference=None,
+        ),
+    )
+
+    assert sent is True
+    assert observed["password"] == "abcdefghijklmnop"
+    assert observed["recipient"] == "soporte.finva@gmail.com"
 
 
 def test_self_deletion_migration_cascades_owned_data():

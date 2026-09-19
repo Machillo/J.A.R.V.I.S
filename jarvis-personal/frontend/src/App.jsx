@@ -195,7 +195,7 @@ export default function App() {
     return <PersonalApp />;
   }
 
-  if (!currentUser.plan_selected || !currentUser.onboarding_completed) {
+  if (!currentUser.plan_selected) {
     return (
       <FinvaOnboarding
         user={currentUser}

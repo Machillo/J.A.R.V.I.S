@@ -266,19 +266,16 @@ def select_plan(plan_code: str, accept_beta_terms: bool = False, consent_version
         plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
         if not plan:
             raise HTTPException(status_code=404, detail="Plan no disponible.")
-        current = conn.execute("SELECT onboarding_level FROM accounts WHERE id=%s FOR UPDATE", (account_id,)).fetchone()
-        completed = (current or {}).get("onboarding_level")
-        needs = PLAN_RANK.get(completed or "", 0) < PLAN_RANK[plan_code]
         conn.execute(
             """INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,expires_at,courtesy_note,granted_by,granted_at,created_at,updated_at)
                VALUES(%s,%s,%s,'self_service',NOW(),NULL,NULL,NULL,NULL,NOW(),NOW())
                ON CONFLICT(account_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status=EXCLUDED.status,
                    access_source='self_service',started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()""",
-            (account_id, plan["id"], "active" if (plan_code == "free" or not needs) else "pending"),
+            (account_id, plan["id"], "active"),
         )
         conn.execute(
-            "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=%s,updated_at=NOW() WHERE id=%s",
-            (not needs, account_id),
+            "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level=%s,updated_at=NOW() WHERE id=%s",
+            (plan_code, account_id),
         )
         conn.commit()
     return {"status": "ok", "profile": enrich_identity(get_current_user())}

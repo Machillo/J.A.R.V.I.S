@@ -3,7 +3,7 @@ from fastapi.responses import Response
 
 from backend.auth.current_user import require_roles
 from backend.product_ops.models import FeedbackCreate, FeedbackUpdate, ProductEvent, StoreLifecycleSimulation, TestPaymentUpdate
-from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_feedback, get_receipt, list_feedback, owner_dashboard, record_event, resolve_test_order, submit_receipt, update_feedback 
+from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_feedback, get_receipt, list_feedback, owner_dashboard, record_event, resend_feedback_email, resolve_test_order, submit_receipt, update_feedback
 from backend.product_ops.store_billing import entitlement_state, restore_owner_access, simulate_lifecycle, store_catalog
 
 router = APIRouter(prefix="/product-ops", tags=["Product Operations"])
@@ -69,3 +69,6 @@ def receipt_download(order_id: int):
 
 @router.patch("/owner/feedback/{ticket_id}")
 def feedback_update(ticket_id: int, payload: FeedbackUpdate): require_roles("owner"); return update_feedback(ticket_id, payload)
+
+@router.post("/owner/feedback/{ticket_id}/resend")
+def feedback_resend(ticket_id: int): require_roles("owner"); return resend_feedback_email(ticket_id)

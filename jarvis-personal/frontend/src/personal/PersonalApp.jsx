@@ -272,7 +272,7 @@ export default function App() {
       setCurrentUser(meData);
 
       // New commercial users finish plan selection/onboarding before Personal modules load.
-      if (meData?.role !== "owner" && (!meData?.plan_selected || !meData?.onboarding_completed)) {
+      if (meData?.role !== "owner" && !meData?.plan_selected) {
         return;
       }
 
@@ -546,7 +546,7 @@ export default function App() {
     return <ProfileSetup user={currentUser} onComplete={(profile) => { setCurrentUser(profile); refreshAppData(); }} />;
   }
 
-  if (currentUser.role !== "owner" && (!currentUser.plan_selected || !currentUser.onboarding_completed)) {
+  if (currentUser.role !== "owner" && !currentUser.plan_selected) {
     return <FinvaOnboarding user={currentUser} onComplete={(profile) => { setCurrentUser(profile); refreshAppData(); }} />;
   }
 
