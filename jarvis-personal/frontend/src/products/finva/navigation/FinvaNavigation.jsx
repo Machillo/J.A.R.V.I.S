@@ -9,7 +9,6 @@ import {
   MoreHorizontal,
   ReceiptText,
   Repeat2,
-  Settings,
   Sparkles,
   Target,
   WalletCards,
@@ -50,9 +49,8 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
     }]),
     ...(plan === "vip" ? [{ title: tx("Automatización", "Automation"), items: [["gmail", tx("Movimientos desde Gmail", "Transactions from Gmail"), Mail]] }] : []),
     {
-      title: tx("Cuenta y soporte", "Account & support"),
+      title: tx("Soporte", "Support"),
       items: [
-        ["settings", tx("Cuenta, apariencia y plan", "Account, appearance & plan"), Settings],
         ["feedback", tx("Ayuda y sugerencias", "Help & feedback"), LifeBuoy],
       ],
     },
