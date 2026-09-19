@@ -13,22 +13,22 @@ import Reports from "../../../users/pages/Reports";
 import SettingsPage from "../../../users/pages/Settings";
 import StrategyBasic from "../../../users/pages/StrategyBasic";
 import Transactions from "../../../users/pages/Transactions";
-import VipExperience from "../../../users/pages/VipExperience";
+import VipScreens from "./vip/VipScreens";
 import { FreeMore, FreeSettings } from "./free/FreeScreens";
 import BasicMore from "./basic/BasicScreens";
 
 export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange, onLogout }) {
   return {
-    overview: plan === "vip" ? <VipExperience view="dashboard" onNavigate={navigate} /> : <FinvaOverview user={user} plan={plan} onNavigate={navigate} />,
+    overview: plan === "vip" ? <VipScreens view="dashboard" user={user} onNavigate={navigate} /> : <FinvaOverview user={user} plan={plan} onNavigate={navigate} />,
     finance: <Finance plan={plan} />,
     debts: <Debts plan={plan} />,
-    strategy: plan === "vip" ? <VipExperience view="strategy" onNavigate={navigate} /> : <StrategyBasic plan={plan} />,
+    strategy: plan === "vip" ? <VipScreens view="strategy" user={user} onNavigate={navigate} /> : <StrategyBasic plan={plan} />,
     gmail: plan === "vip" ? <GmailAutomation /> : <SettingsPage user={user} onUserChange={onUserChange} />,
-    goals: <Goals plan={plan} />,
+    goals: plan === "vip" ? <VipScreens view="goal" user={user} onNavigate={navigate} /> : <Goals plan={plan} />,
     savings: <Goals plan={plan} initialView="savings" />,
     transactions: <Transactions />,
     situation: <FinancialSituation plan={plan} onNavigate={navigate} />,
-    more: plan === "free" ? <FreeMore onNavigate={navigate} onLogout={onLogout} /> : plan === "basic" ? <BasicMore onNavigate={navigate} /> : <SettingsPage user={user} onUserChange={onUserChange} />,
+    more: plan === "free" ? <FreeMore onNavigate={navigate} onLogout={onLogout} /> : plan === "basic" ? <BasicMore onNavigate={navigate} /> : <VipScreens view="more" user={user} onNavigate={navigate} />,
     settings: plan === "free" ? <FreeSettings user={user} onNavigate={navigate} onLogout={onLogout} /> : <SettingsPage user={user} onUserChange={onUserChange} />,
     "plan-settings": <SettingsPage user={user} onUserChange={onUserChange} />,
     budget: <Budget plan={plan} />,
@@ -37,11 +37,12 @@ export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange,
     reports: <Reports plan={plan} />,
     monthly: <MonthlySummary />,
     feedback: <Feedback />,
-    "vip-recommendation": <VipExperience view="recommendation" onNavigate={navigate} />,
-    "vip-projections": <VipExperience view="projections" onNavigate={navigate} />,
-    "vip-scenarios": <VipExperience view="scenarios" onNavigate={navigate} />,
-    "vip-reality": <VipExperience view="reality" onNavigate={navigate} />,
-    "vip-emergency": <VipExperience view="emergency" onNavigate={navigate} />,
-    "vip-preferences": <VipExperience view="preferences" onNavigate={navigate} />,
+    "vip-recommendation": <VipScreens view="recommendation" user={user} onNavigate={navigate} />,
+    "vip-projections": <VipScreens view="projections" user={user} onNavigate={navigate} />,
+    "vip-projection-detail": <VipScreens view="projection-detail" user={user} onNavigate={navigate} />,
+    "vip-scenarios": <VipScreens view="scenarios" user={user} onNavigate={navigate} />,
+    "vip-reality": <VipScreens view="reality" user={user} onNavigate={navigate} />,
+    "vip-emergency": <VipScreens view="emergency" user={user} onNavigate={navigate} />,
+    "vip-preferences": <VipScreens view="preferences" user={user} onNavigate={navigate} />,
   };
 }
