@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, Plus, Target } from "lucide-react";
-import { contributeGoal, contributeSavingsPlan, createGoal, createSavingsPlan, deleteGoal, deleteSavingsPlan, getGoals, getSavingsPlans, updateGoal, updateSavingsPlan } from "../services/jarvisApi";
+import { contributeGoal, contributeSavingsPlan, createGoal, createSavingsPlan, deleteGoal, deleteSavingsPlan, getGoals, getSavingsPlans, getVipCommandCenter, updateGoal, updateSavingsPlan } from "../services/jarvisApi";
 import { AmountDialog, ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
 import { deviceLanguage, localeTag } from "../../lib/locale";
@@ -47,7 +47,7 @@ function SavingsFields({ value, setValue }) {
 
 export default function Goals({ plan = "free" }) {
   const advanced = plan !== "free";
-  const [view,setView] = useState("goals"), [rows,setRows] = useState([]), [savings,setSavings] = useState([]);
+  const [view,setView] = useState("goals"), [rows,setRows] = useState([]), [savings,setSavings] = useState([]), [vipData,setVipData] = useState(null);
   const [form,setForm] = useState(goalEmpty), [savingsForm,setSavingsForm] = useState(savingsEmpty);
   const [creating,setCreating] = useState(false), [creatingSavings,setCreatingSavings] = useState(false);
   const [edit,setEdit] = useState(null), [editSavings,setEditSavings] = useState(null);
@@ -55,7 +55,7 @@ export default function Goals({ plan = "free" }) {
   const [deleting,setDeleting] = useState(null), [busyDialog,setBusyDialog] = useState(false), [error,setError] = useState("");
   const run = async (fn) => { setError(""); try { return await fn(); } catch (err) { setError(err.message); return null; } };
   const load = () => run(async () => { const [goalsData,savingsData] = await Promise.all([getGoals(),getSavingsPlans()]); setRows(goalsData); setSavings(savingsData); });
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); if (plan === "vip") getVipCommandCenter().then(setVipData).catch(() => setVipData(null)); }, [plan]);
   const goalPayload = (value) => ({...value,target_amount:Number(value.target_amount),current_amount:Number(value.current_amount || 0),target_date:value.target_date || null});
   const savingsPayload = (value) => ({...value,monthly_amount:Number(value.monthly_amount),saved_amount:Number(value.saved_amount || 0)});
   const submitGoal = async (event) => { event.preventDefault(); if (await run(() => createGoal(goalPayload(form)))) { setForm(goalEmpty); setCreating(false); load(); } };
@@ -74,9 +74,10 @@ export default function Goals({ plan = "free" }) {
   };
 
   return <section className="content-first-page">
-    <div className="hero"><span>{advanced ? "BASIC 04" : "FREE 05"}</span><h1>{tx("Metas y ahorros", "Goals and savings")}</h1><p>{tx("Separá lo que querés alcanzar de lo que planeás guardar cada mes.", "Keep your goals separate from what you plan to save each month.")}</p></div>
+    <div className="hero"><span>{plan === "vip" ? "FINVA · VIP" : advanced ? "BASIC 04" : "FREE 05"}</span><h1>{tx("Metas y ahorros", "Goals and savings")}</h1><p>{tx("Separá lo que querés alcanzar de lo que planeás guardar cada mes.", "Keep your goals separate from what you plan to save each month.")}</p></div>
     <div className="finva-segmented goals-segmented" role="tablist"><button type="button" className={view === "goals" ? "active" : ""} onClick={() => setView("goals")}><Target size={17}/>{tx("Metas", "Goals")}</button><button type="button" className={view === "savings" ? "active" : ""} onClick={() => setView("savings")}><CalendarClock size={17}/>{tx("Ahorros programados", "Scheduled savings")}</button></div>
     {error && <div className="panel error">{error}</div>}
+    {plan === "vip" && vipData?.goals?.length ? <article className="vip-smart-goal-card"><small>VIP · {tx("META INTELIGENTE","SMART GOAL")}</small><strong>{vipData.goals[0].name}</strong><span>{vipData.goals[0].monthly_required ? `${tx("Aporte recomendado","Recommended contribution")}: ${money(vipData.goals[0].monthly_required)}/${tx("mes","month")}` : tx("Agregá una fecha para calcular el aporte recomendado.","Add a date to calculate the recommended contribution.")}</span><b className={vipData.goals[0].viable ? "positive" : "warning"}>{vipData.goals[0].viable ? tx("Compatible con tu margen actual","Compatible with your current margin") : tx("Requiere ajustar el plan","Requires a plan adjustment")}</b></article> : null}
     {view === "goals" ? <GoalsList rows={rows} advanced={advanced} onCreate={() => setCreating(true)} onContribute={(goal) => { setContribution({...goal,kind:"goal"}); setContributionAmount(""); }} onEdit={setEdit} onDelete={(goal) => setDeleting({...goal,kind:"goal"})}/> : <SavingsList rows={savings} onCreate={() => setCreatingSavings(true)} onContribute={(item) => { setContribution({...item,kind:"savings"}); setContributionAmount(""); }} onEdit={setEditSavings} onDelete={(item) => setDeleting({...item,kind:"savings"})}/>}
     <FinvaFormSheet open={creating} eyebrow={tx("Nueva meta", "New goal")} title={tx("Agregar meta", "Add goal")} onClose={() => setCreating(false)}><form className="form finva-sheet-form" onSubmit={submitGoal}><GoalFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-success">{tx("Guardar meta", "Save goal")}</button></form></FinvaFormSheet>
     <FinvaFormSheet open={Boolean(edit)} eyebrow={tx("Meta", "Goal")} title={tx("Editar meta", "Edit goal")} onClose={() => setEdit(null)}>{edit && <form className="form finva-sheet-form" onSubmit={saveGoal}><GoalFields value={edit} setValue={setEdit} advanced={advanced}/><label><span>{tx("Estado", "Status")}</span><select value={edit.status} onChange={(e) => setEdit({...edit,status:e.target.value})}><option value="active">{tx("Activa", "Active")}</option><option value="paused">{tx("Pausada", "Paused")}</option><option value="completed">{tx("Completada", "Completed")}</option></select></label><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}</FinvaFormSheet>
