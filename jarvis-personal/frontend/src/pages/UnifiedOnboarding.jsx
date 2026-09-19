@@ -268,7 +268,7 @@ export default function UnifiedOnboarding({ user, onComplete }) {
     </section>
   </main>;
 
-  return <main className="unified-onboarding-shell">
+  return <main className={`unified-onboarding-shell unified-plan-${plan}`}>
     <form className="unified-onboarding-card unified-form-stage" onSubmit={submit}>
       <div className="unified-onboarding-top">
         <div><strong>FINVA</strong><small>Onboarding {label(plan)}</small></div>

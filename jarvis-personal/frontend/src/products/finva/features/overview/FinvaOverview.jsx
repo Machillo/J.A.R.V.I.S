@@ -1,6 +1,6 @@
-import { ChevronRight, Crown, PiggyBank, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
+import { CalendarDays, ChevronRight, Crown, PiggyBank, Repeat2, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getBasicDashboard, getFreeDashboard } from "../../../../users/services/jarvisApi";
+import { getBasicDashboard, getBudget, getFinancialCalendar, getFreeDashboard, getRecurring } from "../../../../users/services/jarvisApi";
 import "./overview.css";
 import { deviceLanguage, localeTag } from "../../../../lib/locale";
 const language = deviceLanguage();
@@ -13,6 +13,7 @@ const money = (value) => new Intl.NumberFormat(localeTag(language), {
 }).format(Number(value) || 0);
 
 const change = (value) => `${Number(value) >= 0 ? "+" : ""}${money(value)}`;
+const currentPeriod = () => new Date().toISOString().slice(0, 7);
 
 function MetricCard({ label, value, detail, tone = "neutral", icon: Icon }) {
   return (
@@ -25,8 +26,54 @@ function MetricCard({ label, value, detail, tone = "neutral", icon: Icon }) {
   );
 }
 
+function BasicDashboard({ data, planning, onNavigate }) {
+  const budget = planning?.budget;
+  const calendar = planning?.calendar;
+  const recurring = planning?.recurring;
+  const spent = (budget?.items || []).reduce((sum, item) => sum + Number(item.spent || 0), 0);
+  const budgeted = Number(budget?.total_budgeted || 0);
+  const used = budgeted > 0 ? Math.min(Math.round(spent / budgeted * 100), 100) : 0;
+  const available = Math.max(Number(budget?.available_for_categories || 0) - spent, 0);
+  const today = new Date();
+  const limit = new Date(today);
+  limit.setDate(limit.getDate() + 7);
+  const upcoming = (calendar?.events || []).filter((item) => {
+    const date = new Date(`${item.date}T12:00:00`);
+    return date >= new Date(today.toDateString()) && date <= limit;
+  }).slice(0, 2);
+
+  return <section className="finva-basic-dashboard">
+    <article className="finva-basic-hero-card">
+      <small>{tx("DISPONIBLE PLANIFICADO", "PLANNED AVAILABLE")}</small>
+      <strong>{money(budget ? available : data.balance)}</strong>
+      <span>{budgeted ? tx(`Presupuesto usado ${used}%`, `Budget used ${used}%`) : tx("Configurá tu presupuesto para planificar el mes", "Set up your budget to plan the month")}</span>
+    </article>
+
+    <article className="finva-basic-quick-card">
+      <button type="button" onClick={() => onNavigate?.("budget")}><span><WalletCards size={18}/>{tx("Presupuesto", "Budget")}</span><b>{budgeted ? `${used}%` : "—"}</b></button>
+      <button type="button" onClick={() => onNavigate?.("recurring")}><span><Repeat2 size={18}/>{tx("Recurrentes", "Recurring")}</span><b>{money(recurring?.monthly_expenses)}</b></button>
+      <button type="button" onClick={() => onNavigate?.("calendar")}><span><CalendarDays size={18}/>{tx("Compromisos", "Commitments")}</span><b>{calendar?.summary?.commitments ?? 0}</b></button>
+    </article>
+
+    <article className="finva-basic-upcoming">
+      <header><strong>{tx("Próximos 7 días", "Next 7 days")}</strong><button type="button" onClick={() => onNavigate?.("calendar")}>{tx("Ver calendario", "View calendar")}</button></header>
+      {upcoming.length ? upcoming.map((item) => <div key={`${item.date}-${item.name}`}>
+        <span><b>{item.name}</b><small>{item.date.slice(8,10)} · {item.kind}</small></span>
+        <strong>{item.amount ? money(item.amount) : "—"}</strong>
+      </div>) : <p>{tx("No hay compromisos configurados para los próximos 7 días.", "No commitments are configured for the next 7 days.")}</p>}
+    </article>
+
+    <article className="finva-basic-plan-progress">
+      <header><strong>{tx("Plan del mes", "Monthly plan")}</strong><b>{used}%</b></header>
+      <progress max="100" value={used}/>
+      <span>{used <= 100 ? tx("Vas dentro del presupuesto.", "You're within budget.") : tx("Revisá las categorías que superaron el plan.", "Review categories that exceeded the plan.")}</span>
+    </article>
+  </section>;
+}
+
 export default function FinvaOverview({ user, plan = "free", onNavigate }) {
   const [data, setData] = useState(null);
+  const [planning, setPlanning] = useState(null);
   const [error, setError] = useState("");
   const advanced = plan === "basic" || plan === "vip";
 
@@ -34,6 +81,13 @@ export default function FinvaOverview({ user, plan = "free", onNavigate }) {
     setError("");
     (advanced ? getBasicDashboard() : getFreeDashboard()).then(setData).catch((cause) => setError(cause.message));
   }, [advanced]);
+
+  useEffect(() => {
+    if (plan !== "basic") { setPlanning(null); return; }
+    Promise.all([getBudget(), getFinancialCalendar(currentPeriod()), getRecurring()])
+      .then(([budget, calendar, recurring]) => setPlanning({ budget, calendar, recurring }))
+      .catch(() => setPlanning({ budget: null, calendar: null, recurring: null }));
+  }, [plan]);
 
   const computed = useMemo(() => {
     const categories = data?.categories || [];
@@ -49,6 +103,8 @@ export default function FinvaOverview({ user, plan = "free", onNavigate }) {
 
   if (error) return <div className="mobile-panel finva-overview-state error">{error}</div>;
   if (!data) return <div className="mobile-panel finva-overview-state">{tx("Preparando tu resumen...", "Preparing your overview...")}</div>;
+
+  if (plan === "basic") return <BasicDashboard data={data} planning={planning} onNavigate={onNavigate}/>;
 
   return (
     <section className={`finva-overview dashboard-${plan}`}>
@@ -99,7 +155,6 @@ export default function FinvaOverview({ user, plan = "free", onNavigate }) {
       </article>
 
       {plan === "free" && <button className="finva-overview-action" onClick={() => onNavigate?.("monthly")}><span><strong>{tx("Ver resumen mensual", "View monthly summary")}</strong><small>{tx("Revisá tus números con más detalle.", "Review your numbers in more detail.")}</small></span><ChevronRight /></button>}
-      {plan === "basic" && <button className="finva-overview-action" onClick={() => onNavigate?.("budget")}><Sparkles /><span><strong>{tx("Abrir presupuesto guiado", "Open guided budget")}</strong><small>{tx("Asigná tu ingreso con intención.", "Give every part of your income a purpose.")}</small></span><ChevronRight /></button>}
       {plan === "vip" && <button className="finva-overview-action vip" onClick={() => onNavigate?.("strategy")}><Crown /><span><strong>{tx("Abrir Dirección VIP", "Open VIP Direction")}</strong><small>{tx("Tu estrategia financiera completa.", "Your complete financial strategy.")}</small></span><ChevronRight /></button>}
     </section>
   );

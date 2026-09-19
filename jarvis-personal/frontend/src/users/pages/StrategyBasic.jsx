@@ -55,6 +55,25 @@ export default function StrategyBasic({ plan = "basic" }) {
   if (error) return <div className="panel error">{error}</div>;
   if (!data) return <div className="panel">{copy("Calculando tu estrategia...", "Calculating your strategy...")}</div>;
 
+  if (!vip) {
+    const basicAllocations = data.allocations || [];
+    const covered = Number(data.strategic_margin || 0) >= 0;
+    return <section className="finva-basic-strategy">
+      <div className="hero"><span>BASIC</span><h1>{copy("Estrategia","Strategy")}</h1><p>{copy("FINVA organiza tu mes con tus datos reales y el margen disponible.","FINVA organizes your month using your real data and available margin.")}</p></div>
+      <article className="basic-strategy-hero">
+        <small>{copy("GUÍA DEL MES","MONTHLY GUIDE")}</small>
+        <strong>{covered ? copy("Tu mes está cubierto.","Your month is covered.") : copy("Tu mes necesita ajustes.","Your month needs adjustments.")}</strong>
+        <span>{data.recommendation}</span>
+      </article>
+      <div className="basic-strategy-order">
+        <article><header><strong>1 · {copy("Gastos esenciales","Essential expenses")}</strong><b>{money(data.essential_expenses)}</b></header><span>{covered?copy("Cubierto","Covered"):copy("Prioridad","Priority")}</span></article>
+        <article><header><strong>2 · {copy("Deudas","Debts")}</strong><b>{money(data.minimum_debt_payments)}</b></header><span>{copy("Planificado","Planned")}</span></article>
+        {basicAllocations.slice(0,2).map((allocation,index)=><article key={`${allocation.bucket}-${index}`}><header><strong>{index+3} · {allocation.label}</strong><b>{money(allocation.amount)}</b></header><span>{copy("Sugerido","Suggested")}</span></article>)}
+      </div>
+      <article className="basic-strategy-note">{copy("Basic guía la organización del mes. Las proyecciones y escenarios dinámicos pertenecen a VIP.","Basic guides monthly organization. Dynamic projections and scenarios belong to VIP.")}</article>
+    </section>;
+  }
+
   const runSimulation = async () => {
     setLoadingSimulation(true);
     setError("");
