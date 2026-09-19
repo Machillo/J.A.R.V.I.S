@@ -29,14 +29,14 @@ const GOALS = [
 ];
 
 const CURRENCIES = [
-  { code: "CRC", name: "Colón costarricense", symbol: "₡" },
-  { code: "USD", name: "Dólar estadounidense", symbol: "$" },
-  { code: "ARS", name: "Peso argentino", symbol: "$" },
-  { code: "EUR", name: "Euro", symbol: "€" },
-  { code: "MXN", name: "Peso mexicano", symbol: "$" },
-  { code: "COP", name: "Peso colombiano", symbol: "$" },
-  { code: "GTQ", name: "Quetzal guatemalteco", symbol: "Q" },
-  { code: "PAB", name: "Balboa panameño", symbol: "B/." },
+  { code: "CRC", name: "Colón costarricense", symbol: "₡", flag: "🇨🇷" },
+  { code: "USD", name: "Dólar estadounidense", symbol: "$", flag: "🇺🇸" },
+  { code: "ARS", name: "Peso argentino", symbol: "$", flag: "🇦🇷" },
+  { code: "EUR", name: "Euro", symbol: "€", flag: "🇪🇺" },
+  { code: "MXN", name: "Peso mexicano", symbol: "$", flag: "🇲🇽" },
+  { code: "COP", name: "Peso colombiano", symbol: "$", flag: "🇨🇴" },
+  { code: "GTQ", name: "Quetzal guatemalteco", symbol: "Q", flag: "🇬🇹" },
+  { code: "PAB", name: "Balboa panameño", symbol: "B/.", flag: "🇵🇦" },
 ];
 
 const BANKS = [
@@ -63,7 +63,7 @@ function BrandArt({ isJarvis }) {
       <span className="profile-setup-art-card art-card-one"><Banknote /></span>
       <span className="profile-setup-art-card art-card-two"><PiggyBank /></span>
       <span className="profile-setup-art-core">{isJarvis ? "J" : "F"}</span>
-      <strong>{isJarvis ? "JARVIS" : "FINVA"}</strong>
+      <strong>{isJarvis ? "JARVIS" : "FINVA"}</strong>\n      {!isJarvis && <span className="profile-setup-art-caption">{tx("Tu experiencia empieza con vos", "Your experience starts with you")}</span>}
     </div>
   );
 }
@@ -210,7 +210,7 @@ export default function ProfileSetup({ user, onComplete }) {
           {step === 2 && (
             <section className="profile-setup-step">
               <div className="profile-setup-title">
-                <span>{tx("TUS MONEDAS", "YOUR CURRENCIES")}</span>
+                <span>{tx("PERSONALIZÁ TU DINERO", "PERSONALIZE YOUR MONEY")}</span>
                 <h1>{tx("Configurá cómo ves tu dinero", "Set how you view your money")}</h1>
                 <p>Elegí una moneda principal y agregá las que también usás. No convertiremos montos sin avisarte.</p>
               </div>
@@ -220,7 +220,7 @@ export default function ProfileSetup({ user, onComplete }) {
                   <span>{tx("Moneda principal", "Primary currency")}</span>
                   <select value={baseCurrency} onChange={(event) => chooseBaseCurrency(event.target.value)}>
                     {CURRENCIES.map((currency) => (
-                      <option value={currency.code} key={currency.code}>{currency.name} · {currency.code}</option>
+                      <option value={currency.code} key={currency.code}>{currency.flag} {currency.code} — {currency.name}</option>
                     ))}
                   </select>
                 </label>
@@ -255,7 +255,7 @@ export default function ProfileSetup({ user, onComplete }) {
                         aria-pressed={checked}
                         onClick={() => toggleCurrency(currency.code)}
                       >
-                        <span>{currency.symbol}</span><strong>{currency.code}</strong>{checked && <Check />}
+                        <span>{currency.flag}</span><strong>{currency.code}</strong>{checked && <Check />}
                       </button>
                     );
                   })}

@@ -1,0 +1,322 @@
+/* FINVA onboarding — Figma node 36:1635
+   Visual layer only. Existing auth/legal/profile/plan behavior remains intact. */
+
+:root{
+  --finva-onb-bg:#060e1a;
+  --finva-onb-surface:#0b1726;
+  --finva-onb-surface-strong:#08262b;
+  --finva-onb-line:#142b40;
+  --finva-onb-accent:#0ac7b2;
+  --finva-onb-accent-soft:#083333;
+  --finva-onb-text:#f7fbff;
+  --finva-onb-muted:#9eb0c4;
+  --finva-onb-gold:#d6a12e;
+  --finva-onb-gold-bg:#1f1a0e;
+}
+
+.login-page.auth-shell,
+.legal-consent-shell,
+.profile-setup--finva,
+.unified-onboarding-shell:has(.unified-plan-stage){
+  color-scheme:dark;
+  background:var(--finva-onb-bg);
+  color:var(--finva-onb-text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+
+/* 01 · Login — FINVA ID */
+.login-page.auth-shell{
+  min-height:100dvh;
+  display:flex;
+  align-items:stretch;
+  justify-content:center;
+  padding:0;
+  overflow-y:auto;
+}
+.login-page .auth-grid-lines,
+.login-page .auth-aura,
+.login-page .auth-orb-wrap{display:none}
+.login-page .login-card.auth-card{
+  width:min(100%,402px);
+  min-height:100dvh;
+  margin:0;
+  padding:calc(50px + env(safe-area-inset-top)) 18px calc(22px + env(safe-area-inset-bottom));
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  text-align:left;
+  border:0;
+  border-radius:0;
+  clip-path:none;
+  background:var(--finva-onb-bg);
+  box-shadow:none;
+  backdrop-filter:none;
+}
+.login-page .auth-card::before,.login-page .auth-card::after{display:none}
+.finva-login-top{display:grid;gap:3px}
+.finva-login-top strong{color:var(--finva-onb-accent);font-size:13px;letter-spacing:.08em}
+.finva-login-top small{color:var(--finva-onb-muted);font-size:10px}
+.finva-login-hero{
+  min-height:350px;
+  padding:30px 0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:16px;
+}
+.finva-login-mark{
+  width:42px;height:42px;display:grid;place-items:center;border-radius:12px;
+  color:var(--finva-onb-accent);background:#022420;font-size:18px;font-weight:800;
+}
+.login-page .auth-title{
+  margin:0;padding:0;color:var(--finva-onb-text);font-size:38px;line-height:1.05;
+  letter-spacing:-.04em;text-shadow:none;white-space:normal;font-weight:750;
+}
+.finva-login-hero h2{max-width:330px;margin:0;color:var(--finva-onb-text);font-size:19px;line-height:1.22}
+.finva-login-pillars{margin:0;color:var(--finva-onb-accent);font-size:11px;font-weight:700;letter-spacing:.02em}
+.finva-login-account-title{margin:0 0 14px;color:var(--finva-onb-text);font-size:18px;line-height:1.2}
+.login-page .login-google-btn.auth-google-btn{
+  width:100%;min-height:52px;border:0;border-radius:14px;clip-path:none;
+  background:var(--finva-onb-accent);color:var(--finva-onb-bg);
+  box-shadow:none;font-size:15px;font-weight:800;
+}
+.login-page .login-google-btn.auth-google-btn:hover{transform:none;filter:brightness(1.04);box-shadow:none}
+.login-page .login-google-btn.auth-google-btn:active{transform:scale(.99)}
+.login-page .login-warning.auth-secure-note{
+  display:block;margin:12px 0 0;color:var(--finva-onb-muted);font-size:10px;line-height:1.35;text-align:left;
+}
+.login-page .login-warning svg{display:none}
+.login-page .auth-message{margin:10px 0 0}
+
+/* 02 · Legal consent */
+.legal-consent-shell{
+  min-height:100dvh;
+  display:flex;
+  justify-content:center;
+  align-items:stretch;
+  padding:0;
+}
+.legal-consent-card{
+  width:min(100%,402px);min-height:100dvh;margin:0;
+  padding:calc(50px + env(safe-area-inset-top)) 18px calc(22px + env(safe-area-inset-bottom));
+  border:0;border-radius:0;background:var(--finva-onb-bg);box-shadow:none;
+}
+.legal-consent-top{align-items:flex-start}
+.legal-consent-top>div{display:grid;gap:3px}
+.legal-consent-top strong{color:var(--finva-onb-accent);font-size:13px;letter-spacing:.08em}
+.legal-consent-top small{color:var(--finva-onb-muted);font-size:10px}
+.legal-consent-top button{
+  min-height:34px;padding:0 10px;border:1px solid var(--finva-onb-line);border-radius:10px;
+  background:var(--finva-onb-surface);color:var(--finva-onb-muted);font-size:10px;
+}
+.legal-consent-heading{margin:22px 0 14px}
+.legal-consent-heading>span{color:var(--finva-onb-accent);font-size:10px;letter-spacing:.14em}
+.legal-consent-heading h1{margin:7px 0 8px;font-size:28px;line-height:1.08;letter-spacing:-.035em}
+.legal-consent-heading p{font-size:12px;line-height:1.4;color:var(--finva-onb-muted)}
+.legal-document-link{
+  min-height:94px;margin:10px 0;padding:14px;gap:12px;
+  border:1px solid var(--finva-onb-line);border-radius:17px;background:var(--finva-onb-surface);
+}
+.legal-document-link>svg{width:42px;height:42px;padding:10px;border-radius:12px;background:#022420;color:var(--finva-onb-accent)}
+.legal-document-link strong{font-size:12px}.legal-document-link small{font-size:9px;color:var(--finva-onb-muted)}
+.legal-document-link>span:last-child{font-size:10px;color:var(--finva-onb-accent);font-weight:800}
+.legal-check{margin:13px 0;grid-template-columns:22px 1fr;gap:9px;font-size:12px;line-height:1.35}
+.legal-check input{accent-color:var(--finva-onb-accent)}
+.legal-check a{color:var(--finva-onb-text)}
+.legal-safety-note{
+  margin:15px 0 0;padding:14px;border:1px solid var(--finva-onb-line);border-radius:17px;
+  background:var(--finva-onb-surface);color:var(--finva-onb-accent);font-size:11px;font-weight:700;
+}
+.legal-consent-submit{
+  min-height:52px;margin-top:14px;border-radius:14px;background:var(--finva-onb-accent);
+  color:var(--finva-onb-bg);font-size:15px;font-weight:800;
+}
+.legal-version{color:var(--finva-onb-muted);font-size:9px}
+
+/* 03–06 · Four-step profile setup */
+.profile-setup--finva{
+  --setup-accent:var(--finva-onb-accent);
+  --setup-accent-strong:var(--finva-onb-accent);
+  --setup-ink:var(--finva-onb-text);
+  --setup-muted:var(--finva-onb-muted);
+  --setup-card:var(--finva-onb-surface);
+  --setup-card-soft:var(--finva-onb-surface);
+  --setup-line:var(--finva-onb-line);
+  min-height:100dvh;padding:0;background:var(--finva-onb-bg);overflow:hidden;
+}
+.profile-setup--finva .profile-setup-shell{
+  width:min(100%,402px);height:100dvh;margin:0 auto;background:var(--finva-onb-bg);backdrop-filter:none;
+  border:0;border-radius:0;box-shadow:none;
+}
+.profile-setup--finva .profile-setup-header{
+  min-height:84px;padding:calc(env(safe-area-inset-top) + 16px) 18px 10px;
+  grid-template-columns:34px minmax(0,1fr) 48px;gap:8px;
+}
+.profile-setup--finva .profile-setup-back{
+  width:34px;height:34px;border:0;border-radius:0;background:transparent;color:var(--finva-onb-text);
+}
+.profile-setup--finva .profile-setup-back svg{width:24px}
+.profile-setup--finva .profile-setup-progress{gap:8px}
+.profile-setup--finva .profile-setup-progress span{height:5px;background:#1a2e42}
+.profile-setup--finva .profile-setup-progress span.active{background:var(--finva-onb-accent);box-shadow:none}
+.profile-setup--finva .profile-setup-counter{font-size:11px;color:var(--finva-onb-muted)}
+.profile-setup--finva .profile-setup-scroll{padding:0 18px 14px}
+.profile-setup--finva .profile-setup-step{gap:12px;padding-bottom:8px}
+.profile-setup--finva .profile-setup-title{gap:7px}
+.profile-setup--finva .profile-setup-title.centered{text-align:left}
+.profile-setup--finva .profile-setup-title>span{font-size:9px;color:var(--finva-onb-accent);letter-spacing:.12em}
+.profile-setup--finva .profile-setup-title h1{font-size:25px;line-height:1.08;letter-spacing:-.035em}
+.profile-setup--finva .profile-setup-title p{font-size:10px;line-height:1.4;color:var(--finva-onb-muted)}
+.profile-setup--finva .intro-step{gap:18px}
+.profile-setup--finva .profile-setup-art{
+  min-height:210px;border:0;border-radius:22px;background:transparent;box-shadow:none;
+  place-content:center start;padding:0;
+}
+.profile-setup--finva .profile-setup-art::before,.profile-setup--finva .profile-setup-orbit,.profile-setup--finva .profile-setup-art-card{display:none}
+.profile-setup--finva .profile-setup-art-core{
+  width:42px;height:42px;border-radius:12px;background:#2d2d2e;color:var(--finva-onb-text);
+  font-size:18px;transform:none;box-shadow:none;
+}
+.profile-setup--finva .profile-setup-art strong{margin-top:8px;font-size:11px;letter-spacing:.08em}
+.profile-setup--finva .profile-setup-art-caption{margin-top:5px;color:var(--finva-onb-text);font-size:14px;font-weight:700}
+.profile-setup--finva .profile-setup-field{gap:6px}
+.profile-setup--finva .profile-setup-field>span{display:none}
+.profile-setup--finva .profile-setup-field input,
+.profile-setup--finva .profile-settings-card select,
+.profile-setup--finva .profile-bank-search input{
+  min-height:58px;padding:14px;border:1px solid var(--finva-onb-line);border-radius:17px;
+  background:var(--finva-onb-surface)!important;color:var(--finva-onb-text)!important;
+  -webkit-text-fill-color:var(--finva-onb-text)!important;font-size:14px;
+}
+.profile-setup--finva .profile-goal-list{gap:10px}
+.profile-setup--finva .profile-goal-list>button{
+  min-height:72px;padding:8px 10px;grid-template-columns:42px minmax(0,1fr) 20px;gap:10px;
+  border:1px solid var(--finva-onb-line);border-radius:15px;background:var(--finva-onb-surface);
+}
+.profile-setup--finva .profile-goal-list>button.selected{border-color:var(--finva-onb-accent);background:var(--finva-onb-surface);box-shadow:none}
+.profile-setup--finva .profile-goal-icon{width:42px;height:42px;border-radius:12px;background:#0b2124}
+.profile-setup--finva .profile-goal-list strong{font-size:11px}
+.profile-setup--finva .profile-goal-list small{font-size:8px;color:var(--finva-onb-muted)}
+.profile-setup--finva .profile-settings-card,
+.profile-setup--finva .profile-extra-currencies,
+.profile-setup--finva .profile-bank-security{border:1px solid var(--finva-onb-line);border-radius:16px;background:var(--finva-onb-surface);box-shadow:none}
+.profile-setup--finva .profile-settings-card{padding:13px}
+.profile-setup--finva .profile-settings-card>label,
+.profile-setup--finva .profile-settings-card>fieldset{padding:9px 0}
+.profile-setup--finva .profile-settings-card label>span,
+.profile-setup--finva .profile-settings-card legend{font-size:10px;color:var(--finva-onb-muted)}
+.profile-setup--finva .profile-settings-card select{min-height:50px;padding:10px 12px;border-radius:14px}
+.profile-setup--finva .profile-segmented-control{background:#07111e}
+.profile-setup--finva .profile-segmented-control button{min-height:34px;font-size:10px}
+.profile-setup--finva .profile-segmented-control button.active{background:var(--finva-onb-accent);color:var(--finva-onb-bg)}
+.profile-setup--finva .profile-currency-preview{padding-top:9px}
+.profile-setup--finva .profile-currency-preview small{font-size:9px}.profile-setup--finva .profile-currency-preview strong{font-size:12px}
+.profile-setup--finva .profile-extra-currencies{padding:13px}
+.profile-setup--finva .profile-extra-currencies h2{font-size:10px;color:var(--finva-onb-muted)}
+.profile-setup--finva .profile-extra-currencies>p{font-size:9px;margin:4px 0 10px}
+.profile-setup--finva .profile-extra-currencies>div{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.profile-setup--finva .profile-extra-currencies button{
+  min-height:34px;padding:5px;grid-template-columns:1fr;gap:1px;border-radius:17px;font-size:9px;
+  background:var(--finva-onb-surface);
+}
+.profile-setup--finva .profile-extra-currencies button>span{font-size:13px}
+.profile-setup--finva .profile-extra-currencies button svg{display:none}
+.profile-setup--finva .profile-extra-currencies button.selected{background:var(--finva-onb-accent-soft);border-color:var(--finva-onb-accent)}
+.profile-setup--finva .profile-bank-security{
+  padding:12px 13px;grid-template-columns:28px minmax(0,1fr);border-radius:16px;background:var(--finva-onb-surface-strong);
+}
+.profile-setup--finva .profile-bank-security>svg{width:20px}
+.profile-setup--finva .profile-bank-security strong{font-size:11px}.profile-setup--finva .profile-bank-security small{font-size:9px}
+.profile-setup--finva .profile-bank-search{min-height:48px;padding:0 13px;border:1px solid var(--finva-onb-line);border-radius:16px;background:var(--finva-onb-surface)}
+.profile-setup--finva .profile-bank-search input{min-height:44px;padding:0;border:0}
+.profile-setup--finva .profile-bank-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.profile-setup--finva .profile-bank-card{
+  min-height:78px;padding:10px 12px;display:grid;grid-template-columns:38px minmax(0,1fr);grid-template-rows:auto auto;
+  column-gap:8px;row-gap:2px;align-items:center;text-align:left;border-radius:15px;background:var(--finva-onb-surface);
+}
+.profile-setup--finva .bank-mark{grid-row:1/3;min-width:38px;width:38px;height:38px;border-radius:10px;font-size:10px}
+.profile-setup--finva .profile-bank-card strong{font-size:10px}.profile-setup--finva .profile-bank-card small{font-size:8px}
+.profile-setup--finva .profile-data-note{display:none}
+.profile-setup--finva .profile-setup-footer{
+  padding:10px 18px calc(env(safe-area-inset-bottom) + 12px);gap:5px;border-top:0;background:var(--finva-onb-bg);backdrop-filter:none;
+}
+.profile-setup--finva .profile-setup-footer>button{
+  min-height:52px;border-radius:14px;background:var(--finva-onb-accent);color:var(--finva-onb-bg);
+  box-shadow:none;font-size:14px;font-weight:800;
+}
+.profile-setup--finva .profile-setup-footer small{font-size:9px;color:var(--finva-onb-muted)}
+
+/* 07 · Plan selection */
+.unified-onboarding-shell:has(.unified-plan-stage){
+  min-height:100dvh;height:100dvh;padding:0;overflow-y:auto;background:var(--finva-onb-bg);
+}
+.unified-plan-stage.unified-onboarding-card{
+  width:min(100%,402px);min-height:100dvh;margin:0 auto;padding:calc(50px + env(safe-area-inset-top)) 18px calc(22px + env(safe-area-inset-bottom));
+  border:0;border-radius:0;background:var(--finva-onb-bg);box-shadow:none;
+}
+.unified-plan-stage .unified-onboarding-top{
+  padding:0 0 8px;border:0;align-items:flex-start;
+}
+.unified-plan-stage .unified-onboarding-top>div{gap:3px}
+.unified-plan-stage .unified-onboarding-top strong{color:var(--finva-onb-accent);font-size:12px;letter-spacing:.08em}
+.unified-plan-stage .unified-onboarding-top small{color:var(--finva-onb-muted);font-size:9px}
+.unified-plan-stage .unified-onboarding-top button{
+  min-height:32px;padding:0 9px;border:1px solid var(--finva-onb-line);border-radius:10px;background:var(--finva-onb-surface);font-size:9px;color:var(--finva-onb-muted);
+}
+.unified-plan-stage .unified-onboarding-intro{padding:0 0 10px}
+.unified-plan-stage .unified-eyebrow{display:none}
+.unified-plan-stage .unified-onboarding-intro h1{margin:4px 0 7px;font-size:26px;line-height:1.1;letter-spacing:-.035em}
+.unified-plan-stage .unified-onboarding-intro p{font-size:10px;line-height:1.4;color:var(--finva-onb-muted)}
+.unified-plan-stage .unified-plan-list{display:grid;gap:10px}
+.unified-plan-stage .unified-plan-card{
+  overflow:hidden;border:1px solid var(--finva-onb-line);border-radius:17px;background:var(--finva-onb-surface);box-shadow:none;
+}
+.unified-plan-stage .unified-plan-card.basic,
+.unified-plan-stage .unified-plan-card.vip{border-color:var(--finva-onb-gold);background:var(--finva-onb-gold-bg)}
+.unified-plan-stage .unified-plan-summary{
+  min-height:88px;padding:12px 13px;grid-template-columns:38px minmax(0,1fr) auto auto;gap:9px;background:transparent;color:var(--finva-onb-text);
+}
+.unified-plan-stage .unified-plan-summary>.unified-plan-icon{
+  width:38px;height:38px;border-radius:11px;color:var(--finva-onb-accent);background:#082e2e;
+}
+.unified-plan-stage .unified-plan-card.basic .unified-plan-icon,
+.unified-plan-stage .unified-plan-card.vip .unified-plan-icon{color:var(--finva-onb-gold);background:#47330d}
+.unified-plan-stage .unified-plan-copy>span{font-size:8px;color:var(--finva-onb-muted);letter-spacing:.08em}
+.unified-plan-stage .unified-plan-copy>strong{font-size:14px}
+.unified-plan-stage .unified-plan-copy>small{font-size:9px;color:var(--finva-onb-muted)}
+.unified-plan-stage .unified-plan-price{font-size:12px;color:var(--finva-onb-text)}
+.unified-plan-stage .unified-plan-price small{font-size:7px;color:var(--finva-onb-muted)}
+.unified-plan-stage .unified-plan-details{padding:0 13px 13px;border-top:1px solid rgba(158,176,196,.1)}
+.unified-plan-stage .unified-plan-details ul{margin:10px 0;padding:0;display:grid;grid-template-columns:1fr;gap:5px}
+.unified-plan-stage .unified-plan-details li{font-size:9px;color:var(--finva-onb-muted)}
+.unified-plan-stage .unified-plan-details li svg{width:13px;color:var(--finva-onb-accent)}
+.unified-plan-stage .unified-plan-card.basic .unified-plan-details li svg,
+.unified-plan-stage .unified-plan-card.vip .unified-plan-details li svg{color:var(--finva-onb-gold)}
+.unified-plan-stage .unified-plan-button{
+  width:100%;min-height:50px;border:0;border-radius:14px;background:var(--finva-onb-accent);color:var(--finva-onb-bg);font-size:14px;font-weight:800;
+}
+.unified-plan-stage .unified-plan-card.basic .unified-plan-button,
+.unified-plan-stage .unified-plan-card.vip .unified-plan-button{background:var(--finva-onb-gold);color:var(--finva-onb-bg)}
+.unified-plan-stage .unified-payment-preview,.unified-plan-stage .beta-consent,.unified-plan-stage .beta-price{font-size:9px;line-height:1.35}
+.unified-plan-stage .unified-loading{min-height:180px}
+.unified-plan-stage .unified-onboarding-error{font-size:10px}
+
+/* Keep the approved dark onboarding independent from the app appearance setting. */
+html[data-color-mode-resolved="light"] .profile-setup--finva,
+html[data-theme="light"] .profile-setup--finva,
+html[data-color-mode-resolved="light"] .profile-setup--finva .profile-setup-shell,
+html[data-theme="light"] .profile-setup--finva .profile-setup-shell{
+  --setup-ink:var(--finva-onb-text);--setup-muted:var(--finva-onb-muted);--setup-card:var(--finva-onb-surface);--setup-card-soft:var(--finva-onb-surface);
+  background:var(--finva-onb-bg);color:var(--finva-onb-text);
+}
+
+@media(min-width:520px){
+  .login-page .login-card.auth-card,.legal-consent-card,.profile-setup--finva .profile-setup-shell,.unified-plan-stage.unified-onboarding-card{
+    min-height:min(874px,calc(100dvh - 32px));height:min(874px,calc(100dvh - 32px));margin:16px auto;border:1px solid var(--finva-onb-line);border-radius:38px;overflow:hidden;
+  }
+  .legal-consent-shell{align-items:center}
+}
+@media(max-height:760px){
+  .finva-login-hero{min-height:280px}
+  .profile-setup--finva .profile-setup-art{min-height:150px}
+}

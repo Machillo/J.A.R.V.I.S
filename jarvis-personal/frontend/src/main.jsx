@@ -20,6 +20,7 @@ import "./pages/PublicInfoPage.css";
 import "./pages/UnifiedOnboarding.css";
 import "./pages/LegalConsent.css";
 import "./pages/ProfileSetup.css";
+import "./pages/FinvaOnboardingFigma.css";
 import "./ui/native/styles/tokens.css";
 import "./ui/native/styles/ios.css";
 import "./ui/native/styles/android.css";
