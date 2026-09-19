@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Crown, ShieldCheck, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 import { getBudget, getFinancialSituation, getVipCommandCenter, simulateStrategyVip, updateFinancialSituation } from "../services/jarvisApi";
 import { deviceLanguage, localeTag } from "../../lib/locale";
 
@@ -70,7 +70,7 @@ function VipProjections({data,onNavigate}){
   </section>
 }
 
-function VipScenarios({data}){
+function VipScenarios(){
   const [form,setForm]=useState({monthly_income_change:0,monthly_expense_change:0,one_time_extra:0}),[result,setResult]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const run=async(e)=>{e.preventDefault();setBusy(true);setError("");try{setResult(await simulateStrategyVip(Object.fromEntries(Object.entries(form).map(([k,v])=>[k,Number(v)||0]))))}catch(err){setError(err.message)}finally{setBusy(false)}};
   return <section className="finva-vip-screen"><VipHero title={tx("Escenarios","Scenarios")} subtitle={tx("Probá decisiones sin cambiar tus datos reales.","Try decisions without changing your real data.")}/>
