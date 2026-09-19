@@ -47,7 +47,16 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
         ["reports", tx("Reportes", "Reports"), BarChart3],
       ],
     }]),
-    ...(plan === "vip" ? [{ title: tx("Automatización", "Automation"), items: [["gmail", tx("Movimientos desde Gmail", "Transactions from Gmail"), Mail]] }] : []),
+    ...(plan === "vip" ? [{
+      title: tx("Inteligencia VIP", "VIP Intelligence"),
+      items: [
+        ["vip-projections", tx("Proyecciones", "Projections"), TrendingUp],
+        ["vip-scenarios", tx("Escenarios", "Scenarios"), Sparkles],
+        ["vip-reality", tx("Plan vs realidad", "Plan vs reality"), BarChart3],
+        ["vip-emergency", tx("Fondo de emergencia", "Emergency fund"), ShieldCheck],
+        ["vip-preferences", tx("Preferencias estratégicas", "Strategic preferences"), SlidersHorizontal],
+      ],
+    }, { title: tx("Automatización", "Automation"), items: [["gmail", tx("Movimientos desde Gmail", "Transactions from Gmail"), Mail]] }] : []),
     {
       title: tx("Soporte", "Support"),
       items: [
