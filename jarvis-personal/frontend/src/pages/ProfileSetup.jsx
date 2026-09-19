@@ -22,21 +22,21 @@ const tx = (es, en) => language === "es" ? es : en;
 const GOALS = [
   { id: "debt", icon: WalletCards, label: tx("Salir de deudas", "Pay off debt"), detail: tx("Ordenar pagos y avanzar con un plan claro.", "Organize payments and move forward with a clear plan.") },
   { id: "save", icon: PiggyBank, label: tx("Ahorrar para algo importante", "Save for something important"), detail: tx("Convertir una meta en aportes alcanzables.", "Turn a goal into achievable contributions.") },
-  { id: "partner", icon: HeartHandshake, label: "Organizar dinero en pareja o familia", detail: "Entender juntos qué entra, qué sale y qué sigue." },
-  { id: "life_change", icon: Sparkles, label: "Prepararme para un cambio importante", detail: "Planear una mudanza, viaje, estudio u otra etapa." },
+  { id: "partner", icon: HeartHandshake, label: tx("Organizar dinero en pareja o familia", "Manage money with a partner or family"), detail: tx("Entender juntos qué entra, qué sale y qué sigue.", "Understand together what comes in, what goes out, and what comes next.") },
+  { id: "life_change", icon: Sparkles, label: tx("Prepararme para un cambio importante", "Prepare for an important change"), detail: tx("Planear una mudanza, viaje, estudio u otra etapa.", "Plan a move, trip, education, or another life stage.") },
   { id: "control", icon: Target, label: tx("Tomar control de mis finanzas", "Take control of my finances"), detail: tx("Ver mis números con claridad y tomar mejores decisiones.", "See my numbers clearly and make better decisions.") },
-  { id: "explore", icon: LifeBuoy, label: "Todavía no estoy seguro", detail: "Explorar la app y descubrir por dónde empezar." },
+  { id: "explore", icon: LifeBuoy, label: tx("Todavía no estoy seguro", "I’m not sure yet"), detail: tx("Explorar la app y descubrir por dónde empezar.", "Explore the app and discover where to begin.") },
 ];
 
 const CURRENCIES = [
-  { code: "CRC", name: "Colón costarricense", symbol: "₡", flag: "🇨🇷" },
-  { code: "USD", name: "Dólar estadounidense", symbol: "$", flag: "🇺🇸" },
-  { code: "ARS", name: "Peso argentino", symbol: "$", flag: "🇦🇷" },
+  { code: "CRC", name: tx("Colón costarricense", "Costa Rican colón"), symbol: "₡", flag: "🇨🇷" },
+  { code: "USD", name: tx("Dólar estadounidense", "US dollar"), symbol: "$", flag: "🇺🇸" },
+  { code: "ARS", name: tx("Peso argentino", "Argentine peso"), symbol: "$", flag: "🇦🇷" },
   { code: "EUR", name: "Euro", symbol: "€", flag: "🇪🇺" },
-  { code: "MXN", name: "Peso mexicano", symbol: "$", flag: "🇲🇽" },
-  { code: "COP", name: "Peso colombiano", symbol: "$", flag: "🇨🇴" },
-  { code: "GTQ", name: "Quetzal guatemalteco", symbol: "Q", flag: "🇬🇹" },
-  { code: "PAB", name: "Balboa panameño", symbol: "B/.", flag: "🇵🇦" },
+  { code: "MXN", name: tx("Peso mexicano", "Mexican peso"), symbol: "$", flag: "🇲🇽" },
+  { code: "COP", name: tx("Peso colombiano", "Colombian peso"), symbol: "$", flag: "🇨🇴" },
+  { code: "GTQ", name: tx("Quetzal guatemalteco", "Guatemalan quetzal"), symbol: "Q", flag: "🇬🇹" },
+  { code: "PAB", name: tx("Balboa panameño", "Panamanian balboa"), symbol: "B/.", flag: "🇵🇦" },
 ];
 
 const BANKS = [
@@ -56,6 +56,7 @@ const firstName = (user) => {
 };
 
 function BrandArt({ isJarvis }) {
+  const product = isJarvis ? "JARVIS" : "FINVA";
   return (
     <div className="profile-setup-art" aria-hidden="true">
       <span className="profile-setup-orbit orbit-one" />
@@ -63,7 +64,13 @@ function BrandArt({ isJarvis }) {
       <span className="profile-setup-art-card art-card-one"><Banknote /></span>
       <span className="profile-setup-art-card art-card-two"><PiggyBank /></span>
       <span className="profile-setup-art-core">{isJarvis ? "J" : "F"}</span>
-      <strong>{isJarvis ? "JARVIS" : "FINVA"}</strong>\n      {!isJarvis && <span className="profile-setup-art-caption">{tx("Tu experiencia empieza con vos", "Your experience starts with you")}</span>}
+      <div className="profile-setup-art-copy">
+        <strong>{product}</strong>
+        <span>{isJarvis
+          ? tx("Tu inteligencia financiera, desde el inicio", "Your financial intelligence, from the start")
+          : tx("Tu experiencia empieza con vos", "Your experience starts with you")}
+        </span>
+      </div>
     </div>
   );
 }
@@ -131,7 +138,7 @@ export default function ProfileSetup({ user, onComplete }) {
       });
       onComplete(result.profile);
     } catch (requestError) {
-      setError(requestError?.message || "No pudimos guardar tus preferencias. Intentá nuevamente.");
+      setError(requestError?.message || tx("No pudimos guardar tus preferencias. Intentá nuevamente.", "We couldn’t save your preferences. Please try again."));
     } finally {
       setSaving(false);
     }
@@ -163,7 +170,7 @@ export default function ProfileSetup({ user, onComplete }) {
               <div className="profile-setup-title">
                 <span>{tx("EMPECEMOS", "LET’S GET STARTED")}</span>
                 <h1>{tx("¿Cómo querés que te llamemos?", "What would you like us to call you?")}</h1>
-                <p>Usaremos este nombre para acompañarte dentro de {product}. Podés cambiarlo después.</p>
+                <p>{tx(`Usaremos este nombre para acompañarte dentro de ${product}. Podés cambiarlo después.`, `We’ll use this name throughout ${product}. You can change it later.`)}</p>
               </div>
               <label className="profile-setup-field">
                 <span>{tx("Tu nombre", "Your name")}</span>
@@ -186,9 +193,9 @@ export default function ProfileSetup({ user, onComplete }) {
               <div className="profile-setup-title centered">
                 <span>{tx("PERSONALICEMOS TU EXPERIENCIA", "LET’S PERSONALIZE YOUR EXPERIENCE")}</span>
                 <h1>{tx("¿Qué es lo principal que querés lograr?", "What is the main thing you want to achieve?")}</h1>
-                <p>No hay una respuesta incorrecta. Esto nos ayuda a mostrarte primero lo que más te sirve.</p>
+                <p>{tx("No hay una respuesta incorrecta. Esto nos ayuda a mostrarte primero lo que más te sirve.", "There’s no wrong answer. This helps us show you what matters most first.")}</p>
               </div>
-              <div className="profile-goal-list" role="radiogroup" aria-label="Motivo principal">
+              <div className="profile-goal-list" role="radiogroup" aria-label={tx("Motivo principal", "Main goal")}>
                 {GOALS.map(({ id, icon: Icon, label, detail }) => (
                   <button
                     type="button"
@@ -212,7 +219,7 @@ export default function ProfileSetup({ user, onComplete }) {
               <div className="profile-setup-title">
                 <span>{tx("PERSONALIZÁ TU DINERO", "PERSONALIZE YOUR MONEY")}</span>
                 <h1>{tx("Configurá cómo ves tu dinero", "Set how you view your money")}</h1>
-                <p>Elegí una moneda principal y agregá las que también usás. No convertiremos montos sin avisarte.</p>
+                <p>{tx("Elegí una moneda principal y agregá las que también usás. No convertiremos montos sin avisarte.", "Choose a primary currency and add any others you use. We won’t convert amounts without telling you.")}</p>
               </div>
 
               <div className="profile-settings-card">
@@ -224,6 +231,26 @@ export default function ProfileSetup({ user, onComplete }) {
                     ))}
                   </select>
                 </label>
+                <div className="profile-extra-currencies">
+                  <h2>{tx("Otras monedas que utilizás", "Other currencies you use")}</h2>
+                  <p>{tx("Elegí todas las que necesitás. Podés cambiarlas después.", "Choose all the ones you need. You can change them later.")}</p>
+                  <div>
+                    {CURRENCIES.filter((currency) => currency.code !== baseCurrency).map((currency) => {
+                      const checked = enabledCurrencies.includes(currency.code);
+                      return (
+                        <button
+                          type="button"
+                          key={currency.code}
+                          className={checked ? "selected" : ""}
+                          aria-pressed={checked}
+                          onClick={() => toggleCurrency(currency.code)}
+                        >
+                          <span>{currency.flag}</span><strong>{currency.code}</strong>{checked && <Check />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <fieldset>
                   <legend>{tx("Formato de números", "Number format")}</legend>
                   <div className="profile-segmented-control">
@@ -240,27 +267,7 @@ export default function ProfileSetup({ user, onComplete }) {
                 </fieldset>
                 <div className="profile-currency-preview"><small>{tx("Así se verá", "Preview")}</small><strong>{preview}</strong></div>
               </div>
-
-              <div className="profile-extra-currencies">
-                <h2>{tx("Otras monedas que utilizás", "Other currencies you use")}</h2>
-                <p>Podés elegir varias y modificarlas luego en Configuración.</p>
-                <div>
-                  {CURRENCIES.map((currency) => {
-                    const checked = enabledCurrencies.includes(currency.code);
-                    return (
-                      <button
-                        type="button"
-                        key={currency.code}
-                        className={checked ? "selected" : ""}
-                        aria-pressed={checked}
-                        onClick={() => toggleCurrency(currency.code)}
-                      >
-                        <span>{currency.flag}</span><strong>{currency.code}</strong>{checked && <Check />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <p className="profile-currency-note">{tx("No convertiremos montos sin avisarte.", "We won’t convert amounts without telling you.")}</p>
             </section>
           )}
 
@@ -269,9 +276,9 @@ export default function ProfileSetup({ user, onComplete }) {
               <div className="profile-setup-title">
                 <span>{tx("PRÓXIMAMENTE EN COSTA RICA", "COMING SOON IN COSTA RICA")}</span>
                 <h1>{tx("Tus bancos en un solo lugar", "Your banks in one place")}</h1>
-                <p>Esta es una vista previa. Hoy podés registrar movimientos manualmente y, cuando habilitemos conexiones, te pediremos permiso de solo lectura.</p>
+                <p>{tx("Esta es una vista previa. Hoy podés registrar movimientos manualmente y, cuando habilitemos conexiones, te pediremos permiso de solo lectura.", "This is a preview. For now, you can add transactions manually. When connections are available, we’ll ask for read-only permission.")}</p>
               </div>
-              <div className="profile-bank-security"><ShieldCheck /><span><strong>Tu seguridad primero</strong><small>{product} nunca te pedirá la contraseña de tu banco.</small></span></div>
+              <div className="profile-bank-security"><ShieldCheck /><span><strong>{tx("Tu seguridad primero", "Your security comes first")}</strong><small>{tx(`${product} nunca te pedirá la contraseña de tu banco.`, `${product} will never ask for your bank password.`)}</small></span></div>
               <label className="profile-bank-search"><Search /><input value={bankSearch} onChange={(event) => setBankSearch(event.target.value)} placeholder={tx("Buscar banco", "Search bank")} /></label>
               <div className="profile-bank-grid">
                 {filteredBanks.map((bank) => (
@@ -282,8 +289,8 @@ export default function ProfileSetup({ user, onComplete }) {
                   </div>
                 ))}
               </div>
-              {!filteredBanks.length && <p className="profile-bank-empty">Todavía no aparece ese banco. Podremos agregar más entidades después.</p>}
-              <p className="profile-data-note">Tu configuración financiera existente se conserva. No volveremos a pedirte información que ya completaste.</p>
+              {!filteredBanks.length && <p className="profile-bank-empty">{tx("Todavía no aparece ese banco. Podremos agregar más entidades después.", "That bank isn’t listed yet. We’ll be able to add more institutions later.")}</p>}
+              <p className="profile-data-note">{tx("Tu configuración financiera existente se conserva. No volveremos a pedirte información que ya completaste.", "Your existing financial setup is preserved. We won’t ask again for information you already completed.")}</p>
             </section>
           )}
 
@@ -295,7 +302,10 @@ export default function ProfileSetup({ user, onComplete }) {
             {saving ? tx("Guardando...", "Saving...") : step === 3 ? `${tx("Entrar a", "Enter")} ${product}` : tx("Continuar", "Continue")}
             {!saving && <ChevronRight />}
           </button>
-          <small>{step === 3 ? "Estas preferencias quedarán guardadas en tu cuenta." : "Tus datos se guardarán cuando terminés los cuatro pasos."}</small>
+          <small>{step === 3
+            ? tx("Estas preferencias quedarán guardadas en tu cuenta.", "These preferences will be saved to your account.")
+            : tx("Tus datos se guardarán cuando terminés los cuatro pasos.", "Your data will be saved after you finish all four steps.")}
+          </small>
         </footer>
       </section>
     </main>
