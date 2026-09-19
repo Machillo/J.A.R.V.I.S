@@ -13,14 +13,14 @@ import Reports from "../../../users/pages/Reports";
 import SettingsPage from "../../../users/pages/Settings";
 import StrategyBasic from "../../../users/pages/StrategyBasic";
 import Transactions from "../../../users/pages/Transactions";
-import VipStrategy from "../../../users/pages/VipStrategy";
+import VipExperience from "../../../users/pages/VipExperience";
 
 export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange }) {
   return {
-    overview: <FinvaOverview user={user} plan={plan} onNavigate={navigate} />,
+    overview: plan === "vip" ? <VipExperience view="dashboard" onNavigate={navigate} /> : <FinvaOverview user={user} plan={plan} onNavigate={navigate} />,
     finance: <Finance />,
     debts: <Debts plan={plan} />,
-    strategy: plan === "vip" ? <VipStrategy /> : <StrategyBasic plan={plan} />,
+    strategy: plan === "vip" ? <VipExperience view="strategy" onNavigate={navigate} /> : <StrategyBasic plan={plan} />,
     gmail: plan === "vip" ? <GmailAutomation /> : <SettingsPage user={user} onUserChange={onUserChange} />,
     goals: <Goals plan={plan} />,
     transactions: <Transactions />,
@@ -32,5 +32,11 @@ export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange 
     reports: <Reports />,
     monthly: <MonthlySummary />,
     feedback: <Feedback />,
+    "vip-recommendation": <VipExperience view="recommendation" onNavigate={navigate} />,
+    "vip-projections": <VipExperience view="projections" onNavigate={navigate} />,
+    "vip-scenarios": <VipExperience view="scenarios" onNavigate={navigate} />,
+    "vip-reality": <VipExperience view="reality" onNavigate={navigate} />,
+    "vip-emergency": <VipExperience view="emergency" onNavigate={navigate} />,
+    "vip-preferences": <VipExperience view="preferences" onNavigate={navigate} />,
   };
 }
