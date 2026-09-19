@@ -21,7 +21,7 @@ const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
 const primaryItems = [
-  { key: "overview", label: tx("Resumen", "Overview"), icon: BarChart3 },
+  { key: "overview", label: tx("Inicio", "Home"), icon: BarChart3 },
   { key: "finance", label: tx("Movimientos", "Transactions"), icon: WalletCards },
   { key: "debts", label: tx("Deudas", "Debts"), icon: CreditCard },
   { key: "goals", label: tx("Metas", "Goals"), icon: Target },
