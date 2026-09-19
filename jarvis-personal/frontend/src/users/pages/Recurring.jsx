@@ -40,7 +40,9 @@ export default function Recurring() {
     finally { setBusy(false); }
   };
 
-  const activeItems = data?.items?.filter((item) => item.is_active) || [];\n\n  return <section className="content-first-page finva-basic-recurring">
+  const activeItems = data?.items?.filter((item) => item.is_active) || [];
+
+  return <section className="content-first-page finva-basic-recurring">
     <div className="hero"><span>BASIC 06</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>
     {error && <div className="panel error">{error}</div>}
     {data && <>
