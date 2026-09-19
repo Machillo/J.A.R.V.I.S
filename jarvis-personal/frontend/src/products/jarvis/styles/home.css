@@ -34,20 +34,25 @@
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  padding: calc(24px + env(safe-area-inset-top)) 18px 96px;
+  padding: calc(24px + env(safe-area-inset-top)) 18px 104px;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 
 .native-product--jarvis .jarvis-home-v2.idle {
-  justify-content: center;
+  justify-content: flex-start;
+  padding-top: clamp(
+    calc(76px + env(safe-area-inset-top)),
+    calc(13dvh + env(safe-area-inset-top)),
+    calc(126px + env(safe-area-inset-top))
+  );
 }
 
 .native-product--jarvis .jarvis-home-v2-hero {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -55,12 +60,12 @@
 
 .native-product--jarvis .jarvis-home-v2-mark {
   display: grid;
-  flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
   place-items: center;
   border: 1px solid var(--native-border);
-  border-radius: 14px;
+  border-radius: 17px;
   color: var(--native-accent-2);
   background: var(--native-bg-soft);
 }
@@ -74,13 +79,13 @@
 .native-product--jarvis .jarvis-home-v2-hero p,
 .native-product--jarvis .jarvis-home-v2-hero span {
   color: var(--native-muted);
-  font-size: .82rem;
+  font-size: .9rem;
   line-height: 1.35;
 }
 
 .native-product--jarvis .jarvis-home-v2-hero h1 {
   color: var(--native-text);
-  font-size: 1.45rem;
+  font-size: clamp(1.7rem, 7.4vw, 2.15rem);
   line-height: 1.1;
   letter-spacing: -.035em;
 }
@@ -90,9 +95,13 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  margin-top: 28px;
+  margin-top: 32px;
+  padding: 13px 15px;
+  border: 1px solid var(--jarvis-line);
+  border-radius: 17px;
   color: var(--native-muted);
-  font-size: .86rem;
+  background: color-mix(in srgb, var(--jarvis-surface) 78%, transparent);
+  font-size: .9rem;
 }
 
 .native-product--jarvis .jarvis-home-v2-session {
