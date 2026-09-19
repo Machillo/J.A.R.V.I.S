@@ -1,10 +1,13 @@
 .native-product--finva {
-  --native-accent: #5d58f4;
-  --native-accent-2: #21d2bd;
-  --native-bg: #060b1e;
-  --native-bg-soft: #101a32;
-  --native-surface: rgba(15, 27, 52, .9);
-  --native-surface-raised: rgba(27, 39, 70, .88);
+  --native-accent: #0ac7b2;
+  --native-accent-2: #0ac7b2;
+  --native-bg: #060e1a;
+  --native-bg-soft: #0f1f33;
+  --native-surface: #0b1726;
+  --native-surface-raised: #0f1f33;
+  --native-border: #142b40;
+  --native-text: #f7fbff;
+  --native-muted: #9eb0c4;
 }
 
 .native-product--finva.native-plan--basic {
