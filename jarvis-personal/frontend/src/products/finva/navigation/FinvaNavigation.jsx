@@ -10,6 +10,9 @@ import {
   ReceiptText,
   Repeat2,
   Sparkles,
+  TrendingUp,
+  ShieldCheck,
+  SlidersHorizontal,
   Target,
   WalletCards,
 } from "lucide-react";
