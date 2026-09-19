@@ -178,6 +178,7 @@
   font-size:18px;transform:none;box-shadow:none;
 }
 .profile-setup--finva .profile-setup-art strong{margin-top:8px;font-size:11px;letter-spacing:.08em}
+.profile-setup--finva .profile-setup-art-caption{margin-top:5px;color:var(--finva-onb-text);font-size:14px;font-weight:700}
 .profile-setup--finva .profile-setup-field{gap:6px}
 .profile-setup--finva .profile-setup-field>span{display:none}
 .profile-setup--finva .profile-setup-field input,
