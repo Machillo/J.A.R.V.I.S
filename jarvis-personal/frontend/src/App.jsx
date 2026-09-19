@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import Login from "./pages/Login";
-import UnifiedOnboarding from "./pages/UnifiedOnboarding";
+import FinvaOnboarding from "./pages/FinvaOnboarding";
 import ProfileSetup from "./pages/ProfileSetup";
 import LegalConsent from "./pages/LegalConsent";
 import PersonalApp from "./personal/PersonalApp";
@@ -197,7 +197,7 @@ export default function App() {
 
   if (!currentUser.plan_selected || !currentUser.onboarding_completed) {
     return (
-      <UnifiedOnboarding
+      <FinvaOnboarding
         user={currentUser}
         onComplete={(profile) => setCurrentUser(profile)}
       />

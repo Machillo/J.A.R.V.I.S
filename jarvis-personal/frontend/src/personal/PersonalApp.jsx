@@ -35,7 +35,7 @@ import Reconciliation from "../pages/Reconciliation";
 import FinancialDeterioration from "../pages/FinancialDeterioration";
 import Login from "../pages/Login";
 import UserManagement from "../pages/UserManagement";
-import UnifiedOnboarding from "../pages/UnifiedOnboarding";
+import FinvaOnboarding from "../pages/FinvaOnboarding";
 import ProfileSetup from "../pages/ProfileSetup";
 import ProductOperations from "../pages/ProductOperations";
 
@@ -547,7 +547,7 @@ export default function App() {
   }
 
   if (currentUser.role !== "owner" && (!currentUser.plan_selected || !currentUser.onboarding_completed)) {
-    return <UnifiedOnboarding user={currentUser} onComplete={(profile) => { setCurrentUser(profile); refreshAppData(); }} />;
+    return <FinvaOnboarding user={currentUser} onComplete={(profile) => { setCurrentUser(profile); refreshAppData(); }} />;
   }
 
   const renderPage = () => {

@@ -1,5 +1,6 @@
-/* FINVA Free — approved Figma implementation
-   Reference: FINVA FREE — Complete Product (frames 46:856–46:1490). */
+/* FINVA Free product UI.
+   Canonical source: Figma “FINVA FREE — Complete Product” (46:856–46:1490).
+   This file owns the Free plan tokens and presentation; it is not an override patch. */
 
 .native-product--finva.native-plan--free {
   --native-bg:#060e1a;
@@ -103,37 +104,37 @@ body:has(.native-product--finva.native-plan--free){background:#060e1a}
 }
 .native-product--finva.native-plan--free :is(.panel,.card,.mobile-panel,.situation-card,.profile-completeness-card,.compact-record-card,.finva-fold-list) {
   border:1px solid #142b40;
-  border-radius:16px!important;
+  border-radius:16px;
   background:#0b1726;
   color:#f7fbff;
-  box-shadow:none!important;
+  box-shadow:none;
 }
 .native-product--finva.native-plan--free :is(input,select,textarea) {
-  border:1px solid #142b40!important;
-  border-radius:14px!important;
-  background:#0b1726!important;
-  color:#f7fbff!important;
-  box-shadow:none!important;
+  border:1px solid #142b40;
+  border-radius:14px;
+  background:#0b1726;
+  color:#f7fbff;
+  box-shadow:none;
 }
 .native-product--finva.native-plan--free :is(input,select,textarea):focus {
-  border-color:#0ac7b2!important;
-  box-shadow:0 0 0 3px rgba(10,199,178,.12)!important;
+  border-color:#0ac7b2;
+  box-shadow:0 0 0 3px rgba(10,199,178,.12);
 }
 .native-product--finva.native-plan--free :is(.finva-button-primary,.primary-button,.entry-save-button) {
-  border:0!important;
-  border-radius:14px!important;
-  background:#0ac7b2!important;
-  color:#060e1a!important;
-  box-shadow:none!important;
+  border:0;
+  border-radius:14px;
+  background:#0ac7b2;
+  color:#060e1a;
+  box-shadow:none;
 }
 .native-product--finva.native-plan--free .finva-button-success {
-  border:0!important;background:#3dd9a4!important;color:#061712!important;box-shadow:none!important;
+  border:0;background:#3dd9a4;color:#061712;box-shadow:none;
 }
 .native-product--finva.native-plan--free .finva-button-secondary {
-  border:1px solid #244058!important;background:#0f1f33!important;color:#c6d2df!important;box-shadow:none!important;
+  border:1px solid #244058;background:#0f1f33;color:#c6d2df;box-shadow:none;
 }
 .native-product--finva.native-plan--free .finva-button-danger {
-  border:1px solid rgba(245,64,94,.35)!important;background:#1f1217!important;color:#ff8195!important;box-shadow:none!important;
+  border:1px solid rgba(245,64,94,.35);background:#1f1217;color:#ff8195;box-shadow:none;
 }
 
 /* FREE · 01 Inicio */
@@ -168,9 +169,9 @@ body:has(.native-product--finva.native-plan--free){background:#060e1a}
 .native-product--finva.native-plan--free .finva-overview-chart,
 .native-product--finva.native-plan--free .finva-overview-categories {
   padding:12px 13px;
-  border:1px solid #142b40!important;
-  border-radius:16px!important;
-  background:#0b1726!important;
+  border:1px solid #142b40;
+  border-radius:16px;
+  background:#0b1726;
 }
 .native-product--finva.native-plan--free .finva-overview :is(.finva-overview-chart,.finva-overview-categories)>header small {
   color:#9eb0c4;font-size:.58rem;

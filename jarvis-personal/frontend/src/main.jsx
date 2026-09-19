@@ -17,7 +17,7 @@ import "./styles/10-finance-stability.css";
 import "./styles/11-strategy-v3.css";
 import "./styles/12-mobile-native-compat.css";
 import "./pages/PublicInfoPage.css";
-import "./pages/UnifiedOnboarding.css";
+import "./pages/FinvaOnboarding.css";
 import "./pages/LegalConsent.css";
 import "./pages/ProfileSetup.css";
 import "./pages/FinvaEntryFlow.css";

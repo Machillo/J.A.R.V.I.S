@@ -108,15 +108,6 @@ body:has(.native-product--finva.native-plan--vip){background:#060e1a}
 .native-product--finva.native-plan--vip .native-sheet-group button{min-height:50px;border:1px solid #1a2945;border-radius:14px;background:#0f1f33}
 .native-product--finva.native-plan--vip .native-sheet-group button>span{color:#9c7aff;background:#1a132e}
 
-/* VIP · 01 activation */
-.unified-onboarding-shell.unified-plan-vip{background:#060e1a;color:#f7fbff}
-.unified-plan-vip .unified-onboarding-card{border-color:#1a2945!important;background:#0b1726!important;box-shadow:none!important}
-.unified-plan-vip .unified-onboarding-top strong,.unified-plan-vip .unified-eyebrow{color:#9c7aff!important}
-.unified-plan-vip .unified-saved-note{border:1px solid #1a2945!important;background:#140f26!important;color:#d9d2ff!important}
-.unified-plan-vip .unified-form-grid>label{border-color:#1a2945!important;background:#0b1726!important}
-.unified-plan-vip .unified-form-grid input,.unified-plan-vip .unified-form-grid select{border-color:#1a2945!important;background:#0f1f33!important;color:#f7fbff!important}
-.unified-plan-vip .unified-primary{background:#9c7aff!important;color:#060e1a!important}
-
 html[data-color-mode-resolved="light"] .native-product--finva.native-plan--vip,
 html[data-theme="light"] .native-product--finva.native-plan--vip{--native-bg:#060e1a;--native-bg-soft:#0f1f33;--native-surface:#0b1726;--native-surface-raised:#0f1f33;--native-border:#1a2945;--native-text:#f7fbff;--native-muted:#9eb0c4;--native-accent:#9c7aff;--native-accent-2:#9c7aff;color-scheme:dark;background:#060e1a}
 
