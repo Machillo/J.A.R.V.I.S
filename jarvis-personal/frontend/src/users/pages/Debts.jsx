@@ -22,16 +22,16 @@ const monthsLeft = (debt) => {
 
 function DebtFields({ value, setValue, advanced }) {
   return <div className="finva-compact-fields">
-    <label><span>Nombre de la deuda</span><input required placeholder="Ej. Tarjeta BAC" value={value.name} onChange={(e) => setValue({...value,name:e.target.value})}/></label>
-    {advanced && <label><span>Tipo</span><select value={value.debt_type} onChange={(e) => setValue({...value,debt_type:e.target.value})}><option value="credit_card">Tarjeta</option><option value="loan">Préstamo</option><option value="other">Otra</option></select></label>}
-    <label><span>Saldo pendiente</span><input required type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.remaining_amount} onChange={(e) => setValue({...value,remaining_amount:e.target.value})}/></label>
-    <label><span>Monto original</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.total_amount} onChange={(e) => setValue({...value,total_amount:e.target.value})}/></label>
-    <label><span>Cuota mensual</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.monthly_payment} onChange={(e) => setValue({...value,monthly_payment:e.target.value})}/></label>
+    <label><span>{tx("Nombre de la deuda", "Debt name")}</span><input required placeholder={tx("Ej. Tarjeta BAC", "E.g. BAC credit card")} value={value.name} onChange={(e) => setValue({...value,name:e.target.value})}/></label>
+    {advanced && <label><span>{tx("Tipo", "Type")}</span><select value={value.debt_type} onChange={(e) => setValue({...value,debt_type:e.target.value})}><option value="credit_card">{tx("Tarjeta", "Credit card")}</option><option value="loan">{tx("Préstamo", "Loan")}</option><option value="other">{tx("Otra", "Other")}</option></select></label>}
+    <label><span>{tx("Saldo pendiente", "Outstanding balance")}</span><input required type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.remaining_amount} onChange={(e) => setValue({...value,remaining_amount:e.target.value})}/></label>
+    <label><span>{tx("Monto original", "Original amount")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.total_amount} onChange={(e) => setValue({...value,total_amount:e.target.value})}/></label>
+    <label><span>{tx("Cuota mensual", "Monthly payment")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.monthly_payment} onChange={(e) => setValue({...value,monthly_payment:e.target.value})}/></label>
     {advanced && <>
-      <label><span>Interés anual</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="0%" value={value.interest_rate} onChange={(e) => setValue({...value,interest_rate:e.target.value})}/></label>
-      <label><span>Plazo en meses</span><input type="number" inputMode="numeric" min="1" placeholder="Ej. 24" value={value.term_months} onChange={(e) => setValue({...value,term_months:e.target.value})}/></label>
-      <label><span>Día de pago</span><input type="number" inputMode="numeric" min="1" max="31" placeholder="1–31" value={value.payment_day} onChange={(e) => setValue({...value,payment_day:e.target.value})}/></label>
-      <label><span>Próxima fecha</span><input type="date" value={value.next_payment_date || ""} onChange={(e) => setValue({...value,next_payment_date:e.target.value})}/></label>
+      <label><span>{tx("Interés anual", "Annual interest")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="0%" value={value.interest_rate} onChange={(e) => setValue({...value,interest_rate:e.target.value})}/></label>
+      <label><span>{tx("Plazo en meses", "Term in months")}</span><input type="number" inputMode="numeric" min="1" placeholder={tx("Ej. 24", "E.g. 24")} value={value.term_months} onChange={(e) => setValue({...value,term_months:e.target.value})}/></label>
+      <label><span>{tx("Día de pago", "Payment day")}</span><input type="number" inputMode="numeric" min="1" max="31" placeholder="1–31" value={value.payment_day} onChange={(e) => setValue({...value,payment_day:e.target.value})}/></label>
+      <label><span>{tx("Próxima fecha", "Next date")}</span><input type="date" value={value.next_payment_date || ""} onChange={(e) => setValue({...value,next_payment_date:e.target.value})}/></label>
     </>}
   </div>;
 }
@@ -78,9 +78,9 @@ export default function Debts({ plan = "free" }) {
   };
 
   return <section className="content-first-page">
-    <div className="hero"><span>{advanced ? "BASIC 03" : "FREE 04"}</span><h1>{tx("Deudas", "Debts")}</h1><p>{advanced ? "Gestión completa con tasa, plazo y finalización estimada." : "Saldos, pagos y progreso visual, sin recomendaciones."}</p></div>
+    <div className="hero"><span>{advanced ? "BASIC 03" : "FREE 04"}</span><h1>{tx("Deudas", "Debts")}</h1><p>{advanced ? tx("Gestión completa con tasa, plazo y finalización estimada.", "Complete management with interest, term, and estimated payoff.") : tx("Saldos, pagos y progreso visual, sin recomendaciones.", "Balances, payments, and visual progress without recommendations.")}</p></div>
     {error && <div className="panel error">{error}</div>}
-    <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><CreditCard size={20}/></span><div><strong>{tx("Agregar deuda", "Add debt")}</strong><small>Registrá una nueva obligación</small></div><Plus size={19}/></button>
+    <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><CreditCard size={20}/></span><div><strong>{tx("Agregar deuda", "Add debt")}</strong><small>{tx("Registrá una nueva obligación", "Record a new obligation")}</small></div><Plus size={19}/></button>
 
     <div className="debt-grid content-first-grid">{rows.length ? rows.map((debt) => {
       const total = Math.max(Number(debt.total_amount) || Number(debt.remaining_amount) || 1,1);
@@ -89,20 +89,20 @@ export default function Debts({ plan = "free" }) {
       return <article className="panel debt-card compact-record-card" key={debt.id}>
         <header><span><b>{debt.name}</b>{advanced && <small>{debt.debt_type}</small>}</span><strong>{money(debt.remaining_amount)}</strong></header>
         <progress max="100" value={progress}/>
-        <p>{Number(progress).toFixed(1)}% pagado · cuota {money(debt.monthly_payment)}</p>
-        {advanced && <div className="record-meta"><span>Próximo pago: {(debt.next_payment_date || debt.payment_day) ? `día ${debt.payment_day || String(debt.next_payment_date).slice(8,10)}` : "sin fecha"}</span><span>Finalización: {months ? `~${months} meses` : "faltan datos"}</span></div>}
+        <p>{Number(progress).toFixed(1)}% {tx("pagado · cuota", "paid · payment")} {money(debt.monthly_payment)}</p>
+        {advanced && <div className="record-meta"><span>{tx("Próximo pago", "Next payment")}: {(debt.next_payment_date || debt.payment_day) ? `${tx("día", "day")} ${debt.payment_day || String(debt.next_payment_date).slice(8,10)}` : tx("sin fecha", "no date")}</span><span>{tx("Finalización", "Payoff")}: {months ? `~${months} ${tx("meses", "months")}` : tx("faltan datos", "missing data")}</span></div>}
         <div className="actions">
           <button className="finva-button finva-button-primary" type="button" onClick={() => { setPayment(debt); setPaymentAmount(""); }}>{tx("Registrar pago", "Record payment")}</button>
           {advanced && <button className="finva-button finva-button-secondary" type="button" onClick={() => setEdit({...debt})}>{tx("Editar", "Edit")}</button>}
           <button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(debt)}>{tx("Eliminar", "Delete")}</button>
         </div>
       </article>;
-    }) : <div className="panel finva-empty-state">No tenés deudas registradas.</div>}</div>
+    }) : <div className="panel finva-empty-state">{tx("No tenés deudas registradas.", "You have no recorded debts.")}</div>}</div>
 
-    <FinvaFormSheet open={creating} eyebrow="Nueva deuda" title={tx("Agregar deuda", "Add debt")} onClose={() => setCreating(false)}>
+    <FinvaFormSheet open={creating} eyebrow={tx("Nueva deuda", "New debt")} title={tx("Agregar deuda", "Add debt")} onClose={() => setCreating(false)}>
       <form className="form finva-sheet-form" onSubmit={submit}><DebtFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar deuda", "Save debt")}</button></form>
     </FinvaFormSheet>
-    <FinvaFormSheet open={Boolean(edit)} eyebrow="Deuda" title={tx("Editar deuda", "Edit debt")} onClose={() => setEdit(null)}>
+    <FinvaFormSheet open={Boolean(edit)} eyebrow={tx("Deuda", "Debt")} title={tx("Editar deuda", "Edit debt")} onClose={() => setEdit(null)}>
       {edit && <form className="form finva-sheet-form" onSubmit={save}><DebtFields value={edit} setValue={setEdit} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}
     </FinvaFormSheet>
     <AmountDialog open={Boolean(payment)} title={tx("Registrar pago", "Record payment")} description={payment ? `Aplicar un pago a ${payment.name}.` : ""} value={paymentAmount} onValueChange={setPaymentAmount} confirmLabel={tx("Registrar pago", "Record payment")} onConfirm={registerPayment} onClose={() => { if (!busyDialog) setPayment(null); }} busy={busyDialog}/>
