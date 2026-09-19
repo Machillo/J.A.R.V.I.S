@@ -781,7 +781,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_primary_email_ci ON accounts (LOWE
 CREATE TABLE IF NOT EXISTS workspaces (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_key TEXT NOT NULL UNIQUE,
-    owner_account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+    owner_account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     workspace_type TEXT NOT NULL DEFAULT 'personal' CHECK (workspace_type IN ('personal', 'business')),
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'suspended')),
@@ -889,7 +889,7 @@ BEGIN
               AND r.relname = tbl
         ) THEN
             EXECUTE format(
-                'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT NOT VALID',
+                'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE NOT VALID',
                 tbl,
                 fk_name
             );

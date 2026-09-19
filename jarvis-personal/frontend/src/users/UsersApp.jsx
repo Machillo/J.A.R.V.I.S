@@ -16,6 +16,7 @@ import "./finva-progressive.css";
 import "../products/finva/styles/free.css";
 import "../products/finva/styles/basic-figma.css";
 import "../products/finva/styles/vip-figma.css";
+import "../products/finva/styles/account-actions.css";
 
 export default function UsersApp({ user, onUserChange }) {
   const [page, setPage] = useState(() => window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview");
@@ -42,7 +43,7 @@ export default function UsersApp({ user, onUserChange }) {
   }, []);
 
   useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);
-  const logout = () => supabase.auth.signOut();
+  const logout = () => supabase.auth.signOut({ scope: "local" });
   const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange, onLogout: logout });
   const freeTitles = {
     overview: tx("Hola", "Hello") + `, ${(user?.display_name || user?.email || tx("bienvenido", "welcome")).split(" ")[0]}`,

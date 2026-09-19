@@ -6,6 +6,7 @@ from backend.auth.service import (
     get_allowed_users,
     create_allowed_user,
     delete_allowed_user,
+    delete_current_account,
     check_user_access,
 )
 from backend.auth.current_user import get_current_user, require_roles
@@ -56,6 +57,11 @@ def check_access(request: CheckAccessRequest):
 @router.get("/me")
 def me():
     return enrich_identity(get_current_user())
+
+
+@router.delete("/me")
+def remove_my_account():
+    return delete_current_account()
 
 
 @router.post("/legal/accept")

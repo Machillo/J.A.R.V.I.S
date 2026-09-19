@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { deviceLanguage } from "../../../../lib/locale";
+import AccountActions from "../../components/AccountActions";
 
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
@@ -12,7 +13,7 @@ const planning = [
   ["strategy", tx("Estrategia", "Strategy"), tx("Organizá el dinero disponible del mes.", "Organize the money available this month.")],
 ];
 
-export default function BasicMore({ onNavigate }) {
+export default function BasicMore({ onNavigate, onLogout }) {
   return <section className="finva-basic-more">
     <article className="basic-more-intro">{tx("PLANIFICACIÓN BASIC", "BASIC PLANNING")}</article>
     <div className="basic-more-list">
@@ -25,5 +26,6 @@ export default function BasicMore({ onNavigate }) {
       <small>{tx("Mi dinero", "My money")}</small>
       <span>{tx("Situación financiera · Historial · Resumen mensual", "Financial situation · History · Monthly summary")}</span>
     </button>
+    <AccountActions onLogout={onLogout} variant="basic"/>
   </section>;
 }

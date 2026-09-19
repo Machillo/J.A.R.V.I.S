@@ -11,6 +11,7 @@ from backend.auth.saas import enrich_identity
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+SUPABASE_ADMIN_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SECRET_KEY")
 
 VALID_ROLES = {"owner", "admin", "user", "viewer"}
 VALID_STATUSES = {"active", "blocked", "pending"}
@@ -199,6 +200,83 @@ def delete_allowed_user(user_id: int):
         "status": "OK",
         "message": "Usuario eliminado.",
     }
+
+
+def delete_current_account() -> dict[str, str]:
+    """Permanently delete the authenticated account and its owned data.
+
+    Auth is removed first so a partially completed request can never leave an
+    active login pointing at deleted financial data. The database migration
+    makes account/workspace ownership cascade; we verify that contract before
+    touching Supabase Auth.
+    """
+    from backend.auth.current_user import get_current_user
+
+    current = get_current_user()
+    account_id = str(current.get("account_id") or "")
+    auth_user_id = str(current.get("supabase_user_id") or "")
+    legacy_user_id = int(current.get("id") or 0)
+    email = _normalize_email(str(current.get("email") or ""))
+
+    if not account_id or not auth_user_id or not legacy_user_id:
+        raise HTTPException(status_code=401, detail="No pudimos identificar tu cuenta.")
+    if not SUPABASE_URL or not SUPABASE_ADMIN_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="La eliminación de cuenta no está configurada todavía. Contactá a soporte.",
+        )
+
+    with get_connection() as conn:
+        incompatible = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM pg_constraint c
+            JOIN pg_class child ON child.oid=c.conrelid
+            JOIN pg_namespace ns ON ns.oid=child.relnamespace
+            WHERE c.contype='f'
+              AND ns.nspname='public'
+              AND c.confrelid IN ('public.accounts'::regclass, 'public.workspaces'::regclass)
+              AND c.confdeltype NOT IN ('c','n')
+            """
+        ).fetchone()
+        if int((incompatible or {}).get("total") or 0) > 0:
+            raise HTTPException(
+                status_code=503,
+                detail="La eliminación de cuenta requiere una actualización pendiente. Contactá a soporte.",
+            )
+
+    response = requests.delete(
+        f"{SUPABASE_URL.rstrip('/')}/auth/v1/admin/users/{auth_user_id}",
+        headers={
+            "apikey": SUPABASE_ADMIN_KEY,
+            "Authorization": f"Bearer {SUPABASE_ADMIN_KEY}",
+        },
+        timeout=10,
+    )
+    if response.status_code not in {200, 204, 404}:
+        raise HTTPException(
+            status_code=502,
+            detail="No pudimos eliminar tu acceso. Intentá nuevamente o contactá a soporte.",
+        )
+
+    try:
+        with get_connection() as conn:
+            conn.execute("DELETE FROM accounts WHERE id=%s", (account_id,))
+            # Some historical finance rows use users.id. The workspace cascade
+            # removes their data; this removes the remaining legacy identity.
+            conn.execute(
+                "DELETE FROM users WHERE allowed_user_id=%s OR lower(email)=lower(%s)",
+                (legacy_user_id, email),
+            )
+            conn.execute("DELETE FROM allowed_users WHERE id=%s", (legacy_user_id,))
+            conn.commit()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Tu acceso fue eliminado, pero necesitamos terminar la limpieza de datos. Contactá a soporte.",
+        ) from exc
+
+    return {"status": "OK", "message": "Cuenta eliminada permanentemente."}
 
 
 def check_user_access(email: str):

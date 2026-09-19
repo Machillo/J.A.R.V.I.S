@@ -3,6 +3,8 @@ from pathlib import Path
 
 from backend import main
 from backend.auth import legal
+from backend.auth import service as auth_service
+from backend.auth.current_user import reset_current_user, set_current_user
 from backend.auth.models import ProfileSetupRequest
 from backend.notifications import routes as notification_routes
 from backend.product_ops import service as product_ops_service
@@ -183,3 +185,33 @@ def test_profile_setup_migration_does_not_modify_financial_records():
     assert "profile_setup_completed" in migration
     assert "ALTER TABLE public.financial_profiles" not in migration
     assert "UPDATE public.financial_profiles" not in migration
+
+
+def test_self_deletion_fails_closed_without_server_admin_key(monkeypatch):
+    monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", None)
+    token = set_current_user({
+        "id": 42,
+        "account_id": "11111111-1111-1111-1111-111111111111",
+        "supabase_user_id": "22222222-2222-2222-2222-222222222222",
+        "email": "person@example.com",
+    })
+    try:
+        auth_service.delete_current_account()
+        assert False, "Account deletion must reject requests when no server-only key is configured."
+    except HTTPException as exc:
+        assert exc.status_code == 503
+    finally:
+        reset_current_user(token)
+
+
+def test_self_deletion_migration_cascades_owned_data():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260919_account_self_deletion.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "REFERENCES public.accounts(id) ON DELETE CASCADE" in migration
+    assert "REFERENCES public.workspaces(id) ON DELETE CASCADE" in migration
+    assert "c.confdeltype <> 'c'" in migration
