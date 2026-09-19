@@ -3,8 +3,11 @@ import { Plus, Repeat2 } from "lucide-react";
 import { createRecurring, deleteRecurring, getRecurring, updateRecurring } from "../services/jarvisApi";
 import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
+import { deviceLanguage, localeTag, tx } from "../../lib/locale";
 
-const money = (value) => new Intl.NumberFormat("es-CR", { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
+const language=deviceLanguage();
+const copy=(es,en)=>tx(es,en,language);
+const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
 const empty = { name:"", amount:"", category:"general", item_type:"expense", frequency:"monthly", due_day:"", is_active:true };
 
 export default function Recurring() {
@@ -38,31 +41,31 @@ export default function Recurring() {
   };
 
   return <section className="content-first-page">
-    <div className="hero"><span>BASIC 06</span><h1>Recurrentes</h1><p>Servicios, suscripciones, alquiler y otros cobros repetidos.</p></div>
+    <div className="hero"><span>BASIC 06</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>
     {error && <div className="panel error">{error}</div>}
-    <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><Repeat2 size={20}/></span><div><strong>Agregar recurrente</strong><small>Creá un ingreso o gasto periódico</small></div><Plus size={19}/></button>
+    <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><Repeat2 size={20}/></span><div><strong>{copy("Agregar recurrente","Add recurring item")}</strong><small>{copy("Creá un ingreso o gasto periódico","Create recurring income or expense")}</small></div><Plus size={19}/></button>
 
     {data && <>
-      <div className="kpis compact-kpis"><div className="card"><small>Costo mensual</small><strong>{money(data.monthly_expenses)}</strong></div><div className="card"><small>Costo anual</small><strong>{money(data.annual_expenses)}</strong></div></div>
+      <div className="kpis compact-kpis"><div className="card"><small>{copy("Costo mensual","Monthly cost")}</small><strong>{money(data.monthly_expenses)}</strong></div><div className="card"><small>{copy("Costo anual","Annual cost")}</small><strong>{money(data.annual_expenses)}</strong></div></div>
       <div className="panel table compact-record-list">{data.items.length ? data.items.map((item) => <div className={`row ${item.is_active ? "" : "muted-row"}`} key={item.id}>
-        <span><strong>{item.name}</strong><small>{money(item.monthly_amount)}/mes · {money(item.annual_amount)}/año · día {item.due_day || "—"}</small></span>
-        <span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={() => toggle(item)}>{item.is_active ? "Pausar" : "Activar"}</button><button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(item)}>Eliminar</button></span>
-      </div>) : <p className="finva-empty-state">No tenés movimientos recurrentes.</p>}</div>
+        <span><strong>{item.name}</strong><small>{money(item.monthly_amount)}/{copy("mes","month")} · {money(item.annual_amount)}/{copy("año","year")} · {copy("día","day")} {item.due_day || "—"}</small></span>
+        <span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={() => toggle(item)}>{item.is_active ? copy("Pausar","Pause") : copy("Activar","Activate")}</button><button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(item)}>{copy("Eliminar","Delete")}</button></span>
+      </div>) : <p className="finva-empty-state">{copy("No tenés movimientos recurrentes.","You have no recurring items.")}</p>}</div>
     </>}
 
-    <FinvaFormSheet open={creating} eyebrow="Nuevo recurrente" title="Agregar recurrente" onClose={() => setCreating(false)}>
+    <FinvaFormSheet open={creating} eyebrow={copy("Nuevo recurrente","New recurring item")} title={copy("Agregar recurrente","Add recurring item")} onClose={() => setCreating(false)}>
       <form className="form finva-sheet-form" onSubmit={submit}>
         <div className="finva-compact-fields">
-          <label><span>Nombre</span><input required placeholder="Ej. Netflix" value={form.name} onChange={(e) => setForm({...form,name:e.target.value})}/></label>
-          <label><span>Monto</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="₡0" value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></label>
-          <label><span>Categoría</span><input placeholder="Categoría" value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/></label>
-          <label><span>Tipo</span><select value={form.item_type} onChange={(e) => setForm({...form,item_type:e.target.value})}><option value="expense">Gasto</option><option value="income">Ingreso</option></select></label>
-          <label><span>Frecuencia</span><select value={form.frequency} onChange={(e) => setForm({...form,frequency:e.target.value})}><option value="weekly">Semanal</option><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option><option value="quarterly">Trimestral</option><option value="annual">Anual</option></select></label>
-          <label><span>Día de cobro</span><input type="number" inputMode="numeric" min="1" max="31" placeholder="1–31" value={form.due_day} onChange={(e) => setForm({...form,due_day:e.target.value})}/></label>
+          <label><span>{copy("Nombre","Name")}</span><input required placeholder={copy("Ej. Netflix","E.g. Netflix")} value={form.name} onChange={(e) => setForm({...form,name:e.target.value})}/></label>
+          <label><span>{copy("Monto","Amount")}</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="₡0" value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></label>
+          <label><span>{copy("Categoría","Category")}</span><input placeholder={copy("Categoría","Category")} value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/></label>
+          <label><span>{copy("Tipo","Type")}</span><select value={form.item_type} onChange={(e) => setForm({...form,item_type:e.target.value})}><option value="expense">{copy("Gasto","Expense")}</option><option value="income">{copy("Ingreso","Income")}</option></select></label>
+          <label><span>{copy("Frecuencia","Frequency")}</span><select value={form.frequency} onChange={(e) => setForm({...form,frequency:e.target.value})}><option value="weekly">{copy("Semanal","Weekly")}</option><option value="biweekly">{copy("Quincenal","Twice monthly")}</option><option value="monthly">{copy("Mensual","Monthly")}</option><option value="quarterly">{copy("Trimestral","Quarterly")}</option><option value="annual">{copy("Anual","Annual")}</option></select></label>
+          <label><span>{copy("Día de cobro","Due day")}</span><input type="number" inputMode="numeric" min="1" max="31" placeholder="1–31" value={form.due_day} onChange={(e) => setForm({...form,due_day:e.target.value})}/></label>
         </div>
-        <button className="finva-button finva-button-primary">Guardar recurrente</button>
+        <button className="finva-button finva-button-primary">{copy("Guardar recurrente","Save recurring item")}</button>
       </form>
     </FinvaFormSheet>
-    <ConfirmDialog open={Boolean(deleting)} title="Eliminar recurrente" description={deleting ? `Se eliminará ${deleting.name} de tus movimientos recurrentes.` : ""} onConfirm={remove} onClose={() => { if (!busy) setDeleting(null); }} busy={busy}/>
+    <ConfirmDialog open={Boolean(deleting)} title={copy("Eliminar recurrente","Delete recurring item")} description={deleting ? copy(`Se eliminará ${deleting.name} de tus movimientos recurrentes.`, `${deleting.name} will be removed from your recurring items.`) : ""} onConfirm={remove} onClose={() => { if (!busy) setDeleting(null); }} busy={busy}/>
   </section>;
 }

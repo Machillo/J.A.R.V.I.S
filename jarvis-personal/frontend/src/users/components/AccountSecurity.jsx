@@ -1,6 +1,7 @@
 import { Apple, CheckCircle2, Fingerprint, Link2, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { tx } from "../../lib/locale";
 
 export default function AccountSecurity({ user }) {
   const [identities, setIdentities] = useState([]);
@@ -32,11 +33,11 @@ export default function AccountSecurity({ user }) {
 
   const registerPasskey = async () => {
     setBusy("passkey"); setError(""); setMessage("");
-    if (!supabase.auth.registerPasskey) { setError("Passkeys todavía no están disponibles en este cliente."); setBusy(""); return; }
+    if (!supabase.auth.registerPasskey) { setError(tx("Las passkeys todavía no están disponibles en este cliente.", "Passkeys are not available in this client yet.")); setBusy(""); return; }
     const { data, error: passkeyError } = await supabase.auth.registerPasskey();
     if (passkeyError) setError(passkeyError.message);
     else {
-      setMessage(`Passkey registrada${data?.friendly_name ? `: ${data.friendly_name}` : ""}.`);
+      setMessage(tx(`Passkey registrada${data?.friendly_name ? `: ${data.friendly_name}` : ""}.`, `Passkey registered${data?.friendly_name ? `: ${data.friendly_name}` : ""}.`));
       await reload();
     }
     setBusy("");
@@ -46,30 +47,30 @@ export default function AccountSecurity({ user }) {
     <>
       <div className="section-heading compact">
         <div>
-          <p className="eyebrow">Seguridad</p>
-          <h2>Formas de entrar</h2>
-          <span>Todas apuntan a la misma identidad Finva; no crean otra cuenta cuando se vinculan desde aquí.</span>
+          <p className="eyebrow">{tx("Seguridad", "Security")}</p>
+          <h2>{tx("Formas de entrar", "Sign-in methods")}</h2>
+          <span>{tx("Todas apuntan a la misma identidad Finva; no crean otra cuenta cuando se vinculan desde aquí.", "They all point to the same Finva identity; linking them here does not create another account.")}</span>
         </div>
       </div>
 
       <div className="security-method-list">
         <article className="security-method-row">
-          <div><Link2 size={20} /><span><strong>Google</strong><small>{hasProvider("google") ? "Vinculado" : "No vinculado"}</small></span></div>
+          <div><Link2 size={20} /><span><strong>Google</strong><small>{hasProvider("google") ? tx("Vinculado", "Linked") : tx("No vinculado", "Not linked")}</small></span></div>
           {hasProvider("google") && <CheckCircle2 size={18} />}
         </article>
 
         <article className="security-method-row">
-          <div><Apple size={20} /><span><strong>Apple</strong><small>{hasProvider("apple") ? "Vinculado a esta misma cuenta" : "Podés agregar Sign in with Apple"}</small></span></div>
-          {hasProvider("apple") ? <CheckCircle2 size={18} /> : <button className="finva-button finva-button-secondary" type="button" onClick={linkApple} disabled={Boolean(busy)}>{busy === "apple" ? "Abriendo..." : "Vincular"}</button>}
+          <div><Apple size={20} /><span><strong>Apple</strong><small>{hasProvider("apple") ? tx("Vinculado a esta misma cuenta", "Linked to this account") : tx("Podés agregar Iniciar sesión con Apple", "You can add Sign in with Apple")}</small></span></div>
+          {hasProvider("apple") ? <CheckCircle2 size={18} /> : <button className="finva-button finva-button-secondary" type="button" onClick={linkApple} disabled={Boolean(busy)}>{busy === "apple" ? tx("Abriendo...", "Opening...") : tx("Vincular", "Link")}</button>}
         </article>
 
         <article className="security-method-row">
-          <div><Fingerprint size={21} /><span><strong>Passkey / Face ID</strong><small>{passkeys.length ? `${passkeys.length} registrada${passkeys.length === 1 ? "" : "s"}` : "Usá biometría/PIN del dispositivo"}</small></span></div>
-          <button className="finva-button finva-button-secondary" type="button" onClick={registerPasskey} disabled={Boolean(busy)}>{busy === "passkey" ? "Registrando..." : passkeys.length ? "Agregar otra" : "Registrar"}</button>
+          <div><Fingerprint size={21} /><span><strong>Passkey / Face ID</strong><small>{passkeys.length ? tx(`${passkeys.length} registrada${passkeys.length === 1 ? "" : "s"}`, `${passkeys.length} registered`) : tx("Usá biometría/PIN del dispositivo", "Use device biometrics/PIN")}</small></span></div>
+          <button className="finva-button finva-button-secondary" type="button" onClick={registerPasskey} disabled={Boolean(busy)}>{busy === "passkey" ? tx("Registrando...", "Registering...") : passkeys.length ? tx("Agregar otra", "Add another") : tx("Registrar", "Register")}</button>
         </article>
       </div>
 
-      <button className="security-refresh finva-button finva-button-ghost" type="button" onClick={reload}><RefreshCw size={15} /> Actualizar métodos</button>
+      <button className="security-refresh finva-button finva-button-ghost" type="button" onClick={reload}><RefreshCw size={15} /> {tx("Actualizar métodos", "Refresh methods")}</button>
       {message && <p className="success-banner">{message}</p>}
       {error && <p className="onboarding-error">{error}</p>}
     </>

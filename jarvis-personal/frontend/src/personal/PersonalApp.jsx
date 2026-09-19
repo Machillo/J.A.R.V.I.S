@@ -46,7 +46,7 @@ import AppearanceSelector from "../components/AppearanceSelector";
 import NativeProductShell from "../ui/native/NativeProductShell";
 import { detectNativePlatform } from "../ui/native/platform";
 import JarvisNavigation from "../products/jarvis/navigation/JarvisNavigation";
-import { applyDocumentLanguage, deviceLanguage, t } from "../lib/locale";
+import { applyDocumentLanguage, deviceLanguage, localeTag, t, tx } from "../lib/locale";
 
 const sanitizeCourtesy = (text = "") =>
   String(text || "")
@@ -54,28 +54,28 @@ const sanitizeCourtesy = (text = "") =>
     .replace(/Señor,\s*Señor,\s*/gi, "Señor, ");
 
 const appSectionsFor = (language) => ({
-  dashboard: { title: "J.A.R.V.I.S.", eyebrow: "Assistant" },
+  dashboard: { title: "J.A.R.V.I.S.", eyebrow: language === "es" ? "Asistente" : "Assistant" },
   strategy: { title: t("nav.strategy", language), eyebrow: language === "es" ? "Director financiero" : "Financial Director" },
   finance: { title: t("nav.finance", language), eyebrow: language === "es" ? "Centro financiero" : "Financial Center" },
-  receivables: { title: "Receivables", eyebrow: "People & Payments" },
+  receivables: { title: t("nav.receivables", language), eyebrow: language === "es" ? "Personas y pagos" : "People & Payments" },
   wealth: { title: t("nav.wealth", language), eyebrow: t("wealth.eyebrow", language) },
   investments: { title: t("nav.investments", language), eyebrow: language === "es" ? "Construcción patrimonial" : "Wealth Building" },
   businesses: { title: t("nav.businesses", language), eyebrow: language === "es" ? "Construcción patrimonial" : "Wealth Building" },
   financialAccounts: { title: t("nav.accounts", language), eyebrow: language === "es" ? "Registro financiero" : "Financial Ledger" },
   netWorth: { title: t("nav.netWorth", language), eyebrow: language === "es" ? "Patrimonio actual" : "Live Wealth" },
-  financialTimeline: { title: "Timeline financiero", eyebrow: "Liquidity Map" },
+  financialTimeline: { title: t("nav.financialTimeline", language), eyebrow: language === "es" ? "Mapa de liquidez" : "Liquidity Map" },
   reconciliation: { title: t("nav.reconciliation", language), eyebrow: language === "es" ? "Control financiero" : "Financial Control" },
   deterioration: { title: t("nav.deterioration", language), eyebrow: language === "es" ? "Alerta temprana" : "Early Warning" },
-  chats: { title: "Data Tools", eyebrow: "Imports & Movements" },
-  emails: { title: "Correos", eyebrow: "Chats" },
-  transactions: { title: "Transacciones", eyebrow: "Chats" },
-  additionalCards: { title: "Tarjetas", eyebrow: "Chats" },
-  profile: { title: "Settings", eyebrow: "Profile" },
+  chats: { title: language === "es" ? "Herramientas de datos" : "Data Tools", eyebrow: language === "es" ? "Importaciones y movimientos" : "Imports & Movements" },
+  emails: { title: t("nav.emailMonitor", language), eyebrow: language === "es" ? "Datos" : "Data" },
+  transactions: { title: t("nav.transactions", language), eyebrow: language === "es" ? "Datos" : "Data" },
+  additionalCards: { title: t("nav.additionalCards", language), eyebrow: language === "es" ? "Datos" : "Data" },
+  profile: { title: t("nav.settings", language), eyebrow: language === "es" ? "Perfil" : "Profile" },
   memory: { title: t("nav.memory", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   settings: { title: t("nav.settings", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   goals: { title: t("nav.goals", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
-  userManagement: { title: "Usuarios", eyebrow: "Owner Control" },
-  productOperations: { title: "Operaciones", eyebrow: "FINVA Beta" },
+  userManagement: { title: t("nav.manageUsers", language), eyebrow: language === "es" ? "Control de propietario" : "Owner Control" },
+  productOperations: { title: t("nav.finvaOperations", language), eyebrow: "FINVA Beta" },
 });
 
 const getBottomGroup = (page) => {
@@ -99,24 +99,26 @@ function AppListItem({ icon: Icon, title, subtitle, onClick }) {
 }
 
 function ChatsHub({ navigatePage }) {
+  const language = deviceLanguage();
   return (
     <section className="app-hub-page">
       <div className="app-section-card">
-        <AppListItem icon={MailSearch} title="Correos" subtitle="Escanear, revisar y agregar a finanzas" onClick={() => navigatePage("emails")} />
-        <AppListItem icon={ReceiptText} title="Transacciones" subtitle="Movimientos guardados" onClick={() => navigatePage("transactions")} />
-        <AppListItem icon={CreditCard} title="Tarjetas adicionales" subtitle="Emily y Sidey" onClick={() => navigatePage("additionalCards")} />
+        <AppListItem icon={MailSearch} title={t("nav.emailMonitor", language)} subtitle={tx("Escanear, revisar y agregar a finanzas", "Scan, review, and add to finance", language)} onClick={() => navigatePage("emails")} />
+        <AppListItem icon={ReceiptText} title={t("nav.transactions", language)} subtitle={tx("Movimientos guardados", "Saved transactions", language)} onClick={() => navigatePage("transactions")} />
+        <AppListItem icon={CreditCard} title={t("nav.additionalCards", language)} subtitle={tx("Tarjetas asociadas por persona", "Cards linked by person", language)} onClick={() => navigatePage("additionalCards")} />
       </div>
     </section>
   );
 }
 
 function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, profilePreferences, onProfilePhotoChange }) {
+  const language = deviceLanguage();
   const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
 
   return (
     <section className="app-profile-page">
       <div className="profile-hero">
-        <label className="profile-photo-picker" aria-label="Cambiar foto de perfil">
+        <label className="profile-photo-picker" aria-label={tx("Cambiar foto de perfil", "Change profile photo", language)}>
           <input type="file" accept="image/*" onChange={onProfilePhotoChange} />
           <span className="profile-avatar large">
             {avatarUrl ? <img src={avatarUrl} alt="Kenneth" /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
@@ -124,40 +126,40 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
           <span className="profile-camera-badge"><Camera size={18} /></span>
         </label>
         <h1>{profilePreferences?.display_name || userName || "Kenneth"}</h1>
-        <p>Memory Core y configuración de JARVIS</p>
+        <p>{tx("Memoria y configuración de JARVIS", "JARVIS memory and settings", language)}</p>
       </div>
 
       <div className="app-section-card">
-        <div className="app-group-heading"><strong>Personalización</strong><small>Apariencia y preferencias</small></div>
+        <div className="app-group-heading"><strong>{tx("Personalización", "Personalization", language)}</strong><small>{tx("Apariencia y preferencias", "Appearance and preferences", language)}</small></div>
         <AppearanceSelector compact />
       </div>
 
       <div className="app-section-card">
-        <div className="app-group-heading"><strong>JARVIS personal</strong><small>Memoria, metas y sistema</small></div>
-        <AppListItem icon={Brain} title="Memory Core" subtitle="Memoria y contexto personal" onClick={() => navigatePage("memory")} />
-        <AppListItem icon={Target} title="Goals" subtitle="Objetivos y prioridades" onClick={() => navigatePage("goals")} />
-        <AppListItem icon={SettingsIcon} title="System Settings" subtitle="Preferencias de JARVIS" onClick={() => navigatePage("settings")} />
+        <div className="app-group-heading"><strong>{t("nav.personal", language)}</strong><small>{tx("Memoria, metas y sistema", "Memory, goals, and system", language)}</small></div>
+        <AppListItem icon={Brain} title={t("nav.memory", language)} subtitle={tx("Memoria y contexto personal", "Memory and personal context", language)} onClick={() => navigatePage("memory")} />
+        <AppListItem icon={Target} title={t("nav.goals", language)} subtitle={tx("Objetivos y prioridades", "Objectives and priorities", language)} onClick={() => navigatePage("goals")} />
+        <AppListItem icon={SettingsIcon} title={t("nav.settings", language)} subtitle={tx("Preferencias de JARVIS", "JARVIS preferences", language)} onClick={() => navigatePage("settings")} />
         {currentUser?.role === "owner" && (
-          <><AppListItem icon={UsersRound} title="Administrar usuarios" subtitle="Buscar cuentas y otorgar cortesías" onClick={() => navigatePage("userManagement")} />
-          <AppListItem icon={Activity} title="Operaciones FINVA" subtitle="Promoción, pagos, uso y reportes" onClick={() => navigatePage("productOperations")} /></>
+          <><AppListItem icon={UsersRound} title={t("nav.manageUsers", language)} subtitle={tx("Buscar cuentas y otorgar cortesías", "Find accounts and grant courtesy access", language)} onClick={() => navigatePage("userManagement")} />
+          <AppListItem icon={Activity} title={t("nav.finvaOperations", language)} subtitle={tx("Promoción, pagos, uso y reportes", "Promotions, payments, usage, and reports", language)} onClick={() => navigatePage("productOperations")} /></>
         )}
       </div>
 
       <div className="app-section-card">
-        <div className="app-group-heading"><strong>Datos financieros</strong><small>Entradas, movimientos y tarjetas</small></div>
-        <AppListItem icon={MailSearch} title="Email Monitor" subtitle="Correos bancarios detectados" onClick={() => navigatePage("emails")} />
-        <AppListItem icon={ReceiptText} title="Transactions" subtitle="Historial completo e importaciones" onClick={() => navigatePage("transactions")} />
-        <AppListItem icon={CreditCard} title="Additional Cards" subtitle="Tarjetas asociadas por persona" onClick={() => navigatePage("additionalCards")} />
+        <div className="app-group-heading"><strong>{tx("Datos financieros", "Financial data", language)}</strong><small>{tx("Entradas, movimientos y tarjetas", "Inputs, transactions, and cards", language)}</small></div>
+        <AppListItem icon={MailSearch} title={t("nav.emailMonitor", language)} subtitle={tx("Correos bancarios detectados", "Detected bank emails", language)} onClick={() => navigatePage("emails")} />
+        <AppListItem icon={ReceiptText} title={t("nav.transactions", language)} subtitle={tx("Historial completo e importaciones", "Full history and imports", language)} onClick={() => navigatePage("transactions")} />
+        <AppListItem icon={CreditCard} title={t("nav.additionalCards", language)} subtitle={tx("Tarjetas asociadas por persona", "Cards linked by person", language)} onClick={() => navigatePage("additionalCards")} />
       </div>
 
       <div className="app-section-card compact">
         <div className="app-info-row">
-          <span>Uso IA hoy</span>
-          <strong>{aiUsage ? `${Math.round(aiUsage.total_tokens || 0).toLocaleString("es-CR")} tokens` : "--"}</strong>
+          <span>{tx("Uso de IA hoy", "AI usage today", language)}</span>
+          <strong>{aiUsage ? `${Math.round(aiUsage.total_tokens || 0).toLocaleString(localeTag(language))} tokens` : "--"}</strong>
         </div>
         <button className="app-list-item danger" onClick={onLogout}>
           <span className="app-list-icon"><LogOut size={22} /></span>
-          <span className="app-list-copy"><strong>Salir</strong></span>
+          <span className="app-list-copy"><strong>{t("nav.logout", language)}</strong></span>
         </button>
       </div>
     </section>

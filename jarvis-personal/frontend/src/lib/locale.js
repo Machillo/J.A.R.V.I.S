@@ -47,6 +47,10 @@ export const deviceLanguage = () => {
 
 export const localeTag = (language = deviceLanguage()) => language === "es" ? "es-CR" : "en-US";
 
+// Shared copy helper so JARVIS and FINVA always follow the same device-language rule.
+export const tx = (spanish, english, language = deviceLanguage()) =>
+  language === "es" ? spanish : english;
+
 export const t = (key, language = deviceLanguage()) => {
   const value = key.split(".").reduce((node, part) => node?.[part], dictionaries[language]);
   return value ?? key;
