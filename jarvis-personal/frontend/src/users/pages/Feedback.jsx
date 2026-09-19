@@ -41,7 +41,9 @@ export default function Feedback() {
       : [tx(`Mejora propuesta: ${form.happened}`, `Suggested improvement: ${form.happened}`), tx(`Cómo ayudaría: ${form.benefit}`, `How it would help: ${form.benefit}`), tx(`Pantalla o sección: ${form.screen || "General"}`, `Screen or section: ${form.screen || "General"}`)];
     try {
       const saved = await createFeedback({ category: form.category, subject: form.subject, message: lines.join("\n"), app_version: import.meta.env.VITE_APP_VERSION || "1.8.5", screen: form.screen || undefined, error_reference: form.errorReference || undefined });
-      setNotice(tx(`Listo. Tu reporte es ${saved.public_id}. Soporte ya puede revisarlo.`, `Done. Your report is ${saved.public_id}. Support can now review it.`));
+      setNotice(saved.email_sent
+        ? tx(`Listo. Enviamos ${saved.public_id} al correo de soporte.`, `Done. We emailed ${saved.public_id} to support.`)
+        : tx(`Guardamos ${saved.public_id}, pero el correo no pudo enviarse. Soporte puede revisarlo desde el panel.`, `We saved ${saved.public_id}, but the email could not be sent. Support can review it from the dashboard.`));
       setForm(EMPTY);
       load();
     } catch (cause) {
