@@ -33,14 +33,17 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
     username = os.getenv("SUPPORT_SMTP_USER", "").strip()
     password = os.getenv("SUPPORT_SMTP_APP_PASSWORD", "").strip()
     recipient = os.getenv("SUPPORT_EMAIL_TO", "soporte.finva@gmail.com").strip()
+    sender = os.getenv("SUPPORT_SMTP_FROM", username).strip() or username
     if not username or not password or not recipient:
         logger.warning("Support email not sent for %s: SMTP credentials are not configured", public_id)
         return False
 
     message = EmailMessage()
     message["Subject"] = f"[{public_id}] {payload.category.upper()}: {payload.subject.strip()}"
-    message["From"] = username
+    message["From"] = sender
     message["To"] = recipient
+    if email and email != "no disponible":
+        message["Reply-To"] = email
     message.set_content(
         "\n".join([
             f"Ticket: {public_id}",
@@ -55,9 +58,17 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
         ])
     )
     try:
-        with smtplib.SMTP_SSL(host, port, timeout=8) as smtp:
-            smtp.login(username, password)
-            smtp.send_message(message)
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=15) as smtp:
+                smtp.login(username, password)
+                smtp.send_message(message)
+        else:
+            with smtplib.SMTP(host, port, timeout=15) as smtp:
+                smtp.ehlo()
+                smtp.starttls()
+                smtp.ehlo()
+                smtp.login(username, password)
+                smtp.send_message(message)
         return True
     except Exception:
         logger.exception("Support email delivery failed for %s", public_id)
