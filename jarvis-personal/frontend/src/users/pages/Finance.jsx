@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronDown, Plus, Tag } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronDown, Plus, Search, Tag } from "lucide-react";
 import { createExpense, createIncome, deleteExpense, deleteIncome, getExpenses, getIncome, updateExpense, updateIncome } from "../services/jarvisApi";
 import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
@@ -36,7 +36,7 @@ function Fold({ id, title, subtitle, total, open, onToggle, children }) {
   </section>;
 }
 
-export default function Finance() {
+export default function Finance({ plan = "basic" }) {
   const [income,setIncome] = useState([]);
   const [expenses,setExpenses] = useState([]);
   const [error,setError] = useState("");
@@ -46,6 +46,8 @@ export default function Finance() {
   const [editing,setEditing] = useState(null);
   const [deleting,setDeleting] = useState(null);
   const [deletingBusy,setDeletingBusy] = useState(false);
+  const [query,setQuery] = useState("");
+  const [filter,setFilter] = useState("all");
   const [openGroups,setOpenGroups] = useState(() => {
     try { return JSON.parse(localStorage.getItem("finva:finance-folds")) || ["income","expenses"]; } catch { return ["income","expenses"]; }
   });
@@ -74,10 +76,30 @@ export default function Finance() {
   const isIncome = entryKind === "income"; const activeForm = isIncome ? incomeForm : expenseForm;
   const incomeTotal = income.reduce((sum,item)=>sum+Number(item.amount||0),0);
   const expenseTotal = expenses.reduce((sum,item)=>sum+Number(item.amount||0),0);
+  const movements = [
+    ...income.map((item) => ({...item, kind:"income", date:item.entry_date || item.created_at})),
+    ...expenses.map((item) => ({...item, kind:"expense", date:item.entry_date || item.created_at})),
+  ].filter((item) => (filter === "all" || item.kind === filter) && `${item.description || ""} ${item.category || ""}`.toLowerCase().includes(query.toLowerCase()))
+    .sort((a,b) => String(b.date || "").localeCompare(String(a.date || "")));
 
   const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="finva-fold-row" key={item.id}><span><strong>{item.description || item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b className={tone}>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || item.category})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="finva-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
 
-  return <section className="finance-page finva-progressive-page">
+  const content = plan === "free" ? <section className="free-screen free-movements-screen">
+    <small className="free-plan-label">{tx("Gratis", "Free")}</small>
+    {error && <div className="free-error">{error}</div>}
+    <label className="free-search"><Search size={18}/><input aria-label={tx("Buscar movimientos", "Search transactions")} placeholder={tx("Buscar movimientos", "Search transactions")} value={query} onChange={(event) => setQuery(event.target.value)}/></label>
+    <div className="free-filter-tabs" role="tablist">
+      {[['all',tx('Todos','All')],['income',tx('Ingresos','Income')],['expense',tx('Gastos','Expenses')]].map(([key,label]) => <button type="button" key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}</button>)}
+    </div>
+    <div className="free-transaction-list">
+      {movements.length ? movements.slice(0,8).map((item) => <button className="free-transaction-row" type="button" key={`${item.kind}-${item.id}`} onClick={() => openEdit(item.kind,item)}>
+        <span className={`free-row-icon ${item.kind}`}><ArrowDownLeft size={18}/></span>
+        <span><strong>{item.description || item.category || tx("Movimiento", "Transaction")}</strong><small>{String(item.date || "").slice(0,10)} · {item.category}</small></span>
+        <b className={item.kind}>{item.kind === "expense" ? "−" : "+"}{money(item.amount)}</b>
+      </button>) : <p className="free-empty">{tx("No hay movimientos con esos filtros.", "No transactions match those filters.")}</p>}
+    </div>
+    <button className="free-primary-button" type="button" onClick={() => setEntryKind("choose")}><Plus size={18}/>{tx("Agregar movimiento", "Add transaction")}</button>
+  </section> : <section className="finance-page finva-progressive-page">
     <div className="hero"><span>{tx("MOVIMIENTOS", "TRANSACTIONS")}</span><h1>{tx("Tu dinero día a día", "Your money day by day")}</h1><p>{tx("Registrá lo que realmente entra y sale de tus cuentas. Sin proyecciones de salario.", "Record what actually enters and leaves your accounts, without projected income.")}</p></div>
     {error && <div className="panel error">{error}</div>}
     <div className="finva-money-summary"><small>{tx("Balance de movimientos", "Transaction balance")}</small><strong>{money(incomeTotal-expenseTotal)}</strong><span>{money(incomeTotal)} {tx("ingresado", "received")} · {money(expenseTotal)} {tx("gastado", "spent")}</span></div>
@@ -92,10 +114,13 @@ export default function Finance() {
       <Fold id="expenses" title={tx("Gastos", "Expenses")} subtitle={`${expenses.length} ${tx("movimientos", "transactions")}`} total={money(expenseTotal)} open={openGroups.includes("expenses")} onToggle={toggleGroup}>{rows(expenses,"expense","negative")}</Fold>
     </div>
 
-    <FinvaFormSheet open={Boolean(entryKind)} eyebrow={tx("Nuevo movimiento", "New transaction")} title={isIncome ? tx("Agregar ingreso", "Add income") : tx("Agregar gasto", "Add expense")} onClose={()=>setEntryKind(null)}>
-      <form className={`form finva-sheet-form entry-form ${isIncome ? "income":"expense"}`} onSubmit={isIncome ? submitIncome:submitExpense}><EntryFields form={activeForm} setForm={isIncome ? setIncomeForm:setExpenseForm} categories={isIncome ? incomeCategories:expenseCategories}/>{isIncome && <p className="finva-form-hint">{tx("Ingresá el monto real que recibiste según tu boleta o depósito bancario.", "Enter the actual amount received according to your pay stub or bank deposit.")}</p>}<button className={`finva-button ${isIncome ? "finva-button-success":"finva-button-primary"}`}>{isIncome ? tx("Guardar ingreso", "Save income") : tx("Guardar gasto", "Save expense")}</button></form>
+  </section>;
+
+  return <>{content}
+    <FinvaFormSheet open={Boolean(entryKind)} eyebrow={tx("Nuevo movimiento", "New transaction")} title={entryKind === "choose" ? tx("¿Qué querés registrar?", "What do you want to record?") : isIncome ? tx("Agregar ingreso", "Add income") : tx("Agregar gasto", "Add expense")} onClose={()=>setEntryKind(null)}>
+      {entryKind === "choose" ? <div className="free-entry-choices"><button type="button" onClick={() => setEntryKind("income")}><ArrowDownLeft/>{tx("Ingreso", "Income")}</button><button type="button" onClick={() => setEntryKind("expense")}><ArrowUpRight/>{tx("Gasto", "Expense")}</button></div> : <form className={`form finva-sheet-form entry-form ${isIncome ? "income":"expense"}`} onSubmit={isIncome ? submitIncome:submitExpense}><EntryFields form={activeForm} setForm={isIncome ? setIncomeForm:setExpenseForm} categories={isIncome ? incomeCategories:expenseCategories}/>{isIncome && <p className="finva-form-hint">{tx("Ingresá el monto real que recibiste según tu boleta o depósito bancario.", "Enter the actual amount received according to your pay stub or bank deposit.")}</p>}<button className={`finva-button ${isIncome ? "finva-button-success":"finva-button-primary"}`}>{isIncome ? tx("Guardar ingreso", "Save income") : tx("Guardar gasto", "Save expense")}</button></form>}
     </FinvaFormSheet>
     <FinvaFormSheet open={Boolean(editing)} eyebrow={tx("Movimiento", "Transaction")} title={editing?.kind === "income" ? tx("Editar ingreso", "Edit income") : tx("Editar gasto", "Edit expense")} onClose={()=>setEditing(null)}>{editing && <form className="form finva-sheet-form entry-form" onSubmit={saveEdit}><EntryFields form={editing} setForm={setEditing} categories={editing.kind === "income" ? incomeCategories:expenseCategories}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}</FinvaFormSheet>
     <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar movimiento", "Delete transaction")} description={deleting ? tx(`Se eliminará ${deleting.label}. Esta acción no se puede deshacer.`, `${deleting.label} will be deleted. This action cannot be undone.`):""} onConfirm={remove} onClose={()=>{if(!deletingBusy)setDeleting(null);}} busy={deletingBusy}/>
-  </section>;
+  </>;
 }

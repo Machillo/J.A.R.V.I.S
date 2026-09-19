@@ -14,18 +14,22 @@ import SettingsPage from "../../../users/pages/Settings";
 import StrategyBasic from "../../../users/pages/StrategyBasic";
 import Transactions from "../../../users/pages/Transactions";
 import VipExperience from "../../../users/pages/VipExperience";
+import { FreeMore, FreeSettings } from "./free/FreeScreens";
 
-export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange }) {
+export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange, onLogout }) {
   return {
     overview: plan === "vip" ? <VipExperience view="dashboard" onNavigate={navigate} /> : <FinvaOverview user={user} plan={plan} onNavigate={navigate} />,
-    finance: <Finance />,
+    finance: <Finance plan={plan} />,
     debts: <Debts plan={plan} />,
     strategy: plan === "vip" ? <VipExperience view="strategy" onNavigate={navigate} /> : <StrategyBasic plan={plan} />,
     gmail: plan === "vip" ? <GmailAutomation /> : <SettingsPage user={user} onUserChange={onUserChange} />,
     goals: <Goals plan={plan} />,
+    savings: <Goals plan={plan} initialView="savings" />,
     transactions: <Transactions />,
     situation: <FinancialSituation plan={plan} onNavigate={navigate} />,
-    settings: <SettingsPage user={user} onUserChange={onUserChange} />,
+    more: plan === "free" ? <FreeMore onNavigate={navigate} onLogout={onLogout} /> : <SettingsPage user={user} onUserChange={onUserChange} />,
+    settings: plan === "free" ? <FreeSettings user={user} onNavigate={navigate} onLogout={onLogout} /> : <SettingsPage user={user} onUserChange={onUserChange} />,
+    "plan-settings": <SettingsPage user={user} onUserChange={onUserChange} />,
     budget: <Budget />,
     calendar: <FinancialCalendar />,
     recurring: <Recurring />,

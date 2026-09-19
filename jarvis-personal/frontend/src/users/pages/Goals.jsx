@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarClock, Plus, Target } from "lucide-react";
+import { ArrowLeft, CalendarClock, ChevronRight, Plus, Target } from "lucide-react";
 import { contributeGoal, contributeSavingsPlan, createGoal, createSavingsPlan, deleteGoal, deleteSavingsPlan, getGoals, getSavingsPlans, getVipCommandCenter, updateGoal, updateSavingsPlan } from "../services/jarvisApi";
 import { AmountDialog, ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
@@ -45,14 +45,15 @@ function SavingsFields({ value, setValue }) {
   </div>;
 }
 
-export default function Goals({ plan = "free" }) {
+export default function Goals({ plan = "free", initialView = "goals" }) {
   const advanced = plan !== "free";
-  const [view,setView] = useState("goals"), [rows,setRows] = useState([]), [savings,setSavings] = useState([]), [vipData,setVipData] = useState(null);
+  const [view,setView] = useState(initialView), [rows,setRows] = useState([]), [savings,setSavings] = useState([]), [vipData,setVipData] = useState(null);
   const [form,setForm] = useState(goalEmpty), [savingsForm,setSavingsForm] = useState(savingsEmpty);
   const [creating,setCreating] = useState(false), [creatingSavings,setCreatingSavings] = useState(false);
   const [edit,setEdit] = useState(null), [editSavings,setEditSavings] = useState(null);
   const [contribution,setContribution] = useState(null), [contributionAmount,setContributionAmount] = useState("");
   const [deleting,setDeleting] = useState(null), [busyDialog,setBusyDialog] = useState(false), [error,setError] = useState("");
+  const [selected,setSelected] = useState(null);
   const run = async (fn) => { setError(""); try { return await fn(); } catch (err) { setError(err.message); return null; } };
   const load = () => run(async () => { const [goalsData,savingsData] = await Promise.all([getGoals(),getSavingsPlans()]); setRows(goalsData); setSavings(savingsData); });
   useEffect(() => { load(); if (plan === "vip") getVipCommandCenter().then(setVipData).catch(() => setVipData(null)); }, [plan]);
@@ -73,19 +74,38 @@ export default function Goals({ plan = "free" }) {
     setBusyDialog(false); if (removed) { setDeleting(null); load(); }
   };
 
-  return <section className="content-first-page">
+  const totalTarget = rows.reduce((sum,item) => sum + Number(item.target_amount || 0),0);
+  const totalCurrent = rows.reduce((sum,item) => sum + Number(item.current_amount || 0),0);
+  const totalProgress = totalTarget ? Math.min(totalCurrent / totalTarget * 100,100) : 0;
+  const freeContent = initialView === "savings" ? <section className="content-first-page free-screen free-savings-manage">
+    {error && <div className="free-error">{error}</div>}
+    <SavingsList rows={savings} onCreate={() => setCreatingSavings(true)} onContribute={(item) => { setContribution({...item,kind:"savings"}); setContributionAmount(""); }} onEdit={setEditSavings} onDelete={(item) => setDeleting({...item,kind:"savings"})}/>
+  </section> : selected ? (() => {
+    const target = Math.max(Number(selected.target_amount) || 1,1), current = Number(selected.current_amount) || 0, progress = Math.min(current/target*100,100);
+    return <section className="free-screen free-goal-detail"><button className="free-back-button" type="button" onClick={() => setSelected(null)}><ArrowLeft size={18}/>{tx("Volver a metas", "Back to goals")}</button><article className="free-detail-card"><span className="free-detail-icon"><Target size={24}/></span><h2>{selected.name}</h2><div className="free-progress-ring" style={{"--progress":`${progress * 3.6}deg`}}><span><strong>{Math.round(progress)}%</strong><small>{tx("completo", "complete")}</small></span></div><div className="free-detail-values"><span><small>{tx("Ahorrado", "Saved")}</small><strong>{money(current)}</strong></span><span><small>{tx("Falta", "Remaining")}</small><strong>{money(Math.max(target-current,0))}</strong></span></div></article><button className="free-primary-button" type="button" onClick={() => { setContribution({...selected,kind:"goal"}); setContributionAmount(""); }}>{tx("Registrar aporte", "Record contribution")}</button><button className="free-secondary-button" type="button" onClick={() => setDeleting({...selected,kind:"goal"})}>{tx("Eliminar meta", "Delete goal")}</button></section>;
+  })() : <section className="free-screen free-goals-screen">
+    <small className="free-plan-label">{tx("Gratis", "Free")}</small>
+    <article className="free-summary-card free-summary-card--green"><small>{tx("PROGRESO TOTAL", "TOTAL PROGRESS")}</small><strong>{Math.round(totalProgress)}%</strong><span>{money(totalCurrent)} {tx("de", "of")} {money(totalTarget)}</span></article>
+    {error && <div className="free-error">{error}</div>}
+    <div className="free-record-list">{rows.length ? rows.map((goal) => { const target=Math.max(Number(goal.target_amount)||1,1),current=Number(goal.current_amount)||0,progress=Math.min(current/target*100,100); return <button className="free-record-card" type="button" key={goal.id} onClick={() => setSelected(goal)}><span><strong>{goal.name}</strong><small>{money(current)} {tx("de", "of")} {money(target)}</small><em>{tx("Ver meta", "View goal")}<ChevronRight size={14}/></em></span><b>{Math.round(progress)}%</b></button>; }) : <p className="free-empty">{tx("Todavía no creaste metas.", "You haven't created any goals yet.")}</p>}</div>
+    <button className="free-primary-button" type="button" onClick={() => setCreating(true)}><Plus size={18}/>{tx("Agregar meta", "Add goal")}</button>
+  </section>;
+
+  const content = !advanced ? freeContent : <section className="content-first-page">
     <div className="hero"><span>{plan === "vip" ? "FINVA · VIP" : advanced ? "BASIC 04" : "FREE 05"}</span><h1>{tx("Metas y ahorros", "Goals and savings")}</h1><p>{tx("Separá lo que querés alcanzar de lo que planeás guardar cada mes.", "Keep your goals separate from what you plan to save each month.")}</p></div>
     <div className="finva-segmented goals-segmented" role="tablist"><button type="button" className={view === "goals" ? "active" : ""} onClick={() => setView("goals")}><Target size={17}/>{tx("Metas", "Goals")}</button><button type="button" className={view === "savings" ? "active" : ""} onClick={() => setView("savings")}><CalendarClock size={17}/>{tx("Ahorros programados", "Scheduled savings")}</button></div>
     {error && <div className="panel error">{error}</div>}
     {plan === "vip" && vipData?.goals?.length ? <article className="vip-smart-goal-card"><small>VIP · {tx("META INTELIGENTE","SMART GOAL")}</small><strong>{vipData.goals[0].name}</strong><span>{vipData.goals[0].monthly_required ? `${tx("Aporte recomendado","Recommended contribution")}: ${money(vipData.goals[0].monthly_required)}/${tx("mes","month")}` : tx("Agregá una fecha para calcular el aporte recomendado.","Add a date to calculate the recommended contribution.")}</span><b className={vipData.goals[0].viable ? "positive" : "warning"}>{vipData.goals[0].viable ? tx("Compatible con tu margen actual","Compatible with your current margin") : tx("Requiere ajustar el plan","Requires a plan adjustment")}</b></article> : null}
     {view === "goals" ? <GoalsList rows={rows} advanced={advanced} onCreate={() => setCreating(true)} onContribute={(goal) => { setContribution({...goal,kind:"goal"}); setContributionAmount(""); }} onEdit={setEdit} onDelete={(goal) => setDeleting({...goal,kind:"goal"})}/> : <SavingsList rows={savings} onCreate={() => setCreatingSavings(true)} onContribute={(item) => { setContribution({...item,kind:"savings"}); setContributionAmount(""); }} onEdit={setEditSavings} onDelete={(item) => setDeleting({...item,kind:"savings"})}/>}
-    <FinvaFormSheet open={creating} eyebrow={tx("Nueva meta", "New goal")} title={tx("Agregar meta", "Add goal")} onClose={() => setCreating(false)}><form className="form finva-sheet-form" onSubmit={submitGoal}><GoalFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-success">{tx("Guardar meta", "Save goal")}</button></form></FinvaFormSheet>
+  </section>;
+
+  return <>{content}<FinvaFormSheet open={creating} eyebrow={tx("Nueva meta", "New goal")} title={tx("Agregar meta", "Add goal")} onClose={() => setCreating(false)}><form className="form finva-sheet-form" onSubmit={submitGoal}><GoalFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-success">{tx("Guardar meta", "Save goal")}</button></form></FinvaFormSheet>
     <FinvaFormSheet open={Boolean(edit)} eyebrow={tx("Meta", "Goal")} title={tx("Editar meta", "Edit goal")} onClose={() => setEdit(null)}>{edit && <form className="form finva-sheet-form" onSubmit={saveGoal}><GoalFields value={edit} setValue={setEdit} advanced={advanced}/><label><span>{tx("Estado", "Status")}</span><select value={edit.status} onChange={(e) => setEdit({...edit,status:e.target.value})}><option value="active">{tx("Activa", "Active")}</option><option value="paused">{tx("Pausada", "Paused")}</option><option value="completed">{tx("Completada", "Completed")}</option></select></label><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}</FinvaFormSheet>
     <FinvaFormSheet open={creatingSavings} eyebrow={tx("Ahorro mensual", "Monthly savings")} title={tx("Programar ahorro", "Schedule savings")} onClose={() => setCreatingSavings(false)}><form className="form finva-sheet-form" onSubmit={submitSavings}><SavingsFields value={savingsForm} setValue={setSavingsForm}/><button className="finva-button finva-button-success">{tx("Guardar programación", "Save schedule")}</button></form></FinvaFormSheet>
     <FinvaFormSheet open={Boolean(editSavings)} eyebrow={tx("Ahorro mensual", "Monthly savings")} title={tx("Editar programación", "Edit schedule")} onClose={() => setEditSavings(null)}>{editSavings && <form className="form finva-sheet-form" onSubmit={saveSavings}><SavingsFields value={editSavings} setValue={setEditSavings}/><label><span>{tx("Estado", "Status")}</span><select value={editSavings.status} onChange={(e) => setEditSavings({...editSavings,status:e.target.value})}><option value="active">{tx("Activo", "Active")}</option><option value="paused">{tx("Pausado", "Paused")}</option><option value="completed">{tx("Completado", "Completed")}</option></select></label><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}</FinvaFormSheet>
     <AmountDialog open={Boolean(contribution)} title={contribution?.kind === "savings" ? tx("Registrar ahorro", "Record savings") : tx("Registrar aporte", "Record contribution")} description={contribution ? tx(`Sumar dinero a ${contribution.name}.`, `Add money to ${contribution.name}.`) : ""} value={contributionAmount} onValueChange={setContributionAmount} confirmLabel={tx("Registrar", "Record")} onConfirm={registerContribution} onClose={() => { if (!busyDialog) setContribution(null); }} busy={busyDialog} tone="success"/>
     <ConfirmDialog open={Boolean(deleting)} title={deleting?.kind === "savings" ? tx("Eliminar ahorro programado", "Delete scheduled savings") : tx("Eliminar meta", "Delete goal")} description={deleting ? tx(`Se eliminará ${deleting.name}. Esta acción no se puede deshacer.`, `${deleting.name} will be deleted. This action cannot be undone.`) : ""} onConfirm={remove} onClose={() => { if (!busyDialog) setDeleting(null); }} busy={busyDialog}/>
-  </section>;
+  </>;
 }
 
 function GoalsList({ rows, advanced, onCreate, onContribute, onEdit, onDelete }) {

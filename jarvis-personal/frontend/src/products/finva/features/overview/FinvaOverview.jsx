@@ -130,6 +130,11 @@ export default function FinvaOverview({ user, plan = "free", onNavigate }) {
           <span>{tx("Ingresos", "Income")} {money(data.income)} · {tx("Gastos", "Expenses")} {money(data.expenses)}</span>
           <span>{tx("Deuda pagada", "Debt paid")} {money(data.debt_paid)}</span>
         </article>
+        <article className="finva-free-kpis">
+          <div><span>{tx("Ingresos", "Income")}</span><strong>{money(data.income)}</strong></div>
+          <div><span>{tx("Gastos", "Expenses")}</span><strong>{money(data.expenses)}</strong></div>
+          <div><span>{tx("Deuda pendiente", "Outstanding debt")}</span><strong>{money(data.debt_balance)}</strong></div>
+        </article>
       </>}
 
       <article className="mobile-panel finva-overview-chart">
