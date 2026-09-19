@@ -45,7 +45,7 @@ function BasicDashboard({ data, planning, onNavigate }) {
   return <section className="finva-basic-dashboard">
     <article className="finva-basic-hero-card">
       <small>{tx("DISPONIBLE PLANIFICADO", "PLANNED AVAILABLE")}</small>
-      <strong>{money(available || data.balance)}</strong>
+      <strong>{money(budget ? available : data.balance)}</strong>
       <span>{budgeted ? tx(`Presupuesto usado ${used}%`, `Budget used ${used}%`) : tx("Configurá tu presupuesto para planificar el mes", "Set up your budget to plan the month")}</span>
     </article>
 
