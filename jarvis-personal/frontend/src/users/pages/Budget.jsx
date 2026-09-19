@@ -20,7 +20,7 @@ export default function Budget({ plan = "basic" }){
   if(!data)return <div className={`panel ${error?"error":""}`}>{error||copy("Preparando presupuesto...","Preparing budget...")}</div>;
 
   return <section className="finva-basic-budget">
-    {plan !== "basic" && <div className="hero"><span>BASIC</span><h1>{copy("Presupuesto guiado","Guided budget")}</h1><p>{copy("Organizá cuánto querés usar por categoría y comparalo con lo que ya gastaste.","Organize how much you want to use by category and compare it with what you've already spent.")}</p></div>}
+    {plan === "free" && <div className="hero"><span>BASIC</span><h1>{copy("Presupuesto guiado","Guided budget")}</h1><p>{copy("Organizá cuánto querés usar por categoría y comparalo con lo que ya gastaste.","Organize how much you want to use by category and compare it with what you've already spent.")}</p></div>}
     {error&&<div className="panel error">{error}</div>}
     <article className="basic-budget-summary">
       <small>{new Date().toLocaleDateString(localeTag(language),{month:"long"}).toUpperCase()}</small>
