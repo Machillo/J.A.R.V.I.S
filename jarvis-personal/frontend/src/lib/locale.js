@@ -41,8 +41,8 @@ const dictionaries = {
 
 export const deviceLanguage = () => {
   if (typeof navigator === "undefined") return "es";
-  const candidates = [...(navigator.languages || []), navigator.language].filter(Boolean);
-  return candidates.some((value) => String(value).toLowerCase().startsWith("es")) ? "es" : "en";
+  const primary = (navigator.languages?.[0] || navigator.language || "es").toLowerCase();
+  return primary.startsWith("es") ? "es" : "en";
 };
 
 export const localeTag = (language = deviceLanguage()) => language === "es" ? "es-CR" : "en-US";

@@ -11,6 +11,7 @@ import { supabase } from "./lib/supabase";
 import { registerNativeAuthListener } from "./lib/nativeAuth";
 import { identifyTelemetryUser, trackEvent } from "./lib/telemetry";
 import { openSupport } from "./lib/apiErrors";
+import { tx } from "./lib/locale";
 
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
@@ -157,7 +158,7 @@ export default function App() {
   }
 
   if (!sessionLoaded) {
-    return <BootScreen message="Inicializando sesión..." />;
+    return <BootScreen message={tx("Inicializando sesión...", "Initializing session...")} />;
   }
 
   if (!session) {
@@ -167,12 +168,12 @@ export default function App() {
   if (identityError) {
     return (
       <main className="unified-router-boot">
-        <strong>No pudimos cargar tu cuenta.</strong>
-        <span>{identityError || "Intentá nuevamente o escribinos desde soporte."}</span>
+        <strong>{tx("No pudimos cargar tu cuenta.", "We couldn’t load your account.")}</strong>
+        <span>{identityError || tx("Intentá nuevamente o escribinos desde soporte.", "Try again or contact support.")}</span>
         <div className="boot-actions">
-          <button type="button" onClick={() => window.location.reload()}>Intentar de nuevo</button>
-          <button type="button" onClick={() => { openSupport({ kind: "problem", screen: "inicio", summary: "No se pudo cargar la cuenta." }); window.location.reload(); }}>Abrir soporte</button>
-          <button type="button" onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+          <button type="button" onClick={() => window.location.reload()}>{tx("Intentar de nuevo", "Try again")}</button>
+          <button type="button" onClick={() => { openSupport({ kind: "problem", screen: "inicio", summary: tx("No se pudo cargar la cuenta.", "The account could not be loaded.") }); window.location.reload(); }}>{tx("Abrir soporte", "Open support")}</button>
+          <button type="button" onClick={() => supabase.auth.signOut()}>{tx("Cerrar sesión", "Log out")}</button>
         </div>
       </main>
     );

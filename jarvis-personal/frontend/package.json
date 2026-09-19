@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "audit:language": "node scripts/audit-ui-language.mjs",
+    "test:locale": "node scripts/test-locale.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
