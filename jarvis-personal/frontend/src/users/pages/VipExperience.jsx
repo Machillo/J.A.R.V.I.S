@@ -14,7 +14,7 @@ function Row({label,value,tone=""}){return <div className="vip-figma-row"><span>
 
 export default function VipExperience({view="dashboard",onNavigate}){
   const [data,setData]=useState(null),[profile,setProfile]=useState(null),[budget,setBudget]=useState(null),[error,setError]=useState("");
-  const load=()=>{setError("");Promise.all([getVipCommandCenter(),getFinancialSituation(),getBudget()]).then(([vip,situation,budgetData])=>{setData(vip);setProfile(situation);setBudget(budgetData)}).catch(e=>setError(e.message))};
+  const load=()=>{setError("");Promise.all([getVipCommandCenter(),getFinancialSituation(),getBudget()]).then(([vip,situation,budgetData])=>{setData(vip);setProfile(situation?.financial_profile || {});setBudget(budgetData)}).catch(e=>setError(e.message))};
   useEffect(load,[]);
   if(error&&!data)return <div className="panel error">{error}</div>;
   if(!data||!profile)return <Loading/>;
