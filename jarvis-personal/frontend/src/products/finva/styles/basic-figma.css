@@ -227,17 +227,6 @@ body:has(.native-product--finva.native-plan--basic){background:#060e1a}
 .native-product--finva.native-plan--basic .native-sheet-group button{min-height:50px;border:1px solid #142b40;border-radius:14px;background:#0f1f33}
 .native-product--finva.native-plan--basic .native-sheet-group button>span{color:#1aa6f5;background:#092938}
 
-/* BASIC · 01 incremental activation */
-.unified-onboarding-shell.unified-plan-basic{background:#060e1a;color:#f7fbff}
-.unified-plan-basic .unified-onboarding-card{border-color:#142b40!important;background:#0b1726!important;box-shadow:none!important}
-.unified-plan-basic .unified-onboarding-top strong,
-.unified-plan-basic .unified-eyebrow{color:#1aa6f5!important}
-.unified-plan-basic .unified-saved-note{border:1px solid #142b40!important;background:#092130!important;color:#c6d2df!important}
-.unified-plan-basic .unified-form-grid>label{border-color:#142b40!important;background:#0b1726!important}
-.unified-plan-basic .unified-form-grid input,
-.unified-plan-basic .unified-form-grid select{border-color:#142b40!important;background:#0f1f33!important;color:#f7fbff!important}
-.unified-plan-basic .unified-primary{background:#1aa6f5!important;color:#060e1a!important}
-
 html[data-color-mode-resolved="light"] .native-product--finva.native-plan--basic,
 html[data-theme="light"] .native-product--finva.native-plan--basic{
   --native-bg:#060e1a;--native-bg-soft:#0f1f33;--native-surface:#0b1726;--native-surface-raised:#0f1f33;

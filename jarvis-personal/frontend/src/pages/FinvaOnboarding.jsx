@@ -32,7 +32,7 @@ function FieldHelp({ label, children }) {
   </span>;
 }
 
-export default function UnifiedOnboarding({ user, onComplete }) {
+export default function FinvaOnboarding({ user, onComplete }) {
   const [profile, setProfile] = useState(user);
   const [plans, setPlans] = useState([]);
   const [financialProfile, setFinancialProfile] = useState(null);

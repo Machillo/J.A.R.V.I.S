@@ -13,7 +13,7 @@ import { tx } from "../lib/locale";
 import "./users.css";
 import "./finva-theme.css";
 import "./finva-progressive.css";
-import "../products/finva/styles/free-figma.css";
+import "../products/finva/styles/free.css";
 import "../products/finva/styles/basic-figma.css";
 import "../products/finva/styles/vip-figma.css";
 
@@ -47,7 +47,7 @@ export default function UsersApp({ user, onUserChange }) {
   return (
     <NativeProductShell product="finva" platform={platform} plan={plan} className="users-app">
       <div className="app mobile-app-shell">
-        <NativeProductHeader product="FINVA" subtitle={plan === "free" ? "Gratis" : plan.toUpperCase()} avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()} onProfile={() => setPage("settings")}/>
+        <NativeProductHeader product="FINVA" subtitle={plan === "free" ? tx("Gratis", "Free") : plan.toUpperCase()} avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()} onProfile={() => setPage("settings")}/>
         <main className="content mobile-content native-scroll-content">
           {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>{tx("Entendido", "Got it")}</button></aside>}
           {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>{tx("Algo no cargó", "Something didn’t load")}</strong><span>{tx("Podés intentar de nuevo o reportarlo.", "You can try again or report it.")}</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>{tx("Reportar", "Report")}</button><button className="finva-api-help-close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={() => setApiIssue(null)}>×</button></aside>}
