@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BrainCircuit, ShieldCheck } from "lucide-react";
 import { startGoogleLogin } from "../lib/nativeAuth";
+import { tx } from "../lib/locale";
 
 function GoogleIcon() {
   return (
@@ -47,7 +48,7 @@ export default function Login({ nativeError = "" }) {
         <p className="login-kicker">FINVA ID</p>
         <h1 className="auth-title">FINVA</h1>
         <p className="login-subtitle">
-          Una cuenta. Tus workspaces. Tus finanzas aisladas y conectadas cuando vos lo decidís.
+          {tx("Una cuenta. Tus espacios de trabajo. Tus finanzas aisladas y conectadas cuando vos lo decidís.", "One account. Your workspaces. Your finances isolated and connected when you choose.")}
         </p>
 
         <button
@@ -57,14 +58,14 @@ export default function Login({ nativeError = "" }) {
           type="button"
         >
           <GoogleIcon />
-          {loading ? "Conectando con Google..." : "Continuar con Google"}
+          {loading ? tx("Conectando con Google...", "Connecting to Google...") : tx("Continuar con Google", "Continue with Google")}
         </button>
 
         {(error || nativeError) && <p className="auth-message auth-error">{error || nativeError}</p>}
 
         <p className="login-warning auth-secure-note">
           <ShieldCheck size={15} />
-          Google es el único método de acceso habilitado por ahora.
+          {tx("Google es el único método de acceso habilitado por ahora.", "Google is the only sign-in method currently enabled.")}
         </p>
       </section>
     </main>

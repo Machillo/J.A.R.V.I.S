@@ -1,4 +1,5 @@
 import { AlertTriangle, Banknote, X } from "lucide-react";
+import { tx } from "../../lib/locale";
 
 function DialogFrame({ title, description, icon: Icon, tone = "primary", children, onClose, busy }) {
   return (
@@ -10,7 +11,7 @@ function DialogFrame({ title, description, icon: Icon, tone = "primary", childre
       }}
     >
       <section className={`finva-dialog finva-dialog-${tone}`} role="dialog" aria-modal="true" aria-labelledby="finva-dialog-title">
-        <button className="finva-dialog-close" type="button" aria-label="Cerrar" disabled={busy} onClick={onClose}>
+        <button className="finva-dialog-close" type="button" aria-label={tx("Cerrar", "Close")} disabled={busy} onClick={onClose}>
           <X size={20} />
         </button>
         <div className="finva-dialog-icon"><Icon size={24} /></div>
@@ -44,7 +45,7 @@ export function AmountDialog({
     <DialogFrame title={title} description={description} icon={Banknote} tone={tone} onClose={onClose} busy={busy}>
       <form className="finva-dialog-form" onSubmit={submit}>
         <label>
-          <span>Monto</span>
+          <span>{tx("Monto", "Amount")}</span>
           <div className="finva-money-input">
             <b>₡</b>
             <input
@@ -61,9 +62,9 @@ export function AmountDialog({
           </div>
         </label>
         <div className="finva-dialog-actions">
-          <button className="finva-button finva-button-ghost" type="button" disabled={busy} onClick={onClose}>Cancelar</button>
+          <button className="finva-button finva-button-ghost" type="button" disabled={busy} onClick={onClose}>{tx("Cancelar", "Cancel")}</button>
           <button className="finva-button finva-button-primary" disabled={busy || Number(value) <= 0}>
-            {busy ? "Procesando…" : confirmLabel}
+            {busy ? tx("Procesando…", "Processing…") : confirmLabel}
           </button>
         </div>
       </form>
@@ -75,7 +76,7 @@ export function ConfirmDialog({
   open,
   title,
   description,
-  confirmLabel = "Eliminar",
+  confirmLabel = tx("Eliminar", "Delete"),
   onConfirm,
   onClose,
   busy = false,
@@ -85,9 +86,9 @@ export function ConfirmDialog({
   return (
     <DialogFrame title={title} description={description} icon={AlertTriangle} tone={tone} onClose={onClose} busy={busy}>
       <div className="finva-dialog-actions">
-        <button className="finva-button finva-button-ghost" type="button" disabled={busy} onClick={onClose}>Cancelar</button>
+        <button className="finva-button finva-button-ghost" type="button" disabled={busy} onClick={onClose}>{tx("Cancelar", "Cancel")}</button>
         <button className={`finva-button finva-button-${tone}`} type="button" disabled={busy} onClick={onConfirm}>
-          {busy ? "Procesando…" : confirmLabel}
+          {busy ? tx("Procesando…", "Processing…") : confirmLabel}
         </button>
       </div>
     </DialogFrame>

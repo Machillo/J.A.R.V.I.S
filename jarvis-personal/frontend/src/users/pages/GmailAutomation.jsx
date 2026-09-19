@@ -8,6 +8,7 @@ import {
   getVipGmailStatus,
   syncVipGmail,
 } from "../services/jarvisApi";
+import { tx } from "../../lib/locale";
 
 export default function GmailAutomation() {
   const [gmail, setGmail] = useState(null);
@@ -17,7 +18,7 @@ export default function GmailAutomation() {
 
   const load = useCallback(async () => {
     try { setGmail(await getVipGmailStatus()); }
-    catch (err) { setError(err.message || "No se pudo consultar Gmail."); }
+    catch (err) { setError(err.message || tx("No se pudo consultar Gmail.", "Couldn’t check Gmail.")); }
   }, []);
 
   useEffect(() => {
@@ -40,9 +41,9 @@ export default function GmailAutomation() {
     setBusy("connect"); setError(""); setMessage("");
     try {
       const response = await connectVipGmail();
-      if (!response?.authorization_url) throw new Error("Google no devolvió una dirección de autorización.");
+      if (!response?.authorization_url) throw new Error(tx("Google no devolvió una dirección de autorización.", "Google did not return an authorization URL."));
       await Browser.open({ url: response.authorization_url, presentationStyle: "popover" });
-    } catch (err) { setError(err.message || "No se pudo abrir Google."); }
+    } catch (err) { setError(err.message || tx("No se pudo abrir Google.", "Couldn’t open Google.")); }
     finally { setBusy(""); }
   };
 
@@ -51,8 +52,8 @@ export default function GmailAutomation() {
     try {
       const result = await syncVipGmail();
       await load();
-      setMessage(`Listo: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`);
-    } catch (err) { setError(err.message || "No se pudo actualizar Gmail."); }
+      setMessage(tx(`Listo: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`, `Done: ${result.auto_saved || 0} new transactions and ${result.pending || 0} to review.`));
+    } catch (err) { setError(err.message || tx("No se pudo actualizar Gmail.", "Couldn’t refresh Gmail.")); }
     finally { setBusy(""); }
   };
 
@@ -61,27 +62,27 @@ export default function GmailAutomation() {
     try {
       await disconnectVipGmail();
       setGmail({ connected: false, status: "disconnected" });
-      setMessage("Gmail quedó desconectado de FINVA.");
-    } catch (err) { setError(err.message || "No se pudo desconectar Gmail."); }
+      setMessage(tx("Gmail quedó desconectado de FINVA.", "Gmail was disconnected from FINVA."));
+    } catch (err) { setError(err.message || tx("No se pudo desconectar Gmail.", "Couldn’t disconnect Gmail.")); }
     finally { setBusy(""); }
   };
 
   return <section className="mobile-page gmail-automation-page">
     <div className="mobile-page-heading">
-      <p className="eyebrow">Automatización VIP</p>
-      <h1>Movimientos desde Gmail</h1>
-      <span>FINVA importa notificaciones bancarias de la cuenta que autoricés.</span>
+      <p className="eyebrow">{tx("Automatización VIP", "VIP automation")}</p>
+      <h1>{tx("Movimientos desde Gmail", "Transactions from Gmail")}</h1>
+      <span>{tx("FINVA importa notificaciones bancarias de la cuenta que autoricés.", "FINVA imports bank notifications from the account you authorize.")}</span>
     </div>
     <article className={`gmail-connection-card ${gmail?.needs_reauthorization ? "needs-attention" : ""}`}>
-      <div className="gmail-connection-heading"><span><Mail size={21}/></span><div><strong>Tu correo bancario</strong><small>Permiso individual · solo lectura</small></div></div>
-      <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>Cada usuario conecta únicamente su propio Gmail. FINVA no puede enviar, modificar ni borrar correos.</p></div>
+      <div className="gmail-connection-heading"><span><Mail size={21}/></span><div><strong>{tx("Tu correo bancario", "Your banking email")}</strong><small>{tx("Permiso individual · solo lectura", "Individual permission · read only")}</small></div></div>
+      <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Cada usuario conecta únicamente su propio Gmail. FINVA no puede enviar, modificar ni borrar correos.", "Each user connects only their own Gmail. FINVA cannot send, modify, or delete emails.")}</p></div>
       {!gmail?.connected ? <>
-        <p>{gmail?.needs_reauthorization ? "El permiso venció o fue revocado. Reconectalo para continuar." : "Conectá el Gmail donde recibís las notificaciones de tus bancos."}</p>
-        <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy)} onClick={connect}>{busy === "connect" ? "Abriendo Google…" : gmail?.needs_reauthorization ? "Reconectar Gmail" : "Conectar mi Gmail"}</button>
+        <p>{gmail?.needs_reauthorization ? tx("El permiso venció o fue revocado. Reconectalo para continuar.", "Permission expired or was revoked. Reconnect to continue.") : tx("Conectá el Gmail donde recibís las notificaciones de tus bancos.", "Connect the Gmail account where you receive bank notifications.")}</p>
+        <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy)} onClick={connect}>{busy === "connect" ? tx("Abriendo Google…", "Opening Google…") : gmail?.needs_reauthorization ? tx("Reconectar Gmail", "Reconnect Gmail") : tx("Conectar mi Gmail", "Connect my Gmail")}</button>
       </> : <>
-        <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{gmail.google_email}</strong><small>{gmail.automatic_updates ? "Lectura automática activa" : "Correo conectado"}</small></span></div>
-        {gmail.pending > 0 && <p>{gmail.pending} movimiento(s) necesitan revisión.</p>}
-        <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? "Actualizando…" : "Actualizar ahora"}</button><button type="button" className="danger" disabled={Boolean(busy)} onClick={disconnect}><Unplug size={16}/>Desconectar</button></div>
+        <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{gmail.google_email}</strong><small>{gmail.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span></div>
+        {gmail.pending > 0 && <p>{gmail.pending} {tx("movimiento(s) necesitan revisión.", "transaction(s) need review.")}</p>}
+        <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar ahora", "Refresh now")}</button><button type="button" className="danger" disabled={Boolean(busy)} onClick={disconnect}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
       </>}
     </article>
     {message && <p className="success-banner">{message}</p>}

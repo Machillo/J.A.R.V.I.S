@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
+import { tx } from "../../lib/locale";
 
-export default function FinvaFormSheet({ open, eyebrow = "Nuevo", title, onClose, children }) {
+export default function FinvaFormSheet({ open, eyebrow = tx("Nuevo", "New"), title, onClose, children }) {
   if (!open) return null;
 
   return (
@@ -17,7 +18,7 @@ export default function FinvaFormSheet({ open, eyebrow = "Nuevo", title, onClose
             <small>{eyebrow}</small>
             <h2 id="finva-form-sheet-title">{title}</h2>
           </div>
-          <button className="finva-form-sheet-close" type="button" aria-label="Cerrar" onClick={onClose}>
+          <button className="finva-form-sheet-close" type="button" aria-label={tx("Cerrar", "Close")} onClick={onClose}>
             <X size={21}/>
           </button>
         </header>

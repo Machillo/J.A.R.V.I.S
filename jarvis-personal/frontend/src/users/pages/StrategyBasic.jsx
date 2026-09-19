@@ -14,19 +14,23 @@ import {
   simulateStrategyBasic,
   simulateStrategyVip,
 } from "../services/jarvisApi";
+import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+
+const language = deviceLanguage();
+const copy = (es, en) => tx(es, en, language);
 
 const money = (value) =>
-  new Intl.NumberFormat("es-CR", {
+  new Intl.NumberFormat(localeTag(language), {
     style: "currency",
     currency: "CRC",
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
 
 const priorityLabel = {
-  income: "Completar ingresos",
-  stabilize: "Estabilizar flujo",
-  debt: "Acelerar deuda",
-  emergency: "Construir seguridad",
+  income: copy("Completar ingresos", "Complete income details"),
+  stabilize: copy("Estabilizar flujo", "Stabilize cash flow"),
+  debt: copy("Acelerar deuda", "Accelerate debt payoff"),
+  emergency: copy("Construir seguridad", "Build financial security"),
 };
 
 export default function StrategyBasic({ plan = "basic" }) {
@@ -49,7 +53,7 @@ export default function StrategyBasic({ plan = "basic" }) {
   }, [vip]);
 
   if (error) return <div className="panel error">{error}</div>;
-  if (!data) return <div className="panel">Calculando tu estrategia...</div>;
+  if (!data) return <div className="panel">{copy("Calculando tu estrategia...", "Calculating your strategy...")}</div>;
 
   const runSimulation = async () => {
     setLoadingSimulation(true);
@@ -89,35 +93,35 @@ export default function StrategyBasic({ plan = "basic" }) {
             </>
           )}
         </span>
-        <h1>{vip ? "Dirección financiera VIP" : "Estrategia Basic"}</h1>
+        <h1>{vip ? copy("Dirección financiera VIP", "VIP financial direction") : copy("Estrategia Basic", "Basic strategy")}</h1>
         <p>
           {vip
-            ? "Finva coordina tus prioridades, deuda, seguridad, metas y margen personal."
-            : "Una estrategia matemática construida con tus datos. Si falta información, Finva te lo dice en vez de inventarla."}
+            ? copy("Finva coordina tus prioridades, deuda, seguridad, metas y margen personal.", "Finva coordinates your priorities, debt, safety, goals, and personal margin.")
+            : copy("Una estrategia matemática construida con tus datos. Si falta información, Finva te lo dice en vez de inventarla.", "A mathematical strategy built from your data. If information is missing, Finva tells you instead of making it up.")}
         </p>
       </div>
 
       <div className={`panel strategy strategy-status-${data.status}`}>
-        <small>Prioridad actual</small>
+        <small>{copy("Prioridad actual", "Current priority")}</small>
         <h2>{priorityLabel[data.priority] || data.priority}</h2>
         <p>{vip ? data.director_note : data.recommendation}</p>
       </div>
 
       <div className="strategy-metrics">
         <article>
-          <small>Ingreso mensual estimado</small>
+          <small>{copy("Ingreso mensual estimado", "Estimated monthly income")}</small>
           <strong>{money(data.monthly_income)}</strong>
         </article>
         <article>
-          <small>Gastos esenciales</small>
+          <small>{copy("Gastos esenciales", "Essential expenses")}</small>
           <strong>{money(data.essential_expenses)}</strong>
         </article>
         <article>
-          <small>Cuotas conocidas</small>
+          <small>{copy("Cuotas conocidas", "Known payments")}</small>
           <strong>{money(data.minimum_debt_payments)}</strong>
         </article>
         <article>
-          <small>Margen estratégico</small>
+          <small>{copy("Margen estratégico", "Strategic margin")}</small>
           <strong>{money(data.strategic_margin)}</strong>
         </article>
       </div>
@@ -125,23 +129,23 @@ export default function StrategyBasic({ plan = "basic" }) {
       {vip && (
         <div className="vip-health-grid">
           <article>
-            <small>Deuda activa</small>
+            <small>{copy("Deuda activa", "Active debt")}</small>
             <strong>{money(insights.total_debt)}</strong>
           </article>
           <article>
-            <small>Metas activas</small>
+            <small>{copy("Metas activas", "Active goals")}</small>
             <strong>{insights.active_goals ?? 0}</strong>
           </article>
           <article>
-            <small>Reserva</small>
+            <small>{copy("Reserva", "Reserve")}</small>
             <strong>
               {insights.emergency_progress == null
-                ? "Sin objetivo"
+                ? copy("Sin objetivo", "No target")
                 : `${insights.emergency_progress}%`}
             </strong>
           </article>
           <article>
-            <small>Meses cubiertos</small>
+            <small>{copy("Meses cubiertos", "Months covered")}</small>
             <strong>
               {insights.emergency_months == null ? "—" : insights.emergency_months}
             </strong>
@@ -153,7 +157,7 @@ export default function StrategyBasic({ plan = "basic" }) {
         <div className="panel">
           <div className="strategy-section-title">
             <Target size={18} />
-            <h3>{vip ? "Plan recomendado" : "Qué hacer con tu margen"}</h3>
+            <h3>{vip ? copy("Plan recomendado", "Recommended plan") : copy("Qué hacer con tu margen", "What to do with your margin")}</h3>
           </div>
           <div className="allocation-list">
             {allocations.map((allocation, index) => (
@@ -173,11 +177,10 @@ export default function StrategyBasic({ plan = "basic" }) {
         <div className="panel paycheck-card">
           <div className="strategy-section-title">
             <PiggyBank size={18} />
-            <h3>Próximo ingreso</h3>
+            <h3>{copy("Próximo ingreso", "Next income")}</h3>
           </div>
           <p>
-            Con tu frecuencia de pago actual, Finva estima{" "}
-            {money(data.next_paycheck.estimated_paycheck)} por pago y propone separar:
+            {copy("Con tu frecuencia de pago actual, Finva estima", "With your current pay frequency, Finva estimates")} {money(data.next_paycheck.estimated_paycheck)} {copy("por pago y propone separar:", "per paycheck and suggests setting aside:")}
           </p>
           <div className="allocation-list">
             {data.next_paycheck.envelopes.map((allocation, index) => (
@@ -191,7 +194,7 @@ export default function StrategyBasic({ plan = "basic" }) {
             ))}
           </div>
           {data.next_paycheck.unassigned > 0 && (
-            <small>Sin asignar: {money(data.next_paycheck.unassigned)}</small>
+            <small>{copy("Sin asignar", "Unassigned")}: {money(data.next_paycheck.unassigned)}</small>
           )}
         </div>
       )}
@@ -200,24 +203,23 @@ export default function StrategyBasic({ plan = "basic" }) {
         <div className="panel projection-card">
           <div className="strategy-section-title">
             <PiggyBank size={18} />
-            <h3>Proyección de deuda</h3>
+            <h3>{copy("Proyección de deuda", "Debt projection")}</h3>
           </div>
           <p>
-            Objetivo actual: <b>{data.projection.name}</b>
+            {copy("Objetivo actual", "Current target")}: <b>{data.projection.name}</b>
           </p>
           <p>
-            Con el abono recomendado:{" "}
+            {copy("Con el abono recomendado", "With the recommended extra payment")}:{" "}
             <b>
               {data.projection.months
-                ? `${data.projection.months} meses estimados`
-                : "necesitamos más datos"}
+                ? `${data.projection.months} ${copy("meses estimados", "estimated months")}`
+                : copy("necesitamos más datos", "we need more data")}
             </b>
             .
           </p>
           {data.projection.baseline_months && (
             <small>
-              Solo con la cuota registrada serían aproximadamente{" "}
-              {data.projection.baseline_months} meses.
+              {copy("Solo con la cuota registrada serían aproximadamente", "With only the recorded payment it would take approximately")} {data.projection.baseline_months} {copy("meses", "months")}.
             </small>
           )}
         </div>
@@ -227,19 +229,19 @@ export default function StrategyBasic({ plan = "basic" }) {
         <div className="panel">
           <div className="strategy-section-title">
             <Target size={18} />
-            <h3>Metas inteligentes</h3>
+            <h3>{copy("Metas inteligentes", "Smart goals")}</h3>
           </div>
           <div className="allocation-list">
             {insights.goal_guidance.map((goal) => (
               <div className="smart-goal-row" key={goal.id}>
                 <div>
                   <strong>{goal.name}</strong>
-                  <small>Faltan {money(goal.remaining)}</small>
+                  <small>{copy("Faltan", "Remaining")} {money(goal.remaining)}</small>
                 </div>
                 <b>
                   {goal.monthly_needed == null
-                    ? "Sin fecha"
-                    : `${money(goal.monthly_needed)}/mes`}
+                    ? copy("Sin fecha", "No date")
+                    : `${money(goal.monthly_needed)}/${copy("mes", "month")}`}
                 </b>
               </div>
             ))}
@@ -251,9 +253,9 @@ export default function StrategyBasic({ plan = "basic" }) {
         <div className="panel simulator-card">
           <div className="strategy-section-title">
             <FlaskConical size={18} />
-            <h3>¿Qué pasa si agrego más?</h3>
+            <h3>{copy("¿Qué pasa si agrego más?", "What if I add more?")}</h3>
           </div>
-          <p>Probá un monto mensual adicional sin modificar tus datos.</p>
+          <p>{copy("Probá un monto mensual adicional sin modificar tus datos.", "Try an additional monthly amount without changing your data.")}</p>
           <div className="simulator-controls">
             <input
               type="number"
@@ -268,13 +270,13 @@ export default function StrategyBasic({ plan = "basic" }) {
               onClick={runSimulation}
               disabled={loadingSimulation}
             >
-              {loadingSimulation ? "Calculando..." : "Simular"}
+              {loadingSimulation ? copy("Calculando...", "Calculating...") : copy("Simular", "Simulate")}
             </button>
           </div>
           {simulation && (
             <div className="simulation-result">
               <strong>
-                Nuevo margen para estrategia:{" "}
+                {copy("Nuevo margen para estrategia", "New strategy margin")}:{" "}
                 {money(
                   (simulation.strategic_margin || 0) +
                     (simulation.simulation_extra || 0),
@@ -283,7 +285,7 @@ export default function StrategyBasic({ plan = "basic" }) {
               {simulation.projection?.months && (
                 <span>
                   {simulation.projection.name}: ~{simulation.projection.months} meses
-                  con este escenario.
+                  {copy("meses con este escenario.", "months with this scenario.")}
                 </span>
               )}
             </div>
@@ -295,15 +297,14 @@ export default function StrategyBasic({ plan = "basic" }) {
         <div className="panel simulator-card vip-scenario">
           <div className="strategy-section-title">
             <TrendingUp size={18} />
-            <h3>Laboratorio de escenarios</h3>
+            <h3>{copy("Laboratorio de escenarios", "Scenario lab")}</h3>
           </div>
           <p>
-            Probá cambios sin tocar tus datos reales. Usá números negativos para una
-            reducción mensual.
+            {copy("Probá cambios sin tocar tus datos reales. Usá números negativos para una reducción mensual.", "Try changes without touching your real data. Use negative numbers for a monthly reduction.")}
           </p>
           <div className="vip-scenario-fields">
             <label>
-              <span>Cambio ingreso / mes</span>
+              <span>{copy("Cambio ingreso / mes", "Income change / month")}</span>
               <input
                 type="number"
                 step="0.01"
@@ -317,7 +318,7 @@ export default function StrategyBasic({ plan = "basic" }) {
               />
             </label>
             <label>
-              <span>Cambio gastos / mes</span>
+              <span>{copy("Cambio gastos / mes", "Expense change / month")}</span>
               <input
                 type="number"
                 step="0.01"
@@ -331,7 +332,7 @@ export default function StrategyBasic({ plan = "basic" }) {
               />
             </label>
             <label>
-              <span>Dinero extraordinario</span>
+              <span>{copy("Dinero extraordinario", "One-time money")}</span>
               <input
                 type="number"
                 min="0"
@@ -352,16 +353,15 @@ export default function StrategyBasic({ plan = "basic" }) {
             onClick={runSimulation}
             disabled={loadingSimulation}
           >
-            {loadingSimulation ? "Calculando..." : "Comparar escenario"}
+            {loadingSimulation ? copy("Calculando...", "Calculating...") : copy("Comparar escenario", "Compare scenario")}
           </button>
           {simulation?.scenario && (
             <div className="simulation-result">
               <strong>
-                {simulation.delta.strategic_margin >= 0 ? "Ganás" : "Perdés"}{" "}
-                {money(Math.abs(simulation.delta.strategic_margin))} de margen mensual
+                {simulation.delta.strategic_margin >= 0 ? copy("Ganás", "You gain") : copy("Perdés", "You lose")} {money(Math.abs(simulation.delta.strategic_margin))} {copy("de margen mensual", "in monthly margin")}
               </strong>
               <span>
-                Margen actual: {money(simulation.current.strategic_margin)} → escenario:{" "}
+                {copy("Margen actual", "Current margin")}: {money(simulation.current.strategic_margin)} → {copy("escenario", "scenario")}:{" "}
                 {money(simulation.scenario.strategic_margin)}
               </span>
             </div>
@@ -373,7 +373,7 @@ export default function StrategyBasic({ plan = "basic" }) {
         <div className="strategy-warnings">
           <div className="strategy-section-title">
             <AlertTriangle size={18} />
-            <h3>{vip ? "Alertas del Director" : "Datos que mejorarían la precisión"}</h3>
+            <h3>{vip ? copy("Alertas del Director", "Director alerts") : copy("Datos que mejorarían la precisión", "Data that would improve accuracy")}</h3>
           </div>
           {warnings.map((warning, index) => (
             <p key={index}>

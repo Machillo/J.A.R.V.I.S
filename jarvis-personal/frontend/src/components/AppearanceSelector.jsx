@@ -1,11 +1,12 @@
 import { Laptop, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { applyColorMode, COLOR_MODE_STORAGE_KEY, getSavedColorMode } from "../lib/colorMode";
+import { tx } from "../lib/locale";
 
 const OPTIONS = [
-  { id: "dark", label: "Oscuro", icon: Moon },
-  { id: "light", label: "Claro", icon: Sun },
-  { id: "system", label: "Automático", icon: Laptop },
+  { id: "dark", label: tx("Oscuro", "Dark"), icon: Moon },
+  { id: "light", label: tx("Claro", "Light"), icon: Sun },
+  { id: "system", label: tx("Automático", "Automatic"), icon: Laptop },
 ];
 
 export default function AppearanceSelector({ compact = false }) {
@@ -27,10 +28,10 @@ export default function AppearanceSelector({ compact = false }) {
   return (
     <section className={`appearance-card ${compact ? "compact" : ""}`} aria-labelledby="appearance-title">
       <div className="appearance-copy">
-        <strong id="appearance-title">Apariencia</strong>
-        {!compact && <small>Elegí un tema o dejá que la app use el del celular.</small>}
+        <strong id="appearance-title">{tx("Apariencia", "Appearance")}</strong>
+        {!compact && <small>{tx("Elegí un tema o dejá que la app use el del celular.", "Choose a theme or let the app follow your device.")}</small>}
       </div>
-      <div className="appearance-options" role="group" aria-label="Tema de la aplicación">
+      <div className="appearance-options" role="group" aria-label={tx("Tema de la aplicación", "App theme")}>
         {OPTIONS.map(({ id, label, icon: Icon }) => (
           <button
             type="button"
