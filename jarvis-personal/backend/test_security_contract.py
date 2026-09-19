@@ -215,3 +215,16 @@ def test_self_deletion_migration_cascades_owned_data():
     assert "REFERENCES public.accounts(id) ON DELETE CASCADE" in migration
     assert "REFERENCES public.workspaces(id) ON DELETE CASCADE" in migration
     assert "c.confdeltype <> 'c'" in migration
+
+
+def test_self_deletion_followup_cascades_gmail_and_validates_constraints():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260919183000_fix_account_deletion_cascades.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "finva_gmail_connections_legacy_user_id_fkey" in migration
+    assert "REFERENCES public.users(id) ON DELETE CASCADE" in migration
+    assert "VALIDATE CONSTRAINT" in migration
