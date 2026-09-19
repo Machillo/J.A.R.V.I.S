@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import Any
 
 import requests
@@ -16,10 +17,22 @@ SUPABASE_ADMIN_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABA
 VALID_ROLES = {"owner", "admin", "user", "viewer"}
 VALID_STATUSES = {"active", "blocked", "pending"}
 OWNER_EMAILS = {email.strip().lower() for email in os.getenv("OWNER_EMAILS", "").split(",") if email.strip()}
+logger = logging.getLogger(__name__)
 
 
 def _normalize_email(email: str) -> str:
     return email.lower().strip()
+
+
+def _supabase_admin_headers(admin_key: str) -> dict[str, str]:
+    """Build headers accepted by both legacy and current Supabase admin keys."""
+    headers = {"apikey": admin_key}
+    # Current sb_secret keys are opaque, not JWTs. Sending them as Bearer makes
+    # Supabase reject the request with "Invalid JWT". Legacy service_role keys
+    # still require the Authorization header.
+    if not admin_key.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {admin_key}"
+    return headers
 
 
 def _serialize_allowed_user(row) -> dict[str, Any] | None:
@@ -261,21 +274,24 @@ def delete_current_account() -> dict[str, str]:
 
             response = requests.delete(
                 f"{SUPABASE_URL.rstrip('/')}/auth/v1/admin/users/{auth_user_id}",
-                headers={
-                    "apikey": SUPABASE_ADMIN_KEY,
-                    "Authorization": f"Bearer {SUPABASE_ADMIN_KEY}",
-                },
+                headers=_supabase_admin_headers(SUPABASE_ADMIN_KEY),
                 timeout=10,
             )
             if response.status_code not in {200, 204, 404}:
+                logger.error(
+                    "Supabase Auth account deletion failed with status %s for account %s",
+                    response.status_code,
+                    account_id,
+                )
                 raise HTTPException(
                     status_code=502,
-                    detail="No pudimos eliminar tu acceso. Intentá nuevamente o contactá a soporte.",
+                    detail="No pudimos eliminar tu acceso en este momento. El intento quedó registrado; probá nuevamente o contactá a soporte.",
                 )
             conn.commit()
     except HTTPException:
         raise
     except Exception as exc:
+        logger.exception("Permanent account deletion failed for account %s", account_id)
         raise HTTPException(
             status_code=500,
             detail="No pudimos completar la eliminación. Tus datos permanecen protegidos; intentá nuevamente o contactá a soporte.",

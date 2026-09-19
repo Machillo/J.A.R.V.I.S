@@ -7,6 +7,7 @@ import smtplib
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 
@@ -31,7 +32,9 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
     host = os.getenv("SUPPORT_SMTP_HOST", "smtp.gmail.com").strip()
     port = int(os.getenv("SUPPORT_SMTP_PORT", "465"))
     username = os.getenv("SUPPORT_SMTP_USER", "").strip()
-    password = os.getenv("SUPPORT_SMTP_APP_PASSWORD", "").strip()
+    # Google displays app passwords grouped with spaces. SMTP expects the
+    # sixteen characters without whitespace.
+    password = re.sub(r"\s+", "", os.getenv("SUPPORT_SMTP_APP_PASSWORD", ""))
     recipient = os.getenv("SUPPORT_EMAIL_TO", "soporte.finva@gmail.com").strip()
     sender = os.getenv("SUPPORT_SMTP_FROM", username).strip() or username
     if not username or not password or not recipient:
@@ -57,22 +60,35 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
             payload.message.strip(),
         ])
     )
-    try:
-        if port == 465:
-            with smtplib.SMTP_SSL(host, port, timeout=15) as smtp:
-                smtp.login(username, password)
-                smtp.send_message(message)
-        else:
-            with smtplib.SMTP(host, port, timeout=15) as smtp:
-                smtp.ehlo()
-                smtp.starttls()
-                smtp.ehlo()
-                smtp.login(username, password)
-                smtp.send_message(message)
-        return True
-    except Exception:
-        logger.exception("Support email delivery failed for %s", public_id)
-        return False
+    ports = [port]
+    if host.lower() == "smtp.gmail.com":
+        fallback_port = 587 if port == 465 else 465
+        ports.append(fallback_port)
+
+    for candidate_port in dict.fromkeys(ports):
+        try:
+            if candidate_port == 465:
+                with smtplib.SMTP_SSL(host, candidate_port, timeout=15) as smtp:
+                    smtp.login(username, password)
+                    smtp.send_message(message)
+            else:
+                with smtplib.SMTP(host, candidate_port, timeout=15) as smtp:
+                    smtp.ehlo()
+                    smtp.starttls()
+                    smtp.ehlo()
+                    smtp.login(username, password)
+                    smtp.send_message(message)
+            logger.info("Support email delivered for %s using SMTP port %s", public_id, candidate_port)
+            return True
+        except smtplib.SMTPAuthenticationError:
+            logger.exception(
+                "Support email authentication failed for %s. Verify the Google app password and SMTP user.",
+                public_id,
+            )
+            return False
+        except Exception:
+            logger.exception("Support email delivery failed for %s using SMTP port %s", public_id, candidate_port)
+    return False
 
 
 def launch_promotion_status(now: datetime | None = None):
@@ -103,10 +119,6 @@ def activate_launch_promotion(plan_code: str):
         plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
         if not plan:
             raise HTTPException(404, "Plan no disponible.")
-        current = conn.execute("SELECT onboarding_level FROM accounts WHERE id=%s FOR UPDATE", (account_id,)).fetchone()
-        completed = (current or {}).get("onboarding_level")
-        rank = {"free": 1, "basic": 2, "vip": 3}
-        needs_onboarding = rank.get(completed or "", 0) < rank[plan_code]
         conn.execute(
             """UPDATE billing_orders SET status='canceled',updated_at=NOW()
                WHERE account_id=%s AND status='payment_pending'""",
@@ -124,8 +136,8 @@ def activate_launch_promotion(plan_code: str):
             (account_id, plan["id"], LAUNCH_PROMOTION_END, LAUNCH_PROMOTION_CODE),
         )
         conn.execute(
-            "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=%s,updated_at=NOW() WHERE id=%s",
-            (not needs_onboarding, account_id),
+            "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level=%s,updated_at=NOW() WHERE id=%s",
+            (plan_code, account_id),
         )
         conn.commit()
     record_event("launch_promotion_activated", "plan_selection")
@@ -409,6 +421,39 @@ def list_feedback():
     return [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in rows]
 
 
+def resend_feedback_email(ticket_id: int):
+    """Let an owner retry delivery of an already-saved support ticket."""
+    with get_connection() as conn:
+        ensure_schema(conn)
+        row = conn.execute(
+            """SELECT f.id,f.category,f.subject,f.message,f.plan_code,f.app_version,
+                      COALESCE(a.primary_email,'no disponible') AS email
+               FROM feedback_reports f
+               LEFT JOIN accounts a ON a.id=f.account_id
+               WHERE f.id=%s""",
+            (ticket_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Reporte no encontrado.")
+    public_id = f"FINVA-{int(row['id']):06d}"
+    payload = SimpleNamespace(
+        category=row["category"], subject=row["subject"], message=row["message"],
+        app_version=row.get("app_version"), screen=None, error_reference=None,
+    )
+    sent = _send_support_email(
+        public_id=public_id,
+        email=row.get("email") or "no disponible",
+        plan=row.get("plan_code") or "",
+        payload=payload,
+    )
+    if not sent:
+        raise HTTPException(
+            503,
+            "El reporte está guardado, pero Gmail rechazó el envío. Revisá la contraseña de aplicación en Render.",
+        )
+    return {"status": "sent", "public_id": public_id, "email_sent": True}
+
+
 def owner_dashboard():
     with get_connection() as conn:
         ensure_schema(conn)
@@ -508,7 +553,10 @@ def _activate_order(conn, order, verification_source: str, bank_reference: str |
       VALUES(%s,%s,'active','self_service',NOW(),NOW(),NOW(),NOW()) ON CONFLICT(account_id) DO UPDATE SET
       plan_id=EXCLUDED.plan_id,status='active',access_source='self_service',started_at=NOW(),last_payment_at=NOW(),updated_at=NOW()""",
       (order["account_id"], plan["id"]))
-    conn.execute("UPDATE accounts SET plan_selected=TRUE,onboarding_completed=FALSE,updated_at=NOW() WHERE id=%s", (order["account_id"],))
+    conn.execute(
+      "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level=%s,updated_at=NOW() WHERE id=%s",
+      (order["plan_code"], order["account_id"]),
+    )
 
 
 def match_sinpe_payment(conn, candidate: dict):
