@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, ChevronRight, ShieldCheck, Sparkles } from "lucide-react";
 import { deviceLanguage, localeTag } from "../../../../lib/locale";
+import AccountActions from "../../components/AccountActions";
 import {
   getBudget,
   getFinancialSituation,
@@ -72,7 +73,7 @@ function LoadingScreen() {
   </section>;
 }
 
-export default function VipScreens({ view = "dashboard", onNavigate, user }) {
+export default function VipScreens({ view = "dashboard", onNavigate, onLogout, user }) {
   const [data, setData] = useState(null);
   const [profile, setProfile] = useState(null);
   const [budget, setBudget] = useState(null);
@@ -90,7 +91,7 @@ export default function VipScreens({ view = "dashboard", onNavigate, user }) {
     if (error) return <section className="vip-screen"><Card tone="danger"><h2>{error}</h2><PrimaryButton onClick={load}>{tx("Reintentar", "Try again")}</PrimaryButton></Card></section>;
     return <LoadingScreen/>;
   }
-  const props = { data, profile, budget, onNavigate, user, reload: load };
+  const props = { data, profile, budget, onNavigate, onLogout, user, reload: load };
   const needsActivation = !profile.strategy_preference || profile.emergency_fund_target == null || profile.discretionary_monthly_minimum == null;
   if (needsActivation && view === "dashboard") return <VipActivation {...props}/>;
   const screens = {
@@ -260,7 +261,7 @@ function VipReality({ data, budget, user, onNavigate }) {
   return <section className="vip-screen"><VipHeader title={tx("Plan vs realidad", "Plan vs reality")} user={user} onNavigate={onNavigate}/><Focus eyebrow={new Intl.DateTimeFormat(localeTag(language), {month:"long"}).format(new Date()).toUpperCase()} title={delta >= 0 ? tx(`${money(delta)} mejor que el plan`, `${money(delta)} better than plan`) : tx(`${money(Math.abs(delta))} sobre el plan`, `${money(Math.abs(delta))} over plan`)} caption={tx("FINVA puede reajustar el próximo mes con este resultado.", "FINVA can readjust next month using this result.")} tone={delta >= 0 ? "mint" : "coral"}/>{groups.map(([name, plan, actual]) => <Card key={name} title={name}><DataRow label={`${tx("Plan", "Plan")} ${money(plan)}`} value={`${tx("Real", "Actual")} ${money(actual)}`} tone={actual <= plan ? "mint" : "coral"}/></Card>)}<Card title={tx("Ajuste sugerido", "Suggested adjustment")} tone="gold"><p>{delta >= 0 ? tx("Protegé el excedente dentro de tu prioridad estratégica.", "Protect the surplus within your strategic priority.") : tx("Revisá las categorías sobre el plan antes del próximo mes.", "Review categories over plan before next month.")}</p></Card></section>;
 }
 
-function VipMore({ user, onNavigate }) {
+function VipMore({ user, onNavigate, onLogout }) {
   const items = [
     ["strategy", tx("Estrategia dinámica", "Dynamic strategy"), tx("Prioridades y acciones del mes.", "Priorities and actions for the month.")],
     ["vip-projections", tx("Proyecciones", "Projections"), tx("Mirá hacia dónde van tus números.", "See where your numbers are going.")],
@@ -268,7 +269,7 @@ function VipMore({ user, onNavigate }) {
     ["vip-reality", tx("Plan vs realidad", "Plan vs reality"), tx("Compará lo planeado con lo ocurrido.", "Compare what was planned with what happened.")],
     ["vip-emergency", tx("Fondo de emergencia", "Emergency fund"), tx("Protegé tu colchón financiero.", "Protect your financial cushion.")],
   ];
-  return <section className="vip-screen"><VipHeader title={tx("Más", "More")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("INTELIGENCIA VIP", "VIP INTELLIGENCE")}/>{items.map(([key, title, caption]) => <button className="vip-link-card" type="button" key={key} onClick={() => onNavigate?.(key)}><span><strong>{title}</strong><small>{caption}</small></span><ChevronRight size={17}/></button>)}<button className="vip-link-card vip-link-card--blue" type="button" onClick={() => onNavigate?.("budget")}><span><strong>{tx("Planificación Basic", "Basic planning")}</strong><small>{tx("Presupuesto · Calendario · Recurrentes · Reportes", "Budget · Calendar · Recurring · Reports")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("gmail")}><span><strong>{tx("Movimientos desde Gmail", "Transactions from Gmail")}</strong><small>{tx("Automatización bancaria de solo lectura.", "Read-only banking automation.")}</small></span><ChevronRight size={17}/></button></section>;
+  return <section className="vip-screen"><VipHeader title={tx("Más", "More")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("INTELIGENCIA VIP", "VIP INTELLIGENCE")}/>{items.map(([key, title, caption]) => <button className="vip-link-card" type="button" key={key} onClick={() => onNavigate?.(key)}><span><strong>{title}</strong><small>{caption}</small></span><ChevronRight size={17}/></button>)}<button className="vip-link-card vip-link-card--blue" type="button" onClick={() => onNavigate?.("budget")}><span><strong>{tx("Planificación Basic", "Basic planning")}</strong><small>{tx("Presupuesto · Calendario · Recurrentes · Reportes", "Budget · Calendar · Recurring · Reports")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("gmail")}><span><strong>{tx("Movimientos desde Gmail", "Transactions from Gmail")}</strong><small>{tx("Automatización bancaria de solo lectura.", "Read-only banking automation.")}</small></span><ChevronRight size={17}/></button><AccountActions onLogout={onLogout} variant="vip"/></section>;
 }
 
 function VipPreferences({ profile, user, onNavigate, reload }) {

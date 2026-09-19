@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, CircleHelp, Clock3, History, Landmark, LogOut, PiggyBank, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
+import { ChevronRight, CircleHelp, Clock3, History, Landmark, PiggyBank, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
 import AppearanceSelector from "../../../../components/AppearanceSelector";
+import AccountActions from "../../components/AccountActions";
 import { deviceLanguage, localeTag } from "../../../../lib/locale";
 import { getSavingsPlans } from "../../../../users/services/jarvisApi";
 
@@ -40,7 +41,7 @@ export function FreeMore({ onNavigate, onLogout }) {
       <MenuRow icon={ReceiptText} title={tx("Resumen mensual", "Monthly summary")} subtitle={tx("Así cerró tu mes", "How your month ended")} onClick={() => onNavigate("monthly")}/>
       <MenuRow icon={CircleHelp} title={tx("Ayuda y soporte", "Help & support")} subtitle={tx("Contanos un problema o mejora", "Tell us about an issue or idea")} onClick={() => onNavigate("feedback")}/>
     </div>
-    <button className="free-text-action" type="button" onClick={onLogout}><LogOut size={17}/>{tx("Cerrar sesión", "Log out")}</button>
+    <AccountActions onLogout={onLogout} variant="free"/>
   </section>;
 }
 
@@ -58,6 +59,6 @@ export function FreeSettings({ user, onNavigate, onLogout }) {
       <MenuRow icon={Clock3} title={tx("Plan", "Plan")} subtitle={tx("FINVA Gratis", "FINVA Free")} onClick={() => onNavigate("plan-settings")}/>
       <MenuRow icon={CircleHelp} title={tx("Ayuda", "Help")} subtitle={tx("Soporte FINVA", "FINVA support")} onClick={() => onNavigate("feedback")}/>
     </div>
-    <button className="free-logout-button" type="button" onClick={onLogout}><LogOut size={18}/>{tx("Cerrar sesión", "Log out")}</button>
+    <AccountActions onLogout={onLogout} variant="free"/>
   </section>;
 }
