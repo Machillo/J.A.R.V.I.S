@@ -71,6 +71,11 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
 
   const navigate = (key) => {
     if (key === "more") {
+      if (plan === "free") {
+        onNavigate("more");
+        setMoreOpen(false);
+        return;
+      }
       setMoreOpen((open) => !open);
       return;
     }
@@ -80,7 +85,7 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
 
   const items = [
     ...primaryItems,
-    { key: "more", label: tx("Más", "More"), icon: MoreHorizontal, activeKeys: moreOpen ? ["more", ...secondaryKeys] : secondaryKeys },
+    { key: "more", label: tx("Más", "More"), icon: MoreHorizontal, activeKeys: plan === "free" ? ["more", ...secondaryKeys] : (moreOpen ? ["more", ...secondaryKeys] : secondaryKeys) },
   ];
 
   return (

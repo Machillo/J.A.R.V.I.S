@@ -42,18 +42,35 @@ export default function UsersApp({ user, onUserChange }) {
   }, []);
 
   useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);
-  const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange });
+  const logout = () => supabase.auth.signOut();
+  const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange, onLogout: logout });
+  const freeTitles = {
+    overview: tx("Hola", "Hello") + `, ${(user?.display_name || user?.email || tx("bienvenido", "welcome")).split(" ")[0]}`,
+    finance: tx("Movimientos", "Transactions"), debts: tx("Deudas", "Debts"), goals: tx("Metas", "Goals"),
+    more: tx("Ahorro y más", "Savings & more"), settings: tx("Ajustes", "Settings"),
+    savings: tx("Ahorros", "Savings"),
+    transactions: tx("Historial", "History"), situation: tx("Situación financiera", "Financial situation"),
+    monthly: tx("Resumen mensual", "Monthly summary"), feedback: tx("Ayuda", "Help"),
+  };
 
   return (
     <NativeProductShell product="finva" platform={platform} plan={plan} className="users-app">
       <div className="app mobile-app-shell">
-        <NativeProductHeader product="FINVA" subtitle={plan === "free" ? tx("Gratis", "Free") : plan.toUpperCase()} avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()} onProfile={() => setPage("settings")}/>
+        <NativeProductHeader
+          product="FINVA"
+          subtitle={plan === "free" ? tx("Gratis", "Free") : plan.toUpperCase()}
+          eyebrow={plan === "free" ? (page === "more" || page === "settings" ? "FINVA · FREE" : "FINVA") : undefined}
+          title={plan === "free" ? (freeTitles[page] || "FINVA") : undefined}
+          variant={plan === "free" ? "free" : ""}
+          avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()}
+          onProfile={() => setPage("settings")}
+        />
         <main className="content mobile-content native-scroll-content">
           {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>{tx("Entendido", "Got it")}</button></aside>}
           {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>{tx("Algo no cargó", "Something didn’t load")}</strong><span>{tx("Podés intentar de nuevo o reportarlo.", "You can try again or report it.")}</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>{tx("Reportar", "Report")}</button><button className="finva-api-help-close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={() => setApiIssue(null)}>×</button></aside>}
           <AppErrorBoundary resetKey={page} screen={page}>{pages[page] || pages.overview}</AppErrorBoundary>
         </main>
-        <FinvaNavigation page={page} plan={plan} onNavigate={setPage} onLogout={() => supabase.auth.signOut()}/>
+        <FinvaNavigation page={page} plan={plan} onNavigate={setPage} onLogout={logout}/>
       </div>
     </NativeProductShell>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CreditCard, Plus } from "lucide-react";
+import { ArrowLeft, ChevronRight, CreditCard, Plus } from "lucide-react";
 import { createDebt, deleteDebt, getDebts, payDebt, updateDebt } from "../services/jarvisApi";
 import { AmountDialog, ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
@@ -47,6 +47,7 @@ export default function Debts({ plan = "free" }) {
   const [deleting,setDeleting] = useState(null);
   const [busyDialog,setBusyDialog] = useState(false);
   const [error,setError] = useState("");
+  const [selected,setSelected] = useState(null);
 
   const run = async (fn) => {
     setError("");
@@ -79,7 +80,35 @@ export default function Debts({ plan = "free" }) {
 
   const totalBalance = rows.reduce((sum, debt) => sum + Number(debt.remaining_amount || 0), 0);
 
-  return <section className="content-first-page finva-debts-page">
+  const freeContent = selected ? (() => {
+    const total = Math.max(Number(selected.total_amount) || Number(selected.remaining_amount) || 1, 1);
+    const progress = selected.progress_percent ?? Math.min(Math.max((1 - Number(selected.remaining_amount) / total) * 100, 0), 100);
+    return <section className="free-screen free-debt-detail">
+      <button className="free-back-button" type="button" onClick={() => setSelected(null)}><ArrowLeft size={18}/>{tx("Volver a deudas", "Back to debts")}</button>
+      <article className="free-detail-card">
+        <span className="free-detail-icon"><CreditCard size={24}/></span><h2>{selected.name}</h2>
+        <div className="free-progress-ring" style={{"--progress":`${progress * 3.6}deg`}}><span><strong>{Math.round(progress)}%</strong><small>{tx("pagado", "paid")}</small></span></div>
+        <div className="free-detail-values"><span><small>{tx("Pagado", "Paid")}</small><strong>{money(total - Number(selected.remaining_amount || 0))}</strong></span><span><small>{tx("Restante", "Remaining")}</small><strong>{money(selected.remaining_amount)}</strong></span></div>
+        <div className="free-detail-meta"><span>{tx("Cuota mensual", "Monthly payment")}<b>{money(selected.monthly_payment)}</b></span><span>{tx("Interés", "Interest")}<b>{Number(selected.interest_rate || 0)}%</b></span></div>
+      </article>
+      <button className="free-primary-button" type="button" onClick={() => { setPayment(selected); setPaymentAmount(""); }}>{tx("Registrar pago", "Record payment")}</button>
+      <button className="free-secondary-button" type="button" onClick={() => setDeleting(selected)}>{tx("Eliminar deuda", "Delete debt")}</button>
+    </section>;
+  })() : <section className="free-screen free-debts-screen">
+    <small className="free-plan-label">{tx("Gratis", "Free")}</small>
+    <article className="free-summary-card free-summary-card--red"><small>{tx("DEUDA TOTAL", "TOTAL DEBT")}</small><strong>{money(totalBalance)}</strong><span>{rows.length} {rows.length === 1 ? tx("deuda activa", "active debt") : tx("deudas activas", "active debts")}</span></article>
+    {error && <div className="free-error">{error}</div>}
+    <div className="free-record-list">{rows.length ? rows.map((debt) => {
+      const total = Math.max(Number(debt.total_amount) || Number(debt.remaining_amount) || 1, 1);
+      const progress = debt.progress_percent ?? Math.min(Math.max((1 - Number(debt.remaining_amount) / total) * 100, 0), 100);
+      return <button className="free-record-card" type="button" key={debt.id} onClick={() => setSelected(debt)}>
+        <span><strong>{debt.name}</strong><small>{money(debt.monthly_payment)}/{tx("mes", "month")} · {Math.round(progress)}% {tx("pagado", "paid")}</small><em>{tx("Ver detalle", "View details")}<ChevronRight size={14}/></em></span><b>{money(debt.remaining_amount)}</b>
+      </button>;
+    }) : <p className="free-empty">{tx("No tenés deudas registradas.", "You have no recorded debts.")}</p>}</div>
+    <button className="free-primary-button" type="button" onClick={() => setCreating(true)}><Plus size={18}/>{tx("Agregar deuda", "Add debt")}</button>
+  </section>;
+
+  const content = !advanced ? freeContent : <section className="content-first-page finva-debts-page">
     <div className="hero"><span>{advanced ? "BASIC 03" : "FREE 04"}</span><h1>{tx("Deudas", "Debts")}</h1><p>{advanced ? tx("Gestión completa con tasa, plazo y finalización estimada.", "Complete management with interest, term, and estimated payoff.") : tx("Saldos, pagos y progreso visual, sin recomendaciones.", "Balances, payments, and visual progress without recommendations.")}</p></div>
     {!advanced && <article className="finva-free-debt-summary"><small>{tx("SALDO TOTAL", "TOTAL BALANCE")}</small><strong>{money(totalBalance)}</strong><span>{rows.length} {rows.length === 1 ? tx("deuda registrada", "recorded debt") : tx("deudas registradas", "recorded debts")}</span></article>}
     {error && <div className="panel error">{error}</div>}
@@ -102,13 +131,15 @@ export default function Debts({ plan = "free" }) {
       </article>;
     }) : <div className="panel finva-empty-state">{tx("No tenés deudas registradas.", "You have no recorded debts.")}</div>}</div>
 
-    <FinvaFormSheet open={creating} eyebrow={tx("Nueva deuda", "New debt")} title={tx("Agregar deuda", "Add debt")} onClose={() => setCreating(false)}>
+  </section>;
+
+  return <>{content}<FinvaFormSheet open={creating} eyebrow={tx("Nueva deuda", "New debt")} title={tx("Agregar deuda", "Add debt")} onClose={() => setCreating(false)}>
       <form className="form finva-sheet-form" onSubmit={submit}><DebtFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar deuda", "Save debt")}</button></form>
     </FinvaFormSheet>
     <FinvaFormSheet open={Boolean(edit)} eyebrow={tx("Deuda", "Debt")} title={tx("Editar deuda", "Edit debt")} onClose={() => setEdit(null)}>
       {edit && <form className="form finva-sheet-form" onSubmit={save}><DebtFields value={edit} setValue={setEdit} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}
     </FinvaFormSheet>
     <AmountDialog open={Boolean(payment)} title={tx("Registrar pago", "Record payment")} description={payment ? `Aplicar un pago a ${payment.name}.` : ""} value={paymentAmount} onValueChange={setPaymentAmount} confirmLabel={tx("Registrar pago", "Record payment")} onConfirm={registerPayment} onClose={() => { if (!busyDialog) setPayment(null); }} busy={busyDialog}/>
-    <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar deuda", "Delete debt")} description={deleting ? `Se eliminará ${deleting.name}. Esta acción no se puede deshacer.` : ""} onConfirm={removeDebt} onClose={() => { if (!busyDialog) setDeleting(null); }} busy={busyDialog}/>
-  </section>;
+    <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar deuda", "Delete debt")} description={deleting ? tx(`Se eliminará ${deleting.name}. Esta acción no se puede deshacer.`, `${deleting.name} will be deleted. This action cannot be undone.`) : ""} onConfirm={removeDebt} onClose={() => { if (!busyDialog) setDeleting(null); }} busy={busyDialog}/>
+  </>;
 }
