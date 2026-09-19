@@ -39,7 +39,7 @@ export default function VipCenter() {
       <div className="vip-director"><small>{copy("PRIORIDAD VIGENTE","CURRENT PRIORITY")}</small><h3>{director.headline}</h3><p>{director.next_action}</p><span className={director.data_complete?"ok":"warning"}>{director.data_complete?copy("Datos suficientes","Enough data"):copy("Faltan datos para máxima precisión","More data is needed for maximum accuracy")}</span></div>
     </Section>
 
-    <Section id={2} icon={Gauge} title="Finva Score" subtitle={copy("Salud financiera explicable de 0 a 100.","Explainable financial health from 0 to 100.")}>
+    <Section id={2} icon={Gauge} title={copy("Puntaje Finva", "Finva Score")} subtitle={copy("Salud financiera explicable de 0 a 100.","Explainable financial health from 0 to 100.")}>
       <div className="vip-score"><strong>{score.value}</strong><span>{score.label}</span><progress max="100" value={score.value||0}/></div>
       <div className="vip-factor-list">{score.factors?.map(item=><div key={item.label}><span>{item.label}</span><b className={item.impact}>{typeof item.value==="number"?number(item.value):item.value}</b></div>)}</div>
     </Section>
@@ -49,12 +49,12 @@ export default function VipCenter() {
     </Section>
 
     <Section id={4} icon={Landmark} title={copy("Estrategia avanzada de deudas","Advanced debt strategy")} subtitle={copy("Comparación sin modificar tus deudas reales.","Compare without changing your real debts.")}>
-      <div className="vip-three-grid">{debt.strategies?.map(row=><div className={debt.recommended?.method===row.method?"selected":""} key={row.method}><small>{names[row.method]}</small><strong>{row.target||"Sin deuda"}</strong><span>{row.months==null?"No amortiza":`${row.months} meses`}</span><em>{row.interest==null?"Cuota insuficiente":`${money(row.interest)} en interés`}</em></div>)}</div>
+      <div className="vip-three-grid">{debt.strategies?.map(row=><div className={debt.recommended?.method===row.method?"selected":""} key={row.method}><small>{names[row.method]}</small><strong>{row.target||copy("Sin deuda", "No debt")}</strong><span>{row.months==null?copy("No amortiza", "No payoff"): `${row.months} ${copy("meses", "months")}`}</span><em>{row.interest==null?copy("Cuota insuficiente", "Insufficient payment"): `${money(row.interest)} ${copy("en interés", "in interest")}`}</em></div>)}</div>
     </Section>
 
     <Section id={5} icon={Sparkles} title={copy("¿Qué pasa si…?","What if…?")} subtitle={copy("Simulador: probá cambios sin alterar datos reales.","Sandbox: try changes without altering real data.")}>
-      <form className="vip-scenario" onSubmit={simulate}><label>Ingreso mensual adicional<input type="number" step="0.01" value={scenario.monthly_income_change} onChange={e=>setScenario({...scenario,monthly_income_change:e.target.value})}/></label><label>Cambio en gastos<input type="number" step="0.01" value={scenario.monthly_expense_change} onChange={e=>setScenario({...scenario,monthly_expense_change:e.target.value})}/></label><label>Dinero único disponible<input type="number" min="0" step="0.01" value={scenario.one_time_extra} onChange={e=>setScenario({...scenario,one_time_extra:e.target.value})}/></label><button className="finva-button finva-button-primary" disabled={simulating}>{simulating?"Calculando…":"Simular"}</button></form>
-      {result&&<div className="vip-simulation-result"><Metric label="Margen actual" value={money(result.current?.strategic_margin)}/><Metric label="Margen simulado" value={money(result.scenario?.strategic_margin)} tone={(result.delta?.strategic_margin||0)>=0?"positive":"negative"}/><Metric label="Cambio" value={money(result.delta?.strategic_margin)}/></div>}
+      <form className="vip-scenario" onSubmit={simulate}><label>{copy("Ingreso mensual adicional", "Additional monthly income")}<input type="number" step="0.01" value={scenario.monthly_income_change} onChange={e=>setScenario({...scenario,monthly_income_change:e.target.value})}/></label><label>{copy("Cambio en gastos", "Change in expenses")}<input type="number" step="0.01" value={scenario.monthly_expense_change} onChange={e=>setScenario({...scenario,monthly_expense_change:e.target.value})}/></label><label>{copy("Dinero único disponible", "One-time money available")}<input type="number" min="0" step="0.01" value={scenario.one_time_extra} onChange={e=>setScenario({...scenario,one_time_extra:e.target.value})}/></label><button className="finva-button finva-button-primary" disabled={simulating}>{simulating?copy("Calculando…", "Calculating…"):copy("Simular", "Simulate")}</button></form>
+      {result&&<div className="vip-simulation-result"><Metric label={copy("Margen actual", "Current margin")} value={money(result.current?.strategic_margin)}/><Metric label={copy("Margen simulado", "Simulated margin")} value={money(result.scenario?.strategic_margin)} tone={(result.delta?.strategic_margin||0)>=0?"positive":"negative"}/><Metric label={copy("Cambio", "Change")} value={money(result.delta?.strategic_margin)}/></div>}
     </Section>
 
     <Section id={6} icon={WalletCards} title={copy("Presupuesto adaptativo","Adaptive budget")} subtitle={copy("Lo que realmente podés gastar sin tocar obligaciones ni reserva.","What you can actually spend without touching obligations or reserves.")}>
@@ -62,39 +62,39 @@ export default function VipCenter() {
     </Section>
 
     <Section id={7} icon={AlertTriangle} title={copy("Alertas inteligentes","Smart alerts")} subtitle={copy("Solo cambios que necesitan una acción.","Only changes that need action.")}>
-      {data.alerts?.length?data.alerts.map((alert,index)=><div className={`vip-alert ${alert.severity}`} key={`${alert.title}-${index}`}><strong>{alert.title}</strong><p>{alert.context}</p><small>{alert.action}</small></div>):<div className="vip-clear"><ShieldCheck size={20}/> No hay alertas críticas con los datos actuales.</div>}
+      {data.alerts?.length?data.alerts.map((alert,index)=><div className={`vip-alert ${alert.severity}`} key={`${alert.title}-${index}`}><strong>{alert.title}</strong><p>{alert.context}</p><small>{alert.action}</small></div>):<div className="vip-clear"><ShieldCheck size={20}/> {copy("No hay alertas críticas con los datos actuales.", "There are no critical alerts with the current data.")}</div>}
     </Section>
 
     <Section id={8} icon={CalendarDays} title={copy("Calendario predictivo","Predictive calendar")} subtitle={copy("Saldo proyectado después de cada compromiso durante 45 días.","Projected balance after each commitment over 45 days.")}>
-      {data.calendar?.length?data.calendar.map((event,index)=><div className="vip-timeline" key={`${event.date}-${index}`}><time>{event.date}</time><span><strong>{event.label}</strong><small>{event.kind}</small></span><div><b className={event.kind==="income"?"positive":"negative"}>{event.kind==="income"?"+":"−"}{money(event.amount)}</b><small>queda {money(event.projected_balance)}</small></div></div>):<p className="muted-row">No hay compromisos fechados en los próximos 45 días.</p>}
+      {data.calendar?.length?data.calendar.map((event,index)=><div className="vip-timeline" key={`${event.date}-${index}`}><time>{event.date}</time><span><strong>{event.label}</strong><small>{event.kind}</small></span><div><b className={event.kind==="income"?"positive":"negative"}>{event.kind==="income"?"+":"−"}{money(event.amount)}</b><small>{copy("queda", "remaining")} {money(event.projected_balance)}</small></div></div>):<p className="muted-row">{copy("No hay compromisos fechados en los próximos 45 días.", "There are no dated commitments in the next 45 days.")}</p>}
     </Section>
 
     <Section id={9} icon={TrendingUp} title={copy("Proyecciones financieras","Financial projections")} subtitle={copy("30 días, 3, 6 y 12 meses con supuestos visibles.","30 days, 3, 6, and 12 months with visible assumptions.")}>
-      <div className="vip-projections">{data.projections?.map(row=><div key={row.months}><small>{row.months===1?"30 días":`${row.months} meses`}</small><strong>{money(row.cash)}</strong><span>Deuda {money(row.debt)}</span><em>Patrimonio {money(row.net_worth)}</em></div>)}</div>
+      <div className="vip-projections">{data.projections?.map(row=><div key={row.months}><small>{row.months===1?copy("30 días", "30 days"):`${row.months} ${copy("meses", "months")}`}</small><strong>{money(row.cash)}</strong><span>{copy("Deuda", "Debt")} {money(row.debt)}</span><em>{copy("Patrimonio", "Net worth")} {money(row.net_worth)}</em></div>)}</div>
     </Section>
 
     <Section id={10} icon={CircleDollarSign} title={copy("Patrimonio neto completo","Complete net worth")}>
-      <div className="vip-metrics"><Metric label="Activos" value={money(data.net_worth?.assets)}/><Metric label="Pasivos" value={money(data.net_worth?.liabilities)} tone="negative"/><Metric label="Patrimonio neto" value={money(data.net_worth?.value)} tone={(data.net_worth?.value||0)>=0?"positive":"negative"}/></div>
-      <small className="vip-note">{data.net_worth?.accounts?.length||0} cuentas activas incluidas.</small>
+      <div className="vip-metrics"><Metric label={copy("Activos", "Assets")} value={money(data.net_worth?.assets)}/><Metric label={copy("Pasivos", "Liabilities")} value={money(data.net_worth?.liabilities)} tone="negative"/><Metric label={copy("Patrimonio neto", "Net worth")} value={money(data.net_worth?.value)} tone={(data.net_worth?.value||0)>=0?"positive":"negative"}/></div>
+      <small className="vip-note">{data.net_worth?.accounts?.length||0} {copy("cuentas activas incluidas.", "active accounts included.")}</small>
     </Section>
 
     <Section id={11} icon={Repeat2} title={copy("Recurrentes y suscripciones","Recurring items and subscriptions")} subtitle={copy("Costo mensual y anual que alimenta estrategia y proyecciones.","Monthly and annual cost used by strategy and projections.")}>
-      <div className="vip-metrics"><Metric label="Mensual" value={money(data.recurring?.monthly_expenses)}/><Metric label="Anual" value={money(data.recurring?.annual_expenses)}/><Metric label="Patrones detectados" value={data.recurring?.detected?.length||0}/></div>
+      <div className="vip-metrics"><Metric label={copy("Mensual", "Monthly")} value={money(data.recurring?.monthly_expenses)}/><Metric label={copy("Anual", "Annual")} value={money(data.recurring?.annual_expenses)}/><Metric label={copy("Patrones detectados", "Detected patterns")} value={data.recurring?.detected?.length||0}/></div>
       {data.recurring?.items?.slice(0,5).map(item=><div className="vip-list-row" key={item.id}><span>{item.name}</span><b>{money(item.amount)} · {item.frequency}</b></div>)}
-      {data.recurring?.detected?.slice(0,3).map(item=><div className="vip-list-row" key={item.merchant}><span>{item.merchant}</span><b>{money(item.average_amount)} promedio · {item.months_seen} meses</b></div>)}
+      {data.recurring?.detected?.slice(0,3).map(item=><div className="vip-list-row" key={item.merchant}><span>{item.merchant}</span><b>{money(item.average_amount)} {copy("promedio", "average")} · {item.months_seen} {copy("meses", "months")}</b></div>)}
     </Section>
 
     <Section id={12} icon={BarChart3} title={copy("Reportes avanzados","Advanced reports")} subtitle={copy("Comparativa anual preparada para exportación.","Annual comparison ready for export.")}>
       <div className="vip-report-bars">{report.months?.map(row=>{const max=Math.max(...report.months.map(x=>Math.max(Number(x.income)||0,Number(x.expenses)||0)),1);return <div key={row.month}><small>{row.month.slice(5)}</small><span><i style={{height:`${Math.max(Number(row.income)/max*100,2)}%`}}/><i className="expense" style={{height:`${Math.max(Number(row.expenses)/max*100,2)}%`}}/></span></div>})}</div>
-      <p className="vip-note">Mes actual: {money(report.current?.income)} ingresos · {money(report.current?.expenses)} gastos.</p>
+      <p className="vip-note">{copy("Mes actual", "Current month")}: {money(report.current?.income)} {copy("ingresos", "income")} · {money(report.current?.expenses)} {copy("gastos", "expenses")}.</p>
     </Section>
 
     <Section id={13} icon={PiggyBank} title={copy("Motor de ingresos variables","Variable income engine")} subtitle={copy("Decisiones con una base conservadora, no con el mejor mes.","Decisions based on a conservative baseline, not the best month.")}>
-      <div className="vip-metrics"><Metric label="Estimado del perfil" value={money(variable.estimated)}/><Metric label="Base conservadora" value={money(variable.conservative)}/><Metric label="Variabilidad" value={`${number(variable.variability_percent)}%`}/></div>
+      <div className="vip-metrics"><Metric label={copy("Estimado del perfil", "Profile estimate")} value={money(variable.estimated)}/><Metric label={copy("Base conservadora", "Conservative baseline")} value={money(variable.conservative)}/><Metric label={copy("Variabilidad", "Variability")} value={`${number(variable.variability_percent)}%`}/></div>
     </Section>
 
     <Section id={14} icon={FileInput} title={copy("Importación y automatización","Import and automation")} subtitle={copy("Correo autorizado, clasificación, deduplicación y revisión por confianza.","Authorized email, classification, deduplication, and confidence review.")}>
-      <div className="vip-metrics"><Metric label="Confirmados" value={data.automation?.confirmed||0} tone="positive"/><Metric label="Por revisar" value={data.automation?.review||0} tone="warning"/><Metric label="Duplicados evitados" value={data.automation?.duplicates||0}/></div>
+      <div className="vip-metrics"><Metric label={copy("Confirmados", "Confirmed")} value={data.automation?.confirmed||0} tone="positive"/><Metric label={copy("Por revisar", "To review")} value={data.automation?.review||0} tone="warning"/><Metric label={copy("Duplicados evitados", "Duplicates prevented")} value={data.automation?.duplicates||0}/></div>
     </Section>
 
     <Section id={15} icon={Route} title={copy("Plan financiero dinámico","Dynamic financial plan")} subtitle={copy("El orden cambia cuando cambia tu realidad financiera.","The order changes when your financial reality changes.")}>

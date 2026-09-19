@@ -17,9 +17,9 @@ const expenseEmpty = () => ({ amount:"", description:"", category:"Compras", ent
 function EntryFields({ form, setForm, categories }) {
   return <>
     <label className="entry-amount-field"><span>{tx("Monto", "Amount")}</span><div><b>₡</b><input required inputMode="decimal" type="number" min="0.01" step="0.01" placeholder="0" value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></div></label>
-    <label><span>{tx("Descripción", "Description")}</span><input required placeholder="¿Qué movimiento fue?" value={form.description} onChange={(e) => setForm({...form,description:e.target.value})}/></label>
+    <label><span>{tx("Descripción", "Description")}</span><input required placeholder={tx("¿Qué movimiento fue?", "What was this transaction?")} value={form.description} onChange={(e) => setForm({...form,description:e.target.value})}/></label>
     <div className="entry-field-row">
-      <label><span><Tag size={14}/> {tx("Categoría", "Category")}</span><input list={`${categories[0]}-categories`} placeholder="Categoría" value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/><datalist id={`${categories[0]}-categories`}>{categories.map((item) => <option key={item} value={item}/>)}</datalist></label>
+      <label><span><Tag size={14}/> {tx("Categoría", "Category")}</span><input list={`${categories[0]}-categories`} placeholder={tx("Categoría", "Category")} value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/><datalist id={`${categories[0]}-categories`}>{categories.map((item) => <option key={item} value={item}/>)}</datalist></label>
       <label><span><CalendarDays size={14}/> {tx("Fecha", "Date")}</span><input required type="date" value={form.entry_date} onChange={(e) => setForm({...form,entry_date:e.target.value})}/></label>
     </div>
   </>;
@@ -58,7 +58,7 @@ export default function Finance() {
   const run = useCallback(async (fn) => {
     setError("");
     try { return await fn(); }
-    catch (err) { setError(err?.message || "No se pudo completar la operación."); return null; }
+    catch (err) { setError(err?.message || tx("No se pudo completar la operación.", "The operation could not be completed.")); return null; }
   }, []);
   const load = useCallback(() => run(async () => {
     const [incomeRows,expenseRows] = await Promise.all([getIncome(),getExpenses()]);
@@ -78,24 +78,24 @@ export default function Finance() {
   const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="finva-fold-row" key={item.id}><span><strong>{item.description || item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b className={tone}>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || item.category})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="finva-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
 
   return <section className="finance-page finva-progressive-page">
-    <div className="hero"><span>MOVIMIENTOS</span><h1>{tx("Tu dinero día a día", "Your money day by day")}</h1><p>Registrá lo que realmente entra y sale de tus cuentas. Sin proyecciones de salario.</p></div>
+    <div className="hero"><span>{tx("MOVIMIENTOS", "TRANSACTIONS")}</span><h1>{tx("Tu dinero día a día", "Your money day by day")}</h1><p>{tx("Registrá lo que realmente entra y sale de tus cuentas. Sin proyecciones de salario.", "Record what actually enters and leaves your accounts, without projected income.")}</p></div>
     {error && <div className="panel error">{error}</div>}
-    <div className="finva-money-summary"><small>{tx("Balance de movimientos", "Transaction balance")}</small><strong>{money(incomeTotal-expenseTotal)}</strong><span>{money(incomeTotal)} ingresado · {money(expenseTotal)} gastado</span></div>
+    <div className="finva-money-summary"><small>{tx("Balance de movimientos", "Transaction balance")}</small><strong>{money(incomeTotal-expenseTotal)}</strong><span>{money(incomeTotal)} {tx("ingresado", "received")} · {money(expenseTotal)} {tx("gastado", "spent")}</span></div>
 
     <div className="entry-quick-actions compact">
-      <button className="finva-quick-action income" type="button" onClick={()=>setEntryKind("income")}><span><ArrowDownLeft size={20}/></span><div><strong>{tx("Ingreso", "Income")}</strong><small>Agregar movimiento</small></div><Plus size={18}/></button>
-      <button className="finva-quick-action expense" type="button" onClick={()=>setEntryKind("expense")}><span><ArrowUpRight size={20}/></span><div><strong>{tx("Gasto", "Expense")}</strong><small>Agregar movimiento</small></div><Plus size={18}/></button>
+      <button className="finva-quick-action income" type="button" onClick={()=>setEntryKind("income")}><span><ArrowDownLeft size={20}/></span><div><strong>{tx("Ingreso", "Income")}</strong><small>{tx("Agregar movimiento", "Add transaction")}</small></div><Plus size={18}/></button>
+      <button className="finva-quick-action expense" type="button" onClick={()=>setEntryKind("expense")}><span><ArrowUpRight size={20}/></span><div><strong>{tx("Gasto", "Expense")}</strong><small>{tx("Agregar movimiento", "Add transaction")}</small></div><Plus size={18}/></button>
     </div>
 
     <div className="finva-fold-list">
-      <Fold id="income" title="Ingresos" subtitle={`${income.length} movimientos`} total={money(incomeTotal)} open={openGroups.includes("income")} onToggle={toggleGroup}>{rows(income,"income","positive")}</Fold>
-      <Fold id="expenses" title="Gastos" subtitle={`${expenses.length} movimientos`} total={money(expenseTotal)} open={openGroups.includes("expenses")} onToggle={toggleGroup}>{rows(expenses,"expense","negative")}</Fold>
+      <Fold id="income" title={tx("Ingresos", "Income")} subtitle={`${income.length} ${tx("movimientos", "transactions")}`} total={money(incomeTotal)} open={openGroups.includes("income")} onToggle={toggleGroup}>{rows(income,"income","positive")}</Fold>
+      <Fold id="expenses" title={tx("Gastos", "Expenses")} subtitle={`${expenses.length} ${tx("movimientos", "transactions")}`} total={money(expenseTotal)} open={openGroups.includes("expenses")} onToggle={toggleGroup}>{rows(expenses,"expense","negative")}</Fold>
     </div>
 
-    <FinvaFormSheet open={Boolean(entryKind)} eyebrow="Nuevo movimiento" title={isIncome ? "Agregar ingreso" : "Agregar gasto"} onClose={()=>setEntryKind(null)}>
-      <form className={`form finva-sheet-form entry-form ${isIncome ? "income":"expense"}`} onSubmit={isIncome ? submitIncome:submitExpense}><EntryFields form={activeForm} setForm={isIncome ? setIncomeForm:setExpenseForm} categories={isIncome ? incomeCategories:expenseCategories}/>{isIncome && <p className="finva-form-hint">Ingresá el monto real que recibiste según tu boleta o depósito bancario.</p>}<button className={`finva-button ${isIncome ? "finva-button-success":"finva-button-primary"}`}>Guardar {isIncome ? "ingreso":"gasto"}</button></form>
+    <FinvaFormSheet open={Boolean(entryKind)} eyebrow={tx("Nuevo movimiento", "New transaction")} title={isIncome ? tx("Agregar ingreso", "Add income") : tx("Agregar gasto", "Add expense")} onClose={()=>setEntryKind(null)}>
+      <form className={`form finva-sheet-form entry-form ${isIncome ? "income":"expense"}`} onSubmit={isIncome ? submitIncome:submitExpense}><EntryFields form={activeForm} setForm={isIncome ? setIncomeForm:setExpenseForm} categories={isIncome ? incomeCategories:expenseCategories}/>{isIncome && <p className="finva-form-hint">{tx("Ingresá el monto real que recibiste según tu boleta o depósito bancario.", "Enter the actual amount received according to your pay stub or bank deposit.")}</p>}<button className={`finva-button ${isIncome ? "finva-button-success":"finva-button-primary"}`}>{isIncome ? tx("Guardar ingreso", "Save income") : tx("Guardar gasto", "Save expense")}</button></form>
     </FinvaFormSheet>
-    <FinvaFormSheet open={Boolean(editing)} eyebrow="Movimiento" title={editing?.kind === "income" ? "Editar ingreso":"Editar gasto"} onClose={()=>setEditing(null)}>{editing && <form className="form finva-sheet-form entry-form" onSubmit={saveEdit}><EntryFields form={editing} setForm={setEditing} categories={editing.kind === "income" ? incomeCategories:expenseCategories}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}</FinvaFormSheet>
-    <ConfirmDialog open={Boolean(deleting)} title="Eliminar movimiento" description={deleting ? `Se eliminará ${deleting.label}. Esta acción no se puede deshacer.`:""} onConfirm={remove} onClose={()=>{if(!deletingBusy)setDeleting(null);}} busy={deletingBusy}/>
+    <FinvaFormSheet open={Boolean(editing)} eyebrow={tx("Movimiento", "Transaction")} title={editing?.kind === "income" ? tx("Editar ingreso", "Edit income") : tx("Editar gasto", "Edit expense")} onClose={()=>setEditing(null)}>{editing && <form className="form finva-sheet-form entry-form" onSubmit={saveEdit}><EntryFields form={editing} setForm={setEditing} categories={editing.kind === "income" ? incomeCategories:expenseCategories}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}</FinvaFormSheet>
+    <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar movimiento", "Delete transaction")} description={deleting ? tx(`Se eliminará ${deleting.label}. Esta acción no se puede deshacer.`, `${deleting.label} will be deleted. This action cannot be undone.`):""} onConfirm={remove} onClose={()=>{if(!deletingBusy)setDeleting(null);}} busy={deletingBusy}/>
   </section>;
 }
