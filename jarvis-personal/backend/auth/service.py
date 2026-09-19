@@ -264,11 +264,12 @@ def delete_current_account() -> dict[str, str]:
     try:
         with get_connection() as conn:
             conn.execute("DELETE FROM accounts WHERE id=%s", (account_id,))
-            # Some historical finance rows use users.id. The workspace cascade
-            # removes their data; this removes the remaining legacy identity.
+            # The legacy `users` table has no allowed_user_id column. Its only
+            # stable link to the current identity is the normalized email; the
+            # account/workspace cascades already remove the owned finance data.
             conn.execute(
-                "DELETE FROM users WHERE allowed_user_id=%s OR lower(email)=lower(%s)",
-                (legacy_user_id, email),
+                "DELETE FROM users WHERE lower(email)=lower(%s)",
+                (email,),
             )
             conn.execute("DELETE FROM allowed_users WHERE id=%s", (legacy_user_id,))
 

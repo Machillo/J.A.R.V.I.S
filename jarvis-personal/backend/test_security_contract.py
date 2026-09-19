@@ -216,6 +216,68 @@ def test_supabase_admin_headers_keep_legacy_service_role_authorization():
     assert headers["Authorization"] == "Bearer legacy.service.role"
 
 
+def test_self_deletion_uses_real_legacy_users_schema_for_every_finva_plan(monkeypatch):
+    """Free, Basic and VIP share one deletion contract and valid SQL."""
+    original_url = auth_service.SUPABASE_URL
+    original_key = auth_service.SUPABASE_ADMIN_KEY
+
+    class FakeConnection:
+        def __init__(self):
+            self.queries = []
+            self.committed = False
+
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+
+        def execute(self, query, params=()):
+            normalized = " ".join(query.split())
+            self.queries.append((normalized, params))
+            if "FROM pg_constraint" in normalized:
+                return SimpleNamespace(fetchone=lambda: {"total": 0})
+            return SimpleNamespace(fetchone=lambda: None)
+
+        def commit(self):
+            self.committed = True
+
+    try:
+        monkeypatch.setattr(auth_service, "SUPABASE_URL", "https://project.supabase.co")
+        monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", "sb_secret_test")
+
+        for plan in ("free", "basic", "vip"):
+            connection = FakeConnection()
+            auth_calls = []
+            monkeypatch.setattr(auth_service, "get_connection", lambda: connection)
+            monkeypatch.setattr(
+                auth_service.requests,
+                "delete",
+                lambda url, **kwargs: auth_calls.append((url, kwargs)) or SimpleNamespace(status_code=200),
+            )
+            token = set_current_user({
+                "id": 42,
+                "account_id": "11111111-1111-1111-1111-111111111111",
+                "supabase_user_id": "22222222-2222-2222-2222-222222222222",
+                "email": "Person@Example.com",
+                "subscription": {"plan": plan},
+            })
+            try:
+                result = auth_service.delete_current_account()
+            finally:
+                reset_current_user(token)
+
+            sql = [query for query, _params in connection.queries]
+            assert result["status"] == "OK"
+            assert connection.committed is True
+            assert _contains_sql(sql, "DELETE FROM accounts WHERE id=%s")
+            assert _contains_sql(sql, "DELETE FROM users WHERE lower(email)=lower(%s)")
+            assert _contains_sql(sql, "DELETE FROM allowed_users WHERE id=%s")
+            assert not any("users WHERE allowed_user_id" in query for query in sql)
+            assert auth_calls[0][0].endswith("/auth/v1/admin/users/22222222-2222-2222-2222-222222222222")
+            assert auth_calls[0][1]["headers"] == {"apikey": "sb_secret_test"}
+    finally:
+        monkeypatch.setattr(auth_service, "SUPABASE_URL", original_url)
+        monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", original_key)
+
+
 def test_support_email_normalizes_google_app_password(monkeypatch):
     observed = {}
 
