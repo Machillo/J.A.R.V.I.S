@@ -52,20 +52,29 @@ export default function FinvaOverview({ user, plan = "free", onNavigate }) {
 
   return (
     <section className={`finva-overview dashboard-${plan}`}>
-      <header className="finva-overview-hero">
-        <span>{advanced ? tx("TU PANORAMA", "YOUR OVERVIEW") : tx("TU PUNTO DE PARTIDA", "YOUR STARTING POINT")}</span>
-        <h1>{tx("Hola", "Hello")}, {user?.display_name || tx("bienvenido", "welcome")}</h1>
-        <p>{tx(`Estos son tus números de ${data.month}. Empezá por entenderlos; después decidimos el siguiente paso.`, `These are your numbers for ${data.month}. Understand them first; then we'll decide the next step.`)}</p>
-      </header>
-
-      <div className="finva-overview-metrics">
-        <MetricCard label={tx("Ingresos", "Income")} value={money(data.income)} detail={advanced ? `${change(data.trends?.income)} ${tx("vs. mes anterior", "vs. previous month")}` : tx("Este mes", "This month")} tone="positive" icon={TrendingUp} />
-        <MetricCard label={tx("Gastos", "Expenses")} value={money(data.expenses)} detail={advanced ? `${change(data.trends?.expenses)} ${tx("vs. mes anterior", "vs. previous month")}` : tx("Este mes", "This month")} tone="negative" icon={TrendingDown} />
-        <MetricCard label={tx("Disponible", "Available")} value={money(computed.balance)} tone={Number(computed.balance) < 0 ? "negative" : "accent"} icon={WalletCards} />
-        <MetricCard label={tx("Deuda pendiente", "Outstanding debt")} value={money(data.debt?.remaining ?? data.debt_balance)} detail={advanced ? `${data.debt?.progress || 0}% ${tx("pagado", "paid")}` : tx("Total registrado", "Recorded total")} icon={WalletCards} />
-        {advanced ? <MetricCard label={tx("Ahorro disponible", "Available savings")} value={money(data.savings)} icon={PiggyBank} tone="positive" /> : null}
-        {advanced ? <MetricCard label={tx("Metas", "Goals")} value={`${data.goals?.progress || 0}%`} detail={`${data.goals?.active || 0} ${tx("activas", "active")}`} icon={Sparkles} tone="accent" /> : null}
-      </div>
+      {advanced ? <>
+        <header className="finva-overview-hero">
+          <span>{tx("TU PANORAMA", "YOUR OVERVIEW")}</span>
+          <h1>{tx("Hola", "Hello")}, {user?.display_name || tx("bienvenido", "welcome")}</h1>
+          <p>{tx(`Estos son tus números de ${data.month}. Empezá por entenderlos; después decidimos el siguiente paso.`, `These are your numbers for ${data.month}. Understand them first; then we'll decide the next step.`)}</p>
+        </header>
+        <div className="finva-overview-metrics">
+          <MetricCard label={tx("Ingresos", "Income")} value={money(data.income)} detail={`${change(data.trends?.income)} ${tx("vs. mes anterior", "vs. previous month")}`} tone="positive" icon={TrendingUp} />
+          <MetricCard label={tx("Gastos", "Expenses")} value={money(data.expenses)} detail={`${change(data.trends?.expenses)} ${tx("vs. mes anterior", "vs. previous month")}`} tone="negative" icon={TrendingDown} />
+          <MetricCard label={tx("Disponible", "Available")} value={money(computed.balance)} tone={Number(computed.balance) < 0 ? "negative" : "accent"} icon={WalletCards} />
+          <MetricCard label={tx("Deuda pendiente", "Outstanding debt")} value={money(data.debt?.remaining ?? data.debt_balance)} detail={`${data.debt?.progress || 0}% ${tx("pagado", "paid")}`} icon={WalletCards} />
+          <MetricCard label={tx("Ahorro disponible", "Available savings")} value={money(data.savings)} icon={PiggyBank} tone="positive" />
+          <MetricCard label={tx("Metas", "Goals")} value={`${data.goals?.progress || 0}%`} detail={`${data.goals?.active || 0} ${tx("activas", "active")}`} icon={Sparkles} tone="accent" />
+        </div>
+      </> : <>
+        <small className="finva-free-plan-label">{tx("Gratis", "Free")}</small>
+        <article className="finva-free-available">
+          <small>{tx("DISPONIBLE ESTE MES", "AVAILABLE THIS MONTH")}</small>
+          <strong>{money(data.available_after_commitments ?? computed.balance)}</strong>
+          <span>{tx("Ingresos", "Income")} {money(data.income)} · {tx("Gastos", "Expenses")} {money(data.expenses)}</span>
+          <span>{tx("Deuda pagada", "Debt paid")} {money(data.debt_paid)}</span>
+        </article>
+      </>}
 
       <article className="mobile-panel finva-overview-chart">
         <header><div><small>{tx("ÚLTIMOS 6 MESES", "LAST 6 MONTHS")}</small><h2>{tx("Ingresos y gastos", "Income and expenses")}</h2></div></header>
