@@ -4,10 +4,18 @@ import { parse } from "@babel/parser";
 import traverseModule from "@babel/traverse";
 
 const traverse = traverseModule.default;
-const root = path.resolve("src");
+const scopeIndex = process.argv.indexOf("--scope");
+const requestedScope = scopeIndex >= 0 ? process.argv[scopeIndex + 1] : "src";
+if (!requestedScope || requestedScope.startsWith("-") || path.isAbsolute(requestedScope) || requestedScope.split(/[\\/]+/).includes("..")) {
+  throw new Error("--scope must be a relative directory inside this project");
+}
+const root = path.resolve(requestedScope);
+if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+  throw new Error(`Audit scope does not exist: ${requestedScope}`);
+}
 const extensions = new Set([".js", ".jsx"]);
 const visibleAttributes = new Set(["aria-label", "placeholder", "title", "alt"]);
-const safeText = /^(?:FINVA|J\.?A\.?R\.?V\.?I\.?S\.?|VIP|BASIC|FREE|Google|Apple|Face ID|Passkey|Gmail|SINPE|BAC|MultiMoney|IBKR|CRC|USD|OpenAI|Gemini|Supabase|Render|Vercel|Firebase|ChatGPT|[\d\s.,:+/–—→−%$₡#()]+)$/i;
+const safeText = /^(?:(?:FINVA|J\.?A\.?R\.?V\.?I\.?S\.?|VIP|BASIC|FREE)(?:\s+(?:VIP|BASIC|FREE|\d+))?|Google|Apple|Face ID|Passkey|Passkey\s*\/\s*Face ID|Gmail|SINPE|BAC|MultiMoney|IBKR|CRC|USD|OpenAI|Gemini|Supabase|Render|Vercel|Firebase|ChatGPT|[\d\s.,:+/–—→−%$₡#()]+)$/i;
 const issues = [];
 
 function filesAt(directory) {

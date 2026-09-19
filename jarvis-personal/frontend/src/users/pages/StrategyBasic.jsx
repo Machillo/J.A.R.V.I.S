@@ -284,7 +284,7 @@ export default function StrategyBasic({ plan = "basic" }) {
               </strong>
               {simulation.projection?.months && (
                 <span>
-                  {simulation.projection.name}: ~{simulation.projection.months} meses
+                  {simulation.projection.name}: ~{simulation.projection.months}{" "}
                   {copy("meses con este escenario.", "months with this scenario.")}
                 </span>
               )}

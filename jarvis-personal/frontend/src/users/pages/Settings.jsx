@@ -162,7 +162,7 @@ export default function Settings({ user, onUserChange }) {
       <div className="mobile-page-heading">
         <p className="eyebrow">{tx("Cuenta","Account")}</p>
         <h1>{tx("Mi Finva","My Finva")}</h1>
-        <span>Administrá tu perfil y el plan que querés probar.</span>
+        <span>{tx("Administrá tu perfil y el plan que querés probar.", "Manage your profile and the plan you want to try.")}</span>
       </div>
 
       <div className="account-card">
@@ -178,7 +178,7 @@ export default function Settings({ user, onUserChange }) {
       <AppearanceSelector />
 
       <article className="account-card">
-        <div><strong>{tx("Información legal","Legal information")}</strong><small>Consultá los documentos vigentes cuando querás.</small></div>
+        <div><strong>{tx("Información legal","Legal information")}</strong><small>{tx("Consultá los documentos vigentes cuando querás.", "Review the current documents whenever you want.")}</small></div>
         <span><a href="/terms" target="_blank" rel="noreferrer">{tx("Términos","Terms")}</a> · <a href="/privacy" target="_blank" rel="noreferrer">{tx("Privacidad","Privacy")}</a></span>
       </article>
 
@@ -202,7 +202,7 @@ export default function Settings({ user, onUserChange }) {
 
       <div className="section-heading compact plan-change-heading">
         <div>
-          <p className="eyebrow">Desarrollo</p>
+          <p className="eyebrow">{tx("Desarrollo", "Development")}</p>
           <h2>{tx("Cambiar de plan","Change plan")}</h2>
           <span>{promotionActive ? "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático." : "Basic y VIP utilizan sus precios normales y se activan al confirmar el SINPE."}</span>
         </div>
@@ -247,8 +247,8 @@ export default function Settings({ user, onUserChange }) {
         <article className="pending-payment-card">
           <div className="pending-payment-icon"><Clock3 size={21} /></div>
           <div>
-            <strong>Pago {pendingOrder.plan_code.toUpperCase()} pendiente</strong>
-            <small>Continuá el SINPE con el código {pendingOrder.payment_code}.</small>
+            <strong>{tx("Pago", "Payment")} {pendingOrder.plan_code.toUpperCase()} {tx("pendiente", "pending")}</strong>
+            <small>{tx("Continuá el SINPE con el código", "Continue the SINPE payment with code")} {pendingOrder.payment_code}.</small>
           </div>
           <button type="button" onClick={() => setPaymentFlow({ order: pendingOrder, payment: billing?.payment })}>{tx("Continuar","Continue")}</button>
         </article>
@@ -265,9 +265,9 @@ export default function Settings({ user, onUserChange }) {
             <button className="plan-dialog-close" type="button" aria-label={tx("Cerrar","Close")} disabled={Boolean(changing)} onClick={()=>setConfirming("")}><X size={20}/></button>
             <div className="plan-dialog-icon"><SelectedIcon size={28}/></div>
             <p className="eyebrow">{tx("Confirmar cambio","Confirm change")}</p>
-            <h2 id="plan-dialog-title">Cambiar a {selected?.name || confirming.toUpperCase()}</h2>
+            <h2 id="plan-dialog-title">{tx("Cambiar a", "Switch to")} {selected?.name || confirming.toUpperCase()}</h2>
             <p>{selected?.tagline || "Tu nuevo plan FINVA"}</p>
-            {confirming !== "free" && (promotionActive ? <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio normal será {confirming === "basic" ? "₡2.990" : "₡5.990"}/mes, sin cobro automático.</span></div> : <><div className="plan-payment-notice"><Smartphone size={19}/><span>Al continuar, FINVA generará un código para el detalle del SINPE. El plan se activa cuando confirmemos el depósito.</span></div><label className="beta-consent dialog-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>{setBetaAccepted(e.target.checked);setError("");}}/><span>Acepto el precio normal de {confirming === "basic" ? "₡2.990" : "₡5.990"} al mes.</span></label></>)}
+            {confirming !== "free" && (promotionActive ? <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio normal será ${confirming === "basic" ? "₡2.990" : "₡5.990"}/mes, sin cobro automático.`, `This plan will be free until December 31, 2026. Starting in January, its regular price will be ${confirming === "basic" ? "₡2,990" : "₡5,990"}/month, with no automatic charge.`)}</span></div> : <><div className="plan-payment-notice"><Smartphone size={19}/><span>{tx("Al continuar, FINVA generará un código para el detalle del SINPE. El plan se activa cuando confirmemos el depósito.", "When you continue, FINVA will generate a code for the SINPE payment detail. The plan activates after we confirm the deposit.")}</span></div><label className="beta-consent dialog-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>{setBetaAccepted(e.target.checked);setError("");}}/><span>{tx(`Acepto el precio normal de ${confirming === "basic" ? "₡2.990" : "₡5.990"} al mes.`, `I accept the regular price of ${confirming === "basic" ? "₡2,990" : "₡5,990"} per month.`)}</span></label></>)}
             {error && <div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
             <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>{tx("Cancelar","Cancel")}</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? tx("Procesando...","Processing...") : `${tx("Confirmar","Confirm")} ${selected?.name || confirming.toUpperCase()}`}</button></div>
           </section>
@@ -283,17 +283,17 @@ export default function Settings({ user, onUserChange }) {
             <button className="plan-dialog-close" type="button" aria-label={tx("Cerrar","Close")} disabled={uploading} onClick={()=>{setPaymentFlow(null);setReceipt(null);setError("");}}><X size={20}/></button>
             <div className="plan-dialog-icon"><Smartphone size={26}/></div>
             <p className="eyebrow">{tx("Pago mensual por SINPE","Monthly payment by SINPE")}</p>
-            <h2 id="payment-dialog-title">Activar {order?.plan_code?.toUpperCase()}</h2>
+            <h2 id="payment-dialog-title">{tx("Activar", "Activate")} {order?.plan_code?.toUpperCase()}</h2>
             {!submitted ? <>
-              <p>Realizá el SINPE con estos datos. El código debe ir completo en el detalle del pago.</p>
+              <p>{tx("Realizá el SINPE con estos datos. El código debe ir completo en el detalle del pago.", "Make the SINPE payment using these details. Include the full code in the payment description.")}</p>
               <div className="sinpe-payment-data">
                 <div><span>{tx("Monto exacto","Exact amount")}</span><strong>₡{Number(order?.amount || 0).toLocaleString(localeTag(language))}</strong></div>
                 <div><span>{tx("Número SINPE","SINPE number")}</span><strong>{payment.phone || "Pendiente de configurar"}</strong>{payment.phone&&<button type="button" onClick={()=>copyValue(payment.phone,"phone")}><Copy size={16}/>{copied==="phone"?tx("Copiado","Copied"):tx("Copiar","Copy")}</button>}</div>
                 {payment.recipient&&<div><span>{tx("Destinatario","Recipient")}</span><strong>{payment.recipient}</strong></div>}
                 <div className="payment-code-row"><span>{tx("Código para el detalle","Payment detail code")}</span><strong>{order?.payment_code}</strong><button type="button" onClick={()=>copyValue(order?.payment_code,"code")}><Copy size={16}/>{copied==="code"?tx("Copiado","Copied"):tx("Copiar código","Copy code")}</button></div>
               </div>
-              <small className="payment-expiry-note">Código válido hasta {order?.code_expires_at ? new Date(order.code_expires_at).toLocaleTimeString(localeTag(language), { hour: "2-digit", minute: "2-digit" }) : "dentro de 2 horas"}.</small>
-              {!payment.phone&&<div className="plan-dialog-error"><AlertTriangle size={18}/><span>El número SINPE todavía no está configurado. No realicés el pago hasta que aparezca.</span></div>}
+              <small className="payment-expiry-note">{tx("Código válido hasta", "Code valid until")} {order?.code_expires_at ? new Date(order.code_expires_at).toLocaleTimeString(localeTag(language), { hour: "2-digit", minute: "2-digit" }) : tx("dentro de 2 horas", "within 2 hours")}.</small>
+              {!payment.phone&&<div className="plan-dialog-error"><AlertTriangle size={18}/><span>{tx("El número SINPE todavía no está configurado. No realicés el pago hasta que aparezca.", "The SINPE number has not been configured yet. Do not make the payment until it appears.")}</span></div>}
               <div className="receipt-upload-field">
                 <Upload size={19}/>
                 <span>{receipt ? `Listo: ${receipt.name}` : "Seleccioná una imagen o PDF"}</span>
@@ -307,8 +307,8 @@ export default function Settings({ user, onUserChange }) {
             </> : <div className="payment-waiting-state">
               <CheckCircle2 size={34}/>
               <strong>{tx("Comprobante recibido","Receipt received")}</strong>
-              <p>FINVA está esperando la confirmación del BAC. Cuando coincidan el código y el monto, tu plan se activará automáticamente.</p>
-              <small>Podés cerrar esta pantalla; también volveremos a comprobarlo cuando abras la app.</small>
+              <p>{tx("FINVA está esperando la confirmación del BAC. Cuando coincidan el código y el monto, tu plan se activará automáticamente.", "FINVA is waiting for BAC confirmation. When the code and amount match, your plan will activate automatically.")}</p>
+              <small>{tx("Podés cerrar esta pantalla; también volveremos a comprobarlo cuando abras la app.", "You can close this screen; we will check again when you open the app.")}</small>
             </div>}
           </section>
         </div>;

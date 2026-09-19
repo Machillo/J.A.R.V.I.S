@@ -1,6 +1,9 @@
+import { deviceLanguage, tx } from "../../lib/locale";
+
 export default function NativeBottomBar({ items, activeKey, onNavigate, className = "" }) {
+  const language = deviceLanguage();
   return (
-    <nav className={`native-bottom-nav ${className}`.trim()} style={{ "--native-nav-count": items.length }} aria-label="Navegación principal">
+    <nav className={`native-bottom-nav ${className}`.trim()} style={{ "--native-nav-count": items.length }} aria-label={tx("Navegación principal", "Main navigation", language)}>
       {items.map((item) => {
         const Icon = item.icon;
         const active = item.activeKeys?.includes(activeKey) || item.key === activeKey;
