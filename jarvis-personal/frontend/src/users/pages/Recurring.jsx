@@ -40,18 +40,18 @@ export default function Recurring() {
     finally { setBusy(false); }
   };
 
-  return <section className="content-first-page">
+  const activeItems = data?.items?.filter((item) => item.is_active) || [];\n\n  return <section className="content-first-page finva-basic-recurring">
     <div className="hero"><span>BASIC 06</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>
     {error && <div className="panel error">{error}</div>}
-    <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><Repeat2 size={20}/></span><div><strong>{copy("Agregar recurrente","Add recurring item")}</strong><small>{copy("Creá un ingreso o gasto periódico","Create recurring income or expense")}</small></div><Plus size={19}/></button>
-
     {data && <>
-      <div className="kpis compact-kpis"><div className="card"><small>{copy("Costo mensual","Monthly cost")}</small><strong>{money(data.monthly_expenses)}</strong></div><div className="card"><small>{copy("Costo anual","Annual cost")}</small><strong>{money(data.annual_expenses)}</strong></div></div>
-      <div className="panel table compact-record-list">{data.items.length ? data.items.map((item) => <div className={`row ${item.is_active ? "" : "muted-row"}`} key={item.id}>
-        <span><strong>{item.name}</strong><small>{money(item.monthly_amount)}/{copy("mes","month")} · {money(item.annual_amount)}/{copy("año","year")} · {copy("día","day")} {item.due_day || "—"}</small></span>
-        <span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={() => toggle(item)}>{item.is_active ? copy("Pausar","Pause") : copy("Activar","Activate")}</button><button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(item)}>{copy("Eliminar","Delete")}</button></span>
-      </div>) : <p className="finva-empty-state">{copy("No tenés movimientos recurrentes.","You have no recurring items.")}</p>}</div>
+      <article className="basic-recurring-summary"><small>{copy("PRÓXIMOS 30 DÍAS","NEXT 30 DAYS")}</small><strong>{money(data.monthly_expenses)} {copy("comprometidos","committed")}</strong><span>{activeItems.length} {copy("movimientos recurrentes","recurring items")}</span></article>
+      <div className="basic-recurring-list">{data.items.length ? data.items.map((item) => <article className={`basic-recurring-item ${item.is_active ? "" : "muted-row"}`} key={item.id}>
+        <header><strong>{item.name}</strong><b>{item.item_type === "income" ? "+" : "−"}{money(item.amount)}</b></header>
+        <p>{copy("día","day")} {item.due_day || "—"} · {item.frequency}</p>
+        <div className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={() => toggle(item)}>{item.is_active ? copy("Pausar","Pause") : copy("Activar","Activate")}</button><button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(item)}>{copy("Eliminar","Delete")}</button></div>
+      </article>) : <p className="panel finva-empty-state">{copy("No tenés movimientos recurrentes.","You have no recurring items.")}</p>}</div>
     </>}
+    <button className="finva-add-strip basic-recurring-add" type="button" onClick={() => setCreating(true)}><span><Repeat2 size={20}/></span><div><strong>{copy("Crear recurrente","Create recurring item")}</strong><small>{copy("Ingreso o gasto periódico","Recurring income or expense")}</small></div><Plus size={19}/></button>
 
     <FinvaFormSheet open={creating} eyebrow={copy("Nuevo recurrente","New recurring item")} title={copy("Agregar recurrente","Add recurring item")} onClose={() => setCreating(false)}>
       <form className="form finva-sheet-form" onSubmit={submit}>
