@@ -7,6 +7,18 @@
   --native-surface-raised: rgba(27, 39, 70, .88);
 }
 
+.native-product--finva.native-plan--free {
+  --native-accent: #0ac7b2;
+  --native-accent-2: #0ac7b2;
+  --native-bg: #060e1a;
+  --native-bg-soft: #0f1f33;
+  --native-surface: #0b1726;
+  --native-surface-raised: #0f1f33;
+  --native-border: #142b40;
+  --native-text: #f7fbff;
+  --native-muted: #9eb0c4;
+}
+
 .native-product--finva.native-plan--basic {
   --native-accent: #3f74e8;
   --native-accent-2: #48d6e8;

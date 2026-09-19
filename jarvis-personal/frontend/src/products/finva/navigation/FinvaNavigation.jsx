@@ -9,7 +9,6 @@ import {
   MoreHorizontal,
   ReceiptText,
   Repeat2,
-  Settings,
   Sparkles,
   Target,
   WalletCards,
@@ -21,7 +20,7 @@ const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
 const primaryItems = [
-  { key: "overview", label: tx("Resumen", "Overview"), icon: BarChart3 },
+  { key: "overview", label: tx("Inicio", "Home"), icon: BarChart3 },
   { key: "finance", label: tx("Movimientos", "Transactions"), icon: WalletCards },
   { key: "debts", label: tx("Deudas", "Debts"), icon: CreditCard },
   { key: "goals", label: tx("Metas", "Goals"), icon: Target },
@@ -50,9 +49,8 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
     }]),
     ...(plan === "vip" ? [{ title: tx("Automatización", "Automation"), items: [["gmail", tx("Movimientos desde Gmail", "Transactions from Gmail"), Mail]] }] : []),
     {
-      title: tx("Cuenta y soporte", "Account & support"),
+      title: tx("Soporte", "Support"),
       items: [
-        ["settings", tx("Cuenta, apariencia y plan", "Account, appearance & plan"), Settings],
         ["feedback", tx("Ayuda y sugerencias", "Help & feedback"), LifeBuoy],
       ],
     },
