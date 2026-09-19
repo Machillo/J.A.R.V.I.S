@@ -7,7 +7,7 @@ const money=v=>new Intl.NumberFormat(localeTag(language),{style:"currency",curre
 const now=()=>new Date().toISOString().slice(0,7);
 const shift=(period,delta)=>{const [y,m]=period.split("-").map(Number);const d=new Date(y,m-1+delta,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`};
 
-export default function Reports(){
+export default function Reports({ plan = "basic" }){
   const [period,setPeriod]=useState(now()),[range,setRange]=useState(1),[rows,setRows]=useState([]),[error,setError]=useState("");
   useEffect(()=>{
     setRows([]);setError("");
@@ -19,7 +19,7 @@ export default function Reports(){
   const categoryRows=useMemo(()=>data?.categories||[],[data]);
 
   return <section className="finva-basic-reports">
-    <div className="hero"><span>BASIC</span><h1>{tx("Reportes","Reports")}</h1><p>{tx("Compará resultados, tendencias y categorías con datos reales registrados.","Compare results, trends, and categories using your recorded data.")}</p></div>
+    {plan !== "basic" && <div className="hero"><span>BASIC</span><h1>{tx("Reportes","Reports")}</h1><p>{tx("Compará resultados, tendencias y categorías con datos reales registrados.","Compare results, trends, and categories using your recorded data.")}</p></div>}
     <div className="basic-report-tabs"><button className={range===1?"active":""} onClick={()=>setRange(1)}>{tx("Mes","Month")}</button><button className={range===3?"active":""} onClick={()=>setRange(3)}>3 {tx("meses","months")}</button><button className={range===6?"active":""} onClick={()=>setRange(6)}>6 {tx("meses","months")}</button></div>
     <input className="month-picker" type="month" value={period} onChange={e=>setPeriod(e.target.value)}/>
     {error&&<div className="panel error">{error}</div>}

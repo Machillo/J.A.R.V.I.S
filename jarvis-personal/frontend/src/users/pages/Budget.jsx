@@ -5,7 +5,7 @@ const language=deviceLanguage();
 const copy=(es,en)=>tx(es,en,language);
 const money=(v)=>new Intl.NumberFormat(localeTag(language),{style:"currency",currency:"CRC",maximumFractionDigits:0}).format(Number(v)||0);
 
-export default function Budget(){
+export default function Budget({ plan = "basic" }){
   const [data,setData]=useState(null),[error,setError]=useState(""),[saving,setSaving]=useState(false),[editing,setEditing]=useState(false);
   const load=()=>getBudget().then(setData).catch(e=>setError(e.message));
   useEffect(load,[]);
@@ -20,7 +20,7 @@ export default function Budget(){
   if(!data)return <div className={`panel ${error?"error":""}`}>{error||copy("Preparando presupuesto...","Preparing budget...")}</div>;
 
   return <section className="finva-basic-budget">
-    <div className="hero"><span>BASIC</span><h1>{copy("Presupuesto guiado","Guided budget")}</h1><p>{copy("Organizá cuánto querés usar por categoría y comparalo con lo que ya gastaste.","Organize how much you want to use by category and compare it with what you've already spent.")}</p></div>
+    {plan !== "basic" && <div className="hero"><span>BASIC</span><h1>{copy("Presupuesto guiado","Guided budget")}</h1><p>{copy("Organizá cuánto querés usar por categoría y comparalo con lo que ya gastaste.","Organize how much you want to use by category and compare it with what you've already spent.")}</p></div>}
     {error&&<div className="panel error">{error}</div>}
     <article className="basic-budget-summary">
       <small>{new Date().toLocaleDateString(localeTag(language),{month:"long"}).toUpperCase()}</small>

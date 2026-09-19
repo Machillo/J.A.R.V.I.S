@@ -1,6 +1,6 @@
-import { CalendarDays, ChevronRight, Crown, PiggyBank, Repeat2, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
+import { ChevronRight, Crown, PiggyBank, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getBasicDashboard, getBudget, getFinancialCalendar, getFreeDashboard, getRecurring } from "../../../../users/services/jarvisApi";
+import { getBasicDashboard, getBudget, getFinancialCalendar, getFreeDashboard } from "../../../../users/services/jarvisApi";
 import "./overview.css";
 import { deviceLanguage, localeTag } from "../../../../lib/locale";
 const language = deviceLanguage();
@@ -29,7 +29,6 @@ function MetricCard({ label, value, detail, tone = "neutral", icon: Icon }) {
 function BasicDashboard({ data, planning, onNavigate }) {
   const budget = planning?.budget;
   const calendar = planning?.calendar;
-  const recurring = planning?.recurring;
   const spent = (budget?.items || []).reduce((sum, item) => sum + Number(item.spent || 0), 0);
   const budgeted = Number(budget?.total_budgeted || 0);
   const used = budgeted > 0 ? Math.min(Math.round(spent / budgeted * 100), 100) : 0;
@@ -50,9 +49,9 @@ function BasicDashboard({ data, planning, onNavigate }) {
     </article>
 
     <article className="finva-basic-quick-card">
-      <button type="button" onClick={() => onNavigate?.("budget")}><span><WalletCards size={18}/>{tx("Presupuesto", "Budget")}</span><b>{budgeted ? `${used}%` : "—"}</b></button>
-      <button type="button" onClick={() => onNavigate?.("recurring")}><span><Repeat2 size={18}/>{tx("Recurrentes", "Recurring")}</span><b>{money(recurring?.monthly_expenses)}</b></button>
-      <button type="button" onClick={() => onNavigate?.("calendar")}><span><CalendarDays size={18}/>{tx("Compromisos", "Commitments")}</span><b>{calendar?.summary?.commitments ?? 0}</b></button>
+      <button type="button" onClick={() => onNavigate?.("budget")}><span>{tx("Presupuesto mensual", "Monthly budget")}</span><b>{money(spent)} / {money(budgeted)}</b></button>
+      <button type="button" onClick={() => onNavigate?.("calendar")}><span>{tx("Próximos compromisos", "Upcoming commitments")}</span><b>{money(calendar?.summary?.payments)}</b></button>
+      <button type="button" onClick={() => onNavigate?.("goals")}><span>{tx("Ahorro del mes", "Savings this month")}</span><b className="positive">{money(data.savings)}</b></button>
     </article>
 
     <article className="finva-basic-upcoming">
@@ -84,9 +83,9 @@ export default function FinvaOverview({ user, plan = "free", onNavigate }) {
 
   useEffect(() => {
     if (plan !== "basic") { setPlanning(null); return; }
-    Promise.all([getBudget(), getFinancialCalendar(currentPeriod()), getRecurring()])
-      .then(([budget, calendar, recurring]) => setPlanning({ budget, calendar, recurring }))
-      .catch(() => setPlanning({ budget: null, calendar: null, recurring: null }));
+    Promise.all([getBudget(), getFinancialCalendar(currentPeriod())])
+      .then(([budget, calendar]) => setPlanning({ budget, calendar }))
+      .catch(() => setPlanning({ budget: null, calendar: null }));
   }, [plan]);
 
   const computed = useMemo(() => {

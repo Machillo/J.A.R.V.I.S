@@ -31,7 +31,7 @@ body:has(.native-product--finva.native-plan--free){background:#060e1a}
 .free-summary-card strong{font-size:28px;line-height:1.1;letter-spacing:-.045em}.free-summary-card span{color:#9eb0c4;font-size:12px}
 .free-error{padding:11px 12px;border:1px solid rgba(245,64,94,.35);border-radius:14px;background:#1f1217;color:#ff9aab;font-size:12px}
 .free-empty{margin:0;padding:18px;color:#9eb0c4;text-align:center;font-size:12px}
-.free-primary-button,.free-secondary-button{width:100%;min-height:48px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:14px;font-weight:800}
+.free-primary-button,.free-secondary-button{width:100%;height:48px;min-height:48px;max-height:48px;padding:0 14px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:14px;font-size:12px;font-weight:800}
 .free-primary-button{border:0;background:#0ac7b2;color:#061018}.free-secondary-button{border:1px solid #244058;background:#0f1f33;color:#c6d2df}
 .free-back-button,.free-text-action{width:max-content;display:flex;align-items:center;gap:7px;border:0;background:transparent;color:#0ac7b2;font-weight:750}
 
@@ -53,13 +53,15 @@ body:has(.native-product--finva.native-plan--free){background:#060e1a}
 
 /* Movements */
 .free-search{height:48px;padding:0 13px;display:flex;align-items:center;gap:9px;border:1px solid #142b40;border-radius:14px;background:#0b1726;color:#9eb0c4}
-.free-search input{width:100%;height:100%;padding:0;border:0;background:transparent;box-shadow:none}
-.free-filter-tabs{height:34px;padding:3px;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;border:1px solid #142b40;border-radius:12px;background:#0f1f33}
-.free-filter-tabs button{border:0;border-radius:9px;background:transparent;color:#9eb0c4;font-size:11px;font-weight:700}.free-filter-tabs button.active{background:#08292b;color:#0ac7b2}
+.native-product--finva.native-plan--free .free-search input{width:100%;height:auto;min-height:0;padding:0;border:0;border-radius:0;background:transparent;color:#f7fbff;box-shadow:none}
+.native-product--finva.native-plan--free .free-search input:focus{border:0;box-shadow:none;outline:0}
+.free-filter-tabs{height:34px;padding:0;display:flex;gap:6px;border:0;border-radius:0;background:transparent;overflow-x:auto;scrollbar-width:none}
+.free-filter-tabs::-webkit-scrollbar{display:none}
+.free-filter-tabs button{flex:1 0 0;min-width:0;height:34px;min-height:34px;padding:0 8px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#9eb0c4;font-size:9px;font-weight:700}.free-filter-tabs button.active{background:#082e2e;color:#0ac7b2}
 .free-transaction-list,.free-record-list{display:grid;gap:8px}
-.free-transaction-row{min-height:64px;padding:10px 12px;display:grid;grid-template-columns:36px 1fr auto;align-items:center;gap:10px;border:1px solid #142b40;border-radius:15px;background:#0b1726;color:#f7fbff;text-align:left}
+.free-transaction-row{height:64px;min-height:64px;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid #142b40;border-radius:15px;background:#0b1726;color:#f7fbff;text-align:left}
 .free-row-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#08292b;color:#0ac7b2}.free-row-icon.expense{background:#1f1217;color:#f5405e}
-.free-transaction-row>span:nth-child(2){min-width:0}.free-transaction-row strong,.free-transaction-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.free-transaction-row strong{font-size:12px}.free-transaction-row small{margin-top:3px;color:#9eb0c4;font-size:10px}.free-transaction-row>b{font-size:12px}.free-transaction-row>b.income{color:#3dd9a4}.free-transaction-row>b.expense{color:#ff8195}
+.free-transaction-row>span{min-width:0}.free-transaction-row strong,.free-transaction-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.free-transaction-row strong{font-size:12px}.free-transaction-row small{margin-top:3px;color:#9eb0c4;font-size:9px}.free-transaction-row>b{font-size:12px}.free-transaction-row>b.income{color:#3dd9a4}.free-transaction-row>b.expense,.free-transaction-row>b.debt{color:#ff8195}
 .free-entry-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}.free-entry-choices button{min-height:100px;display:grid;place-items:center;gap:6px;border:1px solid #142b40;border-radius:16px;background:#0f1f33;color:#f7fbff;font-weight:800}.free-entry-choices button:first-child{color:#3dd9a4}.free-entry-choices button:last-child{color:#ff8195}
 
 /* Debts and goals */

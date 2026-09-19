@@ -15,6 +15,7 @@ import StrategyBasic from "../../../users/pages/StrategyBasic";
 import Transactions from "../../../users/pages/Transactions";
 import VipExperience from "../../../users/pages/VipExperience";
 import { FreeMore, FreeSettings } from "./free/FreeScreens";
+import BasicMore from "./basic/BasicScreens";
 
 export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange, onLogout }) {
   return {
@@ -27,13 +28,13 @@ export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange,
     savings: <Goals plan={plan} initialView="savings" />,
     transactions: <Transactions />,
     situation: <FinancialSituation plan={plan} onNavigate={navigate} />,
-    more: plan === "free" ? <FreeMore onNavigate={navigate} onLogout={onLogout} /> : <SettingsPage user={user} onUserChange={onUserChange} />,
+    more: plan === "free" ? <FreeMore onNavigate={navigate} onLogout={onLogout} /> : plan === "basic" ? <BasicMore onNavigate={navigate} /> : <SettingsPage user={user} onUserChange={onUserChange} />,
     settings: plan === "free" ? <FreeSettings user={user} onNavigate={navigate} onLogout={onLogout} /> : <SettingsPage user={user} onUserChange={onUserChange} />,
     "plan-settings": <SettingsPage user={user} onUserChange={onUserChange} />,
-    budget: <Budget />,
-    calendar: <FinancialCalendar />,
-    recurring: <Recurring />,
-    reports: <Reports />,
+    budget: <Budget plan={plan} />,
+    calendar: <FinancialCalendar plan={plan} />,
+    recurring: <Recurring plan={plan} />,
+    reports: <Reports plan={plan} />,
     monthly: <MonthlySummary />,
     feedback: <Feedback />,
     "vip-recommendation": <VipExperience view="recommendation" onNavigate={navigate} />,

@@ -78,24 +78,29 @@ export default function Finance({ plan = "basic" }) {
   const expenseTotal = expenses.reduce((sum,item)=>sum+Number(item.amount||0),0);
   const movements = [
     ...income.map((item) => ({...item, kind:"income", date:item.entry_date || item.created_at})),
-    ...expenses.map((item) => ({...item, kind:"expense", date:item.entry_date || item.created_at})),
+    ...expenses.map((item) => ({
+      ...item,
+      kind: /deud|debt|pr[eé]stamo|loan|cuota/i.test(`${item.category || ""} ${item.description || ""}`) ? "debt" : "expense",
+      sourceKind: "expense",
+      date:item.entry_date || item.created_at,
+    })),
   ].filter((item) => (filter === "all" || item.kind === filter) && `${item.description || ""} ${item.category || ""}`.toLowerCase().includes(query.toLowerCase()))
     .sort((a,b) => String(b.date || "").localeCompare(String(a.date || "")));
 
   const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="finva-fold-row" key={item.id}><span><strong>{item.description || item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b className={tone}>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || item.category})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="finva-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
 
-  const content = plan === "free" ? <section className="free-screen free-movements-screen">
-    <small className="free-plan-label">{tx("Gratis", "Free")}</small>
+  const compact = plan === "free" || plan === "basic";
+  const content = compact ? <section className={`free-screen free-movements-screen ${plan === "basic" ? "basic-movements-screen" : ""}`}>
+    <small className="free-plan-label">{plan === "free" ? tx("Gratis", "Free") : "Basic"}</small>
     {error && <div className="free-error">{error}</div>}
     <label className="free-search"><Search size={18}/><input aria-label={tx("Buscar movimientos", "Search transactions")} placeholder={tx("Buscar movimientos", "Search transactions")} value={query} onChange={(event) => setQuery(event.target.value)}/></label>
     <div className="free-filter-tabs" role="tablist">
-      {[['all',tx('Todos','All')],['income',tx('Ingresos','Income')],['expense',tx('Gastos','Expenses')]].map(([key,label]) => <button type="button" key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}</button>)}
+      {[['all',tx('Todos','All')],['income',tx('Ingresos','Income')],['expense',tx('Gastos','Expenses')],['debt',tx('Deuda','Debt')]].map(([key,label]) => <button type="button" key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}</button>)}
     </div>
     <div className="free-transaction-list">
-      {movements.length ? movements.slice(0,8).map((item) => <button className="free-transaction-row" type="button" key={`${item.kind}-${item.id}`} onClick={() => openEdit(item.kind,item)}>
-        <span className={`free-row-icon ${item.kind}`}><ArrowDownLeft size={18}/></span>
+      {movements.length ? movements.slice(0,8).map((item) => <button className="free-transaction-row" type="button" key={`${item.kind}-${item.id}`} onClick={() => openEdit(item.sourceKind || item.kind,item)}>
         <span><strong>{item.description || item.category || tx("Movimiento", "Transaction")}</strong><small>{String(item.date || "").slice(0,10)} · {item.category}</small></span>
-        <b className={item.kind}>{item.kind === "expense" ? "−" : "+"}{money(item.amount)}</b>
+        <b className={item.kind}>{item.kind === "income" ? "+" : "−"}{money(item.amount)}</b>
       </button>) : <p className="free-empty">{tx("No hay movimientos con esos filtros.", "No transactions match those filters.")}</p>}
     </div>
     <button className="free-primary-button" type="button" onClick={() => setEntryKind("choose")}><Plus size={18}/>{tx("Agregar movimiento", "Add transaction")}</button>

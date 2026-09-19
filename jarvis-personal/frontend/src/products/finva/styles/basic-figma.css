@@ -19,13 +19,14 @@
 .native-product--finva.native-plan--basic::before{display:none}
 body:has(.native-product--finva.native-plan--basic){background:#060e1a}
 .native-product--finva.native-plan--basic .mobile-app-shell{width:min(100%,402px);border:0;background:#060e1a;box-shadow:none}
-.native-product--finva.native-plan--basic .mobile-content{padding-inline:18px;background:#060e1a}
+.native-product--finva.native-plan--basic .mobile-content{padding:0 18px 88px;background:#060e1a}
 .native-product--finva.native-plan--basic .native-product-header{
-  width:min(100%,402px);min-height:82px;padding:max(16px,env(safe-area-inset-top)) 18px 10px;
-  border:0;background:linear-gradient(180deg,#060e1a 72%,rgba(6,14,26,.92));box-shadow:none;backdrop-filter:blur(18px)
+  width:min(100%,402px);min-height:106px;padding:max(46px,env(safe-area-inset-top)) 18px 0;
+  border:0;background:#060e1a;box-shadow:none
 }
-.native-product--finva.native-plan--basic .native-product-title strong{color:#f7fbff;font-size:1.35rem;font-weight:800;letter-spacing:.08em}
-.native-product--finva.native-plan--basic .native-product-title small{margin-top:5px;color:#1aa6f5;font-size:.62rem;letter-spacing:.08em}
+.native-product--finva.native-plan--basic .native-product-header--basic .native-product-title{display:grid;gap:2px}
+.native-product--finva.native-plan--basic .native-product-header--basic .native-product-title small{order:0;margin:0;color:#1aa6f5;font-size:10px;font-weight:700;letter-spacing:0;text-transform:none}
+.native-product--finva.native-plan--basic .native-product-header--basic .native-product-title strong{order:1;color:#f7fbff;font-size:23px;line-height:1.08;font-weight:700;letter-spacing:-.035em}
 .native-product--finva.native-plan--basic .native-profile-button{width:46px;height:46px;border:1px solid #1aa6f5;border-radius:15px;color:#1aa6f5;background:#0f1f33;box-shadow:none}
 
 .native-product--finva.native-plan--basic :is(.hero,.mobile-page-heading){
@@ -38,20 +39,32 @@ body:has(.native-product--finva.native-plan--basic){background:#060e1a}
 .native-product--finva.native-plan--basic .hero p,
 .native-product--finva.native-plan--basic .mobile-page-heading>span{margin:0;color:#9eb0c4;font-size:.7rem;line-height:1.4}
 .native-product--finva.native-plan--basic :is(.panel,.card,.mobile-panel,.compact-record-card,.situation-card,.profile-completeness-card){
-  border:1px solid #142b40;border-radius:16px!important;background:#0b1726;color:#f7fbff;box-shadow:none!important
+  border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#f7fbff;box-shadow:none
 }
 .native-product--finva.native-plan--basic :is(input,select,textarea){
-  border:1px solid #142b40!important;border-radius:14px!important;background:#0b1726!important;color:#f7fbff!important;box-shadow:none!important
+  border:1px solid #142b40;border-radius:14px;background:#0b1726;color:#f7fbff;box-shadow:none
 }
-.native-product--finva.native-plan--basic :is(input,select,textarea):focus{border-color:#1aa6f5!important;box-shadow:0 0 0 3px rgba(26,166,245,.12)!important}
+.native-product--finva.native-plan--basic :is(input,select,textarea):focus{border-color:#1aa6f5;box-shadow:0 0 0 3px rgba(26,166,245,.12)}
 .native-product--finva.native-plan--basic :is(.finva-button-primary,.primary-button,.entry-save-button){
-  border:0!important;border-radius:14px!important;background:#1aa6f5!important;color:#060e1a!important;box-shadow:none!important
+  border:0;border-radius:14px;background:#1aa6f5;color:#060e1a;box-shadow:none
 }
-.native-product--finva.native-plan--basic .finva-button-success{border:0!important;background:#0ac7b2!important;color:#061712!important;box-shadow:none!important}
-.native-product--finva.native-plan--basic .finva-button-secondary{border:1px solid #244058!important;background:#0f1f33!important;color:#c6d2df!important;box-shadow:none!important}
-.native-product--finva.native-plan--basic .finva-button-danger{border:1px solid rgba(245,64,94,.35)!important;background:#1f1217!important;color:#ff8195!important;box-shadow:none!important}
+.native-product--finva.native-plan--basic .finva-button-success{border:0;background:#0ac7b2;color:#061712;box-shadow:none}
+.native-product--finva.native-plan--basic .finva-button-secondary{border:1px solid #244058;background:#0f1f33;color:#c6d2df;box-shadow:none}
+.native-product--finva.native-plan--basic .finva-button-danger{border:1px solid rgba(245,64,94,.35);background:#1f1217;color:#ff8195;box-shadow:none}
 
 /* BASIC · 02 Dashboard completo */
+.native-product--finva.native-plan--basic .basic-movements-screen{display:grid;gap:12px;padding-bottom:18px}
+.native-product--finva.native-plan--basic .basic-movements-screen .free-plan-label{color:#9eb0c4;font-size:10px;font-weight:700}
+.native-product--finva.native-plan--basic .free-search{height:48px;padding:0 13px;display:flex;align-items:center;gap:9px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#9eb0c4}
+.native-product--finva.native-plan--basic .free-search input{width:100%;height:auto;min-height:0;padding:0;border:0;border-radius:0;background:transparent;color:#f7fbff;box-shadow:none}
+.native-product--finva.native-plan--basic .free-search input:focus{border:0;outline:0;box-shadow:none}
+.native-product--finva.native-plan--basic .free-filter-tabs{height:34px;padding:0;display:flex;gap:6px;border:0;background:transparent}
+.native-product--finva.native-plan--basic .free-filter-tabs button{flex:1 0 0;height:34px;min-height:34px;padding:0 8px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#9eb0c4;font-size:9px;font-weight:700}
+.native-product--finva.native-plan--basic .free-filter-tabs button.active{background:#092938;color:#1aa6f5}
+.native-product--finva.native-plan--basic .free-transaction-list{display:grid;gap:8px}
+.native-product--finva.native-plan--basic .free-transaction-row{height:64px;min-height:64px;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#f7fbff;text-align:left}
+.native-product--finva.native-plan--basic .free-transaction-row strong,.native-product--finva.native-plan--basic .free-transaction-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.native-product--finva.native-plan--basic .free-transaction-row strong{font-size:12px}.native-product--finva.native-plan--basic .free-transaction-row small{margin-top:3px;color:#9eb0c4;font-size:9px}.native-product--finva.native-plan--basic .free-transaction-row>b{font-size:12px}.native-product--finva.native-plan--basic .free-transaction-row>b.income{color:#0ac7b2}.native-product--finva.native-plan--basic .free-transaction-row>b.expense,.native-product--finva.native-plan--basic .free-transaction-row>b.debt{color:#f5405e}
+.native-product--finva.native-plan--basic .free-primary-button{height:48px;min-height:48px;max-height:48px;border:0;border-radius:14px;background:#1aa6f5;color:#060e1a;font-size:12px;font-weight:800}
 .native-product--finva.native-plan--basic .finva-basic-dashboard{display:grid;gap:11px;padding-bottom:18px}
 .native-product--finva.native-plan--basic .finva-basic-hero-card{
   min-height:112px;padding:11px 13px;display:grid;align-content:start;gap:5px;border:1px solid #142b40;border-radius:16px;background:#092130
@@ -63,12 +76,13 @@ body:has(.native-product--finva.native-plan--basic){background:#060e1a}
   padding:11px 13px;display:grid;gap:5px;border:1px solid #142b40;border-radius:16px;background:#0b1726
 }
 .native-product--finva.native-plan--basic .finva-basic-quick-card button{
-  min-height:32px;padding:0;display:flex;align-items:center;justify-content:space-between;border:0;border-bottom:1px solid #142b40;color:#f7fbff;background:transparent
+  min-height:32px;padding:0;display:flex;align-items:center;justify-content:space-between;border:0;border-bottom:1px solid #142b40;color:#f7fbff;background:#0f1f33
 }
 .native-product--finva.native-plan--basic .finva-basic-quick-card button:last-child{border-bottom:0}
 .native-product--finva.native-plan--basic .finva-basic-quick-card button span{display:flex;align-items:center;gap:8px;font-size:.72rem}
 .native-product--finva.native-plan--basic .finva-basic-quick-card button svg{color:#1aa6f5}
 .native-product--finva.native-plan--basic .finva-basic-quick-card button b{color:#c6d2df;font-size:.7rem}
+.native-product--finva.native-plan--basic .finva-basic-quick-card button:first-child b{color:#1aa6f5}.native-product--finva.native-plan--basic .finva-basic-quick-card button b.positive{color:#0ac7b2}
 .native-product--finva.native-plan--basic .finva-basic-upcoming,
 .native-product--finva.native-plan--basic .finva-basic-plan-progress{
   padding:11px 13px;border:1px solid #142b40;border-radius:16px;background:#0b1726
@@ -113,7 +127,7 @@ body:has(.native-product--finva.native-plan--basic){background:#060e1a}
 /* BASIC · 04 Calendario financiero */
 .native-product--finva.native-plan--basic .finva-basic-calendar{display:grid;gap:11px}
 .native-product--finva.native-plan--basic .basic-calendar-picker{padding:7px 10px;border:1px solid #142b40;border-radius:14px;background:#0b1726}
-.native-product--finva.native-plan--basic .basic-calendar-picker .month-picker{width:100%;margin:0;border:0!important;background:transparent!important}
+.native-product--finva.native-plan--basic .basic-calendar-picker .month-picker{width:100%;margin:0;border:0;background:transparent}
 .native-product--finva.native-plan--basic .basic-calendar-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .native-product--finva.native-plan--basic .basic-calendar-summary>span{padding:10px 12px;display:grid;gap:4px;border:1px solid #142b40;border-radius:14px;background:#092130}
 .native-product--finva.native-plan--basic .basic-calendar-summary small{color:#1aa6f5;font-size:.54rem;font-weight:800}
@@ -148,7 +162,7 @@ body:has(.native-product--finva.native-plan--basic){background:#060e1a}
 .native-product--finva.native-plan--basic .basic-recurring-item p{margin:5px 0 8px;color:#9eb0c4;font-size:.6rem}
 .native-product--finva.native-plan--basic .basic-recurring-item .actions{display:flex;gap:6px}
 .native-product--finva.native-plan--basic .basic-recurring-item .actions button{min-height:30px;padding:5px 9px;font-size:.58rem}
-.native-product--finva.native-plan--basic .basic-recurring-add{min-height:46px;border:0!important;background:#1aa6f5!important;color:#060e1a!important}
+.native-product--finva.native-plan--basic .basic-recurring-add{min-height:46px;border:0;background:#1aa6f5;color:#060e1a}
 .native-product--finva.native-plan--basic .finva-form-sheet,
 .native-product--finva.native-plan--basic .finva-dialog{border:1px solid #142b40;background:#0b1726;box-shadow:0 -24px 64px rgba(0,0,0,.42)}
 
@@ -209,12 +223,22 @@ body:has(.native-product--finva.native-plan--basic){background:#060e1a}
 .native-product--finva.native-plan--basic .finva-segmented button.active{background:#092938;color:#1aa6f5}
 
 /* BASIC · 12 Más · Planificación and bottom navigation */
+.native-product--finva.native-plan--basic .finva-basic-more{display:grid;gap:11px;padding-bottom:18px}
+.native-product--finva.native-plan--basic .basic-more-intro{height:56px;padding:11px 13px;display:flex;align-items:flex-start;border:1px solid #142b40;border-radius:16px;background:#092130;color:#1aa6f5;font-size:10px;font-weight:700}
+.native-product--finva.native-plan--basic .basic-more-list{display:grid;gap:11px}
+.native-product--finva.native-plan--basic .basic-more-list button{width:100%;height:74px;padding:11px 13px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#f7fbff;text-align:left}
+.native-product--finva.native-plan--basic .basic-more-list button span{min-width:0;display:grid;gap:8px}
+.native-product--finva.native-plan--basic .basic-more-list button strong{padding:7px 0;background:#0f1f33;font-size:11px;font-weight:700}
+.native-product--finva.native-plan--basic .basic-more-list button small{color:#9eb0c4;font-size:9px}
+.native-product--finva.native-plan--basic .basic-more-list button svg{color:#1aa6f5}
+.native-product--finva.native-plan--basic .basic-more-money{width:100%;height:76px;padding:11px 13px;display:grid;align-content:start;gap:8px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#f7fbff;text-align:left}
+.native-product--finva.native-plan--basic .basic-more-money small{color:#9eb0c4;font-size:9px;font-weight:700}.native-product--finva.native-plan--basic .basic-more-money span{font-size:9px}
 .native-product--finva.native-plan--basic .native-bottom-nav{
   left:50%;right:auto;bottom:max(6px,env(safe-area-inset-bottom));width:min(calc(100% - 36px),366px);min-height:58px;
   padding:6px 4px;transform:translateX(-50%);gap:2px;border:1px solid #142b40;border-radius:18px;background:#0f1f33;
   box-shadow:0 12px 30px rgba(0,0,0,.32);backdrop-filter:blur(20px)
 }
-.native-product--finva.native-plan--basic .native-bottom-nav>button{min-height:44px;padding:3px 2px;border-radius:12px;color:#9eb0c4;background:#0b1726}
+.native-product--finva.native-plan--basic .native-bottom-nav>button{min-height:44px;padding:3px 2px;border-radius:0;color:#9eb0c4;background:#0b1726}
 .native-product--finva.native-plan--basic .native-bottom-nav>button::before{display:none}
 .native-product--finva.native-plan--basic .native-bottom-nav>button.active{color:#f7fbff;background:#092938}
 .native-product--finva.native-plan--basic .native-bottom-nav>button.active .native-nav-icon{color:#1aa6f5}

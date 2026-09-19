@@ -59,7 +59,6 @@ export default function StrategyBasic({ plan = "basic" }) {
     const basicAllocations = data.allocations || [];
     const covered = Number(data.strategic_margin || 0) >= 0;
     return <section className="finva-basic-strategy">
-      <div className="hero"><span>BASIC</span><h1>{copy("Estrategia","Strategy")}</h1><p>{copy("FINVA organiza tu mes con tus datos reales y el margen disponible.","FINVA organizes your month using your real data and available margin.")}</p></div>
       <article className="basic-strategy-hero">
         <small>{copy("GUÍA DEL MES","MONTHLY GUIDE")}</small>
         <strong>{covered ? copy("Tu mes está cubierto.","Your month is covered.") : copy("Tu mes necesita ajustes.","Your month needs adjustments.")}</strong>
