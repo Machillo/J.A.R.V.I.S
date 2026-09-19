@@ -52,6 +52,14 @@ export default function UsersApp({ user, onUserChange }) {
     transactions: tx("Historial", "History"), situation: tx("Situación financiera", "Financial situation"),
     monthly: tx("Resumen mensual", "Monthly summary"), feedback: tx("Ayuda", "Help"),
   };
+  const basicTitles = {
+    overview: tx("Hola", "Hello") + `, ${(user?.display_name || user?.email || tx("bienvenido", "welcome")).split(" ")[0]}`, finance: tx("Movimientos", "Transactions"), debts: tx("Deudas", "Debts"), goals: tx("Metas", "Goals"),
+    more: tx("Más", "More"), budget: tx("Presupuesto", "Budget"), calendar: tx("Calendario financiero", "Financial calendar"),
+    recurring: tx("Recurrentes", "Recurring"), reports: tx("Reportes", "Reports"), strategy: tx("Estrategia", "Strategy"),
+    situation: tx("Situación financiera", "Financial situation"), transactions: tx("Historial", "History"), monthly: tx("Resumen mensual", "Monthly summary"),
+    settings: tx("Ajustes", "Settings"), feedback: tx("Ayuda", "Help"),
+  };
+  const customHeader = plan === "free" || plan === "basic";
 
   return (
     <NativeProductShell product="finva" platform={platform} plan={plan} className="users-app">
@@ -59,9 +67,9 @@ export default function UsersApp({ user, onUserChange }) {
         <NativeProductHeader
           product="FINVA"
           subtitle={plan === "free" ? tx("Gratis", "Free") : plan.toUpperCase()}
-          eyebrow={plan === "free" ? (page === "more" || page === "settings" ? "FINVA · FREE" : "FINVA") : undefined}
-          title={plan === "free" ? (freeTitles[page] || "FINVA") : undefined}
-          variant={plan === "free" ? "free" : ""}
+          eyebrow={plan === "free" ? (page === "more" || page === "settings" ? "FINVA · FREE" : "FINVA") : plan === "basic" ? "FINVA · BASIC" : undefined}
+          title={plan === "free" ? (freeTitles[page] || "FINVA") : plan === "basic" ? (basicTitles[page] || "FINVA") : undefined}
+          variant={customHeader ? plan : ""}
           avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()}
           onProfile={() => setPage("settings")}
         />

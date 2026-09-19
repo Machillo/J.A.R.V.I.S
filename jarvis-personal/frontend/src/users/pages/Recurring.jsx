@@ -10,7 +10,7 @@ const copy=(es,en)=>tx(es,en,language);
 const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
 const empty = { name:"", amount:"", category:"general", item_type:"expense", frequency:"monthly", due_day:"", is_active:true };
 
-export default function Recurring() {
+export default function Recurring({ plan = "basic" }) {
   const [data,setData] = useState(null);
   const [form,setForm] = useState(empty);
   const [creating,setCreating] = useState(false);
@@ -43,7 +43,7 @@ export default function Recurring() {
   const activeItems = data?.items?.filter((item) => item.is_active) || [];
 
   return <section className="content-first-page finva-basic-recurring">
-    <div className="hero"><span>BASIC 06</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>
+    {plan !== "basic" && <div className="hero"><span>BASIC 06</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>}
     {error && <div className="panel error">{error}</div>}
     {data && <>
       <article className="basic-recurring-summary"><small>{copy("PRÓXIMOS 30 DÍAS","NEXT 30 DAYS")}</small><strong>{money(data.monthly_expenses)} {copy("comprometidos","committed")}</strong><span>{activeItems.length} {copy("movimientos recurrentes","recurring items")}</span></article>

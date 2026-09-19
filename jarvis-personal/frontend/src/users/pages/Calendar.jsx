@@ -6,12 +6,12 @@ const tx=(es,en)=>language==="es"?es:en;
 const money=v=>new Intl.NumberFormat(localeTag(language),{style:"currency",currency:"CRC",maximumFractionDigits:0}).format(Number(v)||0);
 const now=()=>new Date().toISOString().slice(0,7);
 
-export default function FinancialCalendar(){
+export default function FinancialCalendar({ plan = "basic" }){
   const [period,setPeriod]=useState(now()),[data,setData]=useState(null),[error,setError]=useState("");
   useEffect(()=>{setData(null);getFinancialCalendar(period).then(setData).catch(e=>setError(e.message))},[period]);
   const grouped=(data?.events||[]).reduce((acc,event)=>{(acc[event.date] ||= []).push(event);return acc},{});
   return <section className="finva-basic-calendar">
-    <div className="hero"><span>BASIC</span><h1>{tx("Calendario financiero","Financial calendar")}</h1><p>{tx("Pagos, ingresos, deudas y fechas importantes del mes.","Payments, income, debt, and important dates for the month.")}</p></div>
+    {plan !== "basic" && <div className="hero"><span>BASIC</span><h1>{tx("Calendario financiero","Financial calendar")}</h1><p>{tx("Pagos, ingresos, deudas y fechas importantes del mes.","Payments, income, debt, and important dates for the month.")}</p></div>}
     <div className="basic-calendar-picker"><input className="month-picker" type="month" value={period} onChange={e=>setPeriod(e.target.value)}/></div>
     {error&&<div className="panel error">{error}</div>}
     {!data?<div className="panel">{tx("Cargando...","Loading...")}</div>:<>
