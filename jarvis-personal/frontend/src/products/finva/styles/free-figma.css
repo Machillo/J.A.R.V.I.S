@@ -1,0 +1,348 @@
+/* FINVA Free — approved Figma implementation
+   Reference: FINVA FREE — Complete Product (frames 46:856–46:1490). */
+
+.native-product--finva.native-plan--free {
+  --native-bg:#060e1a;
+  --native-bg-soft:#0f1f33;
+  --native-surface:#0b1726;
+  --native-surface-raised:#0f1f33;
+  --native-border:#142b40;
+  --native-text:#f7fbff;
+  --native-muted:#9eb0c4;
+  --native-accent:#0ac7b2;
+  --native-accent-2:#0ac7b2;
+  --native-success:#3dd9a4;
+  --native-danger:#f5405e;
+  --f-bg:#060e1a;
+  --f-bg-2:#0f1f33;
+  --f-surface:#0b1726;
+  --f-surface-2:#0f1f33;
+  --f-border:#142b40;
+  --f-border-strong:#0ac7b2;
+  --f-text:#f7fbff;
+  --f-text-2:#c6d2df;
+  --f-muted:#9eb0c4;
+  --f-accent:#0ac7b2;
+  --f-accent-2:#0ac7b2;
+  --f-green:#3dd9a4;
+  --f-red:#f5405e;
+  color-scheme:dark;
+  background:#060e1a;
+}
+
+.native-product--finva.native-plan--free::before { display:none; }
+body:has(.native-product--finva.native-plan--free){background:#060e1a}
+
+.native-product--finva.native-plan--free .mobile-app-shell {
+  width:min(100%,402px);
+  border:0;
+  background:#060e1a;
+  box-shadow:none;
+}
+.native-product--finva.native-plan--free .mobile-content {
+  padding-inline:18px;
+  background:#060e1a;
+}
+.native-product--finva.native-plan--free .native-product-header {
+  width:min(100%,402px);
+  min-height:82px;
+  padding:max(16px,env(safe-area-inset-top)) 18px 10px;
+  background:linear-gradient(180deg,#060e1a 72%,rgba(6,14,26,.92));
+  border:0;
+  box-shadow:none;
+  backdrop-filter:blur(18px);
+}
+.native-product--finva.native-plan--free .native-product-title strong {
+  color:#f7fbff;
+  font-size:1.35rem;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+.native-product--finva.native-plan--free .native-product-title small {
+  margin-top:5px;
+  color:#9eb0c4;
+  font-size:.62rem;
+  letter-spacing:.08em;
+  text-transform:none;
+}
+.native-product--finva.native-plan--free .native-profile-button {
+  width:46px;height:46px;border:1px solid #0ac7b2;border-radius:15px;
+  color:#f7fbff;background:#0f1f33;box-shadow:none;
+}
+
+/* Shared Free typography and surfaces. */
+.native-product--finva.native-plan--free :is(.hero,.mobile-page-heading) {
+  min-height:0;
+  margin:0;
+  padding:2px 0 4px;
+  background:transparent;
+  border:0;
+  box-shadow:none;
+}
+.native-product--finva.native-plan--free .hero>span,
+.native-product--finva.native-plan--free .mobile-page-heading .eyebrow {
+  color:#0ac7b2;
+  font-size:.58rem;
+  font-weight:800;
+  letter-spacing:.12em;
+}
+.native-product--finva.native-plan--free .hero h1,
+.native-product--finva.native-plan--free .mobile-page-heading h1 {
+  margin:4px 0;
+  color:#f7fbff;
+  font-size:1.55rem;
+  line-height:1.08;
+  letter-spacing:-.035em;
+}
+.native-product--finva.native-plan--free .hero p,
+.native-product--finva.native-plan--free .mobile-page-heading>span {
+  margin:0;
+  color:#9eb0c4;
+  font-size:.7rem;
+  line-height:1.4;
+}
+.native-product--finva.native-plan--free :is(.panel,.card,.mobile-panel,.situation-card,.profile-completeness-card,.compact-record-card,.finva-fold-list) {
+  border:1px solid #142b40;
+  border-radius:16px!important;
+  background:#0b1726;
+  color:#f7fbff;
+  box-shadow:none!important;
+}
+.native-product--finva.native-plan--free :is(input,select,textarea) {
+  border:1px solid #142b40!important;
+  border-radius:14px!important;
+  background:#0b1726!important;
+  color:#f7fbff!important;
+  box-shadow:none!important;
+}
+.native-product--finva.native-plan--free :is(input,select,textarea):focus {
+  border-color:#0ac7b2!important;
+  box-shadow:0 0 0 3px rgba(10,199,178,.12)!important;
+}
+.native-product--finva.native-plan--free :is(.finva-button-primary,.primary-button,.entry-save-button) {
+  border:0!important;
+  border-radius:14px!important;
+  background:#0ac7b2!important;
+  color:#060e1a!important;
+  box-shadow:none!important;
+}
+.native-product--finva.native-plan--free .finva-button-success {
+  border:0!important;background:#3dd9a4!important;color:#061712!important;box-shadow:none!important;
+}
+.native-product--finva.native-plan--free .finva-button-secondary {
+  border:1px solid #244058!important;background:#0f1f33!important;color:#c6d2df!important;box-shadow:none!important;
+}
+.native-product--finva.native-plan--free .finva-button-danger {
+  border:1px solid rgba(245,64,94,.35)!important;background:#1f1217!important;color:#ff8195!important;box-shadow:none!important;
+}
+
+/* FREE · 01 Inicio */
+.native-product--finva.native-plan--free .finva-overview.dashboard-free {
+  gap:12px;
+  padding:0 0 20px;
+}
+.native-product--finva.native-plan--free .finva-free-plan-label {
+  color:#9eb0c4;
+  font-size:.62rem;
+  font-weight:700;
+}
+.native-product--finva.native-plan--free .finva-free-available {
+  min-height:128px;
+  padding:12px 13px;
+  display:grid;
+  align-content:start;
+  gap:6px;
+  border:1px solid #142b40;
+  border-radius:16px;
+  background:#08292b;
+}
+.native-product--finva.native-plan--free .finva-free-available small {
+  color:#0ac7b2;font-size:.58rem;font-weight:850;letter-spacing:.08em;
+}
+.native-product--finva.native-plan--free .finva-free-available strong {
+  color:#f7fbff;font-size:1.9rem;line-height:1.15;letter-spacing:-.045em;
+}
+.native-product--finva.native-plan--free .finva-free-available span {
+  color:#9eb0c4;font-size:.68rem;line-height:1.25;
+}
+.native-product--finva.native-plan--free .finva-overview-chart,
+.native-product--finva.native-plan--free .finva-overview-categories {
+  padding:12px 13px;
+  border:1px solid #142b40!important;
+  border-radius:16px!important;
+  background:#0b1726!important;
+}
+.native-product--finva.native-plan--free .finva-overview :is(.finva-overview-chart,.finva-overview-categories)>header small {
+  color:#9eb0c4;font-size:.58rem;
+}
+.native-product--finva.native-plan--free .finva-overview :is(.finva-overview-chart,.finva-overview-categories)>header h2 {
+  margin:3px 0 10px;font-size:.82rem;
+}
+.native-product--finva.native-plan--free .finva-overview-chart-row>div { background:#0f1f33; }
+.native-product--finva.native-plan--free .finva-overview-chart .income { background:#0ac7b2; }
+.native-product--finva.native-plan--free .finva-overview-chart .expense { background:#f5405e; }
+.native-product--finva.native-plan--free .finva-overview-categories>div b { background:#0ac7b2; }
+.native-product--finva.native-plan--free .finva-overview-action {
+  min-height:48px;padding:10px 13px;border:1px solid #142b40;border-radius:14px;
+  background:#0b1726;color:#0ac7b2;
+}
+.native-product--finva.native-plan--free .finva-overview-action strong{font-size:.72rem}
+.native-product--finva.native-plan--free .finva-overview-action small{font-size:.62rem}
+
+/* FREE · 02/03 Movimientos + form sheet */
+.native-product--finva.native-plan--free .finva-progressive-page { gap:12px; }
+.native-product--finva.native-plan--free .finva-money-summary {
+  padding:12px 13px;border:1px solid #142b40;border-radius:16px;background:#08292b;
+}
+.native-product--finva.native-plan--free .finva-money-summary small{font-size:.62rem;color:#0ac7b2}
+.native-product--finva.native-plan--free .finva-money-summary strong{font-size:1.55rem;color:#f7fbff}
+.native-product--finva.native-plan--free .finva-money-summary span{font-size:.66rem;color:#9eb0c4}
+.native-product--finva.native-plan--free .entry-quick-actions.compact {
+  grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+}
+.native-product--finva.native-plan--free .entry-quick-actions.compact .finva-quick-action {
+  min-height:62px;padding:10px 12px;border:1px solid #142b40;border-radius:15px;background:#0b1726;color:#f7fbff;
+}
+.native-product--finva.native-plan--free .entry-quick-actions.compact .finva-quick-action>span {
+  width:32px;height:32px;border-radius:10px;background:#082e2e;color:#0ac7b2;
+}
+.native-product--finva.native-plan--free .entry-quick-actions.compact .finva-quick-action.expense>span {
+  background:#1f1217;color:#f5405e;
+}
+.native-product--finva.native-plan--free .finva-fold-head { min-height:58px; }
+.native-product--finva.native-plan--free .finva-fold-body { background:#081321; }
+.native-product--finva.native-plan--free .finva-fold-row { border-color:#142b40; }
+.native-product--finva.native-plan--free .finva-form-sheet,
+.native-product--finva.native-plan--free .finva-dialog {
+  border:1px solid #142b40;
+  background:#0b1726;
+  box-shadow:0 -24px 64px rgba(0,0,0,.42);
+}
+.native-product--finva.native-plan--free .entry-amount-field>div {
+  border:1px solid #142b40;background:#0b1726;
+}
+
+/* FREE · 04/05 Deudas */
+.native-product--finva.native-plan--free .finva-debts-page { display:grid;gap:12px; }
+.native-product--finva.native-plan--free .finva-free-debt-summary {
+  min-height:94px;padding:12px 13px;display:grid;gap:5px;
+  border:1px solid #142b40;border-radius:16px;background:#1f1217;
+}
+.native-product--finva.native-plan--free .finva-free-debt-summary small {
+  color:#f5405e;font-size:.58rem;font-weight:850;letter-spacing:.08em;
+}
+.native-product--finva.native-plan--free .finva-free-debt-summary strong {
+  color:#f7fbff;font-size:1.7rem;line-height:1.1;letter-spacing:-.04em;
+}
+.native-product--finva.native-plan--free .finva-free-debt-summary span { color:#9eb0c4;font-size:.66rem; }
+.native-product--finva.native-plan--free .finva-add-strip {
+  min-height:48px;padding:8px 12px;border:0;border-radius:14px;background:#0ac7b2;color:#060e1a;box-shadow:none;
+}
+.native-product--finva.native-plan--free .finva-add-strip>span { color:#060e1a;background:transparent; }
+.native-product--finva.native-plan--free .finva-add-strip small { color:#124a48; }
+.native-product--finva.native-plan--free .content-first-grid { gap:8px; }
+.native-product--finva.native-plan--free .compact-record-card { padding:12px 13px; }
+.native-product--finva.native-plan--free .debt-card progress,
+.native-product--finva.native-plan--free .goal-card-basic progress {
+  height:6px;border-radius:99px;background:#0f1f33;accent-color:#0ac7b2;
+}
+
+/* FREE · 06/07 Metas + ahorro */
+.native-product--finva.native-plan--free .finva-segmented {
+  padding:3px;border:1px solid #142b40;border-radius:14px;background:#0f1f33;
+}
+.native-product--finva.native-plan--free .finva-segmented button {
+  min-height:38px;border:0;border-radius:11px;background:transparent;color:#9eb0c4;
+}
+.native-product--finva.native-plan--free .finva-segmented button.active {
+  background:#082e2e;color:#0ac7b2;
+}
+.native-product--finva.native-plan--free .goal-card-basic progress { accent-color:#0ac7b2; }
+
+/* FREE · Historial / resumen mensual / situación / soporte */
+.native-product--finva.native-plan--free .movement-filters {
+  padding:10px;display:grid;gap:8px;
+}
+.native-product--finva.native-plan--free .movement-table { padding:0;overflow:hidden; }
+.native-product--finva.native-plan--free .movement-head {
+  padding:10px 12px;background:#0f1f33;color:#9eb0c4;font-size:.62rem;
+}
+.native-product--finva.native-plan--free .movement-row {
+  min-height:64px;padding:10px 12px;border-color:#142b40;
+}
+.native-product--finva.native-plan--free .movement-row :is(time,small){color:#9eb0c4}
+.native-product--finva.native-plan--free .month-picker { margin:8px 0 12px; }
+.native-product--finva.native-plan--free .kpis {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+}
+.native-product--finva.native-plan--free .kpis .card { min-height:82px;padding:12px; }
+.native-product--finva.native-plan--free .kpis .card small{color:#9eb0c4;font-size:.62rem}
+.native-product--finva.native-plan--free .kpis .card strong{font-size:1rem}
+.native-product--finva.native-plan--free .monthly-highlight,
+.native-product--finva.native-plan--free .free-categories { margin-top:10px;padding:12px 13px; }
+.native-product--finva.native-plan--free .profile-completeness-card {
+  padding:12px 13px;background:#08292b;
+}
+.native-product--finva.native-plan--free .profile-completeness-track { background:#0f1f33; }
+.native-product--finva.native-plan--free .profile-completeness-track i { background:#0ac7b2; }
+.native-product--finva.native-plan--free .situation-card-list { gap:8px; }
+.native-product--finva.native-plan--free .situation-card { padding:12px 13px; }
+.native-product--finva.native-plan--free .support-choice-grid { gap:8px; }
+.native-product--finva.native-plan--free .support-choice { padding:14px; }
+
+/* Bottom nav: approved five-item 366×58 language. */
+.native-product--finva.native-plan--free .native-bottom-nav {
+  left:50%;right:auto;bottom:max(6px,env(safe-area-inset-bottom));
+  width:min(calc(100% - 36px),366px);
+  min-height:58px;
+  padding:6px 4px;
+  transform:translateX(-50%);
+  gap:2px;
+  border:1px solid #142b40;
+  border-radius:18px;
+  background:#0f1f33;
+  box-shadow:0 12px 30px rgba(0,0,0,.32);
+  backdrop-filter:blur(20px);
+}
+.native-product--finva.native-plan--free .native-bottom-nav>button {
+  min-height:44px;padding:3px 2px;border-radius:12px;color:#9eb0c4;background:#0b1726;
+}
+.native-product--finva.native-plan--free .native-bottom-nav>button::before { display:none; }
+.native-product--finva.native-plan--free .native-bottom-nav>button.active {
+  color:#f7fbff;background:#082e2e;
+}
+.native-product--finva.native-plan--free .native-bottom-nav>button.active .native-nav-icon { color:#0ac7b2; }
+.native-product--finva.native-plan--free .native-nav-icon { min-height:21px; }
+.native-product--finva.native-plan--free .native-nav-icon svg { width:20px;height:20px; }
+.native-product--finva.native-plan--free .native-nav-label { font-size:.55rem; }
+
+/* More sheet follows FREE · 13 and keeps settings in the header avatar only. */
+.native-product--finva.native-plan--free .native-more-sheet {
+  width:min(calc(100% - 20px),382px);
+  padding:10px 14px calc(76px + env(safe-area-inset-bottom));
+  border:1px solid #142b40;
+  border-radius:24px 24px 0 0;
+  background:#0b1726;
+}
+.native-product--finva.native-plan--free .native-more-sheet header small{color:#0ac7b2}
+.native-product--finva.native-plan--free .native-sheet-group>small{color:#9eb0c4}
+.native-product--finva.native-plan--free .native-sheet-group button {
+  min-height:50px;border:1px solid #142b40;border-radius:14px;background:#0f1f33;
+}
+.native-product--finva.native-plan--free .native-sheet-group button>span {
+  color:#0ac7b2;background:#082e2e;
+}
+
+/* The approved FINVA Free screens are dark regardless of the device appearance. */
+html[data-color-mode-resolved="light"] .native-product--finva.native-plan--free,
+html[data-theme="light"] .native-product--finva.native-plan--free {
+  --native-bg:#060e1a;--native-bg-soft:#0f1f33;--native-surface:#0b1726;--native-surface-raised:#0f1f33;
+  --native-border:#142b40;--native-text:#f7fbff;--native-muted:#9eb0c4;--native-accent:#0ac7b2;--native-accent-2:#0ac7b2;
+  color-scheme:dark;background:#060e1a;
+}
+
+@media(max-width:390px){
+  .native-product--finva.native-plan--free .mobile-content{padding-inline:14px}
+  .native-product--finva.native-plan--free .native-bottom-nav{width:calc(100% - 20px)}
+  .native-product--finva.native-plan--free .finva-free-available strong{font-size:1.7rem}
+}
