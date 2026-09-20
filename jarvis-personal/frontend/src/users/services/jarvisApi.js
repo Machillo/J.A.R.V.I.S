@@ -3,19 +3,26 @@ import { apiError, apiNetworkError } from "../../lib/apiErrors";
 import { flushIncidentQueue } from "../../lib/incidentReporter";
 import { flushPendingOperations, recoverableFetch } from "../../lib/operationRecovery";
 
+const OBSERVABILITY_PATHS = new Set([
+  "/product-ops/incidents",
+  "/product-ops/events",
+  "/product-ops/health",
+]);
+
 async function request(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
+  const autoReport = !OBSERVABILITY_PATHS.has(path);
   let response;
   try {
     response = await recoverableFetch(`${API_URL}${path}`, options);
   } catch (cause) {
-    throw apiNetworkError(cause, path, method);
+    throw apiNetworkError(cause, path, method, autoReport);
   }
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw apiError(response, payload, path, method, true);
+  if (!response.ok) throw apiError(response, payload, path, method, autoReport);
   if (path !== "/product-ops/incidents") flushIncidentQueue();
   if (path !== "/product-ops/incidents") flushPendingOperations();
-  if (!["/product-ops/incidents", "/product-ops/events", "/product-ops/health"].includes(path)) {
+  if (!OBSERVABILITY_PATHS.has(path)) {
     window.dispatchEvent(new CustomEvent("finva:api-recovered"));
   }
   return payload;

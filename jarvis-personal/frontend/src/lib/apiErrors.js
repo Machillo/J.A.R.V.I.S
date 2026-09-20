@@ -61,7 +61,7 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
   return error;
 }
 
-export function apiNetworkError(cause, path, method = "GET") {
+export function apiNetworkError(cause, path, method = "GET", autoReport = true) {
   const queued = Boolean(cause?.finvaOperationQueued);
   const error = new FinvaApiError(queued
     ? "Guardamos este cambio en el dispositivo. FINVA lo enviará cuando vuelva la conexión."
@@ -80,8 +80,10 @@ export function apiNetworkError(cause, path, method = "GET") {
     retryCount: error.retryCount, status: 0, path, method,
     errorType: cause?.name || "network_error", summary: "FINVA perdió comunicación con el servicio.",
   };
-  window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));
-  captureIncident(incident);
+  if (autoReport) {
+    window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));
+    captureIncident(incident);
+  }
   recordError(error, `api:${path || "unknown"}`);
   return error;
 }
