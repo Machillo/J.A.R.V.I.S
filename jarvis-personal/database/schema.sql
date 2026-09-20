@@ -10,12 +10,13 @@ CREATE TABLE IF NOT EXISTS allowed_users (
 
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
-    allowed_user_id BIGINT REFERENCES allowed_users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
     name TEXT NOT NULL,
     country TEXT NOT NULL,
     timezone TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_ci ON users (LOWER(email));
 
 CREATE TABLE IF NOT EXISTS settings (
     id BIGSERIAL PRIMARY KEY,

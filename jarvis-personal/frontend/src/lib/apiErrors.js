@@ -16,7 +16,10 @@ export class FinvaApiError extends Error {
 }
 
 export function apiError(response, payload, path) {
-  const detail = typeof payload === "string" ? payload : payload?.detail || payload?.error || "";
+  const rawDetail = typeof payload === "string" ? payload : payload?.detail || payload?.error || "";
+  const detail = typeof rawDetail === "object" ? rawDetail?.message || "" : rawDetail;
+  const deletionId = typeof rawDetail === "object" ? rawDetail?.deletion_id || "" : "";
+  const deletionStage = typeof rawDetail === "object" ? rawDetail?.stage || "" : "";
   const status = response?.status || 0;
   let message = GENERIC_MESSAGE;
   if (status === 401) message = "Tu sesión venció. Iniciá sesión nuevamente.";
@@ -28,9 +31,9 @@ export function apiError(response, payload, path) {
 
   const error = new FinvaApiError(message, {
     status,
-    errorId: typeof payload === "object" ? payload?.error_id : "",
+    errorId: deletionId || (typeof payload === "object" ? payload?.error_id : ""),
     path,
-    technicalMessage: detail,
+    technicalMessage: deletionStage ? `${detail} [${deletionStage}]` : detail,
   });
   if (status >= 500 || status === 0) {
     window.dispatchEvent(new CustomEvent("finva:api-error", { detail: {
