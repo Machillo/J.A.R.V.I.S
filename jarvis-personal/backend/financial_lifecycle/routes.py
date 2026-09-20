@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from backend.auth.saas import require_feature
 from backend.financial_lifecycle.snapshots import (
     capture_financial_snapshot,
     get_financial_progress,
+    get_monthly_review,
     list_financial_snapshots,
 )
 from backend.financial_lifecycle.state import build_financial_state
@@ -33,3 +34,12 @@ def lifecycle_snapshots(limit: int = 90):
 def lifecycle_progress():
     require_feature("strategy_vip")
     return get_financial_progress()
+
+
+@router.get("/monthly-review")
+def lifecycle_monthly_review(period: str | None = None):
+    require_feature("strategy_vip")
+    try:
+        return get_monthly_review(period)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
