@@ -32,6 +32,7 @@ from backend.user_product.routes import router as user_product_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.routes import router as product_ops_router
+from backend.financial_lifecycle.routes import router as financial_lifecycle_router
 from backend.core.idempotency import (
     IDEMPOTENCY_KEY_PATTERN,
     complete_operation,
@@ -288,6 +289,7 @@ app.include_router(owner_bridge_router)
 app.include_router(user_product_router)
 app.include_router(deployment_monitor_router)
 app.include_router(product_ops_router)
+app.include_router(financial_lifecycle_router)
 
 class AskRequest(BaseModel):
     text: str
