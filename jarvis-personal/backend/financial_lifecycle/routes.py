@@ -5,6 +5,7 @@ from backend.financial_lifecycle.snapshots import (
     capture_financial_snapshot,
     get_financial_progress,
     get_monthly_review,
+    get_proactive_advisor,
     list_financial_snapshots,
 )
 from backend.financial_lifecycle.state import build_financial_state
@@ -43,3 +44,9 @@ def lifecycle_monthly_review(period: str | None = None):
         return get_monthly_review(period)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/proactive-advisor")
+def lifecycle_proactive_advisor():
+    require_feature("strategy_vip")
+    return get_proactive_advisor()

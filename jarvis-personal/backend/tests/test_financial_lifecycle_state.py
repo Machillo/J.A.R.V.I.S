@@ -126,3 +126,15 @@ def test_monthly_review_query_is_scoped_to_workspace_and_period(monkeypatch):
 def test_monthly_review_rejects_invalid_period_before_querying_database():
     with pytest.raises(ValueError, match="YYYY-MM"):
         snapshots.get_monthly_review("2026-13")
+
+
+def test_proactive_advisor_query_is_scoped_to_authenticated_workspace(monkeypatch):
+    connection = _Connection([_Result(one=None)])
+    monkeypatch.setattr(snapshots, "build_financial_state", lambda: {"schema_version": "financial-state-v1"})
+    monkeypatch.setattr(snapshots, "get_current_workspace_id", lambda: "workspace-e")
+    monkeypatch.setattr(snapshots, "get_connection", lambda: connection)
+
+    result = snapshots.get_proactive_advisor()
+
+    assert result["status"] == "BASELINE"
+    assert connection.calls[0][1] == ("workspace-e",)

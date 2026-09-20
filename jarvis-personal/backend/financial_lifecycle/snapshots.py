@@ -10,6 +10,7 @@ from backend.auth.current_user import get_current_account_id, get_current_worksp
 from backend.core.database import get_connection
 from backend.financial_lifecycle.progress import build_longitudinal_progress, compare_states
 from backend.financial_lifecycle.monthly_review import build_monthly_review
+from backend.financial_lifecycle.proactive import build_proactive_advisor
 from backend.financial_lifecycle.state import build_financial_state
 
 def capture_financial_snapshot() -> dict[str, Any]:
@@ -112,3 +113,21 @@ def get_monthly_review(period: str | None = None) -> dict[str, Any]:
     else:
         closing_state = {}
     return build_monthly_review(period=selected, closing_state=closing_state, observations=observations)
+
+
+def get_proactive_advisor() -> dict[str, Any]:
+    current = build_financial_state()
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        previous = conn.execute(
+            """SELECT snapshot_date,state
+               FROM financial_state_snapshots
+               WHERE workspace_id=%s AND snapshot_date<CURRENT_DATE
+               ORDER BY snapshot_date DESC,id DESC LIMIT 1""",
+            (workspace_id,),
+        ).fetchone()
+    return build_proactive_advisor(
+        current=current,
+        previous=(previous or {}).get("state"),
+        baseline_date=str(previous.get("snapshot_date")) if previous else None,
+    )
