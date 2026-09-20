@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 import smtplib
+import requests
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
@@ -43,6 +44,13 @@ def support_email_configuration() -> dict[str, object]:
         "recipient": recipient or None,
         "host": os.getenv("SUPPORT_SMTP_HOST", "smtp.gmail.com").strip(),
         "port": int(os.getenv("SUPPORT_SMTP_PORT", "465")),
+    }
+
+
+def support_channel_configuration() -> dict[str, object]:
+    return {
+        "email": support_email_configuration(),
+        "discord_configured": bool(os.getenv("SUPPORT_DISCORD_WEBHOOK_URL", "").strip()),
     }
 
 
@@ -109,6 +117,78 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
         except Exception:
             logger.exception("Support email delivery failed for %s using SMTP port %s", public_id, candidate_port)
     return False
+
+
+def _send_support_discord(*, public_id: str, plan: str, payload, severity: str = "info") -> bool:
+    """Send privacy-minimized operational context when a Discord webhook is configured."""
+    webhook = os.getenv("SUPPORT_DISCORD_WEBHOOK_URL", "").strip()
+    if not webhook:
+        return False
+    if not re.match(r"^https://(?:canary\.|ptb\.)?(?:discord(?:app)?\.com)/api/webhooks/", webhook, re.I):
+        logger.error("Discord support webhook rejected: unsupported host")
+        return False
+    safe = lambda value: re.sub(r"[\r\n`@]+", " ", str(value or "")).strip()[:160]
+    fields = [
+        f"Ticket: {safe(public_id)}",
+        f"Severidad: {safe(severity)}",
+        f"Tipo: {safe(payload.category)}",
+        f"Plan: {safe(plan) or 'desconocido'}",
+        f"Versión: {safe(payload.app_version) or 'no indicada'}",
+        f"Plataforma: {safe(getattr(payload, 'platform', None)) or 'no indicada'}",
+        f"Pantalla: {safe(getattr(payload, 'screen', None)) or 'no indicada'}",
+        f"Referencia: {safe(getattr(payload, 'error_reference', None)) or 'ninguna'}",
+    ]
+    try:
+        response = requests.post(
+            webhook,
+            json={
+                "content": f"**FINVA · {safe(severity).upper()}**\n```\n" + "\n".join(fields) + "\n```",
+                "allowed_mentions": {"parse": []},
+            },
+            timeout=10,
+        )
+        if response.status_code in {200, 204}:
+            logger.info("Support Discord notification delivered for %s", public_id)
+            return True
+        logger.error("Support Discord notification failed for %s status=%s", public_id, response.status_code)
+    except Exception:
+        logger.exception("Support Discord notification failed for %s", public_id)
+    return False
+
+
+def _incident_severity(path: str, method: str, status: int) -> str:
+    sensitive_operation = method.upper() != "GET" and any(
+        marker in path for marker in ("/auth/me", "/billing/", "/receipt", "/transactions", "/debts", "/goals")
+    )
+    if sensitive_operation or status >= 500:
+        return "critical"
+    return "warning"
+
+
+def _sanitize_incident_path(value: str) -> str:
+    path = str(value or "/unknown").split("?", 1)[0].split("#", 1)[0]
+    path = re.sub(r"[0-9a-f]{8}-[0-9a-f-]{27,}", ":id", path, flags=re.I)
+    path = re.sub(r"/\d+(?=/|$)", "/:id", path)
+    return path[:160] or "/unknown"
+
+
+def _sanitize_diagnostic_label(value: str | None) -> str | None:
+    if not value:
+        return None
+    label = re.sub(r"[\r\n\t@`]+", " ", str(value)).strip()
+    label = re.sub(r"\b\d{6,}\b", "[id]", label)
+    return label[:80] or None
+
+
+def _incident_fingerprint(payload) -> str:
+    source = "|".join([
+        str(payload.method or "GET").upper(),
+        _sanitize_incident_path(payload.path),
+        str(payload.status or 0),
+        str(payload.error_type or "api_error")[:80],
+        str(payload.app_version or "unknown")[:30],
+    ])
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
 def launch_promotion_status(now: datetime | None = None):
@@ -283,7 +363,25 @@ def ensure_schema(conn):
       id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       workspace_id UUID, category TEXT NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'new', plan_code TEXT, app_version TEXT, owner_notes TEXT,
+      source TEXT NOT NULL DEFAULT 'user', severity TEXT NOT NULL DEFAULT 'info', fingerprint TEXT,
+      request_id TEXT, error_reference TEXT, screen TEXT, platform TEXT, retry_count INTEGER NOT NULL DEFAULT 0,
+      occurrence_count INTEGER NOT NULL DEFAULT 1, last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ)""")
+    for ddl in [
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'user'",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS severity TEXT NOT NULL DEFAULT 'info'",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS fingerprint TEXT",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS request_id TEXT",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS error_reference TEXT",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS screen TEXT",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS platform TEXT",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS retry_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS occurrence_count INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    ]:
+        conn.execute(ddl)
+    conn.execute("""CREATE INDEX IF NOT EXISTS idx_feedback_incident_dedupe
+      ON feedback_reports(account_id,fingerprint,last_seen_at DESC) WHERE fingerprint IS NOT NULL""")
     # These tables are backend-only. Keep them inaccessible through the
     # Supabase Data API even when runtime schema recovery creates them.
     for table_name in (
@@ -406,6 +504,13 @@ def record_event(event_name, surface, success=True, duration_bucket=None, app_ve
     return {"status": "recorded"}
 
 
+def _record_event_safely(*args, **kwargs) -> None:
+    try:
+        record_event(*args, **kwargs)
+    except Exception:
+        logger.exception("Product telemetry failed after the primary operation completed")
+
+
 def create_feedback(payload):
     user = get_current_user()
     with get_connection() as conn:
@@ -416,11 +521,14 @@ def create_feedback(payload):
                LEFT JOIN plans p ON p.id=s.plan_id WHERE a.id=%s""",
             (user["account_id"],),
         ).fetchone() or {}
-        row = conn.execute("""INSERT INTO feedback_reports(account_id,workspace_id,category,subject,message,plan_code,app_version)
-          VALUES(%s,%s,%s,%s,%s,%s,%s) RETURNING id,category,subject,status,created_at""", (user["account_id"], user.get("workspace_id"),
-          payload.category, payload.subject.strip(), payload.message.strip(), identity.get("plan_code"), payload.app_version)).fetchone()
+        row = conn.execute("""INSERT INTO feedback_reports(
+            account_id,workspace_id,category,subject,message,plan_code,app_version,screen,error_reference
+          ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+          RETURNING id,category,subject,status,created_at""", (user["account_id"], user.get("workspace_id"),
+          payload.category, payload.subject.strip(), payload.message.strip(), identity.get("plan_code"), payload.app_version,
+          payload.screen, payload.error_reference)).fetchone()
         conn.commit()
-    record_event("feedback_submitted", "feedback")
+    _record_event_safely("feedback_submitted", "feedback")
     public_id = f"FINVA-{int(row['id']):06d}"
     email_sent = _send_support_email(
         public_id=public_id,
@@ -428,14 +536,97 @@ def create_feedback(payload):
         plan=identity.get("plan_code") or "",
         payload=payload,
     )
-    return {**row, "public_id": public_id, "email_sent": email_sent}
+    discord_sent = _send_support_discord(
+        public_id=public_id, plan=identity.get("plan_code") or "", payload=payload,
+    )
+    return {**row, "public_id": public_id, "email_sent": email_sent, "discord_sent": discord_sent}
+
+
+def create_automatic_incident(payload):
+    user = get_current_user()
+    safe_path = _sanitize_incident_path(payload.path)
+    safe_screen = _sanitize_diagnostic_label(payload.screen)
+    fingerprint = _incident_fingerprint(payload)
+    severity = _incident_severity(safe_path, payload.method, payload.status)
+    with get_connection() as conn:
+        ensure_schema(conn)
+        identity = conn.execute(
+            """SELECT a.primary_email,p.code AS plan_code FROM accounts a
+               LEFT JOIN account_subscriptions s ON s.account_id=a.id
+               LEFT JOIN plans p ON p.id=s.plan_id WHERE a.id=%s""",
+            (user["account_id"],),
+        ).fetchone() or {}
+        # Serialize the same account/fingerprint pair so simultaneous failures
+        # cannot create duplicate tickets before either transaction commits.
+        conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            (f"{user['account_id']}:{fingerprint}",),
+        )
+        existing = conn.execute(
+            """SELECT id,status,occurrence_count FROM feedback_reports
+               WHERE account_id=%s AND fingerprint=%s AND source='automatic'
+                 AND status IN ('new','reviewing') AND last_seen_at >= NOW()-INTERVAL '15 minutes'
+               ORDER BY last_seen_at DESC LIMIT 1 FOR UPDATE""",
+            (user["account_id"], fingerprint),
+        ).fetchone()
+        if existing:
+            row = conn.execute(
+                """UPDATE feedback_reports SET occurrence_count=occurrence_count+1,last_seen_at=NOW(),
+                     updated_at=NOW(),request_id=%s,error_reference=%s,retry_count=GREATEST(retry_count,%s)
+                   WHERE id=%s RETURNING id,category,subject,status,created_at,occurrence_count""",
+                (payload.request_id, payload.error_reference, payload.retry_count, existing["id"]),
+            ).fetchone()
+            conn.commit()
+            return {**row, "public_id": f"FINVA-{int(row['id']):06d}", "deduplicated": True,
+                    "email_sent": False, "discord_sent": False}
+
+        subject = f"Fallo automático · {payload.method.upper()} {safe_path}"[:140]
+        message = "\n".join([
+            "FINVA detectó este incidente automáticamente.",
+            f"Operación: {payload.method.upper()} {safe_path}",
+            f"Estado HTTP: {payload.status or 'sin respuesta'}",
+            f"Tipo: {payload.error_type}",
+            f"Reintentos seguros: {payload.retry_count}",
+            f"Request ID: {payload.request_id}",
+            "No se adjuntaron payloads, secretos ni información financiera.",
+        ])
+        row = conn.execute(
+            """INSERT INTO feedback_reports(
+                 account_id,workspace_id,category,subject,message,plan_code,app_version,source,severity,
+                 fingerprint,request_id,error_reference,screen,platform,retry_count
+               ) VALUES(%s,%s,'error',%s,%s,%s,%s,'automatic',%s,%s,%s,%s,%s,%s,%s)
+               RETURNING id,category,subject,status,created_at,occurrence_count""",
+            (user["account_id"], user.get("workspace_id"), subject, message, identity.get("plan_code"),
+             payload.app_version, severity, fingerprint, payload.request_id, payload.error_reference,
+             safe_screen, payload.platform, payload.retry_count),
+        ).fetchone()
+        conn.commit()
+
+    public_id = f"FINVA-{int(row['id']):06d}"
+    notification_payload = SimpleNamespace(
+        category="error", subject=subject, message=message, app_version=payload.app_version,
+        screen=safe_screen or safe_path, error_reference=payload.error_reference or payload.request_id,
+        platform=payload.platform,
+    )
+    email_sent = _send_support_email(
+        public_id=public_id, email=identity.get("primary_email") or "no disponible",
+        plan=identity.get("plan_code") or "", payload=notification_payload,
+    )
+    discord_sent = _send_support_discord(
+        public_id=public_id, plan=identity.get("plan_code") or "",
+        payload=notification_payload, severity=severity,
+    )
+    _record_event_safely("api_error", safe_screen or safe_path, success=False, app_version=payload.app_version)
+    return {**row, "public_id": public_id, "deduplicated": False,
+            "email_sent": email_sent, "discord_sent": discord_sent, "severity": severity}
 
 
 def list_feedback():
     account_id = get_current_account_id()
     with get_connection() as conn:
         ensure_schema(conn)
-        rows = conn.execute("""SELECT id,category,subject,message,status,owner_notes,created_at,updated_at
+        rows = conn.execute("""SELECT id,category,subject,message,status,owner_notes,source,severity,
+          occurrence_count,last_seen_at,created_at,updated_at
           FROM feedback_reports WHERE account_id=%s ORDER BY created_at DESC LIMIT 30""", (account_id,)).fetchall()
         conn.commit()
     return [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in rows]
@@ -490,11 +681,13 @@ def owner_dashboard():
           FROM billing_orders o JOIN accounts a ON a.id=o.account_id WHERE o.status='payment_pending' ORDER BY o.created_at""").fetchall()
         events = conn.execute("""SELECT event_name,COUNT(*) AS uses,COUNT(DISTINCT account_id) AS users
           FROM product_events WHERE created_at>=NOW()-INTERVAL '30 days' GROUP BY event_name ORDER BY uses DESC LIMIT 20""").fetchall()
-        tickets = conn.execute("""SELECT f.id,f.category,f.subject,f.message,f.status,f.owner_notes,f.created_at,a.primary_email AS email
+        tickets = conn.execute("""SELECT f.id,f.category,f.subject,f.message,f.status,f.owner_notes,
+          f.source,f.severity,f.occurrence_count,f.last_seen_at,f.created_at,a.primary_email AS email
           FROM feedback_reports f JOIN accounts a ON a.id=f.account_id ORDER BY CASE f.status WHEN 'new' THEN 1 WHEN 'reviewing' THEN 2 ELSE 3 END,f.created_at DESC LIMIT 100""").fetchall()
         conn.commit()
     return {"promotion": {**launch_promotion_status(), "plans": promotional},
             "support_email": support_email_configuration(),
+            "support_channels": support_channel_configuration(),
             "pending_orders": pending, "feature_usage_30d": events,
             "tickets": [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in tickets]}
 

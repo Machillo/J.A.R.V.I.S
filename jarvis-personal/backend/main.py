@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import logging
+import re
 from uuid import uuid4
 
 from backend.core.brain import process_input
@@ -78,10 +79,24 @@ def _is_public_path(path: str) -> bool:
     return path in PUBLIC_PATHS
 
 
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,80}$")
+
+
+def _request_id(request: Request) -> str:
+    existing = getattr(request.state, "request_id", "")
+    if existing:
+        return existing
+    supplied = request.headers.get("X-Request-ID", "").strip()
+    value = supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else uuid4().hex
+    request.state.request_id = value
+    return value
+
+
 def _internal_error_payload(error_id: str) -> dict[str, str]:
     return {
         "detail": "Ocurrió un error interno. Intentá nuevamente.",
         "error_id": error_id,
+        "request_id": error_id,
     }
 
 
@@ -89,20 +104,21 @@ def _internal_error_payload(error_id: str) -> dict[str, str]:
 async def safe_http_error_handler(request: Request, exc: HTTPException):
     if exc.status_code < 500:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-    error_id = uuid4().hex
+    error_id = _request_id(request)
     logger.error("Internal HTTP error id=%s path=%s", error_id, request.url.path)
     return JSONResponse(status_code=exc.status_code, content=_internal_error_payload(error_id))
 
 
 @app.exception_handler(Exception)
 async def safe_unhandled_error_handler(request: Request, exc: Exception):
-    error_id = uuid4().hex
+    error_id = _request_id(request)
     logger.exception("Unhandled API error id=%s path=%s", error_id, request.url.path, exc_info=exc)
     return JSONResponse(status_code=500, content=_internal_error_payload(error_id))
 
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
+    request_id = _request_id(request)
     origin = request.headers.get("origin")
 
     cors_headers = {}
@@ -111,7 +127,9 @@ async def auth_middleware(request: Request, call_next):
         cors_headers["Access-Control-Allow-Credentials"] = "true"
 
     if request.method == "OPTIONS" or _is_public_path(request.url.path):
-        return await call_next(request)
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
     authorization = request.headers.get("Authorization", "")
 
@@ -119,7 +137,7 @@ async def auth_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=401,
             content={"detail": "Falta Authorization: Bearer <token>."},
-            headers=cors_headers,
+            headers={**cors_headers, "X-Request-ID": request_id},
         )
 
     access_token = authorization.replace("Bearer ", "", 1).strip()
@@ -135,7 +153,7 @@ async def auth_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=status_code,
             content={"detail": detail},
-            headers=cors_headers,
+            headers={**cors_headers, "X-Request-ID": request_id},
         )
 
     request.state.user = user
@@ -143,15 +161,16 @@ async def auth_middleware(request: Request, call_next):
 
     try:
         response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
         return response
 
     except Exception:
-        error_id = uuid4().hex
+        error_id = request_id
         logger.exception("Unhandled API error id=%s path=%s", error_id, request.url.path)
         return JSONResponse(
             status_code=500,
             content=_internal_error_payload(error_id),
-            headers=cors_headers,
+            headers={**cors_headers, "X-Request-ID": request_id},
         )
 
     finally:

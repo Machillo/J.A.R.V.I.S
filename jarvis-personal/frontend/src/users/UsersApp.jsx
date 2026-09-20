@@ -37,9 +37,11 @@ export default function UsersApp({ user, onUserChange }) {
   useEffect(() => {
     const open = () => setPage("feedback");
     const failed = (event) => setApiIssue(event.detail || {});
+    const reported = (event) => setApiIssue((current) => current ? { ...current, reported: true, publicId: event.detail?.public_id } : current);
     window.addEventListener("finva:open-support", open);
     window.addEventListener("finva:api-error", failed);
-    return () => { window.removeEventListener("finva:open-support", open); window.removeEventListener("finva:api-error", failed); };
+    window.addEventListener("finva:incident-reported", reported);
+    return () => { window.removeEventListener("finva:open-support", open); window.removeEventListener("finva:api-error", failed); window.removeEventListener("finva:incident-reported", reported); };
   }, []);
 
   useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);
@@ -76,7 +78,7 @@ export default function UsersApp({ user, onUserChange }) {
         />
         <main className="content mobile-content native-scroll-content">
           {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>{tx("Entendido", "Got it")}</button></aside>}
-          {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>{tx("Algo no cargó", "Something didn’t load")}</strong><span>{tx("Podés intentar de nuevo o reportarlo.", "You can try again or report it.")}</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>{tx("Reportar", "Report")}</button><button className="finva-api-help-close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={() => setApiIssue(null)}>×</button></aside>}
+          {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>{apiIssue.reported ? tx("FINVA ya avisó a soporte", "FINVA already notified support") : tx("Algo no cargó", "Something didn’t load")}</strong><span>{apiIssue.reported ? `${tx("Referencia", "Reference")}: ${apiIssue.publicId}` : tx("Intentamos recuperarlo automáticamente. Si continúa, guardaremos el diagnóstico.", "We tried to recover automatically. If it continues, we'll save the diagnosis.")}</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>{tx("Abrir chat", "Open chat")}</button><button className="finva-api-help-close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={() => setApiIssue(null)}>×</button></aside>}
           <AppErrorBoundary resetKey={page} screen={page}>{pages[page] || pages.overview}</AppErrorBoundary>
         </main>
         <FinvaNavigation page={page} plan={plan} onNavigate={setPage} onLogout={logout}/>
