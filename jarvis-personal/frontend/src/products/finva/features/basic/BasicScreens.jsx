@@ -26,6 +26,16 @@ export default function BasicMore({ onNavigate, onLogout }) {
       <small>{tx("Mi dinero", "My money")}</small>
       <span>{tx("Situación financiera · Historial · Resumen mensual", "Financial situation · History · Monthly summary")}</span>
     </button>
+    <div className="basic-more-list">
+      <button type="button" onClick={() => onNavigate("settings")}>
+        <span><strong>{tx("Ajustes de cuenta y plan", "Account and plan settings")}</strong><small>{tx("Perfil, apariencia, seguridad y cambio de plan.", "Profile, appearance, security, and plan changes.")}</small></span>
+        <ChevronRight size={16}/>
+      </button>
+      <button type="button" onClick={() => onNavigate("feedback")}>
+        <span><strong>{tx("Ayuda y soporte", "Help & support")}</strong><small>{tx("Reportá un problema o compartí una sugerencia.", "Report a problem or share feedback.")}</small></span>
+        <ChevronRight size={16}/>
+      </button>
+    </div>
     <AccountActions onLogout={onLogout} variant="basic"/>
   </section>;
 }
