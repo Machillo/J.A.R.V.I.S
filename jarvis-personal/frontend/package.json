@@ -14,6 +14,7 @@
     "test:phase0d": "node scripts/test-phase-0d.mjs",
     "test:phase0e": "node scripts/test-phase-0e.mjs",
     "test:phase0f": "node scripts/test-phase-0f.mjs",
+    "test:phase0h": "node scripts/test-phase-0h.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
