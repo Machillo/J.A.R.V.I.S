@@ -19,7 +19,9 @@ assert.match(users, /financial_writes/);
 assert.match(registry, /FeatureUnavailable/);
 assert.match(registry, /gated\("gmail_automation"/);
 assert.match(navigation, /featureEnabled\(featureFlags, "vip_intelligence"\)/);
-assert.match(owner, /Motivo del cambio/);
+assert.match(owner, /Motivo para/);
 assert.match(owner, /updateOperationalFeatureFlag/);
+assert.match(owner, /feature-flag-message/);
+assert.match(owner, /encendido.*correctamente/);
 
 console.log("Phase 0F feature flags and kill switches contract passed.");

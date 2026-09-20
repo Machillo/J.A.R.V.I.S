@@ -456,111 +456,30 @@ def _valid_receipt_signature(content_type: str, content: bytes):
 
 
 def ensure_schema(conn):
-    conn.execute("""CREATE TABLE IF NOT EXISTS finva_beta_programs (
-      code TEXT PRIMARY KEY, active BOOLEAN NOT NULL DEFAULT TRUE,
-      beta_duration_months INTEGER NOT NULL DEFAULT 3,
-      basic_slots INTEGER NOT NULL DEFAULT 15, vip_slots INTEGER NOT NULL DEFAULT 15,
-      basic_beta_price_crc NUMERIC(12,2) NOT NULL DEFAULT 1990,
-      vip_beta_price_crc NUMERIC(12,2) NOT NULL DEFAULT 3990,
-      basic_regular_price_crc NUMERIC(12,2) NOT NULL DEFAULT 2990,
-      vip_regular_price_crc NUMERIC(12,2) NOT NULL DEFAULT 5990,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
-    # This table is keyed by ``code`` and intentionally has no numeric ``id``.
-    # Be explicit so the legacy database adapter does not append ``RETURNING id``.
-    conn.execute(
-        """INSERT INTO finva_beta_programs(code) VALUES(%s)
-           ON CONFLICT(code) DO NOTHING RETURNING code""",
-        (BETA_CODE,),
-    )
-    conn.execute("""CREATE TABLE IF NOT EXISTS billing_orders (
-      id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-      workspace_id UUID, plan_code TEXT NOT NULL CHECK(plan_code IN ('basic','vip')),
-      amount NUMERIC(12,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'CRC',
-      status TEXT NOT NULL DEFAULT 'payment_pending' CHECK(status IN ('payment_pending','paid','failed','canceled','expired','refunded')),
-      provider TEXT NOT NULL DEFAULT 'sinpe_mobile', provider_order_id TEXT, beta_code TEXT,
-      beta_price BOOLEAN NOT NULL DEFAULT TRUE, consent_version TEXT NOT NULL,
-      consent_at TIMESTAMPTZ NOT NULL, paid_at TIMESTAMPTZ, payment_code TEXT,
-      code_expires_at TIMESTAMPTZ, receipt_filename TEXT, receipt_content_type TEXT,
-      receipt_size INTEGER, receipt_sha256 TEXT, receipt_data BYTEA,
-      receipt_submitted_at TIMESTAMPTZ, receipt_status TEXT NOT NULL DEFAULT 'not_submitted',
-      verified_at TIMESTAMPTZ, verification_source TEXT, bank_reference TEXT, payer_name TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
-    conn.execute("""CREATE INDEX IF NOT EXISTS idx_billing_orders_status ON billing_orders(status,created_at DESC)""")
-    for ddl in [
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS payment_code TEXT",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS code_expires_at TIMESTAMPTZ",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS receipt_filename TEXT",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS receipt_content_type TEXT",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS receipt_size INTEGER",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS receipt_sha256 TEXT",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS receipt_data BYTEA",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS receipt_submitted_at TIMESTAMPTZ",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS receipt_status TEXT NOT NULL DEFAULT 'not_submitted'",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS verification_source TEXT",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS bank_reference TEXT",
-        "ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS payer_name TEXT",
-    ]:
-        conn.execute(ddl)
-    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS uq_billing_orders_payment_code
-      ON billing_orders(payment_code) WHERE payment_code IS NOT NULL""")
-    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS uq_billing_orders_receipt_sha256
-      ON billing_orders(receipt_sha256) WHERE receipt_sha256 IS NOT NULL""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS billing_subscriptions (
-      account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE, workspace_id UUID,
-      plan_code TEXT NOT NULL CHECK(plan_code IN ('basic','vip')),
-      status TEXT NOT NULL CHECK(status IN ('payment_pending','active','past_due','canceled','expired','refunded')),
-      provider TEXT NOT NULL DEFAULT 'sandbox', provider_subscription_id TEXT, beta_code TEXT,
-      beta_ends_at TIMESTAMPTZ, current_period_start TIMESTAMPTZ, current_period_end TIMESTAMPTZ,
-      cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE, paid_price_crc NUMERIC(12,2),
-      regular_price_crc NUMERIC(12,2), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS product_events (
-      id BIGSERIAL PRIMARY KEY, account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
-      workspace_id UUID, event_name TEXT NOT NULL, plan_code TEXT, surface TEXT NOT NULL,
-      success BOOLEAN NOT NULL DEFAULT TRUE, duration_bucket TEXT, app_version TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
-    conn.execute("""CREATE INDEX IF NOT EXISTS idx_product_events_created ON product_events(created_at DESC)""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS feedback_reports (
-      id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-      workspace_id UUID, category TEXT NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'new', plan_code TEXT, app_version TEXT, owner_notes TEXT,
-      source TEXT NOT NULL DEFAULT 'user', severity TEXT NOT NULL DEFAULT 'info', fingerprint TEXT,
-      request_id TEXT, error_reference TEXT, screen TEXT, platform TEXT, retry_count INTEGER NOT NULL DEFAULT 0,
-      occurrence_count INTEGER NOT NULL DEFAULT 1, last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      affected_operations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
-      discord_alerted_at TIMESTAMPTZ,
-      user_resolution TEXT, user_resolution_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ)""")
-    for ddl in [
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'user'",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS severity TEXT NOT NULL DEFAULT 'info'",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS fingerprint TEXT",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS request_id TEXT",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS error_reference TEXT",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS screen TEXT",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS platform TEXT",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS retry_count INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS occurrence_count INTEGER NOT NULL DEFAULT 1",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS affected_operations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS discord_alerted_at TIMESTAMPTZ",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS user_resolution TEXT",
-        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS user_resolution_at TIMESTAMPTZ",
-    ]:
-        conn.execute(ddl)
-    conn.execute("""CREATE INDEX IF NOT EXISTS idx_feedback_incident_dedupe
-      ON feedback_reports(account_id,fingerprint,last_seen_at DESC) WHERE fingerprint IS NOT NULL""")
-    # These tables are backend-only. Keep them inaccessible through the
-    # Supabase Data API even when runtime schema recovery creates them.
-    for table_name in (
+    """Fail fast when Product Ops migrations are missing, without runtime DDL.
+
+    Schema creation and hardening belong to versioned migrations. Executing
+    CREATE/ALTER/REVOKE here used relation-level locks on every request and
+    allowed concurrent health/event requests to deadlock in PostgreSQL.
+    """
+    required_tables = (
         "finva_beta_programs",
         "billing_orders",
         "billing_subscriptions",
         "product_events",
         "feedback_reports",
-    ):
-        conn.execute(f"ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY")
-        conn.execute(f"REVOKE ALL PRIVILEGES ON TABLE {table_name} FROM anon, authenticated")
+    )
+    checks = ", ".join(
+        f"to_regclass('public.{table_name}') IS NOT NULL AS {table_name}"
+        for table_name in required_tables
+    )
+    state = conn.execute(f"SELECT {checks}").fetchone() or {}
+    missing = [table_name for table_name in required_tables if not state.get(table_name)]
+    if missing:
+        raise RuntimeError(
+            "Product Ops schema is incomplete; apply database migrations. "
+            f"Missing tables: {', '.join(missing)}"
+        )
 
 
 def _counts(conn):

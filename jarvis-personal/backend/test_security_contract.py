@@ -193,9 +193,55 @@ def test_notification_cron_rejects_wrong_secret(monkeypatch):
         assert exc.status_code == 403
 
 
-def test_product_operations_runtime_schema_is_closed_to_data_api_roles():
-    connection = RecordingConnection()
+def test_product_operations_schema_check_never_runs_runtime_ddl():
+    class Result:
+        def fetchone(self):
+            return {
+                "finva_beta_programs": True,
+                "billing_orders": True,
+                "billing_subscriptions": True,
+                "product_events": True,
+                "feedback_reports": True,
+            }
+
+    class Connection(RecordingConnection):
+        def execute(self, query, params=()):
+            super().execute(query, params)
+            return Result()
+
+    connection = Connection()
     product_ops_service.ensure_schema(connection)
+
+    assert len(connection.queries) == 1
+    assert connection.queries[0].upper().startswith("SELECT ")
+    assert not any(
+        keyword in connection.queries[0].upper()
+        for keyword in ("CREATE ", "ALTER ", "REVOKE ", "INSERT ", "UPDATE ", "DELETE ")
+    )
+
+
+def test_product_operations_schema_check_fails_closed_when_migration_is_missing():
+    class Result:
+        def fetchone(self):
+            return {
+                "finva_beta_programs": True,
+                "billing_orders": False,
+                "billing_subscriptions": True,
+                "product_events": True,
+                "feedback_reports": True,
+            }
+
+    class Connection:
+        def execute(self, _query, _params=()):
+            return Result()
+
+    with pytest.raises(RuntimeError, match="billing_orders"):
+        product_ops_service.ensure_schema(Connection())
+
+
+def test_product_operations_migrations_close_tables_to_data_api_roles():
+    migrations = Path(__file__).parents[1] / "database" / "migrations"
+    base = (migrations / "20260910_finva_beta_product_ops.sql").read_text(encoding="utf-8")
 
     for table_name in (
         "finva_beta_programs",
@@ -204,14 +250,8 @@ def test_product_operations_runtime_schema_is_closed_to_data_api_roles():
         "product_events",
         "feedback_reports",
     ):
-        assert _contains_sql(
-            connection.queries,
-            f"ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY",
-        )
-        assert _contains_sql(
-            connection.queries,
-            f"REVOKE ALL PRIVILEGES ON TABLE {table_name} FROM anon, authenticated",
-        )
+        assert f"ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY" in base
+        assert f"REVOKE ALL PRIVILEGES ON TABLE {table_name} FROM anon, authenticated" in base
 
 
 def test_legal_runtime_schema_is_closed_to_data_api_roles():

@@ -8,6 +8,9 @@ const api = read("../src/users/services/jarvisApi.js");
 
 assert.match(api, /getPlatformHealth/);
 assert.match(api, /finva:api-recovered/);
+assert.match(api, /OBSERVABILITY_PATHS/);
+assert.match(api, /apiError\(response, payload, path, method, autoReport\)/);
+assert.match(api, /apiNetworkError\(cause, path, method, autoReport\)/);
 assert.match(app, /finva-health-mode/);
 assert.match(app, /Sin conexión/);
 assert.match(app, /Modo degradado/);
