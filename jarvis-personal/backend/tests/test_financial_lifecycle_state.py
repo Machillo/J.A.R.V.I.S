@@ -1,3 +1,5 @@
+import pytest
+
 from backend.financial_lifecycle import snapshots
 from backend.financial_lifecycle.state import _monthly_ledger
 
@@ -106,3 +108,21 @@ def test_progress_baseline_query_is_scoped_to_authenticated_workspace(monkeypatc
 
     assert result["status"] == "BASELINE"
     assert connection.calls[0][1] == ("workspace-c",)
+
+
+def test_monthly_review_query_is_scoped_to_workspace_and_period(monkeypatch):
+    connection = _Connection([_Result(all_rows=[])])
+    monkeypatch.setattr(snapshots, "get_current_workspace_id", lambda: "workspace-d")
+    monkeypatch.setattr(snapshots, "get_connection", lambda: connection)
+
+    result = snapshots.get_monthly_review("2026-08")
+
+    assert result["status"] == "BASELINE"
+    assert connection.calls[0][1][0] == "workspace-d"
+    assert str(connection.calls[0][1][1]) == "2026-08-01"
+    assert str(connection.calls[0][1][2]) == "2026-09-01"
+
+
+def test_monthly_review_rejects_invalid_period_before_querying_database():
+    with pytest.raises(ValueError, match="YYYY-MM"):
+        snapshots.get_monthly_review("2026-13")

@@ -3,8 +3,10 @@ import { ArrowRight, ChevronRight, ShieldCheck, Sparkles } from "lucide-react";
 import { deviceLanguage, localeTag } from "../../../../lib/locale";
 import AccountActions from "../../components/AccountActions";
 import {
+  captureVipLifecycleSnapshot,
   getBudget,
   getFinancialSituation,
+  getVipMonthlyReview,
   getVipCommandCenter,
   simulateStrategyVip,
   updateFinancialSituation,
@@ -87,6 +89,9 @@ export default function VipScreens({ view = "dashboard", onNavigate, onLogout, u
       .catch(() => setError(tx("No pudimos cargar tu estrategia. Intentá nuevamente.", "We couldn't load your strategy. Please try again.")));
   };
   useEffect(load, []);
+  useEffect(() => {
+    if (view === "dashboard") captureVipLifecycleSnapshot().catch(() => {});
+  }, [view]);
   if (!data || !profile) {
     if (error) return <section className="vip-screen"><Card tone="danger"><h2>{error}</h2><PrimaryButton onClick={load}>{tx("Reintentar", "Try again")}</PrimaryButton></Card></section>;
     return <LoadingScreen/>;
@@ -98,7 +103,7 @@ export default function VipScreens({ view = "dashboard", onNavigate, onLogout, u
     dashboard: VipDashboard, strategy: VipStrategy, recommendation: VipRecommendation,
     projections: VipProjections, "projection-detail": VipProjectionDetail,
     scenarios: VipScenarios, goal: VipSmartGoal, emergency: VipEmergency,
-    reality: VipReality, more: VipMore, preferences: VipPreferences,
+    reality: VipReality, "monthly-review": VipMonthlyReview, more: VipMore, preferences: VipPreferences,
   };
   const Screen = screens[view] || VipDashboard;
   return <Screen {...props}/>;
@@ -149,6 +154,7 @@ function VipDashboard({ data, user, onNavigate }) {
       <DataRow label={tx("Deuda estimada", "Estimated debt")} value={projection ? money(projection.debt) : "—"} tone="mint"/>
     </Card>
     <button className="vip-link-card" type="button" onClick={() => onNavigate?.("vip-reality")}><span><strong>{tx("Plan vs realidad", "Plan vs reality")}</strong><small>{Number(data.reports?.current?.balance) >= 0 ? tx("Tu mes mantiene un balance positivo.", "Your month remains positive.") : tx("Tu mes necesita un ajuste.", "Your month needs an adjustment.")}</small></span><ArrowRight size={17}/></button>
+    <button className="vip-link-card vip-link-card--violet" type="button" onClick={() => onNavigate?.("vip-monthly-review")}><span><strong>{tx("Revisión mensual FINVA", "FINVA monthly review")}</strong><small>{tx("Qué cambió, qué aprendió FINVA y cuál es tu siguiente prioridad.", "What changed, what FINVA learned, and your next priority.")}</small></span><ArrowRight size={17}/></button>
   </section>;
 }
 
@@ -261,12 +267,43 @@ function VipReality({ data, budget, user, onNavigate }) {
   return <section className="vip-screen"><VipHeader title={tx("Plan vs realidad", "Plan vs reality")} user={user} onNavigate={onNavigate}/><Focus eyebrow={new Intl.DateTimeFormat(localeTag(language), {month:"long"}).format(new Date()).toUpperCase()} title={delta >= 0 ? tx(`${money(delta)} mejor que el plan`, `${money(delta)} better than plan`) : tx(`${money(Math.abs(delta))} sobre el plan`, `${money(Math.abs(delta))} over plan`)} caption={tx("FINVA puede reajustar el próximo mes con este resultado.", "FINVA can readjust next month using this result.")} tone={delta >= 0 ? "mint" : "coral"}/>{groups.map(([name, plan, actual]) => <Card key={name} title={name}><DataRow label={`${tx("Plan", "Plan")} ${money(plan)}`} value={`${tx("Real", "Actual")} ${money(actual)}`} tone={actual <= plan ? "mint" : "coral"}/></Card>)}<Card title={tx("Ajuste sugerido", "Suggested adjustment")} tone="gold"><p>{delta >= 0 ? tx("Protegé el excedente dentro de tu prioridad estratégica.", "Protect the surplus within your strategic priority.") : tx("Revisá las categorías sobre el plan antes del próximo mes.", "Review categories over plan before next month.")}</p></Card></section>;
 }
 
+function VipMonthlyReview({ user, onNavigate }) {
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [period, setPeriod] = useState(currentPeriod);
+  const [review, setReview] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setReview(null); setError("");
+    getVipMonthlyReview(period).then(setReview).catch(() => setError(tx("No pudimos generar la revisión mensual.", "We couldn't generate the monthly review.")));
+  }, [period]);
+  if (error) return <section className="vip-screen"><VipHeader title={tx("Revisión mensual", "Monthly review")} user={user} onNavigate={onNavigate}/><Card tone="danger"><p>{error}</p></Card></section>;
+  if (!review) return <LoadingScreen/>;
+  const baseline = review.status === "BASELINE";
+  return <section className="vip-screen">
+    <VipHeader title={tx("Revisión mensual", "Monthly review")} user={user} onNavigate={onNavigate}/>
+    <label className="vip-field"><span>{tx("Período", "Period")}</span><input type="month" max={currentPeriod} value={period} onChange={(event) => setPeriod(event.target.value || currentPeriod)}/></label>
+    <Focus eyebrow={review.period} title={review.headline} caption={review.summary} tone={baseline ? "gold" : review.deviations?.length ? "coral" : "mint"}/>
+    <Card title={tx("Lo que FINVA observó", "What FINVA observed")}>
+      <DataRow label={tx("Observaciones del período", "Period observations")} value={review.coverage?.observations || 0}/>
+      <DataRow label={tx("Cambios relevantes", "Relevant changes")} value={review.finva_value?.changes_detected || 0} tone="violet"/>
+      <DataRow label={tx("Estrategia reajustada", "Strategy adjusted")} value={review.finva_value?.priority_updated ? tx("Sí", "Yes") : tx("No", "No")} tone={review.finva_value?.priority_updated ? "gold" : "mint"}/>
+      <p>{review.finva_value?.explanation}</p>
+    </Card>
+    {!baseline && review.wins?.length > 0 && <Card title={tx("Progreso del mes", "Progress this month")} tone="mint">{review.wins.map((item) => <DataRow key={item.key} label={item.label} value={`${item.delta >= 0 ? "+" : ""}${item.unit === "CRC" ? money(item.delta) : item.delta}`} tone="mint"/>)}</Card>}
+    {!baseline && review.deviations?.length > 0 && <Card title={tx("Desviaciones a corregir", "Deviations to correct")} tone="gold">{review.deviations.map((item) => <DataRow key={item.key} label={item.label} value={`${item.delta >= 0 ? "+" : ""}${item.unit === "CRC" ? money(item.delta) : item.delta}`} tone="coral"/>)}</Card>}
+    {review.plan_vs_reality && <Card title={tx("Plan vs realidad", "Plan vs reality")}><DataRow label={tx("Planeado", "Planned")} value={money(review.plan_vs_reality.planned_amount)}/><DataRow label={tx("Real", "Actual")} value={review.plan_vs_reality.actual_amount == null ? "—" : money(review.plan_vs_reality.actual_amount)} tone={review.plan_vs_reality.status === "met" ? "mint" : "coral"}/></Card>}
+    <Card title={tx("Prioridad del próximo mes", "Next month's priority")} tone="violet"><DataRow label={review.next_month?.title || "—"} value={review.next_month?.amount ? money(review.next_month.amount) : "—"} tone="violet"/><p>{review.next_month?.rationale}</p></Card>
+  </section>;
+}
+
 function VipMore({ user, onNavigate, onLogout }) {
   const items = [
     ["strategy", tx("Estrategia dinámica", "Dynamic strategy"), tx("Prioridades y acciones del mes.", "Priorities and actions for the month.")],
     ["vip-projections", tx("Proyecciones", "Projections"), tx("Mirá hacia dónde van tus números.", "See where your numbers are going.")],
     ["vip-scenarios", tx("Escenarios", "Scenarios"), tx("Probá decisiones sin cambiar datos.", "Try decisions without changing data.")],
     ["vip-reality", tx("Plan vs realidad", "Plan vs reality"), tx("Compará lo planeado con lo ocurrido.", "Compare what was planned with what happened.")],
+    ["vip-monthly-review", tx("Revisión mensual FINVA", "FINVA monthly review"), tx("Entendé qué cambió y cómo se reajusta tu estrategia.", "Understand what changed and how your strategy adapts.")],
     ["vip-emergency", tx("Fondo de emergencia", "Emergency fund"), tx("Protegé tu colchón financiero.", "Protect your financial cushion.")],
   ];
   return <section className="vip-screen"><VipHeader title={tx("Más", "More")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("INTELIGENCIA VIP", "VIP INTELLIGENCE")}/>{items.map(([key, title, caption]) => <button className="vip-link-card" type="button" key={key} onClick={() => onNavigate?.(key)}><span><strong>{title}</strong><small>{caption}</small></span><ChevronRight size={17}/></button>)}<button className="vip-link-card vip-link-card--blue" type="button" onClick={() => onNavigate?.("budget")}><span><strong>{tx("Planificación Basic", "Basic planning")}</strong><small>{tx("Presupuesto · Calendario · Recurrentes · Reportes", "Budget · Calendar · Recurring · Reports")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("gmail")}><span><strong>{tx("Movimientos desde Gmail", "Transactions from Gmail")}</strong><small>{tx("Automatización bancaria de solo lectura.", "Read-only banking automation.")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("settings")}><span><strong>{tx("Ajustes de cuenta y plan", "Account and plan settings")}</strong><small>{tx("Perfil, apariencia, seguridad y cambio de plan.", "Profile, appearance, security, and plan changes.")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("feedback")}><span><strong>{tx("Ayuda y soporte", "Help & support")}</strong><small>{tx("Reportá un problema o compartí una sugerencia.", "Report a problem or share feedback.")}</small></span><ChevronRight size={17}/></button><AccountActions onLogout={onLogout} variant="vip"/></section>;

@@ -42,6 +42,7 @@ export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange,
     "vip-projection-detail": <VipScreens view="projection-detail" user={user} onNavigate={navigate} />,
     "vip-scenarios": <VipScreens view="scenarios" user={user} onNavigate={navigate} />,
     "vip-reality": <VipScreens view="reality" user={user} onNavigate={navigate} />,
+    "vip-monthly-review": <VipScreens view="monthly-review" user={user} onNavigate={navigate} />,
     "vip-emergency": <VipScreens view="emergency" user={user} onNavigate={navigate} />,
     "vip-preferences": <VipScreens view="preferences" user={user} onNavigate={navigate} />,
   };

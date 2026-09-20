@@ -56,6 +56,7 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
         ["vip-projections", tx("Proyecciones", "Projections"), TrendingUp],
         ["vip-scenarios", tx("Escenarios", "Scenarios"), Sparkles],
         ["vip-reality", tx("Plan vs realidad", "Plan vs reality"), BarChart3],
+        ["vip-monthly-review", tx("Revisión mensual", "Monthly review"), Sparkles],
         ["vip-emergency", tx("Fondo de emergencia", "Emergency fund"), ShieldCheck],
         ["vip-preferences", tx("Preferencias estratégicas", "Strategic preferences"), SlidersHorizontal],
       ],
