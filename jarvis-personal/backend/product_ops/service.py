@@ -14,6 +14,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.feature_flags import FEATURE_DEFINITIONS, clear_feature_flag_cache
 
 BETA_CODE = "beta-2026-01"
 LAUNCH_PROMOTION_CODE = "launch-free-2026"
@@ -104,6 +105,41 @@ def update_release_policy(platform: str, payload):
         ).fetchone()
         conn.commit()
     logger.info("Release policy updated platform=%s account_id=%s", platform, account_id)
+    return row
+
+
+def update_feature_flag(flag_key: str, payload):
+    if flag_key not in FEATURE_DEFINITIONS:
+        raise HTTPException(404, "Interruptor operativo no encontrado.")
+    reason = payload.reason.strip()
+    if len(reason) < 3:
+        raise HTTPException(422, "Indicá el motivo del cambio.")
+    account_id = get_current_account_id()
+    with get_connection() as conn:
+        current = conn.execute(
+            "SELECT flag_key,enabled FROM app_feature_flags WHERE flag_key=%s FOR UPDATE",
+            (flag_key,),
+        ).fetchone()
+        if not current:
+            raise HTTPException(404, "Interruptor operativo no encontrado.")
+        row = conn.execute(
+            """UPDATE app_feature_flags SET enabled=%s,updated_by_account_id=%s,updated_at=NOW()
+               WHERE flag_key=%s RETURNING flag_key,display_name,description,enabled,
+               safe_default_enabled,disabled_message_es,disabled_message_en,updated_at""",
+            (payload.enabled, account_id, flag_key),
+        ).fetchone()
+        conn.execute(
+            """INSERT INTO app_feature_flag_audit(
+                 flag_key,previous_enabled,new_enabled,reason,changed_by_account_id
+               ) VALUES(%s,%s,%s,%s,%s)""",
+            (flag_key, current["enabled"], payload.enabled, reason, account_id),
+        )
+        conn.commit()
+    clear_feature_flag_cache()
+    logger.warning(
+        "Operational feature flag changed flag=%s enabled=%s account_id=%s",
+        flag_key, payload.enabled, account_id,
+    )
     return row
 
 
@@ -925,13 +961,24 @@ def owner_dashboard():
                       message_es,message_en,is_active,updated_at
                FROM app_release_policies ORDER BY platform"""
         ).fetchall()
+        feature_flags = conn.execute(
+            """SELECT flag_key,display_name,description,enabled,safe_default_enabled,
+                      disabled_message_es,disabled_message_en,updated_at
+               FROM app_feature_flags ORDER BY display_name"""
+        ).fetchall()
+        feature_flag_audit = conn.execute(
+            """SELECT flag_key,previous_enabled,new_enabled,reason,changed_at
+               FROM app_feature_flag_audit ORDER BY changed_at DESC LIMIT 20"""
+        ).fetchall()
         conn.commit()
     return {"promotion": {**launch_promotion_status(), "plans": promotional},
             "support_email": support_email_configuration(),
             "support_channels": support_channel_configuration(),
             "pending_orders": pending, "feature_usage_30d": events,
             "tickets": [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in tickets],
-            "release_policies": release_policies}
+            "release_policies": release_policies,
+            "feature_flags": feature_flags,
+            "feature_flag_audit": feature_flag_audit}
 
 
 def submit_receipt(order_id: int, filename: str, content_type: str, content: bytes):

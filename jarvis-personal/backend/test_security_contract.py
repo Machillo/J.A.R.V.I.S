@@ -5,6 +5,7 @@ import pytest
 
 from backend import main
 from backend.core import idempotency
+from backend.core import feature_flags
 from backend.auth import legal
 from backend.auth import service as auth_service
 from backend.auth.current_user import reset_current_user, set_current_user
@@ -114,6 +115,55 @@ def test_phase_0e_cannot_activate_an_update_without_https_url():
         product_ops_service.update_release_policy("android", payload)
     assert error.value.status_code == 422
     assert "URL HTTPS" in error.value.detail
+
+
+def test_phase_0f_kill_switches_cover_sensitive_server_paths(monkeypatch):
+    disabled = {
+        key: {
+            "flag_key": key, "enabled": False,
+            "disabled_message_es": "Pausado", "disabled_message_en": "Paused",
+        }
+        for key in feature_flags.FEATURE_DEFINITIONS
+    }
+    monkeypatch.setattr(feature_flags, "load_feature_flags", lambda **_kwargs: disabled)
+
+    assert feature_flags.disabled_feature_for_request("POST", "/user-product/finance/income")["flag_key"] == "financial_writes"
+    assert feature_flags.disabled_feature_for_request("GET", "/user-product/vip/gmail/status")["flag_key"] == "gmail_automation"
+    assert feature_flags.disabled_feature_for_request("GET", "/user-product/vip/strategy-dashboard")["flag_key"] == "vip_intelligence"
+    assert feature_flags.disabled_feature_for_request("GET", "/reports/monthly")["flag_key"] == "advanced_reports"
+    assert feature_flags.disabled_feature_for_request("GET", "/product-ops/billing/store/catalog")["flag_key"] == "store_billing"
+    assert feature_flags.disabled_feature_for_request("GET", "/user-product/finance/income") is None
+    assert feature_flags.disabled_feature_for_request("POST", "/user-product/finance/income", {"role": "owner"}) is None
+
+
+def test_phase_0f_database_failure_uses_per_feature_safe_defaults(monkeypatch):
+    class FailingConnection:
+        def __enter__(self): raise RuntimeError("database unavailable")
+        def __exit__(self, *_args): return False
+
+    monkeypatch.setattr(feature_flags, "get_connection", lambda: FailingConnection())
+    feature_flags.clear_feature_flag_cache()
+    flags = feature_flags.load_feature_flags(force=True)
+
+    assert flags["financial_writes"]["enabled"] is False
+    assert flags["gmail_automation"]["enabled"] is False
+    assert flags["vip_intelligence"]["enabled"] is True
+    assert flags["advanced_reports"]["enabled"] is True
+
+
+def test_phase_0f_migration_is_private_audited_and_deletion_safe():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260920144028_phase_0f_feature_flags.sql"
+    ).read_text(encoding="utf-8")
+    assert "CREATE TABLE IF NOT EXISTS public.app_feature_flags" in migration
+    assert "CREATE TABLE IF NOT EXISTS public.app_feature_flag_audit" in migration
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "REVOKE ALL ON TABLE public.app_feature_flags FROM PUBLIC, anon, authenticated" in migration
+    assert "updated_by_account_id UUID REFERENCES public.accounts(id) ON DELETE SET NULL" in migration
+    assert "changed_by_account_id UUID REFERENCES public.accounts(id) ON DELETE SET NULL" in migration
 
 
 def test_notification_cron_fails_closed_without_secret(monkeypatch):

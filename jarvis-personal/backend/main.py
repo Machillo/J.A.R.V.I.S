@@ -41,6 +41,7 @@ from backend.core.idempotency import (
     reserve_operation,
     safe_abandon_operation,
 )
+from backend.core.feature_flags import disabled_feature_for_request
 
 app = FastAPI(title="Jarvis Core")
 logger = logging.getLogger("jarvis.api")
@@ -136,7 +137,23 @@ async def auth_middleware(request: Request, call_next):
         cors_headers["Access-Control-Allow-Origin"] = origin
         cors_headers["Access-Control-Allow-Credentials"] = "true"
 
-    if request.method == "OPTIONS" or _is_public_path(request.url.path):
+    if request.method == "OPTIONS":
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+    if _is_public_path(request.url.path):
+        disabled_feature = disabled_feature_for_request(request.method, request.url.path)
+        if disabled_feature:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": disabled_feature["disabled_message_es"],
+                    "code": "feature_temporarily_unavailable",
+                    "feature": disabled_feature["flag_key"],
+                },
+                headers={**cors_headers, "X-Request-ID": request_id},
+            )
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         return response
@@ -167,6 +184,17 @@ async def auth_middleware(request: Request, call_next):
         )
 
     request.state.user = user
+    disabled_feature = disabled_feature_for_request(request.method, request.url.path, user)
+    if disabled_feature:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": disabled_feature["disabled_message_es"],
+                "code": "feature_temporarily_unavailable",
+                "feature": disabled_feature["flag_key"],
+            },
+            headers={**cors_headers, "X-Request-ID": request_id},
+        )
     context_token = set_current_user(user)
     idempotency_key = request.headers.get("X-Idempotency-Key", "").strip()
     idempotency_account = str(user.get("account_id") or "")

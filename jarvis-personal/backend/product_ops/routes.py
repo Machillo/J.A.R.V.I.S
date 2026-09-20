@@ -2,8 +2,9 @@ from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import Response
 
 from backend.auth.current_user import require_roles
-from backend.product_ops.models import AutomaticIncidentCreate, FeedbackCreate, FeedbackResolutionUpdate, FeedbackUpdate, ProductEvent, ReleasePolicyUpdate, StoreLifecycleSimulation, TestPaymentUpdate
-from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_automatic_incident, create_feedback, get_receipt, list_feedback, owner_dashboard, platform_health, record_event, release_policy, resend_feedback_email, resolve_test_order, send_discord_test, submit_receipt, update_feedback, update_release_policy, update_user_feedback_resolution
+from backend.product_ops.models import AutomaticIncidentCreate, FeatureFlagUpdate, FeedbackCreate, FeedbackResolutionUpdate, FeedbackUpdate, ProductEvent, ReleasePolicyUpdate, StoreLifecycleSimulation, TestPaymentUpdate
+from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_automatic_incident, create_feedback, get_receipt, list_feedback, owner_dashboard, platform_health, record_event, release_policy, resend_feedback_email, resolve_test_order, send_discord_test, submit_receipt, update_feature_flag, update_feedback, update_release_policy, update_user_feedback_resolution
+from backend.core.feature_flags import user_feature_flags
 from backend.product_ops.store_billing import entitlement_state, restore_owner_access, simulate_lifecycle, store_catalog
 
 router = APIRouter(prefix="/product-ops", tags=["Product Operations"])
@@ -48,6 +49,9 @@ def get_release_policy(
 ):
     return release_policy(platform, version)
 
+@router.get("/feature-flags")
+def feature_flags(): return user_feature_flags()
+
 @router.post("/billing/orders/{order_id}/receipt")
 async def receipt_submit(order_id: int, receipt: UploadFile = File(...)):
     content = await receipt.read(MAX_RECEIPT_BYTES + 1)
@@ -70,6 +74,11 @@ def dashboard(): require_roles("owner"); return owner_dashboard()
 def release_policy_update(platform: str, payload: ReleasePolicyUpdate):
     require_roles("owner")
     return update_release_policy(platform, payload)
+
+@router.patch("/owner/feature-flags/{flag_key}")
+def feature_flag_update(flag_key: str, payload: FeatureFlagUpdate):
+    require_roles("owner")
+    return update_feature_flag(flag_key, payload)
 
 @router.post("/owner/support/discord/test")
 def discord_test(): require_roles("owner"); return send_discord_test()
