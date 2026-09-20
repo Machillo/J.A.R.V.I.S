@@ -7,6 +7,7 @@ import {
   getBudget,
   getFinancialSituation,
   getVipMonthlyReview,
+  getVipProactiveAdvisor,
   getVipCommandCenter,
   simulateStrategyVip,
   updateFinancialSituation,
@@ -103,7 +104,7 @@ export default function VipScreens({ view = "dashboard", onNavigate, onLogout, u
     dashboard: VipDashboard, strategy: VipStrategy, recommendation: VipRecommendation,
     projections: VipProjections, "projection-detail": VipProjectionDetail,
     scenarios: VipScenarios, goal: VipSmartGoal, emergency: VipEmergency,
-    reality: VipReality, "monthly-review": VipMonthlyReview, more: VipMore, preferences: VipPreferences,
+    reality: VipReality, "monthly-review": VipMonthlyReview, today: VipToday, more: VipMore, preferences: VipPreferences,
   };
   const Screen = screens[view] || VipDashboard;
   return <Screen {...props}/>;
@@ -142,6 +143,9 @@ function VipActivation({ profile, user, onNavigate, reload }) {
 function VipDashboard({ data, user, onNavigate }) {
   const roadmap = data.roadmap || [];
   const projection = data.projections?.find((item) => item.months === 6) || data.projections?.[0];
+  const [proactive, setProactive] = useState(null);
+  useEffect(() => { getVipProactiveAdvisor().then(setProactive).catch(() => {}); }, []);
+  const leadAlert = proactive?.alerts?.[0];
   return <section className="vip-screen">
     <VipHeader title={tx("Tu estrategia hoy", "Your strategy today")} user={user} onNavigate={onNavigate}/>
     <Focus eyebrow={tx("DISPONIBLE ESTRATÉGICO", "STRATEGIC AVAILABLE")} title={money(data.safe_to_spend?.amount)} caption={tx(`FINVA encontró ${Math.min(roadmap.length, 3)} acciones para este mes`, `FINVA found ${Math.min(roadmap.length, 3)} actions for this month`)}/>
@@ -155,6 +159,7 @@ function VipDashboard({ data, user, onNavigate }) {
     </Card>
     <button className="vip-link-card" type="button" onClick={() => onNavigate?.("vip-reality")}><span><strong>{tx("Plan vs realidad", "Plan vs reality")}</strong><small>{Number(data.reports?.current?.balance) >= 0 ? tx("Tu mes mantiene un balance positivo.", "Your month remains positive.") : tx("Tu mes necesita un ajuste.", "Your month needs an adjustment.")}</small></span><ArrowRight size={17}/></button>
     <button className="vip-link-card vip-link-card--violet" type="button" onClick={() => onNavigate?.("vip-monthly-review")}><span><strong>{tx("Revisión mensual FINVA", "FINVA monthly review")}</strong><small>{tx("Qué cambió, qué aprendió FINVA y cuál es tu siguiente prioridad.", "What changed, what FINVA learned, and your next priority.")}</small></span><ArrowRight size={17}/></button>
+    <button className={`vip-link-card ${leadAlert?.severity === "critical" || leadAlert?.severity === "high" ? "vip-link-card--gold" : "vip-link-card--mint"}`} type="button" onClick={() => onNavigate?.("vip-today")}><span><strong>{leadAlert?.title || tx("FINVA Today", "FINVA Today")}</strong><small>{leadAlert?.explanation || proactive?.message || tx("FINVA está observando cambios relevantes sin generar ruido.", "FINVA is watching for meaningful changes without creating noise.")}</small></span><ArrowRight size={17}/></button>
   </section>;
 }
 
@@ -297,8 +302,26 @@ function VipMonthlyReview({ user, onNavigate }) {
   </section>;
 }
 
+function VipToday({ user, onNavigate }) {
+  const [advisor, setAdvisor] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    getVipProactiveAdvisor().then(setAdvisor).catch(() => setError(tx("No pudimos revisar cambios recientes.", "We couldn't review recent changes.")));
+  }, []);
+  if (error) return <section className="vip-screen"><VipHeader title="FINVA Today" user={user} onNavigate={onNavigate}/><Card tone="danger"><p>{error}</p></Card></section>;
+  if (!advisor) return <LoadingScreen/>;
+  const tone = advisor.summary?.urgent ? "coral" : advisor.summary?.positive ? "mint" : "violet";
+  return <section className="vip-screen">
+    <VipHeader title="FINVA Today" user={user} onNavigate={onNavigate}/>
+    <Focus eyebrow={advisor.as_of} title={advisor.status === "BASELINE" ? tx("FINVA empezó a observar", "FINVA started observing") : advisor.status === "STABLE" ? tx("Sin cambios importantes", "No meaningful changes") : tx("Hay cambios que merecen atención", "There are changes worth your attention")} caption={advisor.message} tone={tone}/>
+    {advisor.alerts?.map((alert) => <Card key={alert.id} title={alert.title} tone={alert.severity === "success" ? "mint" : alert.severity === "critical" || alert.severity === "high" ? "danger" : "gold"}><p>{alert.explanation}</p><PrimaryButton onClick={() => onNavigate?.(alert.action?.route)}>{alert.action?.label || tx("Revisar", "Review")}</PrimaryButton></Card>)}
+    {!advisor.alerts?.length && <Card title={tx("Qué está observando FINVA", "What FINVA is watching")}><DataRow label={tx("Cambios urgentes", "Urgent changes")} value={advisor.summary?.urgent || 0} tone="mint"/><DataRow label={tx("Cambios a revisar", "Changes to review")} value={advisor.summary?.attention || 0} tone="mint"/><DataRow label={tx("Avances detectados", "Progress detected")} value={advisor.summary?.positive || 0} tone="mint"/></Card>}
+  </section>;
+}
+
 function VipMore({ user, onNavigate, onLogout }) {
   const items = [
+    ["vip-today", tx("FINVA Today", "FINVA Today"), tx("Alertas útiles y acciones basadas en cambios reales.", "Useful alerts and actions based on real changes.")],
     ["strategy", tx("Estrategia dinámica", "Dynamic strategy"), tx("Prioridades y acciones del mes.", "Priorities and actions for the month.")],
     ["vip-projections", tx("Proyecciones", "Projections"), tx("Mirá hacia dónde van tus números.", "See where your numbers are going.")],
     ["vip-scenarios", tx("Escenarios", "Scenarios"), tx("Probá decisiones sin cambiar datos.", "Try decisions without changing data.")],

@@ -73,6 +73,7 @@ export const simulateStrategyVip = (payload) => json("/user-product/finance/stra
 export const getVipCommandCenter = () => request("/user-product/vip/command-center");
 export const captureVipLifecycleSnapshot = () => request("/user-product/vip/lifecycle/snapshots", { method: "POST" });
 export const getVipMonthlyReview = (period = "") => request(`/user-product/vip/lifecycle/monthly-review${period ? `?period=${encodeURIComponent(period)}` : ""}`);
+export const getVipProactiveAdvisor = () => request("/user-product/vip/lifecycle/proactive-advisor");
 export const getVipStrategyDashboard = () => request("/user-product/vip/strategy-dashboard");
 export const getVipDebtAdvisory = (extraCash = null) => request(`/user-product/vip/debt-advisory${extraCash == null ? "" : `?extra_cash=${encodeURIComponent(extraCash)}`}`);
 export const getVipDebtStrategies = () => request("/user-product/vip/debt-strategies");

@@ -53,6 +53,7 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
     ...(plan === "vip" ? [{
       title: tx("Inteligencia VIP", "VIP Intelligence"),
       items: [
+        ["vip-today", tx("FINVA Today", "FINVA Today"), Sparkles],
         ["vip-projections", tx("Proyecciones", "Projections"), TrendingUp],
         ["vip-scenarios", tx("Escenarios", "Scenarios"), Sparkles],
         ["vip-reality", tx("Plan vs realidad", "Plan vs reality"), BarChart3],
