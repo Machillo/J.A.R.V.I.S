@@ -77,6 +77,45 @@ def test_phase_0d_migration_is_private_and_account_scoped():
     assert "INTERVAL '24 hours'" in migration
 
 
+@pytest.mark.parametrize(
+    ("current", "minimum", "latest", "expected"),
+    [
+        ("1.9.5", "1.9.6", "1.9.7", "required"),
+        ("1.9.6", "1.9.6", "1.9.7", "optional"),
+        ("1.9.7", "1.9.6", "1.9.7", "current"),
+        ("2.0.0", "1.9.6", "1.9.7", "current"),
+        ("invalid", "1.9.6", "1.9.7", "unknown"),
+    ],
+)
+def test_phase_0e_release_policy_uses_numeric_semver(current, minimum, latest, expected):
+    assert product_ops_service.evaluate_release_version(current, minimum, latest) == expected
+
+
+def test_phase_0e_release_policy_is_public_but_configuration_is_private():
+    assert main._is_public_path("/product-ops/release-policy") is True
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260920135957_phase_0e_release_policy.sql"
+    ).read_text(encoding="utf-8")
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "REVOKE ALL ON TABLE public.app_release_policies FROM anon, authenticated" in migration
+    assert "updated_by_account_id UUID REFERENCES public.accounts(id) ON DELETE SET NULL" in migration
+    assert "('android', '1.0.0', '1.0.0', NULL" in migration
+
+
+def test_phase_0e_cannot_activate_an_update_without_https_url():
+    payload = SimpleNamespace(
+        minimum_supported_version="1.9.6", latest_version="1.9.7",
+        update_url=None, message_es="Actualizá", message_en="Update", is_active=True,
+    )
+    with pytest.raises(HTTPException) as error:
+        product_ops_service.update_release_policy("android", payload)
+    assert error.value.status_code == 422
+    assert "URL HTTPS" in error.value.detail
+
+
 def test_notification_cron_fails_closed_without_secret(monkeypatch):
     monkeypatch.delenv("NOTIFICATION_CRON_SECRET", raising=False)
     monkeypatch.delenv("EMAIL_MONITOR_CRON_SECRET", raising=False)

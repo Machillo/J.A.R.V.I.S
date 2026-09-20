@@ -18,8 +18,10 @@ import "../products/finva/styles/free.css";
 import "../products/finva/styles/basic-figma.css";
 import "../products/finva/styles/vip-figma.css";
 import "../products/finva/styles/account-actions.css";
+import ReleaseUpdateNotice from "../components/ReleaseUpdateNotice";
+import { dismissRelease, isReleaseDismissed } from "../lib/releasePolicy";
 
-export default function UsersApp({ user, onUserChange }) {
+export default function UsersApp({ user, onUserChange, releasePolicy }) {
   const [page, setPage] = useState(() => window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview");
   const [accessNotice, setAccessNotice] = useState(user?.subscription?.access_notice || null);
   const [apiIssue, setApiIssue] = useState(null);
@@ -27,6 +29,7 @@ export default function UsersApp({ user, onUserChange }) {
   const [platformHealth, setPlatformHealth] = useState("operational");
   const [pendingOperations, setPendingOperations] = useState(0);
   const [recoveryNotice, setRecoveryNotice] = useState("");
+  const [releaseDismissed, setReleaseDismissed] = useState(() => isReleaseDismissed(releasePolicy));
   const plan = user?.subscription?.plan || "free";
   const platform = detectNativePlatform();
 
@@ -86,6 +89,7 @@ export default function UsersApp({ user, onUserChange }) {
   }, []);
 
   useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);
+  useEffect(() => { setReleaseDismissed(isReleaseDismissed(releasePolicy)); }, [releasePolicy]);
   const logout = () => supabase.auth.signOut({ scope: "local" });
   const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange, onLogout: logout });
   const freeTitles = {
@@ -119,6 +123,7 @@ export default function UsersApp({ user, onUserChange }) {
           onProfile={() => setPage("settings")}
         />
         <main className="content mobile-content native-scroll-content">
+          {releasePolicy?.status === "optional" && !releaseDismissed && <ReleaseUpdateNotice policy={releasePolicy} onDismiss={() => { dismissRelease(releasePolicy); setReleaseDismissed(true); }} />}
           {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>{tx("Entendido", "Got it")}</button></aside>}
           {healthMode !== "operational" && <aside className={`finva-health-mode finva-health-mode--${healthMode}`} role="status"><div><strong>{healthMode === "offline" ? tx("Sin conexión", "Offline") : healthMode === "recovering" ? tx("Reconectando…", "Reconnecting…") : healthMode === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : tx("Modo degradado", "Degraded mode")}</strong><span>{healthMode === "offline" ? tx("Podés consultar lo cargado. Los cambios compatibles quedarán guardados en este dispositivo hasta reconectar.", "You can view loaded data. Supported changes will remain on this device until reconnection.") : tx("Algunas funciones pueden tardar. FINVA está intentando recuperarse y ya conserva el diagnóstico.", "Some features may be slow. FINVA is recovering and has preserved the diagnostic context.")}</span></div><button type="button" onClick={() => setPage("feedback")}>{tx("Ver estado", "View status")}</button></aside>}
           {pendingOperations > 0 && <aside className="finva-operation-recovery finva-operation-recovery--pending" role="status"><div><strong>{tx("Cambio protegido", "Change protected")}</strong><span>{tx(`${pendingOperations} cambio${pendingOperations === 1 ? "" : "s"} pendiente${pendingOperations === 1 ? "" : "s"}. Se enviará${pendingOperations === 1 ? "" : "n"} automáticamente.`, `${pendingOperations} pending change${pendingOperations === 1 ? "" : "s"}. FINVA will send ${pendingOperations === 1 ? "it" : "them"} automatically.`)}</span></div></aside>}
