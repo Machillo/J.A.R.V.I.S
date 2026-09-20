@@ -379,6 +379,75 @@ def test_discord_rejects_non_discord_webhook(monkeypatch):
     assert called is False
 
 
+def test_phase_0c_suppresses_warning_discord_alerts_by_default(monkeypatch):
+    called = False
+
+    def fake_post(*_args, **_kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setenv("SUPPORT_DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/123/token")
+    monkeypatch.delenv("SUPPORT_DISCORD_MIN_SEVERITY", raising=False)
+    monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
+
+    sent = product_ops_service._send_support_discord(
+        public_id="FINVA-000010",
+        plan="free",
+        severity="warning",
+        payload=SimpleNamespace(
+            category="error", app_version="1.9.7", platform="android",
+            screen="finance", error_reference="safe-reference",
+        ),
+    )
+
+    assert sent is False
+    assert called is False
+
+
+def test_phase_0c_critical_alert_can_ping_only_configured_role(monkeypatch):
+    observed = {}
+
+    def fake_post(_url, json, timeout):
+        observed.update(payload=json, timeout=timeout)
+        return SimpleNamespace(status_code=204)
+
+    monkeypatch.setenv("SUPPORT_DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/123/token")
+    monkeypatch.setenv("SUPPORT_DISCORD_ALERT_ROLE_ID", "123456789012345678")
+    monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
+
+    sent = product_ops_service._send_support_discord(
+        public_id="FINVA-000011",
+        plan="vip",
+        severity="critical",
+        payload=SimpleNamespace(
+            category="error", app_version="1.9.7", platform="android",
+            screen="settings", error_reference="safe-reference",
+        ),
+    )
+
+    assert sent is True
+    assert observed["payload"]["content"].startswith("<@&123456789012345678>")
+    assert observed["payload"]["allowed_mentions"] == {
+        "parse": [], "roles": ["123456789012345678"],
+    }
+
+
+def test_phase_0c_migration_tracks_discord_delivery_without_public_access():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260920090000_phase_0c_severity_alerts.sql"
+    ).read_text(encoding="utf-8")
+    routes = (Path(__file__).parent / "product_ops" / "routes.py").read_text(encoding="utf-8")
+
+    assert "discord_alerted_at TIMESTAMPTZ" in migration
+    assert "idx_feedback_unalerted_critical" in migration
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "REVOKE ALL PRIVILEGES" in migration
+    assert '/owner/support/discord/test' in routes
+
+
 def test_phase_0a_incident_contract_is_deduplicated_and_backend_only():
     migration = (
         Path(__file__).parents[1]
@@ -452,6 +521,7 @@ def test_automatic_incident_fingerprint_excludes_user_content():
 
     assert product_ops_service._incident_fingerprint(first) == product_ops_service._incident_fingerprint(second)
     assert product_ops_service._incident_severity("/auth/me", "DELETE", 409) == "critical"
+    assert product_ops_service._incident_severity("/user-product/finance/income", "POST", 0) == "critical"
     assert product_ops_service._incident_severity("/reports", "GET", 429) == "warning"
     assert product_ops_service._sanitize_incident_path(
         "/transactions/123?account=456&amount=999"

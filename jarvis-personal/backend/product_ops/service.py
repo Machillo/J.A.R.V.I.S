@@ -48,9 +48,14 @@ def support_email_configuration() -> dict[str, object]:
 
 
 def support_channel_configuration() -> dict[str, object]:
+    minimum = os.getenv("SUPPORT_DISCORD_MIN_SEVERITY", "critical").strip().lower()
+    if minimum not in {"info", "warning", "critical"}:
+        minimum = "critical"
     return {
         "email": support_email_configuration(),
         "discord_configured": bool(os.getenv("SUPPORT_DISCORD_WEBHOOK_URL", "").strip()),
+        "discord_min_severity": minimum,
+        "discord_role_configured": bool(re.fullmatch(r"\d{5,30}", os.getenv("SUPPORT_DISCORD_ALERT_ROLE_ID", "").strip())),
     }
 
 
@@ -121,6 +126,12 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
 
 def _send_support_discord(*, public_id: str, plan: str, payload, severity: str = "info") -> bool:
     """Send privacy-minimized operational context when a Discord webhook is configured."""
+    rank = {"info": 0, "warning": 1, "critical": 2}
+    severity = str(severity or "info").strip().lower()
+    minimum = str(support_channel_configuration()["discord_min_severity"])
+    if rank.get(severity, 0) < rank[minimum]:
+        logger.info("Discord alert suppressed for %s severity=%s minimum=%s", public_id, severity, minimum)
+        return False
     webhook = os.getenv("SUPPORT_DISCORD_WEBHOOK_URL", "").strip()
     if not webhook:
         return False
@@ -138,12 +149,16 @@ def _send_support_discord(*, public_id: str, plan: str, payload, severity: str =
         f"Pantalla: {safe(getattr(payload, 'screen', None)) or 'no indicada'}",
         f"Referencia: {safe(getattr(payload, 'error_reference', None)) or 'ninguna'}",
     ]
+    role_id = os.getenv("SUPPORT_DISCORD_ALERT_ROLE_ID", "").strip()
+    role_id = role_id if re.fullmatch(r"\d{5,30}", role_id) and severity == "critical" else ""
+    mention = f"<@&{role_id}> " if role_id else ""
+    allowed_mentions = {"parse": [], "roles": [role_id]} if role_id else {"parse": []}
     try:
         response = requests.post(
             webhook,
             json={
-                "content": f"**FINVA · {safe(severity).upper()}**\n```\n" + "\n".join(fields) + "\n```",
-                "allowed_mentions": {"parse": []},
+                "content": mention + f"**FINVA · {safe(severity).upper()}**\n```\n" + "\n".join(fields) + "\n```",
+                "allowed_mentions": allowed_mentions,
             },
             timeout=10,
         )
@@ -156,9 +171,39 @@ def _send_support_discord(*, public_id: str, plan: str, payload, severity: str =
     return False
 
 
+def _mark_discord_alerted(ticket_id: int) -> None:
+    """Persist successful delivery so a failure burst cannot spam the alert channel."""
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE feedback_reports SET discord_alerted_at=NOW(),updated_at=NOW() WHERE id=%s",
+                (ticket_id,),
+            )
+            conn.commit()
+    except Exception:
+        logger.exception("Could not persist Discord alert delivery for ticket_id=%s", ticket_id)
+
+
+def send_discord_test():
+    """Owner-only route helper to validate the operational channel without user data."""
+    if not support_channel_configuration()["discord_configured"]:
+        raise HTTPException(503, "Discord no está configurado en Render.")
+    public_id = f"FINVA-TEST-{secrets.token_hex(3).upper()}"
+    payload = SimpleNamespace(
+        category="health", app_version="server", platform="backend",
+        screen="operaciones", error_reference=public_id,
+    )
+    if not _send_support_discord(public_id=public_id, plan="operaciones", payload=payload, severity="critical"):
+        raise HTTPException(503, "Discord rechazó la alerta de prueba. Revisá el webhook en Render.")
+    return {"status": "sent", "reference": public_id}
+
+
 def _incident_severity(path: str, method: str, status: int) -> str:
     sensitive_operation = method.upper() != "GET" and any(
-        marker in path for marker in ("/auth/me", "/billing/", "/receipt", "/transactions", "/debts", "/goals")
+        marker in path for marker in (
+            "/auth/me", "/billing/", "/receipt", "/user-product/finance/",
+            "/transactions", "/debts", "/goals",
+        )
     )
     if sensitive_operation or status >= 500:
         return "critical"
@@ -368,6 +413,7 @@ def ensure_schema(conn):
       request_id TEXT, error_reference TEXT, screen TEXT, platform TEXT, retry_count INTEGER NOT NULL DEFAULT 0,
       occurrence_count INTEGER NOT NULL DEFAULT 1, last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       affected_operations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      discord_alerted_at TIMESTAMPTZ,
       user_resolution TEXT, user_resolution_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ)""")
     for ddl in [
@@ -382,6 +428,7 @@ def ensure_schema(conn):
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS occurrence_count INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS affected_operations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS discord_alerted_at TIMESTAMPTZ",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS user_resolution TEXT",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS user_resolution_at TIMESTAMPTZ",
     ]:
@@ -570,7 +617,7 @@ def create_automatic_incident(payload):
             (f"{user['account_id']}:{fingerprint}",),
         )
         existing = conn.execute(
-            """SELECT id,status,occurrence_count FROM feedback_reports
+            """SELECT id,status,severity,occurrence_count,discord_alerted_at FROM feedback_reports
                WHERE account_id=%s AND fingerprint=%s AND source='automatic'
                  AND status IN ('new','reviewing') AND last_seen_at >= NOW()-INTERVAL '5 minutes'
                ORDER BY last_seen_at DESC LIMIT 1 FOR UPDATE""",
@@ -583,13 +630,29 @@ def create_automatic_incident(payload):
                      severity=CASE WHEN %s='critical' THEN 'critical' ELSE severity END,
                      affected_operations=CASE WHEN %s=ANY(affected_operations) THEN affected_operations
                        ELSE array_append(affected_operations,%s) END
-                   WHERE id=%s RETURNING id,category,subject,status,severity,created_at,occurrence_count,affected_operations""",
+                   WHERE id=%s RETURNING id,category,subject,status,severity,created_at,occurrence_count,
+                     affected_operations,discord_alerted_at""",
                 (payload.request_id, payload.error_reference, payload.retry_count, severity,
                  operation, operation, existing["id"]),
             ).fetchone()
             conn.commit()
-            return {**row, "public_id": f"FINVA-{int(row['id']):06d}", "deduplicated": True,
-                    "email_sent": False, "discord_sent": False}
+            public_id = f"FINVA-{int(row['id']):06d}"
+            discord_sent = False
+            if row.get("severity") == "critical" and not row.get("discord_alerted_at"):
+                escalation_payload = SimpleNamespace(
+                    category="error", subject=row.get("subject") or "Incidente crítico",
+                    message="Incidente correlacionado escalado a crítico.", app_version=payload.app_version,
+                    screen=safe_screen or safe_path, error_reference=payload.error_reference or payload.request_id,
+                    platform=payload.platform,
+                )
+                discord_sent = _send_support_discord(
+                    public_id=public_id, plan=identity.get("plan_code") or "",
+                    payload=escalation_payload, severity="critical",
+                )
+                if discord_sent:
+                    _mark_discord_alerted(row["id"])
+            return {**row, "public_id": public_id, "deduplicated": True,
+                    "email_sent": False, "discord_sent": discord_sent}
 
         subject = f"Fallo automático · {safe_screen or safe_path}"[:140]
         message = "\n".join([
@@ -606,7 +669,8 @@ def create_automatic_incident(payload):
                  account_id,workspace_id,category,subject,message,plan_code,app_version,source,severity,
                  fingerprint,request_id,error_reference,screen,platform,retry_count,affected_operations
                ) VALUES(%s,%s,'error',%s,%s,%s,%s,'automatic',%s,%s,%s,%s,%s,%s,%s,%s)
-               RETURNING id,category,subject,status,severity,created_at,occurrence_count,affected_operations""",
+               RETURNING id,category,subject,status,severity,created_at,occurrence_count,
+                 affected_operations,discord_alerted_at""",
             (user["account_id"], user.get("workspace_id"), subject, message, identity.get("plan_code"),
              payload.app_version, severity, fingerprint, payload.request_id, payload.error_reference,
              safe_screen, payload.platform, payload.retry_count, [operation]),
@@ -627,6 +691,8 @@ def create_automatic_incident(payload):
         public_id=public_id, plan=identity.get("plan_code") or "",
         payload=notification_payload, severity=severity,
     )
+    if discord_sent:
+        _mark_discord_alerted(row["id"])
     _record_event_safely("api_error", safe_screen or safe_path, success=False, app_version=payload.app_version)
     return {**row, "public_id": public_id, "deduplicated": False,
             "email_sent": email_sent, "discord_sent": discord_sent, "severity": severity}
@@ -637,7 +703,7 @@ def list_feedback():
     with get_connection() as conn:
         ensure_schema(conn)
         rows = conn.execute("""SELECT id,category,subject,message,status,owner_notes,source,severity,
-          occurrence_count,last_seen_at,affected_operations,user_resolution,user_resolution_at,created_at,updated_at
+          occurrence_count,last_seen_at,affected_operations,discord_alerted_at,user_resolution,user_resolution_at,created_at,updated_at
           FROM feedback_reports WHERE account_id=%s ORDER BY created_at DESC LIMIT 30""", (account_id,)).fetchall()
         conn.commit()
     return [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in rows]
@@ -772,7 +838,7 @@ def owner_dashboard():
         events = conn.execute("""SELECT event_name,COUNT(*) AS uses,COUNT(DISTINCT account_id) AS users
           FROM product_events WHERE created_at>=NOW()-INTERVAL '30 days' GROUP BY event_name ORDER BY uses DESC LIMIT 20""").fetchall()
         tickets = conn.execute("""SELECT f.id,f.category,f.subject,f.message,f.status,f.owner_notes,
-          f.source,f.severity,f.occurrence_count,f.last_seen_at,f.affected_operations,f.user_resolution,f.user_resolution_at,
+          f.source,f.severity,f.occurrence_count,f.last_seen_at,f.affected_operations,f.discord_alerted_at,f.user_resolution,f.user_resolution_at,
           f.created_at,a.primary_email AS email
           FROM feedback_reports f JOIN accounts a ON a.id=f.account_id ORDER BY CASE f.status WHEN 'new' THEN 1 WHEN 'reviewing' THEN 2 ELSE 3 END,f.created_at DESC LIMIT 100""").fetchall()
         conn.commit()
