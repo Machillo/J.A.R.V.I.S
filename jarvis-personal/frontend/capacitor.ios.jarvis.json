@@ -1,0 +1,13 @@
+{
+  "appId": "com.jarvis.personal",
+  "appName": "J.A.R.V.I.S.",
+  "webDir": "dist",
+  "includePlugins": [
+    "@capacitor/app",
+    "@capacitor/browser",
+    "@capawesome/capacitor-file-picker"
+  ],
+  "ios": {
+    "path": "ios-jarvis"
+  }
+}
