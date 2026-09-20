@@ -28,7 +28,11 @@ USING (
         SELECT 1
         FROM public.workspace_members wm
         WHERE wm.workspace_id = financial_state_snapshots.workspace_id
-          AND wm.account_id = auth.uid()
+          AND EXISTS (
+              SELECT 1 FROM public.accounts a
+              WHERE a.id = wm.account_id
+                AND a.supabase_user_id = auth.uid()
+          )
           AND wm.status = 'active'
     )
 );
@@ -39,12 +43,20 @@ ON public.financial_state_snapshots
 FOR INSERT
 TO authenticated
 WITH CHECK (
-    account_id = auth.uid()
+    EXISTS (
+        SELECT 1 FROM public.accounts a
+        WHERE a.id = financial_state_snapshots.account_id
+          AND a.supabase_user_id = auth.uid()
+    )
     AND EXISTS (
         SELECT 1
         FROM public.workspace_members wm
         WHERE wm.workspace_id = financial_state_snapshots.workspace_id
-          AND wm.account_id = auth.uid()
+          AND EXISTS (
+              SELECT 1 FROM public.accounts a
+              WHERE a.id = wm.account_id
+                AND a.supabase_user_id = auth.uid()
+          )
           AND wm.status = 'active'
     )
 );
@@ -55,22 +67,38 @@ ON public.financial_state_snapshots
 FOR UPDATE
 TO authenticated
 USING (
-    account_id = auth.uid()
+    EXISTS (
+        SELECT 1 FROM public.accounts a
+        WHERE a.id = financial_state_snapshots.account_id
+          AND a.supabase_user_id = auth.uid()
+    )
     AND EXISTS (
         SELECT 1
         FROM public.workspace_members wm
         WHERE wm.workspace_id = financial_state_snapshots.workspace_id
-          AND wm.account_id = auth.uid()
+          AND EXISTS (
+              SELECT 1 FROM public.accounts a
+              WHERE a.id = wm.account_id
+                AND a.supabase_user_id = auth.uid()
+          )
           AND wm.status = 'active'
     )
 )
 WITH CHECK (
-    account_id = auth.uid()
+    EXISTS (
+        SELECT 1 FROM public.accounts a
+        WHERE a.id = financial_state_snapshots.account_id
+          AND a.supabase_user_id = auth.uid()
+    )
     AND EXISTS (
         SELECT 1
         FROM public.workspace_members wm
         WHERE wm.workspace_id = financial_state_snapshots.workspace_id
-          AND wm.account_id = auth.uid()
+          AND EXISTS (
+              SELECT 1 FROM public.accounts a
+              WHERE a.id = wm.account_id
+                AND a.supabase_user_id = auth.uid()
+          )
           AND wm.status = 'active'
     )
 );
