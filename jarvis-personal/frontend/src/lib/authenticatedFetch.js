@@ -2,6 +2,13 @@ import { supabase } from "./supabase";
 
 const SESSION_EXPIRED_MESSAGE = "Tu sesión venció. Iniciá sesión nuevamente.";
 const REQUEST_TIMEOUT_MS = 20_000;
+const RETRYABLE_STATUS = new Set([408, 425, 429, 502, 503, 504]);
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+const newRequestId = () => globalThis.crypto?.randomUUID?.()
+  || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
 async function activeToken(forceRefresh = false) {
   const result = forceRefresh
@@ -51,14 +58,51 @@ async function withToken(url, options, token) {
 }
 
 export async function authenticatedFetch(url, options = {}) {
-  let response = await withToken(url, options, await activeToken());
-  if (response.status !== 401) return response;
+  const method = String(options.method || "GET").toUpperCase();
+  const requestId = options.headers?.["X-Request-ID"] || newRequestId();
+  const safeToRetry = SAFE_METHODS.has(method);
+  const maxRetries = safeToRetry ? 2 : 0;
+  let retryCount = 0;
+  let refreshed = false;
+  let token = await activeToken();
 
-  response = await withToken(url, options, await activeToken(true));
-  if (response.status === 401) {
-    await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-    throw new Error(SESSION_EXPIRED_MESSAGE);
+  while (true) {
+    const requestOptions = {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        "X-Request-ID": requestId,
+        "X-Retry-Attempt": String(retryCount),
+      },
+    };
+    try {
+      let response = await withToken(url, requestOptions, token);
+      if (response.status === 401 && !refreshed) {
+        refreshed = true;
+        token = await activeToken(true);
+        response = await withToken(url, requestOptions, token);
+      }
+      if (response.status === 401) {
+        await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+        throw new Error(SESSION_EXPIRED_MESSAGE);
+      }
+      if (safeToRetry && RETRYABLE_STATUS.has(response.status) && retryCount < maxRetries) {
+        retryCount += 1;
+        await delay(retryCount === 1 ? 250 : 750);
+        continue;
+      }
+      response.finvaRequestId = response.headers.get("X-Request-ID") || requestId;
+      response.finvaRetryCount = retryCount;
+      return response;
+    } catch (error) {
+      if (error?.message === SESSION_EXPIRED_MESSAGE) throw error;
+      if (!safeToRetry || retryCount >= maxRetries) {
+        error.finvaRequestId = requestId;
+        error.finvaRetryCount = retryCount;
+        throw error;
+      }
+      retryCount += 1;
+      await delay(retryCount === 1 ? 250 : 750);
+    }
   }
-
-  return response;
 }

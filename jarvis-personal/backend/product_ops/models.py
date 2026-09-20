@@ -22,7 +22,20 @@ class FeedbackCreate(BaseModel):
     message: str = Field(min_length=5, max_length=4000)
     app_version: str | None = Field(default=None, max_length=30)
     screen: str | None = Field(default=None, max_length=80)
-    error_reference: str | None = Field(default=None, max_length=80)
+    error_reference: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class AutomaticIncidentCreate(BaseModel):
+    path: str = Field(min_length=1, max_length=160, pattern=r"^/")
+    method: str = Field(default="GET", max_length=10, pattern=r"^[A-Za-z]+$")
+    status: int = Field(ge=0, le=599)
+    request_id: str = Field(min_length=8, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    error_reference: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    error_type: str = Field(default="api_error", max_length=80, pattern=r"^[A-Za-z0-9_.-]+$")
+    app_version: str | None = Field(default=None, max_length=30, pattern=r"^[A-Za-z0-9_.+-]+$")
+    platform: str | None = Field(default=None, max_length=30, pattern=r"^[A-Za-z0-9_.-]+$")
+    screen: str | None = Field(default=None, max_length=80)
+    retry_count: int = Field(default=0, ge=0, le=3)
 
 
 class FeedbackUpdate(BaseModel):

@@ -39,6 +39,7 @@ def test_internal_error_payload_never_exposes_exception_details():
     assert payload == {
         "detail": "Ocurrió un error interno. Intentá nuevamente.",
         "error_id": "public-reference",
+        "request_id": "public-reference",
     }
     assert "error" not in payload
     assert "error_type" not in payload
@@ -322,6 +323,97 @@ def test_support_email_normalizes_google_app_password(monkeypatch):
     assert sent is True
     assert observed["password"] == "abcdefghijklmnop"
     assert observed["recipient"] == "soporte.finva@gmail.com"
+
+
+def test_discord_incident_notification_is_privacy_minimized(monkeypatch):
+    observed = {}
+
+    def fake_post(url, json, timeout):
+        observed.update(url=url, payload=json, timeout=timeout)
+        return SimpleNamespace(status_code=204)
+
+    monkeypatch.setenv(
+        "SUPPORT_DISCORD_WEBHOOK_URL",
+        "https://discord.com/api/webhooks/123/example-token",
+    )
+    monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
+    sent = product_ops_service._send_support_discord(
+        public_id="FINVA-000008",
+        plan="vip",
+        severity="critical",
+        payload=SimpleNamespace(
+            category="error",
+            app_version="2.0.0",
+            platform="android",
+            screen="settings",
+            error_reference="request-safe-reference",
+            message="tarjeta 4111111111111111",
+            email="private@example.com",
+        ),
+    )
+
+    assert sent is True
+    content = observed["payload"]["content"]
+    assert "FINVA-000008" in content
+    assert "request-safe-reference" in content
+    assert "4111111111111111" not in content
+    assert "private@example.com" not in content
+    assert "example-token" not in content
+    assert observed["payload"]["allowed_mentions"] == {"parse": []}
+
+
+def test_discord_rejects_non_discord_webhook(monkeypatch):
+    called = False
+
+    def fake_post(*_args, **_kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setenv("SUPPORT_DISCORD_WEBHOOK_URL", "https://evil.example/webhook")
+    monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
+    assert product_ops_service._send_support_discord(
+        public_id="FINVA-000009",
+        plan="free",
+        payload=SimpleNamespace(category="error", app_version=None, platform=None, screen=None, error_reference=None),
+    ) is False
+    assert called is False
+
+
+def test_phase_0a_incident_contract_is_deduplicated_and_backend_only():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260920050000_phase_0a_incident_reporting.sql"
+    ).read_text(encoding="utf-8")
+    service = Path(product_ops_service.__file__).read_text(encoding="utf-8")
+
+    assert "idx_feedback_incident_dedupe" in migration
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "REVOKE ALL PRIVILEGES" in migration
+    assert "source IN ('user', 'automatic')" in migration
+    assert "NOW()-INTERVAL '15 minutes'" in service
+    assert "occurrence_count=occurrence_count+1" in service
+    assert "pg_advisory_xact_lock" in service
+
+
+def test_automatic_incident_fingerprint_excludes_user_content():
+    common = dict(
+        method="GET", path="/finance/overview", status=503,
+        error_type="http_503", app_version="2.0.0",
+    )
+    first = SimpleNamespace(**common, message="salary 1000000", email="a@example.com")
+    second = SimpleNamespace(**common, message="debt 999999", email="b@example.com")
+
+    assert product_ops_service._incident_fingerprint(first) == product_ops_service._incident_fingerprint(second)
+    assert product_ops_service._incident_severity("/auth/me", "DELETE", 409) == "critical"
+    assert product_ops_service._incident_severity("/reports", "GET", 429) == "warning"
+    assert product_ops_service._sanitize_incident_path(
+        "/transactions/123?account=456&amount=999"
+    ) == "/transactions/:id"
+    assert product_ops_service._sanitize_incident_path(
+        "/goals/11111111-1111-1111-1111-111111111111"
+    ) == "/goals/:id"
 
 
 def test_self_deletion_migration_cascades_owned_data():

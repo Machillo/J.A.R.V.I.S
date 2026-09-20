@@ -30,6 +30,7 @@ export const identifyTelemetryUser = (user) => {
 export const trackScreen = (screenName, surface = "unknown") => {
   const cleanScreen = String(screenName || "unknown").slice(0, 80);
   const cleanSurface = String(surface || "unknown").slice(0, 40);
+  window.sessionStorage.setItem("finva:current-screen", cleanScreen);
   safely(() => FirebaseAnalytics.setCurrentScreen({ screenName: cleanScreen, screenClassOverride: cleanSurface }));
   safely(() => FirebaseCrashlytics.setCustomKey({ key: "screen", value: cleanScreen, type: "string" }));
   safely(() => FirebaseCrashlytics.log({ message: `screen:${cleanScreen}` }));

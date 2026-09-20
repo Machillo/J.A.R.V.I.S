@@ -1,11 +1,19 @@
 import { API_URL } from "../../lib/apiUrl";
 import { authenticatedFetch } from "../../lib/authenticatedFetch";
-import { apiError } from "../../lib/apiErrors";
+import { apiError, apiNetworkError } from "../../lib/apiErrors";
+import { flushIncidentQueue } from "../../lib/incidentReporter";
 
 async function request(path, options = {}) {
-  const response = await authenticatedFetch(`${API_URL}${path}`, options);
+  const method = String(options.method || "GET").toUpperCase();
+  let response;
+  try {
+    response = await authenticatedFetch(`${API_URL}${path}`, options);
+  } catch (cause) {
+    throw apiNetworkError(cause, path, method);
+  }
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw apiError(response, payload, path);
+  if (!response.ok) throw apiError(response, payload, path, method, true);
+  if (path !== "/product-ops/incidents") flushIncidentQueue();
   return payload;
 }
 
