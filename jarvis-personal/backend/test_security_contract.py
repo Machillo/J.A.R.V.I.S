@@ -222,8 +222,9 @@ def test_self_deletion_uses_same_account_owned_flow_for_every_plan(monkeypatch, 
     queries = []
 
     class Result:
-        def __init__(self, row=None): self.row = row
+        def __init__(self, row=None, rows=None): self.row = row; self.rows = rows or []
         def fetchone(self): return self.row
+        def fetchall(self): return self.rows
 
     class Connection:
         def __enter__(self): return self
@@ -257,10 +258,30 @@ def test_self_deletion_uses_same_account_owned_flow_for_every_plan(monkeypatch, 
         reset_current_user(token)
 
     sql = [entry[0] for entry in queries if isinstance(entry, tuple)]
-    assert not any("pg_constraint" in query for query in sql)
+    assert any("pg_constraint" in query for query in sql)
     assert any(query.startswith("DELETE FROM accounts") for query in sql)
-    assert any(query.startswith("DELETE FROM users") for query in sql)
+    legacy_delete = next(query for query in sql if query.startswith("DELETE FROM users"))
+    assert "lower(email)" in legacy_delete
+    assert "allowed_user_id" not in legacy_delete
     assert any(query.startswith("DELETE FROM allowed_users") for query in sql)
+
+
+def test_account_deletion_stage_contract_is_complete():
+    assert auth_service.DELETION_STAGES == (
+        "IDENTITY", "FK_CHECK", "ACCOUNT_DELETE", "LEGACY_DELETE",
+        "SUPABASE_AUTH_DELETE", "COMMIT", "DONE",
+    )
+
+
+def test_database_baseline_v1_matches_production_legacy_identity():
+    baseline = (
+        Path(__file__).parents[1] / "database" / "baseline" / "v1_identity_ownership.sql"
+    ).read_text(encoding="utf-8")
+    assert "users_email_ci" in baseline
+    assert "allowed_user_id" not in baseline.split("CREATE TABLE IF NOT EXISTS public.users", 1)[1].split(";", 1)[0]
+    assert "ON DELETE CASCADE" in baseline
+    assert "ON DELETE SET NULL" in baseline
+    assert "ENABLE ROW LEVEL SECURITY" in baseline
 
 
 def test_support_email_configuration_reports_missing_secret_without_exposing_it(monkeypatch):
