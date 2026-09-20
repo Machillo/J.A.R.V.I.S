@@ -3,6 +3,8 @@ import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Crown
 import { getBillingCatalog, getOnboarding, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../lib/receiptPicker";
+import { markFinvaWelcomeSeen, shouldShowFinvaWelcome } from "../lib/firstRunExperience";
+import FinvaWelcomeStory from "./FinvaWelcomeStory";
 
 const iconMap = { free: WalletCards, basic: Sparkles, vip: Crown };
 
@@ -20,6 +22,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
   const [receipt, setReceipt] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState("");
+  const [showWelcome, setShowWelcome] = useState(() => shouldShowFinvaWelcome(user?.id));
 
   const hydrate = (data) => {
     const p = data?.profile;
@@ -87,6 +90,11 @@ export default function FinvaOnboarding({ user, onComplete }) {
     finally { setSaving(false); }
   };
 
+  const finishWelcome = () => {
+    markFinvaWelcomeSeen(user?.id);
+    setShowWelcome(false);
+  };
+
   const copyValue = async (value, field) => {
     if (!value) return;
     const fallbackCopy = () => {
@@ -132,6 +140,10 @@ export default function FinvaOnboarding({ user, onComplete }) {
       }
     }
   };
+
+  if (!profile?.plan_selected && showWelcome) {
+    return <FinvaWelcomeStory onFinish={finishWelcome} />;
+  }
 
   if (!profile?.plan_selected && paymentFlow) {
     const order = paymentFlow.order;
