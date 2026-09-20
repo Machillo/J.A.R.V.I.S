@@ -1,23 +1,24 @@
-import { useEffect, useState } from "react";
-import { Calendar, Edit3, RefreshCw, Save, Target, X } from "lucide-react";
-import { getGoals, updateGoal } from "../services/jarvisApi";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Edit3, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { createGoal, getGoals, updateGoal } from "../services/jarvisApi";
 import { deviceLanguage, localeTag } from "../lib/locale";
+import { JarvisGlassCard, JarvisScreen } from "../products/jarvis/components/JarvisScreen";
+
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
+const formatCRC = (value = 0) => new Intl.NumberFormat(localeTag(language), { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(Number(value) || 0);
+const emptyGoal = { name: "", target_amount: "", current_amount: "", target_date: "", priority: "medium", goal_type: "general", status: "active", funding_order: 100, is_selected: true };
+const priorityLabels = { low: tx("BAJA", "LOW"), medium: tx("MEDIA", "MEDIUM"), high: tx("ALTA", "HIGH"), critical: tx("PRIORITARIA", "PRIORITY") };
 
-const formatCRC = (value = 0) =>
-  new Intl.NumberFormat(localeTag(language), {
-    style: "currency",
-    currency: "CRC",
-    maximumFractionDigits: 0,
-  }).format(Number(value) || 0);
-
-const priorityLabels = {
-  low: tx("BAJA", "LOW"),
-  medium: tx("MEDIA", "MEDIUM"),
-  high: tx("ALTA", "HIGH"),
-  critical: tx("PRIORITARIA", "PRIORITY"),
-};
+const goalPayload = (form) => ({
+  ...form,
+  target_amount: Number(form.target_amount) || 0,
+  current_amount: Number(form.current_amount) || 0,
+  target_date: form.target_date || null,
+  funding_order: Number(form.funding_order) || 100,
+  alternative_group: form.alternative_group || null,
+  depends_on_group: form.depends_on_group || null,
+});
 
 export default function Goals() {
   const [goals, setGoals] = useState([]);
@@ -25,177 +26,86 @@ export default function Goals() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({});
+  const [form, setForm] = useState(emptyGoal);
 
-  const loadGoals = async () => {
+  const loadGoals = useCallback(async () => {
     try {
-      setLoading(true);
-      setError("");
+      setLoading(true); setError("");
       const data = await getGoals();
       setGoals(Array.isArray(data) ? data : []);
     } catch (loadError) {
-      console.error(loadError);
-      setError(loadError.message || "No pude cargar las metas.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadGoals();
+      setError(loadError.message || tx("No pude cargar las metas.", "Goals could not be loaded."));
+    } finally { setLoading(false); }
   }, []);
 
-  const calculateProgress = (goal) => {
-    if (!goal.target_amount) return 0;
-    return Math.min(100, Math.round((Number(goal.current_amount || 0) / Number(goal.target_amount)) * 100));
-  };
+  useEffect(() => { loadGoals(); }, [loadGoals]);
 
-  const startEdit = (goal) => {
-    setEditingId(goal.id);
-    setForm({
-      name: goal.name || "",
-      target_amount: goal.target_amount || 0,
-      current_amount: goal.current_amount || 0,
-      target_date: goal.target_date || "",
-      priority: goal.priority || "medium",
-      status: goal.status || "active",
-      goal_type: goal.goal_type || "general",
-      alternative_group: goal.alternative_group || "",
-      is_selected: goal.is_selected !== false,
-      funding_order: goal.funding_order || 100,
-      depends_on_group: goal.depends_on_group || "",
-    });
-  };
+  const summary = useMemo(() => {
+    const target = goals.reduce((sum, goal) => sum + Number(goal.target_amount || 0), 0);
+    const current = goals.reduce((sum, goal) => sum + Number(goal.current_amount || 0), 0);
+    return { target, current, progress: target ? Math.min(100, Math.round(current / target * 100)) : 0 };
+  }, [goals]);
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setForm({});
-  };
+  const openCreate = () => { setForm({ ...emptyGoal }); setEditingId("new"); setError(""); };
+  const openEdit = (goal) => { setForm({ ...emptyGoal, ...goal, target_date: goal.target_date || "" }); setEditingId(goal.id); setError(""); };
+  const closeForm = () => { setEditingId(null); setForm({ ...emptyGoal }); };
 
-  const saveGoal = async (goalId) => {
-    setSaving(true);
-    setError("");
+  const saveGoal = async (event) => {
+    event.preventDefault(); setSaving(true); setError("");
     try {
-      await updateGoal(goalId, {
-        ...form,
-        target_amount: Number(form.target_amount) || 0,
-        current_amount: Number(form.current_amount) || 0,
-        target_date: form.target_date || null,
-        alternative_group: form.alternative_group || null,
-        depends_on_group: form.depends_on_group || null,
-        funding_order: Number(form.funding_order) || 100,
-      });
-      cancelEdit();
-      await loadGoals();
+      if (editingId === "new") await createGoal(goalPayload(form));
+      else await updateGoal(editingId, goalPayload(form));
+      closeForm(); await loadGoals();
     } catch (saveError) {
-      console.error(saveError);
-      setError(saveError.message || "No pude guardar la meta.");
-    } finally {
-      setSaving(false);
-    }
+      setError(saveError.message || tx("No pude guardar la meta.", "The goal could not be saved."));
+    } finally { setSaving(false); }
   };
 
-  if (loading) {
+  if (loading) return <section className="page"><div className="hud-card">{tx("Cargando metas...", "Loading goals...")}</div></section>;
+
+  if (editingId !== null) {
     return (
-      <section className="data-page jarvis-v2-screen goals-v2">
-        <div className="empty-state full-width">
-          <div className="jarvis-loader"></div>
-          <h3>Cargando metas...</h3>
-          <p>Estoy consultando tus metas financieras reales.</p>
-        </div>
-      </section>
+      <JarvisScreen eyebrow={tx("Metas", "Goals")} title={editingId === "new" ? tx("Nueva meta", "New goal") : tx("Editar meta", "Edit goal")} subtitle={tx("Definí el objetivo y JARVIS arma la ruta", "Set the objective and JARVIS builds the path")} className="goals-screen goal-form-screen" actions={<button className="jarvis-circle-button" type="button" onClick={closeForm} aria-label={tx("Volver", "Back")}><ArrowLeft size={19} /></button>}>
+        {error && <div className="jarvis-inline-message is-warning">{error}</div>}
+        <form className="goal-form" onSubmit={saveGoal}>
+          <GoalField label={tx("Nombre", "Name")}><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={tx("Ej. Viaje Japón", "E.g. Japan trip")} /></GoalField>
+          <GoalField label={tx("Monto objetivo", "Target amount")}><input required type="number" min="1" inputMode="decimal" value={form.target_amount} onChange={(e) => setForm({ ...form, target_amount: e.target.value })} placeholder="₡0" /></GoalField>
+          <GoalField label={tx("Monto actual", "Current amount")}><input type="number" min="0" inputMode="decimal" value={form.current_amount} onChange={(e) => setForm({ ...form, current_amount: e.target.value })} placeholder="₡0" /></GoalField>
+          <GoalField label={tx("Fecha objetivo", "Target date")}><input type="date" value={form.target_date} onChange={(e) => setForm({ ...form, target_date: e.target.value })} /></GoalField>
+          <GoalField label={tx("Prioridad", "Priority")}><select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}><option value="low">{tx("Baja", "Low")}</option><option value="medium">{tx("Media", "Medium")}</option><option value="high">{tx("Alta", "High")}</option><option value="critical">{tx("Prioritaria", "Priority")}</option></select></GoalField>
+          <GoalField label={tx("Tipo", "Type")}><select value={form.goal_type} onChange={(e) => setForm({ ...form, goal_type: e.target.value })}><option value="general">{tx("General", "General")}</option><option value="travel">{tx("Viaje", "Travel")}</option><option value="vehicle">{tx("Vehículo", "Vehicle")}</option><option value="purchase">{tx("Compra", "Purchase")}</option></select></GoalField>
+          <JarvisGlassCard className="goal-route-note"><Sparkles size={18} /><span>{tx("JARVIS financiará esta meta según su prioridad, sin usar dinero ya comprometido.", "JARVIS will fund this goal by priority without using committed money.")}</span></JarvisGlassCard>
+          <button className="jarvis-primary-button" type="submit" disabled={saving}>{saving ? tx("Guardando...", "Saving...") : tx("Guardar meta", "Save goal")}</button>
+        </form>
+      </JarvisScreen>
     );
   }
 
   return (
-    <section className="data-page jarvis-v2-screen goals-v2">
-      <div className="page-section-header goals-v2-header">
-        <div>
-          <h2>{tx("Metas Estratégicas", "Strategic Goals")}</h2>
-          <p>{tx("Viajes, ahorro, deuda y objetivos personales.", "Travel, savings, debt, and personal goals.")}</p>
-        </div>
-
-        <button className="hud-action-button" onClick={loadGoals}>
-          <RefreshCw size={16} />
-          {tx("Actualizar", "Refresh")}
-        </button>
+    <JarvisScreen eyebrow={tx("Metas", "Goals")} title={tx("Metas estratégicas", "Strategic goals")} subtitle={tx("Objetivos, prioridades y progreso", "Objectives, priorities and progress")} className="goals-screen" actions={<button className="jarvis-circle-button" type="button" onClick={loadGoals} aria-label={tx("Actualizar", "Refresh")}><RefreshCw size={18} /></button>}>
+      {error && <div className="jarvis-inline-message is-warning">{error}</div>}
+      <JarvisGlassCard className="goals-summary">
+        <span>{tx("Progreso global", "Global progress")}</span>
+        <div><strong>{summary.progress}%</strong><small>{formatCRC(summary.current)} {tx("de", "of")} {formatCRC(summary.target)}</small></div>
+        <GoalProgress value={summary.progress} />
+      </JarvisGlassCard>
+      <div className="goals-list">
+        {goals.length === 0 ? <JarvisGlassCard className="jarvis-empty-state">{tx("Todavía no creaste metas.", "You have not created any goals yet.")}</JarvisGlassCard> : goals.map((goal) => {
+          const target = Number(goal.target_amount || 0); const current = Number(goal.current_amount || 0);
+          const progress = target ? Math.min(100, Math.round(current / target * 100)) : 0;
+          return <JarvisGlassCard as="button" type="button" className={`goal-summary-card is-${goal.priority || "medium"}`} key={goal.id} onClick={() => openEdit(goal)}>
+            <span>{priorityLabels[goal.priority] || priorityLabels.medium}</span>
+            <div><strong>{goal.name}</strong><b>{progress}%</b></div>
+            <small>{formatCRC(current)} / {formatCRC(target)}</small>
+            <GoalProgress value={progress} />
+            <Edit3 className="goal-summary-card__edit" size={14} />
+          </JarvisGlassCard>;
+        })}
       </div>
-
-      {error && <div className="inline-error">{error}</div>}
-
-      {goals.length === 0 ? (
-        <div className="empty-state full-width">
-          <Target size={36} />
-          <h3>{tx("No hay metas activas todavía", "No active goals yet")}</h3>
-          <p>{tx("Cuando agreguemos metas desde la interfaz o por chat, se mostrarán aquí con progreso, fecha objetivo y prioridad.", "Goals added from the interface or chat will appear here with progress, target date, and priority.")}</p>
-        </div>
-      ) : (
-        <div className="goals-grid goals-v2-list">
-          {goals.map((goal) => {
-            const progress = calculateProgress(goal);
-            const remaining = Math.max(Number(goal.target_amount || 0) - Number(goal.current_amount || 0), 0);
-            const isEditing = editingId === goal.id;
-
-            return (
-              <div key={goal.id} className={`goal-card goal-row-v2 ${goal.priority || "medium"} ${isEditing ? "is-editing" : ""}`}>
-                <div className="goal-header">
-                  <Target size={20} />
-                  <span>{priorityLabels[goal.priority] || "MEDIA"}</span>
-                </div>
-
-                {isEditing ? (
-                  <div className="goal-edit-form">
-                    <label>Nombre<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-                    <label>Monto objetivo<input type="number" value={form.target_amount} onChange={(event) => setForm({ ...form, target_amount: event.target.value })} /></label>
-                    <label>Monto actual<input type="number" value={form.current_amount} onChange={(event) => setForm({ ...form, current_amount: event.target.value })} /></label>
-                    <label>Fecha objetivo<input type="date" value={form.target_date || ""} onChange={(event) => setForm({ ...form, target_date: event.target.value })} /></label>
-                    <label>Importancia
-                      <select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>
-                        <option value="low">Baja</option>
-                        <option value="medium">Media</option>
-                        <option value="high">Alta</option>
-                        <option value="critical">Prioritaria</option>
-                      </select>
-                    </label>
-                    <label>Tipo
-                      <select value={form.goal_type} onChange={(event) => setForm({ ...form, goal_type: event.target.value })}>
-                        <option value="general">General</option><option value="travel">Viaje</option><option value="vehicle">Carro</option><option value="purchase">Compra</option>
-                      </select>
-                    </label>
-                    <label>Grupo alternativo<input placeholder="Ej: viaje-2027" value={form.alternative_group} onChange={(event) => setForm({ ...form, alternative_group: event.target.value })} /></label>
-                    {form.alternative_group && <label>Opción elegida<select value={String(form.is_selected)} onChange={(event) => setForm({ ...form, is_selected: event.target.value === "true" })}><option value="true">Sí, financiar esta</option><option value="false">No, solo comparar</option></select></label>}
-                    <label>Orden de financiamiento<input type="number" min="1" value={form.funding_order} onChange={(event) => setForm({ ...form, funding_order: event.target.value })} /></label>
-                    <label>Activar después del grupo<input placeholder="Ej: viaje-2027" value={form.depends_on_group} onChange={(event) => setForm({ ...form, depends_on_group: event.target.value })} /></label>
-                    <label>Estado
-                      <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
-                        <option value="active">Activa</option>
-                        <option value="paused">Pausada</option>
-                        <option value="completed">Completada</option>
-                      </select>
-                    </label>
-                    <div className="goal-edit-actions">
-                      <button className="hud-action-button success" onClick={() => saveGoal(goal.id)} disabled={saving}><Save size={15} /> Guardar</button>
-                      <button className="ghost-button" onClick={cancelEdit} disabled={saving}><X size={15} /> Cancelar</button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <h3>{goal.name}</h3>
-                    <div className="goal-progress"><div className="goal-progress-fill" style={{ width: `${progress}%` }} /></div>
-                    <div className="goal-percent">{progress}%</div>
-                    <div className="goal-money">{formatCRC(goal.current_amount)} / {formatCRC(goal.target_amount)}</div>
-                    <div className="goal-remaining">{tx("Faltan", "Remaining")} {formatCRC(remaining)}</div>
-                    <div className="goal-date"><Calendar size={14} />{goal.target_date || tx("Sin fecha", "No date")}</div>
-                    {goal.alternative_group && <div className="goal-date">{goal.is_selected ? "Alternativa elegida" : "Alternativa en comparación"} · {goal.alternative_group}</div>}
-                    {goal.depends_on_group && <div className="goal-date">Se activa después de {goal.depends_on_group}</div>}
-                    <button className="goal-edit-button" onClick={() => startEdit(goal)}><Edit3 size={15} /> {tx("Editar", "Edit")}</button>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
+      <button className="jarvis-primary-button goals-add-button" type="button" onClick={openCreate}><Plus size={18} />{tx("Nueva meta", "New goal")}</button>
+    </JarvisScreen>
   );
 }
+
+function GoalField({ label, children }) { return <label className="goal-form-field"><span>{label}</span>{children}</label>; }
+function GoalProgress({ value }) { return <div className="goal-progress-track"><span style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
