@@ -151,6 +151,41 @@ def test_phase_0f_database_failure_uses_per_feature_safe_defaults(monkeypatch):
     assert flags["advanced_reports"]["enabled"] is True
 
 
+def test_finva_gmail_is_a_vip_only_product_entitlement():
+    from backend.auth.saas import BUILTIN_FEATURE_MIN_PLAN
+
+    assert BUILTIN_FEATURE_MIN_PLAN["gmail_automation"] == "vip"
+
+
+def test_finva_gmail_background_access_requires_active_vip():
+    class Result:
+        def __init__(self, row):
+            self.row = row
+
+        def fetchone(self):
+            return self.row
+
+    class Connection:
+        def __init__(self, row):
+            self.row = row
+            self.query = ""
+            self.params = ()
+
+        def execute(self, query, params=()):
+            self.query = " ".join(query.split())
+            self.params = params
+            return Result(self.row)
+
+    vip = Connection({"allowed": 1})
+    assert gmail_service._has_active_vip_access(vip, "account-vip") is True
+    assert "p.code='vip'" in vip.query
+    assert "s.status='active'" in vip.query
+    assert vip.params == ("account-vip",)
+
+    free_or_basic = Connection(None)
+    assert gmail_service._has_active_vip_access(free_or_basic, "account-basic") is False
+
+
 def test_phase_0f_migration_is_private_audited_and_deletion_safe():
     migration = (
         Path(__file__).parents[1]
