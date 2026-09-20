@@ -395,6 +395,51 @@ def test_phase_0a_incident_contract_is_deduplicated_and_backend_only():
     assert "NOW()-INTERVAL '15 minutes'" in service
     assert "occurrence_count=occurrence_count+1" in service
     assert "pg_advisory_xact_lock" in service
+    assert "feedback_reports_user_resolution_check" in migration
+
+
+def test_user_feedback_resolution_is_scoped_to_own_account(monkeypatch):
+    queries = []
+
+    class Result:
+        def __init__(self, row=None): self.row = row
+        def fetchone(self): return self.row
+
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def commit(self): queries.append(("COMMIT", ()))
+        def execute(self, query, params=()):
+            normalized = " ".join(query.split())
+            queries.append((normalized, params))
+            if normalized.startswith("SELECT f.id"):
+                return Result({
+                    "id": 5, "category": "error", "subject": "No carga",
+                    "message": "detalle", "plan_code": "vip", "app_version": "1.9.6",
+                    "screen": "settings", "error_reference": None,
+                    "email": "person@example.com",
+                })
+            if normalized.startswith("UPDATE feedback_reports"):
+                return Result({
+                    "id": 5, "category": "error", "subject": "No carga",
+                    "status": "reviewing", "user_resolution": "still_happening",
+                    "user_resolution_at": "now", "updated_at": "now",
+                })
+            return Result()
+
+    monkeypatch.setattr(product_ops_service, "get_connection", lambda: Connection())
+    monkeypatch.setattr(product_ops_service, "ensure_schema", lambda _conn: None)
+    monkeypatch.setattr(product_ops_service, "get_current_user", lambda: {"account_id": "account-1"})
+    monkeypatch.setattr(product_ops_service, "_send_support_email", lambda **_kwargs: True)
+    monkeypatch.setattr(product_ops_service, "_send_support_discord", lambda **_kwargs: False)
+
+    result = product_ops_service.update_user_feedback_resolution(5, "still_happening")
+
+    assert result["status"] == "reviewing"
+    select_params = next(params for query, params in queries if query.startswith("SELECT f.id"))
+    update_params = next(params for query, params in queries if query.startswith("UPDATE feedback_reports"))
+    assert select_params == (5, "account-1")
+    assert update_params[-2:] == (5, "account-1")
 
 
 def test_automatic_incident_fingerprint_excludes_user_content():

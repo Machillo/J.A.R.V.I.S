@@ -366,6 +366,7 @@ def ensure_schema(conn):
       source TEXT NOT NULL DEFAULT 'user', severity TEXT NOT NULL DEFAULT 'info', fingerprint TEXT,
       request_id TEXT, error_reference TEXT, screen TEXT, platform TEXT, retry_count INTEGER NOT NULL DEFAULT 0,
       occurrence_count INTEGER NOT NULL DEFAULT 1, last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      user_resolution TEXT, user_resolution_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ)""")
     for ddl in [
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'user'",
@@ -378,6 +379,8 @@ def ensure_schema(conn):
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS retry_count INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS occurrence_count INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS user_resolution TEXT",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS user_resolution_at TIMESTAMPTZ",
     ]:
         conn.execute(ddl)
     conn.execute("""CREATE INDEX IF NOT EXISTS idx_feedback_incident_dedupe
@@ -626,10 +629,60 @@ def list_feedback():
     with get_connection() as conn:
         ensure_schema(conn)
         rows = conn.execute("""SELECT id,category,subject,message,status,owner_notes,source,severity,
-          occurrence_count,last_seen_at,created_at,updated_at
+          occurrence_count,last_seen_at,user_resolution,user_resolution_at,created_at,updated_at
           FROM feedback_reports WHERE account_id=%s ORDER BY created_at DESC LIMIT 30""", (account_id,)).fetchall()
         conn.commit()
     return [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in rows]
+
+
+def update_user_feedback_resolution(ticket_id: int, resolution: str):
+    user = get_current_user()
+    account_id = user["account_id"]
+    with get_connection() as conn:
+        ensure_schema(conn)
+        ticket = conn.execute(
+            """SELECT f.id,f.category,f.subject,f.message,f.plan_code,f.app_version,
+                      f.screen,f.error_reference,COALESCE(a.primary_email,'no disponible') AS email
+               FROM feedback_reports f JOIN accounts a ON a.id=f.account_id
+               WHERE f.id=%s AND f.account_id=%s FOR UPDATE""",
+            (ticket_id, account_id),
+        ).fetchone()
+        if not ticket:
+            raise HTTPException(404, "Reporte no encontrado.")
+        status = "resolved" if resolution == "resolved" else "reviewing"
+        row = conn.execute(
+            """UPDATE feedback_reports SET status=%s,user_resolution=%s,user_resolution_at=NOW(),
+                     resolved_at=CASE WHEN %s='resolved' THEN NOW() ELSE NULL END,updated_at=NOW()
+               WHERE id=%s AND account_id=%s
+               RETURNING id,category,subject,status,user_resolution,user_resolution_at,updated_at""",
+            (status, resolution, resolution, ticket_id, account_id),
+        ).fetchone()
+        conn.commit()
+
+    public_id = f"FINVA-{int(row['id']):06d}"
+    label = "El usuario confirmó que se resolvió." if resolution == "resolved" else "El usuario confirmó que el problema continúa."
+    notification = SimpleNamespace(
+        category="status",
+        subject=f"Actualización · {ticket['subject']}",
+        message=label,
+        app_version=ticket.get("app_version"),
+        screen=ticket.get("screen"),
+        error_reference=ticket.get("error_reference"),
+        platform=None,
+    )
+    email_sent = _send_support_email(
+        public_id=public_id,
+        email=ticket.get("email") or "no disponible",
+        plan=ticket.get("plan_code") or "",
+        payload=notification,
+    )
+    discord_sent = _send_support_discord(
+        public_id=public_id,
+        plan=ticket.get("plan_code") or "",
+        payload=notification,
+        severity="warning" if resolution == "still_happening" else "info",
+    )
+    return {**row, "public_id": public_id, "email_sent": email_sent, "discord_sent": discord_sent}
 
 
 def resend_feedback_email(ticket_id: int):
@@ -682,7 +735,8 @@ def owner_dashboard():
         events = conn.execute("""SELECT event_name,COUNT(*) AS uses,COUNT(DISTINCT account_id) AS users
           FROM product_events WHERE created_at>=NOW()-INTERVAL '30 days' GROUP BY event_name ORDER BY uses DESC LIMIT 20""").fetchall()
         tickets = conn.execute("""SELECT f.id,f.category,f.subject,f.message,f.status,f.owner_notes,
-          f.source,f.severity,f.occurrence_count,f.last_seen_at,f.created_at,a.primary_email AS email
+          f.source,f.severity,f.occurrence_count,f.last_seen_at,f.user_resolution,f.user_resolution_at,
+          f.created_at,a.primary_email AS email
           FROM feedback_reports f JOIN accounts a ON a.id=f.account_id ORDER BY CASE f.status WHEN 'new' THEN 1 WHEN 'reviewing' THEN 2 ELSE 3 END,f.created_at DESC LIMIT 100""").fetchall()
         conn.commit()
     return {"promotion": {**launch_promotion_status(), "plans": promotional},

@@ -2,8 +2,8 @@ from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import Response
 
 from backend.auth.current_user import require_roles
-from backend.product_ops.models import AutomaticIncidentCreate, FeedbackCreate, FeedbackUpdate, ProductEvent, StoreLifecycleSimulation, TestPaymentUpdate
-from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_automatic_incident, create_feedback, get_receipt, list_feedback, owner_dashboard, record_event, resend_feedback_email, resolve_test_order, submit_receipt, update_feedback
+from backend.product_ops.models import AutomaticIncidentCreate, FeedbackCreate, FeedbackResolutionUpdate, FeedbackUpdate, ProductEvent, StoreLifecycleSimulation, TestPaymentUpdate
+from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_automatic_incident, create_feedback, get_receipt, list_feedback, owner_dashboard, record_event, resend_feedback_email, resolve_test_order, submit_receipt, update_feedback, update_user_feedback_resolution
 from backend.product_ops.store_billing import entitlement_state, restore_owner_access, simulate_lifecycle, store_catalog
 
 router = APIRouter(prefix="/product-ops", tags=["Product Operations"])
@@ -45,6 +45,10 @@ async def receipt_submit(order_id: int, receipt: UploadFile = File(...)):
 
 @router.post("/feedback")
 def feedback_create(payload: FeedbackCreate): return create_feedback(payload)
+
+@router.patch("/feedback/{ticket_id}/resolution")
+def feedback_resolution(ticket_id: int, payload: FeedbackResolutionUpdate):
+    return update_user_feedback_resolution(ticket_id, payload.resolution)
 
 @router.post("/incidents")
 def incident_create(payload: AutomaticIncidentCreate): return create_automatic_incident(payload)

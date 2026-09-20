@@ -11,6 +11,10 @@ const vite = read("../vite.config.js");
 assert.match(feedback, /support-bubble--/);
 assert.match(feedback, /Tengo un problema/);
 assert.match(feedback, /¿Qué hiciste y qué ocurrió después\?/);
+assert.match(feedback, /support-chat-overlay/);
+assert.match(feedback, /Sí, se resolvió/);
+assert.match(feedback, /No, sigue igual/);
+assert.match(feedback, /updateFeedbackResolution/);
 assert.doesNotMatch(feedback, /1\.8\.5/);
 assert.match(vite, /versionName/);
 
