@@ -20,6 +20,7 @@ import "../products/finva/styles/vip-figma.css";
 import "../products/finva/styles/account-actions.css";
 import ReleaseUpdateNotice from "../components/ReleaseUpdateNotice";
 import { dismissRelease, isReleaseDismissed } from "../lib/releasePolicy";
+import { cachedFeatureFlags, featureDisabledMessage, featureEnabled, getOperationalFeatureFlags } from "../lib/featureFlags";
 
 export default function UsersApp({ user, onUserChange, releasePolicy }) {
   const [page, setPage] = useState(() => window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview");
@@ -30,6 +31,7 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
   const [pendingOperations, setPendingOperations] = useState(0);
   const [recoveryNotice, setRecoveryNotice] = useState("");
   const [releaseDismissed, setReleaseDismissed] = useState(() => isReleaseDismissed(releasePolicy));
+  const [featureFlags, setFeatureFlags] = useState(() => cachedFeatureFlags());
   const plan = user?.subscription?.plan || "free";
   const platform = detectNativePlatform();
 
@@ -90,8 +92,18 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
 
   useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);
   useEffect(() => { setReleaseDismissed(isReleaseDismissed(releasePolicy)); }, [releasePolicy]);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => getOperationalFeatureFlags().then((flags) => { if (active) setFeatureFlags(flags); });
+    const visible = () => { if (document.visibilityState === "visible") refresh(); };
+    refresh();
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", visible);
+    return () => { active=false;window.clearInterval(interval);window.removeEventListener("online",refresh);document.removeEventListener("visibilitychange",visible); };
+  }, []);
   const logout = () => supabase.auth.signOut({ scope: "local" });
-  const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange, onLogout: logout });
+  const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange, onLogout: logout, featureFlags });
   const freeTitles = {
     overview: tx("Hola", "Hello") + `, ${(user?.display_name || user?.email || tx("bienvenido", "welcome")).split(" ")[0]}`,
     finance: tx("Movimientos", "Transactions"), debts: tx("Deudas", "Debts"), goals: tx("Metas", "Goals"),
@@ -124,6 +136,7 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
         />
         <main className="content mobile-content native-scroll-content">
           {releasePolicy?.status === "optional" && !releaseDismissed && <ReleaseUpdateNotice policy={releasePolicy} onDismiss={() => { dismissRelease(releasePolicy); setReleaseDismissed(true); }} />}
+          {featureFlags && !featureEnabled(featureFlags,"financial_writes") && <aside className="finva-health-mode finva-health-mode--degraded" role="status"><div><strong>{tx("Cambios temporalmente pausados", "Changes temporarily paused")}</strong><span>{featureDisabledMessage(featureFlags,"financial_writes",tx("es","en"))}</span></div></aside>}
           {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>{tx("Entendido", "Got it")}</button></aside>}
           {healthMode !== "operational" && <aside className={`finva-health-mode finva-health-mode--${healthMode}`} role="status"><div><strong>{healthMode === "offline" ? tx("Sin conexión", "Offline") : healthMode === "recovering" ? tx("Reconectando…", "Reconnecting…") : healthMode === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : tx("Modo degradado", "Degraded mode")}</strong><span>{healthMode === "offline" ? tx("Podés consultar lo cargado. Los cambios compatibles quedarán guardados en este dispositivo hasta reconectar.", "You can view loaded data. Supported changes will remain on this device until reconnection.") : tx("Algunas funciones pueden tardar. FINVA está intentando recuperarse y ya conserva el diagnóstico.", "Some features may be slow. FINVA is recovering and has preserved the diagnostic context.")}</span></div><button type="button" onClick={() => setPage("feedback")}>{tx("Ver estado", "View status")}</button></aside>}
           {pendingOperations > 0 && <aside className="finva-operation-recovery finva-operation-recovery--pending" role="status"><div><strong>{tx("Cambio protegido", "Change protected")}</strong><span>{tx(`${pendingOperations} cambio${pendingOperations === 1 ? "" : "s"} pendiente${pendingOperations === 1 ? "" : "s"}. Se enviará${pendingOperations === 1 ? "" : "n"} automáticamente.`, `${pendingOperations} pending change${pendingOperations === 1 ? "" : "s"}. FINVA will send ${pendingOperations === 1 ? "it" : "them"} automatically.`)}</span></div></aside>}
@@ -131,7 +144,7 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
           {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>{apiIssue.reported ? tx("FINVA ya avisó a soporte", "FINVA already notified support") : tx("Algo no cargó", "Something didn’t load")}</strong><span>{apiIssue.reported ? `${tx("Referencia", "Reference")}: ${apiIssue.publicId}` : tx("Intentamos recuperarlo automáticamente. Si continúa, guardaremos el diagnóstico.", "We tried to recover automatically. If it continues, we'll save the diagnosis.")}</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>{tx("Abrir chat", "Open chat")}</button><button className="finva-api-help-close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={() => setApiIssue(null)}>×</button></aside>}
           <AppErrorBoundary resetKey={page} screen={page}>{pages[page] || pages.overview}</AppErrorBoundary>
         </main>
-        <FinvaNavigation page={page} plan={plan} onNavigate={setPage} onLogout={logout}/>
+        <FinvaNavigation page={page} plan={plan} onNavigate={setPage} onLogout={logout} featureFlags={featureFlags}/>
       </div>
     </NativeProductShell>
   );

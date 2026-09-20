@@ -68,3 +68,8 @@ class ReleasePolicyUpdate(BaseModel):
     message_es: str = Field(min_length=3, max_length=300)
     message_en: str = Field(min_length=3, max_length=300)
     is_active: bool = True
+
+
+class FeatureFlagUpdate(BaseModel):
+    enabled: bool
+    reason: str = Field(min_length=3, max_length=300)

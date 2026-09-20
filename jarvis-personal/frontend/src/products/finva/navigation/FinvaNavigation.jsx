@@ -19,6 +19,7 @@ import {
 import { useState } from "react";
 import NativeBottomBar from "../../../ui/native/NativeBottomBar";
 import { deviceLanguage } from "../../../lib/locale";
+import { featureEnabled } from "../../../lib/featureFlags";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -29,8 +30,14 @@ const primaryItems = [
   { key: "goals", label: tx("Metas", "Goals"), icon: Target },
 ];
 
-export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
+export default function FinvaNavigation({ page, plan, onNavigate, onLogout, featureFlags }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const available = (key) => {
+    if (key === "gmail") return featureEnabled(featureFlags, "gmail_automation");
+    if (key === "reports") return featureEnabled(featureFlags, "advanced_reports");
+    if (plan === "vip" && ["strategy","vip-projections","vip-scenarios","vip-reality","vip-emergency","vip-preferences"].includes(key)) return featureEnabled(featureFlags, "vip_intelligence");
+    return true;
+  };
   const groups = [
     {
       title: tx("Mi dinero", "My money"),
@@ -68,7 +75,7 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout }) {
         ["feedback", tx("Ayuda y sugerencias", "Help & feedback"), LifeBuoy],
       ],
     },
-  ];
+  ].map((group) => ({ ...group, items:group.items.filter(([key]) => available(key)) })).filter((group) => group.items.length);
   const secondaryKeys = groups.flatMap((group) => group.items.map(([key]) => key));
 
   const navigate = (key) => {
