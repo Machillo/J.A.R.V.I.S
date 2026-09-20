@@ -59,3 +59,12 @@ class StoreLifecycleSimulation(BaseModel):
         "trial_started", "purchased", "renewed", "upgrade", "downgrade",
         "cancel_requested", "grace_period", "restored", "expired", "revoked",
     ]
+
+
+class ReleasePolicyUpdate(BaseModel):
+    minimum_supported_version: str = Field(max_length=30, pattern=r"^[0-9]+\.[0-9]+\.[0-9]+(?:[+-][A-Za-z0-9.-]+)?$")
+    latest_version: str = Field(max_length=30, pattern=r"^[0-9]+\.[0-9]+\.[0-9]+(?:[+-][A-Za-z0-9.-]+)?$")
+    update_url: str | None = Field(default=None, max_length=500, pattern=r"^https://")
+    message_es: str = Field(min_length=3, max_length=300)
+    message_en: str = Field(min_length=3, max_length=300)
+    is_active: bool = True

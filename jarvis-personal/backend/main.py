@@ -65,6 +65,7 @@ app.add_middleware(
 PUBLIC_PATHS = {
     "/",
     "/status",
+    "/product-ops/release-policy",
     "/auth/health",
     "/auth/check-access",
     "/email-monitor/cron",

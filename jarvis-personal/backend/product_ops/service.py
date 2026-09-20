@@ -26,6 +26,85 @@ PAYMENT_CODE_PATTERN = re.compile(r"\bFINVA-[A-Z0-9]{6}\b", re.I)
 RECEIPT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 MAX_RECEIPT_BYTES = 5 * 1024 * 1024
 logger = logging.getLogger(__name__)
+RELEASE_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[+-][A-Za-z0-9.-]+)?$")
+
+
+def _release_version_tuple(value: str | None) -> tuple[int, int, int] | None:
+    """Parse the numeric SemVer core used for compatibility decisions."""
+    normalized = str(value or "").strip()
+    if not RELEASE_VERSION_PATTERN.fullmatch(normalized):
+        return None
+    core = re.split(r"[+-]", normalized, maxsplit=1)[0]
+    return tuple(int(part) for part in core.split("."))
+
+
+def evaluate_release_version(current: str | None, minimum: str, latest: str) -> str:
+    current_tuple = _release_version_tuple(current)
+    minimum_tuple = _release_version_tuple(minimum)
+    latest_tuple = _release_version_tuple(latest)
+    if not current_tuple or not minimum_tuple or not latest_tuple:
+        return "unknown"
+    if current_tuple < minimum_tuple:
+        return "required"
+    if current_tuple < latest_tuple:
+        return "optional"
+    return "current"
+
+
+def release_policy(platform: str, current_version: str):
+    """Return only the public, privacy-safe compatibility decision."""
+    if platform not in {"android", "ios", "web"}:
+        raise HTTPException(422, "Plataforma no válida.")
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT platform,minimum_supported_version,latest_version,update_url,
+                      message_es,message_en,is_active,updated_at
+               FROM app_release_policies WHERE platform=%s""",
+            (platform,),
+        ).fetchone()
+    if not row or not row.get("is_active"):
+        return {"platform": platform, "current_version": current_version, "status": "current", "required": False, "active": False}
+    status = evaluate_release_version(current_version, row["minimum_supported_version"], row["latest_version"])
+    return {
+        **row,
+        "current_version": current_version,
+        "status": status,
+        "required": status == "required",
+        "active": True,
+    }
+
+
+def update_release_policy(platform: str, payload):
+    if platform not in {"android", "ios", "web"}:
+        raise HTTPException(422, "Plataforma no válida.")
+    minimum = _release_version_tuple(payload.minimum_supported_version)
+    latest = _release_version_tuple(payload.latest_version)
+    if not minimum or not latest or latest < minimum:
+        raise HTTPException(422, "La versión más reciente debe ser igual o posterior a la versión mínima.")
+    if payload.is_active and (minimum > (1, 0, 0) or latest > minimum) and not payload.update_url:
+        raise HTTPException(422, "Configurá una URL HTTPS antes de anunciar o exigir una actualización.")
+    account_id = get_current_account_id()
+    with get_connection() as conn:
+        row = conn.execute(
+            """INSERT INTO app_release_policies(
+                 platform,minimum_supported_version,latest_version,update_url,
+                 message_es,message_en,is_active,updated_by_account_id,updated_at
+               ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+               ON CONFLICT(platform) DO UPDATE SET
+                 minimum_supported_version=EXCLUDED.minimum_supported_version,
+                 latest_version=EXCLUDED.latest_version,
+                 update_url=EXCLUDED.update_url,message_es=EXCLUDED.message_es,
+                 message_en=EXCLUDED.message_en,is_active=EXCLUDED.is_active,
+                 updated_by_account_id=EXCLUDED.updated_by_account_id,updated_at=NOW()
+               RETURNING platform,minimum_supported_version,latest_version,update_url,
+                         message_es,message_en,is_active,updated_at""",
+            (platform, payload.minimum_supported_version, payload.latest_version,
+             payload.update_url, payload.message_es.strip(), payload.message_en.strip(),
+             payload.is_active, account_id),
+        ).fetchone()
+        conn.commit()
+    logger.info("Release policy updated platform=%s account_id=%s", platform, account_id)
+    return row
 
 
 def support_email_configuration() -> dict[str, object]:
@@ -841,12 +920,18 @@ def owner_dashboard():
           f.source,f.severity,f.occurrence_count,f.last_seen_at,f.affected_operations,f.discord_alerted_at,f.user_resolution,f.user_resolution_at,
           f.created_at,a.primary_email AS email
           FROM feedback_reports f JOIN accounts a ON a.id=f.account_id ORDER BY CASE f.status WHEN 'new' THEN 1 WHEN 'reviewing' THEN 2 ELSE 3 END,f.created_at DESC LIMIT 100""").fetchall()
+        release_policies = conn.execute(
+            """SELECT platform,minimum_supported_version,latest_version,update_url,
+                      message_es,message_en,is_active,updated_at
+               FROM app_release_policies ORDER BY platform"""
+        ).fetchall()
         conn.commit()
     return {"promotion": {**launch_promotion_status(), "plans": promotional},
             "support_email": support_email_configuration(),
             "support_channels": support_channel_configuration(),
             "pending_orders": pending, "feature_usage_30d": events,
-            "tickets": [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in tickets]}
+            "tickets": [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in tickets],
+            "release_policies": release_policies}
 
 
 def submit_receipt(order_id: int, filename: str, content_type: str, content: bytes):
