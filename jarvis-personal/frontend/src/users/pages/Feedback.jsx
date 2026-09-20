@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Bot, Bug, CheckCircle2, Lightbulb, MessageCircle, RotateCcw, Send, UserRound, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Activity, AlertCircle, Bot, Bug, CheckCircle2, Lightbulb, MessageCircle, RefreshCw, RotateCcw, Send, UserRound, X } from "lucide-react";
 import { SUPPORT_CONTEXT_KEY } from "../../lib/apiErrors";
-import { createFeedback, getFeedback, updateFeedbackResolution } from "../services/jarvisApi";
+import { createFeedback, getFeedback, getPlatformHealth, updateFeedbackResolution } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
 
 const EMPTY = { category: "", subject: "", screen: "", happened: "", expected: "", benefit: "", reproducible: "", errorReference: "" };
@@ -34,6 +34,8 @@ function Bubble({ role, children }) {
 
 export default function Feedback() {
   const [reports, setReports] = useState([]);
+  const [health, setHealth] = useState(null);
+  const [healthBusy, setHealthBusy] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [step, setStep] = useState("category");
   const [draft, setDraft] = useState("");
@@ -43,9 +45,16 @@ export default function Feedback() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const load = () => getFeedback().then(setReports).catch(() => setReports([]));
+  const loadHealth = useCallback(async () => {
+    setHealthBusy(true);
+    try { setHealth(await getPlatformHealth()); }
+    catch { setHealth({ status: navigator.onLine ? "degraded" : "offline" }); }
+    finally { setHealthBusy(false); }
+  }, []);
 
   useEffect(() => {
     load();
+    loadHealth();
     try {
       const saved = JSON.parse(window.sessionStorage.getItem(SUPPORT_CONTEXT_KEY) || "null");
       if (saved) {
@@ -55,7 +64,7 @@ export default function Feedback() {
         window.sessionStorage.removeItem(SUPPORT_CONTEXT_KEY);
       }
     } catch { /* Ignore an invalid local draft. */ }
-  }, []);
+  }, [loadHealth]);
 
   const steps = form.category === "improvement" ? IDEA_STEPS : ERROR_STEPS;
   const transcript = useMemo(() => {
@@ -118,9 +127,18 @@ export default function Feedback() {
   const needsText = !["category", "reproducible", "review"].includes(step);
   const canSendText = draft.trim().length >= (step === "subject" ? 3 : 1)
     || step === "expected" || (step === "screen" && form.category === "improvement");
+  const healthStatus = health?.status || "checking";
+  const healthCopy = healthStatus === "operational"
+    ? tx("Todos los servicios responden con normalidad.", "All services are responding normally.")
+    : healthStatus === "offline"
+      ? tx("Este dispositivo no tiene conexión.", "This device is offline.")
+      : healthStatus === "major_outage"
+        ? tx("Detectamos una interrupción amplia y ya estamos recibiendo diagnósticos.", "We detected a widespread outage and are receiving diagnostics.")
+        : tx("Detectamos fallos recientes y FINVA está operando de forma limitada.", "We detected recent failures and FINVA is operating with limitations.");
 
   return <section className="mobile-page feedback-page support-conversation-page">
     <div className="mobile-page-heading"><p className="eyebrow">{tx("Soporte FINVA", "FINVA support")}</p><h1>{tx("¿En qué te ayudamos?", "How can we help?")}</h1><span>{tx("Conversá con el asistente o revisá el estado de tus reportes.", "Chat with the assistant or review your reports.")}</span></div>
+    <section className={`mobile-panel support-health support-health--${healthStatus}`}><span><Activity size={22}/></span><div><small>{tx("Estado de FINVA", "FINVA status")}</small><strong>{healthStatus === "operational" ? tx("Operando normalmente", "Operational") : healthStatus === "offline" ? tx("Sin conexión", "Offline") : healthStatus === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : healthStatus === "checking" ? tx("Comprobando…", "Checking…") : tx("Servicio degradado", "Degraded service")}</strong><p>{healthCopy}</p></div><button type="button" disabled={healthBusy} onClick={loadHealth} aria-label={tx("Actualizar estado", "Refresh status")}><RefreshCw size={18}/></button></section>
     <button type="button" className="mobile-panel support-chat-launch" onClick={openChat}><span><MessageCircle size={22}/></span><div><strong>{tx("Nueva conversación", "New conversation")}</strong><small>{tx("Reportar un problema o proponer una mejora", "Report a problem or suggest an improvement")}</small></div></button>
     {notice && <p className="success-banner">{notice}</p>}{error && !chatOpen && <p className="onboarding-error">{error}</p>}
 

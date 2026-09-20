@@ -3,7 +3,7 @@ from fastapi.responses import Response
 
 from backend.auth.current_user import require_roles
 from backend.product_ops.models import AutomaticIncidentCreate, FeedbackCreate, FeedbackResolutionUpdate, FeedbackUpdate, ProductEvent, StoreLifecycleSimulation, TestPaymentUpdate
-from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_automatic_incident, create_feedback, get_receipt, list_feedback, owner_dashboard, record_event, resend_feedback_email, resolve_test_order, submit_receipt, update_feedback, update_user_feedback_resolution
+from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_automatic_incident, create_feedback, get_receipt, list_feedback, owner_dashboard, platform_health, record_event, resend_feedback_email, resolve_test_order, submit_receipt, update_feedback, update_user_feedback_resolution
 from backend.product_ops.store_billing import entitlement_state, restore_owner_access, simulate_lifecycle, store_catalog
 
 router = APIRouter(prefix="/product-ops", tags=["Product Operations"])
@@ -37,6 +37,9 @@ def event(payload: ProductEvent): return record_event(**payload.model_dump())
 
 @router.get("/feedback")
 def feedback_list(): return list_feedback()
+
+@router.get("/health")
+def health(): return platform_health()
 
 @router.post("/billing/orders/{order_id}/receipt")
 async def receipt_submit(order_id: int, receipt: UploadFile = File(...)):

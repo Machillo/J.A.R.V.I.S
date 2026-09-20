@@ -6,7 +6,7 @@ import NativeProductShell from "../ui/native/NativeProductShell";
 import { detectNativePlatform } from "../ui/native/platform";
 import { createFinvaFeatureRegistry } from "../products/finva/features/registry";
 import FinvaNavigation from "../products/finva/navigation/FinvaNavigation";
-import { trackProductEvent } from "./services/jarvisApi";
+import { getPlatformHealth, trackProductEvent } from "./services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { trackScreen } from "../lib/telemetry";
 import { tx } from "../lib/locale";
@@ -22,6 +22,8 @@ export default function UsersApp({ user, onUserChange }) {
   const [page, setPage] = useState(() => window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview");
   const [accessNotice, setAccessNotice] = useState(user?.subscription?.access_notice || null);
   const [apiIssue, setApiIssue] = useState(null);
+  const [localHealth, setLocalHealth] = useState(() => navigator.onLine ? "operational" : "offline");
+  const [platformHealth, setPlatformHealth] = useState("operational");
   const plan = user?.subscription?.plan || "free";
   const platform = detectNativePlatform();
 
@@ -36,12 +38,29 @@ export default function UsersApp({ user, onUserChange }) {
 
   useEffect(() => {
     const open = () => setPage("feedback");
-    const failed = (event) => setApiIssue(event.detail || {});
+    const failed = (event) => { setApiIssue(event.detail || {}); setLocalHealth(navigator.onLine ? "degraded" : "offline"); };
     const reported = (event) => setApiIssue((current) => current ? { ...current, reported: true, publicId: event.detail?.public_id } : current);
+    const recovered = () => { if (navigator.onLine) setLocalHealth("operational"); };
+    const offline = () => setLocalHealth("offline");
+    const online = () => {
+      setLocalHealth("recovering");
+      getPlatformHealth().then((health) => { setPlatformHealth(health.status || "operational"); setLocalHealth("operational"); }).catch(() => setLocalHealth("degraded"));
+    };
     window.addEventListener("finva:open-support", open);
     window.addEventListener("finva:api-error", failed);
     window.addEventListener("finva:incident-reported", reported);
-    return () => { window.removeEventListener("finva:open-support", open); window.removeEventListener("finva:api-error", failed); window.removeEventListener("finva:incident-reported", reported); };
+    window.addEventListener("finva:api-recovered", recovered);
+    window.addEventListener("offline", offline);
+    window.addEventListener("online", online);
+    getPlatformHealth().then((health) => setPlatformHealth(health.status || "operational")).catch(() => setLocalHealth(navigator.onLine ? "degraded" : "offline"));
+    return () => {
+      window.removeEventListener("finva:open-support", open);
+      window.removeEventListener("finva:api-error", failed);
+      window.removeEventListener("finva:incident-reported", reported);
+      window.removeEventListener("finva:api-recovered", recovered);
+      window.removeEventListener("offline", offline);
+      window.removeEventListener("online", online);
+    };
   }, []);
 
   useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);
@@ -63,6 +82,7 @@ export default function UsersApp({ user, onUserChange }) {
     settings: tx("Ajustes", "Settings"), feedback: tx("Ayuda", "Help"),
   };
   const customHeader = plan === "free" || plan === "basic";
+  const healthMode = localHealth === "operational" ? platformHealth : localHealth;
 
   return (
     <NativeProductShell product="finva" platform={platform} plan={plan} className="users-app">
@@ -78,6 +98,7 @@ export default function UsersApp({ user, onUserChange }) {
         />
         <main className="content mobile-content native-scroll-content">
           {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>{tx("Entendido", "Got it")}</button></aside>}
+          {healthMode !== "operational" && <aside className={`finva-health-mode finva-health-mode--${healthMode}`} role="status"><div><strong>{healthMode === "offline" ? tx("Sin conexión", "Offline") : healthMode === "recovering" ? tx("Reconectando…", "Reconnecting…") : healthMode === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : tx("Modo degradado", "Degraded mode")}</strong><span>{healthMode === "offline" ? tx("Podés consultar lo que ya está cargado. Esperá a reconectar antes de guardar cambios.", "You can view what is already loaded. Reconnect before saving changes.") : tx("Algunas funciones pueden tardar. FINVA está intentando recuperarse y ya conserva el diagnóstico.", "Some features may be slow. FINVA is recovering and has preserved the diagnostic context.")}</span></div><button type="button" onClick={() => setPage("feedback")}>{tx("Ver estado", "View status")}</button></aside>}
           {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>{apiIssue.reported ? tx("FINVA ya avisó a soporte", "FINVA already notified support") : tx("Algo no cargó", "Something didn’t load")}</strong><span>{apiIssue.reported ? `${tx("Referencia", "Reference")}: ${apiIssue.publicId}` : tx("Intentamos recuperarlo automáticamente. Si continúa, guardaremos el diagnóstico.", "We tried to recover automatically. If it continues, we'll save the diagnosis.")}</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>{tx("Abrir chat", "Open chat")}</button><button className="finva-api-help-close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={() => setApiIssue(null)}>×</button></aside>}
           <AppErrorBoundary resetKey={page} screen={page}>{pages[page] || pages.overview}</AppErrorBoundary>
         </main>

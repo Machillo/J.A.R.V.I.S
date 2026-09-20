@@ -461,6 +461,68 @@ def test_automatic_incident_fingerprint_excludes_user_content():
     ) == "/goals/:id"
 
 
+def test_phase_0b_groups_a_screen_failure_burst_into_one_incident():
+    first = SimpleNamespace(
+        method="POST", path="/user-product/finance/debts", status=0,
+        error_type="network_error", app_version="1.9.6", platform="android", screen="debts",
+    )
+    second = SimpleNamespace(
+        method="GET", path="/user-product/finance/debts", status=0,
+        error_type="network_error", app_version="1.9.6", platform="android", screen="debts",
+    )
+    third = SimpleNamespace(
+        method="POST", path="/product-ops/events", status=0,
+        error_type="network_error", app_version="1.9.6", platform="android", screen="debts",
+    )
+
+    assert product_ops_service._incident_fingerprint(first) == product_ops_service._incident_fingerprint(second)
+    assert product_ops_service._incident_fingerprint(first) == product_ops_service._incident_fingerprint(third)
+
+
+@pytest.mark.parametrize(
+    ("affected", "critical", "expected"),
+    [(0, 0, "operational"), (2, 1, "degraded"), (3, 3, "major_outage")],
+)
+def test_phase_0b_health_status_uses_distinct_accounts(monkeypatch, affected, critical, expected):
+    class Result:
+        def fetchone(self):
+            return {
+                "active_incidents": affected,
+                "occurrences": affected * 3,
+                "affected_accounts": affected,
+                "critical_accounts": critical,
+                "last_incident_at": None,
+            }
+
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def execute(self, _query, _params=()): return Result()
+        def commit(self): pass
+
+    monkeypatch.setattr(product_ops_service, "get_connection", lambda: Connection())
+    monkeypatch.setattr(product_ops_service, "ensure_schema", lambda _conn: None)
+
+    health = product_ops_service.platform_health()
+    assert health["status"] == expected
+    assert health["affected_accounts"] == affected
+    assert "email" not in health
+    assert "account_id" not in health
+
+
+def test_phase_0b_migration_preserves_private_health_contract():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260920070000_phase_0b_health_center.sql"
+    ).read_text(encoding="utf-8")
+    assert "affected_operations TEXT[]" in migration
+    assert "idx_feedback_health_window" in migration
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "REVOKE ALL PRIVILEGES" in migration
+
+
 def test_self_deletion_migration_cascades_owned_data():
     migration = (
         Path(__file__).parents[1]
