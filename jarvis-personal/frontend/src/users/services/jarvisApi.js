@@ -14,6 +14,9 @@ async function request(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw apiError(response, payload, path, method, true);
   if (path !== "/product-ops/incidents") flushIncidentQueue();
+  if (!["/product-ops/incidents", "/product-ops/events", "/product-ops/health"].includes(path)) {
+    window.dispatchEvent(new CustomEvent("finva:api-recovered"));
+  }
   return payload;
 }
 
@@ -41,6 +44,7 @@ export const trackProductEvent = (payload) => json("/product-ops/events", "POST"
 export const getFeedback = () => request("/product-ops/feedback");
 export const createFeedback = (payload) => json("/product-ops/feedback", "POST", payload);
 export const updateFeedbackResolution = (id, resolution) => json(`/product-ops/feedback/${id}/resolution`, "PATCH", { resolution });
+export const getPlatformHealth = () => request("/product-ops/health");
 
 export const getFinancialSituation = () => request("/user-product/financial-situation");
 export const updateFinancialSituation = (payload) => json("/user-product/financial-situation", "PUT", payload);

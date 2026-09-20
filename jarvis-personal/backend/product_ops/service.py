@@ -181,11 +181,12 @@ def _sanitize_diagnostic_label(value: str | None) -> str | None:
 
 
 def _incident_fingerprint(payload) -> str:
+    safe_screen = _sanitize_diagnostic_label(getattr(payload, "screen", None))
+    status_family = "network" if not payload.status else "server" if payload.status >= 500 else "client"
     source = "|".join([
-        str(payload.method or "GET").upper(),
-        _sanitize_incident_path(payload.path),
-        str(payload.status or 0),
-        str(payload.error_type or "api_error")[:80],
+        safe_screen or _sanitize_incident_path(payload.path),
+        status_family,
+        str(getattr(payload, "platform", None) or "unknown")[:30],
         str(payload.app_version or "unknown")[:30],
     ])
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
@@ -366,6 +367,7 @@ def ensure_schema(conn):
       source TEXT NOT NULL DEFAULT 'user', severity TEXT NOT NULL DEFAULT 'info', fingerprint TEXT,
       request_id TEXT, error_reference TEXT, screen TEXT, platform TEXT, retry_count INTEGER NOT NULL DEFAULT 0,
       occurrence_count INTEGER NOT NULL DEFAULT 1, last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      affected_operations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
       user_resolution TEXT, user_resolution_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ)""")
     for ddl in [
@@ -379,6 +381,7 @@ def ensure_schema(conn):
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS retry_count INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS occurrence_count INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+        "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS affected_operations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS user_resolution TEXT",
         "ALTER TABLE feedback_reports ADD COLUMN IF NOT EXISTS user_resolution_at TIMESTAMPTZ",
     ]:
@@ -551,6 +554,7 @@ def create_automatic_incident(payload):
     safe_screen = _sanitize_diagnostic_label(payload.screen)
     fingerprint = _incident_fingerprint(payload)
     severity = _incident_severity(safe_path, payload.method, payload.status)
+    operation = f"{payload.method.upper()} {safe_path}"[:180]
     with get_connection() as conn:
         ensure_schema(conn)
         identity = conn.execute(
@@ -568,22 +572,26 @@ def create_automatic_incident(payload):
         existing = conn.execute(
             """SELECT id,status,occurrence_count FROM feedback_reports
                WHERE account_id=%s AND fingerprint=%s AND source='automatic'
-                 AND status IN ('new','reviewing') AND last_seen_at >= NOW()-INTERVAL '15 minutes'
+                 AND status IN ('new','reviewing') AND last_seen_at >= NOW()-INTERVAL '5 minutes'
                ORDER BY last_seen_at DESC LIMIT 1 FOR UPDATE""",
             (user["account_id"], fingerprint),
         ).fetchone()
         if existing:
             row = conn.execute(
                 """UPDATE feedback_reports SET occurrence_count=occurrence_count+1,last_seen_at=NOW(),
-                     updated_at=NOW(),request_id=%s,error_reference=%s,retry_count=GREATEST(retry_count,%s)
-                   WHERE id=%s RETURNING id,category,subject,status,created_at,occurrence_count""",
-                (payload.request_id, payload.error_reference, payload.retry_count, existing["id"]),
+                     updated_at=NOW(),request_id=%s,error_reference=%s,retry_count=GREATEST(retry_count,%s),
+                     severity=CASE WHEN %s='critical' THEN 'critical' ELSE severity END,
+                     affected_operations=CASE WHEN %s=ANY(affected_operations) THEN affected_operations
+                       ELSE array_append(affected_operations,%s) END
+                   WHERE id=%s RETURNING id,category,subject,status,severity,created_at,occurrence_count,affected_operations""",
+                (payload.request_id, payload.error_reference, payload.retry_count, severity,
+                 operation, operation, existing["id"]),
             ).fetchone()
             conn.commit()
             return {**row, "public_id": f"FINVA-{int(row['id']):06d}", "deduplicated": True,
                     "email_sent": False, "discord_sent": False}
 
-        subject = f"Fallo automático · {payload.method.upper()} {safe_path}"[:140]
+        subject = f"Fallo automático · {safe_screen or safe_path}"[:140]
         message = "\n".join([
             "FINVA detectó este incidente automáticamente.",
             f"Operación: {payload.method.upper()} {safe_path}",
@@ -596,12 +604,12 @@ def create_automatic_incident(payload):
         row = conn.execute(
             """INSERT INTO feedback_reports(
                  account_id,workspace_id,category,subject,message,plan_code,app_version,source,severity,
-                 fingerprint,request_id,error_reference,screen,platform,retry_count
-               ) VALUES(%s,%s,'error',%s,%s,%s,%s,'automatic',%s,%s,%s,%s,%s,%s,%s)
-               RETURNING id,category,subject,status,created_at,occurrence_count""",
+                 fingerprint,request_id,error_reference,screen,platform,retry_count,affected_operations
+               ) VALUES(%s,%s,'error',%s,%s,%s,%s,'automatic',%s,%s,%s,%s,%s,%s,%s,%s)
+               RETURNING id,category,subject,status,severity,created_at,occurrence_count,affected_operations""",
             (user["account_id"], user.get("workspace_id"), subject, message, identity.get("plan_code"),
              payload.app_version, severity, fingerprint, payload.request_id, payload.error_reference,
-             safe_screen, payload.platform, payload.retry_count),
+             safe_screen, payload.platform, payload.retry_count, [operation]),
         ).fetchone()
         conn.commit()
 
@@ -629,10 +637,39 @@ def list_feedback():
     with get_connection() as conn:
         ensure_schema(conn)
         rows = conn.execute("""SELECT id,category,subject,message,status,owner_notes,source,severity,
-          occurrence_count,last_seen_at,user_resolution,user_resolution_at,created_at,updated_at
+          occurrence_count,last_seen_at,affected_operations,user_resolution,user_resolution_at,created_at,updated_at
           FROM feedback_reports WHERE account_id=%s ORDER BY created_at DESC LIMIT 30""", (account_id,)).fetchall()
         conn.commit()
     return [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in rows]
+
+
+def platform_health():
+    """Return privacy-safe operational health derived from recent automatic incidents."""
+    with get_connection() as conn:
+        ensure_schema(conn)
+        row = conn.execute(
+            """SELECT COUNT(*) AS active_incidents,
+                      COALESCE(SUM(occurrence_count),0) AS occurrences,
+                      COUNT(DISTINCT account_id) AS affected_accounts,
+                      COUNT(DISTINCT account_id) FILTER (WHERE severity='critical') AS critical_accounts,
+                      MAX(last_seen_at) AS last_incident_at
+               FROM feedback_reports
+               WHERE source='automatic' AND status IN ('new','reviewing')
+                 AND COALESCE(user_resolution,'still_happening') <> 'resolved'
+                 AND last_seen_at >= NOW()-INTERVAL '15 minutes'"""
+        ).fetchone() or {}
+        conn.commit()
+    affected = int(row.get("affected_accounts") or 0)
+    critical = int(row.get("critical_accounts") or 0)
+    status = "major_outage" if critical >= 3 else "degraded" if affected >= 2 else "operational"
+    return {
+        "status": status,
+        "active_incidents": int(row.get("active_incidents") or 0),
+        "occurrences": int(row.get("occurrences") or 0),
+        "affected_accounts": affected,
+        "last_incident_at": row.get("last_incident_at"),
+        "checked_at": datetime.now(timezone.utc),
+    }
 
 
 def update_user_feedback_resolution(ticket_id: int, resolution: str):
@@ -735,7 +772,7 @@ def owner_dashboard():
         events = conn.execute("""SELECT event_name,COUNT(*) AS uses,COUNT(DISTINCT account_id) AS users
           FROM product_events WHERE created_at>=NOW()-INTERVAL '30 days' GROUP BY event_name ORDER BY uses DESC LIMIT 20""").fetchall()
         tickets = conn.execute("""SELECT f.id,f.category,f.subject,f.message,f.status,f.owner_notes,
-          f.source,f.severity,f.occurrence_count,f.last_seen_at,f.user_resolution,f.user_resolution_at,
+          f.source,f.severity,f.occurrence_count,f.last_seen_at,f.affected_operations,f.user_resolution,f.user_resolution_at,
           f.created_at,a.primary_email AS email
           FROM feedback_reports f JOIN accounts a ON a.id=f.account_id ORDER BY CASE f.status WHEN 'new' THEN 1 WHEN 'reviewing' THEN 2 ELSE 3 END,f.created_at DESC LIMIT 100""").fetchall()
         conn.commit()

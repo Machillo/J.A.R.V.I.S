@@ -10,6 +10,7 @@
     "test:locale": "node scripts/test-locale.mjs",
     "test:navigation": "node scripts/test-finva-settings-navigation.mjs",
     "test:phase0a": "node scripts/test-phase-0a.mjs",
+    "test:phase0b": "node scripts/test-phase-0b.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
