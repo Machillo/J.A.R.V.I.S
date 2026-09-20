@@ -27,6 +27,25 @@ MAX_RECEIPT_BYTES = 5 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 
+def support_email_configuration() -> dict[str, object]:
+    """Return non-secret SMTP readiness details for the owner dashboard."""
+    username = os.getenv("SUPPORT_SMTP_USER", "").strip()
+    password = re.sub(r"\s+", "", os.getenv("SUPPORT_SMTP_APP_PASSWORD", ""))
+    recipient = os.getenv("SUPPORT_EMAIL_TO", "soporte.finva@gmail.com").strip()
+    missing = [name for name, value in (
+        ("SUPPORT_SMTP_USER", username),
+        ("SUPPORT_SMTP_APP_PASSWORD", password),
+        ("SUPPORT_EMAIL_TO", recipient),
+    ) if not value]
+    return {
+        "configured": not missing,
+        "missing": missing,
+        "recipient": recipient or None,
+        "host": os.getenv("SUPPORT_SMTP_HOST", "smtp.gmail.com").strip(),
+        "port": int(os.getenv("SUPPORT_SMTP_PORT", "465")),
+    }
+
+
 def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bool:
     """Best-effort support notification. The database ticket remains canonical."""
     host = os.getenv("SUPPORT_SMTP_HOST", "smtp.gmail.com").strip()
@@ -38,7 +57,8 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
     recipient = os.getenv("SUPPORT_EMAIL_TO", "soporte.finva@gmail.com").strip()
     sender = os.getenv("SUPPORT_SMTP_FROM", username).strip() or username
     if not username or not password or not recipient:
-        logger.warning("Support email not sent for %s: SMTP credentials are not configured", public_id)
+        missing = support_email_configuration()["missing"]
+        logger.warning("Support email not sent for %s: missing %s", public_id, ", ".join(missing))
         return False
 
     message = EmailMessage()
@@ -474,6 +494,7 @@ def owner_dashboard():
           FROM feedback_reports f JOIN accounts a ON a.id=f.account_id ORDER BY CASE f.status WHEN 'new' THEN 1 WHEN 'reviewing' THEN 2 ELSE 3 END,f.created_at DESC LIMIT 100""").fetchall()
         conn.commit()
     return {"promotion": {**launch_promotion_status(), "plans": promotional},
+            "support_email": support_email_configuration(),
             "pending_orders": pending, "feature_usage_30d": events,
             "tickets": [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in tickets]}
 

@@ -227,10 +227,10 @@ def delete_current_account() -> dict[str, str]:
     current = get_current_user()
     account_id = str(current.get("account_id") or "")
     auth_user_id = str(current.get("supabase_user_id") or "")
-    legacy_user_id = int(current.get("id") or 0)
+    allowed_user_id = int(current.get("id") or 0)
     email = _normalize_email(str(current.get("email") or ""))
 
-    if not account_id or not auth_user_id or not legacy_user_id:
+    if not account_id or not auth_user_id or not allowed_user_id:
         raise HTTPException(status_code=401, detail="No pudimos identificar tu cuenta.")
     if not SUPABASE_URL or not SUPABASE_ADMIN_KEY:
         raise HTTPException(
@@ -238,39 +238,37 @@ def delete_current_account() -> dict[str, str]:
             detail="La eliminación de cuenta no está configurada todavía. Contactá a soporte.",
         )
 
-    with get_connection() as conn:
-        incompatible = conn.execute(
-            """
-            SELECT COUNT(*) AS total
-            FROM pg_constraint c
-            JOIN pg_class child ON child.oid=c.conrelid
-            JOIN pg_namespace ns ON ns.oid=child.relnamespace
-            WHERE c.contype='f'
-              AND ns.nspname='public'
-              AND c.confrelid IN (
-                    'public.accounts'::regclass,
-                    'public.workspaces'::regclass,
-                    'public.users'::regclass
-              )
-              AND c.confdeltype NOT IN ('c','n')
-            """
-        ).fetchone()
-        if int((incompatible or {}).get("total") or 0) > 0:
-            raise HTTPException(
-                status_code=503,
-                detail="La eliminación de cuenta requiere una actualización pendiente. Contactá a soporte.",
-            )
-
     try:
         with get_connection() as conn:
-            conn.execute("DELETE FROM accounts WHERE id=%s", (account_id,))
+            # Validate the request identity against the account row. Do not scan
+            # every FK in the schema: a RESTRICT constraint belonging to another
+            # account used to disable deletion globally for Free, Basic and VIP.
+            identity = conn.execute(
+                """SELECT legacy_allowed_user_id, supabase_user_id, primary_email
+                   FROM accounts WHERE id=%s FOR UPDATE""",
+                (account_id,),
+            ).fetchone()
+            if not identity:
+                raise HTTPException(status_code=404, detail="La cuenta ya no existe.")
+            if str(identity.get("supabase_user_id") or "") != auth_user_id:
+                raise HTTPException(status_code=409, detail="La identidad de la cuenta no coincide. Volvé a iniciar sesión.")
+
+            canonical_allowed_user_id = int(identity.get("legacy_allowed_user_id") or allowed_user_id)
+            canonical_email = _normalize_email(str(identity.get("primary_email") or email))
+
+            deleted = conn.execute(
+                "DELETE FROM accounts WHERE id=%s RETURNING id",
+                (account_id,),
+            ).fetchone()
+            if not deleted:
+                raise HTTPException(status_code=404, detail="La cuenta ya no existe.")
             # Some historical finance rows use users.id. The workspace cascade
             # removes their data; this removes the remaining legacy identity.
             conn.execute(
                 "DELETE FROM users WHERE allowed_user_id=%s OR lower(email)=lower(%s)",
-                (legacy_user_id, email),
+                (canonical_allowed_user_id, canonical_email),
             )
-            conn.execute("DELETE FROM allowed_users WHERE id=%s", (legacy_user_id,))
+            conn.execute("DELETE FROM allowed_users WHERE id=%s", (canonical_allowed_user_id,))
 
             response = requests.delete(
                 f"{SUPABASE_URL.rstrip('/')}/auth/v1/admin/users/{auth_user_id}",

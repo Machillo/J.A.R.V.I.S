@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from pathlib import Path
 from types import SimpleNamespace
+import pytest
 
 from backend import main
 from backend.auth import legal
@@ -214,6 +215,61 @@ def test_supabase_admin_headers_keep_legacy_service_role_authorization():
     headers = auth_service._supabase_admin_headers("legacy.service.role")
     assert headers["apikey"] == "legacy.service.role"
     assert headers["Authorization"] == "Bearer legacy.service.role"
+
+
+@pytest.mark.parametrize("plan", ["free", "basic", "vip"])
+def test_self_deletion_uses_same_account_owned_flow_for_every_plan(monkeypatch, plan):
+    queries = []
+
+    class Result:
+        def __init__(self, row=None): self.row = row
+        def fetchone(self): return self.row
+
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def commit(self): queries.append("COMMIT")
+        def execute(self, query, params=()):
+            normalized = " ".join(query.split())
+            queries.append((normalized, params))
+            if normalized.startswith("SELECT legacy_allowed_user_id"):
+                return Result({
+                    "legacy_allowed_user_id": 42,
+                    "supabase_user_id": "22222222-2222-2222-2222-222222222222",
+                    "primary_email": "person@example.com",
+                })
+            if normalized.startswith("DELETE FROM accounts"):
+                return Result({"id": "11111111-1111-1111-1111-111111111111"})
+            return Result()
+
+    monkeypatch.setattr(auth_service, "get_connection", lambda: Connection())
+    monkeypatch.setattr(auth_service, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", "sb_secret_example")
+    monkeypatch.setattr(auth_service.requests, "delete", lambda *_args, **_kwargs: SimpleNamespace(status_code=204))
+    token = set_current_user({
+        "id": 42, "account_id": "11111111-1111-1111-1111-111111111111",
+        "supabase_user_id": "22222222-2222-2222-2222-222222222222",
+        "email": "person@example.com", "plan": plan,
+    })
+    try:
+        assert auth_service.delete_current_account()["status"] == "OK"
+    finally:
+        reset_current_user(token)
+
+    sql = [entry[0] for entry in queries if isinstance(entry, tuple)]
+    assert not any("pg_constraint" in query for query in sql)
+    assert any(query.startswith("DELETE FROM accounts") for query in sql)
+    assert any(query.startswith("DELETE FROM users") for query in sql)
+    assert any(query.startswith("DELETE FROM allowed_users") for query in sql)
+
+
+def test_support_email_configuration_reports_missing_secret_without_exposing_it(monkeypatch):
+    monkeypatch.setenv("SUPPORT_SMTP_USER", "soporte.finva@gmail.com")
+    monkeypatch.delenv("SUPPORT_SMTP_APP_PASSWORD", raising=False)
+    status = product_ops_service.support_email_configuration()
+    assert status["configured"] is False
+    assert status["missing"] == ["SUPPORT_SMTP_APP_PASSWORD"]
+    assert "password" not in status
 
 
 def test_support_email_normalizes_google_app_password(monkeypatch):
