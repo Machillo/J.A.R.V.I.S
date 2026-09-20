@@ -13,7 +13,7 @@ from backend.goals.routes import router as goals_router
 from backend.decision_engine.routes import router as decision_router
 from backend.reports.routes import router as reports_router
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from backend.transactions.routes import router as transactions_router
 from backend.importers.routes import router as importers_router
 from backend.advisor.routes import router as advisor_router
@@ -32,6 +32,14 @@ from backend.user_product.routes import router as user_product_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.routes import router as product_ops_router
+from backend.core.idempotency import (
+    IDEMPOTENCY_KEY_PATTERN,
+    complete_operation,
+    is_recoverable_operation,
+    request_hash,
+    reserve_operation,
+    safe_abandon_operation,
+)
 
 app = FastAPI(title="Jarvis Core")
 logger = logging.getLogger("jarvis.api")
@@ -158,13 +166,97 @@ async def auth_middleware(request: Request, call_next):
 
     request.state.user = user
     context_token = set_current_user(user)
+    idempotency_key = request.headers.get("X-Idempotency-Key", "").strip()
+    idempotency_account = str(user.get("account_id") or "")
+    idempotency_reserved = False
+
+    if idempotency_key and is_recoverable_operation(request.method, request.url.path):
+        if not IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key) or not idempotency_account:
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=422,
+                content={"detail": "La referencia de recuperación no es válida."},
+                headers={**cors_headers, "X-Request-ID": request_id},
+            )
+        body = await request.body()
+        try:
+            reservation = reserve_operation(
+                account_id=idempotency_account,
+                key=idempotency_key,
+                method=request.method,
+                path=request.url.path,
+                digest=request_hash(request.method, request.url.path, body),
+            )
+        except Exception:
+            logger.exception("Idempotency reservation failed id=%s path=%s", request_id, request.url.path)
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "No pudimos proteger este cambio todavía. FINVA lo reintentará."},
+                headers={**cors_headers, "X-Request-ID": request_id, "Retry-After": "2"},
+            )
+        if reservation.state == "replay":
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=reservation.response_status or 200,
+                content=reservation.response_body,
+                headers={
+                    **cors_headers,
+                    "X-Request-ID": request_id,
+                    "X-Idempotency-Replayed": "true",
+                },
+            )
+        if reservation.state in {"processing", "unavailable"}:
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=409,
+                content={"detail": "Este cambio todavía se está procesando."},
+                headers={
+                    **cors_headers,
+                    "X-Request-ID": request_id,
+                    "X-Idempotency-Status": "processing",
+                    "Retry-After": "2",
+                },
+            )
+        if reservation.state == "conflict":
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=409,
+                content={"detail": "La referencia de recuperación ya pertenece a otro cambio."},
+                headers={**cors_headers, "X-Request-ID": request_id},
+            )
+        idempotency_reserved = True
 
     try:
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
+        if idempotency_reserved:
+            if 200 <= response.status_code < 300 and "application/json" in response.headers.get("content-type", ""):
+                response_body = b"".join([chunk async for chunk in response.body_iterator])
+                try:
+                    complete_operation(
+                        account_id=idempotency_account,
+                        key=idempotency_key,
+                        status_code=response.status_code,
+                        body=response_body,
+                    )
+                except Exception:
+                    logger.exception("Idempotency completion failed id=%s path=%s", request_id, request.url.path)
+                    safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
+                response_headers = dict(response.headers)
+                response_headers.pop("content-length", None)
+                response = Response(
+                    content=response_body,
+                    status_code=response.status_code,
+                    headers=response_headers,
+                )
+            else:
+                safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
         return response
 
     except Exception:
+        if idempotency_reserved:
+            safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
         error_id = request_id
         logger.exception("Unhandled API error id=%s path=%s", error_id, request.url.path)
         return JSONResponse(

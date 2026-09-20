@@ -62,7 +62,10 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
 }
 
 export function apiNetworkError(cause, path, method = "GET") {
-  const error = new FinvaApiError(GENERIC_MESSAGE, {
+  const queued = Boolean(cause?.finvaOperationQueued);
+  const error = new FinvaApiError(queued
+    ? "Guardamos este cambio en el dispositivo. FINVA lo enviará cuando vuelva la conexión."
+    : GENERIC_MESSAGE, {
     status: 0,
     errorId: cause?.finvaRequestId || "",
     requestId: cause?.finvaRequestId || "",
@@ -71,6 +74,7 @@ export function apiNetworkError(cause, path, method = "GET") {
     method,
     technicalMessage: cause?.name || "NetworkError",
   });
+  error.operationQueued = queued;
   const incident = {
     screen: path, errorReference: error.errorId, requestId: error.requestId,
     retryCount: error.retryCount, status: 0, path, method,
