@@ -15,7 +15,8 @@ export default function AccountActions({ onLogout, variant = "free" }) {
       await deleteMyAccount();
       await onLogout?.();
     } catch (requestError) {
-      setError(requestError?.message || tx("No pudimos eliminar tu cuenta. Intentá nuevamente.", "We couldn't delete your account. Please try again."));
+      const reference = requestError?.errorId ? ` (${tx("referencia", "reference")}: ${requestError.errorId})` : "";
+      setError(`${requestError?.message || tx("No pudimos eliminar tu cuenta. Intentá nuevamente.", "We couldn't delete your account. Please try again.")}${reference}`);
       setDeleting(false);
     }
   };
