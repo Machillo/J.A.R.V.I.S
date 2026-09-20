@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend import main
+from backend.core import idempotency
 from backend.auth import legal
 from backend.auth import service as auth_service
 from backend.auth.current_user import reset_current_user, set_current_user
@@ -44,6 +45,36 @@ def test_internal_error_payload_never_exposes_exception_details():
     assert "error" not in payload
     assert "error_type" not in payload
     assert "path" not in payload
+
+
+def test_phase_0d_only_recovers_safe_product_writes():
+    assert idempotency.is_recoverable_operation("POST", "/user-product/finance/income") is True
+    assert idempotency.is_recoverable_operation("PATCH", "/user-product/goals/42/contributions") is True
+    assert idempotency.is_recoverable_operation("PUT", "/user-product/basic/budget") is True
+    assert idempotency.is_recoverable_operation("DELETE", "/user-product/finance/income/42") is False
+    assert idempotency.is_recoverable_operation("POST", "/auth/plan") is False
+    assert idempotency.is_recoverable_operation("POST", "/product-ops/billing/orders/42/receipt") is False
+
+
+def test_phase_0d_idempotency_hash_binds_method_path_and_body():
+    first = idempotency.request_hash("POST", "/user-product/finance/income", b'{"amount":100}')
+    assert first == idempotency.request_hash("POST", "/user-product/finance/income", b'{"amount":100}')
+    assert first != idempotency.request_hash("POST", "/user-product/finance/income", b'{"amount":200}')
+    assert first != idempotency.request_hash("POST", "/user-product/finance/expenses", b'{"amount":100}')
+
+
+def test_phase_0d_migration_is_private_and_account_scoped():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260920134005_phase_0d_operation_recovery.sql"
+    ).read_text(encoding="utf-8")
+    assert "PRIMARY KEY (account_id, idempotency_key)" in migration
+    assert "REFERENCES public.accounts(id) ON DELETE CASCADE" in migration
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "REVOKE ALL PRIVILEGES" in migration
+    assert "INTERVAL '24 hours'" in migration
 
 
 def test_notification_cron_fails_closed_without_secret(monkeypatch):

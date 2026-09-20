@@ -10,6 +10,7 @@ import { getPlatformHealth, trackProductEvent } from "./services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { trackScreen } from "../lib/telemetry";
 import { tx } from "../lib/locale";
+import { flushPendingOperations, getPendingOperationCount } from "../lib/operationRecovery";
 import "./users.css";
 import "./finva-theme.css";
 import "./finva-progressive.css";
@@ -24,6 +25,8 @@ export default function UsersApp({ user, onUserChange }) {
   const [apiIssue, setApiIssue] = useState(null);
   const [localHealth, setLocalHealth] = useState(() => navigator.onLine ? "operational" : "offline");
   const [platformHealth, setPlatformHealth] = useState("operational");
+  const [pendingOperations, setPendingOperations] = useState(0);
+  const [recoveryNotice, setRecoveryNotice] = useState("");
   const plan = user?.subscription?.plan || "free";
   const platform = detectNativePlatform();
 
@@ -41,23 +44,42 @@ export default function UsersApp({ user, onUserChange }) {
     const failed = (event) => { setApiIssue(event.detail || {}); setLocalHealth(navigator.onLine ? "degraded" : "offline"); };
     const reported = (event) => setApiIssue((current) => current ? { ...current, reported: true, publicId: event.detail?.public_id } : current);
     const recovered = () => { if (navigator.onLine) setLocalHealth("operational"); };
+    const queueChanged = (event) => setPendingOperations(Number(event.detail?.pending || 0));
+    const operationRecovered = (event) => {
+      setPendingOperations(Number(event.detail?.pending || 0));
+      setRecoveryNotice("recovered");
+      window.setTimeout(() => setRecoveryNotice(""), 5_000);
+    };
+    const operationFailed = (event) => {
+      setPendingOperations(Number(event.detail?.pending || 0));
+      setRecoveryNotice("failed");
+    };
     const offline = () => setLocalHealth("offline");
     const online = () => {
       setLocalHealth("recovering");
+      flushPendingOperations();
       getPlatformHealth().then((health) => { setPlatformHealth(health.status || "operational"); setLocalHealth("operational"); }).catch(() => setLocalHealth("degraded"));
     };
     window.addEventListener("finva:open-support", open);
     window.addEventListener("finva:api-error", failed);
     window.addEventListener("finva:incident-reported", reported);
     window.addEventListener("finva:api-recovered", recovered);
+    window.addEventListener("finva:operation-queue-changed", queueChanged);
+    window.addEventListener("finva:operation-recovered", operationRecovered);
+    window.addEventListener("finva:operation-recovery-failed", operationFailed);
     window.addEventListener("offline", offline);
     window.addEventListener("online", online);
     getPlatformHealth().then((health) => setPlatformHealth(health.status || "operational")).catch(() => setLocalHealth(navigator.onLine ? "degraded" : "offline"));
+    getPendingOperationCount().then(setPendingOperations).catch(() => {});
+    flushPendingOperations();
     return () => {
       window.removeEventListener("finva:open-support", open);
       window.removeEventListener("finva:api-error", failed);
       window.removeEventListener("finva:incident-reported", reported);
       window.removeEventListener("finva:api-recovered", recovered);
+      window.removeEventListener("finva:operation-queue-changed", queueChanged);
+      window.removeEventListener("finva:operation-recovered", operationRecovered);
+      window.removeEventListener("finva:operation-recovery-failed", operationFailed);
       window.removeEventListener("offline", offline);
       window.removeEventListener("online", online);
     };
@@ -98,7 +120,9 @@ export default function UsersApp({ user, onUserChange }) {
         />
         <main className="content mobile-content native-scroll-content">
           {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>{tx("Entendido", "Got it")}</button></aside>}
-          {healthMode !== "operational" && <aside className={`finva-health-mode finva-health-mode--${healthMode}`} role="status"><div><strong>{healthMode === "offline" ? tx("Sin conexión", "Offline") : healthMode === "recovering" ? tx("Reconectando…", "Reconnecting…") : healthMode === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : tx("Modo degradado", "Degraded mode")}</strong><span>{healthMode === "offline" ? tx("Podés consultar lo que ya está cargado. Esperá a reconectar antes de guardar cambios.", "You can view what is already loaded. Reconnect before saving changes.") : tx("Algunas funciones pueden tardar. FINVA está intentando recuperarse y ya conserva el diagnóstico.", "Some features may be slow. FINVA is recovering and has preserved the diagnostic context.")}</span></div><button type="button" onClick={() => setPage("feedback")}>{tx("Ver estado", "View status")}</button></aside>}
+          {healthMode !== "operational" && <aside className={`finva-health-mode finva-health-mode--${healthMode}`} role="status"><div><strong>{healthMode === "offline" ? tx("Sin conexión", "Offline") : healthMode === "recovering" ? tx("Reconectando…", "Reconnecting…") : healthMode === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : tx("Modo degradado", "Degraded mode")}</strong><span>{healthMode === "offline" ? tx("Podés consultar lo cargado. Los cambios compatibles quedarán guardados en este dispositivo hasta reconectar.", "You can view loaded data. Supported changes will remain on this device until reconnection.") : tx("Algunas funciones pueden tardar. FINVA está intentando recuperarse y ya conserva el diagnóstico.", "Some features may be slow. FINVA is recovering and has preserved the diagnostic context.")}</span></div><button type="button" onClick={() => setPage("feedback")}>{tx("Ver estado", "View status")}</button></aside>}
+          {pendingOperations > 0 && <aside className="finva-operation-recovery finva-operation-recovery--pending" role="status"><div><strong>{tx("Cambio protegido", "Change protected")}</strong><span>{tx(`${pendingOperations} cambio${pendingOperations === 1 ? "" : "s"} pendiente${pendingOperations === 1 ? "" : "s"}. Se enviará${pendingOperations === 1 ? "" : "n"} automáticamente.`, `${pendingOperations} pending change${pendingOperations === 1 ? "" : "s"}. FINVA will send ${pendingOperations === 1 ? "it" : "them"} automatically.`)}</span></div></aside>}
+          {recoveryNotice && pendingOperations === 0 && <aside className={`finva-operation-recovery finva-operation-recovery--${recoveryNotice}`} role="status"><div><strong>{recoveryNotice === "recovered" ? tx("Cambio recuperado", "Change recovered") : tx("Revisá el cambio pendiente", "Review the pending change")}</strong><span>{recoveryNotice === "recovered" ? tx("FINVA lo guardó una sola vez al volver la conexión.", "FINVA saved it exactly once after reconnecting.") : tx("El servidor rechazó el cambio; abrí la sección e intentá nuevamente.", "The server rejected the change; open the section and try again.")}</span></div></aside>}
           {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>{apiIssue.reported ? tx("FINVA ya avisó a soporte", "FINVA already notified support") : tx("Algo no cargó", "Something didn’t load")}</strong><span>{apiIssue.reported ? `${tx("Referencia", "Reference")}: ${apiIssue.publicId}` : tx("Intentamos recuperarlo automáticamente. Si continúa, guardaremos el diagnóstico.", "We tried to recover automatically. If it continues, we'll save the diagnosis.")}</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>{tx("Abrir chat", "Open chat")}</button><button className="finva-api-help-close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={() => setApiIssue(null)}>×</button></aside>}
           <AppErrorBoundary resetKey={page} screen={page}>{pages[page] || pages.overview}</AppErrorBoundary>
         </main>

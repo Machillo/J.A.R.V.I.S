@@ -11,6 +11,7 @@
     "test:navigation": "node scripts/test-finva-settings-navigation.mjs",
     "test:phase0a": "node scripts/test-phase-0a.mjs",
     "test:phase0b": "node scripts/test-phase-0b.mjs",
+    "test:phase0d": "node scripts/test-phase-0d.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

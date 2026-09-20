@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
+import { flushPendingOperations } from "./lib/operationRecovery";
 import Login from "./pages/Login";
 import FinvaOnboarding from "./pages/FinvaOnboarding";
 import ProfileSetup from "./pages/ProfileSetup";
@@ -141,6 +142,7 @@ export default function App() {
     CapacitorApp.addListener("appStateChange", ({ isActive }) => {
       if (isActive) {
         trackEvent("app_resumed");
+        flushPendingOperations();
         refreshProfile();
       }
     }).then((listener) => {
