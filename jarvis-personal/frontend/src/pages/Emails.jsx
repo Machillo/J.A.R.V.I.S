@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrainCircuit, MailSearch, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, BrainCircuit, Check, MailSearch, RefreshCw, ShieldCheck, X } from "lucide-react";
 import {
   classifyEmailCandidate,
   decideEmailCandidate,
@@ -7,6 +7,7 @@ import {
   getEmailMonitorStatus,
   syncEmailMonitorGmail,
 } from "../services/jarvisApi";
+import { JarvisGlassCard, JarvisScreen, JarvisStatusPill } from "../products/jarvis/components/JarvisScreen";
 
 const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString("es-CR")}`;
 const dateText = (value) => (value ? new Date(value).toLocaleDateString("es-CR") : "—");
@@ -134,49 +135,97 @@ export default function Emails({ onFinanceChanged }) {
     await load(nextFilter);
   };
 
-  return (
-    <section className="page emails-page">
-      <div className="page-section-header">
-        <div>
-          <span className="eyebrow">Gmail → Finanzas</span>
-          <h2>Correos financieros</h2>
-          <p>JARVIS procesa las reglas que ya conoce. Si aparece un SINPE nuevo, te pregunta qué es antes de guardarlo.</p>
+  const selectedCandidate = candidates.find((item) => item.id === classifying);
+
+  if (selectedCandidate) {
+    return (
+      <JarvisScreen
+        eyebrow="Email Monitor"
+        title="Revisar movimiento"
+        subtitle="Confirmá antes de enviarlo a Finanzas"
+        className="email-review-screen"
+        actions={<button type="button" className="jarvis-circle-button" onClick={() => setClassifying(null)} aria-label="Volver"><ArrowLeft size={20} /></button>}
+      >
+        <JarvisGlassCard className="email-review-source">
+          <span>{selectedCandidate.bank_name || selectedCandidate.sender || "Correo bancario"}{selectedCandidate.card_last4 ? ` · **** ${selectedCandidate.card_last4}` : ""}</span>
+          <strong>{selectedCandidate.email_subject || selectedCandidate.description || "Movimiento detectado"}</strong>
+          <small>{dateText(selectedCandidate.transaction_date)}</small>
+        </JarvisGlassCard>
+
+        <JarvisGlassCard className="email-review-amount">
+          <span>Monto detectado</span>
+          <strong>{money(selectedCandidate.amount)}</strong>
+          <JarvisStatusPill tone="success">Movimiento detectado</JarvisStatusPill>
+        </JarvisGlassCard>
+
+        <div className="email-review-fields">
+          <label className="email-review-field">
+            <span>Descripción</span>
+            <input value={classification.description} onChange={(event) => setClassification((current) => ({ ...current, description: event.target.value }))} />
+          </label>
+          <label className="email-review-field">
+            <span>Tipo</span>
+            <select value={classification.transaction_type} onChange={(event) => setClassification((current) => ({ ...current, transaction_type: event.target.value }))}>
+              <option value="expense">Gasto</option>
+              <option value="income">Ingreso</option>
+              <option value="debt_payment">Pago de deuda</option>
+            </select>
+          </label>
+          <label className="email-review-field">
+            <span>Categoría</span>
+            <input value={classification.category} onChange={(event) => setClassification((current) => ({ ...current, category: event.target.value }))} />
+          </label>
+          <div className="email-review-field is-readonly">
+            <span>Cuenta</span>
+            <strong>{selectedCandidate.account || selectedCandidate.bank_name || "Sin asociar"}{selectedCandidate.card_last4 ? ` · ${selectedCandidate.card_last4}` : ""}</strong>
+          </div>
         </div>
-        <button className="primary-action-button" type="button" onClick={handleScan} disabled={scanning || !monitor?.gmail_ready}>
-          {scanning ? <RefreshCw size={18} /> : <MailSearch size={18} />}
-          {scanning ? "Escaneando..." : "Escanear nuevos correos"}
+
+        <label className="email-review-remember">
+          <input type="checkbox" checked={classification.remember_rule} onChange={(event) => setClassification((current) => ({ ...current, remember_rule: event.target.checked }))} />
+          <span>Recordar esta clasificación para movimientos futuros.</span>
+        </label>
+
+        {message && <div className="jarvis-inline-message">{message}</div>}
+        <div className="email-review-actions">
+          <button type="button" className="jarvis-primary-button" onClick={() => handleClassification(selectedCandidate)}><Check size={17} /> Aprobar y guardar</button>
+          <button type="button" className="jarvis-danger-button" onClick={() => handleSingleDecision(selectedCandidate, "reject")}><X size={17} /> Rechazar</button>
+        </div>
+      </JarvisScreen>
+    );
+  }
+
+  return (
+    <JarvisScreen eyebrow="Email Monitor" title="Correos financieros" subtitle="Gmail → revisión → Finanzas" className="emails-page email-monitor-screen">
+      <JarvisGlassCard className="email-sync-card">
+        <div>
+          <JarvisStatusPill tone={monitor?.gmail_ready ? "success" : "warning"}>{monitor?.gmail_ready ? "● Gmail conectado" : "Gmail sin configurar"}</JarvisStatusPill>
+          <strong>Último escaneo</strong>
+          <small>{lastScan ? "Actualizado ahora" : "Listo para consultar"}</small>
+        </div>
+        <button className="jarvis-primary-button" type="button" onClick={handleScan} disabled={scanning || !monitor?.gmail_ready}>
+          {scanning ? <RefreshCw size={17} /> : <MailSearch size={17} />}
+          {scanning ? "Escaneando…" : "Escanear"}
         </button>
-      </div>
+      </JarvisGlassCard>
 
       {!monitor?.gmail_ready && (
-        <div className="alert-card">Faltan llaves Gmail: GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET y GMAIL_REFRESH_TOKEN.</div>
+        <div className="jarvis-inline-message is-warning">Email Monitor necesita la configuración de Gmail para sincronizar.</div>
       )}
 
-      {message && <div className="alert-card">{message}</div>}
+      {message && <div className="jarvis-inline-message">{message}</div>}
 
-      <div className="email-kpi-grid">
-        <article className="hud-card"><span>Pendientes</span><strong>{Number(totals?.pending || 0).toLocaleString("es-CR")}</strong></article>
-        <article className="hud-card"><span>En finanzas</span><strong>{Number((totals?.confirmed || 0) + (totals?.auto_saved || 0)).toLocaleString("es-CR")}</strong></article>
-        <article className="hud-card"><span>Duplicados</span><strong>{Number(totals?.duplicate || 0).toLocaleString("es-CR")}</strong></article>
-        <article className="hud-card"><span>Mostrando</span><strong>{candidates.length.toLocaleString("es-CR")}</strong></article>
+      <div className="email-monitor-kpis">
+        <JarvisGlassCard className="is-warning"><strong>{Number(totals?.pending || 0).toLocaleString("es-CR")}</strong><span>Pendientes</span></JarvisGlassCard>
+        <JarvisGlassCard className="is-success"><strong>{Number((totals?.confirmed || 0) + (totals?.auto_saved || 0)).toLocaleString("es-CR")}</strong><span>En finanzas</span></JarvisGlassCard>
+        <JarvisGlassCard><strong>{Number(totals?.duplicate || 0).toLocaleString("es-CR")}</strong><span>Duplicados</span></JarvisGlassCard>
       </div>
 
       {lastScan?.processed?.length > 0 && (
-        <div className="hud-panel email-scan-panel">
+        <JarvisGlassCard className="email-scan-panel">
           <h3><ShieldCheck size={18} /> Último escaneo</h3>
           <p>Gmail encontró {lastScan.found} correos. Los repetidos se omitieron por ID/fingerprint y no se crean movimientos duplicados.</p>
-          <div className="email-scan-list">
-            {lastScan.processed.slice(0, 250).map((item) => (
-              <div key={item.gmail_id}>
-                <span>{item.subject || "Sin asunto"}</span>
-                <small>
-                  {item.status} {item.candidate_status ? `· ${item.candidate_status}` : ""}
-                  {item.message ? ` · ${item.message}` : ""}
-                </small>
-              </div>
-            ))}
-          </div>
-        </div>
+        </JarvisGlassCard>
       )}
 
       <div className="email-toolbar">
@@ -187,21 +236,20 @@ export default function Emails({ onFinanceChanged }) {
             </button>
           ))}
         </div>
-        <div className="email-toolbar-actions">
-          <span className="email-learning-note"><BrainCircuit size={17} /> Los pendientes necesitan clasificación.</span>
-        </div>
       </div>
 
+      <div className="jarvis-section-heading"><h3>{filter === "pending" ? "Revisión pendiente" : statusLabel[filter]}</h3><span><BrainCircuit size={15} /> {candidates.length}</span></div>
+
       {loading ? (
-        <div className="hud-card">Cargando correos...</div>
+        <JarvisGlassCard className="jarvis-empty-state">Cargando correos…</JarvisGlassCard>
       ) : candidates.length === 0 ? (
-        <div className="hud-card">No hay movimientos para este filtro.</div>
+        <JarvisGlassCard className="jarvis-empty-state">No hay movimientos para este filtro.</JarvisGlassCard>
       ) : (
         <div className="email-candidate-list">
           {candidates.map((item) => {
             const isPending = item.status === "pending" && !item.transaction_id;
             return (
-              <article className={`email-candidate-card ${item.status}`} key={item.id}>
+              <button type="button" className={`email-candidate-card ${item.status}`} key={item.id} onClick={() => isPending && openClassification(item)}>
                 <div className="email-candidate-main">
                   <div className="email-candidate-title">
                     <strong>{item.description}</strong>
@@ -218,52 +266,18 @@ export default function Emails({ onFinanceChanged }) {
 
                 <div className="email-candidate-side">
                   <strong>{money(item.amount)}</strong>
-                  {isPending ? (
-                    <div className="email-candidate-actions">
-                      <button type="button" onClick={() => openClassification(item)}><BrainCircuit size={14} /> Clasificar</button>
-                      <button type="button" className="danger" onClick={() => handleSingleDecision(item, "reject")}><Trash2 size={14} /> Rechazar</button>
-                    </div>
-                  ) : item.transaction_id ? (
+                  {item.transaction_id ? (
                     <small>Movimiento #{item.transaction_id}</small>
                   ) : item.status === "duplicate" ? (
                     <small>Canónico #{item.canonical_transaction_id || item.duplicate_of}</small>
                   ) : null}
                 </div>
 
-                {isPending && classifying === item.id && (
-                  <div className="email-classification-panel">
-                    <strong>JARVIS pregunta: ¿qué fue este movimiento?</strong>
-                    <label>
-                      Nombre claro
-                      <input value={classification.description} onChange={(event) => setClassification((current) => ({ ...current, description: event.target.value }))} />
-                    </label>
-                    <label>
-                      Tipo
-                      <select value={classification.transaction_type} onChange={(event) => setClassification((current) => ({ ...current, transaction_type: event.target.value }))}>
-                        <option value="expense">Gasto</option>
-                        <option value="income">Ingreso</option>
-                        <option value="debt_payment">Pago de deuda</option>
-                      </select>
-                    </label>
-                    <label>
-                      Categoría
-                      <input value={classification.category} onChange={(event) => setClassification((current) => ({ ...current, category: event.target.value }))} />
-                    </label>
-                    <label className="email-remember-rule">
-                      <input type="checkbox" checked={classification.remember_rule} onChange={(event) => setClassification((current) => ({ ...current, remember_rule: event.target.checked }))} />
-                      Recordar esta combinación de cuentas, dirección y concepto para hacerla automática la próxima vez.
-                    </label>
-                    <div className="email-classification-actions">
-                      <button type="button" onClick={() => handleClassification(item)}>Guardar y aprender</button>
-                      <button type="button" className="secondary" onClick={() => setClassifying(null)}>Cancelar</button>
-                    </div>
-                  </div>
-                )}
-              </article>
+              </button>
             );
           })}
         </div>
       )}
-    </section>
+    </JarvisScreen>
   );
 }
