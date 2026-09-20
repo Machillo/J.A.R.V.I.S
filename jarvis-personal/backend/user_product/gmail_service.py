@@ -37,6 +37,29 @@ FINVA_QUERY = os.getenv(
     "OR from:bancopopular.fi.cr) newer_than:45d -in:spam -in:trash",
 )
 
+def _has_active_vip_access(conn, account_id: str) -> bool:
+    """Return whether an account may use FINVA's Gmail automation.
+
+    Interactive routes enforce the same entitlement through ``require_feature``.
+    This database-level check also protects OAuth callbacks, Pub/Sub delivery and
+    maintenance jobs, where no authenticated user context exists.
+    """
+    row = conn.execute(
+        """SELECT 1
+           FROM account_subscriptions s
+           JOIN plans p ON p.id=s.plan_id
+           WHERE s.account_id=%s
+             AND s.status='active'
+             AND p.code='vip'
+             AND (
+               s.access_source<>'courtesy'
+               OR (s.expires_at IS NOT NULL AND s.expires_at>NOW())
+             )
+           LIMIT 1""",
+        (account_id,),
+    ).fetchone()
+    return bool(row)
+
 
 def _google_config() -> tuple[str, str, str]:
     client_id = os.getenv("FINVA_GMAIL_CLIENT_ID") or os.getenv("GMAIL_CLIENT_ID")
@@ -226,6 +249,12 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     if not oauth_state:
         return RedirectResponse(_return_url("invalid_state"), status_code=302)
 
+    account_id = str(oauth_state["account_id"])
+    workspace_id = str(oauth_state["workspace_id"])
+    with get_connection() as conn:
+        if not _has_active_vip_access(conn, account_id):
+            return RedirectResponse(_return_url("vip_required"), status_code=302)
+
     client_id, client_secret, redirect_uri = _google_config()
     response = requests.post(
         "https://oauth2.googleapis.com/token",
@@ -254,13 +283,15 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     if not google_email:
         return RedirectResponse(_return_url("profile_failed"), status_code=302)
 
-    account_id = str(oauth_state["account_id"])
-    workspace_id = str(oauth_state["workspace_id"])
     try:
         legacy_user_id = _financial_user_id_for_account(account_id)
     except Exception:
         return RedirectResponse(_return_url("identity_failed"), status_code=302)
     with get_connection() as conn:
+        # Recheck after the external OAuth exchange so a concurrent downgrade
+        # cannot persist credentials for an account that is no longer VIP.
+        if not _has_active_vip_access(conn, account_id):
+            return RedirectResponse(_return_url("vip_required"), status_code=302)
         current = conn.execute(
             "SELECT refresh_token_secret_id FROM finva_gmail_connections WHERE account_id=%s FOR UPDATE",
             (account_id,),
@@ -432,6 +463,11 @@ def _connection_with_token(connection_id: int) -> tuple[dict[str, Any], str]:
         ).fetchone()
         if not row:
             raise RuntimeError("Conexión Gmail no encontrada.")
+        if not _has_active_vip_access(conn, str(row["account_id"])):
+            raise HTTPException(
+                status_code=403,
+                detail="La automatización de Gmail está disponible únicamente en el plan VIP.",
+            )
         token = _vault_read(conn, str(row["refresh_token_secret_id"]))
     return dict(row), token
 
@@ -515,7 +551,20 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
     if not secret or not secrets.compare_digest(secret, expected):
         raise HTTPException(status_code=403, detail="Secreto de mantenimiento inválido.")
     with get_connection() as conn:
-        rows = conn.execute("SELECT id FROM finva_gmail_connections WHERE status='active' ORDER BY id").fetchall()
+        rows = conn.execute(
+            """SELECT c.id
+               FROM finva_gmail_connections c
+               JOIN account_subscriptions s ON s.account_id=c.account_id
+               JOIN plans p ON p.id=s.plan_id
+               WHERE c.status='active'
+                 AND s.status='active'
+                 AND p.code='vip'
+                 AND (
+                   s.access_source<>'courtesy'
+                   OR (s.expires_at IS NOT NULL AND s.expires_at>NOW())
+                 )
+               ORDER BY c.id"""
+        ).fetchall()
     completed = 0
     reconnect = 0
     for row in rows:
@@ -550,7 +599,18 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
     email = str(notification.get("emailAddress") or "").lower()
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT id FROM finva_gmail_connections WHERE google_email=%s AND status='active'",
+            """SELECT c.id
+               FROM finva_gmail_connections c
+               JOIN account_subscriptions s ON s.account_id=c.account_id
+               JOIN plans p ON p.id=s.plan_id
+               WHERE c.google_email=%s
+                 AND c.status='active'
+                 AND s.status='active'
+                 AND p.code='vip'
+                 AND (
+                   s.access_source<>'courtesy'
+                   OR (s.expires_at IS NOT NULL AND s.expires_at>NOW())
+                 )""",
             (email,),
         ).fetchone()
     if not row:

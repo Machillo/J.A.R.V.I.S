@@ -29,6 +29,7 @@ BUILTIN_FEATURE_MIN_PLAN = {
     "recurring_items": "basic",
     "basic_reports": "basic",
     "strategy_vip": "vip",
+    "gmail_automation": "vip",
 }
 
 

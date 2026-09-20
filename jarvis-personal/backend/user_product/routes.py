@@ -229,11 +229,11 @@ def vip_aguinaldo():
 
 @router.get("/vip/gmail/status")
 def vip_gmail_status():
-    require_feature("strategy_vip"); return gmail_status()
+    require_feature("gmail_automation"); return gmail_status()
 
 @router.post("/vip/gmail/connect")
 def vip_gmail_connect():
-    require_feature("strategy_vip"); return begin_gmail_connection()
+    require_feature("gmail_automation"); return begin_gmail_connection()
 
 @router.get("/vip/gmail/callback")
 def vip_gmail_callback(code: str | None = None, state: str | None = None, error: str | None = None):
@@ -241,11 +241,11 @@ def vip_gmail_callback(code: str | None = None, state: str | None = None, error:
 
 @router.post("/vip/gmail/sync")
 def vip_gmail_sync():
-    require_feature("strategy_vip"); return sync_current_gmail()
+    require_feature("gmail_automation"); return sync_current_gmail()
 
 @router.delete("/vip/gmail")
 def vip_gmail_disconnect():
-    require_feature("strategy_vip"); return disconnect_gmail()
+    require_feature("gmail_automation"); return disconnect_gmail()
 
 @router.post("/vip/gmail/maintenance")
 def vip_gmail_maintenance(x_finva_cron_secret: str | None = Header(default=None)):
