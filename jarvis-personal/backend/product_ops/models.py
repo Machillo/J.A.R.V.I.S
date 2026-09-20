@@ -43,6 +43,10 @@ class FeedbackUpdate(BaseModel):
     owner_notes: str | None = Field(default=None, max_length=2000)
 
 
+class FeedbackResolutionUpdate(BaseModel):
+    resolution: Literal["resolved", "still_happening"]
+
+
 class TestPaymentUpdate(BaseModel):
     action: Literal["confirm", "reject"] = "confirm"
 

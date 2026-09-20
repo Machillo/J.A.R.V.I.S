@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bot, Bug, Lightbulb, RotateCcw, Send, UserRound } from "lucide-react";
+import { AlertCircle, Bot, Bug, CheckCircle2, Lightbulb, MessageCircle, RotateCcw, Send, UserRound, X } from "lucide-react";
 import { SUPPORT_CONTEXT_KEY } from "../../lib/apiErrors";
-import { createFeedback, getFeedback } from "../services/jarvisApi";
+import { createFeedback, getFeedback, updateFeedbackResolution } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
 
 const EMPTY = { category: "", subject: "", screen: "", happened: "", expected: "", benefit: "", reproducible: "", errorReference: "" };
@@ -18,6 +18,14 @@ const prompts = {
   review: tx("Perfecto. Ya tengo el contexto necesario. ¿Lo envío a soporte?", "Perfect. I have the context I need. Should I send it to support?"),
 };
 
+const statusLabel = (report) => {
+  if (report.user_resolution === "resolved") return tx("Resuelto", "Resolved");
+  if (report.user_resolution === "still_happening") return tx("Sigue ocurriendo", "Still happening");
+  if (report.status === "reviewing") return tx("En revisión", "Under review");
+  if (report.status === "resolved") return tx("Resuelto por soporte", "Resolved by support");
+  return tx("Recibido", "Received");
+};
+
 function Bubble({ role, children }) {
   return <div className={`support-bubble support-bubble--${role}`}>
     <span>{role === "bot" ? <Bot size={17}/> : <UserRound size={17}/>}</span><p>{children}</p>
@@ -29,7 +37,9 @@ export default function Feedback() {
   const [form, setForm] = useState(EMPTY);
   const [step, setStep] = useState("category");
   const [draft, setDraft] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [resolving, setResolving] = useState(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const load = () => getFeedback().then(setReports).catch(() => setReports([]));
@@ -41,6 +51,7 @@ export default function Feedback() {
       if (saved) {
         setForm({ ...EMPTY, category: "error", screen: saved.screen || "", happened: saved.summary || "", errorReference: saved.errorReference || "" });
         setStep("subject");
+        setChatOpen(true);
         window.sessionStorage.removeItem(SUPPORT_CONTEXT_KEY);
       }
     } catch { /* Ignore an invalid local draft. */ }
@@ -62,19 +73,21 @@ export default function Feedback() {
   }, [form, step, steps]);
 
   const chooseCategory = (category) => {
-    setForm({ ...EMPTY, category }); setStep("subject"); setDraft(""); setNotice(""); setError("");
+    setForm({ ...EMPTY, category }); setStep("subject"); setDraft(""); setError("");
   };
   const answer = (value = draft) => {
     const clean = value.trim();
     if (!clean && step !== "expected" && !(step === "screen" && form.category === "improvement")) return;
-    const nextForm = { ...form, [step]: clean };
-    const currentIndex = steps.indexOf(step);
-    setForm(nextForm); setStep(steps[currentIndex + 1] || "review"); setDraft("");
+    setForm({ ...form, [step]: clean });
+    setStep(steps[steps.indexOf(step) + 1] || "review");
+    setDraft("");
   };
-  const restart = () => { setForm(EMPTY); setStep("category"); setDraft(""); setNotice(""); setError(""); };
+  const restart = () => { setForm(EMPTY); setStep("category"); setDraft(""); setError(""); };
+  const closeChat = () => { restart(); setChatOpen(false); };
+  const openChat = () => { restart(); setNotice(""); setChatOpen(true); };
 
   const submit = async () => {
-    setBusy(true); setError(""); setNotice("");
+    setBusy(true); setError("");
     const lines = form.category === "error"
       ? [tx(`Pantalla o sección: ${form.screen}`, `Screen or section: ${form.screen}`), tx(`Qué ocurrió: ${form.happened}`, `What happened: ${form.happened}`), tx(`Qué esperaba: ${form.expected || "No indicado"}`, `Expected: ${form.expected || "Not provided"}`), tx(`¿Se puede repetir?: ${form.reproducible}`, `Reproducible?: ${form.reproducible}`)]
       : [tx(`Mejora propuesta: ${form.happened}`, `Suggested improvement: ${form.happened}`), tx(`Cómo ayudaría: ${form.benefit}`, `How it would help: ${form.benefit}`), tx(`Pantalla o sección: ${form.screen || "General"}`, `Screen or section: ${form.screen || "General"}`)];
@@ -82,11 +95,24 @@ export default function Feedback() {
       const saved = await createFeedback({ category: form.category, subject: form.subject, message: lines.join("\n"), app_version: import.meta.env.VITE_APP_VERSION, screen: form.screen || undefined, error_reference: form.errorReference || undefined });
       setNotice(saved.email_sent
         ? tx(`Listo. Enviamos ${saved.public_id} al correo de soporte.`, `Done. We emailed ${saved.public_id} to support.`)
-        : tx(`Guardamos ${saved.public_id}. Podés seguir usando FINVA mientras soporte lo revisa.`, `We saved ${saved.public_id}. You can keep using FINVA while support reviews it.`));
-      setForm(EMPTY); setStep("category"); load();
+        : tx(`Guardamos ${saved.public_id}. Soporte ya puede revisarlo.`, `We saved ${saved.public_id}. Support can now review it.`));
+      restart(); setChatOpen(false); load();
     } catch (cause) {
       setError(cause.message || tx("No pudimos enviar el reporte. Intentá nuevamente.", "We couldn't send the report. Please try again."));
     } finally { setBusy(false); }
+  };
+
+  const resolveReport = async (report, resolution) => {
+    setResolving(report.id); setError("");
+    try {
+      await updateFeedbackResolution(report.id, resolution);
+      setNotice(resolution === "resolved"
+        ? tx(`${report.public_id} quedó marcado como resuelto.`, `${report.public_id} was marked as resolved.`)
+        : tx(`Avisamos a soporte que ${report.public_id} sigue ocurriendo.`, `We told support that ${report.public_id} is still happening.`));
+      await load();
+    } catch (cause) {
+      setError(cause.message || tx("No pudimos actualizar el reporte.", "We couldn't update the report."));
+    } finally { setResolving(null); }
   };
 
   const needsText = !["category", "reproducible", "review"].includes(step);
@@ -94,26 +120,33 @@ export default function Feedback() {
     || step === "expected" || (step === "screen" && form.category === "improvement");
 
   return <section className="mobile-page feedback-page support-conversation-page">
-    <div className="mobile-page-heading"><p className="eyebrow">{tx("Soporte FINVA", "FINVA support")}</p><h1>{tx("Hablemos", "Let's talk")}</h1><span>{tx("El asistente reúne el contexto y crea el ticket por vos.", "The assistant gathers context and creates the ticket for you.")}</span></div>
-    <section className="mobile-panel support-conversation" aria-live="polite">
-      <div className="support-transcript">{transcript.map((item, index) => <Bubble role={item.role} key={`${item.role}-${index}`}>{item.text}</Bubble>)}</div>
-      {step === "category" && <div className="support-quick-actions">
-        <button type="button" onClick={() => chooseCategory("error")}><Bug size={18}/>{tx("Tengo un problema", "I have a problem")}</button>
-        <button type="button" onClick={() => chooseCategory("improvement")}><Lightbulb size={18}/>{tx("Quiero proponer una mejora", "I want to suggest an improvement")}</button>
-      </div>}
-      {needsText && <div className="support-composer">
-        <textarea rows="2" autoFocus value={draft} maxLength={step === "subject" ? 140 : 1000} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && canSendText) { event.preventDefault(); answer(); } }} placeholder={tx("Escribí tu respuesta…", "Type your answer…")}/>
-        <button type="button" disabled={!canSendText} onClick={() => answer()} aria-label={tx("Enviar respuesta", "Send answer")}><Send size={19}/></button>
-        {(step === "expected" || (step === "screen" && form.category === "improvement")) && <button className="support-skip" type="button" onClick={() => answer("")}>{tx("Omitir", "Skip")}</button>}
-      </div>}
-      {step === "reproducible" && <div className="support-quick-actions">
-        {[tx("Siempre", "Always"), tx("Algunas veces", "Sometimes"), tx("Solo ocurrió una vez", "It only happened once")].map((option) => <button type="button" key={option} onClick={() => answer(option)}>{option}</button>)}
-      </div>}
-      {step === "review" && <div className="support-review-actions"><button type="button" className="primary-button finva-button finva-button-primary" disabled={busy} onClick={submit}><Send size={17}/>{busy ? tx("Enviando…", "Sending…") : tx("Sí, enviar a soporte", "Yes, send to support")}</button><button type="button" onClick={restart}><RotateCcw size={16}/>{tx("Empezar de nuevo", "Start over")}</button></div>}
-      {form.category && step !== "review" && <button className="support-restart" type="button" onClick={restart}><RotateCcw size={14}/>{tx("Reiniciar conversación", "Restart conversation")}</button>}
-      <p className="support-privacy">{tx("No incluyás contraseñas, códigos ni números completos de cuentas o tarjetas.", "Do not include passwords, codes, or full account or card numbers.")}</p>
-      {notice && <p className="success-banner">{notice}</p>}{error && <p className="onboarding-error">{error}</p>}
+    <div className="mobile-page-heading"><p className="eyebrow">{tx("Soporte FINVA", "FINVA support")}</p><h1>{tx("¿En qué te ayudamos?", "How can we help?")}</h1><span>{tx("Conversá con el asistente o revisá el estado de tus reportes.", "Chat with the assistant or review your reports.")}</span></div>
+    <button type="button" className="mobile-panel support-chat-launch" onClick={openChat}><span><MessageCircle size={22}/></span><div><strong>{tx("Nueva conversación", "New conversation")}</strong><small>{tx("Reportar un problema o proponer una mejora", "Report a problem or suggest an improvement")}</small></div></button>
+    {notice && <p className="success-banner">{notice}</p>}{error && !chatOpen && <p className="onboarding-error">{error}</p>}
+
+    <section className="mobile-panel support-report-history">
+      <h2>{tx("Mis reportes", "My reports")}</h2>
+      {reports.length === 0 && <p className="support-empty">{tx("Todavía no tenés reportes.", "You don't have any reports yet.")}</p>}
+      {reports.map((report) => <article className="support-report-card" key={report.id}>
+        <div className="support-report-heading"><div><small>{report.public_id}</small><strong>{report.subject}</strong></div><span className={`support-status support-status--${report.user_resolution || report.status}`}>{statusLabel(report)}</span></div>
+        {report.user_resolution !== "resolved" && <div className="support-resolution"><p>{tx("¿Esto ya quedó resuelto?", "Has this been resolved?")}</p><div><button type="button" disabled={resolving === report.id} onClick={() => resolveReport(report, "resolved")}><CheckCircle2 size={16}/>{tx("Sí, se resolvió", "Yes, resolved")}</button><button type="button" disabled={resolving === report.id} onClick={() => resolveReport(report, "still_happening")}><AlertCircle size={16}/>{tx("No, sigue igual", "No, still happening")}</button></div></div>}
+      </article>)}
     </section>
-    {reports.length > 0 && <div className="mobile-panel"><h2>{tx("Mis reportes", "My reports")}</h2>{reports.map((report)=><div className="feedback-row" key={report.id}><strong>{report.public_id} · {report.subject}</strong><span>{report.status}</span></div>)}</div>}
+
+    {chatOpen && <div className="support-chat-overlay" role="dialog" aria-modal="true" aria-label={tx("Chat de soporte", "Support chat")}>
+      <div className="support-chat-shell">
+        <header><div><p className="eyebrow">{tx("Soporte FINVA", "FINVA support")}</p><h2>{tx("Nueva conversación", "New conversation")}</h2></div><button type="button" onClick={closeChat} aria-label={tx("Cerrar chat", "Close chat")}><X size={22}/></button></header>
+        <section className="support-conversation" aria-live="polite">
+          <div className="support-transcript">{transcript.map((item, index) => <Bubble role={item.role} key={`${item.role}-${index}`}>{item.text}</Bubble>)}</div>
+          {step === "category" && <div className="support-quick-actions"><button type="button" onClick={() => chooseCategory("error")}><Bug size={18}/>{tx("Tengo un problema", "I have a problem")}</button><button type="button" onClick={() => chooseCategory("improvement")}><Lightbulb size={18}/>{tx("Quiero proponer una mejora", "I want to suggest an improvement")}</button></div>}
+          {needsText && <div className="support-composer"><textarea rows="2" autoFocus value={draft} maxLength={step === "subject" ? 140 : 1000} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && canSendText) { event.preventDefault(); answer(); } }} placeholder={tx("Escribí tu respuesta…", "Type your answer…")}/><button type="button" disabled={!canSendText} onClick={() => answer()} aria-label={tx("Enviar respuesta", "Send answer")}><Send size={19}/></button>{(step === "expected" || (step === "screen" && form.category === "improvement")) && <button className="support-skip" type="button" onClick={() => answer("")}>{tx("Omitir", "Skip")}</button>}</div>}
+          {step === "reproducible" && <div className="support-quick-actions">{[tx("Siempre", "Always"), tx("Algunas veces", "Sometimes"), tx("Solo ocurrió una vez", "It only happened once")].map((option) => <button type="button" key={option} onClick={() => answer(option)}>{option}</button>)}</div>}
+          {step === "review" && <div className="support-review-actions"><button type="button" className="primary-button finva-button finva-button-primary" disabled={busy} onClick={submit}><Send size={17}/>{busy ? tx("Enviando…", "Sending…") : tx("Sí, enviar a soporte", "Yes, send to support")}</button><button type="button" onClick={restart}><RotateCcw size={16}/>{tx("Empezar de nuevo", "Start over")}</button></div>}
+          {form.category && step !== "review" && <button className="support-restart" type="button" onClick={restart}><RotateCcw size={14}/>{tx("Reiniciar conversación", "Restart conversation")}</button>}
+          <p className="support-privacy">{tx("No incluyás contraseñas, códigos ni números completos de cuentas o tarjetas.", "Do not include passwords, codes, or full account or card numbers.")}</p>
+          {error && <p className="onboarding-error">{error}</p>}
+        </section>
+      </div>
+    </div>}
   </section>;
 }

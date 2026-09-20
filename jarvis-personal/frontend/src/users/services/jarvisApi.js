@@ -40,6 +40,7 @@ export const uploadPaymentReceipt = (orderId, file) => {
 export const trackProductEvent = (payload) => json("/product-ops/events", "POST", payload);
 export const getFeedback = () => request("/product-ops/feedback");
 export const createFeedback = (payload) => json("/product-ops/feedback", "POST", payload);
+export const updateFeedbackResolution = (id, resolution) => json(`/product-ops/feedback/${id}/resolution`, "PATCH", { resolution });
 
 export const getFinancialSituation = () => request("/user-product/financial-situation");
 export const updateFinancialSituation = (payload) => json("/user-product/financial-situation", "PUT", payload);
