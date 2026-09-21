@@ -138,5 +138,7 @@ def confirm_financial_account(account_balance_id: int, ownership_status: str, di
                    WHERE financial_account_id=%s AND account_id=%s AND workspace_id=%s""",
                 (account_balance_id, account_id, workspace_id),
             )
+        from backend.user_product.candidate_resolution import reevaluate_workspace_candidates
+        reevaluate_workspace_candidates(conn, account_id=account_id, workspace_id=workspace_id)
         conn.commit()
     return {"status": "ok", "item": dict(row)}

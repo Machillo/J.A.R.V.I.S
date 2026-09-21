@@ -78,6 +78,8 @@ def canonical_candidate(
         "confidence": float(parsed.get("confidence") or 0),
         "uncertainty_reason": str(parsed.get("confidence_reason") or "")[:1000] or None,
         "dedupe_key": str(parsed.get("dedupe_key") or "")[:1000] or None,
-        "is_internal_transfer": transaction_type == "internal_transfer" or direction == "internal",
+        # Parser hints are not proof of ownership. Phase 1D only marks an
+        # internal transfer after both endpoints match user-confirmed accounts.
+        "is_internal_transfer": False,
         "raw_payload": parsed,
     }

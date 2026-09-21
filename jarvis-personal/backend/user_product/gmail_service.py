@@ -29,6 +29,7 @@ from backend.email_monitor.gmail_content import collect_attachments, extract_pdf
 from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
+from backend.user_product.candidate_resolution import resolve_candidate
 
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
@@ -254,7 +255,8 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
                        c.movement_kind,c.category,c.bank,c.source_account_label,
                        c.source_account_reference,c.destination_account_reference,c.counterparty,
                        c.parser_name,c.parser_version,c.extraction_method,c.confidence,
-                       c.uncertainty_reason,c.status AS review_status,c.reviewed_at,c.created_at
+                       c.uncertainty_reason,c.status AS review_status,c.reviewed_at,c.created_at,
+                       c.is_internal_transfer,c.related_candidate_id,c.resolution_reason
                 FROM finva_email_messages m
                 LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id
                 WHERE m.account_id=%s AND m.workspace_id=%s{status_filter}
@@ -313,6 +315,17 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             conn.execute("UPDATE finva_email_messages SET status='rejected' WHERE id=%s", (candidate["email_message_id"],))
             conn.commit()
             return {"status": "rejected", "candidate_id": candidate_id, "transaction_id": None}
+
+        if candidate.get("is_internal_transfer"):
+            conn.execute(
+                """UPDATE finva_email_candidates
+                   SET status='confirmed',reviewed_at=NOW(),corrected_fields=ARRAY[]::TEXT[],updated_at=NOW()
+                   WHERE id=%s""",
+                (candidate_id,),
+            )
+            conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
+            conn.commit()
+            return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": None, "is_internal_transfer": True}
 
         values = {
             "transaction_date": candidate["transaction_date"],
@@ -516,6 +529,11 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
         _adapt_identity(body, display_name), received_at,
     )
     kind = "payroll_statement" if payroll_report else str(parsed.get("email_kind") or "ignored")
+    if kind == "ignored" and parsed.get("transaction_type") == "internal_transfer" and parsed.get("amount"):
+        # Legacy parser ownership hints become reviewable evidence, never the
+        # final decision. Confirmed Financial Identity resolves ownership.
+        parsed = {**parsed, "transaction_type": "transfer", "category": "Transferencia"}
+        kind = "movement"
     confidence = 1.0 if payroll_report else float(parsed.get("confidence") or 0)
     status = "ignored"
     transaction_id = None
@@ -611,7 +629,8 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
                 workspace_id=str(connection["workspace_id"]),
                 legacy_user_id=int(connection["legacy_user_id"]),
             )
-            status = candidate_status
+            resolution = resolve_candidate(conn, int(candidate_row["id"]))
+            status = str(resolution.get("status") or candidate_status)
         conn.execute("UPDATE finva_email_messages SET status=%s WHERE id=%s", (status, int(email_row["id"])))
         conn.commit()
     return status
