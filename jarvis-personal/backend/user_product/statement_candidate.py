@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from backend.email_monitor.statement_reconciliation import parse_bac_statement, parse_multimoney_statement
+from backend.email_monitor.popular_pdf import parse_popular_statement
 from backend.finance.category_catalog import normalize_category
 
 
@@ -34,6 +35,8 @@ def parse_statement_movements(bank: str, text: str) -> list[dict[str, Any]]:
         return parse_bac_statement(text)
     if bank_code == "multimoney":
         return parse_multimoney_statement(text)
+    if bank_code == "popular":
+        return parse_popular_statement(text)
     return []
 
 

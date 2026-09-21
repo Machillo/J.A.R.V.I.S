@@ -125,7 +125,7 @@ def test_parse_popular_crc_card_rows_and_skip_usd_only_rows():
     assert rows[0]["card_last4"] == "8285"
 
 
-def test_popular_document_parser_does_not_activate_for_finva_or_untrusted_sender():
+def test_popular_document_parser_rejects_untrusted_sender():
     receipt = """
     COMPROBANTE DE PAGO DE PRESTAMOS
     Número de Operación 123456
