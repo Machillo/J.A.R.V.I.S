@@ -16,6 +16,7 @@
     "test:phase0f": "node scripts/test-phase-0f.mjs",
     "test:phase0h": "node scripts/test-phase-0h.mjs",
     "test:phase0i": "node scripts/test-phase-0i.mjs",
+    "test:phase0j": "node scripts/test-phase-0j.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "ios:sync:finva": "node scripts/ios-product.mjs finva sync",
@@ -24,6 +25,7 @@
     "ios:open:jarvis": "node scripts/ios-product.mjs jarvis open"
   },
   "dependencies": {
+    "@aparajita/capacitor-biometric-auth": "^10.0.0",
     "@capacitor-firebase/analytics": "^8.5.1",
     "@capacitor-firebase/crashlytics": "^8.5.1",
     "@capacitor/android": "^8.5.1",
