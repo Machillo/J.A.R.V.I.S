@@ -126,3 +126,21 @@ def test_reject_candidate_does_not_create_transaction(monkeypatch):
     assert result["status"] == "rejected"
     assert all("INSERT INTO transactions" not in query for query, _ in connection.calls)
     assert connection.committed is True
+
+
+def test_accept_internal_transfer_confirms_without_creating_transaction(monkeypatch):
+    _identity(monkeypatch)
+    candidate = {
+        "id": 4, "email_message_id": 9, "account_id": "account-a",
+        "workspace_id": "workspace-a", "status": "pending", "transaction_id": None,
+        "is_internal_transfer": True,
+    }
+    connection = _Connection([_Result(one=candidate), _Result(), _Result()])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+
+    result = gmail_service.review_gmail_candidate(4, "accept")
+
+    assert result["is_internal_transfer"] is True
+    assert result["transaction_id"] is None
+    assert all("INSERT INTO transactions" not in query for query, _ in connection.calls)
+    assert connection.committed is True

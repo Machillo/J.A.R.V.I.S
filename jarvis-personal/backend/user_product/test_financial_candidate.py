@@ -55,3 +55,16 @@ def test_preserves_transfer_context_without_deciding_ownership():
     assert candidate["source_account_reference"] == "CR00****1111"
     assert candidate["destination_account_reference"] == "CR00****2222"
     assert candidate["is_internal_transfer"] is False
+
+
+def test_parser_internal_hint_does_not_bypass_confirmed_identity():
+    candidate = canonical_candidate(
+        {
+            "bank": "bac", "amount": 5000, "transaction_type": "internal_transfer",
+            "movement_direction": "internal", "origin_account": "1111",
+            "destination_account": "2222",
+        },
+        provider_message_id="gmail-3",
+        subject="Transferencia",
+    )
+    assert candidate["is_internal_transfer"] is False
