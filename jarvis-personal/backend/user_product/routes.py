@@ -45,6 +45,7 @@ from backend.user_product.gmail_service import (
     sync_current_gmail,
 )
 from backend.user_product.financial_identity import confirm_financial_account, list_financial_identity
+from backend.user_product.trust_analytics import get_gmail_trust_analytics
 
 router = APIRouter(prefix="/user-product", tags=["Finva Product"])
 
@@ -252,6 +253,10 @@ def vip_gmail_sync():
 @router.get("/vip/gmail/emails")
 def vip_gmail_emails(status: str | None = None):
     require_feature("gmail_automation"); return list_gmail_emails(status)
+
+@router.get("/vip/gmail/trust-analytics")
+def vip_gmail_trust_analytics():
+    require_feature("gmail_automation"); return get_gmail_trust_analytics()
 
 @router.get("/vip/financial-identity")
 def vip_financial_identity():
