@@ -2,6 +2,7 @@ import {
   BarChart3,
   CalendarDays,
   CreditCard,
+  Gift,
   Landmark,
   LifeBuoy,
   LogOut,
@@ -33,7 +34,7 @@ const primaryItems = [
 export default function FinvaNavigation({ page, plan, onNavigate, onLogout, featureFlags }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const available = (key) => {
-    if (key === "gmail") return featureEnabled(featureFlags, "gmail_automation");
+    if (["gmail", "vip-aguinaldo"].includes(key)) return featureEnabled(featureFlags, "gmail_automation");
     if (key === "reports") return featureEnabled(featureFlags, "advanced_reports");
     if (plan === "vip" && ["strategy","vip-projections","vip-scenarios","vip-reality","vip-emergency","vip-preferences"].includes(key)) return featureEnabled(featureFlags, "vip_intelligence");
     return true;
@@ -66,6 +67,7 @@ export default function FinvaNavigation({ page, plan, onNavigate, onLogout, feat
         ["vip-reality", tx("Plan vs realidad", "Plan vs reality"), BarChart3],
         ["vip-monthly-review", tx("Revisión mensual", "Monthly review"), Sparkles],
         ["vip-emergency", tx("Fondo de emergencia", "Emergency fund"), ShieldCheck],
+        ["vip-aguinaldo", tx("Aguinaldo", "Annual bonus"), Gift],
         ["vip-preferences", tx("Preferencias estratégicas", "Strategic preferences"), SlidersHorizontal],
       ],
     }, { title: tx("Automatización", "Automation"), items: [["gmail", tx("Movimientos desde Gmail", "Transactions from Gmail"), Mail]] }] : []),

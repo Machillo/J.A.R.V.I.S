@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ChevronRight, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, ChevronRight, Mail, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { deviceLanguage, localeTag } from "../../../../lib/locale";
 import AccountActions from "../../components/AccountActions";
 import {
@@ -8,8 +8,11 @@ import {
   getFinancialSituation,
   getVipMonthlyReview,
   getVipProactiveAdvisor,
+  getVipAguinaldo,
   getVipCommandCenter,
+  getVipGmailStatus,
   simulateStrategyVip,
+  syncVipGmail,
   updateFinancialSituation,
 } from "../../../../users/services/jarvisApi";
 
@@ -104,7 +107,8 @@ export default function VipScreens({ view = "dashboard", onNavigate, onLogout, u
     dashboard: VipDashboard, strategy: VipStrategy, recommendation: VipRecommendation,
     projections: VipProjections, "projection-detail": VipProjectionDetail,
     scenarios: VipScenarios, goal: VipSmartGoal, emergency: VipEmergency,
-    reality: VipReality, "monthly-review": VipMonthlyReview, today: VipToday, more: VipMore, preferences: VipPreferences,
+    reality: VipReality, "monthly-review": VipMonthlyReview, today: VipToday, more: VipMore,
+    aguinaldo: VipAguinaldo, preferences: VipPreferences,
   };
   const Screen = screens[view] || VipDashboard;
   return <Screen {...props}/>;
@@ -328,8 +332,64 @@ function VipMore({ user, onNavigate, onLogout }) {
     ["vip-reality", tx("Plan vs realidad", "Plan vs reality"), tx("Compará lo planeado con lo ocurrido.", "Compare what was planned with what happened.")],
     ["vip-monthly-review", tx("Revisión mensual FINVA", "FINVA monthly review"), tx("Entendé qué cambió y cómo se reajusta tu estrategia.", "Understand what changed and how your strategy adapts.")],
     ["vip-emergency", tx("Fondo de emergencia", "Emergency fund"), tx("Protegé tu colchón financiero.", "Protect your financial cushion.")],
+    ["vip-aguinaldo", tx("Aguinaldo", "Annual bonus"), tx("Calculalo con tus órdenes patronales de la CCSS.", "Calculate it from your CCSS payroll orders.")],
   ];
   return <section className="vip-screen"><VipHeader title={tx("Más", "More")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("INTELIGENCIA VIP", "VIP INTELLIGENCE")}/>{items.map(([key, title, caption]) => <button className="vip-link-card" type="button" key={key} onClick={() => onNavigate?.(key)}><span><strong>{title}</strong><small>{caption}</small></span><ChevronRight size={17}/></button>)}<button className="vip-link-card vip-link-card--blue" type="button" onClick={() => onNavigate?.("budget")}><span><strong>{tx("Planificación Basic", "Basic planning")}</strong><small>{tx("Presupuesto · Calendario · Recurrentes · Reportes", "Budget · Calendar · Recurring · Reports")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("gmail")}><span><strong>{tx("Movimientos desde Gmail", "Transactions from Gmail")}</strong><small>{tx("Automatización bancaria de solo lectura.", "Read-only banking automation.")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("settings")}><span><strong>{tx("Ajustes de cuenta y plan", "Account and plan settings")}</strong><small>{tx("Perfil, apariencia, seguridad y cambio de plan.", "Profile, appearance, security, and plan changes.")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("feedback")}><span><strong>{tx("Ayuda y soporte", "Help & support")}</strong><small>{tx("Reportá un problema o compartí una sugerencia.", "Report a problem or share feedback.")}</small></span><ChevronRight size={17}/></button><AccountActions onLogout={onLogout} variant="vip"/></section>;
+}
+
+function VipAguinaldo({ user, onNavigate }) {
+  const [gmail, setGmail] = useState(null);
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    setLoading(true); setError("");
+    try {
+      const status = await getVipGmailStatus();
+      setGmail(status);
+      if (status?.connected) setReport(await getVipAguinaldo());
+      else setReport(null);
+    } catch (reason) {
+      setError(reason?.message || tx("No pudimos calcular tu aguinaldo.", "We couldn't calculate your annual bonus."));
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const synchronize = async () => {
+    setSyncing(true); setError("");
+    try {
+      await syncVipGmail();
+      setReport(await getVipAguinaldo());
+    } catch (reason) {
+      setError(reason?.message || tx("No pudimos sincronizar tus órdenes patronales.", "We couldn't sync your payroll orders."));
+    } finally { setSyncing(false); }
+  };
+
+  if (loading) return <LoadingScreen/>;
+  if (!gmail?.connected) return <section className="vip-screen">
+    <VipHeader title={tx("Aguinaldo", "Annual bonus")} user={user} onNavigate={onNavigate}/>
+    <Focus eyebrow={tx("DATOS OFICIALES CCSS", "OFFICIAL CCSS DATA")} title={tx("Debes sincronizar tu email", "You must sync your email")} caption={tx("FINVA necesita leer tus órdenes patronales de la CCSS para calcular el aguinaldo con salarios oficiales.", "FINVA needs to read your CCSS payroll orders to calculate your annual bonus from official salaries.")} tone="gold"/>
+    <Card title={tx("Permiso de solo lectura", "Read-only access")}><p><ShieldCheck size={16}/>{tx("FINVA no puede enviar, modificar ni borrar tus correos.", "FINVA cannot send, modify, or delete your emails.")}</p></Card>
+    {error && <Card tone="danger"><p>{error}</p></Card>}
+    <PrimaryButton onClick={() => onNavigate?.("gmail")}><Mail size={18}/>{tx("Sincronizar email", "Sync email")}</PrimaryButton>
+  </section>;
+
+  const months = report?.months || [];
+  return <section className="vip-screen">
+    <VipHeader title={tx("Aguinaldo", "Annual bonus")} user={user} onNavigate={onNavigate}/>
+    <Focus eyebrow={tx("ACUMULADO ESTIMADO", "ESTIMATED ACCRUED")} title={money(report?.accrued_aguinaldo)} caption={tx("Salarios oficiales del período ÷ 12", "Official salaries in the period ÷ 12")} tone="mint"/>
+    <Card title={tx("Datos utilizados", "Data used")}>
+      <DataRow label={tx("Salario computable", "Eligible salary")} value={money(report?.earned_salary_total)}/>
+      <DataRow label={tx("Última orden disponible", "Latest available order")} value={report?.period?.official_through || "—"}/>
+      <DataRow label={tx("Meses pendientes", "Missing months")} value={report?.missing_months?.length || 0} tone="gold"/>
+    </Card>
+    <Card title={tx("Desglose mensual", "Monthly breakdown")}>{months.map((item) => <DataRow key={item.month} label={item.month} value={item.entries ? money(item.total_earned) : tx("Pendiente", "Pending")} tone={item.entries ? "mint" : "gold"}/>)}</Card>
+    <Card tone="gold"><p>{tx("FINVA usa únicamente el salario oficial de cada Orden Patronal de la CCSS. No estima meses faltantes con movimientos bancarios.", "FINVA only uses the official salary from each CCSS payroll order. It does not estimate missing months from bank transactions.")}</p></Card>
+    {error && <Card tone="danger"><p>{error}</p></Card>}
+    <PrimaryButton disabled={syncing} onClick={synchronize}><RefreshCw size={18}/>{syncing ? tx("Sincronizando…", "Syncing…") : tx("Sincronizar email y recalcular", "Sync email and recalculate")}</PrimaryButton>
+  </section>;
 }
 
 function VipPreferences({ profile, user, onNavigate, reload }) {

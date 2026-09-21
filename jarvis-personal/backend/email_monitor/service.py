@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import re
-from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -28,6 +27,7 @@ from backend.email_monitor.normalization import normalize_description
 from backend.email_monitor.personal_rules import apply_workspace_email_rules
 from backend.email_monitor.statement_reconciliation import reconcile_statement
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
+from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
 
 OWNER_EMAIL = (
     os.getenv("OWNER_EMAIL", "").strip()
@@ -2275,63 +2275,8 @@ def _decode_gmail_body(payload: dict[str, Any]) -> str:
     return "\n".join(chunk for chunk in chunks if chunk)
 
 
-def _collect_attachments(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    attachments: list[dict[str, Any]] = []
-
-    def walk(part: dict[str, Any]) -> None:
-        filename = part.get("filename") or ""
-        body = part.get("body") or {}
-        attachment_id = body.get("attachmentId")
-        mime = part.get("mimeType", "")
-        if filename or attachment_id:
-            attachments.append({
-                "filename": filename,
-                "attachment_id": attachment_id,
-                "mime_type": mime,
-                "size": body.get("size"),
-            })
-        for child in part.get("parts") or []:
-            walk(child)
-
-    walk(payload or {})
-    return attachments
-
-
-def _extract_pdf_attachment_text(gmail_service, message_id: str, attachments: list[dict[str, Any]]) -> tuple[str, list[str]]:
-    texts: list[str] = []
-    names: list[str] = []
-    try:
-        from pypdf import PdfReader
-    except Exception:
-        return "", [a.get("filename") or "" for a in attachments if a.get("filename")]
-
-    for attachment in attachments:
-        filename = attachment.get("filename") or ""
-        attachment_id = attachment.get("attachment_id")
-        mime_type = attachment.get("mime_type") or ""
-        if filename:
-            names.append(filename)
-        if not attachment_id:
-            continue
-        if "pdf" not in mime_type.lower() and not filename.lower().endswith(".pdf"):
-            continue
-        try:
-            data = gmail_service.users().messages().attachments().get(
-                userId="me", messageId=message_id, id=attachment_id
-            ).execute().get("data")
-            if not data:
-                continue
-            raw = base64.urlsafe_b64decode(data.encode("utf-8"))
-            reader = PdfReader(BytesIO(raw))
-            page_texts = []
-            for page in reader.pages[:8]:
-                page_texts.append(page.extract_text() or "")
-            text = "\n".join(page_texts).strip()
-            if text:
-                texts.append(f"[PDF {filename}]\n{text}")
-        except Exception:
-            continue
-    return "\n".join(texts), names
+_collect_attachments = collect_attachments
+_extract_pdf_attachment_text = extract_pdf_attachment_text
 
 def _gmail_service():
     try:

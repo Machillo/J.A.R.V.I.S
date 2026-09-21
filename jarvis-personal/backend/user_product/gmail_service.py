@@ -8,7 +8,7 @@ import json
 import os
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlencode
@@ -24,6 +24,8 @@ from backend.auth.current_user import (
 )
 from backend.core.database import get_connection
 from backend.email_monitor.parser import parse_financial_email
+from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
+from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
 from backend.finance.category_catalog import normalize_category
 
 
@@ -36,6 +38,17 @@ FINVA_QUERY = os.getenv(
     "OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com "
     "OR from:bancopopular.fi.cr) newer_than:45d -in:spam -in:trash",
 )
+
+
+def _aguinaldo_gmail_query(as_of: date | None = None) -> str:
+    """Search the complete Costa Rican aguinaldo period for CCSS payroll orders."""
+    current = as_of or date.today()
+    period_start = date(current.year if current.month == 12 else current.year - 1, 12, 1)
+    return (
+        '(from:noreply@ccss.sa.cr OR from:ccss@ccss.sa.cr '
+        'OR subject:"Generación de Orden Patronal Digital") '
+        f'after:{period_start:%Y/%m/%d} -in:spam -in:trash'
+    )
 
 def _has_active_vip_access(conn, account_id: str) -> bool:
     """Return whether an account may use FINVA's Gmail automation.
@@ -375,7 +388,10 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
     headers = {item.get("name", "").lower(): item.get("value", "") for item in full.get("payload", {}).get("headers", [])}
     subject = headers.get("subject", "")
     sender = headers.get("from", "")
-    body = _plain_text(full.get("payload") or {}) or full.get("snippet", "")
+    payload = full.get("payload") or {}
+    body = _plain_text(payload) or full.get("snippet", "")
+    attachments = collect_attachments(payload)
+    attachment_text, _ = extract_pdf_attachment_text(service, message_id, attachments)
     received_at = None
     if headers.get("date"):
         try:
@@ -384,14 +400,13 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
             received_at = None
 
     display_name = str(connection.get("display_name") or "")
-    parsed = parse_financial_email(
-        _adapt_identity(subject, display_name),
-        sender,
-        _adapt_identity(body, display_name),
-        received_at,
+    payroll_report = parse_ccss_order_patronal(subject, sender, attachment_text or body)
+    parsed = {} if payroll_report else parse_financial_email(
+        _adapt_identity(subject, display_name), sender,
+        _adapt_identity(body, display_name), received_at,
     )
-    kind = str(parsed.get("email_kind") or "ignored")
-    confidence = float(parsed.get("confidence") or 0)
+    kind = "payroll_statement" if payroll_report else str(parsed.get("email_kind") or "ignored")
+    confidence = 1.0 if payroll_report else float(parsed.get("confidence") or 0)
     status = "ignored"
     transaction_id = None
 
@@ -409,12 +424,39 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
             (
                 int(connection["id"]), connection["account_id"], connection["workspace_id"], message_id,
-                sender[:500], subject[:500], received_at, parsed.get("bank") or "unknown", kind,
-                parsed.get("confidence_reason") or parsed.get("ignore_reason") or "",
+                sender[:500], subject[:500], received_at,
+                "ccss" if payroll_report else parsed.get("bank") or "unknown", kind,
+                (f"Orden patronal CCSS {payroll_report['period_month']} procesada."
+                 if payroll_report else parsed.get("confidence_reason") or parsed.get("ignore_reason") or ""),
             ),
         ).fetchone()
 
-        if kind == "movement" and parsed.get("amount") and parsed.get("transaction_type"):
+        if payroll_report:
+            conn.execute(
+                """INSERT INTO payroll_salary_reports(
+                       user_id,workspace_id,email_message_id,provider_message_id,period_month,
+                       reported_salary,trans_previous_salary,previous_salary,daily_subsidy,
+                       employer_number,verification_code,source,updated_at
+                   ) VALUES(%s,%s,NULL,%s,%s,%s,%s,%s,%s,%s,%s,'ccss_order_patronal',NOW())
+                   ON CONFLICT(workspace_id,period_month) DO UPDATE SET
+                       provider_message_id=EXCLUDED.provider_message_id,
+                       reported_salary=EXCLUDED.reported_salary,
+                       trans_previous_salary=EXCLUDED.trans_previous_salary,
+                       previous_salary=EXCLUDED.previous_salary,
+                       daily_subsidy=EXCLUDED.daily_subsidy,
+                       employer_number=EXCLUDED.employer_number,
+                       verification_code=EXCLUDED.verification_code,
+                       source=EXCLUDED.source,updated_at=NOW()""",
+                (
+                    int(connection["legacy_user_id"]), connection["workspace_id"], message_id,
+                    payroll_report["period_month"], payroll_report["reported_salary"],
+                    payroll_report["trans_previous_salary"], payroll_report["previous_salary"],
+                    payroll_report["daily_subsidy"], payroll_report.get("employer_number"),
+                    payroll_report.get("verification_code"),
+                ),
+            )
+            status = "payroll_statement"
+        elif kind == "movement" and parsed.get("amount") and parsed.get("transaction_type"):
             tx_type = str(parsed.get("transaction_type"))
             candidate_status = "pending"
             if confidence >= 0.97 and tx_type in {"income", "expense", "debt_payment"}:
@@ -449,7 +491,7 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
                 ),
             )
             status = candidate_status
-            conn.execute("UPDATE finva_email_messages SET status=%s WHERE id=%s", (status, int(email_row["id"])))
+        conn.execute("UPDATE finva_email_messages SET status=%s WHERE id=%s", (status, int(email_row["id"])))
         conn.commit()
     return status
 
@@ -479,7 +521,15 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
         response = service.users().messages().list(
             userId="me", q=FINVA_QUERY, maxResults=max(1, min(max_results, 250))
         ).execute()
-        results = [_process_message(service, connection, item["id"]) for item in response.get("messages", []) if item.get("id")]
+        payroll_response = service.users().messages().list(
+            userId="me", q=_aguinaldo_gmail_query(), maxResults=100
+        ).execute()
+        messages = {
+            item["id"]: item
+            for item in [*(response.get("messages", [])), *(payroll_response.get("messages", []))]
+            if item.get("id")
+        }
+        results = [_process_message(service, connection, item["id"]) for item in messages.values()]
     except Exception as exc:
         message = str(exc).lower()
         if "invalid_grant" in message or "token has been expired" in message or "revoked" in message:
@@ -505,6 +555,7 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
         "found": len(results),
         "auto_saved": results.count("auto_saved"),
         "pending": results.count("pending"),
+        "payroll_reports": results.count("payroll_statement"),
         "duplicates": results.count("duplicate"),
     }
 
