@@ -4,7 +4,7 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    GmailCandidateReviewRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -44,6 +44,7 @@ from backend.user_product.gmail_service import (
     review_gmail_candidate,
     sync_current_gmail,
 )
+from backend.user_product.financial_identity import confirm_financial_account, list_financial_identity
 
 router = APIRouter(prefix="/user-product", tags=["Finva Product"])
 
@@ -251,6 +252,15 @@ def vip_gmail_sync():
 @router.get("/vip/gmail/emails")
 def vip_gmail_emails(status: str | None = None):
     require_feature("gmail_automation"); return list_gmail_emails(status)
+
+@router.get("/vip/financial-identity")
+def vip_financial_identity():
+    require_feature("gmail_automation"); return list_financial_identity()
+
+@router.put("/vip/financial-identity/accounts/{account_balance_id}")
+def vip_financial_identity_confirm(account_balance_id: int, request: FinancialAccountIdentityRequest):
+    require_feature("gmail_automation")
+    return confirm_financial_account(account_balance_id, request.ownership_status, request.display_name)
 
 @router.post("/vip/gmail/candidates/{candidate_id}/accept")
 def vip_gmail_candidate_accept(candidate_id: int):

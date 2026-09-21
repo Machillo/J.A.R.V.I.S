@@ -8,6 +8,7 @@ const registry = readFileSync(new URL("../src/products/finva/features/registry.j
 const navigation = readFileSync(new URL("../src/products/finva/navigation/FinvaNavigation.jsx", import.meta.url), "utf8");
 const hubs = readFileSync(new URL("../src/products/finva/features/hubs/FinvaHubs.jsx", import.meta.url), "utf8");
 const settings = readFileSync(new URL("../src/users/pages/Settings.jsx", import.meta.url), "utf8");
+const gmail = readFileSync(new URL("../src/users/pages/GmailAutomation.jsx", import.meta.url), "utf8");
 
 assert.match(vip, /onNavigate\?\.\("settings"\)/, "VIP must expose account and plan settings");
 assert.match(vip, /onNavigate\?\.\("feedback"\)/, "VIP must expose support reporting");
@@ -27,5 +28,8 @@ assert.doesNotMatch(navigation, /key: "more"/, "Primary navigation must not rest
 assert.match(settings, /<AccountActions onLogout=\{onLogout\} variant=\{currentPlan\}/, "Basic and VIP settings must expose logout and permanent account deletion");
 assert.match(free, /<AccountActions onLogout=\{onLogout\}/, "Free settings must preserve permanent account deletion");
 assert.match(registry, /<SettingsPage user=\{user\} onUserChange=\{onUserChange\} onLogout=\{onLogout\}/, "Settings must receive the logout callback used after deletion");
+assert.match(gmail, /getVipFinancialIdentity/, "VIP Gmail must load the user's financial identity");
+assert.match(gmail, /confirmVipFinancialAccount/, "Detected accounts must require an explicit ownership decision");
+assert.match(gmail, /FINVA no incluirá una cuenta detectada en tu patrimonio sin tu confirmación/, "Detected accounts must explain that ownership is not assumed");
 
 console.log("FINVA information architecture, settings and VIP Gmail contracts passed.");
