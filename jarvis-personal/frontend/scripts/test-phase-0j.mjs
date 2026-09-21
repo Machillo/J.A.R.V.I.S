@@ -24,6 +24,8 @@ const infoPlist = readFileSync(new URL("../ios-finva/App/App/Info.plist", import
 const iosProductScript = readFileSync(new URL("./ios-product.mjs", import.meta.url), "utf8");
 
 assert.match(app, /<FinvaAppLock/, "authenticated FINVA is protected by the local lock gate");
+assert.match(app, /if \(!isFinvaDistribution\) return personalApp;[\s\S]*<FinvaAppLock userId=\{currentUser\.id\}/, "FINVA protects owner and admin sessions without changing the standalone JARVIS app");
+assert.match(app, /nativeAppId === "com\.finva\.app"/, "owner protection is scoped to the FINVA distribution");
 assert.match(settings, /Bloquear ahora/, "settings provide a manual lock action");
 assert.doesNotMatch(settings, /<select/, "users cannot weaken the FINVA-owned timeout");
 assert.match(settings, /5 minutos/, "settings explain the fixed five-minute timeout");
