@@ -69,3 +69,17 @@ def test_marks_internal_only_when_two_distinct_confirmed_accounts_match():
     assert "transaction_type=CASE" in query
     assert params[1] is True
     assert params[-2:] == ("confirmed_owned_endpoints", 9)
+
+
+def test_links_one_possible_cross_source_match_without_auto_rejecting():
+    statement = _candidate(source_type="statement", external_reference=None)
+    connection = _Connection([
+        _Result(one=statement), _Result(one=None),
+        _Result(rows=[{"id": 4, "description": "SINPE A AHORRO", "source_account_reference": "1111", "destination_account_reference": None}]),
+        _Result(one=None), _Result(one=None), _Result(),
+    ])
+    result = resolve_candidate(connection, 9)
+    assert result == {"status": "pending"}
+    query, params = connection.calls[-1]
+    assert "related_candidate_id=%s" in query
+    assert params[-3:] == (4, "possible_cross_source_match", 9)

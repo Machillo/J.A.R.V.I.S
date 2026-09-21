@@ -1,6 +1,7 @@
 from datetime import date
 
 from backend.user_product import gmail_service
+from backend.user_product.financial_candidate import canonical_candidate
 
 
 class _Result:
@@ -144,3 +145,42 @@ def test_accept_internal_transfer_confirms_without_creating_transaction(monkeypa
     assert result["transaction_id"] is None
     assert all("INSERT INTO transactions" not in query for query, _ in connection.calls)
     assert connection.committed is True
+
+
+def test_canonical_insert_keeps_statement_link_and_valid_parameter_shape(monkeypatch):
+    candidate = canonical_candidate(
+        {"bank": "bac", "transaction_date": "2026-09-20", "description": "Compra", "amount": 1250,
+         "transaction_type": "expense", "category": "food", "dedupe_key": "one"},
+        provider_message_id="gmail-1", subject="Compra",
+    )
+    candidate.update({"source_type": "statement", "source_provider": "pdf"})
+
+    class _StrictConnection:
+        def execute(self, query, params=()):
+            assert query.count("%s") == len(params)
+            assert params[3] == 88
+            return _Result(one={"id": 44})
+
+    monkeypatch.setattr(gmail_service, "discover_candidate_account", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(gmail_service, "resolve_candidate", lambda *_args, **_kwargs: {"status": "pending"})
+    result = gmail_service._insert_finva_candidate(
+        _StrictConnection(), email_message_id=9,
+        connection={"account_id": "account-a", "workspace_id": "workspace-a", "legacy_user_id": 7},
+        candidate=candidate, statement_document_id=88,
+    )
+    assert result == {"status": "pending"}
+
+
+def test_statement_confirmation_records_statement_source():
+    connection = _Connection([_Result(one={"id": 55})])
+    candidate = {
+        "source_type": "statement", "bank": "bac", "legacy_user_id": 77,
+        "workspace_id": "workspace-a", "financial_account_id": None,
+    }
+    gmail_service._create_candidate_transaction(
+        connection, candidate,
+        {"transaction_date": date(2026, 9, 20), "description": "Compra", "amount": 1250,
+         "transaction_type": "expense", "category": "food"},
+    )
+    _query, params = connection.calls[0]
+    assert params[6] == "finva_statement"

@@ -59,6 +59,33 @@ def _confirmed_account(conn, candidate: dict[str, Any], reference: Any) -> int |
     return int(row["id"]) if row else None
 
 
+def _possible_cross_source_match(conn, candidate: dict[str, Any]) -> int | None:
+    """Link, but never auto-discard, a weaker email-to-statement match."""
+    if candidate.get("source_type") != "statement":
+        return None
+    rows = conn.execute(
+        """SELECT id,description,source_account_reference,destination_account_reference
+           FROM finva_email_candidates
+           WHERE account_id=%s AND workspace_id=%s AND source_type<>'statement'
+             AND transaction_date=%s AND amount=%s AND currency=%s AND bank=%s
+             AND status<>'rejected'
+           ORDER BY id""",
+        (
+            candidate["account_id"], candidate["workspace_id"], candidate["transaction_date"],
+            candidate["amount"], candidate.get("currency") or "CRC", candidate.get("bank") or "unknown",
+        ),
+    ).fetchall()
+    description = _plain(candidate.get("description"))
+    account = _last4(candidate.get("source_account_reference") or candidate.get("destination_account_reference"))
+    matches = []
+    for row in rows:
+        row = dict(row)
+        other_account = _last4(row.get("source_account_reference") or row.get("destination_account_reference"))
+        if _plain(row.get("description")) == description and (not account or not other_account or account == other_account):
+            matches.append(int(row["id"]))
+    return matches[0] if len(matches) == 1 else None
+
+
 def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
     """Resolve semantic duplicates and own-account transfers conservatively."""
     row = conn.execute(
@@ -89,10 +116,11 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
         )
         return {"status": "duplicate", "related_candidate_id": duplicate_id}
 
+    possible_match_id = _possible_cross_source_match(conn, candidate)
     source_id = _confirmed_account(conn, candidate, candidate.get("source_account_reference"))
     destination_id = _confirmed_account(conn, candidate, candidate.get("destination_account_reference"))
     is_internal = bool(source_id and destination_id and source_id != destination_id)
-    reason = "confirmed_owned_endpoints" if is_internal else None
+    reason = "confirmed_owned_endpoints" if is_internal else "possible_cross_source_match" if possible_match_id else None
     raw = candidate.get("raw_payload") or {}
     base_type = str(raw.get("transaction_type") or candidate.get("transaction_type") or "transfer")
     base_direction = str(raw.get("movement_direction") or candidate.get("movement_direction") or "unknown")
@@ -103,11 +131,11 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
                transaction_type=CASE WHEN %s THEN 'internal_transfer' ELSE %s END,
                movement_direction=CASE WHEN %s THEN 'internal' ELSE %s END,
                category=CASE WHEN %s THEN 'Movimiento interno' ELSE %s END,
-               resolution_reason=%s,updated_at=NOW()
+               related_candidate_id=%s,resolution_reason=%s,updated_at=NOW()
            WHERE id=%s""",
         (
             fingerprint, is_internal, is_internal, base_type, is_internal, base_direction,
-            is_internal, base_category, reason, candidate_id,
+            is_internal, base_category, possible_match_id, reason, candidate_id,
         ),
     )
     return {"status": "internal_transfer" if is_internal else "pending"}
