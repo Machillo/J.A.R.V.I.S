@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException
 
@@ -28,6 +29,26 @@ RECEIPT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/p
 MAX_RECEIPT_BYTES = 5 * 1024 * 1024
 logger = logging.getLogger(__name__)
 RELEASE_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[+-][A-Za-z0-9.-]+)?$")
+def _discord_webhook_host(webhook: str) -> str | None:
+    """Return the verified official Discord host without exposing webhook secrets."""
+    try:
+        parsed = urlsplit(webhook)
+        host = (parsed.hostname or "").lower()
+        official_host = any(host == domain or host.endswith(f".{domain}") for domain in (
+            "discord.com", "discordapp.com",
+        ))
+        if (
+            parsed.scheme.lower() == "https"
+            and official_host
+            and parsed.port in {None, 443}
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.path.startswith("/api/webhooks/")
+        ):
+            return host
+    except (TypeError, ValueError):
+        pass
+    return None
 
 
 def _release_version_tuple(value: str | None) -> tuple[int, int, int] | None:
@@ -250,8 +271,9 @@ def _send_support_discord(*, public_id: str, plan: str, payload, severity: str =
     webhook = os.getenv("SUPPORT_DISCORD_WEBHOOK_URL", "").strip()
     if not webhook:
         return False
-    if not re.match(r"^https://(?:canary\.|ptb\.)?(?:discord(?:app)?\.com)/api/webhooks/", webhook, re.I):
-        logger.error("Discord support webhook rejected: unsupported host")
+    webhook_host = _discord_webhook_host(webhook)
+    if not webhook_host:
+        logger.error("Discord support webhook rejected: unsupported host or path")
         return False
     safe = lambda value: re.sub(r"[\r\n`@]+", " ", str(value or "")).strip()[:160]
     fields = [
@@ -280,7 +302,10 @@ def _send_support_discord(*, public_id: str, plan: str, payload, severity: str =
         if response.status_code in {200, 204}:
             logger.info("Support Discord notification delivered for %s", public_id)
             return True
-        logger.error("Support Discord notification failed for %s status=%s", public_id, response.status_code)
+        logger.error(
+            "Support Discord notification failed for %s host=%s status=%s",
+            public_id, webhook_host, response.status_code,
+        )
     except Exception:
         logger.exception("Support Discord notification failed for %s", public_id)
     return False
