@@ -7,11 +7,13 @@ const situation = readFileSync(new URL("../src/users/pages/FinancialSituation.js
 
 assert.match(app, /<ProgressiveProfileNudge/);
 assert.match(nudge, /page !== "overview"/);
+assert.match(nudge, /plan === "free"/);
 assert.match(nudge, /sessionStorage/);
 assert.match(nudge, /income_count/);
 assert.match(nudge, /missing_interest/);
 assert.match(nudge, /plan === "vip"/);
 assert.match(situation, /monthly_income_average/);
+assert.match(situation, /plan !== "free"/);
 assert.match(situation, /Revisalo antes de guardar/);
 
 console.log("Phase 0I progressive profiling contract passed.");
