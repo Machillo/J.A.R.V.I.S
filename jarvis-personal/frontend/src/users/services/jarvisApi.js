@@ -90,7 +90,6 @@ export const getVipAguinaldo = () => request("/user-product/vip/aguinaldo");
 export const getVipGmailStatus = () => request("/user-product/vip/gmail/status");
 export const connectVipGmail = () => request("/user-product/vip/gmail/connect", { method: "POST" });
 export const syncVipGmail = () => request("/user-product/vip/gmail/sync", { method: "POST" });
-export const updateVipGmailAiFallback = (enabled) => json("/user-product/vip/gmail/ai-fallback", "PUT", { enabled });
 export const disconnectVipGmail = () => request("/user-product/vip/gmail", { method: "DELETE" });
 export const getVipGmailEmails = (status = "") => request(`/user-product/vip/gmail/emails${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 export const acceptVipGmailCandidate = (id, corrections = null) => corrections

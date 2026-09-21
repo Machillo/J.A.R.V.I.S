@@ -167,10 +167,6 @@ class GmailCandidateReviewRequest(BaseModel):
     category: str = Field(default="general", max_length=100)
 
 
-class GmailAiFallbackRequest(BaseModel):
-    enabled: bool
-
-
 class FinancialAccountIdentityRequest(BaseModel):
     ownership_status: Literal["own", "not_mine"]
     display_name: str | None = Field(default=None, max_length=120)

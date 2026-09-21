@@ -37,5 +37,21 @@ def test_parser_internal_hint_remains_unconfirmed_transfer():
     assert candidate["movement_kind"] == "transfer"
 
 
+def test_popular_card_statement_emits_reviewable_rows():
+    text = """ESTADO DE CUENTA DE TARJETA DE CRÉDITO
+Número de cuenta: XXXXXXXXXXXX8285
+Detalle de compras del período
+12/08/2026 SUPERMERCADO PRUEBA 18,500.00 0.00
+Total de compras del período 18,500.00 0.00"""
+    rows = parse_statement_movements("popular", text)
+    candidate = statement_candidate(
+        rows[0], bank="popular", document_hash=statement_hash(text),
+        movement_index=0, statement_text=text,
+    )
+    assert candidate["bank"] == "popular"
+    assert candidate["amount"] == 18500.0
+    assert candidate["source_account_reference"] == "8285"
+
+
 def test_unsupported_bank_does_not_guess_statement_rows():
-    assert parse_statement_movements("popular", "01/08/2026\n123\nMOVIMIENTO\n1.00") == []
+    assert parse_statement_movements("unknown", "01/08/2026\n123\nMOVIMIENTO\n1.00") == []

@@ -136,7 +136,7 @@ def parse_popular_loan_payment(text: str, received_at: str | None = None) -> dic
         },
         "dedupe_key": f"popular_loan_payment|{transaction_date}|{reference}|{amount:.2f}",
         # Payroll deductions can already be reflected in net salary. Always
-        # require Kenneth's review before creating a direct expense.
+        # require the user's review before creating a direct expense.
         "confidence": 0.93,
         "confidence_reason": "Comprobante oficial de cuota Popular; requiere revisar posible rebajo de planilla.",
     }
