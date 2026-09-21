@@ -8,20 +8,17 @@ import {
 
 export const APP_LOCK_CHANGED_EVENT = "finva:app-lock-changed";
 export const APP_LOCK_REQUESTED_EVENT = "finva:app-lock-requested";
-export const APP_LOCK_TIMEOUTS = [0, 60_000, 300_000, 900_000, 3_600_000];
 export const DEFAULT_APP_LOCK_TIMEOUT = 300_000;
 
 const storageKey = (userId) => `finva:app-lock:${userId}`;
+const onboardingKey = (userId) => `finva:app-lock-onboarding:v1:${userId}`;
 
 export function isNativeAppLockSupported() {
   return Capacitor.isNativePlatform();
 }
 
 export function normalizeAppLockConfig(value = {}) {
-  const timeoutMs = APP_LOCK_TIMEOUTS.includes(Number(value.timeoutMs))
-    ? Number(value.timeoutMs)
-    : DEFAULT_APP_LOCK_TIMEOUT;
-  return { enabled: Boolean(value.enabled), timeoutMs };
+  return { enabled: Boolean(value.enabled), timeoutMs: DEFAULT_APP_LOCK_TIMEOUT };
 }
 
 export function getAppLockConfig(userId) {
@@ -43,6 +40,15 @@ export function saveAppLockConfig(userId, config) {
 
 export function requestAppLock(userId) {
   window.dispatchEvent(new CustomEvent(APP_LOCK_REQUESTED_EVENT, { detail: { userId } }));
+}
+
+export function hasSeenAppLockOnboarding(userId) {
+  if (!userId) return true;
+  return window.localStorage.getItem(onboardingKey(userId)) === "1";
+}
+
+export function markAppLockOnboardingSeen(userId) {
+  if (userId) window.localStorage.setItem(onboardingKey(userId), "1");
 }
 
 export function shouldLockAfterInactivity(timeoutMs, inactiveForMs) {

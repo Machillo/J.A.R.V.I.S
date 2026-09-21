@@ -7,16 +7,20 @@ import {
   appLockErrorMessage,
   authenticateAppLock,
   getAppLockConfig,
+  hasSeenAppLockOnboarding,
   isNativeAppLockSupported,
+  markAppLockOnboardingSeen,
   shouldLockAfterInactivity,
 } from "../lib/appLock";
 import { tx } from "../lib/locale";
+import FinvaAppLockOnboarding from "./FinvaAppLockOnboarding";
 import "./FinvaAppLock.css";
 
 export default function FinvaAppLock({ userId, onLogout, children }) {
   const [config, setConfig] = useState(() => getAppLockConfig(userId));
   const [locked, setLocked] = useState(() => isNativeAppLockSupported() && getAppLockConfig(userId).enabled);
   const [appActive, setAppActive] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(() => isNativeAppLockSupported() && !getAppLockConfig(userId).enabled && !hasSeenAppLockOnboarding(userId));
   const [message, setMessage] = useState("");
   const inactiveAt = useRef(null);
   const authenticating = useRef(false);
@@ -25,6 +29,8 @@ export default function FinvaAppLock({ userId, onLogout, children }) {
     const next = getAppLockConfig(userId);
     setConfig(next);
     setLocked(isNativeAppLockSupported() && next.enabled);
+    if (next.enabled) markAppLockOnboardingSeen(userId);
+    setShowOnboarding(isNativeAppLockSupported() && !next.enabled && !hasSeenAppLockOnboarding(userId));
     setMessage("");
   }, [userId]);
 
@@ -84,6 +90,10 @@ export default function FinvaAppLock({ userId, onLogout, children }) {
       window.removeEventListener(APP_LOCK_REQUESTED_EVENT, requested);
     };
   }, [config.enabled, userId]);
+
+  if (showOnboarding) {
+    return <FinvaAppLockOnboarding userId={userId} onFinish={() => setShowOnboarding(false)} />;
+  }
 
   if (!locked) return children;
 
