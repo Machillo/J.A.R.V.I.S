@@ -10,14 +10,14 @@ export default function ProgressiveProfileNudge({ user, plan, page, onNavigate }
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    if (page !== "overview") return;
+    if (plan === "free" || page !== "overview") return;
     let active = true;
     getFinancialSituation().then((value) => { if (active) setData(value); }).catch(() => {});
     return () => { active = false; };
-  }, [page]);
+  }, [page, plan]);
 
   const prompt = useMemo(() => {
-    if (!data) return null;
+    if (plan === "free" || !data) return null;
     const profile = data.financial_profile;
     if (!profile && Number(data.observed?.income_count || 0) > 0) return "income";
     if (!profile) return "profile";
