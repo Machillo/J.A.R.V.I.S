@@ -96,6 +96,12 @@ export const acceptVipGmailCandidate = (id, corrections = null) => corrections
   ? json(`/user-product/vip/gmail/candidates/${id}/accept`, "PUT", corrections)
   : request(`/user-product/vip/gmail/candidates/${id}/accept`, { method: "POST" });
 export const rejectVipGmailCandidate = (id) => request(`/user-product/vip/gmail/candidates/${id}/reject`, { method: "POST" });
+export const getVipFinancialIdentity = () => request("/user-product/vip/financial-identity");
+export const confirmVipFinancialAccount = (id, ownershipStatus, displayName = "") => json(
+  `/user-product/vip/financial-identity/accounts/${id}`,
+  "PUT",
+  { ownership_status: ownershipStatus, display_name: displayName || null },
+);
 
 export const getGoals = () => request("/user-product/goals");
 export const createGoal = (payload) => json("/user-product/goals", "POST", payload);

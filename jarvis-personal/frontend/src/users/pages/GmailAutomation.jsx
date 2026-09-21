@@ -1,4 +1,4 @@
-import { Check, CheckCircle2, Mail, Pencil, RefreshCw, ShieldCheck, Unplug, X } from "lucide-react";
+import { Building2, Check, CheckCircle2, Mail, Pencil, RefreshCw, ShieldCheck, Unplug, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
@@ -8,6 +8,8 @@ import {
   acceptVipGmailCandidate,
   getVipGmailEmails,
   getVipGmailStatus,
+  getVipFinancialIdentity,
+  confirmVipFinancialAccount,
   rejectVipGmailCandidate,
   syncVipGmail,
 } from "../services/jarvisApi";
@@ -21,11 +23,14 @@ export default function GmailAutomation() {
   const [emails, setEmails] = useState([]);
   const [filter, setFilter] = useState("pending");
   const [editing, setEditing] = useState(null);
+  const [identity, setIdentity] = useState({ items: [], summary: {} });
 
   const load = useCallback(async () => {
     try {
-      const [status, inbox] = await Promise.all([getVipGmailStatus(), getVipGmailEmails(filter)]);
-      setGmail(status); setEmails(inbox?.items || []);
+      const [status, inbox, accounts] = await Promise.all([
+        getVipGmailStatus(), getVipGmailEmails(filter), getVipFinancialIdentity(),
+      ]);
+      setGmail(status); setEmails(inbox?.items || []); setIdentity(accounts || { items: [], summary: {} });
     }
     catch (err) { setError(err.message || tx("No se pudo consultar Gmail.", "Couldn’t check Gmail.")); }
   }, [filter]);
@@ -39,6 +44,16 @@ export default function GmailAutomation() {
       setMessage(action === "reject" ? tx("Correo descartado.", "Email dismissed.") : tx("Movimiento guardado.", "Transaction saved."));
       await load();
     } catch (err) { setError(err.message || tx("No se pudo revisar el correo.", "Couldn’t review the email.")); }
+    finally { setBusy(""); }
+  };
+
+  const confirmAccount = async (item, ownershipStatus) => {
+    setBusy(`account-${item.id}`); setError(""); setMessage("");
+    try {
+      await confirmVipFinancialAccount(item.id, ownershipStatus);
+      setMessage(ownershipStatus === "own" ? tx("Cuenta confirmada como propia.", "Account confirmed as yours.") : tx("Cuenta marcada como ajena.", "Account marked as not yours."));
+      await load();
+    } catch (err) { setError(err.message || tx("No se pudo confirmar la cuenta.", "Couldn’t confirm the account.")); }
     finally { setBusy(""); }
   };
 
@@ -106,6 +121,15 @@ export default function GmailAutomation() {
         <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar ahora", "Refresh now")}</button><button type="button" className="danger" disabled={Boolean(busy)} onClick={disconnect}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
       </>}
     </article>
+    {gmail?.connected && identity.items.length > 0 && <section className="gmail-identity" aria-label={tx("Cuentas detectadas", "Detected accounts")}>
+      <header><div><p className="eyebrow">{tx("Tu mapa financiero", "Your financial map")}</p><h2>{tx("Cuentas detectadas", "Detected accounts")}</h2></div><span>{identity.summary?.pending || 0} {tx("pendientes", "pending")}</span></header>
+      <p>{tx("Confirmá cuáles cuentas son tuyas. FINVA no incluirá una cuenta detectada en tu patrimonio sin tu confirmación.", "Confirm which accounts are yours. FINVA won’t include a detected account in your net worth without your confirmation.")}</p>
+      <div className="gmail-identity-list">{identity.items.map((item) => <article key={item.id}>
+        <span className="gmail-identity-icon"><Building2 size={19}/></span>
+        <div><strong>{item.account_name}</strong><small>{item.bank_name} · {item.institution_country} · {item.currency}</small></div>
+        {item.ownership_status === "pending" ? <div className="gmail-account-actions"><button type="button" disabled={Boolean(busy)} onClick={() => confirmAccount(item, "not_mine")}>{tx("No es mía", "Not mine")}</button><button type="button" className="primary" disabled={Boolean(busy)} onClick={() => confirmAccount(item, "own")}>{tx("Es mía", "It’s mine")}</button></div> : <span className={`gmail-ownership-state ${item.ownership_status}`}>{item.ownership_status === "own" ? tx("Cuenta propia", "Owned account") : tx("Cuenta ajena", "Not owned")}</span>}
+      </article>)}</div>
+    </section>}
     {gmail?.connected && <section className="gmail-inbox" aria-label={tx("Correos financieros", "Financial emails")}>
       <header><div><p className="eyebrow">{tx("Bandeja financiera", "Financial inbox")}</p><h2>{tx("Correos recibidos", "Received emails")}</h2></div><span>{emails.length}</span></header>
       <div className="gmail-inbox-tabs">

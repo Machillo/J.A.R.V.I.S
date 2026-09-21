@@ -28,6 +28,7 @@ from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
 from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
+from backend.user_product.financial_identity import discover_candidate_account
 
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
@@ -572,7 +573,7 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
                 subject=subject,
             )
             candidate_status = "pending"
-            conn.execute(
+            candidate_row = conn.execute(
                 """INSERT INTO finva_email_candidates(
                        email_message_id,account_id,workspace_id,transaction_id,movement_index,
                        source_type,source_provider,source_record_key,institution_country,
@@ -584,7 +585,7 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
                    ) VALUES(
                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb
-                   )""",
+                   ) RETURNING id""",
                 (
                     int(email_row["id"]), connection["account_id"], connection["workspace_id"], transaction_id,
                     candidate["movement_index"], candidate["source_type"], candidate["source_provider"],
@@ -601,6 +602,14 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
                     candidate["is_internal_transfer"], candidate_status,
                     json.dumps(candidate["raw_payload"], default=str),
                 ),
+            ).fetchone()
+            discover_candidate_account(
+                conn,
+                candidate_id=int(candidate_row["id"]),
+                candidate=candidate,
+                account_id=str(connection["account_id"]),
+                workspace_id=str(connection["workspace_id"]),
+                legacy_user_id=int(connection["legacy_user_id"]),
             )
             status = candidate_status
         conn.execute("UPDATE finva_email_messages SET status=%s WHERE id=%s", (status, int(email_row["id"])))

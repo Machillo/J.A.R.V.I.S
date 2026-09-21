@@ -167,6 +167,11 @@ class GmailCandidateReviewRequest(BaseModel):
     category: str = Field(default="general", max_length=100)
 
 
+class FinancialAccountIdentityRequest(BaseModel):
+    ownership_status: Literal["own", "not_mine"]
+    display_name: str | None = Field(default=None, max_length=120)
+
+
 class MovementUpdateRequest(BaseModel):
     transaction_date: date
     description: str
