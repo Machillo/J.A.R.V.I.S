@@ -88,7 +88,10 @@ export default function GmailAutomation() {
     try {
       const result = await syncVipGmail();
       await load();
-      setMessage(tx(`Listo: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`, `Done: ${result.auto_saved || 0} new transactions and ${result.pending || 0} to review.`));
+      const progress = result.scan_scope === "year_to_date" && !result.initial_scan_complete
+        ? tx(" FINVA continuará recorriendo el resto del año en las próximas actualizaciones.", " FINVA will continue scanning the rest of the year during the next refreshes.")
+        : "";
+      setMessage(tx(`Listo: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`, `Done: ${result.auto_saved || 0} new transactions and ${result.pending || 0} to review.`) + progress);
     } catch (err) { setError(err.message || tx("No se pudo actualizar Gmail.", "Couldn’t refresh Gmail.")); }
     finally { setBusy(""); }
   };
