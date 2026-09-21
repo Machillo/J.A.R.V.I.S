@@ -6,6 +6,7 @@ import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "
 import AppearanceSelector from "../../components/AppearanceSelector";
 import AppLockSettings from "../components/AppLockSettings";
 import { deviceLanguage, localeTag } from "../../lib/locale";
+import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -24,6 +25,11 @@ export default function Settings({ user, onUserChange }) {
   const [receipt, setReceipt] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState("");
+  useFinvaBackHandler(() => {
+    if (changing || uploading) return;
+    if (paymentFlow) setPaymentFlow(null);
+    else setConfirming("");
+  }, Boolean(confirming || paymentFlow));
 
   const currentPlan = user?.subscription?.plan || "free";
   const currentPlanInfo = useMemo(

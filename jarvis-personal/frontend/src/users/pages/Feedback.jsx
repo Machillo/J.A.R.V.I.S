@@ -3,6 +3,7 @@ import { Activity, AlertCircle, Bot, Bug, CheckCircle2, Lightbulb, MessageCircle
 import { SUPPORT_CONTEXT_KEY } from "../../lib/apiErrors";
 import { createFeedback, getFeedback, getPlatformHealth, updateFeedbackResolution } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
+import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
 
 const EMPTY = { category: "", subject: "", screen: "", happened: "", expected: "", benefit: "", reproducible: "", errorReference: "" };
 const ERROR_STEPS = ["subject", "screen", "happened", "expected", "reproducible", "review"];
@@ -44,6 +45,7 @@ export default function Feedback() {
   const [resolving, setResolving] = useState(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  useFinvaBackHandler(() => { if (!busy) setChatOpen(false); }, chatOpen);
   const load = () => getFeedback().then(setReports).catch(() => setReports([]));
   const loadHealth = useCallback(async () => {
     setHealthBusy(true);

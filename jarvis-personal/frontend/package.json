@@ -9,6 +9,7 @@
     "audit:language": "node scripts/audit-ui-language.mjs",
     "test:locale": "node scripts/test-locale.mjs",
     "test:navigation": "node scripts/test-finva-settings-navigation.mjs",
+    "test:native-navigation": "node scripts/test-native-navigation.mjs",
     "test:phase0a": "node scripts/test-phase-0a.mjs",
     "test:phase0b": "node scripts/test-phase-0b.mjs",
     "test:phase0d": "node scripts/test-phase-0d.mjs",
