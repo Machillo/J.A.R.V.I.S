@@ -16,6 +16,7 @@ import { tx } from "./lib/locale";
 import ReleaseUpdateNotice from "./components/ReleaseUpdateNotice";
 import { getReleasePolicy } from "./lib/releasePolicy";
 import { detectNativePlatform } from "./ui/native/platform";
+import FinvaAppLock from "./components/FinvaAppLock";
 
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
@@ -227,5 +228,9 @@ export default function App() {
     );
   }
 
-  return <UsersApp user={currentUser} onUserChange={setCurrentUser} releasePolicy={releasePolicy} />;
+  return (
+    <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
+      <UsersApp user={currentUser} onUserChange={setCurrentUser} releasePolicy={releasePolicy} />
+    </FinvaAppLock>
+  );
 }

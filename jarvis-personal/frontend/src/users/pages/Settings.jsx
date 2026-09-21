@@ -4,6 +4,7 @@ import { getBillingCatalog, getMe, getPlans, selectPlan, uploadPaymentReceipt } 
 import AccountSecurity from "../components/AccountSecurity";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../../lib/receiptPicker";
 import AppearanceSelector from "../../components/AppearanceSelector";
+import AppLockSettings from "../components/AppLockSettings";
 import { deviceLanguage, localeTag } from "../../lib/locale";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
@@ -174,6 +175,8 @@ export default function Settings({ user, onUserChange }) {
       </div>
 
       <AccountSecurity user={user} />
+
+      <AppLockSettings userId={user?.id} />
 
       <AppearanceSelector />
 
