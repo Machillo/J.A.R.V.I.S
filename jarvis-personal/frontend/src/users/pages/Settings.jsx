@@ -7,12 +7,13 @@ import AppearanceSelector from "../../components/AppearanceSelector";
 import AppLockSettings from "../components/AppLockSettings";
 import { deviceLanguage, localeTag } from "../../lib/locale";
 import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
+import AccountActions from "../../products/finva/components/AccountActions";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
 const icons = { free: WalletCards, basic: Sparkles, vip: Crown };
 
-export default function Settings({ user, onUserChange }) {
+export default function Settings({ user, onUserChange, onLogout }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [changing, setChanging] = useState("");
@@ -322,6 +323,8 @@ export default function Settings({ user, onUserChange }) {
           </section>
         </div>;
       })()}
+
+      <AccountActions onLogout={onLogout} variant={currentPlan} />
     </section>
   );
 }
