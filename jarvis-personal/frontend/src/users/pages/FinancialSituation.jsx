@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BriefcaseBusiness,
   ChevronRight,
@@ -58,12 +58,12 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const load = () => getFinancialSituation().then((response) => {
+  const load = useCallback(() => getFinancialSituation().then((response) => {
     setData(response);
     const fp = response.financial_profile || {};
     setForm({
       income_type: fp.income_type || "fixed",
-      fixed_monthly_salary: fp.fixed_monthly_salary ?? (response.observed?.income_count > 0 ? response.observed.monthly_income_average : ""),
+      fixed_monthly_salary: fp.fixed_monthly_salary ?? (plan !== "free" && response.observed?.income_count > 0 ? response.observed.monthly_income_average : ""),
       hourly_rate: fp.hourly_rate ?? "",
       work_days_per_week: fp.work_days_per_week ?? 5,
       hours_per_day: fp.hours_per_day ?? "",
@@ -75,9 +75,9 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
       strategy_preference: fp.strategy_preference || "balanced",
       discretionary_monthly_minimum: fp.discretionary_monthly_minimum ?? "",
     });
-  });
+  }), [plan]);
 
-  useEffect(() => { load().catch((e) => setError(e.message)); }, []);
+  useEffect(() => { load().catch((e) => setError(e.message)); }, [load]);
 
   const completeness = useMemo(() => {
     if (!data) return 0;
@@ -143,7 +143,7 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
         {plan !== "free" && Number(data.debts?.missing_interest || 0) > 0 && <p>{tx(`Podés mejorar la precisión agregando la tasa de interés de ${data.debts.missing_interest} deuda(s).`, `Improve accuracy by adding the interest rate for ${data.debts.missing_interest} debt(s).`)}</p>}
       </article>
 
-      {!data.financial_profile && Number(data.observed?.income_count || 0) > 0 && <article className="situation-observed-note"><Sparkles size={18}/><div><strong>{tx("Referencia tomada de tus movimientos", "Reference based on your transactions")}</strong><p>{tx(`Calculamos ${money(data.observed.monthly_income_average)} al mes con ${data.observed.income_count} ingreso(s) de los últimos 90 días. Revisalo antes de guardar.`, `We calculated ${money(data.observed.monthly_income_average)} per month from ${data.observed.income_count} income transaction(s) in the last 90 days. Review it before saving.`)}</p></div></article>}
+      {plan !== "free" && !data.financial_profile && Number(data.observed?.income_count || 0) > 0 && <article className="situation-observed-note"><Sparkles size={18}/><div><strong>{tx("Referencia tomada de tus movimientos", "Reference based on your transactions")}</strong><p>{tx(`Calculamos ${money(data.observed.monthly_income_average)} al mes con ${data.observed.income_count} ingreso(s) de los últimos 90 días. Revisalo antes de guardar.`, `We calculated ${money(data.observed.monthly_income_average)} per month from ${data.observed.income_count} income transaction(s) in the last 90 days. Review it before saving.`)}</p></div></article>}
 
       <div className="situation-card-list">
         <SituationCard icon={CircleDollarSign} title={tx("Referencia de ingresos", "Income reference")} summary={tx("FINVA usa tus movimientos reales, no un salario proyectado", "FINVA uses your actual transactions, not projected income")} editing={editing === "income"} onEdit={() => setEditing(editing === "income" ? "" : "income")}>
