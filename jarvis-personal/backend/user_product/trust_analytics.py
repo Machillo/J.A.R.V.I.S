@@ -35,6 +35,7 @@ def summarize_trust_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "source_provider": row.get("source_provider") or "unknown",
             "parser_name": row.get("parser_name") or "unknown",
             "parser_version": row.get("parser_version") or "unknown",
+            "movement_kind": row.get("movement_kind") or "unknown",
             "reviewed": reviewed,
             "accepted_unchanged": accepted,
             "corrected": corrected,
@@ -62,7 +63,7 @@ def get_gmail_trust_analytics() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT institution_country,bank,source_type,source_provider,parser_name,parser_version,
+            """SELECT institution_country,bank,source_type,source_provider,parser_name,parser_version,movement_kind,
                       COUNT(*) FILTER (WHERE status IN ('confirmed','rejected')) AS reviewed,
                       COUNT(*) FILTER (WHERE status='confirmed' AND cardinality(corrected_fields)=0) AS accepted_unchanged,
                       COUNT(*) FILTER (WHERE status='confirmed' AND cardinality(corrected_fields)>0) AS corrected,
@@ -70,8 +71,8 @@ def get_gmail_trust_analytics() -> dict[str, Any]:
                       COUNT(*) FILTER (WHERE status='pending') AS pending
                  FROM finva_email_candidates
                 WHERE account_id=%s AND workspace_id=%s
-                GROUP BY institution_country,bank,source_type,source_provider,parser_name,parser_version
-                ORDER BY reviewed DESC,bank,source_type,parser_name,parser_version""",
+                GROUP BY institution_country,bank,source_type,source_provider,parser_name,parser_version,movement_kind
+                ORDER BY reviewed DESC,bank,source_type,parser_name,parser_version,movement_kind""",
             (account_id, workspace_id),
         ).fetchall()
     return summarize_trust_rows([dict(row) for row in rows])

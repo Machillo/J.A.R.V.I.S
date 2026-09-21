@@ -30,6 +30,7 @@ def test_summary_measures_observed_decisions_and_rates():
         {
             "institution_country": "CR", "bank": "bac", "source_type": "email",
             "source_provider": "gmail", "parser_name": "bac_card", "parser_version": "3",
+            "movement_kind": "card_purchase",
             "reviewed": 10, "accepted_unchanged": 7, "corrected": 2, "rejected": 1, "pending": 4,
         },
         {
@@ -44,6 +45,7 @@ def test_summary_measures_observed_decisions_and_rates():
         "pending": 6, "acceptance_rate": 66.67, "correction_rate": 20.0, "rejection_rate": 13.33,
     }
     assert result["segments"][0]["acceptance_rate"] == 70.0
+    assert result["segments"][0]["movement_kind"] == "card_purchase"
 
 
 def test_query_is_scoped_and_segmented(monkeypatch):
@@ -57,6 +59,6 @@ def test_query_is_scoped_and_segmented(monkeypatch):
     query, params = connection.calls[0]
     assert "account_id=%s AND workspace_id=%s" in query
     assert "cardinality(corrected_fields)>0" in query
-    assert "GROUP BY institution_country,bank,source_type,source_provider,parser_name,parser_version" in query
+    assert "GROUP BY institution_country,bank,source_type,source_provider,parser_name,parser_version,movement_kind" in query
     assert params == ("account-a", "workspace-a")
     assert result["totals"]["acceptance_rate"] == 0.0

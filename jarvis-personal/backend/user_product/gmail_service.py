@@ -32,6 +32,7 @@ from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import resolve_candidate
 from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
+from backend.user_product.gmail_retention import apply_gmail_retention, retention_policy
 from backend.user_product.statement_candidate import (
     PARSER_NAME as STATEMENT_PARSER_NAME,
     PARSER_VERSION as STATEMENT_PARSER_VERSION,
@@ -274,7 +275,7 @@ def gmail_status() -> dict[str, Any]:
             (workspace_id,),
         ).fetchone()
     if not row:
-        return {"connected": False, "status": "disconnected", "pending": 0, "consent": gmail_consent_status()}
+        return {"connected": False, "status": "disconnected", "pending": 0, "consent": gmail_consent_status(), "retention": retention_policy()}
     data = dict(row)
     return {
         "connected": data.get("status") == "active",
@@ -283,6 +284,7 @@ def gmail_status() -> dict[str, Any]:
         "pending": int((pending or {}).get("total") or 0),
         **data,
         "consent": gmail_consent_status(),
+        "retention": retention_policy(),
     }
 
 
@@ -921,7 +923,8 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
                 reconnect += 1
         except Exception:
             continue
-    return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect}
+    retention = apply_gmail_retention()
+    return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect, "retention": retention}
 
 
 def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, Any]:
