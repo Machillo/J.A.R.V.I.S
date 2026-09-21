@@ -18,6 +18,9 @@ import { getReleasePolicy } from "./lib/releasePolicy";
 import { detectNativePlatform } from "./ui/native/platform";
 import FinvaAppLock from "./components/FinvaAppLock";
 
+const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.finva.app";
+const isFinvaDistribution = nativeAppId === "com.finva.app";
+
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
     <main className="unified-router-boot">
@@ -216,7 +219,13 @@ export default function App() {
   }
 
   if (currentUser.role === "owner" || currentUser.role === "admin") {
-    return <PersonalApp />;
+    const personalApp = <PersonalApp />;
+    if (!isFinvaDistribution) return personalApp;
+    return (
+      <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
+        {personalApp}
+      </FinvaAppLock>
+    );
   }
 
   if (!currentUser.plan_selected) {
