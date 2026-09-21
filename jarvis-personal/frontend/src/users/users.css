@@ -453,6 +453,11 @@
 .users-app .gmail-connection-heading strong,.users-app .gmail-connection-heading small,.users-app .gmail-connection-status strong,.users-app .gmail-connection-status small { display:block; }
 .users-app .gmail-connection-heading small,.users-app .gmail-connection-status small,.users-app .gmail-connection-card p { color:var(--muted); }
 .users-app .gmail-connection-card p { margin:0; line-height:1.55; }
+.users-app .gmail-ai-fallback { display:flex; gap:14px; align-items:center; justify-content:space-between; padding:14px; border:1px solid rgba(20,184,166,.18); border-radius:18px; background:rgba(8,15,30,.28); }
+.users-app .gmail-ai-fallback > div { display:grid; gap:4px; }
+.users-app .gmail-ai-fallback small { max-width:54ch; color:var(--muted); line-height:1.45; }
+.users-app .gmail-ai-fallback button { flex:none; min-width:92px; padding:9px 12px; border:1px solid rgba(148,163,184,.28); border-radius:999px; background:rgba(15,23,42,.72); color:var(--muted); font-weight:800; }
+.users-app .gmail-ai-fallback button.active { border-color:rgba(45,212,191,.48); background:rgba(20,184,166,.18); color:#5eead4; }
 .users-app .gmail-connection-status { padding:12px 14px; border-radius:16px; background:rgba(15,23,42,.34); color:#34d399; }
 .users-app .gmail-connection-status span { min-width:0; }
 .users-app .gmail-connection-status strong { overflow:hidden; text-overflow:ellipsis; }

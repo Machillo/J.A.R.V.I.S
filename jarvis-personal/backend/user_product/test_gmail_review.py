@@ -253,3 +253,45 @@ def test_disconnect_revokes_access_without_deleting_financial_history(monkeypatc
     queries = [query for query, _params in connection.calls]
     assert any("SET status='disabled'" in query for query in queries)
     assert all("DELETE FROM finva_gmail_connections" not in query for query in queries)
+
+
+def test_ai_fallback_requires_connection_and_records_explicit_consent(monkeypatch):
+    _identity(monkeypatch)
+    connection = _Connection([_Result(one={"ai_fallback_enabled": True, "ai_fallback_consent_at": "now"})])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+    monkeypatch.setattr(gmail_service, "ai_fallback_available", lambda: True)
+
+    result = gmail_service.update_ai_fallback(True)
+
+    query, params = connection.calls[0]
+    assert "ai_fallback_consent_at" in query
+    assert params == (True, True, "account-a", "workspace-a")
+    assert result["ai_fallback_enabled"] is True
+    assert connection.committed is True
+
+
+def test_ai_fallback_review_records_correction_feedback(monkeypatch):
+    _identity(monkeypatch)
+    candidate = {
+        "id": 4, "email_message_id": 9, "account_id": "account-a", "workspace_id": "workspace-a",
+        "transaction_id": None, "transaction_date": date(2026, 9, 20), "description": "Compra",
+        "amount": 1250, "transaction_type": "expense", "category": "food", "bank": "bac",
+        "status": "pending", "legacy_user_id": 77, "extraction_method": "ai",
+        "parser_name": "finva_ai_fallback",
+    }
+    connection = _Connection([
+        _Result(one=candidate), _Result(one={"id": 55}), _Result(), _Result(), _Result(),
+    ])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+
+    gmail_service.review_gmail_candidate(4, "accept", {
+        "transaction_date": date(2026, 9, 20), "description": "Supermercado",
+        "amount": 1250, "transaction_type": "expense", "category": "food",
+    })
+
+    query, params = next(
+        (query, params) for query, params in connection.calls
+        if "UPDATE finva_parser_fallback_events" in query
+    )
+    assert "corrected_fields" in query
+    assert params == ("corrected", ["description"], 4)
