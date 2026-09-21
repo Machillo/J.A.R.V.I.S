@@ -15,6 +15,7 @@
     "test:phase0e": "node scripts/test-phase-0e.mjs",
     "test:phase0f": "node scripts/test-phase-0f.mjs",
     "test:phase0h": "node scripts/test-phase-0h.mjs",
+    "test:phase0i": "node scripts/test-phase-0i.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "ios:sync:finva": "node scripts/ios-product.mjs finva sync",
