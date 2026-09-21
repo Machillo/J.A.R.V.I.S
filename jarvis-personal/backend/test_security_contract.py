@@ -303,6 +303,20 @@ def test_legal_runtime_schema_is_closed_to_data_api_roles():
     )
 
 
+def test_gmail_consent_ledger_is_private_and_cascades_with_identity():
+    migration = (
+        Path(__file__).parents[1]
+        / "database"
+        / "migrations"
+        / "20260921230000_phase_1h_gmail_consent.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "REFERENCES public.accounts(id) ON DELETE CASCADE" in migration
+    assert "REFERENCES public.workspaces(id) ON DELETE CASCADE" in migration
+    assert "ALTER TABLE public.finva_gmail_consents ENABLE ROW LEVEL SECURITY" in migration
+    assert "REVOKE ALL ON TABLE public.finva_gmail_consents FROM anon, authenticated" in migration
+
+
 def test_rls_lockdown_migration_fails_if_public_tables_remain_unprotected():
     migration = (
         Path(__file__).parents[1]

@@ -3,6 +3,11 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 
+class GmailConsentRequest(BaseModel):
+    accepted: bool
+    version: str = Field(max_length=80)
+
+
 class IncomeCreateRequest(BaseModel):
     amount: float = Field(gt=0)
     description: str = ""
