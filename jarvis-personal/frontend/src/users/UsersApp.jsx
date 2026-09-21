@@ -21,6 +21,7 @@ import "../products/finva/styles/account-actions.css";
 import ReleaseUpdateNotice from "../components/ReleaseUpdateNotice";
 import { dismissRelease, isReleaseDismissed } from "../lib/releasePolicy";
 import { cachedFeatureFlags, featureDisabledMessage, featureEnabled, getOperationalFeatureFlags } from "../lib/featureFlags";
+import ProgressiveProfileNudge from "./components/ProgressiveProfileNudge";
 
 export default function UsersApp({ user, onUserChange, releasePolicy }) {
   const [page, setPage] = useState(() => window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview");
@@ -142,6 +143,7 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
           {pendingOperations > 0 && <aside className="finva-operation-recovery finva-operation-recovery--pending" role="status"><div><strong>{tx("Cambio protegido", "Change protected")}</strong><span>{tx(`${pendingOperations} cambio${pendingOperations === 1 ? "" : "s"} pendiente${pendingOperations === 1 ? "" : "s"}. Se enviará${pendingOperations === 1 ? "" : "n"} automáticamente.`, `${pendingOperations} pending change${pendingOperations === 1 ? "" : "s"}. FINVA will send ${pendingOperations === 1 ? "it" : "them"} automatically.`)}</span></div></aside>}
           {recoveryNotice && pendingOperations === 0 && <aside className={`finva-operation-recovery finva-operation-recovery--${recoveryNotice}`} role="status"><div><strong>{recoveryNotice === "recovered" ? tx("Cambio recuperado", "Change recovered") : tx("Revisá el cambio pendiente", "Review the pending change")}</strong><span>{recoveryNotice === "recovered" ? tx("FINVA lo guardó una sola vez al volver la conexión.", "FINVA saved it exactly once after reconnecting.") : tx("El servidor rechazó el cambio; abrí la sección e intentá nuevamente.", "The server rejected the change; open the section and try again.")}</span></div></aside>}
           {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>{apiIssue.reported ? tx("FINVA ya avisó a soporte", "FINVA already notified support") : tx("Algo no cargó", "Something didn’t load")}</strong><span>{apiIssue.reported ? `${tx("Referencia", "Reference")}: ${apiIssue.publicId}` : tx("Intentamos recuperarlo automáticamente. Si continúa, guardaremos el diagnóstico.", "We tried to recover automatically. If it continues, we'll save the diagnosis.")}</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>{tx("Abrir chat", "Open chat")}</button><button className="finva-api-help-close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={() => setApiIssue(null)}>×</button></aside>}
+          <ProgressiveProfileNudge user={user} plan={plan} page={page} onNavigate={setPage}/>
           <AppErrorBoundary resetKey={page} screen={page}>{pages[page] || pages.overview}</AppErrorBoundary>
         </main>
         <FinvaNavigation page={page} plan={plan} onNavigate={setPage} onLogout={logout} featureFlags={featureFlags}/>

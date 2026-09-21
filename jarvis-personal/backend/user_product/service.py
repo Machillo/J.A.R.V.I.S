@@ -613,10 +613,34 @@ def get_financial_situation():
                FROM financial_goals WHERE workspace_id=%s AND status='active'""",
             (workspace_id,),
         ).fetchone()
+        observed = conn.execute(
+            """SELECT
+                 COUNT(*) FILTER (WHERE transaction_type='income') AS income_count,
+                 COALESCE(SUM(amount) FILTER (WHERE transaction_type='income'),0) AS income_total,
+                 COUNT(DISTINCT date_trunc('month',transaction_date))
+                   FILTER (WHERE transaction_type='income') AS income_months,
+                 COUNT(*) FILTER (WHERE transaction_type='expense') AS expense_count,
+                 COALESCE(SUM(amount) FILTER (WHERE transaction_type='expense'),0) AS expense_total,
+                 COUNT(DISTINCT date_trunc('month',transaction_date))
+                   FILTER (WHERE transaction_type='expense') AS expense_months
+               FROM transactions
+               WHERE workspace_id=%s AND transaction_date >= CURRENT_DATE - INTERVAL '90 days'""",
+            (workspace_id,),
+        ).fetchone()
+    observed = dict(observed or {})
+    income_months = max(int(observed.get("income_months") or 0), 1)
+    expense_months = max(int(observed.get("expense_months") or 0), 1)
     return {
         "financial_profile": dict(profile) if profile else None,
         "debts": dict(debts),
         "goals": dict(goals),
+        "observed": {
+            "window_days": 90,
+            "income_count": int(observed.get("income_count") or 0),
+            "monthly_income_average": _money(observed.get("income_total")) / income_months,
+            "expense_count": int(observed.get("expense_count") or 0),
+            "monthly_expense_average": _money(observed.get("expense_total")) / expense_months,
+        },
     }
 
 
