@@ -365,10 +365,12 @@ def test_profile_setup_normalizes_name_and_preserves_base_currency():
         usage_goal="save",
         base_currency="USD",
         enabled_currencies=["ARS", "USD", "ARS"],
+        selected_financial_institutions=["bac", "multimoney", "bac"],
     )
 
     assert request.display_name == "Ana María"
     assert request.enabled_currencies == ["USD", "ARS"]
+    assert request.selected_financial_institutions == ["bac", "multimoney"]
 
 
 def test_profile_setup_migration_does_not_modify_financial_records():

@@ -182,7 +182,7 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
         account = conn.execute(
             """SELECT onboarding_completed,onboarding_level,plan_selected,display_name,
                       usage_goal,base_currency,enabled_currencies,number_format,
-                      currency_placement,profile_setup_completed
+                      currency_placement,selected_financial_institutions,profile_setup_completed
                FROM accounts WHERE id=%s""",
             (account_id,),
         ).fetchone()
@@ -199,6 +199,7 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
         "enabled_currencies": (account or {}).get("enabled_currencies") or ["CRC"],
         "number_format": (account or {}).get("number_format") or "dot_comma",
         "currency_placement": (account or {}).get("currency_placement") or "before",
+        "selected_financial_institutions": (account or {}).get("selected_financial_institutions") or [],
         "profile_setup_completed": bool((account or {}).get("profile_setup_completed")),
         "onboarding_completed": bool((account or {}).get("onboarding_completed")),
         "onboarding_level": (account or {}).get("onboarding_level"),
@@ -215,7 +216,8 @@ def complete_profile_setup(payload):
         conn.execute(
             """UPDATE accounts
                SET display_name=%s,usage_goal=%s,base_currency=%s,enabled_currencies=%s,
-                   number_format=%s,currency_placement=%s,profile_setup_completed=TRUE,updated_at=NOW()
+                   number_format=%s,currency_placement=%s,selected_financial_institutions=%s,
+                   profile_setup_completed=TRUE,updated_at=NOW()
                WHERE id=%s""",
             (
                 payload.display_name,
@@ -224,6 +226,7 @@ def complete_profile_setup(payload):
                 payload.enabled_currencies,
                 payload.number_format,
                 payload.currency_placement,
+                payload.selected_financial_institutions,
                 account_id,
             ),
         )

@@ -50,6 +50,44 @@ FINVA_QUERY = os.getenv(
 )
 
 
+def _year_to_date_query(as_of: date | None = None) -> str:
+    """Use the current calendar year only for a connection's first sync."""
+    current = as_of or date.today()
+    query = re.sub(r"\s+newer_than:\d+d\b", "", FINVA_QUERY, flags=re.IGNORECASE)
+    return f"{query} after:{current.year}/01/01"
+
+
+def _list_message_refs(service, query: str, limit: int) -> list[dict[str, Any]]:
+    """Page through a bounded Gmail search without retaining message content."""
+    items: list[dict[str, Any]] = []
+    page_token = None
+    bounded_limit = max(1, min(int(limit), 1000))
+    while len(items) < bounded_limit:
+        request = {
+            "userId": "me", "q": query,
+            "maxResults": min(250, bounded_limit - len(items)),
+        }
+        if page_token:
+            request["pageToken"] = page_token
+        response = service.users().messages().list(**request).execute()
+        items.extend(item for item in response.get("messages", []) if item.get("id"))
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+    return items[:bounded_limit]
+
+
+def _list_message_page(service, query: str, *, page_token: str | None, limit: int = 50) -> tuple[list[dict[str, Any]], str | None]:
+    request: dict[str, Any] = {
+        "userId": "me", "q": query, "maxResults": max(1, min(int(limit), 100)),
+    }
+    if page_token:
+        request["pageToken"] = page_token
+    response = service.users().messages().list(**request).execute()
+    items = [item for item in response.get("messages", []) if item.get("id")]
+    return items, response.get("nextPageToken")
+
+
 def _aguinaldo_gmail_query(as_of: date | None = None) -> str:
     """Search the complete Costa Rican aguinaldo period for CCSS payroll orders."""
     current = as_of or date.today()
@@ -222,7 +260,8 @@ def gmail_status() -> dict[str, Any]:
     with get_connection() as conn:
         row = conn.execute(
             """SELECT id,google_email,status,granted_scopes,last_sync_at,last_success_at,
-                      watch_expiration,last_error,connected_at,updated_at
+                      watch_expiration,last_error,connected_at,updated_at,
+                      initial_scan_started_at,initial_scan_completed_at
                FROM finva_gmail_connections
                WHERE account_id=%s AND workspace_id=%s""",
             (account_id, workspace_id),
@@ -489,7 +528,13 @@ def disconnect_gmail() -> dict[str, str]:
             requests.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
         except Exception:
             pass
-        conn.execute("DELETE FROM finva_gmail_connections WHERE id=%s", (int(row["id"]),))
+        conn.execute(
+            """UPDATE finva_gmail_connections
+               SET status='disabled',history_id=NULL,watch_expiration=NULL,last_error=NULL,
+                   initial_scan_page_token=NULL,updated_at=NOW()
+               WHERE id=%s""",
+            (int(row["id"]),),
+        )
         _vault_delete(conn, str(row["refresh_token_secret_id"]))
         conn.commit()
     return {"status": "disconnected"}
@@ -739,15 +784,19 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
     connection, token = _connection_with_token(connection_id)
     try:
         service = service or _credentials(token)
-        response = service.users().messages().list(
-            userId="me", q=FINVA_QUERY, maxResults=max(1, min(max_results, 250))
-        ).execute()
-        payroll_response = service.users().messages().list(
-            userId="me", q=_aguinaldo_gmail_query(), maxResults=100
-        ).execute()
+        initial_sync = not connection.get("initial_scan_completed_at")
+        next_initial_page = None
+        if initial_sync:
+            financial_messages, next_initial_page = _list_message_page(
+                service, _year_to_date_query(),
+                page_token=connection.get("initial_scan_page_token"), limit=50,
+            )
+        else:
+            financial_messages = _list_message_refs(service, FINVA_QUERY, max_results)
+        payroll_messages = _list_message_refs(service, _aguinaldo_gmail_query(), 100)
         messages = {
             item["id"]: item
-            for item in [*(response.get("messages", [])), *(payroll_response.get("messages", []))]
+            for item in [*financial_messages, *payroll_messages]
             if item.get("id")
         }
         results = [_process_message(service, connection, item["id"]) for item in messages.values()]
@@ -766,13 +815,20 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
 
     with get_connection() as conn:
         conn.execute(
-            """UPDATE finva_gmail_connections SET status='active',last_sync_at=NOW(),last_success_at=NOW(),
-                      last_error=NULL,updated_at=NOW() WHERE id=%s""",
-            (connection_id,),
+            """UPDATE finva_gmail_connections
+               SET status='active',last_sync_at=NOW(),last_success_at=NOW(),last_error=NULL,
+                   initial_scan_started_at=CASE WHEN %s THEN COALESCE(initial_scan_started_at,NOW()) ELSE initial_scan_started_at END,
+                   initial_scan_page_token=CASE WHEN %s THEN %s ELSE initial_scan_page_token END,
+                   initial_scan_completed_at=CASE WHEN %s AND %s IS NULL THEN NOW() ELSE initial_scan_completed_at END,
+                   updated_at=NOW()
+               WHERE id=%s""",
+            (initial_sync, initial_sync, next_initial_page, initial_sync, next_initial_page, connection_id),
         )
         conn.commit()
     return {
         "status": "ok",
+        "scan_scope": "year_to_date" if initial_sync else "recent",
+        "initial_scan_complete": (not initial_sync) or next_initial_page is None,
         "found": len(results),
         "auto_saved": results.count("auto_saved"),
         "pending": results.count("pending"),

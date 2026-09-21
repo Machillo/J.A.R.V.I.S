@@ -184,3 +184,72 @@ def test_statement_confirmation_records_statement_source():
     )
     _query, params = connection.calls[0]
     assert params[6] == "finva_statement"
+
+
+def test_first_sync_query_covers_current_calendar_year(monkeypatch):
+    monkeypatch.setattr(gmail_service, "FINVA_QUERY", "(from:bank@example.com) newer_than:45d -in:spam")
+    query = gmail_service._year_to_date_query(date(2026, 9, 21))
+    assert "newer_than" not in query
+    assert "after:2026/01/01" in query
+    assert "from:bank@example.com" in query
+
+
+def test_message_listing_paginates_but_respects_hard_limit():
+    calls = []
+    pages = [
+        {"messages": [{"id": "1"}, {"id": "2"}], "nextPageToken": "next"},
+        {"messages": [{"id": "3"}, {"id": "4"}]},
+    ]
+
+    class _ListCall:
+        def __init__(self, response): self.response = response
+        def execute(self): return self.response
+
+    class _Messages:
+        def list(self, **kwargs):
+            calls.append(kwargs)
+            return _ListCall(pages.pop(0))
+
+    class _Users:
+        def messages(self): return _Messages()
+
+    class _Service:
+        def users(self): return _Users()
+
+    items = gmail_service._list_message_refs(_Service(), "from:bank", 3)
+    assert [item["id"] for item in items] == ["1", "2", "3"]
+    assert calls[1]["pageToken"] == "next"
+
+
+def test_initial_scan_page_returns_resume_cursor():
+    class _Call:
+        def execute(self): return {"messages": [{"id": "1"}], "nextPageToken": "resume"}
+    class _Messages:
+        def list(self, **kwargs):
+            assert kwargs["maxResults"] == 50
+            assert "pageToken" not in kwargs
+            return _Call()
+    class _Users:
+        def messages(self): return _Messages()
+    class _Service:
+        def users(self): return _Users()
+
+    items, cursor = gmail_service._list_message_page(_Service(), "after:2026/01/01", page_token=None)
+    assert items == [{"id": "1"}]
+    assert cursor == "resume"
+
+
+def test_disconnect_revokes_access_without_deleting_financial_history(monkeypatch):
+    _identity(monkeypatch)
+    connection = _Connection([
+        _Result(one={"id": 12, "refresh_token_secret_id": "secret-a"}), _Result(),
+    ])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+    monkeypatch.setattr(gmail_service, "_vault_read", lambda *_args: "token")
+    monkeypatch.setattr(gmail_service, "_vault_delete", lambda *_args: None)
+    monkeypatch.setattr(gmail_service.requests, "post", lambda *_args, **_kwargs: None)
+
+    assert gmail_service.disconnect_gmail() == {"status": "disconnected"}
+    queries = [query for query, _params in connection.calls]
+    assert any("SET status='disabled'" in query for query in queries)
+    assert all("DELETE FROM finva_gmail_connections" not in query for query in queries)
