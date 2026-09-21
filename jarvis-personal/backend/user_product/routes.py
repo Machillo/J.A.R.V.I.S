@@ -4,7 +4,7 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    GmailCandidateReviewRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -39,7 +39,9 @@ from backend.user_product.gmail_service import (
     finish_gmail_connection,
     gmail_maintenance,
     gmail_status,
+    list_gmail_emails,
     process_gmail_push,
+    review_gmail_candidate,
     sync_current_gmail,
 )
 
@@ -245,6 +247,23 @@ def vip_gmail_callback(code: str | None = None, state: str | None = None, error:
 @router.post("/vip/gmail/sync")
 def vip_gmail_sync():
     require_feature("gmail_automation"); return sync_current_gmail()
+
+@router.get("/vip/gmail/emails")
+def vip_gmail_emails(status: str | None = None):
+    require_feature("gmail_automation"); return list_gmail_emails(status)
+
+@router.post("/vip/gmail/candidates/{candidate_id}/accept")
+def vip_gmail_candidate_accept(candidate_id: int):
+    require_feature("gmail_automation"); return review_gmail_candidate(candidate_id, "accept")
+
+@router.post("/vip/gmail/candidates/{candidate_id}/reject")
+def vip_gmail_candidate_reject(candidate_id: int):
+    require_feature("gmail_automation"); return review_gmail_candidate(candidate_id, "reject")
+
+@router.put("/vip/gmail/candidates/{candidate_id}/accept")
+def vip_gmail_candidate_correct(candidate_id: int, request: GmailCandidateReviewRequest):
+    require_feature("gmail_automation")
+    return review_gmail_candidate(candidate_id, "accept", request.model_dump())
 
 @router.delete("/vip/gmail")
 def vip_gmail_disconnect():

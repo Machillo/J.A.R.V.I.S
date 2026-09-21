@@ -18,6 +18,7 @@ import { FreeMore, FreeSettings } from "./free/FreeScreens";
 import BasicMore from "./basic/BasicScreens";
 import { featureEnabled } from "../../../lib/featureFlags";
 import FeatureUnavailable from "./FeatureUnavailable";
+import { AdvisorHub, PlanHub, ProfileHub } from "./hubs/FinvaHubs";
 
 export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange, onLogout, featureFlags }) {
   const gated = (flagKey, component) => featureEnabled(featureFlags, flagKey) ? component : <FeatureUnavailable flags={featureFlags} flagKey={flagKey}/>;
@@ -25,6 +26,9 @@ export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange,
   return {
     overview: plan === "vip" && vipEnabled ? <VipScreens view="dashboard" user={user} onNavigate={navigate} /> : <FinvaOverview user={user} plan={plan} onNavigate={navigate} />,
     finance: <Finance plan={plan} />,
+    plan: <PlanHub plan={plan} navigate={navigate} />,
+    advisor: <AdvisorHub plan={plan} navigate={navigate} />,
+    profile: <ProfileHub plan={plan} navigate={navigate} onLogout={onLogout} />,
     debts: <Debts plan={plan} />,
     strategy: plan === "vip" ? gated("vip_intelligence", <VipScreens view="strategy" user={user} onNavigate={navigate} />) : <StrategyBasic plan={plan} />,
     gmail: plan === "vip" ? gated("gmail_automation", <GmailAutomation />) : <SettingsPage user={user} onUserChange={onUserChange} />,

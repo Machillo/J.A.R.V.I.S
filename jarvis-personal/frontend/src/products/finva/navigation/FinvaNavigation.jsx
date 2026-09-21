@@ -1,23 +1,4 @@
-import {
-  BarChart3,
-  CalendarDays,
-  CreditCard,
-  Gift,
-  Landmark,
-  LifeBuoy,
-  LogOut,
-  Mail,
-  MoreHorizontal,
-  ReceiptText,
-  Repeat2,
-  Sparkles,
-  TrendingUp,
-  ShieldCheck,
-  SlidersHorizontal,
-  Target,
-  WalletCards,
-} from "lucide-react";
-import { useState } from "react";
+import { BarChart3, CircleUserRound, Sparkles, Target, WalletCards } from "lucide-react";
 import NativeBottomBar from "../../../ui/native/NativeBottomBar";
 import { deviceLanguage } from "../../../lib/locale";
 import { featureEnabled } from "../../../lib/featureFlags";
@@ -25,104 +6,15 @@ const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
 const primaryItems = [
-  { key: "overview", label: tx("Inicio", "Home"), icon: BarChart3 },
-  { key: "finance", label: tx("Movimientos", "Transactions"), icon: WalletCards },
-  { key: "debts", label: tx("Deudas", "Debts"), icon: CreditCard },
-  { key: "goals", label: tx("Metas", "Goals"), icon: Target },
+  { key: "overview", label: tx("Hoy", "Today"), icon: BarChart3 },
+  { key: "finance", label: tx("Movimientos", "Transactions"), icon: WalletCards, activeKeys: ["finance", "transactions", "monthly"] },
+  { key: "plan", label: tx("Plan", "Plan"), icon: Target, activeKeys: ["plan", "debts", "goals", "savings", "budget", "calendar", "recurring", "vip-emergency", "vip-aguinaldo"] },
+  { key: "advisor", label: "FINVA", icon: Sparkles, activeKeys: ["advisor", "strategy", "vip-today", "vip-recommendation", "vip-projections", "vip-projection-detail", "vip-scenarios", "vip-reality", "vip-monthly-review", "vip-preferences", "reports"] },
+  { key: "profile", label: tx("Perfil", "Profile"), icon: CircleUserRound, activeKeys: ["profile", "situation", "gmail", "settings", "plan-settings", "feedback"] },
 ];
 
-export default function FinvaNavigation({ page, plan, onNavigate, onLogout, featureFlags }) {
-  const [moreOpen, setMoreOpen] = useState(false);
-  const available = (key) => {
-    if (["gmail", "vip-aguinaldo"].includes(key)) return featureEnabled(featureFlags, "gmail_automation");
-    if (key === "reports") return featureEnabled(featureFlags, "advanced_reports");
-    if (plan === "vip" && ["strategy","vip-projections","vip-scenarios","vip-reality","vip-emergency","vip-preferences"].includes(key)) return featureEnabled(featureFlags, "vip_intelligence");
-    return true;
-  };
-  const groups = [
-    {
-      title: tx("Mi dinero", "My money"),
-      items: [
-        ["situation", tx("Mi situación financiera", "My financial situation"), Landmark],
-        ["transactions", tx("Historial completo", "Full history"), ReceiptText],
-        ["monthly", tx("Resumen mensual", "Monthly summary"), BarChart3],
-      ],
-    },
-    ...(plan === "free" ? [] : [{
-      title: tx("Planificación", "Planning"),
-      items: [
-        ["strategy", plan === "vip" ? tx("Dirección VIP", "VIP Direction") : tx("Estrategia", "Strategy"), Sparkles],
-        ["budget", tx("Presupuesto", "Budget"), WalletCards],
-        ["calendar", tx("Calendario", "Calendar"), CalendarDays],
-        ["recurring", tx("Pagos recurrentes", "Recurring payments"), Repeat2],
-        ["reports", tx("Reportes", "Reports"), BarChart3],
-      ],
-    }]),
-    ...(plan === "vip" ? [{
-      title: tx("Inteligencia VIP", "VIP Intelligence"),
-      items: [
-        ["vip-today", tx("FINVA Today", "FINVA Today"), Sparkles],
-        ["vip-projections", tx("Proyecciones", "Projections"), TrendingUp],
-        ["vip-scenarios", tx("Escenarios", "Scenarios"), Sparkles],
-        ["vip-reality", tx("Plan vs realidad", "Plan vs reality"), BarChart3],
-        ["vip-monthly-review", tx("Revisión mensual", "Monthly review"), Sparkles],
-        ["vip-emergency", tx("Fondo de emergencia", "Emergency fund"), ShieldCheck],
-        ["vip-aguinaldo", tx("Aguinaldo", "Annual bonus"), Gift],
-        ["vip-preferences", tx("Preferencias estratégicas", "Strategic preferences"), SlidersHorizontal],
-      ],
-    }, { title: tx("Automatización", "Automation"), items: [["gmail", tx("Movimientos desde Gmail", "Transactions from Gmail"), Mail]] }] : []),
-    {
-      title: tx("Soporte", "Support"),
-      items: [
-        ["feedback", tx("Ayuda y sugerencias", "Help & feedback"), LifeBuoy],
-      ],
-    },
-  ].map((group) => ({ ...group, items:group.items.filter(([key]) => available(key)) })).filter((group) => group.items.length);
-  const secondaryKeys = groups.flatMap((group) => group.items.map(([key]) => key));
-
-  const navigate = (key) => {
-    if (key === "more") {
-      if (plan === "free" || plan === "basic" || plan === "vip") {
-        onNavigate("more");
-        setMoreOpen(false);
-        return;
-      }
-      setMoreOpen((open) => !open);
-      return;
-    }
-    onNavigate(key);
-    setMoreOpen(false);
-  };
-
-  const items = [
-    ...primaryItems,
-    { key: "more", label: tx("Más", "More"), icon: MoreHorizontal, activeKeys: ["more", ...secondaryKeys] },
-  ];
-
-  return (
-    <>
-      {moreOpen && (
-        <div className="native-more-backdrop" onClick={() => setMoreOpen(false)}>
-          <section className="native-more-sheet" onClick={(event) => event.stopPropagation()}>
-            <div className="native-sheet-handle" />
-            <header><small>FINVA</small><strong>{tx("Explorar", "Explore")}</strong></header>
-            <div className="native-sheet-groups">
-              {groups.map((group) => (
-                <div className="native-sheet-group" key={group.title}>
-                  <small>{group.title}</small>
-                  {group.items.map(([key, label, Icon]) => (
-                    <button type="button" key={key} className={page === key ? "active" : ""} onClick={() => navigate(key)}>
-                      <span><Icon size={20} /></span><strong>{label}</strong>
-                    </button>
-                  ))}
-                </div>
-              ))}
-              <button type="button" className="native-sheet-logout" onClick={onLogout}><LogOut size={20} /><strong>{tx("Cerrar sesión", "Log out")}</strong></button>
-            </div>
-          </section>
-        </div>
-      )}
-      <NativeBottomBar items={items} activeKey={moreOpen ? "more" : page} onNavigate={navigate} className="finva-native-nav" />
-    </>
-  );
+export default function FinvaNavigation({ page, plan, onNavigate, featureFlags }) {
+  const vipAvailable = featureEnabled(featureFlags, "vip_intelligence");
+  const items = primaryItems.map((entry) => entry.key === "advisor" && plan === "vip" && !vipAvailable ? { ...entry, badge: "!" } : entry);
+  return <NativeBottomBar items={items} activeKey={page} onNavigate={onNavigate} className="finva-native-nav" />;
 }
