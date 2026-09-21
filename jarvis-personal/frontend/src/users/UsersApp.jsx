@@ -6,6 +6,7 @@ import NativeProductShell from "../ui/native/NativeProductShell";
 import { detectNativePlatform } from "../ui/native/platform";
 import { createFinvaFeatureRegistry } from "../products/finva/features/registry";
 import FinvaNavigation from "../products/finva/navigation/FinvaNavigation";
+import useFinvaNavigation from "../products/finva/navigation/useFinvaNavigation";
 import { getPlatformHealth, trackProductEvent } from "./services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { trackScreen } from "../lib/telemetry";
@@ -24,7 +25,8 @@ import { cachedFeatureFlags, featureDisabledMessage, featureEnabled, getOperatio
 import ProgressiveProfileNudge from "./components/ProgressiveProfileNudge";
 
 export default function UsersApp({ user, onUserChange, releasePolicy }) {
-  const [page, setPage] = useState(() => window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview");
+  const initialPage = window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview";
+  const { page, navigate } = useFinvaNavigation(initialPage);
   const [accessNotice, setAccessNotice] = useState(user?.subscription?.access_notice || null);
   const [apiIssue, setApiIssue] = useState(null);
   const [localHealth, setLocalHealth] = useState(() => navigator.onLine ? "operational" : "offline");
@@ -46,7 +48,7 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
   }, [page]);
 
   useEffect(() => {
-    const open = () => setPage("feedback");
+    const open = () => navigate("feedback");
     const failed = (event) => { setApiIssue(event.detail || {}); setLocalHealth(navigator.onLine ? "degraded" : "offline"); };
     const reported = (event) => setApiIssue((current) => current ? { ...current, reported: true, publicId: event.detail?.public_id } : current);
     const recovered = () => { if (navigator.onLine) setLocalHealth("operational"); };
@@ -89,7 +91,7 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
       window.removeEventListener("offline", offline);
       window.removeEventListener("online", online);
     };
-  }, []);
+  }, [navigate]);
 
   useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);
   useEffect(() => { setReleaseDismissed(isReleaseDismissed(releasePolicy)); }, [releasePolicy]);
@@ -104,7 +106,7 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
     return () => { active=false;window.clearInterval(interval);window.removeEventListener("online",refresh);document.removeEventListener("visibilitychange",visible); };
   }, []);
   const logout = () => supabase.auth.signOut({ scope: "local" });
-  const pages = createFinvaFeatureRegistry({ user, plan, navigate: setPage, onUserChange, onLogout: logout, featureFlags });
+  const pages = createFinvaFeatureRegistry({ user, plan, navigate, onUserChange, onLogout: logout, featureFlags });
   const freeTitles = {
     overview: tx("Hola", "Hello") + `, ${(user?.display_name || user?.email || tx("bienvenido", "welcome")).split(" ")[0]}`,
     finance: tx("Movimientos", "Transactions"), debts: tx("Deudas", "Debts"), goals: tx("Metas", "Goals"),
@@ -133,20 +135,20 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
           title={plan === "free" ? (freeTitles[page] || "FINVA") : plan === "basic" ? (basicTitles[page] || "FINVA") : undefined}
           variant={customHeader ? plan : ""}
           avatar={(user?.display_name || user?.email || "U").slice(0, 1).toUpperCase()}
-          onProfile={() => setPage("settings")}
+          onProfile={() => navigate("settings")}
         />
         <main className="content mobile-content native-scroll-content">
           {releasePolicy?.status === "optional" && !releaseDismissed && <ReleaseUpdateNotice policy={releasePolicy} onDismiss={() => { dismissRelease(releasePolicy); setReleaseDismissed(true); }} />}
           {featureFlags && !featureEnabled(featureFlags,"financial_writes") && <aside className="finva-health-mode finva-health-mode--degraded" role="status"><div><strong>{tx("Cambios temporalmente pausados", "Changes temporarily paused")}</strong><span>{featureDisabledMessage(featureFlags,"financial_writes",tx("es","en"))}</span></div></aside>}
           {accessNotice && <aside className="subscription-ended-banner" role="status"><div><strong>{accessNotice.title}</strong><span>{accessNotice.message}</span></div><button type="button" onClick={() => setAccessNotice(null)}>{tx("Entendido", "Got it")}</button></aside>}
-          {healthMode !== "operational" && <aside className={`finva-health-mode finva-health-mode--${healthMode}`} role="status"><div><strong>{healthMode === "offline" ? tx("Sin conexión", "Offline") : healthMode === "recovering" ? tx("Reconectando…", "Reconnecting…") : healthMode === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : tx("Modo degradado", "Degraded mode")}</strong><span>{healthMode === "offline" ? tx("Podés consultar lo cargado. Los cambios compatibles quedarán guardados en este dispositivo hasta reconectar.", "You can view loaded data. Supported changes will remain on this device until reconnection.") : tx("Algunas funciones pueden tardar. FINVA está intentando recuperarse y ya conserva el diagnóstico.", "Some features may be slow. FINVA is recovering and has preserved the diagnostic context.")}</span></div><button type="button" onClick={() => setPage("feedback")}>{tx("Ver estado", "View status")}</button></aside>}
+          {healthMode !== "operational" && <aside className={`finva-health-mode finva-health-mode--${healthMode}`} role="status"><div><strong>{healthMode === "offline" ? tx("Sin conexión", "Offline") : healthMode === "recovering" ? tx("Reconectando…", "Reconnecting…") : healthMode === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : tx("Modo degradado", "Degraded mode")}</strong><span>{healthMode === "offline" ? tx("Podés consultar lo cargado. Los cambios compatibles quedarán guardados en este dispositivo hasta reconectar.", "You can view loaded data. Supported changes will remain on this device until reconnection.") : tx("Algunas funciones pueden tardar. FINVA está intentando recuperarse y ya conserva el diagnóstico.", "Some features may be slow. FINVA is recovering and has preserved the diagnostic context.")}</span></div><button type="button" onClick={() => navigate("feedback")}>{tx("Ver estado", "View status")}</button></aside>}
           {pendingOperations > 0 && <aside className="finva-operation-recovery finva-operation-recovery--pending" role="status"><div><strong>{tx("Cambio protegido", "Change protected")}</strong><span>{tx(`${pendingOperations} cambio${pendingOperations === 1 ? "" : "s"} pendiente${pendingOperations === 1 ? "" : "s"}. Se enviará${pendingOperations === 1 ? "" : "n"} automáticamente.`, `${pendingOperations} pending change${pendingOperations === 1 ? "" : "s"}. FINVA will send ${pendingOperations === 1 ? "it" : "them"} automatically.`)}</span></div></aside>}
           {recoveryNotice && pendingOperations === 0 && <aside className={`finva-operation-recovery finva-operation-recovery--${recoveryNotice}`} role="status"><div><strong>{recoveryNotice === "recovered" ? tx("Cambio recuperado", "Change recovered") : tx("Revisá el cambio pendiente", "Review the pending change")}</strong><span>{recoveryNotice === "recovered" ? tx("FINVA lo guardó una sola vez al volver la conexión.", "FINVA saved it exactly once after reconnecting.") : tx("El servidor rechazó el cambio; abrí la sección e intentá nuevamente.", "The server rejected the change; open the section and try again.")}</span></div></aside>}
           {apiIssue && <aside className="finva-api-help" role="alert"><div><strong>{apiIssue.reported ? tx("FINVA ya avisó a soporte", "FINVA already notified support") : tx("Algo no cargó", "Something didn’t load")}</strong><span>{apiIssue.reported ? `${tx("Referencia", "Reference")}: ${apiIssue.publicId}` : tx("Intentamos recuperarlo automáticamente. Si continúa, guardaremos el diagnóstico.", "We tried to recover automatically. If it continues, we'll save the diagnosis.")}</span></div><button className="finva-api-help-support" type="button" onClick={() => { openSupport({ kind: "problem", ...apiIssue }); setApiIssue(null); }}>{tx("Abrir chat", "Open chat")}</button><button className="finva-api-help-close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={() => setApiIssue(null)}>×</button></aside>}
-          <ProgressiveProfileNudge user={user} plan={plan} page={page} onNavigate={setPage}/>
+          <ProgressiveProfileNudge user={user} plan={plan} page={page} onNavigate={navigate}/>
           <AppErrorBoundary resetKey={page} screen={page}>{pages[page] || pages.overview}</AppErrorBoundary>
         </main>
-        <FinvaNavigation page={page} plan={plan} onNavigate={setPage} onLogout={logout} featureFlags={featureFlags}/>
+        <FinvaNavigation page={page} plan={plan} onNavigate={navigate} onLogout={logout} featureFlags={featureFlags}/>
       </div>
     </NativeProductShell>
   );
