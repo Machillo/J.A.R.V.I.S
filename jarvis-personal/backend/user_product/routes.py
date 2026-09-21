@@ -4,7 +4,7 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, GmailAiFallbackRequest, GmailCandidateReviewRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -43,6 +43,7 @@ from backend.user_product.gmail_service import (
     process_gmail_push,
     review_gmail_candidate,
     sync_current_gmail,
+    update_ai_fallback,
 )
 from backend.user_product.financial_identity import confirm_financial_account, list_financial_identity
 
@@ -248,6 +249,10 @@ def vip_gmail_callback(code: str | None = None, state: str | None = None, error:
 @router.post("/vip/gmail/sync")
 def vip_gmail_sync():
     require_feature("gmail_automation"); return sync_current_gmail()
+
+@router.put("/vip/gmail/ai-fallback")
+def vip_gmail_ai_fallback(request: GmailAiFallbackRequest):
+    require_feature("gmail_automation"); return update_ai_fallback(request.enabled)
 
 @router.get("/vip/gmail/emails")
 def vip_gmail_emails(status: str | None = None):

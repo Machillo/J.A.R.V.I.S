@@ -12,6 +12,7 @@ import {
   confirmVipFinancialAccount,
   rejectVipGmailCandidate,
   syncVipGmail,
+  updateVipGmailAiFallback,
 } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
 
@@ -106,6 +107,19 @@ export default function GmailAutomation() {
     finally { setBusy(""); }
   };
 
+  const toggleAiFallback = async () => {
+    const enabled = !gmail?.ai_fallback_enabled;
+    setBusy("ai-fallback"); setError(""); setMessage("");
+    try {
+      const result = await updateVipGmailAiFallback(enabled);
+      setGmail((current) => ({ ...current, ...result }));
+      setMessage(enabled
+        ? tx("Interpretación asistida activada. Los resultados siempre requerirán tu aprobación.", "Assisted interpretation enabled. Results will always require your approval.")
+        : tx("Interpretación asistida desactivada.", "Assisted interpretation disabled."));
+    } catch (err) { setError(err.message || tx("No se pudo cambiar esta preferencia.", "Couldn’t change this preference.")); }
+    finally { setBusy(""); }
+  };
+
   return <section className="mobile-page gmail-automation-page">
     <div className="mobile-page-heading">
       <p className="eyebrow">{tx("Automatización VIP", "VIP automation")}</p>
@@ -120,6 +134,11 @@ export default function GmailAutomation() {
         <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy)} onClick={connect}>{busy === "connect" ? tx("Abriendo Google…", "Opening Google…") : gmail?.needs_reauthorization ? tx("Reconectar Gmail", "Reconnect Gmail") : tx("Conectar mi Gmail", "Connect my Gmail")}</button>
       </> : <>
         <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{gmail.google_email}</strong><small>{gmail.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span></div>
+        <div className="gmail-ai-fallback">
+          <div><strong>{tx("Interpretar formatos nuevos con IA", "Interpret new formats with AI")}</strong><small>{tx("Opcional. FINVA oculta identificadores completos, no guarda una copia adicional del contenido enviado y siempre te pide aceptar o rechazar el movimiento.", "Optional. FINVA masks full identifiers, stores no additional copy of the submitted content, and always asks you to accept or reject the transaction.")}</small></div>
+          <button type="button" role="switch" aria-checked={Boolean(gmail.ai_fallback_enabled)} disabled={Boolean(busy) || !gmail.ai_fallback_available} className={gmail.ai_fallback_enabled ? "active" : ""} onClick={toggleAiFallback}>{gmail.ai_fallback_enabled ? tx("Activada", "On") : tx("Desactivada", "Off")}</button>
+        </div>
+        {!gmail.ai_fallback_available && <p>{tx("La interpretación asistida todavía no está disponible en este entorno.", "Assisted interpretation is not available in this environment yet.")}</p>}
         {gmail.pending > 0 && <p>{gmail.pending} {tx("movimiento(s) necesitan revisión.", "transaction(s) need review.")}</p>}
         <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar ahora", "Refresh now")}</button><button type="button" className="danger" disabled={Boolean(busy)} onClick={disconnect}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
       </>}

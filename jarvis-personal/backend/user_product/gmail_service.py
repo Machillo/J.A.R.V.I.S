@@ -30,6 +30,7 @@ from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import resolve_candidate
+from backend.user_product.adaptive_parser import is_available as ai_fallback_available, parse_unknown_email
 from backend.user_product.statement_candidate import (
     PARSER_NAME as STATEMENT_PARSER_NAME,
     PARSER_VERSION as STATEMENT_PARSER_VERSION,
@@ -261,7 +262,8 @@ def gmail_status() -> dict[str, Any]:
         row = conn.execute(
             """SELECT id,google_email,status,granted_scopes,last_sync_at,last_success_at,
                       watch_expiration,last_error,connected_at,updated_at,
-                      initial_scan_started_at,initial_scan_completed_at
+                      initial_scan_started_at,initial_scan_completed_at,
+                      ai_fallback_enabled,ai_fallback_consent_at
                FROM finva_gmail_connections
                WHERE account_id=%s AND workspace_id=%s""",
             (account_id, workspace_id),
@@ -278,8 +280,30 @@ def gmail_status() -> dict[str, Any]:
         "needs_reauthorization": data.get("status") == "reauthorization_required",
         "automatic_updates": bool(data.get("watch_expiration")),
         "pending": int((pending or {}).get("total") or 0),
+        "ai_fallback_available": ai_fallback_available(),
         **data,
     }
+
+
+def update_ai_fallback(enabled: bool) -> dict[str, Any]:
+    account_id = get_current_account_id()
+    workspace_id = get_current_workspace_id()
+    if enabled and not ai_fallback_available():
+        raise HTTPException(status_code=503, detail="La interpretación con IA no está disponible en este momento.")
+    with get_connection() as conn:
+        row = conn.execute(
+            """UPDATE finva_gmail_connections
+               SET ai_fallback_enabled=%s,
+                   ai_fallback_consent_at=CASE WHEN %s THEN COALESCE(ai_fallback_consent_at,NOW()) ELSE NULL END,
+                   updated_at=NOW()
+               WHERE account_id=%s AND workspace_id=%s
+               RETURNING ai_fallback_enabled,ai_fallback_consent_at""",
+            (enabled, enabled, account_id, workspace_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Primero conectá Gmail.")
+        conn.commit()
+    return {**dict(row), "ai_fallback_available": ai_fallback_available()}
 
 
 def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
@@ -366,6 +390,13 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
                 (candidate_id,),
             )
             conn.execute("UPDATE finva_email_messages SET status='rejected' WHERE id=%s", (candidate["email_message_id"],))
+            if candidate.get("parser_name") == "finva_ai_fallback":
+                conn.execute(
+                    """UPDATE finva_parser_fallback_events
+                       SET review_outcome='rejected',reviewed_at=NOW()
+                       WHERE candidate_id=%s""",
+                    (candidate_id,),
+                )
             conn.commit()
             return {"status": "rejected", "candidate_id": candidate_id, "transaction_id": None}
 
@@ -377,6 +408,13 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
                 (candidate_id,),
             )
             conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
+            if candidate.get("parser_name") == "finva_ai_fallback":
+                conn.execute(
+                    """UPDATE finva_parser_fallback_events
+                       SET review_outcome='accepted',reviewed_at=NOW()
+                       WHERE candidate_id=%s""",
+                    (candidate_id,),
+                )
             conn.commit()
             return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": None, "is_internal_transfer": True}
 
@@ -405,6 +443,13 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
              values["transaction_type"], category, corrected_fields, candidate_id),
         )
         conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
+        if candidate.get("parser_name") == "finva_ai_fallback":
+            conn.execute(
+                """UPDATE finva_parser_fallback_events
+                   SET review_outcome=%s,corrected_fields=%s,reviewed_at=NOW()
+                   WHERE candidate_id=%s""",
+                ("corrected" if corrected_fields else "accepted", corrected_fields, candidate_id),
+            )
         conn.commit()
     return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": transaction_id}
 
@@ -568,6 +613,7 @@ def _adapt_identity(value: str, display_name: str) -> str:
 def _insert_finva_candidate(
     conn, *, email_message_id: int, connection: dict[str, Any],
     candidate: dict[str, Any], statement_document_id: int | None = None,
+    fallback_event_id: int | None = None,
 ) -> dict[str, Any]:
     row = conn.execute(
         """INSERT INTO finva_email_candidates(
@@ -605,12 +651,25 @@ def _insert_finva_candidate(
         ),
     ).fetchone()
     candidate_id = int(row["id"])
+    if fallback_event_id:
+        conn.execute(
+            "UPDATE finva_parser_fallback_events SET candidate_id=%s WHERE id=%s",
+            (candidate_id, fallback_event_id),
+        )
     discover_candidate_account(
         conn, candidate_id=candidate_id, candidate=candidate,
         account_id=str(connection["account_id"]), workspace_id=str(connection["workspace_id"]),
         legacy_user_id=int(connection["legacy_user_id"]),
     )
     return resolve_candidate(conn, candidate_id)
+
+
+def _message_already_ingested(connection_id: int, provider_message_id: str) -> bool:
+    with get_connection() as conn:
+        return bool(conn.execute(
+            "SELECT 1 FROM finva_email_messages WHERE connection_id=%s AND provider_message_id=%s",
+            (connection_id, provider_message_id),
+        ).fetchone())
 
 
 def _process_message(service, connection: dict[str, Any], message_id: str) -> str:
@@ -636,6 +695,24 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
         _adapt_identity(subject, display_name), sender,
         _adapt_identity(financial_text, display_name), received_at,
     )
+    fallback_result = None
+    if (
+        not payroll_report
+        and connection.get("ai_fallback_enabled")
+        and parsed.get("email_kind") == "ignored"
+        and parsed.get("bank") in {"bac", "multimoney", "popular"}
+        and "sin plantilla confiable" in str(parsed.get("ignore_reason") or "").lower()
+        and not _message_already_ingested(int(connection["id"]), message_id)
+    ):
+        fallback_result = parse_unknown_email(
+            subject=_adapt_identity(subject, display_name),
+            sender=sender,
+            body=_adapt_identity(financial_text, display_name),
+            received_at=received_at,
+            bank=str(parsed["bank"]),
+        )
+        if fallback_result.get("parsed"):
+            parsed = fallback_result["parsed"]
     kind = "payroll_statement" if payroll_report else str(parsed.get("email_kind") or "ignored")
     if kind == "ignored" and parsed.get("transaction_type") == "internal_transfer" and parsed.get("amount"):
         # Legacy parser ownership hints become reviewable evidence, never the
@@ -682,6 +759,32 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
                      if payroll_report else parsed.get("confidence_reason") or parsed.get("ignore_reason") or ""),
                 ),
             ).fetchone()
+
+        fallback_event_id = None
+        if fallback_result:
+            fallback_event = conn.execute(
+                """INSERT INTO finva_parser_fallback_events(
+                       account_id,workspace_id,email_message_id,bank,format_fingerprint,
+                       provider,model,outcome,confidence,input_chars,prompt_tokens,
+                       completion_tokens,estimated_cost_usd
+                   ) VALUES(%s,%s,%s,%s,%s,'google',%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT(email_message_id) WHERE email_message_id IS NOT NULL
+                   DO UPDATE SET outcome=EXCLUDED.outcome,confidence=EXCLUDED.confidence,
+                                 input_chars=EXCLUDED.input_chars,model=EXCLUDED.model,
+                                 prompt_tokens=EXCLUDED.prompt_tokens,
+                                 completion_tokens=EXCLUDED.completion_tokens,
+                                 estimated_cost_usd=EXCLUDED.estimated_cost_usd
+                   RETURNING id""",
+                (
+                    connection["account_id"], connection["workspace_id"], int(email_row["id"]),
+                    parsed.get("bank") or "unknown", fallback_result["fingerprint"],
+                    fallback_result["model"], fallback_result["status"],
+                    fallback_result["confidence"], fallback_result["input_chars"],
+                    fallback_result["prompt_tokens"], fallback_result["completion_tokens"],
+                    fallback_result["estimated_cost_usd"],
+                ),
+            ).fetchone()
+            fallback_event_id = int(fallback_event["id"])
 
         if payroll_report:
             conn.execute(
@@ -754,7 +857,7 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
             )
             resolution = _insert_finva_candidate(
                 conn, email_message_id=int(email_row["id"]), connection=connection,
-                candidate=candidate,
+                candidate=candidate, fallback_event_id=fallback_event_id,
             )
             status = str(resolution.get("status") or "pending")
         conn.execute("UPDATE finva_email_messages SET status=%s WHERE id=%s", (status, int(email_row["id"])))
