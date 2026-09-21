@@ -27,6 +27,7 @@ from backend.email_monitor.parser import parse_financial_email
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
 from backend.finance.category_catalog import normalize_category
+from backend.user_product.financial_candidate import canonical_candidate
 
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
@@ -248,8 +249,11 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
         rows = conn.execute(
             f"""SELECT m.id AS email_id,m.sender,m.subject,m.received_at,m.bank,m.status AS email_status,
                        m.parse_reason,c.id AS candidate_id,c.transaction_id,c.transaction_date,
-                       c.description,c.amount,c.transaction_type,c.category,c.confidence,
-                       c.status AS review_status,c.created_at
+                       c.description,c.amount,c.currency,c.transaction_type,c.movement_direction,
+                       c.movement_kind,c.category,c.bank,c.source_account_label,
+                       c.source_account_reference,c.destination_account_reference,c.counterparty,
+                       c.parser_name,c.parser_version,c.extraction_method,c.confidence,
+                       c.uncertainty_reason,c.status AS review_status,c.reviewed_at,c.created_at
                 FROM finva_email_messages m
                 LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id
                 WHERE m.account_id=%s AND m.workspace_id=%s{status_filter}
@@ -265,13 +269,14 @@ def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[
     row = conn.execute(
         """INSERT INTO transactions(
                transaction_date,description,amount,transaction_type,category,account,source,notes,
-               user_id,workspace_id,created_at
-           ) VALUES(%s,%s,%s,%s,%s,%s,'finva_gmail',%s,%s,%s,NOW()) RETURNING id""",
+               user_id,workspace_id,financial_account_id,created_at
+           ) VALUES(%s,%s,%s,%s,%s,%s,'finva_gmail',%s,%s,%s,%s,NOW()) RETURNING id""",
         (
             values["transaction_date"], values["description"].strip(), values["amount"],
             values["transaction_type"], category, candidate.get("bank") or "",
             "Confirmado por el usuario desde un correo bancario.",
             int(candidate["legacy_user_id"]), candidate["workspace_id"],
+            candidate.get("financial_account_id"),
         ),
     ).fetchone()
     return int(row["id"])
@@ -299,7 +304,9 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             return {"status": candidate["status"], "candidate_id": candidate_id, "transaction_id": candidate.get("transaction_id")}
         if action == "reject":
             conn.execute(
-                "UPDATE finva_email_candidates SET status='rejected',updated_at=NOW() WHERE id=%s",
+                """UPDATE finva_email_candidates
+                   SET status='rejected',reviewed_at=NOW(),corrected_fields=ARRAY[]::TEXT[],updated_at=NOW()
+                   WHERE id=%s""",
                 (candidate_id,),
             )
             conn.execute("UPDATE finva_email_messages SET status='rejected' WHERE id=%s", (candidate["email_message_id"],))
@@ -315,15 +322,20 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
         }
         if corrections:
             values.update(corrections)
+        corrected_fields = sorted(
+            key for key, value in (corrections or {}).items()
+            if value != candidate.get(key)
+        )
         transaction_id = _create_candidate_transaction(conn, candidate, values)
         category = normalize_category(values["category"], values["transaction_type"])
         conn.execute(
             """UPDATE finva_email_candidates
                SET transaction_id=%s,transaction_date=%s,description=%s,amount=%s,
-                   transaction_type=%s,category=%s,status='confirmed',updated_at=NOW()
+                   transaction_type=%s,category=%s,status='confirmed',reviewed_at=NOW(),
+                   corrected_fields=%s,updated_at=NOW()
                WHERE id=%s""",
             (transaction_id, values["transaction_date"], values["description"].strip(), values["amount"],
-             values["transaction_type"], category, candidate_id),
+             values["transaction_type"], category, corrected_fields, candidate_id),
         )
         conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
         conn.commit()
@@ -554,19 +566,40 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
             )
             status = "payroll_statement"
         elif kind == "movement" and parsed.get("amount") and parsed.get("transaction_type"):
-            tx_type = str(parsed.get("transaction_type"))
+            candidate = canonical_candidate(
+                parsed,
+                provider_message_id=message_id,
+                subject=subject,
+            )
             candidate_status = "pending"
             conn.execute(
                 """INSERT INTO finva_email_candidates(
-                       email_message_id,account_id,workspace_id,transaction_id,transaction_date,description,
-                       amount,transaction_type,category,bank,confidence,status,raw_payload
-                   ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)""",
+                       email_message_id,account_id,workspace_id,transaction_id,movement_index,
+                       source_type,source_provider,source_record_key,institution_country,
+                       transaction_date,transaction_time,description,amount,currency,original_amount,
+                       original_currency,transaction_type,movement_direction,movement_kind,category,bank,
+                       source_account_label,source_account_reference,destination_account_reference,
+                       counterparty,external_reference,parser_name,parser_version,extraction_method,
+                       confidence,uncertainty_reason,dedupe_key,is_internal_transfer,status,raw_payload
+                   ) VALUES(
+                       %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                       %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb
+                   )""",
                 (
                     int(email_row["id"]), connection["account_id"], connection["workspace_id"], transaction_id,
-                    parsed.get("transaction_date") or datetime.now(timezone.utc).date().isoformat(),
-                    str(parsed.get("description") or subject)[:500], parsed.get("amount"), tx_type,
-                    normalize_category(parsed.get("category"), tx_type), parsed.get("bank") or "unknown",
-                    confidence, candidate_status, json.dumps(parsed, default=str),
+                    candidate["movement_index"], candidate["source_type"], candidate["source_provider"],
+                    candidate["source_record_key"], candidate["institution_country"],
+                    candidate["transaction_date"], candidate["transaction_time"], candidate["description"],
+                    candidate["amount"], candidate["currency"], candidate["original_amount"],
+                    candidate["original_currency"], candidate["transaction_type"],
+                    candidate["movement_direction"], candidate["movement_kind"], candidate["category"],
+                    candidate["bank"], candidate["source_account_label"],
+                    candidate["source_account_reference"], candidate["destination_account_reference"],
+                    candidate["counterparty"], candidate["external_reference"], candidate["parser_name"],
+                    candidate["parser_version"], candidate["extraction_method"], candidate["confidence"],
+                    candidate["uncertainty_reason"], candidate["dedupe_key"],
+                    candidate["is_internal_transfer"], candidate_status,
+                    json.dumps(candidate["raw_payload"], default=str),
                 ),
             )
             status = candidate_status
