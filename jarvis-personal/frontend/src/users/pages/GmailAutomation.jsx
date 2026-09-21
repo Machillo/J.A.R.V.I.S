@@ -1,11 +1,14 @@
-import { CheckCircle2, Mail, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
+import { Check, CheckCircle2, Mail, Pencil, RefreshCw, ShieldCheck, Unplug, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import {
   connectVipGmail,
   disconnectVipGmail,
+  acceptVipGmailCandidate,
+  getVipGmailEmails,
   getVipGmailStatus,
+  rejectVipGmailCandidate,
   syncVipGmail,
 } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
@@ -15,11 +18,29 @@ export default function GmailAutomation() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [emails, setEmails] = useState([]);
+  const [filter, setFilter] = useState("pending");
+  const [editing, setEditing] = useState(null);
 
   const load = useCallback(async () => {
-    try { setGmail(await getVipGmailStatus()); }
+    try {
+      const [status, inbox] = await Promise.all([getVipGmailStatus(), getVipGmailEmails(filter)]);
+      setGmail(status); setEmails(inbox?.items || []);
+    }
     catch (err) { setError(err.message || tx("No se pudo consultar Gmail.", "Couldn’t check Gmail.")); }
-  }, []);
+  }, [filter]);
+
+  const review = async (item, action, corrections = null) => {
+    setBusy(`${action}-${item.candidate_id}`); setError(""); setMessage("");
+    try {
+      if (action === "reject") await rejectVipGmailCandidate(item.candidate_id);
+      else await acceptVipGmailCandidate(item.candidate_id, corrections);
+      setEditing(null);
+      setMessage(action === "reject" ? tx("Correo descartado.", "Email dismissed.") : tx("Movimiento guardado.", "Transaction saved."));
+      await load();
+    } catch (err) { setError(err.message || tx("No se pudo revisar el correo.", "Couldn’t review the email.")); }
+    finally { setBusy(""); }
+  };
 
   useEffect(() => {
     load();
@@ -85,6 +106,32 @@ export default function GmailAutomation() {
         <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar ahora", "Refresh now")}</button><button type="button" className="danger" disabled={Boolean(busy)} onClick={disconnect}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
       </>}
     </article>
+    {gmail?.connected && <section className="gmail-inbox" aria-label={tx("Correos financieros", "Financial emails")}>
+      <header><div><p className="eyebrow">{tx("Bandeja financiera", "Financial inbox")}</p><h2>{tx("Correos recibidos", "Received emails")}</h2></div><span>{emails.length}</span></header>
+      <div className="gmail-inbox-tabs">
+        <button type="button" className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>{tx("Por revisar", "To review")}</button>
+        <button type="button" className={filter === "" ? "active" : ""} onClick={() => setFilter("")}>{tx("Todos", "All")}</button>
+      </div>
+      {!emails.length && <div className="gmail-inbox-empty"><Mail size={25}/><strong>{filter ? tx("No hay correos por revisar", "No emails to review") : tx("Todavía no hay correos financieros", "No financial emails yet")}</strong><small>{tx("Cuando FINVA detecte un movimiento bancario aparecerá acá.", "When FINVA detects a bank transaction, it will appear here.")}</small></div>}
+      <div className="gmail-email-list">{emails.map((item) => {
+        const pending = item.review_status === "pending";
+        const edit = editing?.candidate_id === item.candidate_id;
+        return <article className="gmail-email-card" key={item.email_id}>
+          <div className="gmail-email-meta"><span>{item.bank || tx("Banco", "Bank")}</span><time>{item.received_at ? new Date(item.received_at).toLocaleDateString() : ""}</time></div>
+          <strong>{item.subject || item.description || tx("Movimiento bancario", "Bank transaction")}</strong>
+          <small>{item.sender}</small>
+          {item.candidate_id ? edit ? <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); review(item, "accept", { transaction_date: form.get("transaction_date"), description: form.get("description"), amount: Number(form.get("amount")), transaction_type: form.get("transaction_type"), category: form.get("category") }); }} className="gmail-candidate-editor">
+            <input name="description" defaultValue={item.description} required aria-label={tx("Descripción", "Description")}/>
+            <div><input name="amount" type="number" step="0.01" min="0.01" defaultValue={item.amount} required aria-label={tx("Monto", "Amount")}/><input name="transaction_date" type="date" defaultValue={item.transaction_date} required aria-label={tx("Fecha", "Date")}/></div>
+            <div><select name="transaction_type" defaultValue={item.transaction_type}><option value="expense">{tx("Gasto", "Expense")}</option><option value="income">{tx("Ingreso", "Income")}</option><option value="debt_payment">{tx("Pago de deuda", "Debt payment")}</option></select><input name="category" defaultValue={item.category || "general"} required aria-label={tx("Categoría", "Category")}/></div>
+            <div className="gmail-review-actions"><button type="button" onClick={() => setEditing(null)}><X size={16}/>{tx("Cancelar", "Cancel")}</button><button className="primary" disabled={Boolean(busy)}><Check size={16}/>{tx("Guardar", "Save")}</button></div>
+          </form> : <>
+            <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>₡{Number(item.amount || 0).toLocaleString()}</b></span></div>
+            {pending ? <div className="gmail-review-actions"><button type="button" className="reject" disabled={Boolean(busy)} onClick={() => review(item, "reject")}><X size={16}/>{tx("Rechazar", "Reject")}</button><button type="button" disabled={Boolean(busy)} onClick={() => setEditing(item)}><Pencil size={16}/>{tx("Corregir", "Edit")}</button><button type="button" className="primary" disabled={Boolean(busy)} onClick={() => review(item, "accept")}><Check size={16}/>{tx("Aceptar", "Accept")}</button></div> : <span className={`gmail-review-state ${item.review_status}`}>{item.review_status === "confirmed" || item.review_status === "auto_saved" ? tx("Guardado", "Saved") : item.review_status === "rejected" ? tx("Rechazado", "Rejected") : item.review_status}</span>}
+          </> : <p>{item.parse_reason || tx("FINVA no detectó un movimiento en este correo.", "FINVA did not detect a transaction in this email.")}</p>}
+        </article>;
+      })}</div>
+    </section>}
     {message && <p className="success-banner">{message}</p>}
     {error && <p className="onboarding-error">{error}</p>}
   </section>;

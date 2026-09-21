@@ -233,6 +233,103 @@ def gmail_status() -> dict[str, Any]:
     }
 
 
+def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
+    account_id = get_current_account_id()
+    workspace_id = get_current_workspace_id()
+    allowed = {"pending", "auto_saved", "confirmed", "rejected", "duplicate"}
+    if status and status not in allowed:
+        raise HTTPException(status_code=422, detail="Estado de revisión inválido.")
+    params: list[Any] = [account_id, workspace_id]
+    status_filter = ""
+    if status:
+        status_filter = " AND c.status=%s"
+        params.append(status)
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""SELECT m.id AS email_id,m.sender,m.subject,m.received_at,m.bank,m.status AS email_status,
+                       m.parse_reason,c.id AS candidate_id,c.transaction_id,c.transaction_date,
+                       c.description,c.amount,c.transaction_type,c.category,c.confidence,
+                       c.status AS review_status,c.created_at
+                FROM finva_email_messages m
+                LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id
+                WHERE m.account_id=%s AND m.workspace_id=%s{status_filter}
+                ORDER BY COALESCE(m.received_at,m.created_at) DESC,m.id DESC
+                LIMIT 200""",
+            tuple(params),
+        ).fetchall()
+    return {"status": "ok", "items": [dict(row) for row in rows]}
+
+
+def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any]) -> int:
+    category = normalize_category(values["category"], values["transaction_type"])
+    row = conn.execute(
+        """INSERT INTO transactions(
+               transaction_date,description,amount,transaction_type,category,account,source,notes,
+               user_id,workspace_id,created_at
+           ) VALUES(%s,%s,%s,%s,%s,%s,'finva_gmail',%s,%s,%s,NOW()) RETURNING id""",
+        (
+            values["transaction_date"], values["description"].strip(), values["amount"],
+            values["transaction_type"], category, candidate.get("bank") or "",
+            "Confirmado por el usuario desde un correo bancario.",
+            int(candidate["legacy_user_id"]), candidate["workspace_id"],
+        ),
+    ).fetchone()
+    return int(row["id"])
+
+
+def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str, Any] | None = None) -> dict[str, Any]:
+    if action not in {"accept", "reject"}:
+        raise HTTPException(status_code=422, detail="Acción de revisión inválida.")
+    account_id = get_current_account_id()
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        candidate = conn.execute(
+            """SELECT c.*,g.legacy_user_id
+               FROM finva_email_candidates c
+               JOIN finva_gmail_connections g
+                 ON g.account_id=c.account_id AND g.workspace_id=c.workspace_id
+               WHERE c.id=%s AND c.account_id=%s AND c.workspace_id=%s
+               FOR UPDATE""",
+            (candidate_id, account_id, workspace_id),
+        ).fetchone()
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Correo financiero no encontrado.")
+        candidate = dict(candidate)
+        if candidate["status"] != "pending":
+            return {"status": candidate["status"], "candidate_id": candidate_id, "transaction_id": candidate.get("transaction_id")}
+        if action == "reject":
+            conn.execute(
+                "UPDATE finva_email_candidates SET status='rejected',updated_at=NOW() WHERE id=%s",
+                (candidate_id,),
+            )
+            conn.execute("UPDATE finva_email_messages SET status='rejected' WHERE id=%s", (candidate["email_message_id"],))
+            conn.commit()
+            return {"status": "rejected", "candidate_id": candidate_id, "transaction_id": None}
+
+        values = {
+            "transaction_date": candidate["transaction_date"],
+            "description": candidate["description"],
+            "amount": candidate["amount"],
+            "transaction_type": candidate["transaction_type"],
+            "category": candidate["category"],
+        }
+        if corrections:
+            values.update(corrections)
+        transaction_id = _create_candidate_transaction(conn, candidate, values)
+        category = normalize_category(values["category"], values["transaction_type"])
+        conn.execute(
+            """UPDATE finva_email_candidates
+               SET transaction_id=%s,transaction_date=%s,description=%s,amount=%s,
+                   transaction_type=%s,category=%s,status='confirmed',updated_at=NOW()
+               WHERE id=%s""",
+            (transaction_id, values["transaction_date"], values["description"].strip(), values["amount"],
+             values["transaction_type"], category, candidate_id),
+        )
+        conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
+        conn.commit()
+    return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": transaction_id}
+
+
 def begin_gmail_connection() -> dict[str, str]:
     client_id, _, redirect_uri = _google_config()
     user = get_current_user()
@@ -459,24 +556,6 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
         elif kind == "movement" and parsed.get("amount") and parsed.get("transaction_type"):
             tx_type = str(parsed.get("transaction_type"))
             candidate_status = "pending"
-            if confidence >= 0.97 and tx_type in {"income", "expense", "debt_payment"}:
-                category = normalize_category(parsed.get("category"), tx_type)
-                tx = conn.execute(
-                    """INSERT INTO transactions(
-                           transaction_date,description,amount,transaction_type,category,account,source,notes,
-                           original_amount,original_currency,exchange_rate,user_id,workspace_id,created_at
-                       ) VALUES(%s,%s,%s,%s,%s,%s,'finva_gmail',%s,%s,%s,%s,%s,%s,NOW())
-                       RETURNING id""",
-                    (
-                        parsed.get("transaction_date") or datetime.now(timezone.utc).date().isoformat(),
-                        str(parsed.get("description") or subject)[:500], parsed.get("amount"), tx_type, category,
-                        str(parsed.get("account") or "")[:200], "Importado automáticamente desde Gmail.",
-                        parsed.get("original_amount"), parsed.get("original_currency"), parsed.get("exchange_rate"),
-                        int(connection["legacy_user_id"]), connection["workspace_id"],
-                    ),
-                ).fetchone()
-                transaction_id = int(tx["id"])
-                candidate_status = "auto_saved"
             conn.execute(
                 """INSERT INTO finva_email_candidates(
                        email_message_id,account_id,workspace_id,transaction_id,transaction_date,description,

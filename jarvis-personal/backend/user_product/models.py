@@ -159,6 +159,14 @@ class TransactionCreateRequest(BaseModel):
     notes: str = ""
 
 
+class GmailCandidateReviewRequest(BaseModel):
+    transaction_date: date
+    description: str = Field(min_length=1, max_length=500)
+    amount: float = Field(gt=0)
+    transaction_type: Literal["expense", "income", "debt_payment"]
+    category: str = Field(default="general", max_length=100)
+
+
 class MovementUpdateRequest(BaseModel):
     transaction_date: date
     description: str
