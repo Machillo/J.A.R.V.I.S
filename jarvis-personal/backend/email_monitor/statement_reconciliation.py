@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from backend.finance.category_catalog import normalize_category
 from backend.transactions.parser import detect_category
+from backend.email_monitor.popular_pdf import parse_popular_statement
 
 
 DATE_LINE = re.compile(r"(?m)^(\d{2}/\d{2}/\d{4})\s*$")
@@ -300,9 +301,13 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
         raise HTTPException(status_code=404, detail="Estado de cuenta no encontrado.")
     document = dict(document)
     bank = document.get("bank")
-    if bank not in {"multimoney", "bac"}:
-        raise HTTPException(status_code=400, detail="La conciliación admite estados MultiMoney y BAC.")
-    parser = parse_multimoney_statement if bank == "multimoney" else parse_bac_statement
+    if bank not in {"multimoney", "bac", "popular"}:
+        raise HTTPException(status_code=400, detail="La conciliación admite estados MultiMoney, BAC y Banco Popular.")
+    parser = (
+        parse_multimoney_statement if bank == "multimoney"
+        else parse_popular_statement if bank == "popular"
+        else parse_bac_statement
+    )
     movements = parser(document.get("extracted_text") or "")
     if not movements:
         raise HTTPException(status_code=422, detail=f"No pude extraer movimientos seguros del PDF de {bank.upper()}.")
@@ -475,7 +480,7 @@ def _import_missing_statement_movement(
             movement["amount"],
             movement["transaction_type"],
             movement["category"],
-            "MultiMoney" if bank == "multimoney" else "BAC",
+            "MultiMoney" if bank == "multimoney" else "Banco Popular" if bank == "popular" else "BAC",
             f"{bank}_statement",
             f"Importado automáticamente durante conciliación mensual | {source_marker}",
             movement.get("original_amount"),
