@@ -200,6 +200,10 @@
 .users-app .actions { display:flex; gap:7px; flex-wrap:wrap; justify-content:flex-end; }
 
 /* Dashboard */
+.users-app .finva-profile-nudge{position:relative;margin:0 0 12px;padding:14px 42px 14px 14px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid color-mix(in srgb,var(--f-accent) 45%,var(--f-border));border-radius:18px;background:color-mix(in srgb,var(--f-accent) 10%,var(--f-surface));color:var(--f-text)}
+.users-app .finva-profile-nudge>svg{color:var(--f-accent)}.users-app .finva-profile-nudge strong,.users-app .finva-profile-nudge span{display:block}.users-app .finva-profile-nudge strong{font-size:.86rem}.users-app .finva-profile-nudge span{margin-top:3px;color:var(--f-muted);font-size:.72rem;line-height:1.35}.users-app .finva-profile-nudge>button:not(.finva-profile-nudge-close){min-height:34px;padding:7px 11px}.users-app .finva-profile-nudge .finva-profile-nudge-close{position:absolute;top:6px;right:6px;min-width:30px!important;min-height:30px!important;padding:5px!important;border:0!important;background:transparent!important;color:var(--f-muted)}
+.users-app .situation-observed-note{display:flex;gap:10px;padding:13px 14px;border:1px solid color-mix(in srgb,var(--f-accent) 45%,var(--f-border));border-radius:16px;background:color-mix(in srgb,var(--f-accent) 9%,var(--f-surface))}.users-app .situation-observed-note>svg{flex:none;color:var(--f-accent)}.users-app .situation-observed-note p{margin:4px 0 0;color:var(--f-muted);font-size:.74rem;line-height:1.4}
+@media(max-width:520px){.users-app .finva-profile-nudge{grid-template-columns:auto minmax(0,1fr)}.users-app .finva-profile-nudge>button:not(.finva-profile-nudge-close){grid-column:2;justify-self:start}}
 .users-app .dashboard-plan-action {
   width:100%;
   margin-top:12px;
