@@ -30,6 +30,13 @@ from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import resolve_candidate
+from backend.user_product.statement_candidate import (
+    PARSER_NAME as STATEMENT_PARSER_NAME,
+    PARSER_VERSION as STATEMENT_PARSER_VERSION,
+    parse_statement_movements,
+    statement_candidate,
+    statement_hash,
+)
 
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
@@ -256,6 +263,7 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
                        c.source_account_reference,c.destination_account_reference,c.counterparty,
                        c.parser_name,c.parser_version,c.extraction_method,c.confidence,
                        c.uncertainty_reason,c.status AS review_status,c.reviewed_at,c.created_at,
+                       c.source_type,c.source_provider,c.statement_document_id,
                        c.is_internal_transfer,c.related_candidate_id,c.resolution_reason
                 FROM finva_email_messages m
                 LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id
@@ -269,15 +277,21 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
 
 def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any]) -> int:
     category = normalize_category(values["category"], values["transaction_type"])
+    source = "finva_statement" if candidate.get("source_type") == "statement" else "finva_gmail"
+    note = (
+        "Confirmado por el usuario desde un estado de cuenta."
+        if candidate.get("source_type") == "statement"
+        else "Confirmado por el usuario desde un correo bancario."
+    )
     row = conn.execute(
         """INSERT INTO transactions(
                transaction_date,description,amount,transaction_type,category,account,source,notes,
                user_id,workspace_id,financial_account_id,created_at
-           ) VALUES(%s,%s,%s,%s,%s,%s,'finva_gmail',%s,%s,%s,%s,NOW()) RETURNING id""",
+           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) RETURNING id""",
         (
             values["transaction_date"], values["description"].strip(), values["amount"],
             values["transaction_type"], category, candidate.get("bank") or "",
-            "Confirmado por el usuario desde un correo bancario.",
+            source, note,
             int(candidate["legacy_user_id"]), candidate["workspace_id"],
             candidate.get("financial_account_id"),
         ),
@@ -506,6 +520,54 @@ def _adapt_identity(value: str, display_name: str) -> str:
     return adapted
 
 
+def _insert_finva_candidate(
+    conn, *, email_message_id: int, connection: dict[str, Any],
+    candidate: dict[str, Any], statement_document_id: int | None = None,
+) -> dict[str, Any]:
+    row = conn.execute(
+        """INSERT INTO finva_email_candidates(
+               email_message_id,account_id,workspace_id,transaction_id,statement_document_id,
+               movement_index,source_type,source_provider,source_record_key,institution_country,
+               transaction_date,transaction_time,description,amount,currency,original_amount,
+               original_currency,transaction_type,movement_direction,movement_kind,category,bank,
+               source_account_label,source_account_reference,destination_account_reference,
+               counterparty,external_reference,parser_name,parser_version,extraction_method,
+               confidence,uncertainty_reason,dedupe_key,is_internal_transfer,status,raw_payload
+           ) VALUES(
+               %s,%s,%s,NULL,%s,
+               %s,%s,%s,%s,%s,
+               %s,%s,%s,%s,%s,%s,
+               %s,%s,%s,%s,%s,%s,
+               %s,%s,%s,
+               %s,%s,%s,%s,%s,
+               %s,%s,%s,%s,'pending',%s::jsonb
+           ) RETURNING id""",
+        (
+            email_message_id, connection["account_id"], connection["workspace_id"],
+            statement_document_id, candidate["movement_index"], candidate["source_type"],
+            candidate["source_provider"], candidate["source_record_key"],
+            candidate["institution_country"], candidate["transaction_date"],
+            candidate["transaction_time"], candidate["description"], candidate["amount"],
+            candidate["currency"], candidate["original_amount"], candidate["original_currency"],
+            candidate["transaction_type"], candidate["movement_direction"],
+            candidate["movement_kind"], candidate["category"], candidate["bank"],
+            candidate["source_account_label"], candidate["source_account_reference"],
+            candidate["destination_account_reference"], candidate["counterparty"],
+            candidate["external_reference"], candidate["parser_name"], candidate["parser_version"],
+            candidate["extraction_method"], candidate["confidence"], candidate["uncertainty_reason"],
+            candidate["dedupe_key"], candidate["is_internal_transfer"],
+            json.dumps(candidate["raw_payload"], default=str),
+        ),
+    ).fetchone()
+    candidate_id = int(row["id"])
+    discover_candidate_account(
+        conn, candidate_id=candidate_id, candidate=candidate,
+        account_id=str(connection["account_id"]), workspace_id=str(connection["workspace_id"]),
+        legacy_user_id=int(connection["legacy_user_id"]),
+    )
+    return resolve_candidate(conn, candidate_id)
+
+
 def _process_message(service, connection: dict[str, Any], message_id: str) -> str:
     full = service.users().messages().get(userId="me", id=message_id, format="full").execute()
     headers = {item.get("name", "").lower(): item.get("value", "") for item in full.get("payload", {}).get("headers", [])}
@@ -514,7 +576,7 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
     payload = full.get("payload") or {}
     body = _plain_text(payload) or full.get("snippet", "")
     attachments = collect_attachments(payload)
-    attachment_text, _ = extract_pdf_attachment_text(service, message_id, attachments)
+    attachment_text, attachment_names = extract_pdf_attachment_text(service, message_id, attachments)
     received_at = None
     if headers.get("date"):
         try:
@@ -524,9 +586,10 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
 
     display_name = str(connection.get("display_name") or "")
     payroll_report = parse_ccss_order_patronal(subject, sender, attachment_text or body)
+    financial_text = "\n".join(item for item in (body, attachment_text) if item)
     parsed = {} if payroll_report else parse_financial_email(
         _adapt_identity(subject, display_name), sender,
-        _adapt_identity(body, display_name), received_at,
+        _adapt_identity(financial_text, display_name), received_at,
     )
     kind = "payroll_statement" if payroll_report else str(parsed.get("email_kind") or "ignored")
     if kind == "ignored" and parsed.get("transaction_type") == "internal_transfer" and parsed.get("amount"):
@@ -540,24 +603,40 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
 
     with get_connection() as conn:
         existing = conn.execute(
-            "SELECT id FROM finva_email_messages WHERE connection_id=%s AND provider_message_id=%s",
+            "SELECT id,status FROM finva_email_messages WHERE connection_id=%s AND provider_message_id=%s",
             (int(connection["id"]), message_id),
         ).fetchone()
         if existing:
-            return "duplicate"
-        email_row = conn.execute(
-            """INSERT INTO finva_email_messages(
-                   connection_id,account_id,workspace_id,provider_message_id,sender,subject,received_at,
-                   bank,status,parse_reason
-               ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-            (
-                int(connection["id"]), connection["account_id"], connection["workspace_id"], message_id,
-                sender[:500], subject[:500], received_at,
-                "ccss" if payroll_report else parsed.get("bank") or "unknown", kind,
-                (f"Orden patronal CCSS {payroll_report['period_month']} procesada."
-                 if payroll_report else parsed.get("confidence_reason") or parsed.get("ignore_reason") or ""),
-            ),
-        ).fetchone()
+            statement_exists = kind == "statement" and conn.execute(
+                "SELECT 1 FROM finva_statement_documents WHERE email_message_id=%s",
+                (int(existing["id"]),),
+            ).fetchone()
+            if kind != "statement" or statement_exists:
+                return "duplicate"
+            email_row = existing
+            conn.execute(
+                """UPDATE finva_email_messages
+                   SET bank=%s,status='statement',parse_reason=%s WHERE id=%s""",
+                (
+                    parsed.get("bank") or "unknown",
+                    parsed.get("confidence_reason") or "Estado de cuenta listo para procesar.",
+                    int(existing["id"]),
+                ),
+            )
+        else:
+            email_row = conn.execute(
+                """INSERT INTO finva_email_messages(
+                       connection_id,account_id,workspace_id,provider_message_id,sender,subject,received_at,
+                       bank,status,parse_reason
+                   ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (
+                    int(connection["id"]), connection["account_id"], connection["workspace_id"], message_id,
+                    sender[:500], subject[:500], received_at,
+                    "ccss" if payroll_report else parsed.get("bank") or "unknown", kind,
+                    (f"Orden patronal CCSS {payroll_report['period_month']} procesada."
+                     if payroll_report else parsed.get("confidence_reason") or parsed.get("ignore_reason") or ""),
+                ),
+            ).fetchone()
 
         if payroll_report:
             conn.execute(
@@ -584,53 +663,55 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
                 ),
             )
             status = "payroll_statement"
+        elif kind == "statement":
+            document_text = attachment_text or financial_text
+            document_hash = statement_hash(document_text)
+            movements = parse_statement_movements(str(parsed.get("bank") or "unknown"), document_text)
+            document_status = (
+                "candidates_ready" if movements else
+                "unsupported" if parsed.get("bank") not in {"bac", "multimoney"} else "empty"
+            )
+            document_row = conn.execute(
+                """INSERT INTO finva_statement_documents(
+                       email_message_id,account_id,workspace_id,bank,statement_month,
+                       attachment_names,document_hash,parser_name,parser_version,movements_found,status
+                   ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (
+                    int(email_row["id"]), connection["account_id"], connection["workspace_id"],
+                    parsed.get("bank") or "unknown", parsed.get("statement_month"),
+                    attachment_names, document_hash, STATEMENT_PARSER_NAME,
+                    STATEMENT_PARSER_VERSION, len(movements), document_status,
+                ),
+            ).fetchone()
+            resolutions = []
+            for index, movement in enumerate(movements):
+                candidate = statement_candidate(
+                    movement, bank=str(parsed.get("bank") or "unknown"),
+                    document_hash=document_hash, movement_index=index,
+                    statement_text=document_text,
+                )
+                resolutions.append(_insert_finva_candidate(
+                    conn, email_message_id=int(email_row["id"]), connection=connection,
+                    candidate=candidate, statement_document_id=int(document_row["id"]),
+                ))
+            if movements:
+                status = "duplicate" if all(item.get("status") == "duplicate" for item in resolutions) else "pending"
+                reason = f"Estado de cuenta procesado: {len(movements)} movimiento(s) listos para revisión."
+            else:
+                status = "ignored"
+                reason = "Estado de cuenta detectado, pero el formato todavía no tiene filas firmadas compatibles."
+            conn.execute("UPDATE finva_email_messages SET parse_reason=%s WHERE id=%s", (reason, int(email_row["id"])))
         elif kind == "movement" and parsed.get("amount") and parsed.get("transaction_type"):
             candidate = canonical_candidate(
                 parsed,
                 provider_message_id=message_id,
                 subject=subject,
             )
-            candidate_status = "pending"
-            candidate_row = conn.execute(
-                """INSERT INTO finva_email_candidates(
-                       email_message_id,account_id,workspace_id,transaction_id,movement_index,
-                       source_type,source_provider,source_record_key,institution_country,
-                       transaction_date,transaction_time,description,amount,currency,original_amount,
-                       original_currency,transaction_type,movement_direction,movement_kind,category,bank,
-                       source_account_label,source_account_reference,destination_account_reference,
-                       counterparty,external_reference,parser_name,parser_version,extraction_method,
-                       confidence,uncertainty_reason,dedupe_key,is_internal_transfer,status,raw_payload
-                   ) VALUES(
-                       %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                       %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb
-                   ) RETURNING id""",
-                (
-                    int(email_row["id"]), connection["account_id"], connection["workspace_id"], transaction_id,
-                    candidate["movement_index"], candidate["source_type"], candidate["source_provider"],
-                    candidate["source_record_key"], candidate["institution_country"],
-                    candidate["transaction_date"], candidate["transaction_time"], candidate["description"],
-                    candidate["amount"], candidate["currency"], candidate["original_amount"],
-                    candidate["original_currency"], candidate["transaction_type"],
-                    candidate["movement_direction"], candidate["movement_kind"], candidate["category"],
-                    candidate["bank"], candidate["source_account_label"],
-                    candidate["source_account_reference"], candidate["destination_account_reference"],
-                    candidate["counterparty"], candidate["external_reference"], candidate["parser_name"],
-                    candidate["parser_version"], candidate["extraction_method"], candidate["confidence"],
-                    candidate["uncertainty_reason"], candidate["dedupe_key"],
-                    candidate["is_internal_transfer"], candidate_status,
-                    json.dumps(candidate["raw_payload"], default=str),
-                ),
-            ).fetchone()
-            discover_candidate_account(
-                conn,
-                candidate_id=int(candidate_row["id"]),
+            resolution = _insert_finva_candidate(
+                conn, email_message_id=int(email_row["id"]), connection=connection,
                 candidate=candidate,
-                account_id=str(connection["account_id"]),
-                workspace_id=str(connection["workspace_id"]),
-                legacy_user_id=int(connection["legacy_user_id"]),
             )
-            resolution = resolve_candidate(conn, int(candidate_row["id"]))
-            status = str(resolution.get("status") or candidate_status)
+            status = str(resolution.get("status") or "pending")
         conn.execute("UPDATE finva_email_messages SET status=%s WHERE id=%s", (status, int(email_row["id"])))
         conn.commit()
     return status
