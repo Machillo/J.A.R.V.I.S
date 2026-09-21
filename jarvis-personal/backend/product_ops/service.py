@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 RELEASE_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[+-][A-Za-z0-9.-]+)?$")
 def _discord_webhook_host(webhook: str) -> str | None:
     """Return the verified official Discord host without exposing webhook secrets."""
+    fingerprint = hashlib.sha256(webhook.encode("utf-8", errors="replace")).hexdigest()[:12]
     try:
         parsed = urlsplit(webhook)
         host = (parsed.hostname or "").lower()
@@ -46,8 +47,18 @@ def _discord_webhook_host(webhook: str) -> str | None:
             and parsed.path.startswith("/api/webhooks/")
         ):
             return host
-    except (TypeError, ValueError):
-        pass
+        logger.error(
+            "Discord webhook validation failed scheme=%r host=%r port=%r credentials=%s "
+            "path_valid=%s fingerprint=%s length=%s",
+            parsed.scheme.lower(), host, parsed.port,
+            parsed.username is not None or parsed.password is not None,
+            parsed.path.startswith("/api/webhooks/"), fingerprint, len(webhook),
+        )
+    except (TypeError, ValueError) as error:
+        logger.error(
+            "Discord webhook validation parse failure type=%s fingerprint=%s length=%s",
+            type(error).__name__, fingerprint, len(webhook),
+        )
     return None
 
 

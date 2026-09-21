@@ -609,21 +609,27 @@ def test_discord_rejects_lookalike_hooks_host(monkeypatch):
     assert called is False
 
 
-def test_discord_rejects_non_discord_webhook(monkeypatch):
+def test_discord_rejects_non_discord_webhook(monkeypatch, caplog):
     called = False
 
     def fake_post(*_args, **_kwargs):
         nonlocal called
         called = True
 
-    monkeypatch.setenv("SUPPORT_DISCORD_WEBHOOK_URL", "https://evil.example/webhook")
+    secret_url = "https://evil.example/api/webhooks/123/super-secret-token"
+    monkeypatch.setenv("SUPPORT_DISCORD_WEBHOOK_URL", secret_url)
     monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
     assert product_ops_service._send_support_discord(
         public_id="FINVA-000009",
         plan="free",
+        severity="critical",
         payload=SimpleNamespace(category="error", app_version=None, platform=None, screen=None, error_reference=None),
     ) is False
     assert called is False
+    assert "host='evil.example'" in caplog.text
+    assert "path_valid=True" in caplog.text
+    assert "super-secret-token" not in caplog.text
+    assert secret_url not in caplog.text
 
 
 def test_phase_0c_suppresses_warning_discord_alerts_by_default(monkeypatch):
