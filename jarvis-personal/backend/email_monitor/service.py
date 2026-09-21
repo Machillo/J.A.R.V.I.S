@@ -28,6 +28,7 @@ from backend.email_monitor.personal_rules import apply_workspace_email_rules
 from backend.email_monitor.statement_reconciliation import reconcile_statement
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
+from backend.email_monitor.popular_pdf import parse_popular_email_document
 
 OWNER_EMAIL = (
     os.getenv("OWNER_EMAIL", "").strip()
@@ -38,7 +39,7 @@ DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
     # Sender-only query on purpose. The parser decides what is financial.
     # The old query mixed sender + keywords and Gmail returned only a tiny subset.
-    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopular OR from:popular OR from:noreply@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")',
+    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopularinforma.fi.cr OR from:bpdc.fi.cr OR from:bancopopular OR from:popular OR from:noreply@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")',
 )
 # Gmail ingestion is automatic only for high-confidence parser decisions.
 AUTO_COMMIT_CONFIDENCE = max(
@@ -46,6 +47,20 @@ AUTO_COMMIT_CONFIDENCE = max(
     min(float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "0.95")), 1.0),
 )
 logger = logging.getLogger(__name__)
+
+
+def _with_popular_gmail_sources(query: str) -> str:
+    """Upgrade persisted JARVIS queries without replacing owner customization."""
+    required = (
+        "from:bancopopular.fi.cr",
+        "from:bancopopularinforma.fi.cr",
+        "from:bpdc.fi.cr",
+    )
+    missing = [source for source in required if source.lower() not in (query or "").lower()]
+    if not missing:
+        return query
+    additions = " OR ".join(missing)
+    return f"({query} OR {additions})" if query.strip() else f"({additions})"
 
 
 def build_current_month_gmail_query(base_query: str | None = None, today: date | None = None) -> str:
@@ -755,6 +770,13 @@ def _settings_query_for_owner(conn, user_id: int, workspace_id: str | None = Non
         (user_id, workspace_id, DEFAULT_QUERY),
     ).fetchone()
     gmail_query = (row or {}).get("gmail_query") or DEFAULT_QUERY
+    popular_query = _with_popular_gmail_sources(gmail_query)
+    if popular_query != gmail_query:
+        gmail_query = popular_query
+        conn.execute(
+            "UPDATE email_monitor_settings SET gmail_query = %s, updated_at = NOW() WHERE workspace_id = %s",
+            (gmail_query, workspace_id),
+        )
     if "orden patronal" not in gmail_query.lower() and "noreply@ccss.sa.cr" not in gmail_query.lower():
         gmail_query = f'({gmail_query} OR from:noreply@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")'
         conn.execute(
@@ -1412,7 +1434,16 @@ def scan_email_text(
             "candidate": None,
         }
 
-    parsed = parse_financial_email(subject, sender, body, received_at)
+    # Banco Popular is enabled only in JARVIS' owner email monitor. FINVA's VIP
+    # Gmail service keeps its existing provider list until this parser is proven
+    # with multiple users and explicitly promoted there.
+    parsed = parse_popular_email_document(
+        subject=subject,
+        sender=sender,
+        body=body,
+        attachment_text=attachment_text,
+        received_at=received_at,
+    ) or parse_financial_email(subject, sender, body, received_at)
     parsed["attachment_names"] = attachment_names
 
     with get_connection() as conn:
@@ -1496,7 +1527,7 @@ def scan_email_text(
                 ),
             ).fetchone()
             reconciliation = None
-            if parsed.get("bank") in {"multimoney", "bac"} and statement_row:
+            if parsed.get("bank") in {"multimoney", "bac", "popular"} and statement_row:
                 try:
                     reconciliation = reconcile_statement(
                         conn,
@@ -1505,11 +1536,10 @@ def scan_email_text(
                         statement_id=int(statement_row["id"]),
                     )
                 except HTTPException as exc:
-                    if parsed.get("bank") != "bac" or exc.status_code != 422:
+                    if parsed.get("bank") not in {"bac", "popular"} or exc.status_code != 422:
                         raise
-                    # BAC publishes more than one PDF layout. Keep an unknown
-                    # layout pending for inspection instead of failing the Gmail
-                    # scan or, worse, importing unsigned/guessed movements.
+                    # BAC and Popular publish more than one PDF layout. Keep an
+                    # unknown layout pending instead of importing guessed rows.
                     reconciliation = {
                         "status": "PENDING_LAYOUT",
                         "statement_id": int(statement_row["id"]),
@@ -2490,7 +2520,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
             SELECT id, bank
             FROM email_statement_documents
             WHERE workspace_id = %s
-              AND bank IN ('bac', 'multimoney')
+              AND bank IN ('bac', 'multimoney', 'popular')
               AND extracted_text IS NOT NULL
               AND LENGTH(TRIM(extracted_text)) > 0
               AND status IN ('pending_reconciliation', 'needs_review')
