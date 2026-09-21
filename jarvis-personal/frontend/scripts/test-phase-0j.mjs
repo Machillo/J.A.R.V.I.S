@@ -17,6 +17,7 @@ assert.equal(hasSeenAppLockOnboarding("existing-user"), true, "completed onboard
 const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 const settings = readFileSync(new URL("../src/users/components/AppLockSettings.jsx", import.meta.url), "utf8");
 const lock = readFileSync(new URL("../src/components/FinvaAppLock.jsx", import.meta.url), "utf8");
+const appLock = readFileSync(new URL("../src/lib/appLock.js", import.meta.url), "utf8");
 const onboarding = readFileSync(new URL("../src/components/FinvaAppLockOnboarding.jsx", import.meta.url), "utf8");
 const iosConfig = readFileSync(new URL("../capacitor.ios.finva.json", import.meta.url), "utf8");
 const infoPlist = readFileSync(new URL("../ios-finva/App/App/Info.plist", import.meta.url), "utf8");
@@ -34,6 +35,7 @@ assert.match(onboarding, /Ahora no/, "onboarding never traps a user without comp
 assert.match(iosConfig, /capacitor-biometric-auth/, "FINVA iOS bundles the biometric plugin");
 assert.match(infoPlist, /NSFaceIDUsageDescription/, "FINVA declares why it uses Face ID");
 assert.match(iosProductScript, /verifyNativeBundle\(\)/, "the iOS workflow verifies the generated native bundle before opening Xcode");
-assert.match(iosProductScript, /finva:app-lock-onboarding:v1/, "the FINVA iOS workflow rejects a stale bundle without biometric onboarding");
+assert.match(appLock, /VITE_NATIVE_APP_ID.*com\.finva\.app/, "FINVA iOS does not skip security while the Capacitor bridge is attaching");
+assert.match(iosProductScript, /finva:app-lock-onboarding:v2/, "the FINVA iOS workflow rejects a stale bundle without biometric onboarding");
 
 console.log("Phase 0J biometric lock contract passed.");

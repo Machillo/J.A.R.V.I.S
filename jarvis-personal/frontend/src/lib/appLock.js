@@ -11,10 +11,13 @@ export const APP_LOCK_REQUESTED_EVENT = "finva:app-lock-requested";
 export const DEFAULT_APP_LOCK_TIMEOUT = 300_000;
 
 const storageKey = (userId) => `finva:app-lock:${userId}`;
-const onboardingKey = (userId) => `finva:app-lock-onboarding:v1:${userId}`;
+const onboardingKey = (userId) => `finva:app-lock-onboarding:v2:${userId}`;
 
 export function isNativeAppLockSupported() {
-  return Capacitor.isNativePlatform();
+  // Capacitor's bridge can report `web` during the first iOS render. The
+  // product-specific build id is deterministic and keeps the FINVA gate from
+  // being skipped while WebKit finishes attaching the native bridge.
+  return Capacitor.isNativePlatform() || import.meta.env?.VITE_NATIVE_APP_ID === "com.finva.app";
 }
 
 export function normalizeAppLockConfig(value = {}) {

@@ -47,7 +47,7 @@ function verifyNativeBundle() {
   if (productName === "finva") {
     const hasBiometricOnboarding = generatedFiles(publicPath)
       .filter((path) => path.endsWith(".js"))
-      .some((path) => readFileSync(path, "utf8").includes("finva:app-lock-onboarding:v1"));
+      .some((path) => readFileSync(path, "utf8").includes("finva:app-lock-onboarding:v2"));
     if (!hasBiometricOnboarding) {
       throw new Error("El bundle iOS de FINVA no contiene el onboarding biométrico. No abras Xcode con archivos antiguos.");
     }
