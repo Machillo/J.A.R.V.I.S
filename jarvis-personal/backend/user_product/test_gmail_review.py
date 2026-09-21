@@ -72,6 +72,35 @@ def test_accept_candidate_creates_one_transaction_and_confirms(monkeypatch):
     assert sum("INSERT INTO transactions" in query for query, _ in connection.calls) == 1
     assert result == {"status": "confirmed", "candidate_id": 4, "transaction_id": 55}
     assert connection.committed is True
+    update_params = next(params for query, params in connection.calls if "corrected_fields" in query)
+    assert update_params[-2] == []
+
+
+def test_accept_records_fields_corrected_by_user(monkeypatch):
+    _identity(monkeypatch)
+    candidate = {
+        "id": 4, "email_message_id": 9, "account_id": "account-a", "workspace_id": "workspace-a",
+        "transaction_id": None, "transaction_date": date(2026, 9, 20), "description": "Compra",
+        "amount": 1250, "transaction_type": "expense", "category": "food", "bank": "bac",
+        "status": "pending", "legacy_user_id": 77,
+    }
+    connection = _Connection([_Result(one=candidate), _Result(one={"id": 55}), _Result(), _Result()])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+
+    gmail_service.review_gmail_candidate(
+        4,
+        "accept",
+        {
+            "transaction_date": date(2026, 9, 20),
+            "description": "Supermercado",
+            "amount": 1250,
+            "transaction_type": "expense",
+            "category": "food",
+        },
+    )
+
+    update_params = next(params for query, params in connection.calls if "corrected_fields" in query)
+    assert update_params[-2] == ["description"]
 
 
 def test_review_is_idempotent_after_candidate_was_confirmed(monkeypatch):
