@@ -1,0 +1,68 @@
+import { useEffect, useState } from "react";
+import { Fingerprint, KeyRound, ShieldCheck, TimerReset } from "lucide-react";
+import {
+  appLockErrorMessage,
+  authenticateAppLock,
+  biometryLabel,
+  DEFAULT_APP_LOCK_TIMEOUT,
+  getBiometryStatus,
+  markAppLockOnboardingSeen,
+  saveAppLockConfig,
+} from "../lib/appLock";
+import { tx } from "../lib/locale";
+
+export default function FinvaAppLockOnboarding({ userId, onFinish }) {
+  const [status, setStatus] = useState(null);
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    getBiometryStatus()
+      .then(setStatus)
+      .catch(() => setStatus({ isAvailable: false, deviceIsSecure: false }));
+  }, []);
+
+  const skip = () => {
+    markAppLockOnboardingSeen(userId);
+    onFinish();
+  };
+
+  const activate = async () => {
+    if (working || !status?.isAvailable) return;
+    setWorking(true);
+    setMessage("");
+    try {
+      await authenticateAppLock();
+      saveAppLockConfig(userId, { enabled: true, timeoutMs: DEFAULT_APP_LOCK_TIMEOUT });
+      markAppLockOnboardingSeen(userId);
+      onFinish();
+    } catch (error) {
+      setMessage(appLockErrorMessage(error));
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const label = biometryLabel(status?.biometryType);
+  return (
+    <main className="finva-app-lock finva-app-lock--onboarding" aria-live="polite">
+      <section className="finva-app-lock-card finva-app-lock-welcome">
+        <div className="finva-app-lock-mark"><KeyRound size={34} /></div>
+        <p>FINVA · {tx("ACCESO SEGURO", "SECURE ACCESS")}</p>
+        <h1>{tx(`Entrá con ${label}`, `Access with ${label}`)}</h1>
+        <span>{tx("Después de iniciar con Google, FINVA puede usar la llave segura de este teléfono para proteger tus finanzas.", "After signing in with Google, FINVA can use this phone’s secure key to protect your finances.")}</span>
+        <div className="finva-app-lock-benefits">
+          <div><Fingerprint size={20}/><span><strong>{tx("Tu cara o huella", "Your face or fingerprint")}</strong><small>{tx("FINVA nunca recibe ni guarda tus datos biométricos.", "FINVA never receives or stores your biometric data.")}</small></span></div>
+          <div><TimerReset size={20}/><span><strong>{tx("Bloqueo a los 5 minutos", "Locks after 5 minutes")}</strong><small>{tx("Las salidas rápidas no te interrumpirán.", "Brief app switches won’t interrupt you.")}</small></span></div>
+          <div><ShieldCheck size={20}/><span><strong>{tx("Sin cerrar tu sesión", "Without signing you out")}</strong><small>{tx("Solo confirmás que sos vos para volver a entrar.", "You only confirm it’s you to get back in.")}</small></span></div>
+        </div>
+        {status && !status.isAvailable && <div className="finva-app-lock-error" role="alert">{tx("No encontramos biometría configurada. Podés activarla luego desde Ajustes de FINVA.", "No configured biometrics were found. You can enable it later from FINVA Settings.")}</div>}
+        {message && <div className="finva-app-lock-error" role="alert">{message}</div>}
+        <button className="finva-app-unlock-button" type="button" disabled={working || status === null || !status?.isAvailable} onClick={activate}>
+          <Fingerprint size={21} /> {working ? tx("Verificando…", "Verifying…") : tx("Activar acceso seguro", "Enable secure access")}
+        </button>
+        <button className="finva-app-lock-skip-button" type="button" disabled={working} onClick={skip}>{tx("Ahora no", "Not now")}</button>
+      </section>
+    </main>
+  );
+}
