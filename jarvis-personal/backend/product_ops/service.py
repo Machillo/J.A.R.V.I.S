@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.feature_flags import FEATURE_DEFINITIONS, clear_feature_flag_cache
+from backend.product_ops.email_monitor_dashboard import build_email_monitor_dashboard
 
 BETA_CODE = "beta-2026-01"
 LAUNCH_PROMOTION_CODE = "launch-free-2026"
@@ -925,6 +926,7 @@ def owner_dashboard():
             """SELECT flag_key,previous_enabled,new_enabled,reason,changed_at
                FROM app_feature_flag_audit ORDER BY changed_at DESC LIMIT 20"""
         ).fetchall()
+        email_monitor = build_email_monitor_dashboard(conn)
         conn.commit()
     return {"promotion": {**launch_promotion_status(), "plans": promotional},
             "support_email": support_email_configuration(),
@@ -933,7 +935,8 @@ def owner_dashboard():
             "tickets": [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in tickets],
             "release_policies": release_policies,
             "feature_flags": feature_flags,
-            "feature_flag_audit": feature_flag_audit}
+            "feature_flag_audit": feature_flag_audit,
+            "email_monitor": email_monitor}
 
 
 def submit_receipt(order_id: int, filename: str, content_type: str, content: bytes):
