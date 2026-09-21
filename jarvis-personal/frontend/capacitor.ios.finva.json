@@ -1,0 +1,13 @@
+{
+  "appId": "com.finva.app",
+  "appName": "FINVA",
+  "webDir": "dist",
+  "includePlugins": [
+    "@capacitor/app",
+    "@capacitor/browser",
+    "@capawesome/capacitor-file-picker"
+  ],
+  "ios": {
+    "path": "ios-finva"
+  }
+}
