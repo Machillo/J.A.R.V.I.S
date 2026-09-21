@@ -557,6 +557,58 @@ def test_discord_incident_notification_is_privacy_minimized(monkeypatch):
     assert observed["payload"]["allowed_mentions"] == {"parse": []}
 
 
+def test_discord_accepts_official_hooks_host(monkeypatch):
+    observed = {}
+
+    def fake_post(url, json, timeout):
+        observed.update(url=url, payload=json, timeout=timeout)
+        return SimpleNamespace(status_code=204)
+
+    monkeypatch.setenv(
+        "SUPPORT_DISCORD_WEBHOOK_URL",
+        "https://hooks.discord.com/api/webhooks/123/example-token",
+    )
+    monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
+
+    sent = product_ops_service._send_support_discord(
+        public_id="FINVA-000008-HOOKS",
+        plan="operaciones",
+        severity="critical",
+        payload=SimpleNamespace(
+            category="health", app_version="server", platform="backend",
+            screen="operaciones", error_reference="safe-reference",
+        ),
+    )
+
+    assert sent is True
+    assert observed["url"].startswith("https://hooks.discord.com/api/webhooks/")
+
+
+def test_discord_rejects_lookalike_hooks_host(monkeypatch):
+    called = False
+
+    def fake_post(*_args, **_kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setenv(
+        "SUPPORT_DISCORD_WEBHOOK_URL",
+        "https://hooks.discord.com.evil.example/api/webhooks/123/token",
+    )
+    monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
+
+    assert product_ops_service._send_support_discord(
+        public_id="FINVA-000008-EVIL",
+        plan="operaciones",
+        severity="critical",
+        payload=SimpleNamespace(
+            category="health", app_version="server", platform="backend",
+            screen="operaciones", error_reference="safe-reference",
+        ),
+    ) is False
+    assert called is False
+
+
 def test_discord_rejects_non_discord_webhook(monkeypatch):
     called = False
 
