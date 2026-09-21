@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 
 from backend.auth.saas import require_feature
 from backend.user_product.models import (
@@ -225,7 +225,10 @@ def vip_salvavidas_update(request: SalvavidasUpdateRequest):
 
 @router.get("/vip/aguinaldo")
 def vip_aguinaldo():
-    require_feature("strategy_vip"); return calculate_aguinaldo()
+    require_feature("gmail_automation")
+    if not gmail_status().get("connected"):
+        raise HTTPException(status_code=409, detail="Debes sincronizar tu email para calcular el aguinaldo.")
+    return calculate_aguinaldo()
 
 @router.get("/vip/gmail/status")
 def vip_gmail_status():
