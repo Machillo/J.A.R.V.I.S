@@ -1,7 +1,9 @@
 import { AlertTriangle, Banknote, X } from "lucide-react";
 import { tx } from "../../lib/locale";
+import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
 
 function DialogFrame({ title, description, icon: Icon, tone = "primary", children, onClose, busy }) {
+  useFinvaBackHandler(() => { if (!busy) onClose(); });
   return (
     <div
       className="finva-dialog-backdrop"
