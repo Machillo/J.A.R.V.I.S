@@ -4,7 +4,7 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -46,6 +46,7 @@ from backend.user_product.gmail_service import (
 )
 from backend.user_product.financial_identity import confirm_financial_account, list_financial_identity
 from backend.user_product.trust_analytics import get_gmail_trust_analytics
+from backend.user_product.gmail_consent import accept_gmail_consent
 
 router = APIRouter(prefix="/user-product", tags=["Finva Product"])
 
@@ -241,6 +242,11 @@ def vip_gmail_status():
 @router.post("/vip/gmail/connect")
 def vip_gmail_connect():
     require_feature("gmail_automation"); return begin_gmail_connection()
+
+@router.post("/vip/gmail/consent")
+def vip_gmail_consent(request: GmailConsentRequest):
+    require_feature("gmail_automation")
+    return accept_gmail_consent(accepted=request.accepted, version=request.version)
 
 @router.get("/vip/gmail/callback")
 def vip_gmail_callback(code: str | None = None, state: str | None = None, error: str | None = None):

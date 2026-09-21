@@ -453,6 +453,9 @@
 .users-app .gmail-connection-heading strong,.users-app .gmail-connection-heading small,.users-app .gmail-connection-status strong,.users-app .gmail-connection-status small { display:block; }
 .users-app .gmail-connection-heading small,.users-app .gmail-connection-status small,.users-app .gmail-connection-card p { color:var(--muted); }
 .users-app .gmail-connection-card p { margin:0; line-height:1.55; }
+.users-app .gmail-legal-links a { color:#5eead4; font-weight:750; }
+.users-app .gmail-consent-check { display:grid; grid-template-columns:24px 1fr; gap:10px; align-items:start; padding:14px; border:1px solid rgba(45,212,191,.22); border-radius:16px; background:rgba(20,184,166,.07); color:#dbeafe; line-height:1.45; }
+.users-app .gmail-consent-check input { width:21px; height:21px; margin:1px 0 0; accent-color:#14b8a6; }
 .users-app .gmail-connection-status { padding:12px 14px; border-radius:16px; background:rgba(15,23,42,.34); color:#34d399; }
 .users-app .gmail-connection-status span { min-width:0; }
 .users-app .gmail-connection-status strong { overflow:hidden; text-overflow:ellipsis; }

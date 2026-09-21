@@ -31,6 +31,7 @@ from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import resolve_candidate
+from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
 from backend.user_product.statement_candidate import (
     PARSER_NAME as STATEMENT_PARSER_NAME,
     PARSER_VERSION as STATEMENT_PARSER_VERSION,
@@ -273,7 +274,7 @@ def gmail_status() -> dict[str, Any]:
             (workspace_id,),
         ).fetchone()
     if not row:
-        return {"connected": False, "status": "disconnected", "pending": 0}
+        return {"connected": False, "status": "disconnected", "pending": 0, "consent": gmail_consent_status()}
     data = dict(row)
     return {
         "connected": data.get("status") == "active",
@@ -281,6 +282,7 @@ def gmail_status() -> dict[str, Any]:
         "automatic_updates": bool(data.get("watch_expiration")),
         "pending": int((pending or {}).get("total") or 0),
         **data,
+        "consent": gmail_consent_status(),
     }
 
 
@@ -412,6 +414,7 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
 
 
 def begin_gmail_connection() -> dict[str, str]:
+    require_gmail_consent()
     client_id, _, redirect_uri = _google_config()
     user = get_current_user()
     account_id = get_current_account_id()

@@ -4,6 +4,7 @@ import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import {
   connectVipGmail,
+  acceptVipGmailConsent,
   disconnectVipGmail,
   acceptVipGmailCandidate,
   getVipGmailEmails,
@@ -24,6 +25,7 @@ export default function GmailAutomation() {
   const [filter, setFilter] = useState("pending");
   const [editing, setEditing] = useState(null);
   const [identity, setIdentity] = useState({ items: [], summary: {} });
+  const [consentAccepted, setConsentAccepted] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +78,10 @@ export default function GmailAutomation() {
   const connect = async () => {
     setBusy("connect"); setError(""); setMessage("");
     try {
+      if (gmail?.consent?.required) {
+        if (!consentAccepted) throw new Error(tx("Debés aceptar la explicación de Email Monitor antes de conectarlo.", "You must accept the Email Monitor explanation before connecting it."));
+        await acceptVipGmailConsent(gmail.consent.version);
+      }
       const response = await connectVipGmail();
       if (!response?.authorization_url) throw new Error(tx("Google no devolvió una dirección de autorización.", "Google did not return an authorization URL."));
       await Browser.open({ url: response.authorization_url, presentationStyle: "popover" });
@@ -116,8 +122,11 @@ export default function GmailAutomation() {
       <div className="gmail-connection-heading"><span><Mail size={21}/></span><div><strong>{tx("Tu correo bancario", "Your banking email")}</strong><small>{tx("Permiso individual · solo lectura", "Individual permission · read only")}</small></div></div>
       <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Cada usuario conecta únicamente su propio Gmail. FINVA no puede enviar, modificar ni borrar correos.", "Each user connects only their own Gmail. FINVA cannot send, modify, or delete emails.")}</p></div>
       {!gmail?.connected ? <>
-        <p>{gmail?.needs_reauthorization ? tx("El permiso venció o fue revocado. Reconectalo para continuar.", "Permission expired or was revoked. Reconnect to continue.") : tx("Conectá el Gmail donde recibís las notificaciones de tus bancos.", "Connect the Gmail account where you receive bank notifications.")}</p>
-        <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy)} onClick={connect}>{busy === "connect" ? tx("Abriendo Google…", "Opening Google…") : gmail?.needs_reauthorization ? tx("Reconectar Gmail", "Reconnect Gmail") : tx("Conectar mi Gmail", "Connect my Gmail")}</button>
+        <p>{gmail?.needs_reauthorization ? tx("El permiso venció o fue revocado. Reconectalo para continuar.", "Permission expired or was revoked. Reconnect to continue.") : tx("FINVA revisará el historial financiero del Gmail que autoricés para detectar cuentas, movimientos, ingresos y estados bancarios. Cada hallazgo requiere tu revisión antes de guardarse.", "FINVA will review the financial history of the Gmail account you authorize to detect accounts, transactions, income, and bank statements. Every finding requires your review before it is saved.")}</p>
+        <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("El acceso es solo lectura. Procesamos únicamente correos financieros compatibles y conservamos los resultados necesarios para mostrarte movimientos y evitar duplicados. Podés desconectar Gmail cuando querás.", "Access is read-only. We process only compatible financial emails and retain the results needed to show transactions and prevent duplicates. You can disconnect Gmail at any time.")}</p></div>
+        <p className="gmail-legal-links"><a href="/terms" target="_blank" rel="noreferrer">{tx("Términos", "Terms")}</a> · <a href="/privacy" target="_blank" rel="noreferrer">{tx("Privacidad", "Privacy")}</a></p>
+        {gmail?.consent?.required && <label className="gmail-consent-check"><input type="checkbox" checked={consentAccepted} onChange={(event) => { setConsentAccepted(event.target.checked); setError(""); }}/><span>{tx("Entiendo y acepto que FINVA analice los correos financieros de la cuenta que autorice bajo estas condiciones.", "I understand and agree that FINVA may analyze financial emails from the account I authorize under these conditions.")}</span></label>}
+        <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={connect}>{busy === "connect" ? tx("Abriendo Google…", "Opening Google…") : gmail?.needs_reauthorization ? tx("Reconectar Gmail", "Reconnect Gmail") : tx("Aceptar y conectar Gmail", "Accept and connect Gmail")}</button>
       </> : <>
         <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{gmail.google_email}</strong><small>{gmail.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span></div>
         {gmail.pending > 0 && <p>{gmail.pending} {tx("movimiento(s) necesitan revisión.", "transaction(s) need review.")}</p>}
