@@ -124,13 +124,10 @@ export default function Settings({ status }) {
 
 
   const handleCreatePremiumStrategy = async () => {
-    setPremiumMessage("Analizando finanzas con ChatGPT...");
+    setPremiumMessage("Calculando estrategia con el motor financiero...");
     try {
       const result = await createJarvisPremiumInitialStrategy();
-      setPremiumMessage(result?.status === "OK" ? "Señor, estrategia premium creada y guardada." : result?.message || "No pude crear la estrategia.");
-      const [premiumData, guideData] = await Promise.all([getJarvisPremiumStatus(), getJarvisPremiumGuides()]);
-      setPremiumStatus(premiumData);
-      setPremiumGuides(guideData?.items || []);
+      setPremiumMessage(result?.status === "OK" ? "Estrategia recalculada con tus datos actuales. Podés verla en Strategy." : result?.message || "No pude calcular la estrategia.");
     } catch (error) {
       setPremiumMessage(error.message);
     }
@@ -185,8 +182,8 @@ export default function Settings({ status }) {
   if (section === "premium") return <JarvisScreen eyebrow="Owner" title="IA Premium" subtitle="Modelo, presupuesto y análisis guardados" actions={back} className="settings-screen settings-premium">
     <JarvisGlassCard className="settings-detail-card"><JarvisStatusPill tone={premiumStatus?.configured ? "success" : "warning"}>{premiumStatus?.configured ? "OPENAI CONECTADO" : "OPENAI PENDIENTE"}</JarvisStatusPill><span className="settings-card-label">MODELO ACTIVO</span><h3>{premiumStatus?.model || "—"}</h3><p>Los cálculos exactos permanecen en el backend.</p></JarvisGlassCard>
     <JarvisGlassCard className="settings-usage-card"><span>PRESUPUESTO MENSUAL</span><strong>${Number(premiumStatus?.budget_usd || 10).toFixed(2)}</strong><small>${Number(premiumStatus?.used_usd || 0).toFixed(2)} utilizados · {Number(premiumStatus?.percent_used || 0).toFixed(1)}%</small><div className="usage-bar"><i style={{ width: `${Math.min(premiumStatus?.percent_used || 0, 100)}%` }} /></div></JarvisGlassCard>
-    <button className="jarvis-primary-button settings-premium-action" type="button" onClick={handleCreatePremiumStrategy} disabled={!premiumStatus?.configured}><Sparkles size={18} />Crear análisis financiero premium</button>
-    {premiumMessage && <div className="jarvis-inline-message">{premiumMessage}</div>}<div className="settings-saved"><h3>Guías y análisis guardados</h3>{premiumGuides.map((guide) => <JarvisGlassCard key={guide.id}><strong>{guide.title || guide.guide_type}</strong><small>{String(guide.content || "").slice(0, 90)}</small></JarvisGlassCard>)}</div>
+    <button className="jarvis-primary-button settings-premium-action" type="button" onClick={handleCreatePremiumStrategy}><Sparkles size={18} />Recalcular estrategia con el motor financiero</button>
+    {premiumMessage && <div className="jarvis-inline-message">{premiumMessage}</div>}<div className="settings-saved"><h3>Análisis históricos (no determinan tu estrategia actual)</h3>{premiumGuides.map((guide) => <JarvisGlassCard key={guide.id}><strong>{guide.title || guide.guide_type}</strong><small>{String(guide.content || "").slice(0, 90)}</small></JarvisGlassCard>)}</div>
   </JarvisScreen>;
 
   if (section === "owner") return <JarvisScreen eyebrow="Owner" title="Centro Owner" subtitle="Identidad privada y operación" actions={back} className="settings-screen settings-owner">

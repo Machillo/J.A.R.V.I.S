@@ -125,62 +125,21 @@ Ejemplos:
 
 
 def get_current_strategy_summary() -> dict[str, Any]:
-    context = build_premium_context("estrategia actual distribución dinero")
-    guide_items = context.get("premium_guides") or []
-    active_strategy = next((g for g in guide_items if g.get("guide_type") == "financial_strategy"), None)
-    strategic = context.get("strategic_engine") or {}
-    advisor = context.get("advisor_core") or {}
-    allocation = strategic.get("allocation") or strategic.get("smart_cash_allocation") or {}
-    allocations = allocation.get("allocations") if isinstance(allocation, dict) else None
-
-    # Fallback compact from recommendations/debts if allocation engine isn't present in report.
-    if not allocations:
-        debts = context.get("debts") or []
-        highest_interest = None
-        try:
-            highest_interest = max(debts, key=lambda item: float(item.get("interest_rate") or 0)) if debts else None
-        except Exception:
-            highest_interest = None
-        allocations = []
-        if highest_interest:
-            allocations.append({
-                "target_type": "debt",
-                "target_name": highest_interest.get("name") or "Deuda prioritaria",
-                "percentage": 60,
-                "amount": None,
-                "reason": "Prioridad sugerida por tasa de interés y estrategia de deuda.",
-            })
-        allocations.append({
-            "target_type": "cash_guard",
-            "target_name": "Gastos fijos y margen",
-            "percentage": 40,
-            "amount": None,
-            "reason": "Mantener pagos al día antes de abonar extras.",
-        })
-
+    """Show the current financial engine result, never a historical AI guide."""
     blueprint = build_local_strategy_blueprint()
-    if active_strategy:
-        data = active_strategy.get("data") or {}
-        if isinstance(data, str):
-            try:
-                data = json.loads(data)
-            except Exception:
-                data = {}
-        blueprint = data.get("strategy_blueprint") or blueprint
-
-    title = active_strategy.get("title") if active_strategy else blueprint.get("title", "Estrategia base")
-    content = active_strategy.get("content") if active_strategy else "Señor, aún no hay una estrategia premium guardada. Ejecuta: Jarvis, ejecuta mi estrategia premium."
-
+    strategic = _safe(get_financial_engine_report, {})
+    advisor = _safe(get_financial_advice, {})
+    priority = blueprint.get("priority") or {}
     return {
         "status": "OK",
-        "title": title,
-        "summary": content[:1200],
-        "allocations": allocations[:6],
-        "health": (strategic.get("health") or {}),
-        "forecast": (strategic.get("forecast") or {}),
+        "title": blueprint.get("title") or "Estrategia activa",
+        "summary": priority.get("detail") or blueprint.get("objective") or "",
+        "allocations": blueprint.get("allocation_items") or [],
+        "health": strategic.get("health") or {},
+        "forecast": strategic.get("forecast") or {},
         "strategy": blueprint,
         "action_plan": advisor.get("action_plan") or [],
         "data_quality": advisor.get("data_quality") or {},
         "decision_policy": advisor.get("decision_policy"),
-        "source": "premium_guide" if active_strategy else "local_fallback",
+        "source": "live_database",
     }
