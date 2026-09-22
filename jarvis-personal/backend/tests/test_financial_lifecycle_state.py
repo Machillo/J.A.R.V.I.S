@@ -74,17 +74,54 @@ class _Connection:
 
 def test_snapshot_capture_binds_authenticated_workspace_and_account(monkeypatch):
     state = {"period": "2026-09", "schema_version": "financial-state-v1"}
-    connection = _Connection([_Result(one={"id": 7, "snapshot_date": "2026-09-20"})])
+    connection = _Connection([_Result(one=None), _Result(one={"id": 7, "snapshot_date": "2026-09-20"})])
     monkeypatch.setattr(snapshots, "build_financial_state", lambda: state)
     monkeypatch.setattr(snapshots, "get_current_workspace_id", lambda: "workspace-a")
     monkeypatch.setattr(snapshots, "get_current_account_id", lambda: "account-a")
+    monkeypatch.setattr(snapshots, "get_current_user_id", lambda: 77)
     monkeypatch.setattr(snapshots, "get_connection", lambda: connection)
 
     result = snapshots.capture_financial_snapshot()
 
-    assert connection.calls[0][1][:2] == ("workspace-a", "account-a")
+    assert connection.calls[1][1][:2] == ("workspace-a", "account-a")
     assert connection.committed is True
     assert result["snapshot"]["id"] == 7
+    assert result["alerts_queued"] == 0
+
+
+def test_snapshot_queues_proactive_alerts_once_with_safe_payload(monkeypatch):
+    previous_state = {
+        "balance_sheet": {"net_worth": 1_000_000, "liquid_assets": 200_000},
+        "debt": {"total": 500_000}, "cashflow": {"safe_available": 100_000, "net_operational": 50_000},
+        "emergency_fund": {"current": 200_000, "coverage_months": 1.5},
+        "health": {"score": 70},
+        "strategy": {"next_action": {"type": "debt", "title": "Abonar deuda", "amount": 50_000}},
+    }
+    current = {
+        **previous_state, "period": "2026-09", "schema_version": "financial-state-v1",
+        "debt": {"total": 550_000},
+    }
+    connection = _Connection([
+        _Result(one={"snapshot_date": "2026-09-21", "state": previous_state}),
+        _Result(one={"id": 8, "snapshot_date": "2026-09-22"}),
+        _Result(),
+    ])
+    monkeypatch.setattr(snapshots, "build_financial_state", lambda: current)
+    monkeypatch.setattr(snapshots, "get_current_workspace_id", lambda: "workspace-a")
+    monkeypatch.setattr(snapshots, "get_current_account_id", lambda: "account-a")
+    monkeypatch.setattr(snapshots, "get_current_user_id", lambda: 77)
+    monkeypatch.setattr(snapshots, "get_connection", lambda: connection)
+
+    result = snapshots.capture_financial_snapshot()
+
+    notifications = [(query, params) for query, params in connection.calls if "INSERT INTO notification_jobs" in query]
+    assert result["alerts_queued"] == 1
+    assert len(notifications) == 1
+    query, params = notifications[0]
+    assert "ON CONFLICT DO NOTHING" in query
+    assert params[5].startswith("financial-lifecycle:")
+    assert "state" not in params[6]
+    assert "raw_payload" not in params[6]
 
 
 def test_snapshot_history_query_is_scoped_to_authenticated_workspace(monkeypatch):
