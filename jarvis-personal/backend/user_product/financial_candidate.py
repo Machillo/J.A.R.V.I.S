@@ -32,7 +32,7 @@ def canonical_candidate(
     subject: str,
     movement_index: int = 0,
 ) -> dict[str, Any]:
-    """Adapt a producer payload into FINVA's provider-independent candidate shape."""
+    """Adapt a producer payload into DINCR's provider-independent candidate shape."""
     transaction_type = str(parsed.get("transaction_type") or "")
     original_currency = str(parsed.get("original_currency") or "").upper() or None
     # Parser amounts are normalized to CRC today; preserve the source currency

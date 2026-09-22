@@ -30,6 +30,6 @@ assert.match(free, /<AccountActions onLogout=\{onLogout\}/, "Free settings must 
 assert.match(registry, /<SettingsPage user=\{user\} onUserChange=\{onUserChange\} onLogout=\{onLogout\}/, "Settings must receive the logout callback used after deletion");
 assert.match(gmail, /getVipFinancialIdentity/, "VIP Gmail must load the user's financial identity");
 assert.match(gmail, /confirmVipFinancialAccount/, "Detected accounts must require an explicit ownership decision");
-assert.match(gmail, /FINVA no incluirá una cuenta detectada en tu patrimonio sin tu confirmación/, "Detected accounts must explain that ownership is not assumed");
+assert.match(gmail, /DINCR no incluirá una cuenta detectada en tu patrimonio sin tu confirmación/, "Detected accounts must explain that ownership is not assumed");
 
-console.log("FINVA information architecture, settings and VIP Gmail contracts passed.");
+console.log("DINCR information architecture, settings and VIP Gmail contracts passed.");

@@ -24,7 +24,7 @@ const isFinvaDistribution = nativeAppId === "com.finva.app";
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
     <main className="unified-router-boot">
-      <strong>FINVA</strong>
+      <strong>DINCR</strong>
       <span>{message}</span>
     </main>
   );
@@ -45,7 +45,7 @@ export default function App() {
       setReleasePolicy(await getReleasePolicy(detectNativePlatform()));
     } catch {
       // Compatibility checks are fail-open: a network or backend outage must
-      // never strand a user outside FINVA.
+      // never strand a user outside DINCR.
       setReleasePolicy(null);
     }
   }, []);
@@ -107,7 +107,7 @@ export default function App() {
 
   useEffect(() => {
     const isPersonal = ownerBridgeMode || currentUser?.role === "owner" || currentUser?.role === "admin";
-    document.title = isPersonal ? "J.A.R.V.I.S." : "Finva";
+    document.title = isPersonal ? "J.A.R.V.I.S." : "DINCR";
   }, [ownerBridgeMode, currentUser]);
 
   useEffect(() => {

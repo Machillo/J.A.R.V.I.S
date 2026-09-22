@@ -1,4 +1,4 @@
-"""Persistence and comparison for FINVA longitudinal financial state."""
+"""Persistence and comparison for DINCR longitudinal financial state."""
 from __future__ import annotations
 
 import json
@@ -68,7 +68,7 @@ def get_financial_progress() -> dict[str, Any]:
             "current": current,
             "previous": None,
             "delta": None,
-            "message": "FINVA necesita una observación anterior para medir progreso.",
+            "message": "DINCR necesita una observación anterior para medir progreso.",
             "longitudinal": build_longitudinal_progress(current, []),
         }
 

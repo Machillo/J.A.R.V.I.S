@@ -7,7 +7,7 @@ const dictionaries = {
       businesses: "Negocios", netWorth: "Patrimonio neto", financialTimeline: "Cronología financiera",
       reconciliation: "Conciliación", deterioration: "Deterioro financiero", personal: "JARVIS personal",
       goals: "Metas", memory: "Memoria", settings: "Configuración", profile: "Perfil y apariencia",
-      administration: "Administración", manageUsers: "Administrar usuarios", finvaOperations: "Operaciones FINVA",
+      administration: "Administración", manageUsers: "Administrar usuarios", finvaOperations: "Operaciones DINCR",
       logout: "Cerrar sesión", profileAlt: "Perfil",
     },
     accounts: {
@@ -26,7 +26,7 @@ const dictionaries = {
       businesses: "Businesses", netWorth: "Net worth", financialTimeline: "Financial timeline",
       reconciliation: "Reconciliation", deterioration: "Financial deterioration", personal: "Personal JARVIS",
       goals: "Goals", memory: "Memory", settings: "Settings", profile: "Profile & appearance",
-      administration: "Administration", manageUsers: "Manage users", finvaOperations: "FINVA operations",
+      administration: "Administration", manageUsers: "Manage users", finvaOperations: "DINCR operations",
       logout: "Log out", profileAlt: "Profile",
     },
     accounts: {
@@ -47,7 +47,7 @@ export const deviceLanguage = () => {
 
 export const localeTag = (language = deviceLanguage()) => language === "es" ? "es-CR" : "en-US";
 
-// Shared copy helper so JARVIS and FINVA always follow the same device-language rule.
+// Shared copy helper so JARVIS and DINCR always follow the same device-language rule.
 export const tx = (spanish, english, language = deviceLanguage()) =>
   language === "es" ? spanish : english;
 

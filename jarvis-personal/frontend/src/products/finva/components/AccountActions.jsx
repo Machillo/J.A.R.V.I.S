@@ -24,7 +24,7 @@ export default function AccountActions({ onLogout, variant = "free" }) {
   return <section className={`finva-account-actions finva-account-actions--${variant}`}>
     <div className="finva-account-actions__heading">
       <small>{tx("CUENTA", "ACCOUNT")}</small>
-      <strong>{tx("Tu acceso a FINVA", "Your FINVA access")}</strong>
+      <strong>{tx("Tu acceso a DINCR", "Your DINCR access")}</strong>
     </div>
     <button className="finva-account-actions__row" type="button" onClick={onLogout}>
       <span><LogOut size={19}/><span><strong>{tx("Cerrar sesión", "Log out")}</strong><small>{tx("Salir de este dispositivo", "Sign out on this device")}</small></span></span>

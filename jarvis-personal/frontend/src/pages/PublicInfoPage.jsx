@@ -7,7 +7,7 @@ const isTerms = path === "/terms";
 function AboutPage() {
   return <>
     <span className="public-kicker">ASISTENTE FINANCIERO PERSONAL</span>
-    <h1>FINVA + J.A.R.V.I.S.</h1>
+    <h1>DINCR + J.A.R.V.I.S.</h1>
     <p className="public-lead">Herramientas para organizar ingresos, gastos, deudas, metas y decisiones financieras desde una experiencia privada y orientada a móvil.</p>
     <section className="public-feature-grid" aria-label="Funciones principales">
       <article><MailCheck size={24}/><h2>Control financiero</h2><p>Centraliza información que el usuario registra o autoriza para construir su panorama financiero.</p></article>
@@ -21,10 +21,10 @@ function TermsPage() {
   return <>
     <span className="public-kicker">VERSIÓN 2026-09-16-v1 · VIGENTE DESDE EL 16 DE SEPTIEMBRE DE 2026</span>
     <h1>Términos y Condiciones</h1>
-    <p className="public-lead">Estos términos regulan el acceso y uso de FINVA y J.A.R.V.I.S., servicios digitales desarrollados y operados desde Costa Rica por Kenneth Andrés Alvarado Obando.</p>
+    <p className="public-lead">Estos términos regulan el acceso y uso de DINCR y J.A.R.V.I.S., servicios digitales desarrollados y operados desde Costa Rica por Kenneth Andrés Alvarado Obando.</p>
     <section className="public-copy legal-copy">
       <h2>1. Aceptación y capacidad</h2><p>Al crear o utilizar una cuenta, la persona confirma que leyó y aceptó estos términos y la Política de Privacidad. Debe tener al menos 18 años y capacidad legal para contratar. Si no está de acuerdo, no debe utilizar el servicio.</p>
-      <h2>2. Finalidad del servicio</h2><p>FINVA y J.A.R.V.I.S. ayudan a registrar, organizar, analizar y proyectar información financiera. Sus cálculos, alertas, simulaciones y contenido generado con automatización o inteligencia artificial son orientativos y pueden contener errores.</p>
+      <h2>2. Finalidad del servicio</h2><p>DINCR y J.A.R.V.I.S. ayudan a registrar, organizar, analizar y proyectar información financiera. Sus cálculos, alertas, simulaciones y contenido generado con automatización o inteligencia artificial son orientativos y pueden contener errores.</p>
       <h2>3. No constituye asesoría profesional</h2><p>El servicio no es un banco, entidad financiera, contador, asesor de inversiones, abogado ni asesor tributario. No ejecuta inversiones ni garantiza ahorro, rentabilidad, eliminación de deudas o resultados económicos. Las decisiones finales pertenecen al usuario, quien debe verificar la información y buscar asesoría profesional cuando corresponda.</p>
       <h2>4. Cuenta y seguridad</h2><p>El usuario debe suministrar información correcta, proteger el acceso a su cuenta, mantener seguro su dispositivo y avisar sobre accesos no autorizados. No puede compartir cuentas, suplantar personas, intentar vulnerar el sistema ni usarlo con fines ilícitos.</p>
       <h2>5. Datos ingresados y autorizaciones</h2><p>El usuario conserva la titularidad de sus datos y autoriza su tratamiento únicamente para prestar, mantener, proteger y mejorar las funciones solicitadas. Es responsable de contar con autorización cuando incorpore información de terceras personas.</p>
@@ -43,9 +43,9 @@ function PrivacyPage() {
   return <>
     <span className="public-kicker">VERSIÓN 2026-09-16-v1 · VIGENTE DESDE EL 16 DE SEPTIEMBRE DE 2026</span>
     <h1>Política de Privacidad</h1>
-    <p className="public-lead">Esta política explica cómo FINVA y J.A.R.V.I.S. tratan datos personales conforme a los principios de consentimiento informado, finalidad, proporcionalidad, calidad, seguridad y confidencialidad.</p>
+    <p className="public-lead">Esta política explica cómo DINCR y J.A.R.V.I.S. tratan datos personales conforme a los principios de consentimiento informado, finalidad, proporcionalidad, calidad, seguridad y confidencialidad.</p>
     <section className="public-copy legal-copy">
-      <h2>1. Responsable</h2><p>El responsable del tratamiento es Kenneth Andrés Alvarado Obando, Costa Rica, desarrollador y operador de FINVA y J.A.R.V.I.S. Las solicitudes se reciben mediante Reportes o el canal de soporte mostrado dentro de la aplicación.</p>
+      <h2>1. Responsable</h2><p>El responsable del tratamiento es Kenneth Andrés Alvarado Obando, Costa Rica, desarrollador y operador de DINCR y J.A.R.V.I.S. Las solicitudes se reciben mediante Reportes o el canal de soporte mostrado dentro de la aplicación.</p>
       <h2>2. Datos tratados</h2><p>Podemos tratar identificación y cuenta —nombre, correo e identificadores técnicos—; información financiera ingresada por el usuario —ingresos, gastos, saldos, deudas, metas y presupuestos—; comprobantes de pago; eventos de uso, diagnósticos de errores y datos básicos del dispositivo; y contenido de integraciones que el usuario conecte expresamente.</p>
       <h2>3. Finalidades</h2><p>Los datos se usan para autenticar la cuenta, prestar funciones financieras, calcular resúmenes y simulaciones, sincronizar información autorizada, validar suscripciones, atender soporte, prevenir fraude, proteger el servicio, diagnosticar fallos y mejorar estabilidad y experiencia. No se venden ni se usan para publicidad de terceros.</p>
       <h2>4. Base del tratamiento</h2><p>El tratamiento necesario para prestar el servicio se realiza con el consentimiento informado del usuario y para ejecutar las funciones que solicita. Ciertas evidencias pueden conservarse para seguridad, cumplimiento de obligaciones y atención de reclamaciones. El consentimiento de comunicaciones promocionales, si se ofrece, será separado y opcional.</p>
@@ -63,8 +63,8 @@ function PrivacyPage() {
 
 export default function PublicInfoPage() {
   return <main className="public-info-shell">
-    <nav className="public-info-nav" aria-label="Información pública"><a className="public-brand" href="/about">FINVA</a><div><a className={!isPrivacy&&!isTerms?"active":""} href="/about">Acerca de</a><a className={isTerms?"active":""} href="/terms">Términos</a><a className={isPrivacy?"active":""} href="/privacy">Privacidad</a></div></nav>
+    <nav className="public-info-nav" aria-label="Información pública"><a className="public-brand" href="/about">DINCR</a><div><a className={!isPrivacy&&!isTerms?"active":""} href="/about">Acerca de</a><a className={isTerms?"active":""} href="/terms">Términos</a><a className={isPrivacy?"active":""} href="/privacy">Privacidad</a></div></nav>
     <div className="public-info-content">{isTerms ? <TermsPage/> : isPrivacy ? <PrivacyPage/> : <AboutPage/>}</div>
-    <footer><span>FINVA + J.A.R.V.I.S. · Costa Rica</span><div><a href="/terms">Términos</a> · <a href="/privacy">Privacidad</a></div></footer>
+    <footer><span>DINCR + J.A.R.V.I.S. · Costa Rica</span><div><a href="/terms">Términos</a> · <a href="/privacy">Privacidad</a></div></footer>
   </main>;
 }

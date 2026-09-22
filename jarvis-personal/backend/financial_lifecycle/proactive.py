@@ -1,4 +1,4 @@
-"""Deterministic, ingestion-agnostic signals for FINVA Proactive Advisor."""
+"""Deterministic, ingestion-agnostic signals for DINCR Proactive Advisor."""
 from __future__ import annotations
 
 import hashlib
@@ -30,7 +30,7 @@ def build_proactive_advisor(
             "baseline_date": None,
             "alerts": [],
             "summary": {"urgent": 0, "attention": 0, "positive": 0},
-            "message": "FINVA necesita una observación anterior para detectar cambios significativos.",
+            "message": "DINCR necesita una observación anterior para detectar cambios significativos.",
         }
 
     comparison = compare_states(current, previous)
@@ -84,7 +84,7 @@ def build_proactive_advisor(
     transition = comparison["strategy_transition"]
     if transition["changed"]:
         alerts.append(_alert(
-            "strategy_changed", "medium", "FINVA reajustó tu estrategia",
+            "strategy_changed", "medium", "DINCR reajustó tu estrategia",
             transition["reason"] or "La prioridad cambió con la nueva información.",
             "Ver nueva estrategia", "strategy", transition, baseline_date, today,
         ))
@@ -117,7 +117,7 @@ def build_proactive_advisor(
             "attention": sum(item["severity"] == "medium" for item in alerts),
             "positive": sum(item["severity"] == "success" for item in alerts),
         },
-        "message": "FINVA detectó cambios que merecen atención." if alerts else "No hay cambios significativos desde la observación anterior.",
+        "message": "DINCR detectó cambios que merecen atención." if alerts else "No hay cambios significativos desde la observación anterior.",
     }
 
 

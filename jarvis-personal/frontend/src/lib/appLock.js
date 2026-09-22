@@ -15,7 +15,7 @@ const onboardingKey = (userId) => `finva:app-lock-onboarding:v2:${userId}`;
 
 export function isNativeAppLockSupported() {
   // Capacitor's bridge can report `web` during the first iOS render. The
-  // product-specific build id is deterministic and keeps the FINVA gate from
+  // product-specific build id is deterministic and keeps the DINCR gate from
   // being skipped while WebKit finishes attaching the native bridge.
   return Capacitor.isNativePlatform() || import.meta.env?.VITE_NATIVE_APP_ID === "com.finva.app";
 }
@@ -87,11 +87,11 @@ export function appLockErrorMessage(error) {
 
 export async function authenticateAppLock() {
   await BiometricAuth.authenticate({
-    reason: "Desbloquear FINVA",
+    reason: "Desbloquear DINCR",
     cancelTitle: "Cancelar",
     allowDeviceCredential: true,
     iosFallbackTitle: "Usar código",
-    androidTitle: "Desbloquear FINVA",
+    androidTitle: "Desbloquear DINCR",
     androidSubtitle: "Confirmá que sos vos para ver tus finanzas",
     androidConfirmationRequired: false,
     androidBiometryStrength: AndroidBiometryStrength.weak,

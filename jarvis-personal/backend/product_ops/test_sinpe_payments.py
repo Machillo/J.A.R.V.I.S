@@ -30,7 +30,7 @@ def _candidate(**overrides):
         "notes": (
             "BAC SINPE Móvil | entrada | payer: Persona Prueba | "
             "recipient: Kenneth Alvarado | telefono destino: 88888888 | "
-            "detalle: FINVA-A2B3C4 | referencia 123456789"
+            "detalle: DINCR-A2B3C4 | referencia 123456789"
         ),
     }
     candidate.update(overrides)
@@ -46,9 +46,25 @@ def test_matching_bank_confirmation_activates_order(monkeypatch):
 
     result = service.match_sinpe_payment(conn, _candidate())
 
-    assert result == {"order_id": 17, "plan_code": "basic", "payment_code": "FINVA-A2B3C4"}
-    assert conn.calls[0][1] == ("FINVA-A2B3C4",)
+    assert result == {"order_id": 17, "plan_code": "basic", "payment_code": "DINCR-A2B3C4"}
+    assert conn.calls[0][1] == ("DINCR-A2B3C4",)
     assert activated[0][2:] == ("gmail_bac_sinpe", "123456789", "Persona Prueba")
+
+
+def test_legacy_finva_payment_code_still_activates_existing_order(monkeypatch):
+    order = {"id": 18, "plan_code": "vip", "amount": 1990}
+    conn = _Connection(order)
+    activated = []
+    monkeypatch.setenv("FINVA_SINPE_PHONE", "8888-8888")
+    monkeypatch.setattr(service, "_activate_order", lambda *args: activated.append(args))
+
+    result = service.match_sinpe_payment(
+        conn,
+        _candidate(notes=_candidate()["notes"].replace("DINCR-A2B3C4", "FINVA-A2B3C4")),
+    )
+
+    assert result == {"order_id": 18, "plan_code": "vip", "payment_code": "FINVA-A2B3C4"}
+    assert activated
 
 
 def test_outgoing_or_wrong_amount_does_not_activate(monkeypatch):

@@ -1,6 +1,6 @@
 {
   "appId": "com.finva.app",
-  "appName": "FINVA",
+  "appName": "DINCR",
   "webDir": "dist",
   "includePlugins": [
     "@capacitor/app",

@@ -7,7 +7,7 @@ const story = [
   {
     eyebrow: "ENTENDÉ TU PRESENTE",
     title: "Todo empieza con claridad",
-    copy: "FINVA reúne lo importante para que entendás dónde estás, sin pedirte llenar un formulario financiero al entrar.",
+    copy: "DINCR reúne lo importante para que entendás dónde estás, sin pedirte llenar un formulario financiero al entrar.",
     Icon: WalletCards,
   },
   {
@@ -19,7 +19,7 @@ const story = [
   {
     eyebrow: "AVANZÁ CON DIRECCIÓN",
     title: "Siempre sabés qué sigue",
-    copy: "FINVA y JARVIS transforman tu información en próximos pasos concretos para recuperar control y construir tranquilidad.",
+    copy: "DINCR y JARVIS transforman tu información en próximos pasos concretos para recuperar control y construir tranquilidad.",
     Icon: Compass,
   },
 ];
@@ -48,7 +48,7 @@ export default function FinvaWelcomeStory({ onFinish }) {
       <div className="finva-welcome-orb finva-welcome-orb--one" />
       <div className="finva-welcome-orb finva-welcome-orb--two" />
       <header className="finva-welcome-brand">
-        <span><Sparkles size={16} /> FINVA</span>
+        <span><Sparkles size={16} /> DINCR</span>
         <button type="button" onClick={onFinish}>Omitir</button>
       </header>
 

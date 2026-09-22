@@ -3,14 +3,14 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "J.A.R.V.I.S.", body: event.data ? event.data.text() : "Nueva notificación." };
+    data = { title: "DINCR", body: event.data ? event.data.text() : "Nueva notificación." };
   }
 
-  const title = data.title || "J.A.R.V.I.S.";
+  const title = data.title || "DINCR";
   const options = {
     body: data.body || "Señor, tiene una alerta pendiente.",
-    icon: data.icon || "/jarvis-icon-192.png",
-    badge: data.badge || "/jarvis-icon-192.png",
+    icon: data.icon || "/dincr-icon-192.png",
+    badge: data.badge || "/dincr-icon-192.png",
     data: { url: data.url || "/", category: data.category || "general" },
     vibrate: [120, 60, 120],
   };

@@ -285,7 +285,7 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
         )
         plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
         if not plan:
-            raise HTTPException(404, "Plan FINVA no disponible.")
+            raise HTTPException(404, "Plan DINCR no disponible.")
         existing = conn.execute(
             "SELECT access_source FROM account_subscriptions WHERE account_id=%s",
             (account_id,),

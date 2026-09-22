@@ -25,7 +25,7 @@ PRICES = {
     "basic": {"regular": 2990},
     "vip": {"regular": 5990},
 }
-PAYMENT_CODE_PATTERN = re.compile(r"\bFINVA-[A-Z0-9]{6}\b", re.I)
+PAYMENT_CODE_PATTERN = re.compile(r"\b(?:DINCR|FINVA)-[A-Z0-9]{6}\b", re.I)
 RECEIPT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 MAX_RECEIPT_BYTES = 5 * 1024 * 1024
 logger = logging.getLogger(__name__)
@@ -306,7 +306,7 @@ def _send_support_discord(*, public_id: str, plan: str, payload, severity: str =
         response = requests.post(
             webhook,
             json={
-                "content": mention + f"**FINVA · {safe(severity).upper()}**\n```\n" + "\n".join(fields) + "\n```",
+                "content": mention + f"**DINCR · {safe(severity).upper()}**\n```\n" + "\n".join(fields) + "\n```",
                 "allowed_mentions": allowed_mentions,
             },
             timeout=10,
@@ -340,7 +340,7 @@ def send_discord_test():
     """Owner-only route helper to validate the operational channel without user data."""
     if not support_channel_configuration()["discord_configured"]:
         raise HTTPException(503, "Discord no está configurado en Render.")
-    public_id = f"FINVA-TEST-{secrets.token_hex(3).upper()}"
+    public_id = f"DINCR-TEST-{secrets.token_hex(3).upper()}"
     payload = SimpleNamespace(
         category="health", app_version="server", platform="backend",
         screen="operaciones", error_reference=public_id,
@@ -469,7 +469,7 @@ def _public_order(order):
 def _new_payment_code(conn):
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     for _ in range(20):
-        code = "FINVA-" + "".join(secrets.choice(alphabet) for _ in range(6))
+        code = "DINCR-" + "".join(secrets.choice(alphabet) for _ in range(6))
         if not conn.execute("SELECT 1 FROM billing_orders WHERE payment_code=%s", (code,)).fetchone():
             return code
     raise HTTPException(503, "No se pudo generar un código de pago. Intentá nuevamente.")
@@ -550,7 +550,7 @@ def catalog():
     except Exception:
         # The plan screen should remain usable even if the optional billing
         # state cannot be read. Keep the full exception in backend logs.
-        logger.exception("Could not load the FINVA billing state")
+        logger.exception("Could not load the DINCR billing state")
     plans = []
     for code, info in PRICES.items():
         plans.append({"code": code, "regular_price_crc": info["regular"]})
@@ -653,7 +653,7 @@ def create_feedback(payload):
           payload.screen, payload.error_reference)).fetchone()
         conn.commit()
     _record_event_safely("feedback_submitted", "feedback")
-    public_id = f"FINVA-{int(row['id']):06d}"
+    public_id = f"DINCR-{int(row['id']):06d}"
     email_sent = _send_support_email(
         public_id=public_id,
         email=identity.get("primary_email") or "no disponible",
@@ -707,7 +707,7 @@ def create_automatic_incident(payload):
                  operation, operation, existing["id"]),
             ).fetchone()
             conn.commit()
-            public_id = f"FINVA-{int(row['id']):06d}"
+            public_id = f"DINCR-{int(row['id']):06d}"
             discord_sent = False
             if row.get("severity") == "critical" and not row.get("discord_alerted_at"):
                 escalation_payload = SimpleNamespace(
@@ -727,7 +727,7 @@ def create_automatic_incident(payload):
 
         subject = f"Fallo automático · {safe_screen or safe_path}"[:140]
         message = "\n".join([
-            "FINVA detectó este incidente automáticamente.",
+            "DINCR detectó este incidente automáticamente.",
             f"Operación: {payload.method.upper()} {safe_path}",
             f"Estado HTTP: {payload.status or 'sin respuesta'}",
             f"Tipo: {payload.error_type}",
@@ -748,7 +748,7 @@ def create_automatic_incident(payload):
         ).fetchone()
         conn.commit()
 
-    public_id = f"FINVA-{int(row['id']):06d}"
+    public_id = f"DINCR-{int(row['id']):06d}"
     notification_payload = SimpleNamespace(
         category="error", subject=subject, message=message, app_version=payload.app_version,
         screen=safe_screen or safe_path, error_reference=payload.error_reference or payload.request_id,
@@ -777,7 +777,7 @@ def list_feedback():
           occurrence_count,last_seen_at,affected_operations,discord_alerted_at,user_resolution,user_resolution_at,created_at,updated_at
           FROM feedback_reports WHERE account_id=%s ORDER BY created_at DESC LIMIT 30""", (account_id,)).fetchall()
         conn.commit()
-    return [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in rows]
+    return [{**r, "public_id": f"DINCR-{int(r['id']):06d}"} for r in rows]
 
 
 def platform_health():
@@ -833,7 +833,7 @@ def update_user_feedback_resolution(ticket_id: int, resolution: str):
         ).fetchone()
         conn.commit()
 
-    public_id = f"FINVA-{int(row['id']):06d}"
+    public_id = f"DINCR-{int(row['id']):06d}"
     label = "El usuario confirmó que se resolvió." if resolution == "resolved" else "El usuario confirmó que el problema continúa."
     notification = SimpleNamespace(
         category="status",
@@ -873,7 +873,7 @@ def resend_feedback_email(ticket_id: int):
         ).fetchone()
     if not row:
         raise HTTPException(404, "Reporte no encontrado.")
-    public_id = f"FINVA-{int(row['id']):06d}"
+    public_id = f"DINCR-{int(row['id']):06d}"
     payload = SimpleNamespace(
         category=row["category"], subject=row["subject"], message=row["message"],
         app_version=row.get("app_version"), screen=None, error_reference=None,
@@ -932,7 +932,7 @@ def owner_dashboard():
             "support_email": support_email_configuration(),
             "support_channels": support_channel_configuration(),
             "pending_orders": pending, "feature_usage_30d": events,
-            "tickets": [{**r, "public_id": f"FINVA-{int(r['id']):06d}"} for r in tickets],
+            "tickets": [{**r, "public_id": f"DINCR-{int(r['id']):06d}"} for r in tickets],
             "release_policies": release_policies,
             "feature_flags": feature_flags,
             "feature_flag_audit": feature_flag_audit,
@@ -977,7 +977,7 @@ def submit_receipt(order_id: int, filename: str, content_type: str, content: byt
           ((filename or "comprobante")[:180], content_type, len(content), digest, content, order_id)).fetchone()
         conn.commit()
     return {"status": "receipt_submitted", "order": _public_order(row),
-            "message": "Comprobante recibido. FINVA verificará el depósito con la confirmación bancaria."}
+            "message": "Comprobante recibido. DINCR verificará el depósito con la confirmación bancaria."}
 
 
 def get_receipt(order_id: int):
@@ -1084,4 +1084,4 @@ def update_feedback(ticket_id: int, payload):
           RETURNING id,status,owner_notes,updated_at""", (payload.status, payload.owner_notes, payload.status, ticket_id)).fetchone()
         if not row: raise HTTPException(404, "Reporte no encontrado.")
         conn.commit()
-    return {**row, "public_id": f"FINVA-{int(row['id']):06d}"}
+    return {**row, "public_id": f"DINCR-{int(row['id']):06d}"}

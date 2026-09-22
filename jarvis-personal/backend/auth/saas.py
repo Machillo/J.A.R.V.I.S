@@ -10,12 +10,12 @@ from backend.core.database import get_connection
 
 PLAN_COPY = {
     "free": {"name": "Gratis", "tagline": "Organizá y entendé tus números.", "features": ["Resumen financiero", "Ingresos y gastos", "Deudas", "Metas", "Transacciones", "Horas extra"]},
-    "basic": {"name": "Basic", "tagline": "FINVA organiza y guía tu mes.", "features": ["Todo Gratis", "Dashboard completo", "Presupuesto guiado", "Deudas y metas completas", "Calendario", "Recurrentes", "Reportes"]},
+    "basic": {"name": "Basic", "tagline": "DINCR organiza y guía tu mes.", "features": ["Todo Gratis", "Dashboard completo", "Presupuesto guiado", "Deudas y metas completas", "Calendario", "Recurrentes", "Reportes"]},
     "vip": {"name": "VIP", "tagline": "Director financiero personal.", "features": ["Todo Basic", "Estrategia dinámica", "Proyecciones", "Metas inteligentes", "Escenarios"]},
 }
 PLAN_RANK = {"free": 1, "basic": 2, "vip": 3}
 BUILTIN_FEATURE_MIN_PLAN = {
-    # Core FINVA capabilities must follow the product plan even if a deployment
+    # Core DINCR capabilities must follow the product plan even if a deployment
     # has not yet synchronized plan_features rows.
     "finance_overview": "free",
     "spending": "free",

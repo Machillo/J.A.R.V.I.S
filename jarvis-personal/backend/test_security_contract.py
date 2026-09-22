@@ -522,7 +522,7 @@ def test_support_email_normalizes_google_app_password(monkeypatch):
     monkeypatch.setattr(product_ops_service.smtplib, "SMTP_SSL", lambda *_args, **_kwargs: FakeSmtp())
 
     sent = product_ops_service._send_support_email(
-        public_id="FINVA-000001",
+        public_id="DINCR-000001",
         email="person@example.com",
         plan="vip",
         payload=SimpleNamespace(
@@ -549,7 +549,7 @@ def test_discord_incident_notification_is_privacy_minimized(monkeypatch):
     )
     monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
     sent = product_ops_service._send_support_discord(
-        public_id="FINVA-000008",
+        public_id="DINCR-000008",
         plan="vip",
         severity="critical",
         payload=SimpleNamespace(
@@ -565,7 +565,7 @@ def test_discord_incident_notification_is_privacy_minimized(monkeypatch):
 
     assert sent is True
     content = observed["payload"]["content"]
-    assert "FINVA-000008" in content
+    assert "DINCR-000008" in content
     assert "request-safe-reference" in content
     assert "4111111111111111" not in content
     assert "private@example.com" not in content
@@ -587,7 +587,7 @@ def test_discord_accepts_official_hooks_host(monkeypatch):
     monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
 
     sent = product_ops_service._send_support_discord(
-        public_id="FINVA-000008-HOOKS",
+        public_id="DINCR-000008-HOOKS",
         plan="operaciones",
         severity="critical",
         payload=SimpleNamespace(
@@ -614,7 +614,7 @@ def test_discord_rejects_lookalike_hooks_host(monkeypatch):
     monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
 
     assert product_ops_service._send_support_discord(
-        public_id="FINVA-000008-EVIL",
+        public_id="DINCR-000008-EVIL",
         plan="operaciones",
         severity="critical",
         payload=SimpleNamespace(
@@ -636,7 +636,7 @@ def test_discord_rejects_non_discord_webhook(monkeypatch, caplog):
     monkeypatch.setenv("SUPPORT_DISCORD_WEBHOOK_URL", secret_url)
     monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
     assert product_ops_service._send_support_discord(
-        public_id="FINVA-000009",
+        public_id="DINCR-000009",
         plan="free",
         severity="critical",
         payload=SimpleNamespace(category="error", app_version=None, platform=None, screen=None, error_reference=None),
@@ -660,7 +660,7 @@ def test_phase_0c_suppresses_warning_discord_alerts_by_default(monkeypatch):
     monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
 
     sent = product_ops_service._send_support_discord(
-        public_id="FINVA-000010",
+        public_id="DINCR-000010",
         plan="free",
         severity="warning",
         payload=SimpleNamespace(
@@ -685,7 +685,7 @@ def test_phase_0c_critical_alert_can_ping_only_configured_role(monkeypatch):
     monkeypatch.setattr(product_ops_service.requests, "post", fake_post)
 
     sent = product_ops_service._send_support_discord(
-        public_id="FINVA-000011",
+        public_id="DINCR-000011",
         plan="vip",
         severity="critical",
         payload=SimpleNamespace(

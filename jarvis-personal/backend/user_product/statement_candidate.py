@@ -44,7 +44,7 @@ def statement_candidate(
     movement: dict[str, Any], *, bank: str, document_hash: str,
     movement_index: int, statement_text: str,
 ) -> dict[str, Any]:
-    """Adapt a signed statement row to FINVA's canonical candidate contract."""
+    """Adapt a signed statement row to DINCR's canonical candidate contract."""
     direction = str(movement.get("direction") or "unknown").lower()
     parser_type = str(movement.get("transaction_type") or "")
     # A parser may recognize an own-transfer phrase, but ownership remains a

@@ -34,14 +34,14 @@ export default function Login({ nativeError = "" }) {
     <main className="login-page auth-shell">
       <section className="login-card auth-card">
         <div className="finva-login-top">
-          <strong>FINVA</strong>
+          <strong>DINCR</strong>
           <small>JARVIS Financial Intelligence</small>
         </div>
 
         <div className="finva-login-hero">
-          <span className="finva-login-mark" aria-hidden="true">F</span>
-          <h1 className="auth-title">FINVA</h1>
-          <h2>{tx("Tu vida financiera, en equilibrio", "Your financial life, in balance")}</h2>
+          <span className="finva-login-mark" aria-hidden="true">D</span>
+          <h1 className="auth-title">DINCR</h1>
+          <h2>{tx("Tu dinero, con propósito", "Your money, with purpose")}</h2>
           <p className="finva-login-pillars">
             {tx("Organizá · Planificá · Avanzá · Lográ más", "Organize · Plan · Move forward · Achieve more")}
           </p>

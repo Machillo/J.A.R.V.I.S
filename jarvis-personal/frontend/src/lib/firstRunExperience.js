@@ -15,6 +15,6 @@ export function markFinvaWelcomeSeen(accountId) {
   try {
     window.localStorage.setItem(welcomeKey(accountId), "seen");
   } catch {
-    // Storage may be unavailable in hardened browsers. This must never block FINVA.
+    // Storage may be unavailable in hardened browsers. This must never block DINCR.
   }
 }

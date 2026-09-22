@@ -16,7 +16,7 @@ assert.match(app, /Sin conexión/);
 assert.match(app, /Modo degradado/);
 assert.match(app, /window\.addEventListener\("offline"/);
 assert.match(app, /window\.addEventListener\("online"/);
-assert.match(feedback, /Estado de FINVA/);
+assert.match(feedback, /Estado de DINCR/);
 assert.match(feedback, /Operando normalmente/);
 assert.match(feedback, /Servicio degradado/);
 

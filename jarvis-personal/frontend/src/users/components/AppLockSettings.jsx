@@ -45,7 +45,7 @@ export default function AppLockSettings({ userId }) {
   };
 
   if (!isNativeAppLockSupported()) {
-    return <article className="app-lock-settings account-card app-lock-settings--web"><LockKeyhole size={22}/><div><strong>{tx("Bloqueo de FINVA", "FINVA app lock")}</strong><small>{tx("Disponible en la aplicación para Android y iPhone.", "Available in the Android and iPhone app.")}</small></div></article>;
+    return <article className="app-lock-settings account-card app-lock-settings--web"><LockKeyhole size={22}/><div><strong>{tx("Bloqueo de DINCR", "DINCR app lock")}</strong><small>{tx("Disponible en la aplicación para Android y iPhone.", "Available in the Android and iPhone app.")}</small></div></article>;
   }
 
   const label = biometryLabel(status?.biometryType);
@@ -53,10 +53,10 @@ export default function AppLockSettings({ userId }) {
     <article className="app-lock-settings">
       <header>
         <span><ShieldCheck size={22}/></span>
-        <div><strong>{tx("Bloqueo de FINVA", "FINVA app lock")}</strong><small>{tx(`Protegé la app con ${label} o el código del teléfono.`, `Protect the app with ${label} or your device passcode.`)}</small></div>
+        <div><strong>{tx("Bloqueo de DINCR", "DINCR app lock")}</strong><small>{tx(`Protegé la app con ${label} o el código del teléfono.`, `Protect the app with ${label} or your device passcode.`)}</small></div>
         <button className={`app-lock-toggle ${config.enabled ? "is-on" : ""}`} type="button" role="switch" aria-checked={config.enabled} disabled={working || status === null} onClick={toggle}><i /></button>
       </header>
-      {config.enabled && <div className="app-lock-timeout"><span>{tx("Bloqueo automático", "Automatic lock")}</span><strong>{tx("Después de 5 minutos fuera de FINVA", "After 5 minutes away from FINVA")}</strong></div>}
+      {config.enabled && <div className="app-lock-timeout"><span>{tx("Bloqueo automático", "Automatic lock")}</span><strong>{tx("Después de 5 minutos fuera de DINCR", "After 5 minutes away from DINCR")}</strong></div>}
       {config.enabled && <button className="app-lock-now" type="button" onClick={() => requestAppLock(userId)}><Fingerprint size={18}/>{tx("Bloquear ahora", "Lock now")}</button>}
       {message && <small className="app-lock-message" role="status">{message}</small>}
     </article>

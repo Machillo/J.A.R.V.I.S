@@ -52,7 +52,7 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
       path,
       method,
       errorType: `http_${status || "network"}`,
-      summary: "FINVA no pudo completar una acción.",
+      summary: "DINCR no pudo completar una acción.",
     };
     window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));
     captureIncident(incident);
@@ -64,7 +64,7 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
 export function apiNetworkError(cause, path, method = "GET", autoReport = true) {
   const queued = Boolean(cause?.finvaOperationQueued);
   const error = new FinvaApiError(queued
-    ? "Guardamos este cambio en el dispositivo. FINVA lo enviará cuando vuelva la conexión."
+    ? "Guardamos este cambio en el dispositivo. DINCR lo enviará cuando vuelva la conexión."
     : GENERIC_MESSAGE, {
     status: 0,
     errorId: cause?.finvaRequestId || "",
@@ -78,7 +78,7 @@ export function apiNetworkError(cause, path, method = "GET", autoReport = true) 
   const incident = {
     screen: path, errorReference: error.errorId, requestId: error.requestId,
     retryCount: error.retryCount, status: 0, path, method,
-    errorType: cause?.name || "network_error", summary: "FINVA perdió comunicación con el servicio.",
+    errorType: cause?.name || "network_error", summary: "DINCR perdió comunicación con el servicio.",
   };
   if (autoReport) {
     window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));

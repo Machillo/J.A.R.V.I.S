@@ -1,4 +1,4 @@
-"""Canonical FINVA financial state for longitudinal Phase 2 analysis."""
+"""Canonical DINCR financial state for longitudinal Phase 2 analysis."""
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
