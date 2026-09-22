@@ -10,6 +10,7 @@
     "test:locale": "node scripts/test-locale.mjs",
     "test:navigation": "node scripts/test-finva-settings-navigation.mjs",
     "test:native-navigation": "node scripts/test-native-navigation.mjs",
+    "test:product-analytics": "node scripts/test-product-analytics-contract.mjs",
     "test:phase0a": "node scripts/test-phase-0a.mjs",
     "test:phase0b": "node scripts/test-phase-0b.mjs",
     "test:phase0d": "node scripts/test-phase-0d.mjs",
@@ -38,6 +39,7 @@
     "@supabase/supabase-js": "^2.107.0",
     "firebase": "^12.6.0",
     "lucide-react": "^1.17.0",
+    "posthog-js": "^1.434.5",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "recharts": "^3.6.0"
