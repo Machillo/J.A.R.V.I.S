@@ -36,7 +36,7 @@
   outline-offset: 2px;
 }
 
-/* Finva — mobile-first product shell */
+/* DINCR — mobile-first product shell */
 .users-app .app,
 .users-app .mobile-app-shell {
   width: min(100%, 520px);
@@ -609,7 +609,7 @@
 }
 
 /* ========================================================================== */
-/* 2026 MOBILE FINTECH VISUAL SYSTEM — FINVA                                  */
+/* 2026 MOBILE FINTECH VISUAL SYSTEM — DINCR                                  */
 /* Visual-only layer. Structure, order, navigation and flows remain intact.    */
 /* ========================================================================== */
 
@@ -949,7 +949,7 @@ body:has(.users-app) { background: #050b0e; }
   border-color: rgba(93,214,255,.18);
 }
 
-/* Auth surface inside FINVA scope. */
+/* Auth surface inside DINCR scope. */
 .users-app .auth-shell,
 .users-app .login-page {
   background:
@@ -1027,7 +1027,7 @@ body:has(.users-app) { background: #050b0e; }
   }
 }
 
-/* FINVA Basic 01–07 */
+/* DINCR Basic 01–07 */
 .users-app .negative, .users-app .expense { color: var(--danger); }
 .users-app .card em { color: var(--muted); font-size: .72rem; font-style: normal; }
 .users-app .basic-chart { display:block; margin-top:12px; overflow:hidden; }
@@ -1064,7 +1064,7 @@ body:has(.users-app) { background: #050b0e; }
 @media (min-width: 760px) {
   .users-app .debt-grid, .users-app .goal-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
-/* FINVA Free 01–07 */
+/* DINCR Free 01–07 */
 .users-app .negative { color:var(--danger); }
 .users-app .positive { color:var(--success); }
 .users-app .free-chart, .users-app .free-categories, .users-app .monthly-highlight { margin-top:12px; }

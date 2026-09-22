@@ -15,7 +15,7 @@ if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
 }
 const extensions = new Set([".js", ".jsx"]);
 const visibleAttributes = new Set(["aria-label", "placeholder", "title", "alt"]);
-const safeText = /^(?:(?:FINVA|J\.?A\.?R\.?V\.?I\.?S\.?|VIP|BASIC|FREE)(?:\s+(?:VIP|BASIC|FREE|\d+))?|Google|Apple|Face ID|Passkey|Passkey\s*\/\s*Face ID|Gmail|SINPE|BAC|MultiMoney|IBKR|CRC|USD|OpenAI|Gemini|Supabase|Render|Vercel|Firebase|ChatGPT|[\d\s.,:+/–—→−%$₡#()]+)$/i;
+const safeText = /^(?:(?:DINCR|J\.?A\.?R\.?V\.?I\.?S\.?|VIP|BASIC|FREE)(?:\s+(?:VIP|BASIC|FREE|\d+))?|Google|Apple|Face ID|Passkey|Passkey\s*\/\s*Face ID|Gmail|SINPE|BAC|MultiMoney|IBKR|CRC|USD|OpenAI|Gemini|Supabase|Render|Vercel|Firebase|ChatGPT|[\d\s.,:+/–—→−%$₡#()]+)$/i;
 const issues = [];
 
 function filesAt(directory) {

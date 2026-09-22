@@ -27,7 +27,7 @@ from backend.user_product.strategy_engine import (
 def _legacy_financial_user_id() -> int:
     """Return/create the legacy users.id required by old financial FKs.
 
-    Finva authorization is account/workspace based. Some historical Personal tables
+    DINCR authorization is account/workspace based. Some historical Personal tables
     still require user_id -> users(id), while authentication uses allowed_users.
     This bridge is account-scoped by the authenticated account email and exists only
     to satisfy those legacy foreign keys.
@@ -55,7 +55,7 @@ def _legacy_financial_user_id() -> int:
         created = conn.execute(
             """INSERT INTO users(email,name,country,timezone,created_at)
                VALUES(%s,%s,%s,%s,NOW()) RETURNING id""",
-            (email, (account.get("display_name") or "Finva User").strip(), "Unknown", "UTC"),
+            (email, (account.get("display_name") or "DINCR User").strip(), "Unknown", "UTC"),
         ).fetchone()
         conn.commit()
         return int(created["id"])

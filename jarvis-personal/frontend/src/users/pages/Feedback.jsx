@@ -70,7 +70,7 @@ export default function Feedback() {
 
   const steps = form.category === "improvement" ? IDEA_STEPS : ERROR_STEPS;
   const transcript = useMemo(() => {
-    const rows = [{ role:"bot", text:tx("Hola, soy el asistente de soporte de FINVA. Te haré unas preguntas cortas para entenderlo bien.", "Hi, I'm FINVA's support assistant. I'll ask a few short questions so I can understand it correctly.") }];
+    const rows = [{ role:"bot", text:tx("Hola, soy el asistente de soporte de DINCR. Te haré unas preguntas cortas para entenderlo bien.", "Hi, I'm DINCR's support assistant. I'll ask a few short questions so I can understand it correctly.") }];
     if (!form.category) return rows;
     rows.push({ role:"user", text:form.category === "error" ? tx("Tengo un problema", "I have a problem") : tx("Quiero proponer una mejora", "I want to suggest an improvement") });
     for (const key of steps) {
@@ -136,11 +136,11 @@ export default function Feedback() {
       ? tx("Este dispositivo no tiene conexión.", "This device is offline.")
       : healthStatus === "major_outage"
         ? tx("Detectamos una interrupción amplia y ya estamos recibiendo diagnósticos.", "We detected a widespread outage and are receiving diagnostics.")
-        : tx("Detectamos fallos recientes y FINVA está operando de forma limitada.", "We detected recent failures and FINVA is operating with limitations.");
+        : tx("Detectamos fallos recientes y DINCR está operando de forma limitada.", "We detected recent failures and DINCR is operating with limitations.");
 
   return <section className="mobile-page feedback-page support-conversation-page">
-    <div className="mobile-page-heading"><p className="eyebrow">{tx("Soporte FINVA", "FINVA support")}</p><h1>{tx("¿En qué te ayudamos?", "How can we help?")}</h1><span>{tx("Conversá con el asistente o revisá el estado de tus reportes.", "Chat with the assistant or review your reports.")}</span></div>
-    <section className={`mobile-panel support-health support-health--${healthStatus}`}><span><Activity size={22}/></span><div><small>{tx("Estado de FINVA", "FINVA status")}</small><strong>{healthStatus === "operational" ? tx("Operando normalmente", "Operational") : healthStatus === "offline" ? tx("Sin conexión", "Offline") : healthStatus === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : healthStatus === "checking" ? tx("Comprobando…", "Checking…") : tx("Servicio degradado", "Degraded service")}</strong><p>{healthCopy}</p></div><button type="button" disabled={healthBusy} onClick={loadHealth} aria-label={tx("Actualizar estado", "Refresh status")}><RefreshCw size={18}/></button></section>
+    <div className="mobile-page-heading"><p className="eyebrow">{tx("Soporte DINCR", "DINCR support")}</p><h1>{tx("¿En qué te ayudamos?", "How can we help?")}</h1><span>{tx("Conversá con el asistente o revisá el estado de tus reportes.", "Chat with the assistant or review your reports.")}</span></div>
+    <section className={`mobile-panel support-health support-health--${healthStatus}`}><span><Activity size={22}/></span><div><small>{tx("Estado de DINCR", "DINCR status")}</small><strong>{healthStatus === "operational" ? tx("Operando normalmente", "Operational") : healthStatus === "offline" ? tx("Sin conexión", "Offline") : healthStatus === "major_outage" ? tx("Interrupción temporal", "Temporary outage") : healthStatus === "checking" ? tx("Comprobando…", "Checking…") : tx("Servicio degradado", "Degraded service")}</strong><p>{healthCopy}</p></div><button type="button" disabled={healthBusy} onClick={loadHealth} aria-label={tx("Actualizar estado", "Refresh status")}><RefreshCw size={18}/></button></section>
     <button type="button" className="mobile-panel support-chat-launch" onClick={openChat}><span><MessageCircle size={22}/></span><div><strong>{tx("Nueva conversación", "New conversation")}</strong><small>{tx("Reportar un problema o proponer una mejora", "Report a problem or suggest an improvement")}</small></div></button>
     {notice && <p className="success-banner">{notice}</p>}{error && !chatOpen && <p className="onboarding-error">{error}</p>}
 
@@ -155,7 +155,7 @@ export default function Feedback() {
 
     {chatOpen && <div className="support-chat-overlay" role="dialog" aria-modal="true" aria-label={tx("Chat de soporte", "Support chat")}>
       <div className="support-chat-shell">
-        <header><div><p className="eyebrow">{tx("Soporte FINVA", "FINVA support")}</p><h2>{tx("Nueva conversación", "New conversation")}</h2></div><button type="button" onClick={closeChat} aria-label={tx("Cerrar chat", "Close chat")}><X size={22}/></button></header>
+        <header><div><p className="eyebrow">{tx("Soporte DINCR", "DINCR support")}</p><h2>{tx("Nueva conversación", "New conversation")}</h2></div><button type="button" onClick={closeChat} aria-label={tx("Cerrar chat", "Close chat")}><X size={22}/></button></header>
         <section className="support-conversation" aria-live="polite">
           <div className="support-transcript">{transcript.map((item, index) => <Bubble role={item.role} key={`${item.role}-${index}`}>{item.text}</Bubble>)}</div>
           {step === "category" && <div className="support-quick-actions"><button type="button" onClick={() => chooseCategory("error")}><Bug size={18}/>{tx("Tengo un problema", "I have a problem")}</button><button type="button" onClick={() => chooseCategory("improvement")}><Lightbulb size={18}/>{tx("Quiero proponer una mejora", "I want to suggest an improvement")}</button></div>}

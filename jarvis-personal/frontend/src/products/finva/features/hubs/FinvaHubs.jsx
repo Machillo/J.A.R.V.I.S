@@ -33,19 +33,19 @@ export function PlanHub({ plan, navigate }) {
     item(navigate, "vip-emergency", tx("Fondo de emergencia", "Emergency fund"), tx("Tu Salvavidas financiero", "Your financial safety net"), ShieldCheck),
     item(navigate, "vip-aguinaldo", tx("Aguinaldo", "Annual bonus"), tx("Estimación basada en tus salarios", "Estimate based on your salaries"), Gift),
   );
-  return <Hub eyebrow="FINVA" title={tx("Tu plan", "Your plan")} description={tx("Todo lo que estás organizando, en un solo lugar.", "Everything you are organizing, in one place.")} groups={[{ title: tx("Construí tu plan", "Build your plan"), items: planning }, { title: tx("Organización", "Organization"), items: organization }]}/>;
+  return <Hub eyebrow="DINCR" title={tx("Tu plan", "Your plan")} description={tx("Todo lo que estás organizando, en un solo lugar.", "Everything you are organizing, in one place.")} groups={[{ title: tx("Construí tu plan", "Build your plan"), items: planning }, { title: tx("Organización", "Organization"), items: organization }]}/>;
 }
 
 export function AdvisorHub({ plan, navigate }) {
   const intelligence = plan === "vip" ? [
-    item(navigate, "vip-today", tx("FINVA Today", "FINVA Today"), tx("Qué requiere tu atención hoy", "What needs your attention today"), Sparkles),
+    item(navigate, "vip-today", tx("DINCR Today", "DINCR Today"), tx("Qué requiere tu atención hoy", "What needs your attention today"), Sparkles),
     item(navigate, "strategy", tx("Dirección VIP", "VIP direction"), tx("Tu prioridad financiera actual", "Your current financial priority"), Landmark),
     item(navigate, "vip-reality", tx("Plan vs realidad", "Plan vs reality"), tx("Compará lo planeado con lo ocurrido", "Compare plan with reality"), BarChart3),
     item(navigate, "vip-monthly-review", tx("Revisión mensual", "Monthly review"), tx("Qué cambió y qué sigue", "What changed and what comes next"), ReceiptText),
     item(navigate, "vip-projections", tx("Proyecciones", "Projections"), tx("Cómo puede evolucionar tu dinero", "How your money may evolve"), TrendingUp),
     item(navigate, "vip-scenarios", tx("Escenarios", "Scenarios"), tx("Probá decisiones antes de tomarlas", "Test decisions before making them"), SlidersHorizontal),
   ] : plan === "basic" ? [item(navigate, "strategy", tx("Mi estrategia", "My strategy"), tx("Una ruta clara para avanzar", "A clear path forward"), Sparkles)] : [item(navigate, "monthly", tx("Resumen mensual", "Monthly summary"), tx("Entendé cómo cerró tu mes", "Understand how your month ended"), BarChart3)];
-  return <Hub eyebrow={tx("Tu asesor", "Your advisor")} title="FINVA" description={plan === "vip" ? tx("FINVA aprende de tu historia y reajusta tu estrategia.", "FINVA learns from your history and adjusts your strategy.") : tx("Entendé tu situación y descubrí tu siguiente paso.", "Understand your situation and discover your next step.")} groups={[{ title: tx("Dirección financiera", "Financial direction"), items: intelligence }]}/>;
+  return <Hub eyebrow={tx("Tu asesor", "Your advisor")} title="DINCR" description={plan === "vip" ? tx("DINCR aprende de tu historia y reajusta tu estrategia.", "DINCR learns from your history and adjusts your strategy.") : tx("Entendé tu situación y descubrí tu siguiente paso.", "Understand your situation and discover your next step.")} groups={[{ title: tx("Dirección financiera", "Financial direction"), items: intelligence }]}/>;
 }
 
 export function ProfileHub({ plan, navigate, onLogout }) {
@@ -54,6 +54,6 @@ export function ProfileHub({ plan, navigate, onLogout }) {
     item(navigate, "settings", tx("Cuenta y plan", "Account and plan"), tx("Perfil, suscripción y preferencias", "Profile, subscription and preferences"), Settings),
   ];
   if (plan === "vip") account.splice(1, 0, item(navigate, "gmail", tx("Correos financieros", "Financial emails"), tx("Conexión, sincronización y revisión", "Connection, sync and review"), Mail));
-  const support = [item(navigate, "feedback", tx("Ayuda y sugerencias", "Help and feedback"), tx("Soporte y estado del servicio", "Support and service status"), LifeBuoy), { key: "logout", label: tx("Cerrar sesión", "Log out"), detail: tx("Salir de FINVA en este dispositivo", "Sign out of FINVA on this device"), icon: LogOut, action: onLogout }];
+  const support = [item(navigate, "feedback", tx("Ayuda y sugerencias", "Help and feedback"), tx("Soporte y estado del servicio", "Support and service status"), LifeBuoy), { key: "logout", label: tx("Cerrar sesión", "Log out"), detail: tx("Salir de DINCR en este dispositivo", "Sign out of DINCR on this device"), icon: LogOut, action: onLogout }];
   return <Hub eyebrow={tx("Tu cuenta", "Your account")} title={tx("Perfil", "Profile")} description={tx("Configuración, conexiones y soporte.", "Settings, connections and support.")} groups={[{ title: tx("Cuenta", "Account"), items: account }, { title: tx("Soporte", "Support"), items: support }]}/>;
 }

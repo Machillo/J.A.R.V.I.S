@@ -101,8 +101,8 @@ export default function FinvaAppLock({ userId, onLogout, children }) {
     <main className="finva-app-lock" aria-live="polite">
       <section className="finva-app-lock-card">
         <div className="finva-app-lock-mark"><ShieldCheck size={34} /></div>
-        <p>FINVA · {tx("SEGURIDAD", "SECURITY")}</p>
-        <h1>{tx("FINVA está bloqueada", "FINVA is locked")}</h1>
+        <p>DINCR · {tx("SEGURIDAD", "SECURITY")}</p>
+        <h1>{tx("DINCR está bloqueada", "DINCR is locked")}</h1>
         <span>{tx("Tus datos siguen privados. Confirmá que sos vos para continuar.", "Your data remains private. Confirm it’s you to continue.")}</span>
         {message && <div className="finva-app-lock-error" role="alert">{message}</div>}
         <button className="finva-app-unlock-button" type="button" onClick={unlock}>

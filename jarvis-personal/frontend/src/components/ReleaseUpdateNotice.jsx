@@ -11,19 +11,19 @@ async function openUpdateUrl(url) {
 
 export default function ReleaseUpdateNotice({ policy, required = false, onDismiss, onRefresh }) {
   const message = tx(policy?.message_es, policy?.message_en)
-    || tx("Hay una nueva versión de FINVA disponible.", "A new FINVA version is available.");
+    || tx("Hay una nueva versión de DINCR disponible.", "A new DINCR version is available.");
 
   if (required) {
     return (
       <main className="finva-release-gate" role="alert" aria-live="assertive">
         <section className="finva-release-gate__card">
           <ShieldAlert size={42} aria-hidden="true" />
-          <small>FINVA · {policy?.current_version}</small>
+          <small>DINCR · {policy?.current_version}</small>
           <h1>{tx("Actualización necesaria", "Update required")}</h1>
           <p>{message}</p>
           <span>{tx("Esta versión ya no es compatible. Actualizá para proteger tus datos y continuar.", "This version is no longer compatible. Update to protect your data and continue.")}</span>
           {policy?.update_url ? (
-            <button type="button" onClick={() => openUpdateUrl(policy.update_url)}><Download size={19} /> {tx("Actualizar FINVA", "Update FINVA")}</button>
+            <button type="button" onClick={() => openUpdateUrl(policy.update_url)}><Download size={19} /> {tx("Actualizar DINCR", "Update DINCR")}</button>
           ) : (
             <button type="button" onClick={onRefresh}><RefreshCw size={19} /> {tx("Comprobar nuevamente", "Check again")}</button>
           )}

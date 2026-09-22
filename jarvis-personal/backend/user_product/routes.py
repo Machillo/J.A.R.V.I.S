@@ -48,7 +48,7 @@ from backend.user_product.financial_identity import confirm_financial_account, l
 from backend.user_product.trust_analytics import get_gmail_trust_analytics
 from backend.user_product.gmail_consent import accept_gmail_consent
 
-router = APIRouter(prefix="/user-product", tags=["Finva Product"])
+router = APIRouter(prefix="/user-product", tags=["DINCR Product"])
 
 @router.get("/finance/summary")
 def finance_summary():
@@ -209,7 +209,7 @@ def vip_command_center():
 
 @router.get("/vip/strategy-dashboard")
 def vip_strategy_dashboard():
-    """Motor determinístico probado en JARVIS, aislado al workspace FINVA activo."""
+    """Motor determinístico probado en JARVIS, aislado al workspace DINCR activo."""
     require_feature("strategy_vip"); return get_premium_strategy_dashboard()
 
 @router.get("/vip/debt-advisory")

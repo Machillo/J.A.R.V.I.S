@@ -104,7 +104,7 @@ def _aguinaldo_gmail_query(as_of: date | None = None) -> str:
     )
 
 def _has_active_vip_access(conn, account_id: str) -> bool:
-    """Return whether an account may use FINVA's Gmail automation.
+    """Return whether an account may use DINCR's Gmail automation.
 
     Interactive routes enforce the same entitlement through ``require_feature``.
     This database-level check also protects OAuth callbacks, Pub/Sub delivery and
@@ -134,7 +134,7 @@ def _google_config() -> tuple[str, str, str]:
     if not client_id or not client_secret or not redirect_uri:
         raise HTTPException(
             status_code=503,
-            detail="La conexión con Gmail todavía no está configurada en FINVA.",
+            detail="La conexión con Gmail todavía no está configurada en DINCR.",
         )
     return client_id, client_secret, redirect_uri
 
@@ -188,7 +188,7 @@ def _financial_user_id_for_account(account_id: str) -> int:
             (account_id,),
         ).fetchone()
         if not account or not account.get("primary_email"):
-            raise RuntimeError("La cuenta FINVA no tiene una identidad financiera válida.")
+            raise RuntimeError("La cuenta DINCR no tiene una identidad financiera válida.")
         existing = conn.execute(
             "SELECT id FROM users WHERE lower(email)=lower(%s) ORDER BY id LIMIT 1",
             (account["primary_email"],),
@@ -198,7 +198,7 @@ def _financial_user_id_for_account(account_id: str) -> int:
         created = conn.execute(
             """INSERT INTO users(email,name,country,timezone,created_at)
                VALUES(%s,%s,'Costa Rica','America/Costa_Rica',NOW()) RETURNING id""",
-            (account["primary_email"], account.get("display_name") or "Usuario FINVA"),
+            (account["primary_email"], account.get("display_name") or "Usuario DINCR"),
         ).fetchone()
         conn.commit()
         return int(created["id"])
@@ -207,7 +207,7 @@ def _financial_user_id_for_account(account_id: str) -> int:
 def _vault_create(conn, token: str, account_id: str) -> str:
     row = conn.execute(
         "SELECT vault.create_secret(%s, NULL, %s) AS secret_id",
-        (token, f"FINVA Gmail refresh token for account {account_id}"),
+        (token, f"DINCR Gmail refresh token for account {account_id}"),
     ).fetchone()
     if not row or not row.get("secret_id"):
         raise RuntimeError("No se pudo proteger la autorización de Gmail.")
@@ -826,7 +826,7 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
         message = str(exc).lower()
         if "invalid_grant" in message or "token has been expired" in message or "revoked" in message:
             _mark_reconnect(connection_id)
-            raise HTTPException(status_code=409, detail="La conexión de Gmail venció. Volvé a autorizarla desde FINVA.") from exc
+            raise HTTPException(status_code=409, detail="La conexión de Gmail venció. Volvé a autorizarla desde DINCR.") from exc
         with get_connection() as conn:
             conn.execute(
                 "UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_error=%s,updated_at=NOW() WHERE id=%s",

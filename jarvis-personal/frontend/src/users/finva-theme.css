@@ -1,5 +1,5 @@
 /*
- * FINVA — Balance & Clarity
+ * DINCR — Balance & Clarity
  * Product-level color system. Kept separate from users.css so the theme can
  * evolve without affecting the private JARVIS workspace.
  */
@@ -213,7 +213,7 @@
   .users-app .mobile-bottom-nav button { min-height: 62px; }
 }
 
-/* Follow the phone setting. FINVA remains dark when the OS uses dark mode. */
+/* Follow the phone setting. DINCR remains dark when the OS uses dark mode. */
 @media (prefers-color-scheme: light) {
   .users-app {
     color-scheme: light;

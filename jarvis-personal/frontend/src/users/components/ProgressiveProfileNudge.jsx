@@ -33,9 +33,9 @@ export default function ProgressiveProfileNudge({ user, plan, page, onNavigate }
 
   if (!prompt || dismissed || page !== "overview") return null;
   const content = {
-    income: [tx("FINVA ya encontró ingresos reales", "FINVA already found real income"), tx("Podés usarlos como referencia y confirmar el dato, sin volver a escribir todo.", "Use them as a reference and confirm the value without entering everything again."), "situation"],
-    profile: [tx("Completá solo el siguiente dato útil", "Add only the next useful detail"), tx("Tu perfil es opcional. FINVA te lo pedirá poco a poco cuando mejore una recomendación.", "Your profile is optional. FINVA will ask gradually when it improves a recommendation."), "situation"],
-    expenses: [tx("Ya hay gastos para revisar", "There are expenses ready to review"), tx("FINVA calculó una referencia con tus movimientos; confirmá cuánto es realmente esencial.", "FINVA calculated a reference from your transactions; confirm how much is truly essential."), "situation"],
+    income: [tx("DINCR ya encontró ingresos reales", "DINCR already found real income"), tx("Podés usarlos como referencia y confirmar el dato, sin volver a escribir todo.", "Use them as a reference and confirm the value without entering everything again."), "situation"],
+    profile: [tx("Completá solo el siguiente dato útil", "Add only the next useful detail"), tx("Tu perfil es opcional. DINCR te lo pedirá poco a poco cuando mejore una recomendación.", "Your profile is optional. DINCR will ask gradually when it improves a recommendation."), "situation"],
+    expenses: [tx("Ya hay gastos para revisar", "There are expenses ready to review"), tx("DINCR calculó una referencia con tus movimientos; confirmá cuánto es realmente esencial.", "DINCR calculated a reference from your transactions; confirm how much is truly essential."), "situation"],
     "debt-interest": [tx("Una deuda necesita su tasa", "A debt needs its interest rate"), tx("Agregarla mejora el orden de pago sin pedirte de nuevo los demás datos.", "Adding it improves payoff ordering without asking for the other details again."), "debts"],
     goals: [tx("¿Qué querés lograr primero?", "What do you want to achieve first?"), tx("Una meta concreta permite que VIP ordene mejor sus recomendaciones.", "A concrete goal helps VIP prioritize recommendations."), "goals"],
   }[prompt];

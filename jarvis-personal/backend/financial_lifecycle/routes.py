@@ -10,7 +10,7 @@ from backend.financial_lifecycle.snapshots import (
 )
 from backend.financial_lifecycle.state import build_financial_state
 
-router = APIRouter(prefix="/user-product/vip/lifecycle", tags=["FINVA Lifecycle"])
+router = APIRouter(prefix="/user-product/vip/lifecycle", tags=["DINCR Lifecycle"])
 
 
 @router.get("/state")

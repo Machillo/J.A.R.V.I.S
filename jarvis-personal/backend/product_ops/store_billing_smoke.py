@@ -1,4 +1,4 @@
-"""Manual FINVA store-billing sandbox smoke test.
+"""Manual DINCR store-billing sandbox smoke test.
 
 Run from jarvis-personal with a configured development/test database:
 
@@ -83,7 +83,7 @@ def main():
         simulate_lifecycle("basic", "annual", "expired")
         _expect("free")
 
-        print("FINVA STORE BILLING SMOKE TEST: PASS")
+        print("DINCR STORE BILLING SMOKE TEST: PASS")
     finally:
         reset_current_user(token)
 

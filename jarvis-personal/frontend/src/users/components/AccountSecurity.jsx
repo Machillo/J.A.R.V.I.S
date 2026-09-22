@@ -49,7 +49,7 @@ export default function AccountSecurity({ user }) {
         <div>
           <p className="eyebrow">{tx("Seguridad", "Security")}</p>
           <h2>{tx("Formas de entrar", "Sign-in methods")}</h2>
-          <span>{tx("Todas apuntan a la misma identidad Finva; no crean otra cuenta cuando se vinculan desde aquí.", "They all point to the same Finva identity; linking them here does not create another account.")}</span>
+          <span>{tx("Todas apuntan a la misma identidad DINCR; no crean otra cuenta cuando se vinculan desde aquí.", "They all point to the same DINCR identity; linking them here does not create another account.")}</span>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-"""FINVA Phase 2C monthly review built from canonical financial states."""
+"""DINCR Phase 2C monthly review built from canonical financial states."""
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -33,7 +33,7 @@ def build_monthly_review(
             "period": period,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "coverage": coverage,
-            "headline": "FINVA ya guardó la base para medir tu evolución.",
+            "headline": "DINCR ya guardó la base para medir tu evolución.",
             "summary": "El próximo cierre podrá comparar lo planeado con lo que realmente ocurrió.",
             "scorecard": [],
             "wins": [],
@@ -44,7 +44,7 @@ def build_monthly_review(
                 "observations_analyzed": len(ordered),
                 "changes_detected": 0,
                 "priority_updated": False,
-                "explanation": "FINVA creó tu punto de partida financiero verificable.",
+                "explanation": "DINCR creó tu punto de partida financiero verificable.",
             },
             "next_month": _next_month(action),
         }
@@ -100,23 +100,23 @@ def _headline(wins: list[dict[str, Any]], deviations: list[dict[str, Any]]) -> s
     if deviations and not wins:
         return "Este mes requiere un reajuste financiero."
     if wins and deviations:
-        return "Hubo progreso, con áreas que FINVA debe reajustar."
+        return "Hubo progreso, con áreas que DINCR debe reajustar."
     return "Tu situación se mantuvo estable durante el período."
 
 
 def _summary(summary: dict[str, int], transition: dict[str, Any]) -> str:
     movement = f"{summary['improved']} indicadores mejoraron y {summary['declined']} se desviaron."
     if transition["kind"] == "priority_changed":
-        return f"{movement} FINVA cambió la prioridad para responder a la nueva situación."
+        return f"{movement} DINCR cambió la prioridad para responder a la nueva situación."
     if transition["kind"] == "plan_adjusted":
-        return f"{movement} FINVA mantuvo el objetivo y ajustó la ejecución."
+        return f"{movement} DINCR mantuvo el objetivo y ajustó la ejecución."
     return f"{movement} La prioridad estratégica se mantiene."
 
 
 def _value_explanation(changed: int, transition: dict[str, Any]) -> str:
     if transition["changed"]:
-        return f"FINVA detectó {changed} cambios relevantes y reajustó la estrategia con evidencia del período."
-    return f"FINVA verificó {changed} cambios relevantes y confirmó que la prioridad actual sigue siendo válida."
+        return f"DINCR detectó {changed} cambios relevantes y reajustó la estrategia con evidencia del período."
+    return f"DINCR verificó {changed} cambios relevantes y confirmó que la prioridad actual sigue siendo válida."
 
 
 def _next_month(action: dict[str, Any]) -> dict[str, Any]:
@@ -124,5 +124,5 @@ def _next_month(action: dict[str, Any]) -> dict[str, Any]:
         "priority": action.get("type") or "observe",
         "title": action.get("title") or "Seguir acumulando historia financiera",
         "amount": round(float(action.get("amount") or 0), 2),
-        "rationale": action.get("why") or "FINVA actualizará la recomendación con la próxima observación.",
+        "rationale": action.get("why") or "DINCR actualizará la recomendación con la próxima observación.",
     }

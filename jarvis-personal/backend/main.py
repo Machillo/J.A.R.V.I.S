@@ -222,7 +222,7 @@ async def auth_middleware(request: Request, call_next):
             reset_current_user(context_token)
             return JSONResponse(
                 status_code=503,
-                content={"detail": "No pudimos proteger este cambio todavía. FINVA lo reintentará."},
+                content={"detail": "No pudimos proteger este cambio todavía. DINCR lo reintentará."},
                 headers={**cors_headers, "X-Request-ID": request_id, "Retry-After": "2"},
             )
         if reservation.state == "replay":

@@ -56,7 +56,7 @@ const firstName = (user) => {
 };
 
 function BrandArt({ isJarvis }) {
-  const product = isJarvis ? "JARVIS" : "FINVA";
+  const product = isJarvis ? "JARVIS" : "DINCR";
   return (
     <div className="profile-setup-art" aria-hidden="true">
       <span className="profile-setup-orbit orbit-one" />
@@ -77,7 +77,7 @@ function BrandArt({ isJarvis }) {
 
 export default function ProfileSetup({ user, onComplete }) {
   const isJarvis = user?.role === "owner" || user?.role === "admin";
-  const product = isJarvis ? "JARVIS" : "FINVA";
+  const product = isJarvis ? "JARVIS" : "DINCR";
   const platform = Capacitor.getPlatform();
   const initialCurrency = user?.base_currency || "CRC";
   const [step, setStep] = useState(0);
@@ -284,7 +284,7 @@ export default function ProfileSetup({ user, onComplete }) {
               <div className="profile-setup-title">
                 <span>{tx("TUS INSTITUCIONES", "YOUR INSTITUTIONS")}</span>
                 <h1>{tx("Tus bancos en un solo lugar", "Your banks in one place")}</h1>
-                <p>{tx("Seleccioná los bancos que utilizás. FINVA VIP ya puede aprender de notificaciones y estados de cuenta de BAC y MultiMoney cuando conectés Gmail.", "Select the banks you use. FINVA VIP can already learn from BAC and MultiMoney notifications and statements when you connect Gmail.")}</p>
+                <p>{tx("Seleccioná los bancos que utilizás. DINCR VIP ya puede aprender de notificaciones y estados de cuenta de BAC y MultiMoney cuando conectés Gmail.", "Select the banks you use. DINCR VIP can already learn from BAC and MultiMoney notifications and statements when you connect Gmail.")}</p>
               </div>
               <div className="profile-bank-security"><ShieldCheck /><span><strong>{tx("Tu seguridad primero", "Your security comes first")}</strong><small>{tx(`${product} nunca te pedirá la contraseña de tu banco.`, `${product} will never ask for your bank password.`)}</small></span></div>
               <label className="profile-bank-search"><Search /><input value={bankSearch} onChange={(event) => setBankSearch(event.target.value)} placeholder={tx("Buscar banco", "Search bank")} /></label>
@@ -299,7 +299,7 @@ export default function ProfileSetup({ user, onComplete }) {
                 ))}
               </div>
               {!filteredBanks.length && <p className="profile-bank-empty">{tx("Todavía no aparece ese banco. Podremos agregar más entidades después.", "That bank isn’t listed yet. We’ll be able to add more institutions later.")}</p>}
-              <p className="profile-data-note">{tx("Esto no conecta ninguna cuenta ni comparte contraseñas. Solo personaliza FINVA y prepara la automatización que vos autoricés después.", "This does not connect any account or share passwords. It only personalizes FINVA and prepares automation you authorize later.")}</p>
+              <p className="profile-data-note">{tx("Esto no conecta ninguna cuenta ni comparte contraseñas. Solo personaliza DINCR y prepara la automatización que vos autoricés después.", "This does not connect any account or share passwords. It only personalizes DINCR and prepares automation you authorize later.")}</p>
             </section>
           )}
 

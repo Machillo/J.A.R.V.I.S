@@ -8,17 +8,17 @@ const sheet = readFileSync(new URL("../src/users/components/FinvaFormSheet.jsx",
 const feedback = readFileSync(new URL("../src/users/pages/Feedback.jsx", import.meta.url), "utf8");
 const settings = readFileSync(new URL("../src/users/pages/Settings.jsx", import.meta.url), "utf8");
 
-assert.match(hook, /history\.pushState/, "FINVA destinations create real history entries");
+assert.match(hook, /history\.pushState/, "DINCR destinations create real history entries");
 assert.match(hook, /history\.back\(\)/, "back returns to the previous entry instead of forcing home");
 assert.match(hook, /addListener\("backButton"/, "Android system back is integrated");
-assert.match(hook, /minimizeApp\(\)/, "Android only leaves FINVA when the stack is empty");
+assert.match(hook, /minimizeApp\(\)/, "Android only leaves DINCR when the stack is empty");
 assert.match(hook, /clientX <= EDGE_START_PX/, "iOS edge swipes are recognized");
 assert.match(hook, /finva:native-back/, "nested flows can consume back before page navigation");
 assert.match(dialog, /useFinvaBackHandler/, "system back closes an open confirmation or amount dialog first");
 assert.match(sheet, /useFinvaBackHandler\(onClose, open\)/, "system back closes an open form sheet first");
 assert.match(feedback, /useFinvaBackHandler/, "system back closes the support chat before leaving support");
 assert.match(settings, /Boolean\(confirming \|\| paymentFlow\)/, "system back closes plan and payment flows before leaving settings");
-assert.match(app, /useFinvaNavigation\(initialPage\)/, "all FINVA plans share the native history stack");
+assert.match(app, /useFinvaNavigation\(initialPage\)/, "all DINCR plans share the native history stack");
 assert.doesNotMatch(app, /navigate:\s*setPage/, "feature navigation cannot bypass the history stack");
 
-console.log("FINVA native back navigation contract passed.");
+console.log("DINCR native back navigation contract passed.");

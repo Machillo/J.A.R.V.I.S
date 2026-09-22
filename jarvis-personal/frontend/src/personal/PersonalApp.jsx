@@ -79,7 +79,7 @@ const appSectionsFor = (language) => ({
   settings: { title: t("nav.settings", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   goals: { title: t("nav.goals", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   userManagement: { title: t("nav.manageUsers", language), eyebrow: language === "es" ? "Control de propietario" : "Owner Control" },
-  productOperations: { title: t("nav.finvaOperations", language), eyebrow: "FINVA Beta" },
+  productOperations: { title: t("nav.finvaOperations", language), eyebrow: "DINCR Beta" },
 });
 
 const getBottomGroup = (page) => {

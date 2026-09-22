@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DEFAULT_APP_LOCK_TIMEOUT, hasSeenAppLockOnboarding, markAppLockOnboardingSeen, normalizeAppLockConfig, shouldLockAfterInactivity } from "../src/lib/appLock.js";
 
-assert.equal(DEFAULT_APP_LOCK_TIMEOUT, 300_000, "FINVA owns a five-minute security timeout");
+assert.equal(DEFAULT_APP_LOCK_TIMEOUT, 300_000, "DINCR owns a five-minute security timeout");
 assert.equal(normalizeAppLockConfig({ enabled: true, timeoutMs: 0 }).timeoutMs, 300_000, "legacy custom timeouts migrate to five minutes");
 assert.equal(shouldLockAfterInactivity(300_000, 299_999), false, "five-minute grace period is respected");
 assert.equal(shouldLockAfterInactivity(300_000, 300_000), true, "five-minute timeout locks at its boundary");
@@ -23,21 +23,21 @@ const iosConfig = readFileSync(new URL("../capacitor.ios.finva.json", import.met
 const infoPlist = readFileSync(new URL("../ios-finva/App/App/Info.plist", import.meta.url), "utf8");
 const iosProductScript = readFileSync(new URL("./ios-product.mjs", import.meta.url), "utf8");
 
-assert.match(app, /<FinvaAppLock/, "authenticated FINVA is protected by the local lock gate");
-assert.match(app, /if \(!isFinvaDistribution\) return personalApp;[\s\S]*<FinvaAppLock userId=\{currentUser\.id\}/, "FINVA protects owner and admin sessions without changing the standalone JARVIS app");
-assert.match(app, /nativeAppId === "com\.finva\.app"/, "owner protection is scoped to the FINVA distribution");
+assert.match(app, /<FinvaAppLock/, "authenticated DINCR is protected by the local lock gate");
+assert.match(app, /if \(!isFinvaDistribution\) return personalApp;[\s\S]*<FinvaAppLock userId=\{currentUser\.id\}/, "DINCR protects owner and admin sessions without changing the standalone JARVIS app");
+assert.match(app, /nativeAppId === "com\.finva\.app"/, "owner protection is scoped to the DINCR distribution");
 assert.match(settings, /Bloquear ahora/, "settings provide a manual lock action");
-assert.doesNotMatch(settings, /<select/, "users cannot weaken the FINVA-owned timeout");
+assert.doesNotMatch(settings, /<select/, "users cannot weaken the DINCR-owned timeout");
 assert.match(settings, /5 minutos/, "settings explain the fixed five-minute timeout");
 assert.match(lock, /appStateChange/, "lock reacts to native background and resume events");
 assert.match(lock, /hasSeenAppLockOnboarding/, "new and existing users receive the one-time security onboarding");
 assert.match(lock, /Cerrar sesión/, "locked screen keeps logout separate from unlock");
 assert.match(onboarding, /Activar acceso seguro/, "onboarding offers direct biometric activation");
 assert.match(onboarding, /Ahora no/, "onboarding never traps a user without compatible biometrics");
-assert.match(iosConfig, /capacitor-biometric-auth/, "FINVA iOS bundles the biometric plugin");
-assert.match(infoPlist, /NSFaceIDUsageDescription/, "FINVA declares why it uses Face ID");
+assert.match(iosConfig, /capacitor-biometric-auth/, "DINCR iOS bundles the biometric plugin");
+assert.match(infoPlist, /NSFaceIDUsageDescription/, "DINCR declares why it uses Face ID");
 assert.match(iosProductScript, /verifyNativeBundle\(\)/, "the iOS workflow verifies the generated native bundle before opening Xcode");
-assert.match(appLock, /VITE_NATIVE_APP_ID.*com\.finva\.app/, "FINVA iOS does not skip security while the Capacitor bridge is attaching");
-assert.match(iosProductScript, /finva:app-lock-onboarding:v2/, "the FINVA iOS workflow rejects a stale bundle without biometric onboarding");
+assert.match(appLock, /VITE_NATIVE_APP_ID.*com\.finva\.app/, "DINCR iOS does not skip security while the Capacitor bridge is attaching");
+assert.match(iosProductScript, /finva:app-lock-onboarding:v2/, "the DINCR iOS workflow rejects a stale bundle without biometric onboarding");
 
 console.log("Phase 0J biometric lock contract passed.");

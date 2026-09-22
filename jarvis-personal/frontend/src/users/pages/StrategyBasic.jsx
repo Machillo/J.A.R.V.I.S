@@ -114,8 +114,8 @@ export default function StrategyBasic({ plan = "basic" }) {
         <h1>{vip ? copy("Dirección financiera VIP", "VIP financial direction") : copy("Estrategia Basic", "Basic strategy")}</h1>
         <p>
           {vip
-            ? copy("Finva coordina tus prioridades, deuda, seguridad, metas y margen personal.", "Finva coordinates your priorities, debt, safety, goals, and personal margin.")
-            : copy("Una estrategia matemática construida con tus datos. Si falta información, Finva te lo dice en vez de inventarla.", "A mathematical strategy built from your data. If information is missing, Finva tells you instead of making it up.")}
+            ? copy("DINCR coordina tus prioridades, deuda, seguridad, metas y margen personal.", "DINCR coordinates your priorities, debt, safety, goals, and personal margin.")
+            : copy("Una estrategia matemática construida con tus datos. Si falta información, DINCR te lo dice en vez de inventarla.", "A mathematical strategy built from your data. If information is missing, DINCR tells you instead of making it up.")}
         </p>
       </div>
 
@@ -198,7 +198,7 @@ export default function StrategyBasic({ plan = "basic" }) {
             <h3>{copy("Próximo ingreso", "Next income")}</h3>
           </div>
           <p>
-            {copy("Con tu frecuencia de pago actual, Finva estima", "With your current pay frequency, Finva estimates")} {money(data.next_paycheck.estimated_paycheck)} {copy("por pago y propone separar:", "per paycheck and suggests setting aside:")}
+            {copy("Con tu frecuencia de pago actual, DINCR estima", "With your current pay frequency, DINCR estimates")} {money(data.next_paycheck.estimated_paycheck)} {copy("por pago y propone separar:", "per paycheck and suggests setting aside:")}
           </p>
           <div className="allocation-list">
             {data.next_paycheck.envelopes.map((allocation, index) => (

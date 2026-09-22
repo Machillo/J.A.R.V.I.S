@@ -1,7 +1,7 @@
 """
-FINVA <-> PERSONAL runtime isolation check.
+DINCR <-> PERSONAL runtime isolation check.
 
-Creates temporary sentinel debt/goal rows inside the REAL Personal and Finva
+Creates temporary sentinel debt/goal rows inside the REAL Personal and DINCR
 workspaces, then attacks them through the application's real service layer from
 the opposite authenticated context.
 
@@ -160,9 +160,9 @@ def main():
     finva = resolve_context(FINVA_EMAIL)
 
     if personal["account_id"] == finva["account_id"]:
-        fail("Personal y Finva resolvieron al mismo account_id.")
+        fail("Personal y DINCR resolvieron al mismo account_id.")
     if personal["workspace_id"] == finva["workspace_id"]:
-        fail("Personal y Finva resolvieron al mismo workspace_id.")
+        fail("Personal y DINCR resolvieron al mismo workspace_id.")
 
     marker = uuid.uuid4().hex[:10].upper()
     p = create_sentinels(personal, f"P_{marker}")
@@ -172,48 +172,48 @@ def main():
 
     try:
         # ------------------------------------------------------------
-        # FINVA -> PERSONAL using Finva's real user_product services.
+        # DINCR -> PERSONAL using DINCR's real user_product services.
         # ------------------------------------------------------------
         token = use(finva)
         try:
             debts = list_user_debts()
             goals = list_user_goals()
             results.append((
-                "Finva list excludes Personal debt",
+                "DINCR list excludes Personal debt",
                 not any(int(x["id"]) == int(p["debt"]["id"]) for x in debts),
             ))
             results.append((
-                "Finva list excludes Personal goal",
+                "DINCR list excludes Personal goal",
                 not any(int(x["id"]) == int(p["goal"]["id"]) for x in goals),
             ))
             results.append((
-                "Finva payment against Personal debt blocked",
+                "DINCR payment against Personal debt blocked",
                 blocked_http(lambda: pay_user_debt(int(p["debt"]["id"]), 1.0)),
             ))
             results.append((
-                "Finva delete Personal debt blocked",
+                "DINCR delete Personal debt blocked",
                 blocked_http(lambda: delete_user_debt(int(p["debt"]["id"]))),
             ))
             results.append((
-                "Finva delete Personal goal blocked",
+                "DINCR delete Personal goal blocked",
                 blocked_http(lambda: delete_user_goal(int(p["goal"]["id"]))),
             ))
         finally:
             reset_current_user(token)
 
         # ------------------------------------------------------------
-        # PERSONAL -> FINVA using Personal's real services.
+        # PERSONAL -> DINCR using Personal's real services.
         # ------------------------------------------------------------
         token = use(personal)
         try:
             debts = get_debts()
             goals = get_financial_goals()
             results.append((
-                "Personal list excludes Finva debt",
+                "Personal list excludes DINCR debt",
                 not any(int(x["id"]) == int(f["debt"]["id"]) for x in debts),
             ))
             results.append((
-                "Personal list excludes Finva goal",
+                "Personal list excludes DINCR goal",
                 not any(int(x["id"]) == int(f["goal"]["id"]) for x in goals),
             ))
 
@@ -229,17 +229,17 @@ def main():
                 None,
             )
             results.append((
-                "Personal update Finva debt blocked",
+                "Personal update DINCR debt blocked",
                 debt_update.get("status") == "ERROR",
             ))
             results.append((
-                "Personal delete Finva debt blocked",
+                "Personal delete DINCR debt blocked",
                 delete_debt(int(f["debt"]["id"])).get("status") == "ERROR",
             ))
 
             direct_goal = get_financial_goal(int(f["goal"]["id"]))
             results.append((
-                "Personal direct read Finva goal blocked",
+                "Personal direct read DINCR goal blocked",
                 direct_goal.get("status") == "ERROR",
             ))
             goal_update = update_financial_goal(
@@ -252,11 +252,11 @@ def main():
                 "active",
             )
             results.append((
-                "Personal update Finva goal blocked",
+                "Personal update DINCR goal blocked",
                 goal_update.get("status") == "ERROR",
             ))
             results.append((
-                "Personal delete Finva goal blocked",
+                "Personal delete DINCR goal blocked",
                 delete_financial_goal(int(f["goal"]["id"])).get("status") == "ERROR",
             ))
         finally:
@@ -334,8 +334,8 @@ def main():
         print("=" * 52)
         print(f"Personal account : {personal['account_id']}")
         print(f"Personal workspace: {personal['workspace_id']}")
-        print(f"Finva account    : {finva['account_id']}")
-        print(f"Finva workspace  : {finva['workspace_id']}")
+        print(f"DINCR account    : {finva['account_id']}")
+        print(f"DINCR workspace  : {finva['workspace_id']}")
         print("-" * 52)
 
         for label, passed in results:
@@ -349,7 +349,7 @@ def main():
             sys.exit(1)
 
         print("\nRESULT: PASS")
-        print("Personal <-> Finva financial isolation is enforced by runtime workspace scope.")
+        print("Personal <-> DINCR financial isolation is enforced by runtime workspace scope.")
 
     finally:
         # Cleanup ONLY rows created by this exact run.

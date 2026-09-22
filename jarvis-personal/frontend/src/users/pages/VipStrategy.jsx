@@ -16,5 +16,5 @@ const finvaStrategyApi = {
 };
 
 export default function VipStrategy() {
-  return <PremiumStrategy api={finvaStrategyApi} brandName="FINVA" />;
+  return <PremiumStrategy api={finvaStrategyApi} brandName="DINCR" />;
 }

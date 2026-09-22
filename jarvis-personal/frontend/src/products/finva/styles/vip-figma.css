@@ -1,4 +1,4 @@
-/* FINVA VIP — canonical implementation of Figma section 56:880. */
+/* DINCR VIP — canonical implementation of Figma section 56:880. */
 .native-product--finva.native-plan--vip{--vip-bg:#060e1a;--vip-surface:#0b1726;--vip-surface-raised:#0f1f33;--vip-focus:#140f26;--vip-border:#1a2945;--vip-text:#f7fbff;--vip-muted:#9eb0c4;--vip-violet:#9c7aff;--vip-mint:#0ac7b2;--vip-gold:#e0b861;--vip-coral:#f5405e;--vip-blue:#1aa6f5;color-scheme:dark;min-height:100dvh;background:var(--vip-bg);color:var(--vip-text)}
 body:has(.native-product--finva.native-plan--vip){background:var(--vip-bg)}
 .native-product--finva.native-plan--vip::before,.native-product--finva.native-plan--vip>.mobile-app-shell>.native-product-header{display:none}
