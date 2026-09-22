@@ -12,6 +12,7 @@ import Recurring from "../../../users/pages/Recurring";
 import Reports from "../../../users/pages/Reports";
 import SettingsPage from "../../../users/pages/Settings";
 import StrategyBasic from "../../../users/pages/StrategyBasic";
+import VipStrategy from "../../../users/pages/VipStrategy";
 import Transactions from "../../../users/pages/Transactions";
 import VipScreens from "./vip/VipScreens";
 import { FreeMore, FreeSettings } from "./free/FreeScreens";
@@ -30,7 +31,7 @@ export function createFinvaFeatureRegistry({ user, plan, navigate, onUserChange,
     advisor: <AdvisorHub plan={plan} navigate={navigate} />,
     profile: <ProfileHub plan={plan} navigate={navigate} onLogout={onLogout} />,
     debts: <Debts plan={plan} />,
-    strategy: plan === "vip" ? gated("vip_intelligence", <VipScreens view="strategy" user={user} onNavigate={navigate} />) : <StrategyBasic plan={plan} />,
+    strategy: plan === "vip" ? gated("vip_intelligence", <VipStrategy />) : <StrategyBasic plan={plan} />,
     gmail: plan === "vip" ? gated("gmail_automation", <GmailAutomation />) : <SettingsPage user={user} onUserChange={onUserChange} onLogout={onLogout} />,
     goals: plan === "vip" ? <VipScreens view="goal" user={user} onNavigate={navigate} /> : <Goals plan={plan} />,
     savings: <Goals plan={plan} initialView="savings" />,
