@@ -7,7 +7,7 @@ import re
 from backend.ai.action_flow import continue_pending_action, start_action, _missing_required, _save_action
 from backend.ai.chat_memory import finish_pending_action, get_pending_action
 from backend.ai.gemini_client import ask_gemini
-from backend.ai.openai_client import ask_openai, get_active_premium_guides, save_premium_guide
+from backend.ai.openai_client import ask_openai, get_active_premium_guides
 from backend.ai.intent_router import ACTION_TYPES, detect_intent, is_pending_interrupt
 from backend.ai.memory_service import get_relevant_memory_context, remember_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
@@ -259,8 +259,8 @@ def _director_strategy_message(blueprint: dict) -> str:
     one_time = blueprint.get("current_month_one_time_debt_boost") or 0
     debt = blueprint.get("total_debt") or 0
     lines = [
-        "Señor, estrategia premium activada en modo Director.",
-        f"Estrategia: {blueprint.get('title') or 'Dictador de Deuda'}.",
+        "Señor, estrategia financiera calculada con los datos actuales.",
+        f"Estrategia: {blueprint.get('title') or 'Plan financiero'}.",
         f"Ingreso base recurrente: {_money(recurring_income)}. Ingreso de este mes: {_money(income)}. Deuda actual: {_money(debt)}.",
     ]
     if first:
@@ -290,74 +290,13 @@ def _director_strategy_message(blueprint: dict) -> str:
 
 
 def create_initial_financial_strategy():
-    """Crea una estrategia premium en modo Director: decide, guarda y muestra ruta.
-
-    No pregunta si debe comenzar; si el usuario pidió estrategia, Jarvis ejecuta.
-    """
-    context = build_financial_context()
-    memory_context = get_relevant_memory_context("estrategia financiera principal", limit=10)
+    """Return the live deterministic strategy without AI or saved guide overrides."""
     blueprint = build_local_strategy_blueprint()
-
-    system = """
-Eres J.A.R.V.I.S., Director Financiero Personal.
-No eres consultor: cuando el usuario pide estrategia, decides y ejecutas una estrategia base con los datos existentes.
-No preguntes "¿desea que...?" si ya hay deudas, ingresos o gastos suficientes.
-No saludes con nombre/correo. Usa solo "Señor,".
-Sé firme, corto y accionable. Debes actuar como director estricto: deuda primero, liquidez controlada, compras no esenciales restringidas.
-No inventes datos; si algo falta, lo marcas como pendiente, pero igual creas una estrategia provisional.
-""".strip()
-
-    prompt = f"""
-Crea y activa una estrategia financiera premium para el usuario.
-
-Blueprint calculado por el backend, úsalo como fuente dura:
-{json.dumps(blueprint, ensure_ascii=False, indent=2)}
-
-Memoria relevante:
-{json.dumps(memory_context, ensure_ascii=False, indent=2)}
-
-Datos reales del backend:
-{json.dumps(context, ensure_ascii=False, indent=2)}
-
-Entrega obligatoria:
-1. Nombre de estrategia activa.
-2. Diagnóstico brutal en máximo 4 bullets.
-3. Deuda prioritaria y por qué.
-4. Distribución del salario en porcentajes.
-5. Regla para OT, bonos y sobrantes.
-6. Tiempo estimado para pagar deudas según datos actuales.
-7. Qué debe hacer este mes.
-8. Qué datos faltan para mejorar precisión.
-
-Tono: firme, tipo director. No pidas permiso para comenzar.
-"""
-    ai_response = ask_openai(prompt, route="jarvis_premium_initial_strategy", system=system, max_tokens=1400)
-    director_message = _director_strategy_message(blueprint)
-
-    if ai_response.get("status") != "OK":
-        saved = save_premium_guide(
-            guide_type="financial_strategy",
-            title=blueprint.get("title", "Estrategia financiera principal"),
-            content=director_message,
-            data={"strategy_blueprint": blueprint, "context_snapshot": context, "created_by": "local_fallback"},
-        )
-        return {"status": "OK", "message": director_message, "guide": saved.get("guide"), "data": {"strategy": blueprint}, "budget": ai_response.get("budget")}
-
-    ai_content = ai_response["text"].strip()
-    content = director_message + "\n\nGuía premium ampliada:\n" + ai_content
-    saved = save_premium_guide(
-        guide_type="financial_strategy",
-        title=blueprint.get("title", "Estrategia financiera principal"),
-        content=content,
-        data={"strategy_blueprint": blueprint, "context_snapshot": context, "created_by": "openai_director", "ai_notes": ai_content},
-    )
     return {
         "status": "OK",
-        "message": director_message,
-        "guide": saved.get("guide"),
+        "message": _director_strategy_message(blueprint),
         "data": {"strategy": blueprint},
-        "usage": ai_response.get("usage"),
-        "budget": ai_response.get("budget"),
+        "source": "live_database",
     }
 
 
@@ -435,7 +374,14 @@ def process_message(user_message: str):
         if decision_result:
             return decision_result
 
-    intent_result = detect_intent(user_message)
+    strategy_request = bool(re.search(
+        r"\b(estrategia|strategy|plan financiero|an[aá]lisis financiero)\b",
+        (user_message or "").lower(),
+    ))
+    intent_result = (
+        {"intent": "financial_strategy", "source": "deterministic", "confidence": 1.0}
+        if strategy_request else detect_intent(user_message)
+    )
 
     # Si hay una acción pendiente, primero verificamos si el usuario está cambiando de tema.
     # Esto evita que "busca Chimborazo" termine guardado como categoría o gasto.
@@ -452,6 +398,19 @@ def process_message(user_message: str):
                 "pending": pending_result.get("pending", False),
                 "data": pending_result.get("data"),
             }
+
+    # Strategy requests always use the same live engine as both strategy screens.
+    # The owner chat must not ask a model to generate or override the plan.
+    if strategy_request:
+        result = create_initial_financial_strategy()
+        return {
+            "message": result["message"],
+            "intent": "financial_strategy",
+            "status": "OK",
+            "pending": False,
+            "source": "live_database",
+            "data": result["data"],
+        }
 
     # Advisor Core owns every number and priority. The AI only explains the
     # deterministic result; the formatter has a local fallback, so the response
@@ -571,9 +530,7 @@ def process_message(user_message: str):
                 "intent": "financial_strategy",
                 "status": result.get("status", "OK"),
                 "pending": False,
-                "source": "openai_premium_director",
-                "usage": result.get("usage"),
-                "budget": result.get("budget"),
+                "source": "live_database",
                 "data": result,
             }
 
