@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { FirebaseAnalytics } from "@capacitor-firebase/analytics";
 import { FirebaseCrashlytics } from "@capacitor-firebase/crashlytics";
+import { captureProductEvent, setProductAnalyticsUser } from "./productAnalytics";
 
 const native = Capacitor.isNativePlatform();
 const safely = (action) => native ? Promise.resolve().then(action).catch(() => {}) : Promise.resolve();
@@ -25,6 +26,7 @@ export const identifyTelemetryUser = (user) => {
   safely(() => FirebaseAnalytics.setUserProperty({ key: "plan", value: plan }));
   safely(() => FirebaseCrashlytics.setUserId({ userId: userId || "anonymous" }));
   safely(() => FirebaseCrashlytics.setCustomKey({ key: "plan", value: plan, type: "string" }));
+  setProductAnalyticsUser(user);
 };
 
 export const trackScreen = (screenName, surface = "unknown") => {
@@ -34,6 +36,7 @@ export const trackScreen = (screenName, surface = "unknown") => {
   safely(() => FirebaseAnalytics.setCurrentScreen({ screenName: cleanScreen, screenClassOverride: cleanSurface }));
   safely(() => FirebaseCrashlytics.setCustomKey({ key: "screen", value: cleanScreen, type: "string" }));
   safely(() => FirebaseCrashlytics.log({ message: `screen:${cleanScreen}` }));
+  captureProductEvent("screen_viewed", { screen: cleanScreen, surface: cleanSurface });
 };
 
 export const trackEvent = (name, params = {}) => {
@@ -41,6 +44,7 @@ export const trackEvent = (name, params = {}) => {
     Object.entries(params).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value)).slice(0, 20)
   );
   safely(() => FirebaseAnalytics.logEvent({ name: String(name).slice(0, 40), params: cleanParams }));
+  captureProductEvent(name, cleanParams);
 };
 
 export const recordError = (error, context = "handled") => {
