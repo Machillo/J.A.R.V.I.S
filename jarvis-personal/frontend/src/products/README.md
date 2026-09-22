@@ -1,13 +1,13 @@
 # Frontend por producto y plataforma
 
-Esta carpeta mantiene separadas las experiencias de JARVIS y FINVA sin duplicar cálculos ni llamadas de API.
+Esta carpeta mantiene separadas las experiencias de JARVIS y DINCR sin duplicar cálculos ni llamadas de API.
 
 ## Productos
 
 - `finva/`: navegación, estilos y módulos de la aplicación comercial.
 - `jarvis/`: navegación, estilos y módulos del laboratorio personal.
 
-Cada función nueva debe vivir en `products/<producto>/features/<función>/`. El resumen de FINVA es el ejemplo completo: componente y estilos están juntos en `finva/features/overview/`.
+Cada función nueva debe vivir en `products/<producto>/features/<función>/`. El resumen de DINCR es el ejemplo completo: componente y estilos están juntos en `finva/features/overview/`.
 
 ## Plataformas
 
@@ -22,7 +22,7 @@ La lógica financiera nunca debe duplicarse por plataforma. Android y iOS compar
 
 ## Sistema visual
 
-- JARVIS y FINVA comparten tarjetas, formularios, encabezados, hojas y espaciado desde `ui/native`.
+- JARVIS y DINCR comparten tarjetas, formularios, encabezados, hojas y espaciado desde `ui/native`.
 - Los archivos de cada producto solo definen color y compatibilidad con sus pantallas existentes.
-- FINVA aplica una variante de color por plan: `free`, `basic` o `vip`.
+- DINCR aplica una variante de color por plan: `free`, `basic` o `vip`.
 - Cada producto mantiene cinco accesos principales. Las funciones secundarias se organizan en **Más** para que ninguna ruta desaparezca cuando la app crezca.

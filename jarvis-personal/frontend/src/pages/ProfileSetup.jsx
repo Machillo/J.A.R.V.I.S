@@ -40,14 +40,14 @@ const CURRENCIES = [
 ];
 
 const BANKS = [
-  { name: "BAC Credomatic", short: "BAC", tone: "red" },
-  { name: "Banco Nacional", short: "BN", tone: "blue" },
-  { name: "Banco de Costa Rica", short: "BCR", tone: "navy" },
-  { name: "Banco Popular", short: "BP", tone: "orange" },
-  { name: "Davivienda", short: "DAV", tone: "yellow" },
-  { name: "Scotiabank", short: "S", tone: "red" },
-  { name: "Promerica", short: "PRO", tone: "green" },
-  { name: "MultiMoney", short: "MM", tone: "violet" },
+  { id: "bac", name: "BAC Credomatic", short: "BAC", tone: "red", supported: true },
+  { id: "bn", name: "Banco Nacional", short: "BN", tone: "blue" },
+  { id: "bcr", name: "Banco de Costa Rica", short: "BCR", tone: "navy" },
+  { id: "popular", name: "Banco Popular", short: "BP", tone: "orange" },
+  { id: "davivienda", name: "Davivienda", short: "DAV", tone: "yellow" },
+  { id: "scotiabank", name: "Scotiabank", short: "S", tone: "red" },
+  { id: "promerica", name: "Promerica", short: "PRO", tone: "green" },
+  { id: "multimoney", name: "MultiMoney", short: "MM", tone: "violet", supported: true },
 ];
 
 const firstName = (user) => {
@@ -56,7 +56,7 @@ const firstName = (user) => {
 };
 
 function BrandArt({ isJarvis }) {
-  const product = isJarvis ? "JARVIS" : "FINVA";
+  const product = isJarvis ? "JARVIS" : "DINCR";
   return (
     <div className="profile-setup-art" aria-hidden="true">
       <span className="profile-setup-orbit orbit-one" />
@@ -77,7 +77,7 @@ function BrandArt({ isJarvis }) {
 
 export default function ProfileSetup({ user, onComplete }) {
   const isJarvis = user?.role === "owner" || user?.role === "admin";
-  const product = isJarvis ? "JARVIS" : "FINVA";
+  const product = isJarvis ? "JARVIS" : "DINCR";
   const platform = Capacitor.getPlatform();
   const initialCurrency = user?.base_currency || "CRC";
   const [step, setStep] = useState(0);
@@ -91,6 +91,7 @@ export default function ProfileSetup({ user, onComplete }) {
   const [numberFormat, setNumberFormat] = useState(user?.number_format || "dot_comma");
   const [currencyPlacement, setCurrencyPlacement] = useState(user?.currency_placement || "before");
   const [bankSearch, setBankSearch] = useState("");
+  const [selectedBanks, setSelectedBanks] = useState(() => user?.selected_financial_institutions || []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -118,6 +119,12 @@ export default function ProfileSetup({ user, onComplete }) {
       : [...current, code]);
   };
 
+  const toggleBank = (id) => {
+    setSelectedBanks((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id]);
+  };
+
   const next = () => {
     setError("");
     if (!canContinue) return;
@@ -135,6 +142,7 @@ export default function ProfileSetup({ user, onComplete }) {
         enabled_currencies: [...new Set([baseCurrency, ...enabledCurrencies])],
         number_format: numberFormat,
         currency_placement: currencyPlacement,
+        selected_financial_institutions: selectedBanks,
       });
       onComplete(result.profile);
     } catch (requestError) {
@@ -274,23 +282,24 @@ export default function ProfileSetup({ user, onComplete }) {
           {step === 3 && (
             <section className="profile-setup-step bank-step">
               <div className="profile-setup-title">
-                <span>{tx("PRÓXIMAMENTE EN COSTA RICA", "COMING SOON IN COSTA RICA")}</span>
+                <span>{tx("TUS INSTITUCIONES", "YOUR INSTITUTIONS")}</span>
                 <h1>{tx("Tus bancos en un solo lugar", "Your banks in one place")}</h1>
-                <p>{tx("Esta es una vista previa. Hoy podés registrar movimientos manualmente y, cuando habilitemos conexiones, te pediremos permiso de solo lectura.", "This is a preview. For now, you can add transactions manually. When connections are available, we’ll ask for read-only permission.")}</p>
+                <p>{tx("Seleccioná los bancos que utilizás. DINCR VIP ya puede aprender de notificaciones y estados de cuenta de BAC y MultiMoney cuando conectés Gmail.", "Select the banks you use. DINCR VIP can already learn from BAC and MultiMoney notifications and statements when you connect Gmail.")}</p>
               </div>
               <div className="profile-bank-security"><ShieldCheck /><span><strong>{tx("Tu seguridad primero", "Your security comes first")}</strong><small>{tx(`${product} nunca te pedirá la contraseña de tu banco.`, `${product} will never ask for your bank password.`)}</small></span></div>
               <label className="profile-bank-search"><Search /><input value={bankSearch} onChange={(event) => setBankSearch(event.target.value)} placeholder={tx("Buscar banco", "Search bank")} /></label>
               <div className="profile-bank-grid">
                 {filteredBanks.map((bank) => (
-                  <div className="profile-bank-card" key={bank.name}>
+                  <button type="button" className={`profile-bank-card ${selectedBanks.includes(bank.id) ? "selected" : ""}`} aria-pressed={selectedBanks.includes(bank.id)} key={bank.name} onClick={() => toggleBank(bank.id)}>
                     <span className={`bank-mark bank-mark--${bank.tone}`}>{bank.short}</span>
                     <strong>{bank.name}</strong>
-                    <small>{tx("Próximamente", "Coming soon")}</small>
-                  </div>
+                    <small>{bank.supported ? tx("Compatible con Gmail VIP", "Works with VIP Gmail") : tx("Registrado para futuras conexiones", "Saved for future connections")}</small>
+                    {selectedBanks.includes(bank.id) && <Check />}
+                  </button>
                 ))}
               </div>
               {!filteredBanks.length && <p className="profile-bank-empty">{tx("Todavía no aparece ese banco. Podremos agregar más entidades después.", "That bank isn’t listed yet. We’ll be able to add more institutions later.")}</p>}
-              <p className="profile-data-note">{tx("Tu configuración financiera existente se conserva. No volveremos a pedirte información que ya completaste.", "Your existing financial setup is preserved. We won’t ask again for information you already completed.")}</p>
+              <p className="profile-data-note">{tx("Esto no conecta ninguna cuenta ni comparte contraseñas. Solo personaliza DINCR y prepara la automatización que vos autoricés después.", "This does not connect any account or share passwords. It only personalizes DINCR and prepares automation you authorize later.")}</p>
             </section>
           )}
 

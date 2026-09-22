@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ChevronRight, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, ChevronRight, Mail, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { deviceLanguage, localeTag } from "../../../../lib/locale";
 import AccountActions from "../../components/AccountActions";
 import {
+  captureVipLifecycleSnapshot,
   getBudget,
   getFinancialSituation,
+  getVipMonthlyReview,
+  getVipProactiveAdvisor,
+  getVipAguinaldo,
   getVipCommandCenter,
+  getVipGmailStatus,
   simulateStrategyVip,
+  syncVipGmail,
   updateFinancialSituation,
 } from "../../../../users/services/jarvisApi";
 
@@ -38,8 +44,8 @@ const strategyText = (value = "") => {
 function VipHeader({ title, user, onNavigate }) {
   const initial = (user?.display_name || user?.email || "U").slice(0, 1).toUpperCase();
   return <header className="vip-screen-header">
-    <div><small>FINVA · VIP</small><h1>{title}</h1></div>
-    <button type="button" onClick={() => onNavigate?.("vip-preferences")} aria-label={tx("Abrir preferencias VIP", "Open VIP preferences")}>{initial}</button>
+    <div><small>DINCR · VIP</small><h1>{title}</h1></div>
+    <button type="button" onClick={() => onNavigate?.("settings")} aria-label={tx("Abrir ajustes", "Open settings")}>{initial}</button>
   </header>;
 }
 
@@ -87,6 +93,9 @@ export default function VipScreens({ view = "dashboard", onNavigate, onLogout, u
       .catch(() => setError(tx("No pudimos cargar tu estrategia. Intentá nuevamente.", "We couldn't load your strategy. Please try again.")));
   };
   useEffect(load, []);
+  useEffect(() => {
+    if (view === "dashboard") captureVipLifecycleSnapshot().catch(() => {});
+  }, [view]);
   if (!data || !profile) {
     if (error) return <section className="vip-screen"><Card tone="danger"><h2>{error}</h2><PrimaryButton onClick={load}>{tx("Reintentar", "Try again")}</PrimaryButton></Card></section>;
     return <LoadingScreen/>;
@@ -98,7 +107,8 @@ export default function VipScreens({ view = "dashboard", onNavigate, onLogout, u
     dashboard: VipDashboard, strategy: VipStrategy, recommendation: VipRecommendation,
     projections: VipProjections, "projection-detail": VipProjectionDetail,
     scenarios: VipScenarios, goal: VipSmartGoal, emergency: VipEmergency,
-    reality: VipReality, more: VipMore, preferences: VipPreferences,
+    reality: VipReality, "monthly-review": VipMonthlyReview, today: VipToday, more: VipMore,
+    aguinaldo: VipAguinaldo, preferences: VipPreferences,
   };
   const Screen = screens[view] || VipDashboard;
   return <Screen {...props}/>;
@@ -137,9 +147,12 @@ function VipActivation({ profile, user, onNavigate, reload }) {
 function VipDashboard({ data, user, onNavigate }) {
   const roadmap = data.roadmap || [];
   const projection = data.projections?.find((item) => item.months === 6) || data.projections?.[0];
+  const [proactive, setProactive] = useState(null);
+  useEffect(() => { getVipProactiveAdvisor().then(setProactive).catch(() => {}); }, []);
+  const leadAlert = proactive?.alerts?.[0];
   return <section className="vip-screen">
     <VipHeader title={tx("Tu estrategia hoy", "Your strategy today")} user={user} onNavigate={onNavigate}/>
-    <Focus eyebrow={tx("DISPONIBLE ESTRATÉGICO", "STRATEGIC AVAILABLE")} title={money(data.safe_to_spend?.amount)} caption={tx(`FINVA encontró ${Math.min(roadmap.length, 3)} acciones para este mes`, `FINVA found ${Math.min(roadmap.length, 3)} actions for this month`)}/>
+    <Focus eyebrow={tx("DISPONIBLE ESTRATÉGICO", "STRATEGIC AVAILABLE")} title={money(data.safe_to_spend?.amount)} caption={tx(`DINCR encontró ${Math.min(roadmap.length, 3)} acciones para este mes`, `DINCR found ${Math.min(roadmap.length, 3)} actions for this month`)}/>
     <Card title={tx("Prioridad recomendada", "Recommended priority")}>
       {roadmap.slice(0, 3).map((item, index) => <DataRow key={`${item.order}-${item.title}`} label={strategyText(item.title)} value={item.amount ? `+ ${money(item.amount)}` : "—"} tone={["coral", "mint", "gold"][index]}/>) }
       <p>{tx("Mantiene tus gastos esenciales y mínimo personal protegidos.", "Your essential expenses and personal minimum remain protected.")}</p>
@@ -149,13 +162,15 @@ function VipDashboard({ data, user, onNavigate }) {
       <DataRow label={tx("Deuda estimada", "Estimated debt")} value={projection ? money(projection.debt) : "—"} tone="mint"/>
     </Card>
     <button className="vip-link-card" type="button" onClick={() => onNavigate?.("vip-reality")}><span><strong>{tx("Plan vs realidad", "Plan vs reality")}</strong><small>{Number(data.reports?.current?.balance) >= 0 ? tx("Tu mes mantiene un balance positivo.", "Your month remains positive.") : tx("Tu mes necesita un ajuste.", "Your month needs an adjustment.")}</small></span><ArrowRight size={17}/></button>
+    <button className="vip-link-card vip-link-card--violet" type="button" onClick={() => onNavigate?.("vip-monthly-review")}><span><strong>{tx("Revisión mensual DINCR", "DINCR monthly review")}</strong><small>{tx("Qué cambió, qué aprendió DINCR y cuál es tu siguiente prioridad.", "What changed, what DINCR learned, and your next priority.")}</small></span><ArrowRight size={17}/></button>
+    <button className={`vip-link-card ${leadAlert?.severity === "critical" || leadAlert?.severity === "high" ? "vip-link-card--gold" : "vip-link-card--mint"}`} type="button" onClick={() => onNavigate?.("vip-today")}><span><strong>{leadAlert?.title || tx("DINCR Today", "DINCR Today")}</strong><small>{leadAlert?.explanation || proactive?.message || tx("DINCR está observando cambios relevantes sin generar ruido.", "DINCR is watching for meaningful changes without creating noise.")}</small></span><ArrowRight size={17}/></button>
   </section>;
 }
 
 function VipStrategy({ data, user, onNavigate }) {
   return <section className="vip-screen">
     <VipHeader title={tx("Estrategia dinámica", "Dynamic strategy")} user={user} onNavigate={onNavigate}/>
-    <Focus eyebrow={`${tx("PRIORIDAD", "PRIORITY")} · ${(data.director?.priority || "balanced").toUpperCase()}`} title={tx("Tu dinero tiene un orden.", "Your money has an order.")} caption={tx("FINVA reajusta el plan según lo que realmente ocurre.", "FINVA readjusts the plan based on what actually happens.")}/>
+    <Focus eyebrow={`${tx("PRIORIDAD", "PRIORITY")} · ${(data.director?.priority || "balanced").toUpperCase()}`} title={tx("Tu dinero tiene un orden.", "Your money has an order.")} caption={tx("DINCR reajusta el plan según lo que realmente ocurre.", "DINCR readjusts the plan based on what actually happens.")}/>
     {(data.roadmap || []).slice(0, 4).map((item, index) => <Card key={`${item.order}-${item.title}`} className="vip-priority-card"><DataRow label={`${index + 1} · ${strategyText(item.title)}`} value={item.amount ? money(item.amount) : "—"} tone={["mint", "violet", "gold", "blue"][index]}/><p>{strategyText(item.why)}</p></Card>)}
     <PrimaryButton onClick={() => onNavigate?.("vip-recommendation")}>{tx("Ver recomendaciones", "View recommendations")}</PrimaryButton>
   </section>;
@@ -234,7 +249,7 @@ function VipScenarios({ data, user, onNavigate }) {
 
 function VipSmartGoal({ data, user, onNavigate }) {
   const goal = data.goals?.[0];
-  if (!goal) return <section className="vip-screen"><VipHeader title={tx("Meta inteligente", "Smart goal")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("META INTELIGENTE", "SMART GOAL")} title={tx("Creá tu primera meta", "Create your first goal")} caption={tx("Cuando agregués una meta, FINVA calculará un ritmo compatible con tu estrategia.", "When you add a goal, FINVA will calculate a pace compatible with your strategy.")}/><button className="vip-link-card" type="button" onClick={() => onNavigate?.("more")}><span><strong>{tx("Planificación", "Planning")}</strong><small>{tx("Administrá metas desde las herramientas de planificación.", "Manage goals from the planning tools.")}</small></span><ChevronRight size={17}/></button></section>;
+  if (!goal) return <section className="vip-screen"><VipHeader title={tx("Meta inteligente", "Smart goal")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("META INTELIGENTE", "SMART GOAL")} title={tx("Creá tu primera meta", "Create your first goal")} caption={tx("Cuando agregués una meta, DINCR calculará un ritmo compatible con tu estrategia.", "When you add a goal, DINCR will calculate a pace compatible with your strategy.")}/><button className="vip-link-card" type="button" onClick={() => onNavigate?.("more")}><span><strong>{tx("Planificación", "Planning")}</strong><small>{tx("Administrá metas desde las herramientas de planificación.", "Manage goals from the planning tools.")}</small></span><ChevronRight size={17}/></button></section>;
   const target = Number(goal.target_amount) || 0, current = Number(goal.current_amount) || 0;
   const completion = target ? Math.min(current / target * 100, 100) : 0;
   return <section className="vip-screen"><VipHeader title={goal.name} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("META INTELIGENTE", "SMART GOAL")} title={`${percent(completion)} ${tx("completada", "complete")}`} caption={`${money(current)} ${tx("de", "of")} ${money(target)}`}/><Card title={tx("Plan recomendado", "Recommended plan")} tone="gold"><DataRow label={tx("Aporte mensual", "Monthly contribution")} value={goal.monthly_required == null ? "—" : money(goal.monthly_required)} tone="violet"/><DataRow label={tx("Meses restantes", "Months remaining")} value={goal.months_left == null ? "—" : String(goal.months_left)} tone="mint"/><DataRow label={tx("Falta", "Remaining")} value={money(goal.remaining)}/></Card><Card title={tx("Protección estratégica", "Strategic protection")}><p className={goal.viable ? "vip-text-mint" : "vip-text-gold"}>{goal.viable ? tx("Este aporte respeta tu fondo de emergencia y tu mínimo personal.", "This contribution respects your emergency fund and personal minimum.") : tx("Esta meta requiere ajustar el plan actual.", "This goal requires adjusting the current plan.")}</p></Card><PrimaryButton onClick={() => onNavigate?.("vip-scenarios")}>{tx("Simular un cambio", "Simulate a change")}</PrimaryButton></section>;
@@ -245,7 +260,7 @@ function VipEmergency({ profile, data, user, onNavigate }) {
   const progress = target ? Math.min(saved / target * 100, 100) : 0;
   const essentials = Number(profile.essential_monthly_expenses) || 0;
   const contribution = Math.max(0, Math.min(Number(data.safe_to_spend?.monthly_margin) || 0, target - saved));
-  return <section className="vip-screen"><VipHeader title={tx("Fondo de emergencia", "Emergency fund")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("OBJETIVO VIP", "VIP TARGET")} title={`${money(saved)} / ${money(target)}`} caption={`${percent(progress)} ${tx("protegido", "protected")}`} tone="gold"><progress max="100" value={progress}/></Focus><Card title={tx("Ritmo recomendado", "Recommended pace")} tone="violet"><DataRow label={tx("Aporte mensual", "Monthly contribution")} value={money(contribution)} tone="violet"/><DataRow label={tx("Falta para el objetivo", "Remaining to target")} value={money(Math.max(target - saved, 0))} tone="mint"/><DataRow label={tx("Cobertura actual", "Current coverage")} value={`${essentials ? (saved / essentials).toFixed(1) : "0.0"} ${tx("meses", "months")}`} tone="gold"/></Card><Card title={tx("Por qué importa", "Why it matters")} tone="gold"><p>{tx("FINVA protege este fondo antes de aumentar aportes opcionales a metas.", "FINVA protects this fund before increasing optional goal contributions.")}</p></Card><PrimaryButton onClick={() => onNavigate?.("vip-preferences")}>{tx("Ajustar objetivo", "Adjust target")}</PrimaryButton></section>;
+  return <section className="vip-screen"><VipHeader title={tx("Fondo de emergencia", "Emergency fund")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("OBJETIVO VIP", "VIP TARGET")} title={`${money(saved)} / ${money(target)}`} caption={`${percent(progress)} ${tx("protegido", "protected")}`} tone="gold"><progress max="100" value={progress}/></Focus><Card title={tx("Ritmo recomendado", "Recommended pace")} tone="violet"><DataRow label={tx("Aporte mensual", "Monthly contribution")} value={money(contribution)} tone="violet"/><DataRow label={tx("Falta para el objetivo", "Remaining to target")} value={money(Math.max(target - saved, 0))} tone="mint"/><DataRow label={tx("Cobertura actual", "Current coverage")} value={`${essentials ? (saved / essentials).toFixed(1) : "0.0"} ${tx("meses", "months")}`} tone="gold"/></Card><Card title={tx("Por qué importa", "Why it matters")} tone="gold"><p>{tx("DINCR protege este fondo antes de aumentar aportes opcionales a metas.", "DINCR protects this fund before increasing optional goal contributions.")}</p></Card><PrimaryButton onClick={() => onNavigate?.("vip-preferences")}>{tx("Ajustar objetivo", "Adjust target")}</PrimaryButton></section>;
 }
 
 function VipReality({ data, budget, user, onNavigate }) {
@@ -258,18 +273,123 @@ function VipReality({ data, budget, user, onNavigate }) {
     [tx("Deudas", "Debts"), Number(data.debt_planner?.recommended?.monthly_to_target) || 0, Number(data.reports?.current?.debt_paid) || 0],
     [tx("Ahorro", "Savings"), Number(data.safe_to_spend?.monthly_margin) || 0, Math.max(Number(data.reports?.current?.balance) || 0, 0)],
   ];
-  return <section className="vip-screen"><VipHeader title={tx("Plan vs realidad", "Plan vs reality")} user={user} onNavigate={onNavigate}/><Focus eyebrow={new Intl.DateTimeFormat(localeTag(language), {month:"long"}).format(new Date()).toUpperCase()} title={delta >= 0 ? tx(`${money(delta)} mejor que el plan`, `${money(delta)} better than plan`) : tx(`${money(Math.abs(delta))} sobre el plan`, `${money(Math.abs(delta))} over plan`)} caption={tx("FINVA puede reajustar el próximo mes con este resultado.", "FINVA can readjust next month using this result.")} tone={delta >= 0 ? "mint" : "coral"}/>{groups.map(([name, plan, actual]) => <Card key={name} title={name}><DataRow label={`${tx("Plan", "Plan")} ${money(plan)}`} value={`${tx("Real", "Actual")} ${money(actual)}`} tone={actual <= plan ? "mint" : "coral"}/></Card>)}<Card title={tx("Ajuste sugerido", "Suggested adjustment")} tone="gold"><p>{delta >= 0 ? tx("Protegé el excedente dentro de tu prioridad estratégica.", "Protect the surplus within your strategic priority.") : tx("Revisá las categorías sobre el plan antes del próximo mes.", "Review categories over plan before next month.")}</p></Card></section>;
+  return <section className="vip-screen"><VipHeader title={tx("Plan vs realidad", "Plan vs reality")} user={user} onNavigate={onNavigate}/><Focus eyebrow={new Intl.DateTimeFormat(localeTag(language), {month:"long"}).format(new Date()).toUpperCase()} title={delta >= 0 ? tx(`${money(delta)} mejor que el plan`, `${money(delta)} better than plan`) : tx(`${money(Math.abs(delta))} sobre el plan`, `${money(Math.abs(delta))} over plan`)} caption={tx("DINCR puede reajustar el próximo mes con este resultado.", "DINCR can readjust next month using this result.")} tone={delta >= 0 ? "mint" : "coral"}/>{groups.map(([name, plan, actual]) => <Card key={name} title={name}><DataRow label={`${tx("Plan", "Plan")} ${money(plan)}`} value={`${tx("Real", "Actual")} ${money(actual)}`} tone={actual <= plan ? "mint" : "coral"}/></Card>)}<Card title={tx("Ajuste sugerido", "Suggested adjustment")} tone="gold"><p>{delta >= 0 ? tx("Protegé el excedente dentro de tu prioridad estratégica.", "Protect the surplus within your strategic priority.") : tx("Revisá las categorías sobre el plan antes del próximo mes.", "Review categories over plan before next month.")}</p></Card></section>;
+}
+
+function VipMonthlyReview({ user, onNavigate }) {
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [period, setPeriod] = useState(currentPeriod);
+  const [review, setReview] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setReview(null); setError("");
+    getVipMonthlyReview(period).then(setReview).catch(() => setError(tx("No pudimos generar la revisión mensual.", "We couldn't generate the monthly review.")));
+  }, [period]);
+  if (error) return <section className="vip-screen"><VipHeader title={tx("Revisión mensual", "Monthly review")} user={user} onNavigate={onNavigate}/><Card tone="danger"><p>{error}</p></Card></section>;
+  if (!review) return <LoadingScreen/>;
+  const baseline = review.status === "BASELINE";
+  return <section className="vip-screen">
+    <VipHeader title={tx("Revisión mensual", "Monthly review")} user={user} onNavigate={onNavigate}/>
+    <label className="vip-field"><span>{tx("Período", "Period")}</span><input type="month" max={currentPeriod} value={period} onChange={(event) => setPeriod(event.target.value || currentPeriod)}/></label>
+    <Focus eyebrow={review.period} title={review.headline} caption={review.summary} tone={baseline ? "gold" : review.deviations?.length ? "coral" : "mint"}/>
+    <Card title={tx("Lo que DINCR observó", "What DINCR observed")}>
+      <DataRow label={tx("Observaciones del período", "Period observations")} value={review.coverage?.observations || 0}/>
+      <DataRow label={tx("Cambios relevantes", "Relevant changes")} value={review.finva_value?.changes_detected || 0} tone="violet"/>
+      <DataRow label={tx("Estrategia reajustada", "Strategy adjusted")} value={review.finva_value?.priority_updated ? tx("Sí", "Yes") : tx("No", "No")} tone={review.finva_value?.priority_updated ? "gold" : "mint"}/>
+      <p>{review.finva_value?.explanation}</p>
+    </Card>
+    {!baseline && review.wins?.length > 0 && <Card title={tx("Progreso del mes", "Progress this month")} tone="mint">{review.wins.map((item) => <DataRow key={item.key} label={item.label} value={`${item.delta >= 0 ? "+" : ""}${item.unit === "CRC" ? money(item.delta) : item.delta}`} tone="mint"/>)}</Card>}
+    {!baseline && review.deviations?.length > 0 && <Card title={tx("Desviaciones a corregir", "Deviations to correct")} tone="gold">{review.deviations.map((item) => <DataRow key={item.key} label={item.label} value={`${item.delta >= 0 ? "+" : ""}${item.unit === "CRC" ? money(item.delta) : item.delta}`} tone="coral"/>)}</Card>}
+    {review.plan_vs_reality && <Card title={tx("Plan vs realidad", "Plan vs reality")}><DataRow label={tx("Planeado", "Planned")} value={money(review.plan_vs_reality.planned_amount)}/><DataRow label={tx("Real", "Actual")} value={review.plan_vs_reality.actual_amount == null ? "—" : money(review.plan_vs_reality.actual_amount)} tone={review.plan_vs_reality.status === "met" ? "mint" : "coral"}/></Card>}
+    <Card title={tx("Prioridad del próximo mes", "Next month's priority")} tone="violet"><DataRow label={review.next_month?.title || "—"} value={review.next_month?.amount ? money(review.next_month.amount) : "—"} tone="violet"/><p>{review.next_month?.rationale}</p></Card>
+  </section>;
+}
+
+function VipToday({ user, onNavigate }) {
+  const [advisor, setAdvisor] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    getVipProactiveAdvisor().then(setAdvisor).catch(() => setError(tx("No pudimos revisar cambios recientes.", "We couldn't review recent changes.")));
+  }, []);
+  if (error) return <section className="vip-screen"><VipHeader title="DINCR Today" user={user} onNavigate={onNavigate}/><Card tone="danger"><p>{error}</p></Card></section>;
+  if (!advisor) return <LoadingScreen/>;
+  const tone = advisor.summary?.urgent ? "coral" : advisor.summary?.positive ? "mint" : "violet";
+  return <section className="vip-screen">
+    <VipHeader title="DINCR Today" user={user} onNavigate={onNavigate}/>
+    <Focus eyebrow={advisor.as_of} title={advisor.status === "BASELINE" ? tx("DINCR empezó a observar", "DINCR started observing") : advisor.status === "STABLE" ? tx("Sin cambios importantes", "No meaningful changes") : tx("Hay cambios que merecen atención", "There are changes worth your attention")} caption={advisor.message} tone={tone}/>
+    {advisor.alerts?.map((alert) => <Card key={alert.id} title={alert.title} tone={alert.severity === "success" ? "mint" : alert.severity === "critical" || alert.severity === "high" ? "danger" : "gold"}><p>{alert.explanation}</p><PrimaryButton onClick={() => onNavigate?.(alert.action?.route)}>{alert.action?.label || tx("Revisar", "Review")}</PrimaryButton></Card>)}
+    {!advisor.alerts?.length && <Card title={tx("Qué está observando DINCR", "What DINCR is watching")}><DataRow label={tx("Cambios urgentes", "Urgent changes")} value={advisor.summary?.urgent || 0} tone="mint"/><DataRow label={tx("Cambios a revisar", "Changes to review")} value={advisor.summary?.attention || 0} tone="mint"/><DataRow label={tx("Avances detectados", "Progress detected")} value={advisor.summary?.positive || 0} tone="mint"/></Card>}
+  </section>;
 }
 
 function VipMore({ user, onNavigate, onLogout }) {
   const items = [
+    ["vip-today", tx("DINCR Today", "DINCR Today"), tx("Alertas útiles y acciones basadas en cambios reales.", "Useful alerts and actions based on real changes.")],
     ["strategy", tx("Estrategia dinámica", "Dynamic strategy"), tx("Prioridades y acciones del mes.", "Priorities and actions for the month.")],
     ["vip-projections", tx("Proyecciones", "Projections"), tx("Mirá hacia dónde van tus números.", "See where your numbers are going.")],
     ["vip-scenarios", tx("Escenarios", "Scenarios"), tx("Probá decisiones sin cambiar datos.", "Try decisions without changing data.")],
     ["vip-reality", tx("Plan vs realidad", "Plan vs reality"), tx("Compará lo planeado con lo ocurrido.", "Compare what was planned with what happened.")],
+    ["vip-monthly-review", tx("Revisión mensual DINCR", "DINCR monthly review"), tx("Entendé qué cambió y cómo se reajusta tu estrategia.", "Understand what changed and how your strategy adapts.")],
     ["vip-emergency", tx("Fondo de emergencia", "Emergency fund"), tx("Protegé tu colchón financiero.", "Protect your financial cushion.")],
+    ["vip-aguinaldo", tx("Aguinaldo", "Annual bonus"), tx("Calculalo con tus órdenes patronales de la CCSS.", "Calculate it from your CCSS payroll orders.")],
   ];
-  return <section className="vip-screen"><VipHeader title={tx("Más", "More")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("INTELIGENCIA VIP", "VIP INTELLIGENCE")}/>{items.map(([key, title, caption]) => <button className="vip-link-card" type="button" key={key} onClick={() => onNavigate?.(key)}><span><strong>{title}</strong><small>{caption}</small></span><ChevronRight size={17}/></button>)}<button className="vip-link-card vip-link-card--blue" type="button" onClick={() => onNavigate?.("budget")}><span><strong>{tx("Planificación Basic", "Basic planning")}</strong><small>{tx("Presupuesto · Calendario · Recurrentes · Reportes", "Budget · Calendar · Recurring · Reports")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("gmail")}><span><strong>{tx("Movimientos desde Gmail", "Transactions from Gmail")}</strong><small>{tx("Automatización bancaria de solo lectura.", "Read-only banking automation.")}</small></span><ChevronRight size={17}/></button><AccountActions onLogout={onLogout} variant="vip"/></section>;
+  return <section className="vip-screen"><VipHeader title={tx("Más", "More")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("INTELIGENCIA VIP", "VIP INTELLIGENCE")}/>{items.map(([key, title, caption]) => <button className="vip-link-card" type="button" key={key} onClick={() => onNavigate?.(key)}><span><strong>{title}</strong><small>{caption}</small></span><ChevronRight size={17}/></button>)}<button className="vip-link-card vip-link-card--blue" type="button" onClick={() => onNavigate?.("budget")}><span><strong>{tx("Planificación Basic", "Basic planning")}</strong><small>{tx("Presupuesto · Calendario · Recurrentes · Reportes", "Budget · Calendar · Recurring · Reports")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("gmail")}><span><strong>{tx("Movimientos desde Gmail", "Transactions from Gmail")}</strong><small>{tx("Automatización bancaria de solo lectura.", "Read-only banking automation.")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("settings")}><span><strong>{tx("Ajustes de cuenta y plan", "Account and plan settings")}</strong><small>{tx("Perfil, apariencia, seguridad y cambio de plan.", "Profile, appearance, security, and plan changes.")}</small></span><ChevronRight size={17}/></button><button className="vip-link-card" type="button" onClick={() => onNavigate?.("feedback")}><span><strong>{tx("Ayuda y soporte", "Help & support")}</strong><small>{tx("Reportá un problema o compartí una sugerencia.", "Report a problem or share feedback.")}</small></span><ChevronRight size={17}/></button><AccountActions onLogout={onLogout} variant="vip"/></section>;
+}
+
+function VipAguinaldo({ user, onNavigate }) {
+  const [gmail, setGmail] = useState(null);
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    setLoading(true); setError("");
+    try {
+      const status = await getVipGmailStatus();
+      setGmail(status);
+      if (status?.connected) setReport(await getVipAguinaldo());
+      else setReport(null);
+    } catch (reason) {
+      setError(reason?.message || tx("No pudimos calcular tu aguinaldo.", "We couldn't calculate your annual bonus."));
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const synchronize = async () => {
+    setSyncing(true); setError("");
+    try {
+      await syncVipGmail();
+      setReport(await getVipAguinaldo());
+    } catch (reason) {
+      setError(reason?.message || tx("No pudimos sincronizar tus órdenes patronales.", "We couldn't sync your payroll orders."));
+    } finally { setSyncing(false); }
+  };
+
+  if (loading) return <LoadingScreen/>;
+  if (!gmail?.connected) return <section className="vip-screen">
+    <VipHeader title={tx("Aguinaldo", "Annual bonus")} user={user} onNavigate={onNavigate}/>
+    <Focus eyebrow={tx("DATOS OFICIALES CCSS", "OFFICIAL CCSS DATA")} title={tx("Debes sincronizar tu email", "You must sync your email")} caption={tx("DINCR necesita leer tus órdenes patronales de la CCSS para calcular el aguinaldo con salarios oficiales.", "DINCR needs to read your CCSS payroll orders to calculate your annual bonus from official salaries.")} tone="gold"/>
+    <Card title={tx("Permiso de solo lectura", "Read-only access")}><p><ShieldCheck size={16}/>{tx("DINCR no puede enviar, modificar ni borrar tus correos.", "DINCR cannot send, modify, or delete your emails.")}</p></Card>
+    {error && <Card tone="danger"><p>{error}</p></Card>}
+    <PrimaryButton onClick={() => onNavigate?.("gmail")}><Mail size={18}/>{tx("Sincronizar email", "Sync email")}</PrimaryButton>
+  </section>;
+
+  const months = report?.months || [];
+  return <section className="vip-screen">
+    <VipHeader title={tx("Aguinaldo", "Annual bonus")} user={user} onNavigate={onNavigate}/>
+    <Focus eyebrow={tx("ACUMULADO ESTIMADO", "ESTIMATED ACCRUED")} title={money(report?.accrued_aguinaldo)} caption={tx("Salarios oficiales del período ÷ 12", "Official salaries in the period ÷ 12")} tone="mint"/>
+    <Card title={tx("Datos utilizados", "Data used")}>
+      <DataRow label={tx("Salario computable", "Eligible salary")} value={money(report?.earned_salary_total)}/>
+      <DataRow label={tx("Última orden disponible", "Latest available order")} value={report?.period?.official_through || "—"}/>
+      <DataRow label={tx("Meses pendientes", "Missing months")} value={report?.missing_months?.length || 0} tone="gold"/>
+    </Card>
+    <Card title={tx("Desglose mensual", "Monthly breakdown")}>{months.map((item) => <DataRow key={item.month} label={item.month} value={item.entries ? money(item.total_earned) : tx("Pendiente", "Pending")} tone={item.entries ? "mint" : "gold"}/>)}</Card>
+    <Card tone="gold"><p>{tx("DINCR usa únicamente el salario oficial de cada Orden Patronal de la CCSS. No estima meses faltantes con movimientos bancarios.", "DINCR only uses the official salary from each CCSS payroll order. It does not estimate missing months from bank transactions.")}</p></Card>
+    {error && <Card tone="danger"><p>{error}</p></Card>}
+    <PrimaryButton disabled={syncing} onClick={synchronize}><RefreshCw size={18}/>{syncing ? tx("Sincronizando…", "Syncing…") : tx("Sincronizar email y recalcular", "Sync email and recalculate")}</PrimaryButton>
+  </section>;
 }
 
 function VipPreferences({ profile, user, onNavigate, reload }) {
@@ -283,5 +403,5 @@ function VipPreferences({ profile, user, onNavigate, reload }) {
     } catch { setMessage(tx("No pudimos guardar los cambios.", "We couldn't save your changes.")); }
     finally { setSaving(false); }
   };
-  return <section className="vip-screen"><VipHeader title={tx("Preferencias VIP", "VIP preferences")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("ESTRATEGIA PERSONAL", "PERSONAL STRATEGY")} caption={tx("FINVA adapta sus recomendaciones a estas reglas.", "FINVA adapts its recommendations to these rules.")}/><form className="vip-form" onSubmit={save}><label className="vip-field"><span>{tx("Prioridad", "Priority")}</span><select value={form.strategy_preference || "balanced"} onChange={(e) => setForm({...form, strategy_preference:e.target.value})}><option value="balanced">{tx("Equilibrado", "Balanced")}</option><option value="debt">{tx("Deuda", "Debt")}</option><option value="emergency">{tx("Emergencia", "Emergency")}</option><option value="goals">{tx("Metas", "Goals")}</option></select></label><label className="vip-field"><span>{tx("Fondo de emergencia", "Emergency fund")}</span><input type="number" min="0" value={form.emergency_fund_target ?? 0} onChange={(e) => setForm({...form, emergency_fund_target:e.target.value})}/></label><label className="vip-field"><span>{tx("Mínimo para gustos", "Personal minimum")}</span><input type="number" min="0" value={form.discretionary_monthly_minimum ?? 0} onChange={(e) => setForm({...form, discretionary_monthly_minimum:e.target.value})}/></label><Card title={tx("Cómo usa FINVA estos datos", "How FINVA uses this data")} tone="gold"><p><ShieldCheck size={16}/>{tx("Protege tus límites antes de sugerir pagos, ahorro o aportes a metas.", "It protects your limits before suggesting payments, savings, or goal contributions.")}</p></Card>{message && <p className="vip-form-message"><Sparkles size={15}/>{message}</p>}<button className="vip-primary" disabled={saving}>{saving ? tx("Guardando…", "Saving…") : tx("Guardar preferencias", "Save preferences")}</button></form></section>;
+  return <section className="vip-screen"><VipHeader title={tx("Preferencias VIP", "VIP preferences")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("ESTRATEGIA PERSONAL", "PERSONAL STRATEGY")} caption={tx("DINCR adapta sus recomendaciones a estas reglas.", "DINCR adapts its recommendations to these rules.")}/><form className="vip-form" onSubmit={save}><label className="vip-field"><span>{tx("Prioridad", "Priority")}</span><select value={form.strategy_preference || "balanced"} onChange={(e) => setForm({...form, strategy_preference:e.target.value})}><option value="balanced">{tx("Equilibrado", "Balanced")}</option><option value="debt">{tx("Deuda", "Debt")}</option><option value="emergency">{tx("Emergencia", "Emergency")}</option><option value="goals">{tx("Metas", "Goals")}</option></select></label><label className="vip-field"><span>{tx("Fondo de emergencia", "Emergency fund")}</span><input type="number" min="0" value={form.emergency_fund_target ?? 0} onChange={(e) => setForm({...form, emergency_fund_target:e.target.value})}/></label><label className="vip-field"><span>{tx("Mínimo para gustos", "Personal minimum")}</span><input type="number" min="0" value={form.discretionary_monthly_minimum ?? 0} onChange={(e) => setForm({...form, discretionary_monthly_minimum:e.target.value})}/></label><Card title={tx("Cómo usa DINCR estos datos", "How DINCR uses this data")} tone="gold"><p><ShieldCheck size={16}/>{tx("Protege tus límites antes de sugerir pagos, ahorro o aportes a metas.", "It protects your limits before suggesting payments, savings, or goal contributions.")}</p></Card>{message && <p className="vip-form-message"><Sparkles size={15}/>{message}</p>}<button className="vip-primary" disabled={saving}>{saving ? tx("Guardando…", "Saving…") : tx("Guardar preferencias", "Save preferences")}</button></form></section>;
 }

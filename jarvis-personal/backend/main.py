@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import logging
+import re
 from uuid import uuid4
 
 from backend.core.brain import process_input
@@ -12,7 +13,7 @@ from backend.goals.routes import router as goals_router
 from backend.decision_engine.routes import router as decision_router
 from backend.reports.routes import router as reports_router
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from backend.transactions.routes import router as transactions_router
 from backend.importers.routes import router as importers_router
 from backend.advisor.routes import router as advisor_router
@@ -31,6 +32,16 @@ from backend.user_product.routes import router as user_product_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.routes import router as product_ops_router
+from backend.financial_lifecycle.routes import router as financial_lifecycle_router
+from backend.core.idempotency import (
+    IDEMPOTENCY_KEY_PATTERN,
+    complete_operation,
+    is_recoverable_operation,
+    request_hash,
+    reserve_operation,
+    safe_abandon_operation,
+)
+from backend.core.feature_flags import disabled_feature_for_request
 
 app = FastAPI(title="Jarvis Core")
 logger = logging.getLogger("jarvis.api")
@@ -56,6 +67,7 @@ app.add_middleware(
 PUBLIC_PATHS = {
     "/",
     "/status",
+    "/product-ops/release-policy",
     "/auth/health",
     "/auth/check-access",
     "/email-monitor/cron",
@@ -78,10 +90,24 @@ def _is_public_path(path: str) -> bool:
     return path in PUBLIC_PATHS
 
 
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,80}$")
+
+
+def _request_id(request: Request) -> str:
+    existing = getattr(request.state, "request_id", "")
+    if existing:
+        return existing
+    supplied = request.headers.get("X-Request-ID", "").strip()
+    value = supplied if REQUEST_ID_PATTERN.fullmatch(supplied) else uuid4().hex
+    request.state.request_id = value
+    return value
+
+
 def _internal_error_payload(error_id: str) -> dict[str, str]:
     return {
         "detail": "Ocurrió un error interno. Intentá nuevamente.",
         "error_id": error_id,
+        "request_id": error_id,
     }
 
 
@@ -89,20 +115,21 @@ def _internal_error_payload(error_id: str) -> dict[str, str]:
 async def safe_http_error_handler(request: Request, exc: HTTPException):
     if exc.status_code < 500:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-    error_id = uuid4().hex
+    error_id = _request_id(request)
     logger.error("Internal HTTP error id=%s path=%s", error_id, request.url.path)
     return JSONResponse(status_code=exc.status_code, content=_internal_error_payload(error_id))
 
 
 @app.exception_handler(Exception)
 async def safe_unhandled_error_handler(request: Request, exc: Exception):
-    error_id = uuid4().hex
+    error_id = _request_id(request)
     logger.exception("Unhandled API error id=%s path=%s", error_id, request.url.path, exc_info=exc)
     return JSONResponse(status_code=500, content=_internal_error_payload(error_id))
 
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
+    request_id = _request_id(request)
     origin = request.headers.get("origin")
 
     cors_headers = {}
@@ -110,8 +137,26 @@ async def auth_middleware(request: Request, call_next):
         cors_headers["Access-Control-Allow-Origin"] = origin
         cors_headers["Access-Control-Allow-Credentials"] = "true"
 
-    if request.method == "OPTIONS" or _is_public_path(request.url.path):
-        return await call_next(request)
+    if request.method == "OPTIONS":
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+    if _is_public_path(request.url.path):
+        disabled_feature = disabled_feature_for_request(request.method, request.url.path)
+        if disabled_feature:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": disabled_feature["disabled_message_es"],
+                    "code": "feature_temporarily_unavailable",
+                    "feature": disabled_feature["flag_key"],
+                },
+                headers={**cors_headers, "X-Request-ID": request_id},
+            )
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
     authorization = request.headers.get("Authorization", "")
 
@@ -119,7 +164,7 @@ async def auth_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=401,
             content={"detail": "Falta Authorization: Bearer <token>."},
-            headers=cors_headers,
+            headers={**cors_headers, "X-Request-ID": request_id},
         )
 
     access_token = authorization.replace("Bearer ", "", 1).strip()
@@ -135,23 +180,119 @@ async def auth_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=status_code,
             content={"detail": detail},
-            headers=cors_headers,
+            headers={**cors_headers, "X-Request-ID": request_id},
         )
 
     request.state.user = user
+    disabled_feature = disabled_feature_for_request(request.method, request.url.path, user)
+    if disabled_feature:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": disabled_feature["disabled_message_es"],
+                "code": "feature_temporarily_unavailable",
+                "feature": disabled_feature["flag_key"],
+            },
+            headers={**cors_headers, "X-Request-ID": request_id},
+        )
     context_token = set_current_user(user)
+    idempotency_key = request.headers.get("X-Idempotency-Key", "").strip()
+    idempotency_account = str(user.get("account_id") or "")
+    idempotency_reserved = False
+
+    if idempotency_key and is_recoverable_operation(request.method, request.url.path):
+        if not IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key) or not idempotency_account:
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=422,
+                content={"detail": "La referencia de recuperación no es válida."},
+                headers={**cors_headers, "X-Request-ID": request_id},
+            )
+        body = await request.body()
+        try:
+            reservation = reserve_operation(
+                account_id=idempotency_account,
+                key=idempotency_key,
+                method=request.method,
+                path=request.url.path,
+                digest=request_hash(request.method, request.url.path, body),
+            )
+        except Exception:
+            logger.exception("Idempotency reservation failed id=%s path=%s", request_id, request.url.path)
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "No pudimos proteger este cambio todavía. DINCR lo reintentará."},
+                headers={**cors_headers, "X-Request-ID": request_id, "Retry-After": "2"},
+            )
+        if reservation.state == "replay":
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=reservation.response_status or 200,
+                content=reservation.response_body,
+                headers={
+                    **cors_headers,
+                    "X-Request-ID": request_id,
+                    "X-Idempotency-Replayed": "true",
+                },
+            )
+        if reservation.state in {"processing", "unavailable"}:
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=409,
+                content={"detail": "Este cambio todavía se está procesando."},
+                headers={
+                    **cors_headers,
+                    "X-Request-ID": request_id,
+                    "X-Idempotency-Status": "processing",
+                    "Retry-After": "2",
+                },
+            )
+        if reservation.state == "conflict":
+            reset_current_user(context_token)
+            return JSONResponse(
+                status_code=409,
+                content={"detail": "La referencia de recuperación ya pertenece a otro cambio."},
+                headers={**cors_headers, "X-Request-ID": request_id},
+            )
+        idempotency_reserved = True
 
     try:
         response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        if idempotency_reserved:
+            if 200 <= response.status_code < 300 and "application/json" in response.headers.get("content-type", ""):
+                response_body = b"".join([chunk async for chunk in response.body_iterator])
+                try:
+                    complete_operation(
+                        account_id=idempotency_account,
+                        key=idempotency_key,
+                        status_code=response.status_code,
+                        body=response_body,
+                    )
+                except Exception:
+                    logger.exception("Idempotency completion failed id=%s path=%s", request_id, request.url.path)
+                    safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
+                response_headers = dict(response.headers)
+                response_headers.pop("content-length", None)
+                response = Response(
+                    content=response_body,
+                    status_code=response.status_code,
+                    headers=response_headers,
+                )
+            else:
+                safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
         return response
 
     except Exception:
-        error_id = uuid4().hex
+        if idempotency_reserved:
+            safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
+        error_id = request_id
         logger.exception("Unhandled API error id=%s path=%s", error_id, request.url.path)
         return JSONResponse(
             status_code=500,
             content=_internal_error_payload(error_id),
-            headers=cors_headers,
+            headers={**cors_headers, "X-Request-ID": request_id},
         )
 
     finally:
@@ -176,6 +317,7 @@ app.include_router(owner_bridge_router)
 app.include_router(user_product_router)
 app.include_router(deployment_monitor_router)
 app.include_router(product_ops_router)
+app.include_router(financial_lifecycle_router)
 
 class AskRequest(BaseModel):
     text: str

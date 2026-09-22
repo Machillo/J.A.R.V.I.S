@@ -9,10 +9,11 @@ function formatJarvisResponse(data) {
   return tx("Señor, análisis completado.", "Sir, analysis complete.");
 }
 
-export default function Dashboard({ jarvisResponse, chatHistory = [], userName = "Kenneth" }) {
+export default function Dashboard({ jarvisResponse, chatHistory = [], userName = "Kenneth", profilePreferences, currentUser, onOpenProfile }) {
   const responseText = formatJarvisResponse(jarvisResponse);
   const hasResponse = Boolean(responseText) || chatHistory.length > 0;
   const latestMessages = chatHistory.slice(-6);
+  const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
 
   return (
     <section className={`jarvis-v2-screen jarvis-home-v2 ${hasResponse ? "has-response" : "idle"}`}>
@@ -23,6 +24,9 @@ export default function Dashboard({ jarvisResponse, chatHistory = [], userName =
           <h1>J.A.R.V.I.S.</h1>
           <span>{tx("¿Qué hacemos ahora?", "What shall we do now?")}</span>
         </div>
+        <button type="button" className="jarvis-home-profile" onClick={onOpenProfile} aria-label={tx("Abrir perfil", "Open profile")}>
+          {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{(userName || "K").slice(0, 1).toUpperCase()}</span>}
+        </button>
       </header>
 
       {hasResponse ? (

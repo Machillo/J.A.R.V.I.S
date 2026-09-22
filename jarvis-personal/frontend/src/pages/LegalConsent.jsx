@@ -37,7 +37,7 @@ export default function LegalConsent({ user, onAccepted }) {
   return <main className="legal-consent-shell">
     <form className="legal-consent-card" onSubmit={submit}>
       <header className="legal-consent-top">
-        <div><strong>FINVA</strong><small>JARVIS Financial Intelligence</small></div>
+        <div><strong>DINCR</strong><small>JARVIS Financial Intelligence</small></div>
         <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> {tx("Salir", "Log out")}</button>
       </header>
 

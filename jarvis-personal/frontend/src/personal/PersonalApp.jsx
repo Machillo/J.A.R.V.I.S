@@ -14,6 +14,7 @@ import {
   Target,
   UsersRound,
   Activity,
+  HandCoins,
 } from "lucide-react";
 import Dashboard from "../pages/Dashboard";
 import Finance from "../pages/Finance";
@@ -38,6 +39,8 @@ import UserManagement from "../pages/UserManagement";
 import FinvaOnboarding from "../pages/FinvaOnboarding";
 import ProfileSetup from "../pages/ProfileSetup";
 import ProductOperations from "../pages/ProductOperations";
+import MoneyControl from "../products/jarvis/pages/MoneyControl";
+import { JarvisGlassCard, JarvisScreen } from "../products/jarvis/components/JarvisScreen";
 
 import { askJarvis, getFinanceDashboard, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
@@ -67,6 +70,7 @@ const appSectionsFor = (language) => ({
   reconciliation: { title: t("nav.reconciliation", language), eyebrow: language === "es" ? "Control financiero" : "Financial Control" },
   deterioration: { title: t("nav.deterioration", language), eyebrow: language === "es" ? "Alerta temprana" : "Early Warning" },
   chats: { title: language === "es" ? "Herramientas de datos" : "Data Tools", eyebrow: language === "es" ? "Importaciones y movimientos" : "Imports & Movements" },
+  moneyControl: { title: language === "es" ? "Control de dinero" : "Money Control", eyebrow: language === "es" ? "Más" : "More" },
   emails: { title: t("nav.emailMonitor", language), eyebrow: language === "es" ? "Datos" : "Data" },
   transactions: { title: t("nav.transactions", language), eyebrow: language === "es" ? "Datos" : "Data" },
   additionalCards: { title: t("nav.additionalCards", language), eyebrow: language === "es" ? "Datos" : "Data" },
@@ -75,11 +79,11 @@ const appSectionsFor = (language) => ({
   settings: { title: t("nav.settings", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   goals: { title: t("nav.goals", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   userManagement: { title: t("nav.manageUsers", language), eyebrow: language === "es" ? "Control de propietario" : "Owner Control" },
-  productOperations: { title: t("nav.finvaOperations", language), eyebrow: "FINVA Beta" },
+  productOperations: { title: t("nav.finvaOperations", language), eyebrow: "DINCR Beta" },
 });
 
 const getBottomGroup = (page) => {
-  if (["emails", "transactions", "additionalCards", "chats"].includes(page)) return "profile";
+  if (["emails", "transactions", "additionalCards", "chats", "moneyControl"].includes(page)) return "profile";
   if (["memory", "settings", "goals", "profile", "userManagement", "productOperations"].includes(page)) return "profile";
   if (["investments", "businesses", "netWorth", "financialTimeline", "reconciliation", "deterioration", "wealth"].includes(page)) return "wealth";
   return page;
@@ -116,7 +120,7 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
   const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
 
   return (
-    <section className="app-profile-page">
+    <JarvisScreen eyebrow={tx("Perfil", "Profile", language)} title={profilePreferences?.display_name || userName || "Kenneth"} subtitle={tx("Tu identidad y preferencias", "Your identity and preferences", language)} className="profile-screen">
       <div className="profile-hero">
         <label className="profile-photo-picker" aria-label={tx("Cambiar foto de perfil", "Change profile photo", language)}>
           <input type="file" accept="image/*" onChange={onProfilePhotoChange} />
@@ -126,43 +130,33 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
           <span className="profile-camera-badge"><Camera size={18} /></span>
         </label>
         <h1>{profilePreferences?.display_name || userName || "Kenneth"}</h1>
-        <p>{tx("Memoria y configuración de JARVIS", "JARVIS memory and settings", language)}</p>
+        <p>{currentUser?.email || sessionStorage.getItem("jarvis_user_email") || ""}</p>
       </div>
 
-      <div className="app-section-card">
-        <div className="app-group-heading"><strong>{tx("Personalización", "Personalization", language)}</strong><small>{tx("Apariencia y preferencias", "Appearance and preferences", language)}</small></div>
+      <JarvisGlassCard as="div" className="profile-appearance-card">
+        <div className="app-group-heading"><strong>{tx("Apariencia", "Appearance", language)}</strong><small>{tx("Oscuro · Automático", "Dark · Automatic", language)}</small></div>
         <AppearanceSelector compact />
-      </div>
+      </JarvisGlassCard>
 
-      <div className="app-section-card">
-        <div className="app-group-heading"><strong>{t("nav.personal", language)}</strong><small>{tx("Memoria, metas y sistema", "Memory, goals, and system", language)}</small></div>
+      <div className="profile-link-list">
         <AppListItem icon={Brain} title={t("nav.memory", language)} subtitle={tx("Memoria y contexto personal", "Memory and personal context", language)} onClick={() => navigatePage("memory")} />
         <AppListItem icon={Target} title={t("nav.goals", language)} subtitle={tx("Objetivos y prioridades", "Objectives and priorities", language)} onClick={() => navigatePage("goals")} />
         <AppListItem icon={SettingsIcon} title={t("nav.settings", language)} subtitle={tx("Preferencias de JARVIS", "JARVIS preferences", language)} onClick={() => navigatePage("settings")} />
+        <AppListItem icon={HandCoins} title={tx("Datos financieros", "Financial data", language)} subtitle={tx("Control · Email · historial · tarjetas", "Control · Email · history · cards", language)} onClick={() => navigatePage("moneyControl")} />
         {currentUser?.role === "owner" && (
           <><AppListItem icon={UsersRound} title={t("nav.manageUsers", language)} subtitle={tx("Buscar cuentas y otorgar cortesías", "Find accounts and grant courtesy access", language)} onClick={() => navigatePage("userManagement")} />
           <AppListItem icon={Activity} title={t("nav.finvaOperations", language)} subtitle={tx("Promoción, pagos, uso y reportes", "Promotions, payments, usage, and reports", language)} onClick={() => navigatePage("productOperations")} /></>
         )}
       </div>
 
-      <div className="app-section-card">
-        <div className="app-group-heading"><strong>{tx("Datos financieros", "Financial data", language)}</strong><small>{tx("Entradas, movimientos y tarjetas", "Inputs, transactions, and cards", language)}</small></div>
-        <AppListItem icon={MailSearch} title={t("nav.emailMonitor", language)} subtitle={tx("Correos bancarios detectados", "Detected bank emails", language)} onClick={() => navigatePage("emails")} />
-        <AppListItem icon={ReceiptText} title={t("nav.transactions", language)} subtitle={tx("Historial completo e importaciones", "Full history and imports", language)} onClick={() => navigatePage("transactions")} />
-        <AppListItem icon={CreditCard} title={t("nav.additionalCards", language)} subtitle={tx("Tarjetas asociadas por persona", "Cards linked by person", language)} onClick={() => navigatePage("additionalCards")} />
-      </div>
-
-      <div className="app-section-card compact">
-        <div className="app-info-row">
+      <div className="profile-footer-actions">
+        <JarvisGlassCard as="div" className="app-info-row">
           <span>{tx("Uso de IA hoy", "AI usage today", language)}</span>
           <strong>{aiUsage ? `${Math.round(aiUsage.total_tokens || 0).toLocaleString(localeTag(language))} tokens` : "--"}</strong>
-        </div>
-        <button className="app-list-item danger" onClick={onLogout}>
-          <span className="app-list-icon"><LogOut size={22} /></span>
-          <span className="app-list-copy"><strong>{t("nav.logout", language)}</strong></span>
-        </button>
+        </JarvisGlassCard>
+        <button className="jarvis-danger-button" type="button" onClick={onLogout}>{t("nav.logout", language)}</button>
       </div>
-    </section>
+    </JarvisScreen>
   );
 }
 
@@ -600,6 +594,8 @@ export default function App() {
 
       case "chats":
         return <ChatsHub navigatePage={navigatePage} />;
+      case "moneyControl":
+        return <MoneyControl onNavigate={navigatePage} />;
 
       case "userManagement":
         return <UserManagement />;
@@ -610,12 +606,13 @@ export default function App() {
         return <ProfileHub navigatePage={navigatePage} userName={userName} currentUser={currentUser} aiUsage={aiUsage} onLogout={handleLogout} profilePreferences={profilePreferences} onProfilePhotoChange={handleProfilePhotoChange} />;
 
       default:
-        return <Dashboard jarvisResponse={jarvisResponse} chatHistory={chatHistory} userName={userName} />;
+        return <Dashboard jarvisResponse={jarvisResponse} chatHistory={chatHistory} userName={userName} profilePreferences={profilePreferences} currentUser={currentUser} onOpenProfile={() => navigatePage("profile")} />;
     }
   };
 
   const currentSection = appSections[activePage] || appSections[getBottomGroup(activePage)] || appSections.dashboard;
-  const showHeader = activePage !== "dashboard";
+  const immersivePages = new Set(["moneyControl", "emails", "transactions", "additionalCards", "goals", "memory", "profile", "settings"]);
+  const showHeader = activePage !== "dashboard" && !immersivePages.has(activePage);
   const platform = detectNativePlatform();
   const isStandalonePwa = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
 
@@ -637,7 +634,7 @@ export default function App() {
           </header>
         )}
 
-        {showHeader ? (
+        {activePage !== "dashboard" ? (
           <div className={`native-screen-content native-screen-content--${activePage}`}>
             {renderPage()}
           </div>

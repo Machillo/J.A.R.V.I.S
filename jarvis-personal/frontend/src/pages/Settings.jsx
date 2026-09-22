@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ArrowLeft, Bell, CalendarDays, RadioTower, Sparkles, Trophy } from "lucide-react";
 import {
   getJarvisUsageAdmin,
   getJarvisUsageToday,
@@ -15,6 +16,7 @@ import {
   getDeploymentMonitor,
 } from "../services/jarvisApi";
 import { enableJarvisPushNotifications, isPushSupported } from "../pushNotifications";
+import { JarvisGlassCard, JarvisMenuRow, JarvisScreen, JarvisStatusPill } from "../products/jarvis/components/JarvisScreen";
 
 const splitTeams = (value) =>
   value
@@ -25,6 +27,7 @@ const splitTeams = (value) =>
 
 
 export default function Settings({ status }) {
+  const [section, setSection] = useState("general");
   const [me, setMe] = useState(null);
   const [usage, setUsage] = useState(null);
   const [premiumStatus, setPremiumStatus] = useState(null);
@@ -171,189 +174,36 @@ export default function Settings({ status }) {
     }
   };
 
-  return (
-    <section className="page settings-page">
-      <h1>Configuración</h1>
-      <p className="subtitle">Perfil, permisos, IA, notificaciones y preferencias personales.</p>
+  const back = section === "general" ? null : <button className="jarvis-circle-button" type="button" onClick={() => setSection("general")} aria-label="Volver"><ArrowLeft size={19} /></button>;
 
-      <div className="settings-grid">
-        <div className="jarvis-panel settings-card">
-          <h2>Usuario actual</h2>
-          <p><strong>Email:</strong> {me?.email || "—"}</p>
-          <p><strong>Rol:</strong> {me?.role || "—"}</p>
-          <p><strong>Estado:</strong> {me?.status || "—"}</p>
-          {isOwner && <p className="owner-badge">Acceso owner: internet + administración completa</p>}
-        </div>
+  if (section === "notifications") return <JarvisScreen eyebrow="Configuración" title="Notificaciones" subtitle="Web Push, calendario y deportes" actions={back} className="settings-screen settings-notifications">
+    <JarvisGlassCard className="settings-detail-card"><JarvisStatusPill tone={pushInfo?.subscriptions ? "success" : "warning"}>{pushInfo?.subscriptions ? "WEB PUSH ACTIVO" : "WEB PUSH INACTIVO"}</JarvisStatusPill><h3>Este dispositivo</h3><p>Permiso {notificationStatus} · {pushInfo?.vapid_ready ? "VAPID listo" : "VAPID pendiente"}</p><p>{pushInfo?.subscriptions ?? 0} dispositivos registrados</p><b>{pushInfo?.pending_jobs ?? 0} alertas pendientes</b><div className="settings-card-actions"><button className="jarvis-primary-button" type="button" onClick={handleEnableNotifications} disabled={!isPushSupported()}>Activar</button><button className="jarvis-primary-button" type="button" onClick={handleTestNotification} disabled={!pushInfo?.subscriptions}>Enviar prueba</button></div>{pushMessage && <small>{pushMessage}</small>}</JarvisGlassCard>
+    <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">PRÓXIMOS EVENTOS</span><div className="settings-compact-list">{calendar.length ? calendar.slice(0, 6).map((event) => <div key={event.id}><b>{event.event_date}</b><span>{event.title}</span></div>) : <p>No hay compromisos próximos.</p>}</div></JarvisGlassCard>
+    <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">PREFERENCIAS DEPORTIVAS</span><ToggleRow label="F1" detail="Prácticas · Qualy · Carrera" checked={Boolean(sports?.f1)} onChange={(checked) => setSports((current) => ({ ...(current || {}), f1: checked }))} /><ToggleRow label="UFC" detail="Cartelera principal" checked={Boolean(sports?.ufc)} onChange={(checked) => setSports((current) => ({ ...(current || {}), ufc: checked }))} /><label className="settings-team-field"><span>Fútbol</span><input value={teamsText} onChange={(event) => setTeamsText(event.target.value)} placeholder="Real Madrid, Costa Rica" /></label><button className="jarvis-primary-button" type="button" onClick={handleSaveSports}>Guardar preferencias</button></JarvisGlassCard>
+  </JarvisScreen>;
 
-        <div className="jarvis-panel settings-card">
-          <h2>Consumo IA de hoy</h2>
-          <p><strong>Tokens:</strong> {usage?.total_tokens?.toLocaleString("es-CR") || 0}</p>
-          <p><strong>Límite:</strong> {usage?.daily_limit?.toLocaleString("es-CR") || "—"}</p>
-          <p><strong>Disponible:</strong> {usage?.remaining_tokens?.toLocaleString("es-CR") || "—"}</p>
-          <div className="usage-bar">
-            <span style={{ width: `${Math.min(usage?.percent_used || 0, 100)}%` }} />
-          </div>
-        </div>
-      </div>
+  if (section === "premium") return <JarvisScreen eyebrow="Owner" title="IA Premium" subtitle="Modelo, presupuesto y análisis guardados" actions={back} className="settings-screen settings-premium">
+    <JarvisGlassCard className="settings-detail-card"><JarvisStatusPill tone={premiumStatus?.configured ? "success" : "warning"}>{premiumStatus?.configured ? "OPENAI CONECTADO" : "OPENAI PENDIENTE"}</JarvisStatusPill><span className="settings-card-label">MODELO ACTIVO</span><h3>{premiumStatus?.model || "—"}</h3><p>Los cálculos exactos permanecen en el backend.</p></JarvisGlassCard>
+    <JarvisGlassCard className="settings-usage-card"><span>PRESUPUESTO MENSUAL</span><strong>${Number(premiumStatus?.budget_usd || 10).toFixed(2)}</strong><small>${Number(premiumStatus?.used_usd || 0).toFixed(2)} utilizados · {Number(premiumStatus?.percent_used || 0).toFixed(1)}%</small><div className="usage-bar"><i style={{ width: `${Math.min(premiumStatus?.percent_used || 0, 100)}%` }} /></div></JarvisGlassCard>
+    <button className="jarvis-primary-button settings-premium-action" type="button" onClick={handleCreatePremiumStrategy} disabled={!premiumStatus?.configured}><Sparkles size={18} />Crear análisis financiero premium</button>
+    {premiumMessage && <div className="jarvis-inline-message">{premiumMessage}</div>}<div className="settings-saved"><h3>Guías y análisis guardados</h3>{premiumGuides.map((guide) => <JarvisGlassCard key={guide.id}><strong>{guide.title || guide.guide_type}</strong><small>{String(guide.content || "").slice(0, 90)}</small></JarvisGlassCard>)}</div>
+  </JarvisScreen>;
 
+  if (section === "owner") return <JarvisScreen eyebrow="Owner" title="Centro Owner" subtitle="Identidad privada y operación" actions={back} className="settings-screen settings-owner">
+    <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">IDENTIDAD JARVIS</span><h3>Personal ↔ Cuenta pública</h3><p>Vinculación segura por UUID verificado</p><JarvisStatusPill tone="success">CONECTADA</JarvisStatusPill><button className="jarvis-primary-button" type="button" onClick={handleLinkOwnerBridge} disabled={ownerBridgeBusy}>{ownerBridgeBusy ? "Verificando..." : "Administrar vínculo"}</button>{ownerBridgeMessage && <small>{ownerBridgeMessage}</small>}</JarvisGlassCard>
+    <h3 className="settings-section-title">Monitor de despliegues</h3>{Object.entries(deployments?.latest || {}).map(([provider, item]) => <JarvisGlassCard className="deployment-card" key={provider}><span>{provider.toUpperCase()}</span><strong>{item.service_name || provider}</strong><small>Commit {item.commit_sha?.slice(0, 7) || "—"}</small><JarvisStatusPill tone={item.status === "success" ? "success" : item.status === "failure" ? "danger" : "warning"}>{item.status === "success" ? "Correcto" : item.status}</JarvisStatusPill></JarvisGlassCard>)}
+    <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">EVENTOS RECIENTES</span><div className="settings-compact-list">{(deployments?.events || []).slice(0, 5).map((item) => <div key={item.id}><b>{item.provider}</b><span>{item.summary || item.event_type}</span>{item.log_url && <a href={item.log_url} target="_blank" rel="noreferrer">Abrir log</a>}</div>)}</div></JarvisGlassCard>
+    {isAdmin && adminUsage?.users?.length > 0 && <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">CONSUMO POR USUARIO</span><div className="settings-compact-list">{adminUsage.users.map((user) => <div key={user.user_id}><b>{user.role}</b><span>{user.email} · {Number(user.total_tokens || 0).toLocaleString("es-CR")}</span></div>)}</div></JarvisGlassCard>}
+  </JarvisScreen>;
 
+  return <JarvisScreen eyebrow="Configuración" title="Configuración" subtitle="Cuenta, consumo y preferencias" className="settings-screen settings-general">
+    <JarvisGlassCard className="settings-user-card"><span>USUARIO ACTUAL</span><strong>{me?.email || "—"}</strong><small>{me?.role || "—"}</small><JarvisStatusPill tone="success">{String(me?.status || "activo").toUpperCase()}</JarvisStatusPill></JarvisGlassCard>
+    <JarvisGlassCard className="settings-usage-card"><span>CONSUMO DE IA HOY</span><strong>{usage?.total_tokens?.toLocaleString("es-CR") || 0}</strong><small>Límite {usage?.daily_limit?.toLocaleString("es-CR") || "—"} · disponibles {usage?.remaining_tokens?.toLocaleString("es-CR") || "—"}</small><div className="usage-bar"><i style={{ width: `${Math.min(usage?.percent_used || 0, 100)}%` }} /></div></JarvisGlassCard>
+    <div className="settings-menu"><h3>Preferencias</h3><JarvisMenuRow icon={Bell} title="Notificaciones" detail="Web Push, calendario y deportes" onClick={() => setSection("notifications")} />{isOwner && <><JarvisMenuRow icon={Sparkles} title="IA Premium" detail="Modelo y presupuesto" onClick={() => setSection("premium")} /><JarvisMenuRow icon={RadioTower} title="Centro Owner" detail="Identidad y despliegues" onClick={() => setSection("owner")} /></>}<JarvisMenuRow icon={CalendarDays} title="Calendario" detail={`${calendar.length} próximos compromisos`} onClick={() => setSection("notifications")} /><JarvisMenuRow icon={Trophy} title="Deportes" detail="F1 · UFC · Fútbol" onClick={() => setSection("notifications")} /></div>
+    {status?.config && <small className="settings-system-note">Sistema JARVIS sincronizado</small>}
+  </JarvisScreen>;
+}
 
-      {isOwner && (
-        <div className="jarvis-panel settings-card">
-          <h2>Identidad JARVIS</h2>
-          <p>Vinculá esta identidad privada con tu cuenta owner de JARVIS Users. El vínculo usa los UUID verificados de ambos Supabase, no el correo.</p>
-          <button className="jarvis-action-button" type="button" onClick={handleLinkOwnerBridge} disabled={ownerBridgeBusy}>
-            {ownerBridgeBusy ? "Verificando..." : "Conectar con la app pública"}
-          </button>
-          <small>Después podrás entrar a la app con Google, Apple vinculado o una passkey/Face ID sin perder tu identidad Personal.</small>
-          {ownerBridgeMessage && <small className="email-sync-status">{ownerBridgeMessage}</small>}
-        </div>
-      )}
-
-      {isOwner && (
-        <div className="jarvis-panel settings-card deployment-monitor-card">
-          <h2>Monitor de despliegues</h2>
-          <p>Vercel y Render, con commit, estado y acceso al error original.</p>
-          <div className="deployment-status-grid">
-            {Object.entries(deployments?.latest || {}).map(([provider, item]) => (
-              <div className={`deployment-status-item ${item.status}`} key={provider}>
-                <span>{provider.toUpperCase()}</span>
-                <strong>{item.status === "success" ? "Correcto" : item.status === "failure" ? "Falló" : "Procesando"}</strong>
-                <small>{item.commit_sha ? item.commit_sha.slice(0, 7) : item.service_name}</small>
-              </div>
-            ))}
-          </div>
-          <div className="settings-list deployment-event-list">
-            {(deployments?.events || []).slice(0, 8).map((item) => (
-              <div key={item.id}>
-                <strong>{item.provider.toUpperCase()} · {item.status}</strong>
-                <span>{item.summary || item.event_type}</span>
-                <small>{item.detail || (item.commit_sha ? `Commit ${item.commit_sha.slice(0, 7)}` : "Sin detalle adicional")}</small>
-                {item.log_url && <a href={item.log_url} target="_blank" rel="noreferrer">Abrir log</a>}
-              </div>
-            ))}
-          </div>
-          {!deployments?.events?.length && <small>Aún no han llegado eventos. La tabla se activa automáticamente al conectar los webhooks.</small>}
-        </div>
-      )}
-
-      {isOwner && (
-        <div className="jarvis-panel settings-card premium-ai-card">
-          <h2>ChatGPT Premium</h2>
-          <p><strong>Estado:</strong> {premiumStatus?.configured ? "Conectado" : "Falta OPENAI_API_KEY"}</p>
-          <p><strong>Modelo:</strong> {premiumStatus?.model || "—"}</p>
-          <p><strong>Presupuesto mensual:</strong> ${Number(premiumStatus?.budget_usd || 10).toFixed(2)}</p>
-          <p><strong>Usado:</strong> ${Number(premiumStatus?.used_usd || 0).toFixed(4)} · {Number(premiumStatus?.percent_used || 0).toFixed(1)}%</p>
-          <div className="usage-bar premium-budget-bar">
-            <span style={{ width: `${Math.min(premiumStatus?.percent_used || 0, 100)}%` }} />
-          </div>
-          <button className="jarvis-action-button" type="button" onClick={handleCreatePremiumStrategy} disabled={!premiumStatus?.configured}>
-            Crear análisis financiero premium
-          </button>
-          <small>ChatGPT solo se usa para owner, con límite mensual. El backend sigue haciendo los cálculos exactos.</small>
-          {premiumMessage && <small className="email-sync-status">{premiumMessage}</small>}
-          {premiumGuides.length > 0 && (
-            <div className="settings-list premium-guides-list">
-              {premiumGuides.slice(0, 2).map((guide) => (
-                <div key={guide.id}>
-                  <strong>{guide.title || guide.guide_type}</strong>
-                  <span>{String(guide.content || "").slice(0, 180)}...</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="settings-grid">
-        <div className="jarvis-panel settings-card">
-          <h2>Notificaciones reales</h2>
-          <p>Permiso navegador: <strong>{notificationStatus}</strong></p>
-          <p>Web Push: <strong>{pushInfo?.vapid_ready ? "Listo" : "Faltan llaves VAPID"}</strong></p>
-          <p>Dispositivos registrados: <strong>{pushInfo?.subscriptions ?? 0}</strong></p>
-          <p>Alertas pendientes: <strong>{pushInfo?.pending_jobs ?? 0}</strong></p>
-          <button className="jarvis-action-button" onClick={handleEnableNotifications} disabled={!isPushSupported()}>
-            Activar Web Push en este iPhone
-          </button>
-          <button className="jarvis-action-button secondary" onClick={handleTestNotification} disabled={!pushInfo?.subscriptions}>
-            Enviar prueba
-          </button>
-          <small>
-            En iPhone funciona cuando JARVIS está agregado a pantalla de inicio como PWA y las notificaciones están permitidas.
-          </small>
-          {pushMessage && <small className="email-sync-status">{pushMessage}</small>}
-        </div>
-
-        <div className="jarvis-panel settings-card">
-          <h2>Calendario próximo</h2>
-          {calendar.length === 0 ? (
-            <p>No hay compromisos próximos.</p>
-          ) : (
-            <div className="settings-list">
-              {calendar.slice(0, 6).map((event) => (
-                <div key={event.id}>
-                  <strong>{event.event_date}</strong>
-                  <span>{event.title}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-
-
-
-      <div className="jarvis-panel settings-card">
-        <h2>Preferencias deportivas</h2>
-        <label className="settings-check">
-          <input
-            type="checkbox"
-            checked={Boolean(sports?.f1)}
-            onChange={(event) => setSports((current) => ({ ...(current || {}), f1: event.target.checked }))}
-          />
-          Fórmula 1: prácticas, clasificación, sprint y carrera
-        </label>
-        <label className="settings-check">
-          <input
-            type="checkbox"
-            checked={Boolean(sports?.ufc)}
-            onChange={(event) => setSports((current) => ({ ...(current || {}), ufc: event.target.checked }))}
-          />
-          UFC: peleas y carteleras importantes
-        </label>
-        <label className="settings-label">
-          Equipos favoritos
-          <textarea
-            value={teamsText}
-            onChange={(event) => setTeamsText(event.target.value)}
-            placeholder="Real Madrid, Saprissa, Manchester City..."
-          />
-        </label>
-        <button className="jarvis-action-button" onClick={handleSaveSports}>
-          Guardar preferencias
-        </button>
-      </div>
-
-      {adminUsage?.users?.length > 0 && (
-        <div className="jarvis-panel admin-panel">
-          <h2>Panel admin · consumo por usuario</h2>
-          <div className="admin-usage-list">
-            {adminUsage.users.map((user) => (
-              <div key={user.user_id} className="admin-usage-row">
-                <span>{user.email}</span>
-                <small>{user.role}</small>
-                <strong>{Number(user.total_tokens || 0).toLocaleString("es-CR")} / {Number(user.daily_limit || 0).toLocaleString("es-CR")}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="jarvis-panel settings-card">
-        <h2>Config sistema</h2>
-        <pre>{JSON.stringify(status?.config || {}, null, 2)}</pre>
-      </div>
-    </section>
-  );
+function ToggleRow({ label, detail, checked, onChange }) {
+  return <label className="settings-toggle-row"><strong>{label}</strong><span>{detail}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>;
 }

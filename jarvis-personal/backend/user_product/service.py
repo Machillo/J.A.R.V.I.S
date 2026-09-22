@@ -27,7 +27,7 @@ from backend.user_product.strategy_engine import (
 def _legacy_financial_user_id() -> int:
     """Return/create the legacy users.id required by old financial FKs.
 
-    Finva authorization is account/workspace based. Some historical Personal tables
+    DINCR authorization is account/workspace based. Some historical Personal tables
     still require user_id -> users(id), while authentication uses allowed_users.
     This bridge is account-scoped by the authenticated account email and exists only
     to satisfy those legacy foreign keys.
@@ -55,7 +55,7 @@ def _legacy_financial_user_id() -> int:
         created = conn.execute(
             """INSERT INTO users(email,name,country,timezone,created_at)
                VALUES(%s,%s,%s,%s,NOW()) RETURNING id""",
-            (email, (account.get("display_name") or "Finva User").strip(), "Unknown", "UTC"),
+            (email, (account.get("display_name") or "DINCR User").strip(), "Unknown", "UTC"),
         ).fetchone()
         conn.commit()
         return int(created["id"])
@@ -613,10 +613,34 @@ def get_financial_situation():
                FROM financial_goals WHERE workspace_id=%s AND status='active'""",
             (workspace_id,),
         ).fetchone()
+        observed = conn.execute(
+            """SELECT
+                 COUNT(*) FILTER (WHERE transaction_type='income') AS income_count,
+                 COALESCE(SUM(amount) FILTER (WHERE transaction_type='income'),0) AS income_total,
+                 COUNT(DISTINCT date_trunc('month',transaction_date))
+                   FILTER (WHERE transaction_type='income') AS income_months,
+                 COUNT(*) FILTER (WHERE transaction_type='expense') AS expense_count,
+                 COALESCE(SUM(amount) FILTER (WHERE transaction_type='expense'),0) AS expense_total,
+                 COUNT(DISTINCT date_trunc('month',transaction_date))
+                   FILTER (WHERE transaction_type='expense') AS expense_months
+               FROM transactions
+               WHERE workspace_id=%s AND transaction_date >= CURRENT_DATE - INTERVAL '90 days'""",
+            (workspace_id,),
+        ).fetchone()
+    observed = dict(observed or {})
+    income_months = max(int(observed.get("income_months") or 0), 1)
+    expense_months = max(int(observed.get("expense_months") or 0), 1)
     return {
         "financial_profile": dict(profile) if profile else None,
         "debts": dict(debts),
         "goals": dict(goals),
+        "observed": {
+            "window_days": 90,
+            "income_count": int(observed.get("income_count") or 0),
+            "monthly_income_average": _money(observed.get("income_total")) / income_months,
+            "expense_count": int(observed.get("expense_count") or 0),
+            "monthly_expense_average": _money(observed.get("expense_total")) / expense_months,
+        },
     }
 
 

@@ -1,7 +1,9 @@
 import { X } from "lucide-react";
 import { tx } from "../../lib/locale";
+import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
 
 export default function FinvaFormSheet({ open, eyebrow = tx("Nuevo", "New"), title, onClose, children }) {
+  useFinvaBackHandler(onClose, open);
   if (!open) return null;
 
   return (

@@ -4,13 +4,16 @@ import { getBillingCatalog, getMe, getPlans, selectPlan, uploadPaymentReceipt } 
 import AccountSecurity from "../components/AccountSecurity";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../../lib/receiptPicker";
 import AppearanceSelector from "../../components/AppearanceSelector";
+import AppLockSettings from "../components/AppLockSettings";
 import { deviceLanguage, localeTag } from "../../lib/locale";
+import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
+import AccountActions from "../../products/finva/components/AccountActions";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
 const icons = { free: WalletCards, basic: Sparkles, vip: Crown };
 
-export default function Settings({ user, onUserChange }) {
+export default function Settings({ user, onUserChange, onLogout }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [changing, setChanging] = useState("");
@@ -23,6 +26,11 @@ export default function Settings({ user, onUserChange }) {
   const [receipt, setReceipt] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState("");
+  useFinvaBackHandler(() => {
+    if (changing || uploading) return;
+    if (paymentFlow) setPaymentFlow(null);
+    else setConfirming("");
+  }, Boolean(confirming || paymentFlow));
 
   const currentPlan = user?.subscription?.plan || "free";
   const currentPlanInfo = useMemo(
@@ -53,7 +61,7 @@ export default function Settings({ user, onUserChange }) {
           const profile = await getMe();
           onUserChange?.(profile);
           setPaymentFlow(null);
-          setMessage(`Pago confirmado. Tu plan ${profile?.subscription?.plan?.toUpperCase() || "FINVA"} ya está activo.`);
+          setMessage(`Pago confirmado. Tu plan ${profile?.subscription?.plan?.toUpperCase() || "DINCR"} ya está activo.`);
         } else if (next?.order) {
           setPaymentFlow((current) => current ? { ...current, order: next.order, payment: next.payment } : current);
         }
@@ -161,7 +169,7 @@ export default function Settings({ user, onUserChange }) {
     <section className="mobile-page settings-page">
       <div className="mobile-page-heading">
         <p className="eyebrow">{tx("Cuenta","Account")}</p>
-        <h1>{tx("Mi Finva","My Finva")}</h1>
+        <h1>{tx("Mi DINCR","My DINCR")}</h1>
         <span>{tx("Administrá tu perfil y el plan que querés probar.", "Manage your profile and the plan you want to try.")}</span>
       </div>
 
@@ -174,6 +182,8 @@ export default function Settings({ user, onUserChange }) {
       </div>
 
       <AccountSecurity user={user} />
+
+      <AppLockSettings userId={user?.id} />
 
       <AppearanceSelector />
 
@@ -195,7 +205,7 @@ export default function Settings({ user, onUserChange }) {
         </div>
         <div className="current-plan-copy">
           <strong>{currentPlanInfo?.name || currentPlan.toUpperCase()}</strong>
-          <span>{currentPlanInfo?.tagline || "Plan personal Finva"}</span>
+          <span>{currentPlanInfo?.tagline || "Plan personal DINCR"}</span>
         </div>
         <span className="plan-status-pill">{tx("Actual","Current")}</span>
       </article>
@@ -266,8 +276,8 @@ export default function Settings({ user, onUserChange }) {
             <div className="plan-dialog-icon"><SelectedIcon size={28}/></div>
             <p className="eyebrow">{tx("Confirmar cambio","Confirm change")}</p>
             <h2 id="plan-dialog-title">{tx("Cambiar a", "Switch to")} {selected?.name || confirming.toUpperCase()}</h2>
-            <p>{selected?.tagline || "Tu nuevo plan FINVA"}</p>
-            {confirming !== "free" && (promotionActive ? <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio normal será ${confirming === "basic" ? "₡2.990" : "₡5.990"}/mes, sin cobro automático.`, `This plan will be free until December 31, 2026. Starting in January, its regular price will be ${confirming === "basic" ? "₡2,990" : "₡5,990"}/month, with no automatic charge.`)}</span></div> : <><div className="plan-payment-notice"><Smartphone size={19}/><span>{tx("Al continuar, FINVA generará un código para el detalle del SINPE. El plan se activa cuando confirmemos el depósito.", "When you continue, FINVA will generate a code for the SINPE payment detail. The plan activates after we confirm the deposit.")}</span></div><label className="beta-consent dialog-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>{setBetaAccepted(e.target.checked);setError("");}}/><span>{tx(`Acepto el precio normal de ${confirming === "basic" ? "₡2.990" : "₡5.990"} al mes.`, `I accept the regular price of ${confirming === "basic" ? "₡2,990" : "₡5,990"} per month.`)}</span></label></>)}
+            <p>{selected?.tagline || "Tu nuevo plan DINCR"}</p>
+            {confirming !== "free" && (promotionActive ? <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio normal será ${confirming === "basic" ? "₡2.990" : "₡5.990"}/mes, sin cobro automático.`, `This plan will be free until December 31, 2026. Starting in January, its regular price will be ${confirming === "basic" ? "₡2,990" : "₡5,990"}/month, with no automatic charge.`)}</span></div> : <><div className="plan-payment-notice"><Smartphone size={19}/><span>{tx("Al continuar, DINCR generará un código para el detalle del SINPE. El plan se activa cuando confirmemos el depósito.", "When you continue, DINCR will generate a code for the SINPE payment detail. The plan activates after we confirm the deposit.")}</span></div><label className="beta-consent dialog-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>{setBetaAccepted(e.target.checked);setError("");}}/><span>{tx(`Acepto el precio normal de ${confirming === "basic" ? "₡2.990" : "₡5.990"} al mes.`, `I accept the regular price of ${confirming === "basic" ? "₡2,990" : "₡5,990"} per month.`)}</span></label></>)}
             {error && <div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
             <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>{tx("Cancelar","Cancel")}</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? tx("Procesando...","Processing...") : `${tx("Confirmar","Confirm")} ${selected?.name || confirming.toUpperCase()}`}</button></div>
           </section>
@@ -307,12 +317,14 @@ export default function Settings({ user, onUserChange }) {
             </> : <div className="payment-waiting-state">
               <CheckCircle2 size={34}/>
               <strong>{tx("Comprobante recibido","Receipt received")}</strong>
-              <p>{tx("FINVA está esperando la confirmación del BAC. Cuando coincidan el código y el monto, tu plan se activará automáticamente.", "FINVA is waiting for BAC confirmation. When the code and amount match, your plan will activate automatically.")}</p>
+              <p>{tx("DINCR está esperando la confirmación del BAC. Cuando coincidan el código y el monto, tu plan se activará automáticamente.", "DINCR is waiting for BAC confirmation. When the code and amount match, your plan will activate automatically.")}</p>
               <small>{tx("Podés cerrar esta pantalla; también volveremos a comprobarlo cuando abras la app.", "You can close this screen; we will check again when you open the app.")}</small>
             </div>}
           </section>
         </div>;
       })()}
+
+      <AccountActions onLogout={onLogout} variant={currentPlan} />
     </section>
   );
 }

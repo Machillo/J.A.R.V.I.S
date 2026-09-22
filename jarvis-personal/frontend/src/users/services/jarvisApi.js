@@ -1,11 +1,30 @@
 import { API_URL } from "../../lib/apiUrl";
-import { authenticatedFetch } from "../../lib/authenticatedFetch";
-import { apiError } from "../../lib/apiErrors";
+import { apiError, apiNetworkError } from "../../lib/apiErrors";
+import { flushIncidentQueue } from "../../lib/incidentReporter";
+import { flushPendingOperations, recoverableFetch } from "../../lib/operationRecovery";
+
+const OBSERVABILITY_PATHS = new Set([
+  "/product-ops/incidents",
+  "/product-ops/events",
+  "/product-ops/health",
+]);
 
 async function request(path, options = {}) {
-  const response = await authenticatedFetch(`${API_URL}${path}`, options);
+  const method = String(options.method || "GET").toUpperCase();
+  const autoReport = !OBSERVABILITY_PATHS.has(path);
+  let response;
+  try {
+    response = await recoverableFetch(`${API_URL}${path}`, options);
+  } catch (cause) {
+    throw apiNetworkError(cause, path, method, autoReport);
+  }
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw apiError(response, payload, path);
+  if (!response.ok) throw apiError(response, payload, path, method, autoReport);
+  if (path !== "/product-ops/incidents") flushIncidentQueue();
+  if (path !== "/product-ops/incidents") flushPendingOperations();
+  if (!OBSERVABILITY_PATHS.has(path)) {
+    window.dispatchEvent(new CustomEvent("finva:api-recovered"));
+  }
   return payload;
 }
 
@@ -32,6 +51,8 @@ export const uploadPaymentReceipt = (orderId, file) => {
 export const trackProductEvent = (payload) => json("/product-ops/events", "POST", payload);
 export const getFeedback = () => request("/product-ops/feedback");
 export const createFeedback = (payload) => json("/product-ops/feedback", "POST", payload);
+export const updateFeedbackResolution = (id, resolution) => json(`/product-ops/feedback/${id}/resolution`, "PATCH", { resolution });
+export const getPlatformHealth = () => request("/product-ops/health");
 
 export const getFinancialSituation = () => request("/user-product/financial-situation");
 export const updateFinancialSituation = (payload) => json("/user-product/financial-situation", "PUT", payload);
@@ -57,6 +78,9 @@ export const simulateStrategyBasic = (extra_monthly) => json("/user-product/fina
 export const getStrategyVip = () => request("/user-product/finance/strategy-vip");
 export const simulateStrategyVip = (payload) => json("/user-product/finance/strategy-vip/simulate", "POST", payload);
 export const getVipCommandCenter = () => request("/user-product/vip/command-center");
+export const captureVipLifecycleSnapshot = () => request("/user-product/vip/lifecycle/snapshots", { method: "POST" });
+export const getVipMonthlyReview = (period = "") => request(`/user-product/vip/lifecycle/monthly-review${period ? `?period=${encodeURIComponent(period)}` : ""}`);
+export const getVipProactiveAdvisor = () => request("/user-product/vip/lifecycle/proactive-advisor");
 export const getVipStrategyDashboard = () => request("/user-product/vip/strategy-dashboard");
 export const getVipDebtAdvisory = (extraCash = null) => request(`/user-product/vip/debt-advisory${extraCash == null ? "" : `?extra_cash=${encodeURIComponent(extraCash)}`}`);
 export const getVipDebtStrategies = () => request("/user-product/vip/debt-strategies");
@@ -65,8 +89,20 @@ export const updateVipSalvavidas = (payload) => json("/user-product/vip/salvavid
 export const getVipAguinaldo = () => request("/user-product/vip/aguinaldo");
 export const getVipGmailStatus = () => request("/user-product/vip/gmail/status");
 export const connectVipGmail = () => request("/user-product/vip/gmail/connect", { method: "POST" });
+export const acceptVipGmailConsent = (version) => json("/user-product/vip/gmail/consent", "POST", { accepted: true, version });
 export const syncVipGmail = () => request("/user-product/vip/gmail/sync", { method: "POST" });
 export const disconnectVipGmail = () => request("/user-product/vip/gmail", { method: "DELETE" });
+export const getVipGmailEmails = (status = "") => request(`/user-product/vip/gmail/emails${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+export const acceptVipGmailCandidate = (id, corrections = null) => corrections
+  ? json(`/user-product/vip/gmail/candidates/${id}/accept`, "PUT", corrections)
+  : request(`/user-product/vip/gmail/candidates/${id}/accept`, { method: "POST" });
+export const rejectVipGmailCandidate = (id) => request(`/user-product/vip/gmail/candidates/${id}/reject`, { method: "POST" });
+export const getVipFinancialIdentity = () => request("/user-product/vip/financial-identity");
+export const confirmVipFinancialAccount = (id, ownershipStatus, displayName = "") => json(
+  `/user-product/vip/financial-identity/accounts/${id}`,
+  "PUT",
+  { ownership_status: ownershipStatus, display_name: displayName || null },
+);
 
 export const getGoals = () => request("/user-product/goals");
 export const createGoal = (payload) => json("/user-product/goals", "POST", payload);

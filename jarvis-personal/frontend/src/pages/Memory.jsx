@@ -7,6 +7,7 @@ import {
   searchMemoryItems,
 } from "../services/jarvisApi";
 import { deviceLanguage } from "../lib/locale";
+import { JarvisGlassCard, JarvisScreen, JarvisStatusPill } from "../products/jarvis/components/JarvisScreen";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -88,21 +89,15 @@ export default function Memory() {
   };
 
   return (
-    <section className="page memory-page">
-      <div className="page-heading-row">
-        <div>
-          <h1>{tx("Núcleo de memoria", "Memory Core")}</h1>
-          <p className="subtitle">{tx("Memoria persistente por usuario. Jarvis usa esto para responder con contexto real.", "Persistent memory per user. Jarvis uses it to respond with real context.")}</p>
-        </div>
-        <div className="memory-total-pill">
-          <Brain size={18} />
-          {summary?.total || 0} {tx("recuerdos", "memories")}
-        </div>
-      </div>
+    <JarvisScreen eyebrow={tx("Memoria", "Memory")} title={tx("Núcleo de memoria", "Memory core")} subtitle={tx("Contexto personal utilizado por JARVIS", "Personal context used by JARVIS")} className="memory-screen">
+      <JarvisGlassCard className="memory-status-card">
+        <Brain size={29} />
+        <div><strong>{summary?.total || 0} {tx("recuerdos", "memories")}</strong><small>{Object.keys(summary?.profile_preferences || {}).length} {tx("preferencias activas · sincronizado", "active preferences · synced")}</small></div>
+        <JarvisStatusPill tone="success">{tx("ACTIVA", "ACTIVE")}</JarvisStatusPill>
+      </JarvisGlassCard>
 
-      <div className="memory-grid">
-        <div className="jarvis-panel memory-compose-card">
-          <h2>{tx("Guardar recuerdo", "Save memory")}</h2>
+      <JarvisGlassCard className="memory-compose-card">
+          <h3>{tx("Guardar un recuerdo", "Save a memory")}</h3>
           <textarea
             value={form.content}
             onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
@@ -130,28 +125,27 @@ export default function Memory() {
             </select>
           </div>
 
-          <button className="jarvis-action-button" onClick={handleCreate} disabled={saving || !form.content.trim()}>
+          <button className="jarvis-primary-button memory-save-button" type="button" onClick={handleCreate} disabled={saving || !form.content.trim()}>
             <Plus size={17} />
-            {tx("Guardar memoria", "Save memory")}
+            {tx("Guardar", "Save")}
           </button>
-        </div>
+      </JarvisGlassCard>
 
-        <div className="jarvis-panel memory-profile-card">
-          <h2>{tx("Preferencias activas", "Active preferences")}</h2>
+      <div className="memory-section">
+          <h3>{tx("Preferencias activas", "Active preferences")}</h3>
           <div className="memory-profile-list">
             {Object.entries(summary?.profile_preferences || {}).map(([key, value]) => (
-              <div key={key}>
+              <JarvisGlassCard as="div" key={key}>
                 <span>{key}</span>
                 <strong>{String(value)}</strong>
-              </div>
+              </JarvisGlassCard>
             ))}
           </div>
-        </div>
       </div>
 
-      <div className="jarvis-panel memory-list-card">
+      <div className="memory-section memory-list-card">
         <div className="memory-list-header">
-          <h2>{tx("Recuerdos guardados", "Saved memories")}</h2>
+          <h3>{tx("Recuerdos recientes", "Recent memories")}</h3>
           <div className="memory-search-box">
             <Search size={16} />
             <input
@@ -162,7 +156,7 @@ export default function Memory() {
               }}
               placeholder={tx("Buscar memoria...", "Search memory...")}
             />
-            <button onClick={handleSearch}>{tx("Buscar", "Search")}</button>
+            <button type="button" onClick={handleSearch} aria-label={tx("Buscar", "Search")}><Search size={14} /></button>
           </div>
         </div>
 
@@ -173,20 +167,19 @@ export default function Memory() {
         ) : (
           <div className="memory-items">
             {items.map((item) => (
-              <article key={item.id} className="memory-item">
+              <JarvisGlassCard key={item.id} className="memory-item">
                 <div>
                   <span className="memory-category">{CATEGORY_LABELS[item.category] || item.category}</span>
                   <p>{item.content}</p>
-                  <small>Importancia {item.importance} · {item.source}</small>
                 </div>
                 <button className="memory-delete" onClick={() => handleDelete(item.id)} aria-label={tx("Eliminar memoria", "Delete memory")}>
                   <Trash2 size={16} />
                 </button>
-              </article>
+              </JarvisGlassCard>
             ))}
           </div>
         )}
       </div>
-    </section>
+    </JarvisScreen>
   );
 }

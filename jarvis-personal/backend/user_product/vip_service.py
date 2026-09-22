@@ -108,7 +108,18 @@ def get_vip_command_center() -> dict:
             (workspace_id, _shift_month(current, -5)),
         ).fetchall()]
         candidates = {"confirmed": 0, "review": 0, "duplicates": 0}
-        if _table_exists(conn, "email_transaction_candidates"):
+        if _table_exists(conn, "finva_email_candidates"):
+            rows = conn.execute(
+                "SELECT status,COUNT(*) total FROM finva_email_candidates WHERE workspace_id=%s GROUP BY status",
+                (workspace_id,),
+            ).fetchall()
+            counts = {str(row["status"]): int(row["total"]) for row in rows}
+            candidates = {
+                "confirmed": counts.get("confirmed", 0) + counts.get("auto_saved", 0),
+                "review": counts.get("pending", 0),
+                "duplicates": counts.get("duplicate", 0),
+            }
+        elif _table_exists(conn, "email_transaction_candidates"):
             rows = conn.execute(
                 "SELECT status,COUNT(*) total FROM email_transaction_candidates WHERE workspace_id=%s GROUP BY status",
                 (workspace_id,),

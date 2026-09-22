@@ -1,5 +1,5 @@
 /*
- * FINVA — Balance & Clarity
+ * DINCR — Balance & Clarity
  * Product-level color system. Kept separate from users.css so the theme can
  * evolve without affecting the private JARVIS workspace.
  */
@@ -213,7 +213,7 @@
   .users-app .mobile-bottom-nav button { min-height: 62px; }
 }
 
-/* Follow the phone setting. FINVA remains dark when the OS uses dark mode. */
+/* Follow the phone setting. DINCR remains dark when the OS uses dark mode. */
 @media (prefers-color-scheme: light) {
   .users-app {
     color-scheme: light;
@@ -500,6 +500,21 @@ body:has(.users-app) { background: #0b132b; }
 .users-app .finva-api-help button { border:0; min-height:34px; border-radius:10px; padding:7px 9px; color:var(--f-text); font-size:.7rem; font-weight:760; }
 .users-app .finva-api-help-support { background:rgba(251,113,133,.14); }
 .users-app .finva-api-help-close { width:34px; padding:0!important; background:rgba(255,255,255,.055); font-size:1rem!important; }
+.users-app .finva-health-mode { margin:10px 0 4px; padding:11px 12px; border:1px solid rgba(250,204,21,.22); border-radius:14px; background:rgba(92,64,15,.34); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.users-app .finva-health-mode div { display:grid; gap:3px; min-width:0; }
+.users-app .finva-health-mode strong { font-size:.78rem; }
+.users-app .finva-health-mode span { color:var(--f-muted); font-size:.68rem; line-height:1.35; }
+.users-app .finva-health-mode button { flex:0 0 auto; min-height:34px; padding:7px 9px; border:0; border-radius:10px; background:rgba(250,204,21,.12); color:#f8df86; font-size:.7rem; font-weight:760; }
+.users-app .finva-health-mode--offline,.users-app .finva-health-mode--major_outage { border-color:rgba(251,113,133,.25); background:rgba(80,28,42,.42); }
+.users-app .finva-health-mode--offline button,.users-app .finva-health-mode--major_outage button { background:rgba(251,113,133,.14); color:#ffc0ca; }
+.users-app .finva-operation-recovery { margin:10px 0 4px; padding:11px 12px; border:1px solid rgba(114,224,173,.25); border-radius:14px; background:rgba(17,76,58,.34); }
+.users-app .finva-operation-recovery div { display:grid; gap:3px; }
+.users-app .finva-operation-recovery strong { font-size:.78rem; color:#9af0c8; }
+.users-app .finva-operation-recovery span { color:var(--f-muted); font-size:.68rem; line-height:1.35; }
+.users-app .finva-operation-recovery--pending { border-color:rgba(250,204,21,.22); background:rgba(92,64,15,.34); }
+.users-app .finva-operation-recovery--pending strong { color:#f8df86; }
+.users-app .finva-operation-recovery--failed { border-color:rgba(251,113,133,.25); background:rgba(80,28,42,.42); }
+.users-app .finva-operation-recovery--failed strong { color:#ffc0ca; }
 .users-app .finva-error-fallback { margin:20px; display:grid; gap:12px; }
 .users-app .finva-error-fallback p { color:var(--f-muted); margin:0; line-height:1.5; }
 .users-app .finva-error-fallback > div { display:flex; flex-wrap:wrap; gap:10px; }

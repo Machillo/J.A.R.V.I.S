@@ -3,7 +3,8 @@ import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "./supabase";
 
-export const NATIVE_AUTH_REDIRECT = "com.finva.app://auth/callback";
+const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.finva.app";
+export const NATIVE_AUTH_REDIRECT = `${nativeAppId}://auth/callback`;
 export const isNativeApp = () => Capacitor.isNativePlatform();
 
 export async function startGoogleLogin() {

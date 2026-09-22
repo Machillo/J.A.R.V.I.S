@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import re
-from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -28,6 +27,8 @@ from backend.email_monitor.normalization import normalize_description
 from backend.email_monitor.personal_rules import apply_workspace_email_rules
 from backend.email_monitor.statement_reconciliation import reconcile_statement
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
+from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
+from backend.email_monitor.popular_pdf import parse_popular_email_document
 
 OWNER_EMAIL = (
     os.getenv("OWNER_EMAIL", "").strip()
@@ -38,7 +39,7 @@ DEFAULT_QUERY = os.getenv(
     "GMAIL_FINANCE_QUERY",
     # Sender-only query on purpose. The parser decides what is financial.
     # The old query mixed sender + keywords and Gmail returned only a tiny subset.
-    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopular OR from:popular OR from:noreply@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")',
+    '(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com OR from:bancopopular.fi.cr OR from:bancopopularinforma.fi.cr OR from:bpdc.fi.cr OR from:bancopopular OR from:popular OR from:noreply@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")',
 )
 # Gmail ingestion is automatic only for high-confidence parser decisions.
 AUTO_COMMIT_CONFIDENCE = max(
@@ -46,6 +47,20 @@ AUTO_COMMIT_CONFIDENCE = max(
     min(float(os.getenv("EMAIL_AUTO_COMMIT_CONFIDENCE", "0.95")), 1.0),
 )
 logger = logging.getLogger(__name__)
+
+
+def _with_popular_gmail_sources(query: str) -> str:
+    """Upgrade persisted JARVIS queries without replacing owner customization."""
+    required = (
+        "from:bancopopular.fi.cr",
+        "from:bancopopularinforma.fi.cr",
+        "from:bpdc.fi.cr",
+    )
+    missing = [source for source in required if source.lower() not in (query or "").lower()]
+    if not missing:
+        return query
+    additions = " OR ".join(missing)
+    return f"({query} OR {additions})" if query.strip() else f"({additions})"
 
 
 def build_current_month_gmail_query(base_query: str | None = None, today: date | None = None) -> str:
@@ -755,6 +770,13 @@ def _settings_query_for_owner(conn, user_id: int, workspace_id: str | None = Non
         (user_id, workspace_id, DEFAULT_QUERY),
     ).fetchone()
     gmail_query = (row or {}).get("gmail_query") or DEFAULT_QUERY
+    popular_query = _with_popular_gmail_sources(gmail_query)
+    if popular_query != gmail_query:
+        gmail_query = popular_query
+        conn.execute(
+            "UPDATE email_monitor_settings SET gmail_query = %s, updated_at = NOW() WHERE workspace_id = %s",
+            (gmail_query, workspace_id),
+        )
     if "orden patronal" not in gmail_query.lower() and "noreply@ccss.sa.cr" not in gmail_query.lower():
         gmail_query = f'({gmail_query} OR from:noreply@ccss.sa.cr OR subject:"Generación de Orden Patronal Digital")'
         conn.execute(
@@ -1412,7 +1434,16 @@ def scan_email_text(
             "candidate": None,
         }
 
-    parsed = parse_financial_email(subject, sender, body, received_at)
+    # Banco Popular is enabled only in JARVIS' owner email monitor. DINCR's VIP
+    # Gmail service keeps its existing provider list until this parser is proven
+    # with multiple users and explicitly promoted there.
+    parsed = parse_popular_email_document(
+        subject=subject,
+        sender=sender,
+        body=body,
+        attachment_text=attachment_text,
+        received_at=received_at,
+    ) or parse_financial_email(subject, sender, body, received_at)
     parsed["attachment_names"] = attachment_names
 
     with get_connection() as conn:
@@ -1496,7 +1527,7 @@ def scan_email_text(
                 ),
             ).fetchone()
             reconciliation = None
-            if parsed.get("bank") in {"multimoney", "bac"} and statement_row:
+            if parsed.get("bank") in {"multimoney", "bac", "popular"} and statement_row:
                 try:
                     reconciliation = reconcile_statement(
                         conn,
@@ -1505,11 +1536,10 @@ def scan_email_text(
                         statement_id=int(statement_row["id"]),
                     )
                 except HTTPException as exc:
-                    if parsed.get("bank") != "bac" or exc.status_code != 422:
+                    if parsed.get("bank") not in {"bac", "popular"} or exc.status_code != 422:
                         raise
-                    # BAC publishes more than one PDF layout. Keep an unknown
-                    # layout pending for inspection instead of failing the Gmail
-                    # scan or, worse, importing unsigned/guessed movements.
+                    # BAC and Popular publish more than one PDF layout. Keep an
+                    # unknown layout pending instead of importing guessed rows.
                     reconciliation = {
                         "status": "PENDING_LAYOUT",
                         "statement_id": int(statement_row["id"]),
@@ -1801,7 +1831,7 @@ def scan_email_text(
         candidate_row = dict(refreshed_row) if refreshed_row else candidate_row
         _assert_duplicate_has_trace(candidate_row)
 
-        # FINVA beta payments are activated only when the uploaded proof and a
+        # DINCR beta payments are activated only when the uploaded proof and a
         # real incoming BAC SINPE notification agree on code and amount.
         from backend.product_ops.service import match_sinpe_payment
         payment_match = match_sinpe_payment(
@@ -1809,19 +1839,19 @@ def scan_email_text(
             {**candidate_row, "movement_direction": parsed.get("movement_direction")},
         )
         if payment_match:
-            description = f"Suscripción FINVA {payment_match['plan_code'].upper()}"
+            description = f"Suscripción DINCR {payment_match['plan_code'].upper()}"
             conn.execute(
                 """UPDATE email_transaction_candidates
-                SET description=%s, normalized_description=%s, category='Ingresos / FINVA',
+                SET description=%s, normalized_description=%s, category='Ingresos / DINCR',
                     confidence=1, auto_commit_allowed=TRUE,
-                    review_reason='Pago FINVA confirmado por código, monto y correo BAC.', updated_at=NOW()
+                    review_reason='Pago DINCR confirmado por código, monto y correo BAC.', updated_at=NOW()
                 WHERE id=%s AND workspace_id=%s""",
                 (description, description, int(candidate_row["id"]), workspace_id),
             )
             candidate_row.update(
                 description=description,
                 normalized_description=description,
-                category="Ingresos / FINVA",
+                category="Ingresos / DINCR",
                 confidence=1,
                 auto_commit_allowed=True,
             )
@@ -2275,63 +2305,8 @@ def _decode_gmail_body(payload: dict[str, Any]) -> str:
     return "\n".join(chunk for chunk in chunks if chunk)
 
 
-def _collect_attachments(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    attachments: list[dict[str, Any]] = []
-
-    def walk(part: dict[str, Any]) -> None:
-        filename = part.get("filename") or ""
-        body = part.get("body") or {}
-        attachment_id = body.get("attachmentId")
-        mime = part.get("mimeType", "")
-        if filename or attachment_id:
-            attachments.append({
-                "filename": filename,
-                "attachment_id": attachment_id,
-                "mime_type": mime,
-                "size": body.get("size"),
-            })
-        for child in part.get("parts") or []:
-            walk(child)
-
-    walk(payload or {})
-    return attachments
-
-
-def _extract_pdf_attachment_text(gmail_service, message_id: str, attachments: list[dict[str, Any]]) -> tuple[str, list[str]]:
-    texts: list[str] = []
-    names: list[str] = []
-    try:
-        from pypdf import PdfReader
-    except Exception:
-        return "", [a.get("filename") or "" for a in attachments if a.get("filename")]
-
-    for attachment in attachments:
-        filename = attachment.get("filename") or ""
-        attachment_id = attachment.get("attachment_id")
-        mime_type = attachment.get("mime_type") or ""
-        if filename:
-            names.append(filename)
-        if not attachment_id:
-            continue
-        if "pdf" not in mime_type.lower() and not filename.lower().endswith(".pdf"):
-            continue
-        try:
-            data = gmail_service.users().messages().attachments().get(
-                userId="me", messageId=message_id, id=attachment_id
-            ).execute().get("data")
-            if not data:
-                continue
-            raw = base64.urlsafe_b64decode(data.encode("utf-8"))
-            reader = PdfReader(BytesIO(raw))
-            page_texts = []
-            for page in reader.pages[:8]:
-                page_texts.append(page.extract_text() or "")
-            text = "\n".join(page_texts).strip()
-            if text:
-                texts.append(f"[PDF {filename}]\n{text}")
-        except Exception:
-            continue
-    return "\n".join(texts), names
+_collect_attachments = collect_attachments
+_extract_pdf_attachment_text = extract_pdf_attachment_text
 
 def _gmail_service():
     try:
@@ -2545,7 +2520,7 @@ def sync_gmail_for_owner(max_results: int = 100, auto_commit: bool = True, query
             SELECT id, bank
             FROM email_statement_documents
             WHERE workspace_id = %s
-              AND bank IN ('bac', 'multimoney')
+              AND bank IN ('bac', 'multimoney', 'popular')
               AND extracted_text IS NOT NULL
               AND LENGTH(TRIM(extracted_text)) > 0
               AND status IN ('pending_reconciliation', 'needs_review')

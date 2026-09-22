@@ -3,6 +3,11 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 
+class GmailConsentRequest(BaseModel):
+    accepted: bool
+    version: str = Field(max_length=80)
+
+
 class IncomeCreateRequest(BaseModel):
     amount: float = Field(gt=0)
     description: str = ""
@@ -157,6 +162,19 @@ class TransactionCreateRequest(BaseModel):
     transaction_type: Literal["expense", "income"]
     category: str = "general"
     notes: str = ""
+
+
+class GmailCandidateReviewRequest(BaseModel):
+    transaction_date: date
+    description: str = Field(min_length=1, max_length=500)
+    amount: float = Field(gt=0)
+    transaction_type: Literal["expense", "income", "debt_payment"]
+    category: str = Field(default="general", max_length=100)
+
+
+class FinancialAccountIdentityRequest(BaseModel):
+    ownership_status: Literal["own", "not_mine"]
+    display_name: str | None = Field(default=None, max_length=120)
 
 
 class MovementUpdateRequest(BaseModel):

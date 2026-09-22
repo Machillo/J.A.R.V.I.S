@@ -1,12 +1,14 @@
 {
-  "name": "Finva",
-  "short_name": "Finva",
+  "name": "DINCR",
+  "short_name": "DINCR",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#02070d",
   "theme_color": "#02070d",
   "icons": [
-    { "src": "/jarvis-icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/jarvis-icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/dincr-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/dincr-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/dincr-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/dincr-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

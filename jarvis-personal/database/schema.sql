@@ -10,12 +10,13 @@ CREATE TABLE IF NOT EXISTS allowed_users (
 
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
-    allowed_user_id BIGINT REFERENCES allowed_users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
     name TEXT NOT NULL,
     country TEXT NOT NULL,
     timezone TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_ci ON users (LOWER(email));
 
 CREATE TABLE IF NOT EXISTS settings (
     id BIGSERIAL PRIMARY KEY,
@@ -552,6 +553,7 @@ ALTER TABLE notification_subscriptions ADD COLUMN IF NOT EXISTS last_error TEXT;
 CREATE TABLE IF NOT EXISTS notification_jobs (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+    workspace_id UUID,
     title TEXT NOT NULL,
     body TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'general',
@@ -570,6 +572,26 @@ CREATE TABLE IF NOT EXISTS notification_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_notification_jobs_due ON notification_jobs(status, scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_notification_jobs_user ON notification_jobs(user_id, scheduled_at);
+
+CREATE TABLE IF NOT EXISTS financial_input_events (
+    id BIGSERIAL PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+    event_name TEXT NOT NULL,
+    contract_version TEXT NOT NULL,
+    transaction_id BIGINT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(transaction_id, event_name, contract_version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_financial_input_events_workspace_created
+    ON financial_input_events(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_financial_input_events_account_fk
+    ON financial_input_events(account_id);
+CREATE INDEX IF NOT EXISTS idx_financial_input_events_user_fk
+    ON financial_input_events(user_id);
 
 -- Ejemplo opcional para prueba manual. Cambiá scheduled_at si querés probar cron.
 -- INSERT INTO notification_jobs (user_id, title, body, category, scheduled_at, dedupe_key)

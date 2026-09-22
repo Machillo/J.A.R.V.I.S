@@ -56,8 +56,8 @@ export function FreeSettings({ user, onNavigate, onLogout }) {
     <div className="free-menu-card">
       <MenuRow icon={WalletCards} title={tx("Moneda y formato", "Currency & format")} subtitle={tx("Colón costarricense · CRC", "Costa Rican colón · CRC")} onClick={() => onNavigate("situation")}/>
       <MenuRow icon={ShieldCheck} title={tx("Privacidad y seguridad", "Privacy & security")} subtitle={tx("Cuenta y permisos", "Account and permissions")} onClick={() => onNavigate("plan-settings")}/>
-      <MenuRow icon={Clock3} title={tx("Plan", "Plan")} subtitle={tx("FINVA Gratis", "FINVA Free")} onClick={() => onNavigate("plan-settings")}/>
-      <MenuRow icon={CircleHelp} title={tx("Ayuda", "Help")} subtitle={tx("Soporte FINVA", "FINVA support")} onClick={() => onNavigate("feedback")}/>
+      <MenuRow icon={Clock3} title={tx("Plan", "Plan")} subtitle={tx("DINCR Gratis", "DINCR Free")} onClick={() => onNavigate("plan-settings")}/>
+      <MenuRow icon={CircleHelp} title={tx("Ayuda", "Help")} subtitle={tx("Soporte DINCR", "DINCR support")} onClick={() => onNavigate("feedback")}/>
     </div>
     <AccountActions onLogout={onLogout} variant="free"/>
   </section>;

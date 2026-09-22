@@ -55,6 +55,9 @@ class ProfileSetupRequest(BaseModel):
     enabled_currencies: list[Literal["CRC", "USD", "ARS", "EUR", "MXN", "COP", "GTQ", "PAB"]] = Field(default_factory=lambda: ["CRC"], min_length=1, max_length=8)
     number_format: Literal["dot_comma", "comma_dot"] = "dot_comma"
     currency_placement: Literal["before", "after"] = "before"
+    selected_financial_institutions: list[Literal[
+        "bac", "bn", "bcr", "popular", "davivienda", "scotiabank", "promerica", "multimoney"
+    ]] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode="after")
     def normalize_preferences(self):
@@ -64,4 +67,5 @@ class ProfileSetupRequest(BaseModel):
         self.enabled_currencies = list(dict.fromkeys([self.base_currency, *self.enabled_currencies]))
         if len(self.enabled_currencies) > 8:
             raise ValueError("Podés activar hasta ocho monedas.")
+        self.selected_financial_institutions = list(dict.fromkeys(self.selected_financial_institutions))
         return self

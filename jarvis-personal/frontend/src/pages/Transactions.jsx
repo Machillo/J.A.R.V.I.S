@@ -23,6 +23,7 @@ import {
   getTransactionAnalysis,
   getTransactions,
 } from "../services/jarvisApi";
+import { JarvisScreen } from "../products/jarvis/components/JarvisScreen";
 import { deviceLanguage, localeTag } from "../lib/locale";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
@@ -164,18 +165,17 @@ export default function Transactions() {
   if (loading) return <LoadingState />;
 
   return (
-    <section className="data-page">
-      <div className="page-section-header">
-        <div>
-          <h2>{tx("Transacciones", "Transactions")}</h2>
-          <p>{tx("Movimientos reales registrados por usuario.", "Real transactions recorded by user.")}</p>
-        </div>
-
-        <button className="hud-action-button" onClick={loadTransactions}>
+    <JarvisScreen
+      eyebrow={tx("Historial", "History")}
+      title={tx("Transacciones", "Transactions")}
+      subtitle={tx("Tus movimientos reales y su evolución", "Your real movements and their evolution")}
+      className="transactions-screen"
+      actions={(
+        <button className="jarvis-circle-button" onClick={loadTransactions} aria-label={tx("Actualizar", "Refresh")}>
           <RefreshCw size={16} />
-          {tx("Actualizar", "Refresh")}
         </button>
-      </div>
+      )}
+    >
 
       {error && (
         <div className="inline-error">
@@ -347,6 +347,6 @@ export default function Transactions() {
           </div>
         )}
       </article>
-    </section>
+    </JarvisScreen>
   );
 }

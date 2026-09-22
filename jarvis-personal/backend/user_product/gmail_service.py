@@ -8,7 +8,7 @@ import json
 import os
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlencode
@@ -24,7 +24,23 @@ from backend.auth.current_user import (
 )
 from backend.core.database import get_connection
 from backend.email_monitor.parser import parse_financial_email
+from backend.email_monitor.popular_pdf import parse_popular_email_document
+from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
+from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
 from backend.finance.category_catalog import normalize_category
+from backend.user_product.financial_candidate import canonical_candidate
+from backend.user_product.financial_identity import discover_candidate_account
+from backend.user_product.candidate_resolution import resolve_candidate
+from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
+from backend.user_product.gmail_retention import apply_gmail_retention, retention_policy
+from backend.user_product.payroll_income import identify_received_payroll, link_received_payroll
+from backend.user_product.statement_candidate import (
+    PARSER_NAME as STATEMENT_PARSER_NAME,
+    PARSER_VERSION as STATEMENT_PARSER_VERSION,
+    parse_statement_movements,
+    statement_candidate,
+    statement_hash,
+)
 
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
@@ -34,8 +50,81 @@ FINVA_QUERY = os.getenv(
     "OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr "
     "OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net "
     "OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com "
-    "OR from:bancopopular.fi.cr) newer_than:45d -in:spam -in:trash",
+    "OR from:bancopopular.fi.cr OR from:bancopopularinforma.fi.cr OR from:bpdc.fi.cr) "
+    "newer_than:45d -in:spam -in:trash",
 )
+
+
+def _year_to_date_query(as_of: date | None = None) -> str:
+    """Use the current calendar year only for a connection's first sync."""
+    current = as_of or date.today()
+    query = re.sub(r"\s+newer_than:\d+d\b", "", FINVA_QUERY, flags=re.IGNORECASE)
+    return f"{query} after:{current.year}/01/01"
+
+
+def _list_message_refs(service, query: str, limit: int) -> list[dict[str, Any]]:
+    """Page through a bounded Gmail search without retaining message content."""
+    items: list[dict[str, Any]] = []
+    page_token = None
+    bounded_limit = max(1, min(int(limit), 1000))
+    while len(items) < bounded_limit:
+        request = {
+            "userId": "me", "q": query,
+            "maxResults": min(250, bounded_limit - len(items)),
+        }
+        if page_token:
+            request["pageToken"] = page_token
+        response = service.users().messages().list(**request).execute()
+        items.extend(item for item in response.get("messages", []) if item.get("id"))
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+    return items[:bounded_limit]
+
+
+def _list_message_page(service, query: str, *, page_token: str | None, limit: int = 50) -> tuple[list[dict[str, Any]], str | None]:
+    request: dict[str, Any] = {
+        "userId": "me", "q": query, "maxResults": max(1, min(int(limit), 100)),
+    }
+    if page_token:
+        request["pageToken"] = page_token
+    response = service.users().messages().list(**request).execute()
+    items = [item for item in response.get("messages", []) if item.get("id")]
+    return items, response.get("nextPageToken")
+
+
+def _aguinaldo_gmail_query(as_of: date | None = None) -> str:
+    """Search the complete Costa Rican aguinaldo period for CCSS payroll orders."""
+    current = as_of or date.today()
+    period_start = date(current.year if current.month == 12 else current.year - 1, 12, 1)
+    return (
+        '(from:noreply@ccss.sa.cr OR from:ccss@ccss.sa.cr '
+        'OR subject:"Generación de Orden Patronal Digital") '
+        f'after:{period_start:%Y/%m/%d} -in:spam -in:trash'
+    )
+
+def _has_active_vip_access(conn, account_id: str) -> bool:
+    """Return whether an account may use DINCR's Gmail automation.
+
+    Interactive routes enforce the same entitlement through ``require_feature``.
+    This database-level check also protects OAuth callbacks, Pub/Sub delivery and
+    maintenance jobs, where no authenticated user context exists.
+    """
+    row = conn.execute(
+        """SELECT 1
+           FROM account_subscriptions s
+           JOIN plans p ON p.id=s.plan_id
+           WHERE s.account_id=%s
+             AND s.status='active'
+             AND p.code='vip'
+             AND (
+               s.access_source<>'courtesy'
+               OR (s.expires_at IS NOT NULL AND s.expires_at>NOW())
+             )
+           LIMIT 1""",
+        (account_id,),
+    ).fetchone()
+    return bool(row)
 
 
 def _google_config() -> tuple[str, str, str]:
@@ -45,7 +134,7 @@ def _google_config() -> tuple[str, str, str]:
     if not client_id or not client_secret or not redirect_uri:
         raise HTTPException(
             status_code=503,
-            detail="La conexión con Gmail todavía no está configurada en FINVA.",
+            detail="La conexión con Gmail todavía no está configurada en DINCR.",
         )
     return client_id, client_secret, redirect_uri
 
@@ -99,7 +188,7 @@ def _financial_user_id_for_account(account_id: str) -> int:
             (account_id,),
         ).fetchone()
         if not account or not account.get("primary_email"):
-            raise RuntimeError("La cuenta FINVA no tiene una identidad financiera válida.")
+            raise RuntimeError("La cuenta DINCR no tiene una identidad financiera válida.")
         existing = conn.execute(
             "SELECT id FROM users WHERE lower(email)=lower(%s) ORDER BY id LIMIT 1",
             (account["primary_email"],),
@@ -109,7 +198,7 @@ def _financial_user_id_for_account(account_id: str) -> int:
         created = conn.execute(
             """INSERT INTO users(email,name,country,timezone,created_at)
                VALUES(%s,%s,'Costa Rica','America/Costa_Rica',NOW()) RETURNING id""",
-            (account["primary_email"], account.get("display_name") or "Usuario FINVA"),
+            (account["primary_email"], account.get("display_name") or "Usuario DINCR"),
         ).fetchone()
         conn.commit()
         return int(created["id"])
@@ -118,7 +207,7 @@ def _financial_user_id_for_account(account_id: str) -> int:
 def _vault_create(conn, token: str, account_id: str) -> str:
     row = conn.execute(
         "SELECT vault.create_secret(%s, NULL, %s) AS secret_id",
-        (token, f"FINVA Gmail refresh token for account {account_id}"),
+        (token, f"DINCR Gmail refresh token for account {account_id}"),
     ).fetchone()
     if not row or not row.get("secret_id"):
         raise RuntimeError("No se pudo proteger la autorización de Gmail.")
@@ -176,7 +265,8 @@ def gmail_status() -> dict[str, Any]:
     with get_connection() as conn:
         row = conn.execute(
             """SELECT id,google_email,status,granted_scopes,last_sync_at,last_success_at,
-                      watch_expiration,last_error,connected_at,updated_at
+                      watch_expiration,last_error,connected_at,updated_at,
+                      initial_scan_started_at,initial_scan_completed_at
                FROM finva_gmail_connections
                WHERE account_id=%s AND workspace_id=%s""",
             (account_id, workspace_id),
@@ -186,7 +276,7 @@ def gmail_status() -> dict[str, Any]:
             (workspace_id,),
         ).fetchone()
     if not row:
-        return {"connected": False, "status": "disconnected", "pending": 0}
+        return {"connected": False, "status": "disconnected", "pending": 0, "consent": gmail_consent_status(), "retention": retention_policy()}
     data = dict(row)
     return {
         "connected": data.get("status") == "active",
@@ -194,10 +284,189 @@ def gmail_status() -> dict[str, Any]:
         "automatic_updates": bool(data.get("watch_expiration")),
         "pending": int((pending or {}).get("total") or 0),
         **data,
+        "consent": gmail_consent_status(),
+        "retention": retention_policy(),
     }
 
 
+def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
+    account_id = get_current_account_id()
+    workspace_id = get_current_workspace_id()
+    allowed = {"pending", "auto_saved", "confirmed", "rejected", "duplicate"}
+    if status and status not in allowed:
+        raise HTTPException(status_code=422, detail="Estado de revisión inválido.")
+    params: list[Any] = [account_id, workspace_id]
+    status_filter = ""
+    if status:
+        status_filter = " AND c.status=%s"
+        params.append(status)
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""SELECT m.id AS email_id,m.sender,m.subject,m.received_at,m.bank,m.status AS email_status,
+                       m.parse_reason,c.id AS candidate_id,c.transaction_id,c.transaction_date,
+                       c.description,c.amount,c.currency,c.transaction_type,c.movement_direction,
+                       c.movement_kind,c.category,c.bank,c.source_account_label,
+                       c.source_account_reference,c.destination_account_reference,c.counterparty,
+                       c.parser_name,c.parser_version,c.extraction_method,c.confidence,
+                       c.uncertainty_reason,c.status AS review_status,c.reviewed_at,c.created_at,
+                       c.source_type,c.source_provider,c.statement_document_id,
+                       c.is_internal_transfer,c.related_candidate_id,c.resolution_reason
+                FROM finva_email_messages m
+                LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id
+                WHERE m.account_id=%s AND m.workspace_id=%s{status_filter}
+                ORDER BY COALESCE(m.received_at,m.created_at) DESC,m.id DESC
+                LIMIT 200""",
+            tuple(params),
+        ).fetchall()
+    return {"status": "ok", "items": [dict(row) for row in rows]}
+
+
+def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any]) -> int:
+    category = normalize_category(values["category"], values["transaction_type"])
+    source = "finva_statement" if candidate.get("source_type") == "statement" else "finva_gmail"
+    note = (
+        "Confirmado por el usuario desde un estado de cuenta."
+        if candidate.get("source_type") == "statement"
+        else "Confirmado por el usuario desde un correo bancario."
+    )
+    row = conn.execute(
+        """INSERT INTO transactions(
+               transaction_date,description,amount,transaction_type,category,account,source,notes,
+               user_id,workspace_id,financial_account_id,created_at
+           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) RETURNING id""",
+        (
+            values["transaction_date"], values["description"].strip(), values["amount"],
+            values["transaction_type"], category, candidate.get("bank") or "",
+            source, note,
+            int(candidate["legacy_user_id"]), candidate["workspace_id"],
+            candidate.get("financial_account_id"),
+        ),
+    ).fetchone()
+    return int(row["id"])
+
+
+def _publish_confirmed_financial_input(
+    conn, candidate: dict[str, Any], values: dict[str, Any], transaction_id: int,
+) -> None:
+    """Publish the privacy-safe Phase 1 boundary in the same DB transaction.
+
+    Downstream phases consume this canonical event instead of Gmail bodies,
+    attachment text or parser evidence. Both inserts are idempotent so a retry
+    cannot duplicate either the event or the user notification.
+    """
+    category = normalize_category(values["category"], values["transaction_type"])
+    payload = {
+        "transaction_id": transaction_id,
+        "transaction_date": str(values["transaction_date"]),
+        "amount": float(values["amount"]),
+        "currency": str(candidate.get("currency") or "CRC"),
+        "transaction_type": str(values["transaction_type"]),
+        "category": category,
+        "financial_account_id": candidate.get("financial_account_id"),
+        "source": "statement" if candidate.get("source_type") == "statement" else "gmail",
+    }
+    conn.execute(
+        """INSERT INTO financial_input_events(
+               account_id,workspace_id,user_id,event_name,contract_version,
+               transaction_id,payload,created_at
+           ) VALUES(%s,%s,%s,'transaction_confirmed','financial-input-v1',%s,%s::jsonb,NOW())
+           ON CONFLICT(transaction_id,event_name,contract_version) DO NOTHING""",
+        (
+            candidate["account_id"], candidate["workspace_id"], int(candidate["legacy_user_id"]),
+            transaction_id, json.dumps(payload, default=str),
+        ),
+    )
+    conn.execute(
+        """INSERT INTO notification_jobs(
+               user_id,workspace_id,title,body,category,scheduled_at,
+               reference_type,reference_id,dedupe_key,payload
+           ) VALUES(%s,%s,%s,%s,'financial_import',NOW(),
+                    'transaction',%s,%s,%s::jsonb)
+           ON CONFLICT DO NOTHING""",
+        (
+            int(candidate["legacy_user_id"]), candidate["workspace_id"],
+            "Movimiento confirmado",
+            f"DINCR guardó {values['description'].strip()} por {float(values['amount']):,.2f} {payload['currency']}.",
+            str(transaction_id), f"financial-input-v1:{transaction_id}",
+            json.dumps({"event": "transaction_confirmed", "transaction_id": transaction_id}),
+        ),
+    )
+
+
+def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str, Any] | None = None) -> dict[str, Any]:
+    if action not in {"accept", "reject"}:
+        raise HTTPException(status_code=422, detail="Acción de revisión inválida.")
+    account_id = get_current_account_id()
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        candidate = conn.execute(
+            """SELECT c.*,g.legacy_user_id
+               FROM finva_email_candidates c
+               JOIN finva_gmail_connections g
+                 ON g.account_id=c.account_id AND g.workspace_id=c.workspace_id
+               WHERE c.id=%s AND c.account_id=%s AND c.workspace_id=%s
+               FOR UPDATE""",
+            (candidate_id, account_id, workspace_id),
+        ).fetchone()
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Correo financiero no encontrado.")
+        candidate = dict(candidate)
+        if candidate["status"] != "pending":
+            return {"status": candidate["status"], "candidate_id": candidate_id, "transaction_id": candidate.get("transaction_id")}
+        if action == "reject":
+            conn.execute(
+                """UPDATE finva_email_candidates
+                   SET status='rejected',reviewed_at=NOW(),corrected_fields=ARRAY[]::TEXT[],updated_at=NOW()
+                   WHERE id=%s""",
+                (candidate_id,),
+            )
+            conn.execute("UPDATE finva_email_messages SET status='rejected' WHERE id=%s", (candidate["email_message_id"],))
+            conn.commit()
+            return {"status": "rejected", "candidate_id": candidate_id, "transaction_id": None}
+
+        if candidate.get("is_internal_transfer"):
+            conn.execute(
+                """UPDATE finva_email_candidates
+                   SET status='confirmed',reviewed_at=NOW(),corrected_fields=ARRAY[]::TEXT[],updated_at=NOW()
+                   WHERE id=%s""",
+                (candidate_id,),
+            )
+            conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
+            conn.commit()
+            return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": None, "is_internal_transfer": True}
+
+        values = {
+            "transaction_date": candidate["transaction_date"],
+            "description": candidate["description"],
+            "amount": candidate["amount"],
+            "transaction_type": candidate["transaction_type"],
+            "category": candidate["category"],
+        }
+        if corrections:
+            values.update(corrections)
+        corrected_fields = sorted(
+            key for key, value in (corrections or {}).items()
+            if value != candidate.get(key)
+        )
+        transaction_id = _create_candidate_transaction(conn, candidate, values)
+        _publish_confirmed_financial_input(conn, candidate, values, transaction_id)
+        category = normalize_category(values["category"], values["transaction_type"])
+        conn.execute(
+            """UPDATE finva_email_candidates
+               SET transaction_id=%s,transaction_date=%s,description=%s,amount=%s,
+                   transaction_type=%s,category=%s,status='confirmed',reviewed_at=NOW(),
+                   corrected_fields=%s,updated_at=NOW()
+               WHERE id=%s""",
+            (transaction_id, values["transaction_date"], values["description"].strip(), values["amount"],
+             values["transaction_type"], category, corrected_fields, candidate_id),
+        )
+        conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
+        conn.commit()
+    return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": transaction_id}
+
+
 def begin_gmail_connection() -> dict[str, str]:
+    require_gmail_consent()
     client_id, _, redirect_uri = _google_config()
     user = get_current_user()
     account_id = get_current_account_id()
@@ -225,6 +494,12 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     oauth_state = _decode_oauth_state(state)
     if not oauth_state:
         return RedirectResponse(_return_url("invalid_state"), status_code=302)
+
+    account_id = str(oauth_state["account_id"])
+    workspace_id = str(oauth_state["workspace_id"])
+    with get_connection() as conn:
+        if not _has_active_vip_access(conn, account_id):
+            return RedirectResponse(_return_url("vip_required"), status_code=302)
 
     client_id, client_secret, redirect_uri = _google_config()
     response = requests.post(
@@ -254,13 +529,15 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     if not google_email:
         return RedirectResponse(_return_url("profile_failed"), status_code=302)
 
-    account_id = str(oauth_state["account_id"])
-    workspace_id = str(oauth_state["workspace_id"])
     try:
         legacy_user_id = _financial_user_id_for_account(account_id)
     except Exception:
         return RedirectResponse(_return_url("identity_failed"), status_code=302)
     with get_connection() as conn:
+        # Recheck after the external OAuth exchange so a concurrent downgrade
+        # cannot persist credentials for an account that is no longer VIP.
+        if not _has_active_vip_access(conn, account_id):
+            return RedirectResponse(_return_url("vip_required"), status_code=302)
         current = conn.execute(
             "SELECT refresh_token_secret_id FROM finva_gmail_connections WHERE account_id=%s FOR UPDATE",
             (account_id,),
@@ -308,7 +585,13 @@ def disconnect_gmail() -> dict[str, str]:
             requests.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
         except Exception:
             pass
-        conn.execute("DELETE FROM finva_gmail_connections WHERE id=%s", (int(row["id"]),))
+        conn.execute(
+            """UPDATE finva_gmail_connections
+               SET status='disabled',history_id=NULL,watch_expiration=NULL,last_error=NULL,
+                   initial_scan_page_token=NULL,updated_at=NOW()
+               WHERE id=%s""",
+            (int(row["id"]),),
+        )
         _vault_delete(conn, str(row["refresh_token_secret_id"]))
         conn.commit()
     return {"status": "disconnected"}
@@ -339,12 +622,67 @@ def _adapt_identity(value: str, display_name: str) -> str:
     return adapted
 
 
+def _insert_finva_candidate(
+    conn, *, email_message_id: int, connection: dict[str, Any],
+    candidate: dict[str, Any], statement_document_id: int | None = None,
+) -> dict[str, Any]:
+    row = conn.execute(
+        """INSERT INTO finva_email_candidates(
+               email_message_id,account_id,workspace_id,transaction_id,statement_document_id,
+               movement_index,source_type,source_provider,source_record_key,institution_country,
+               transaction_date,transaction_time,description,amount,currency,original_amount,
+               original_currency,transaction_type,movement_direction,movement_kind,category,bank,
+               source_account_label,source_account_reference,destination_account_reference,
+               counterparty,external_reference,parser_name,parser_version,extraction_method,
+               confidence,uncertainty_reason,dedupe_key,is_internal_transfer,status,raw_payload
+           ) VALUES(
+               %s,%s,%s,NULL,%s,
+               %s,%s,%s,%s,%s,
+               %s,%s,%s,%s,%s,%s,
+               %s,%s,%s,%s,%s,%s,
+               %s,%s,%s,
+               %s,%s,%s,%s,%s,
+               %s,%s,%s,%s,'pending',%s::jsonb
+           ) RETURNING id""",
+        (
+            email_message_id, connection["account_id"], connection["workspace_id"],
+            statement_document_id, candidate["movement_index"], candidate["source_type"],
+            candidate["source_provider"], candidate["source_record_key"],
+            candidate["institution_country"], candidate["transaction_date"],
+            candidate["transaction_time"], candidate["description"], candidate["amount"],
+            candidate["currency"], candidate["original_amount"], candidate["original_currency"],
+            candidate["transaction_type"], candidate["movement_direction"],
+            candidate["movement_kind"], candidate["category"], candidate["bank"],
+            candidate["source_account_label"], candidate["source_account_reference"],
+            candidate["destination_account_reference"], candidate["counterparty"],
+            candidate["external_reference"], candidate["parser_name"], candidate["parser_version"],
+            candidate["extraction_method"], candidate["confidence"], candidate["uncertainty_reason"],
+            candidate["dedupe_key"], candidate["is_internal_transfer"],
+            json.dumps(candidate["raw_payload"], default=str),
+        ),
+    ).fetchone()
+    candidate_id = int(row["id"])
+    discover_candidate_account(
+        conn, candidate_id=candidate_id, candidate=candidate,
+        account_id=str(connection["account_id"]), workspace_id=str(connection["workspace_id"]),
+        legacy_user_id=int(connection["legacy_user_id"]),
+    )
+    link_received_payroll(
+        conn, candidate_id=candidate_id, candidate=candidate,
+        workspace_id=str(connection["workspace_id"]),
+    )
+    return resolve_candidate(conn, candidate_id)
+
+
 def _process_message(service, connection: dict[str, Any], message_id: str) -> str:
     full = service.users().messages().get(userId="me", id=message_id, format="full").execute()
     headers = {item.get("name", "").lower(): item.get("value", "") for item in full.get("payload", {}).get("headers", [])}
     subject = headers.get("subject", "")
     sender = headers.get("from", "")
-    body = _plain_text(full.get("payload") or {}) or full.get("snippet", "")
+    payload = full.get("payload") or {}
+    body = _plain_text(payload) or full.get("snippet", "")
+    attachments = collect_attachments(payload)
+    attachment_text, attachment_names = extract_pdf_attachment_text(service, message_id, attachments)
     received_at = None
     if headers.get("date"):
         try:
@@ -353,72 +691,144 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
             received_at = None
 
     display_name = str(connection.get("display_name") or "")
-    parsed = parse_financial_email(
-        _adapt_identity(subject, display_name),
-        sender,
-        _adapt_identity(body, display_name),
-        received_at,
+    payroll_report = parse_ccss_order_patronal(subject, sender, attachment_text or body)
+    financial_text = "\n".join(item for item in (body, attachment_text) if item)
+    parsed = {} if payroll_report else (
+        parse_popular_email_document(
+            subject=_adapt_identity(subject, display_name),
+            sender=sender,
+            body=_adapt_identity(financial_text, display_name),
+            attachment_text=_adapt_identity(attachment_text, display_name),
+            received_at=received_at,
+        ) or parse_financial_email(
+            _adapt_identity(subject, display_name), sender,
+            _adapt_identity(financial_text, display_name), received_at,
+        )
     )
-    kind = str(parsed.get("email_kind") or "ignored")
-    confidence = float(parsed.get("confidence") or 0)
+    if parsed and not payroll_report:
+        parsed = identify_received_payroll(parsed, subject=subject, body=financial_text)
+    kind = "payroll_statement" if payroll_report else str(parsed.get("email_kind") or "ignored")
+    if kind == "ignored" and parsed.get("transaction_type") == "internal_transfer" and parsed.get("amount"):
+        # Legacy parser ownership hints become reviewable evidence, never the
+        # final decision. Confirmed Financial Identity resolves ownership.
+        parsed = {**parsed, "transaction_type": "transfer", "category": "Transferencia"}
+        kind = "movement"
+    confidence = 1.0 if payroll_report else float(parsed.get("confidence") or 0)
     status = "ignored"
     transaction_id = None
 
     with get_connection() as conn:
         existing = conn.execute(
-            "SELECT id FROM finva_email_messages WHERE connection_id=%s AND provider_message_id=%s",
+            "SELECT id,status FROM finva_email_messages WHERE connection_id=%s AND provider_message_id=%s",
             (int(connection["id"]), message_id),
         ).fetchone()
         if existing:
-            return "duplicate"
-        email_row = conn.execute(
-            """INSERT INTO finva_email_messages(
-                   connection_id,account_id,workspace_id,provider_message_id,sender,subject,received_at,
-                   bank,status,parse_reason
-               ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-            (
-                int(connection["id"]), connection["account_id"], connection["workspace_id"], message_id,
-                sender[:500], subject[:500], received_at, parsed.get("bank") or "unknown", kind,
-                parsed.get("confidence_reason") or parsed.get("ignore_reason") or "",
-            ),
-        ).fetchone()
-
-        if kind == "movement" and parsed.get("amount") and parsed.get("transaction_type"):
-            tx_type = str(parsed.get("transaction_type"))
-            candidate_status = "pending"
-            if confidence >= 0.97 and tx_type in {"income", "expense", "debt_payment"}:
-                category = normalize_category(parsed.get("category"), tx_type)
-                tx = conn.execute(
-                    """INSERT INTO transactions(
-                           transaction_date,description,amount,transaction_type,category,account,source,notes,
-                           original_amount,original_currency,exchange_rate,user_id,workspace_id,created_at
-                       ) VALUES(%s,%s,%s,%s,%s,%s,'finva_gmail',%s,%s,%s,%s,%s,%s,NOW())
-                       RETURNING id""",
-                    (
-                        parsed.get("transaction_date") or datetime.now(timezone.utc).date().isoformat(),
-                        str(parsed.get("description") or subject)[:500], parsed.get("amount"), tx_type, category,
-                        str(parsed.get("account") or "")[:200], "Importado automáticamente desde Gmail.",
-                        parsed.get("original_amount"), parsed.get("original_currency"), parsed.get("exchange_rate"),
-                        int(connection["legacy_user_id"]), connection["workspace_id"],
-                    ),
-                ).fetchone()
-                transaction_id = int(tx["id"])
-                candidate_status = "auto_saved"
+            statement_exists = kind == "statement" and conn.execute(
+                "SELECT 1 FROM finva_statement_documents WHERE email_message_id=%s",
+                (int(existing["id"]),),
+            ).fetchone()
+            if kind != "statement" or statement_exists:
+                return "duplicate"
+            email_row = existing
             conn.execute(
-                """INSERT INTO finva_email_candidates(
-                       email_message_id,account_id,workspace_id,transaction_id,transaction_date,description,
-                       amount,transaction_type,category,bank,confidence,status,raw_payload
-                   ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)""",
+                """UPDATE finva_email_messages
+                   SET bank=%s,status='statement',parse_reason=%s WHERE id=%s""",
                 (
-                    int(email_row["id"]), connection["account_id"], connection["workspace_id"], transaction_id,
-                    parsed.get("transaction_date") or datetime.now(timezone.utc).date().isoformat(),
-                    str(parsed.get("description") or subject)[:500], parsed.get("amount"), tx_type,
-                    normalize_category(parsed.get("category"), tx_type), parsed.get("bank") or "unknown",
-                    confidence, candidate_status, json.dumps(parsed, default=str),
+                    parsed.get("bank") or "unknown",
+                    parsed.get("confidence_reason") or "Estado de cuenta listo para procesar.",
+                    int(existing["id"]),
                 ),
             )
-            status = candidate_status
-            conn.execute("UPDATE finva_email_messages SET status=%s WHERE id=%s", (status, int(email_row["id"])))
+        else:
+            email_row = conn.execute(
+                """INSERT INTO finva_email_messages(
+                       connection_id,account_id,workspace_id,provider_message_id,sender,subject,received_at,
+                       bank,status,parse_reason
+                   ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (
+                    int(connection["id"]), connection["account_id"], connection["workspace_id"], message_id,
+                    sender[:500], subject[:500], received_at,
+                    "ccss" if payroll_report else parsed.get("bank") or "unknown", kind,
+                    (f"Orden patronal CCSS {payroll_report['period_month']} procesada."
+                     if payroll_report else parsed.get("confidence_reason") or parsed.get("ignore_reason") or ""),
+                ),
+            ).fetchone()
+
+        if payroll_report:
+            conn.execute(
+                """INSERT INTO payroll_salary_reports(
+                       user_id,workspace_id,email_message_id,provider_message_id,period_month,
+                       reported_salary,trans_previous_salary,previous_salary,daily_subsidy,
+                       employer_number,verification_code,source,updated_at
+                   ) VALUES(%s,%s,NULL,%s,%s,%s,%s,%s,%s,%s,%s,'ccss_order_patronal',NOW())
+                   ON CONFLICT(workspace_id,period_month) DO UPDATE SET
+                       provider_message_id=EXCLUDED.provider_message_id,
+                       reported_salary=EXCLUDED.reported_salary,
+                       trans_previous_salary=EXCLUDED.trans_previous_salary,
+                       previous_salary=EXCLUDED.previous_salary,
+                       daily_subsidy=EXCLUDED.daily_subsidy,
+                       employer_number=EXCLUDED.employer_number,
+                       verification_code=EXCLUDED.verification_code,
+                       source=EXCLUDED.source,updated_at=NOW()""",
+                (
+                    int(connection["legacy_user_id"]), connection["workspace_id"], message_id,
+                    payroll_report["period_month"], payroll_report["reported_salary"],
+                    payroll_report["trans_previous_salary"], payroll_report["previous_salary"],
+                    payroll_report["daily_subsidy"], payroll_report.get("employer_number"),
+                    payroll_report.get("verification_code"),
+                ),
+            )
+            status = "payroll_statement"
+        elif kind == "statement":
+            document_text = attachment_text or financial_text
+            document_hash = statement_hash(document_text)
+            movements = parse_statement_movements(str(parsed.get("bank") or "unknown"), document_text)
+            document_status = (
+                "candidates_ready" if movements else
+                "unsupported" if parsed.get("bank") not in {"bac", "multimoney", "popular"} else "empty"
+            )
+            document_row = conn.execute(
+                """INSERT INTO finva_statement_documents(
+                       email_message_id,account_id,workspace_id,bank,statement_month,
+                       attachment_names,document_hash,parser_name,parser_version,movements_found,status
+                   ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (
+                    int(email_row["id"]), connection["account_id"], connection["workspace_id"],
+                    parsed.get("bank") or "unknown", parsed.get("statement_month"),
+                    attachment_names, document_hash, STATEMENT_PARSER_NAME,
+                    STATEMENT_PARSER_VERSION, len(movements), document_status,
+                ),
+            ).fetchone()
+            resolutions = []
+            for index, movement in enumerate(movements):
+                candidate = statement_candidate(
+                    movement, bank=str(parsed.get("bank") or "unknown"),
+                    document_hash=document_hash, movement_index=index,
+                    statement_text=document_text,
+                )
+                resolutions.append(_insert_finva_candidate(
+                    conn, email_message_id=int(email_row["id"]), connection=connection,
+                    candidate=candidate, statement_document_id=int(document_row["id"]),
+                ))
+            if movements:
+                status = "duplicate" if all(item.get("status") == "duplicate" for item in resolutions) else "pending"
+                reason = f"Estado de cuenta procesado: {len(movements)} movimiento(s) listos para revisión."
+            else:
+                status = "ignored"
+                reason = "Estado de cuenta detectado, pero el formato todavía no tiene filas firmadas compatibles."
+            conn.execute("UPDATE finva_email_messages SET parse_reason=%s WHERE id=%s", (reason, int(email_row["id"])))
+        elif kind == "movement" and parsed.get("amount") and parsed.get("transaction_type"):
+            candidate = canonical_candidate(
+                parsed,
+                provider_message_id=message_id,
+                subject=subject,
+            )
+            resolution = _insert_finva_candidate(
+                conn, email_message_id=int(email_row["id"]), connection=connection,
+                candidate=candidate,
+            )
+            status = str(resolution.get("status") or "pending")
+        conn.execute("UPDATE finva_email_messages SET status=%s WHERE id=%s", (status, int(email_row["id"])))
         conn.commit()
     return status
 
@@ -432,6 +842,11 @@ def _connection_with_token(connection_id: int) -> tuple[dict[str, Any], str]:
         ).fetchone()
         if not row:
             raise RuntimeError("Conexión Gmail no encontrada.")
+        if not _has_active_vip_access(conn, str(row["account_id"])):
+            raise HTTPException(
+                status_code=403,
+                detail="La automatización de Gmail está disponible únicamente en el plan VIP.",
+            )
         token = _vault_read(conn, str(row["refresh_token_secret_id"]))
     return dict(row), token
 
@@ -440,15 +855,27 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
     connection, token = _connection_with_token(connection_id)
     try:
         service = service or _credentials(token)
-        response = service.users().messages().list(
-            userId="me", q=FINVA_QUERY, maxResults=max(1, min(max_results, 250))
-        ).execute()
-        results = [_process_message(service, connection, item["id"]) for item in response.get("messages", []) if item.get("id")]
+        initial_sync = not connection.get("initial_scan_completed_at")
+        next_initial_page = None
+        if initial_sync:
+            financial_messages, next_initial_page = _list_message_page(
+                service, _year_to_date_query(),
+                page_token=connection.get("initial_scan_page_token"), limit=50,
+            )
+        else:
+            financial_messages = _list_message_refs(service, FINVA_QUERY, max_results)
+        payroll_messages = _list_message_refs(service, _aguinaldo_gmail_query(), 100)
+        messages = {
+            item["id"]: item
+            for item in [*financial_messages, *payroll_messages]
+            if item.get("id")
+        }
+        results = [_process_message(service, connection, item["id"]) for item in messages.values()]
     except Exception as exc:
         message = str(exc).lower()
         if "invalid_grant" in message or "token has been expired" in message or "revoked" in message:
             _mark_reconnect(connection_id)
-            raise HTTPException(status_code=409, detail="La conexión de Gmail venció. Volvé a autorizarla desde FINVA.") from exc
+            raise HTTPException(status_code=409, detail="La conexión de Gmail venció. Volvé a autorizarla desde DINCR.") from exc
         with get_connection() as conn:
             conn.execute(
                 "UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_error=%s,updated_at=NOW() WHERE id=%s",
@@ -459,16 +886,24 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
 
     with get_connection() as conn:
         conn.execute(
-            """UPDATE finva_gmail_connections SET status='active',last_sync_at=NOW(),last_success_at=NOW(),
-                      last_error=NULL,updated_at=NOW() WHERE id=%s""",
-            (connection_id,),
+            """UPDATE finva_gmail_connections
+               SET status='active',last_sync_at=NOW(),last_success_at=NOW(),last_error=NULL,
+                   initial_scan_started_at=CASE WHEN %s THEN COALESCE(initial_scan_started_at,NOW()) ELSE initial_scan_started_at END,
+                   initial_scan_page_token=CASE WHEN %s THEN %s ELSE initial_scan_page_token END,
+                   initial_scan_completed_at=CASE WHEN %s AND %s IS NULL THEN NOW() ELSE initial_scan_completed_at END,
+                   updated_at=NOW()
+               WHERE id=%s""",
+            (initial_sync, initial_sync, next_initial_page, initial_sync, next_initial_page, connection_id),
         )
         conn.commit()
     return {
         "status": "ok",
+        "scan_scope": "year_to_date" if initial_sync else "recent",
+        "initial_scan_complete": (not initial_sync) or next_initial_page is None,
         "found": len(results),
         "auto_saved": results.count("auto_saved"),
         "pending": results.count("pending"),
+        "payroll_reports": results.count("payroll_statement"),
         "duplicates": results.count("duplicate"),
     }
 
@@ -515,7 +950,20 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
     if not secret or not secrets.compare_digest(secret, expected):
         raise HTTPException(status_code=403, detail="Secreto de mantenimiento inválido.")
     with get_connection() as conn:
-        rows = conn.execute("SELECT id FROM finva_gmail_connections WHERE status='active' ORDER BY id").fetchall()
+        rows = conn.execute(
+            """SELECT c.id
+               FROM finva_gmail_connections c
+               JOIN account_subscriptions s ON s.account_id=c.account_id
+               JOIN plans p ON p.id=s.plan_id
+               WHERE c.status='active'
+                 AND s.status='active'
+                 AND p.code='vip'
+                 AND (
+                   s.access_source<>'courtesy'
+                   OR (s.expires_at IS NOT NULL AND s.expires_at>NOW())
+                 )
+               ORDER BY c.id"""
+        ).fetchall()
     completed = 0
     reconnect = 0
     for row in rows:
@@ -531,7 +979,8 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
                 reconnect += 1
         except Exception:
             continue
-    return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect}
+    retention = apply_gmail_retention()
+    return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect, "retention": retention}
 
 
 def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, Any]:
@@ -550,7 +999,18 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
     email = str(notification.get("emailAddress") or "").lower()
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT id FROM finva_gmail_connections WHERE google_email=%s AND status='active'",
+            """SELECT c.id
+               FROM finva_gmail_connections c
+               JOIN account_subscriptions s ON s.account_id=c.account_id
+               JOIN plans p ON p.id=s.plan_id
+               WHERE c.google_email=%s
+                 AND c.status='active'
+                 AND s.status='active'
+                 AND p.code='vip'
+                 AND (
+                   s.access_source<>'courtesy'
+                   OR (s.expires_at IS NOT NULL AND s.expires_at>NOW())
+                 )""",
             (email,),
         ).fetchone()
     if not row:

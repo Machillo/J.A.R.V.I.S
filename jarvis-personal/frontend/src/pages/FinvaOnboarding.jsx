@@ -3,6 +3,8 @@ import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Crown
 import { getBillingCatalog, getOnboarding, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../lib/receiptPicker";
+import { markFinvaWelcomeSeen, shouldShowFinvaWelcome } from "../lib/firstRunExperience";
+import FinvaWelcomeStory from "./FinvaWelcomeStory";
 
 const iconMap = { free: WalletCards, basic: Sparkles, vip: Crown };
 
@@ -20,6 +22,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
   const [receipt, setReceipt] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState("");
+  const [showWelcome, setShowWelcome] = useState(() => shouldShowFinvaWelcome(user?.id));
 
   const hydrate = (data) => {
     const p = data?.profile;
@@ -87,6 +90,11 @@ export default function FinvaOnboarding({ user, onComplete }) {
     finally { setSaving(false); }
   };
 
+  const finishWelcome = () => {
+    markFinvaWelcomeSeen(user?.id);
+    setShowWelcome(false);
+  };
+
   const copyValue = async (value, field) => {
     if (!value) return;
     const fallbackCopy = () => {
@@ -133,6 +141,10 @@ export default function FinvaOnboarding({ user, onComplete }) {
     }
   };
 
+  if (!profile?.plan_selected && showWelcome) {
+    return <FinvaWelcomeStory onFinish={finishWelcome} />;
+  }
+
   if (!profile?.plan_selected && paymentFlow) {
     const order = paymentFlow.order;
     const payment = paymentFlow.payment || billing?.payment || {};
@@ -140,7 +152,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
     return <main className="unified-onboarding-shell">
       <section className="unified-onboarding-card unified-payment-stage">
         <div className="unified-onboarding-top">
-          <div><strong>FINVA</strong><small>Activar {order?.plan_code?.toUpperCase()}</small></div>
+          <div><strong>DINCR</strong><small>Activar {order?.plan_code?.toUpperCase()}</small></div>
           {!submitted && <button type="button" onClick={() => { setPaymentFlow(null); setReceipt(null); setError(""); }} disabled={uploading}>Volver</button>}
         </div>
         <div className="unified-payment-heading"><div className="unified-plan-icon"><Smartphone size={24}/></div><div><span className="unified-eyebrow">PAGO MENSUAL POR SINPE</span><h1>{submitted ? "Comprobante recibido" : `Activar ${order?.plan_code?.toUpperCase()}`}</h1></div></div>
@@ -161,7 +173,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
           }
           {error && <p className="unified-onboarding-error">{error}</p>}
           <button className="unified-primary" type="button" disabled={uploading || !receipt || !payment.phone} onClick={sendReceipt}>{uploading ? "Subiendo..." : "Enviar comprobante"}</button>
-        </> : <div className="unified-payment-waiting"><CheckCircle2 size={38}/><strong>Listo, ya recibimos tu comprobante</strong><p>FINVA está esperando la confirmación. Cuando coincidan el código y el monto, tu plan se activará automáticamente.</p><small>Podés cerrar la app. Al volver, continuaremos verificando el pago.</small></div>}
+        </> : <div className="unified-payment-waiting"><CheckCircle2 size={38}/><strong>Listo, ya recibimos tu comprobante</strong><p>DINCR está esperando la confirmación. Cuando coincidan el código y el monto, tu plan se activará automáticamente.</p><small>Podés cerrar la app. Al volver, continuaremos verificando el pago.</small></div>}
       </section>
     </main>;
   }
@@ -169,7 +181,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
   if (!profile?.plan_selected) return <main className="unified-onboarding-shell">
     <section className="unified-onboarding-card unified-plan-stage">
       <div className="unified-onboarding-top">
-        <div><strong>FINVA</strong><small>Elegí tu plan personal</small></div>
+        <div><strong>DINCR</strong><small>Elegí tu plan personal</small></div>
         <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> Salir</button>
       </div>
       <div className="unified-onboarding-intro">
@@ -201,7 +213,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
   return <main className="unified-onboarding-shell">
     <section className="unified-onboarding-card unified-loading">
       <div className="unified-spinner"/>
-      <span>Abriendo FINVA…</span>
+      <span>Abriendo DINCR…</span>
     </section>
   </main>;
 }

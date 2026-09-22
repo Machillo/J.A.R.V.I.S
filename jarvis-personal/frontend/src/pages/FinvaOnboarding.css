@@ -1,5 +1,5 @@
-/* FINVA first-run onboarding.
-   Canonical source: Figma “FINVA — iOS Onboarding Initial”. */
+/* DINCR first-run onboarding.
+   Canonical source: Figma “DINCR — iOS Onboarding Initial”. */
 
 .unified-onboarding-shell {
   --onboarding-bg: #060e1a;
@@ -295,6 +295,39 @@
 
 .unified-onboarding-shell :is(h1, h2, h3, p, small, strong, span, label, button) { overflow-wrap: anywhere; }
 
+.finva-welcome-story {
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+  padding: max(20px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+  color: #f7fbff;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(20, 189, 171, .13), transparent 34%),
+    linear-gradient(180deg, #06101d 0%, #071522 54%, #050c16 100%);
+}
+.finva-welcome-brand,.finva-welcome-footer{position:relative;z-index:2;width:min(100%,440px);margin-inline:auto}
+.finva-welcome-brand{display:flex;align-items:center;justify-content:space-between}
+.finva-welcome-brand>span{display:inline-flex;align-items:center;gap:7px;color:#67e4d5;font-size:.78rem;font-weight:850;letter-spacing:.14em}
+.finva-welcome-brand button{min-height:40px;padding:0 10px;border:0;color:#9eb0c4;background:transparent;font:inherit;font-weight:700}
+.finva-welcome-stage{position:relative;z-index:2;align-self:center;width:min(100%,440px);margin:auto;text-align:center;animation:finva-welcome-enter .55s ease both}
+.finva-welcome-symbol{width:104px;height:104px;display:grid;place-items:center;margin:0 auto 28px;border:1px solid rgba(103,228,213,.28);border-radius:32px;color:#67e4d5;background:linear-gradient(145deg,rgba(16,65,76,.84),rgba(10,31,48,.94));box-shadow:0 22px 70px rgba(0,0,0,.34),0 0 36px rgba(16,199,178,.12);animation:finva-welcome-float 3.4s ease-in-out infinite}
+.finva-welcome-stage small{color:#67e4d5;font-size:.68rem;font-weight:850;letter-spacing:.14em}
+.finva-welcome-stage h1{margin:12px 0 14px;font-size:clamp(2rem,9vw,3rem);line-height:1.02;letter-spacing:-.045em}
+.finva-welcome-stage p{max-width:390px;margin:0 auto;color:#a9bacb;font-size:1rem;line-height:1.65}
+.finva-welcome-footer{display:grid;gap:18px}
+.finva-welcome-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.finva-welcome-progress span{height:4px;overflow:hidden;border-radius:999px;background:#173044}
+.finva-welcome-progress span.active{background:linear-gradient(90deg,#0ac7b2,#67e4d5);box-shadow:0 0 12px rgba(10,199,178,.25)}
+.finva-welcome-next{min-height:52px;display:flex;align-items:center;justify-content:center;gap:9px;border:1px solid rgba(103,228,213,.24);border-radius:16px;color:#031916;background:linear-gradient(180deg,#6ce9da,#28cbb8);font:inherit;font-weight:850;box-shadow:0 14px 34px rgba(10,199,178,.18)}
+.finva-welcome-orb{position:absolute;z-index:1;border-radius:50%;filter:blur(2px);opacity:.38;pointer-events:none}
+.finva-welcome-orb--one{width:250px;height:250px;top:14%;right:-150px;background:radial-gradient(circle,rgba(65,121,255,.35),transparent 68%)}
+.finva-welcome-orb--two{width:280px;height:280px;bottom:7%;left:-190px;background:radial-gradient(circle,rgba(10,199,178,.32),transparent 68%)}
+@keyframes finva-welcome-enter{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes finva-welcome-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+
 @media (max-width: 390px) {
   .unified-onboarding-shell { padding-inline: 14px; }
   .unified-onboarding-card { padding: 15px; }
@@ -306,5 +339,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .unified-spinner { animation: none; }
+  .unified-spinner,
+  .finva-welcome-stage,
+  .finva-welcome-symbol { animation: none; }
 }

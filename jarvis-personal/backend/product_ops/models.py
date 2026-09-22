@@ -22,12 +22,29 @@ class FeedbackCreate(BaseModel):
     message: str = Field(min_length=5, max_length=4000)
     app_version: str | None = Field(default=None, max_length=30)
     screen: str | None = Field(default=None, max_length=80)
-    error_reference: str | None = Field(default=None, max_length=80)
+    error_reference: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class AutomaticIncidentCreate(BaseModel):
+    path: str = Field(min_length=1, max_length=160, pattern=r"^/")
+    method: str = Field(default="GET", max_length=10, pattern=r"^[A-Za-z]+$")
+    status: int = Field(ge=0, le=599)
+    request_id: str = Field(min_length=8, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    error_reference: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    error_type: str = Field(default="api_error", max_length=80, pattern=r"^[A-Za-z0-9_.-]+$")
+    app_version: str | None = Field(default=None, max_length=30, pattern=r"^[A-Za-z0-9_.+-]+$")
+    platform: str | None = Field(default=None, max_length=30, pattern=r"^[A-Za-z0-9_.-]+$")
+    screen: str | None = Field(default=None, max_length=80)
+    retry_count: int = Field(default=0, ge=0, le=3)
 
 
 class FeedbackUpdate(BaseModel):
     status: Literal["new", "reviewing", "resolved", "dismissed"]
     owner_notes: str | None = Field(default=None, max_length=2000)
+
+
+class FeedbackResolutionUpdate(BaseModel):
+    resolution: Literal["resolved", "still_happening"]
 
 
 class TestPaymentUpdate(BaseModel):
@@ -42,3 +59,17 @@ class StoreLifecycleSimulation(BaseModel):
         "trial_started", "purchased", "renewed", "upgrade", "downgrade",
         "cancel_requested", "grace_period", "restored", "expired", "revoked",
     ]
+
+
+class ReleasePolicyUpdate(BaseModel):
+    minimum_supported_version: str = Field(max_length=30, pattern=r"^[0-9]+\.[0-9]+\.[0-9]+(?:[+-][A-Za-z0-9.-]+)?$")
+    latest_version: str = Field(max_length=30, pattern=r"^[0-9]+\.[0-9]+\.[0-9]+(?:[+-][A-Za-z0-9.-]+)?$")
+    update_url: str | None = Field(default=None, max_length=500, pattern=r"^https://")
+    message_es: str = Field(min_length=3, max_length=300)
+    message_en: str = Field(min_length=3, max_length=300)
+    is_active: bool = True
+
+
+class FeatureFlagUpdate(BaseModel):
+    enabled: bool
+    reason: str = Field(min_length=3, max_length=300)

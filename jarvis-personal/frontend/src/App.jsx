@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
+import { flushPendingOperations } from "./lib/operationRecovery";
 import Login from "./pages/Login";
 import FinvaOnboarding from "./pages/FinvaOnboarding";
 import ProfileSetup from "./pages/ProfileSetup";
@@ -12,11 +13,18 @@ import { registerNativeAuthListener } from "./lib/nativeAuth";
 import { identifyTelemetryUser, trackEvent } from "./lib/telemetry";
 import { openSupport } from "./lib/apiErrors";
 import { tx } from "./lib/locale";
+import ReleaseUpdateNotice from "./components/ReleaseUpdateNotice";
+import { getReleasePolicy } from "./lib/releasePolicy";
+import { detectNativePlatform } from "./ui/native/platform";
+import FinvaAppLock from "./components/FinvaAppLock";
+
+const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.finva.app";
+const isFinvaDistribution = nativeAppId === "com.finva.app";
 
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
     <main className="unified-router-boot">
-      <strong>FINVA</strong>
+      <strong>DINCR</strong>
       <span>{message}</span>
     </main>
   );
@@ -29,7 +37,20 @@ export default function App() {
   const [identityError, setIdentityError] = useState("");
   const [ownerBridgeMode, setOwnerBridgeMode] = useState(false);
   const [nativeAuthError, setNativeAuthError] = useState("");
+  const [releasePolicy, setReleasePolicy] = useState(null);
   const currentUserRef = useRef(null);
+
+  const refreshReleasePolicy = useCallback(async () => {
+    try {
+      setReleasePolicy(await getReleasePolicy(detectNativePlatform()));
+    } catch {
+      // Compatibility checks are fail-open: a network or backend outage must
+      // never strand a user outside DINCR.
+      setReleasePolicy(null);
+    }
+  }, []);
+
+  useEffect(() => { refreshReleasePolicy(); }, [refreshReleasePolicy]);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -86,7 +107,7 @@ export default function App() {
 
   useEffect(() => {
     const isPersonal = ownerBridgeMode || currentUser?.role === "owner" || currentUser?.role === "admin";
-    document.title = isPersonal ? "J.A.R.V.I.S." : "Finva";
+    document.title = isPersonal ? "J.A.R.V.I.S." : "DINCR";
   }, [ownerBridgeMode, currentUser]);
 
   useEffect(() => {
@@ -141,7 +162,9 @@ export default function App() {
     CapacitorApp.addListener("appStateChange", ({ isActive }) => {
       if (isActive) {
         trackEvent("app_resumed");
+        flushPendingOperations();
         refreshProfile();
+        refreshReleasePolicy();
       }
     }).then((listener) => {
       nativeListener = listener;
@@ -151,7 +174,7 @@ export default function App() {
       cancelled = true;
       nativeListener?.remove();
     };
-  }, [session, ownerBridgeMode]);
+  }, [session, ownerBridgeMode, refreshReleasePolicy]);
 
   if (ownerBridgeMode) {
     return <PersonalApp />;
@@ -183,6 +206,10 @@ export default function App() {
     return <BootScreen />;
   }
 
+  if (currentUser.role !== "owner" && currentUser.role !== "admin" && releasePolicy?.required) {
+    return <ReleaseUpdateNotice policy={releasePolicy} required onRefresh={refreshReleasePolicy} />;
+  }
+
   if (currentUser.role !== "owner" && currentUser.role !== "admin" && currentUser.legal?.required) {
     return <LegalConsent user={currentUser} onAccepted={setCurrentUser} />;
   }
@@ -192,7 +219,13 @@ export default function App() {
   }
 
   if (currentUser.role === "owner" || currentUser.role === "admin") {
-    return <PersonalApp />;
+    const personalApp = <PersonalApp />;
+    if (!isFinvaDistribution) return personalApp;
+    return (
+      <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
+        {personalApp}
+      </FinvaAppLock>
+    );
   }
 
   if (!currentUser.plan_selected) {
@@ -204,5 +237,9 @@ export default function App() {
     );
   }
 
-  return <UsersApp user={currentUser} onUserChange={setCurrentUser} />;
+  return (
+    <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
+      <UsersApp user={currentUser} onUserChange={setCurrentUser} releasePolicy={releasePolicy} />
+    </FinvaAppLock>
+  );
 }

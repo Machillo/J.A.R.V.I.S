@@ -1,5 +1,6 @@
 import os
 import logging
+import uuid
 from typing import Any
 
 import requests
@@ -18,6 +19,35 @@ VALID_ROLES = {"owner", "admin", "user", "viewer"}
 VALID_STATUSES = {"active", "blocked", "pending"}
 OWNER_EMAILS = {email.strip().lower() for email in os.getenv("OWNER_EMAILS", "").split(",") if email.strip()}
 logger = logging.getLogger(__name__)
+
+DELETION_STAGES = (
+    "IDENTITY", "FK_CHECK", "ACCOUNT_DELETE", "LEGACY_DELETE",
+    "SUPABASE_AUTH_DELETE", "COMMIT", "DONE",
+)
+
+
+def _log_deletion(deletion_id: str, stage: str, status: str, **technical) -> None:
+    """Structured deletion trace without identity, secrets or financial data."""
+    safe = {key: value for key, value in technical.items() if value not in (None, "")}
+    logger.info(
+        "account_deletion deletion_id=%s stage=%s status=%s technical=%s",
+        deletion_id, stage, status, safe,
+    )
+
+
+def _deletion_error_metadata(exc: Exception) -> dict[str, object]:
+    metadata: dict[str, object] = {"error_type": type(exc).__name__}
+    status_code = getattr(exc, "status_code", None)
+    if status_code:
+        metadata["http_status"] = status_code
+    pgcode = getattr(exc, "pgcode", None)
+    if pgcode:
+        metadata["pgcode"] = pgcode
+    diag = getattr(exc, "diag", None)
+    constraint_name = getattr(diag, "constraint_name", None) if diag else None
+    if constraint_name:
+        metadata["constraint"] = constraint_name
+    return metadata
 
 
 def _normalize_email(email: str) -> str:
@@ -224,81 +254,118 @@ def delete_current_account() -> dict[str, str]:
     """
     from backend.auth.current_user import get_current_user
 
+    deletion_id = str(uuid.uuid4())
+    stage = "IDENTITY"
+    _log_deletion(deletion_id, stage, "STARTED")
     current = get_current_user()
     account_id = str(current.get("account_id") or "")
     auth_user_id = str(current.get("supabase_user_id") or "")
-    legacy_user_id = int(current.get("id") or 0)
+    allowed_user_id = int(current.get("id") or 0)
     email = _normalize_email(str(current.get("email") or ""))
 
-    if not account_id or not auth_user_id or not legacy_user_id:
-        raise HTTPException(status_code=401, detail="No pudimos identificar tu cuenta.")
+    if not account_id or not auth_user_id or not allowed_user_id:
+        _log_deletion(deletion_id, stage, "FAILED", error_type="IncompleteIdentity", http_status=401)
+        raise HTTPException(status_code=401, detail={"message": "No pudimos identificar tu cuenta.", "deletion_id": deletion_id, "stage": stage})
     if not SUPABASE_URL or not SUPABASE_ADMIN_KEY:
+        _log_deletion(deletion_id, stage, "FAILED", error_type="MissingServerConfiguration", http_status=503)
         raise HTTPException(
             status_code=503,
-            detail="La eliminación de cuenta no está configurada todavía. Contactá a soporte.",
+            detail={"message": "La eliminación de cuenta no está configurada todavía. Contactá a soporte.", "deletion_id": deletion_id, "stage": stage},
         )
-
-    with get_connection() as conn:
-        incompatible = conn.execute(
-            """
-            SELECT COUNT(*) AS total
-            FROM pg_constraint c
-            JOIN pg_class child ON child.oid=c.conrelid
-            JOIN pg_namespace ns ON ns.oid=child.relnamespace
-            WHERE c.contype='f'
-              AND ns.nspname='public'
-              AND c.confrelid IN (
-                    'public.accounts'::regclass,
-                    'public.workspaces'::regclass,
-                    'public.users'::regclass
-              )
-              AND c.confdeltype NOT IN ('c','n')
-            """
-        ).fetchone()
-        if int((incompatible or {}).get("total") or 0) > 0:
-            raise HTTPException(
-                status_code=503,
-                detail="La eliminación de cuenta requiere una actualización pendiente. Contactá a soporte.",
-            )
 
     try:
         with get_connection() as conn:
-            conn.execute("DELETE FROM accounts WHERE id=%s", (account_id,))
-            # The legacy `users` table has no allowed_user_id column. Its only
-            # stable link to the current identity is the normalized email; the
-            # account/workspace cascades already remove the owned finance data.
-            conn.execute(
-                "DELETE FROM users WHERE lower(email)=lower(%s)",
-                (email,),
-            )
-            conn.execute("DELETE FROM allowed_users WHERE id=%s", (legacy_user_id,))
+            # Validate the request identity against the account row. Do not scan
+            # every FK in the schema: a RESTRICT constraint belonging to another
+            # account used to disable deletion globally for Free, Basic and VIP.
+            identity = conn.execute(
+                """SELECT legacy_allowed_user_id, supabase_user_id, primary_email
+                   FROM accounts WHERE id=%s FOR UPDATE""",
+                (account_id,),
+            ).fetchone()
+            if not identity:
+                raise HTTPException(status_code=404, detail="La cuenta ya no existe.")
+            if str(identity.get("supabase_user_id") or "") != auth_user_id:
+                raise HTTPException(status_code=409, detail="La identidad de la cuenta no coincide. Volvé a iniciar sesión.")
 
+            _log_deletion(deletion_id, stage, "COMPLETED")
+
+            canonical_allowed_user_id = int(identity.get("legacy_allowed_user_id") or allowed_user_id)
+            canonical_email = _normalize_email(str(identity.get("primary_email") or email))
+
+            stage = "FK_CHECK"
+            incompatible = conn.execute(
+                """SELECT child.relname AS child_table, c.conname AS constraint_name
+                   FROM pg_constraint c
+                   JOIN pg_class child ON child.oid=c.conrelid
+                   JOIN pg_namespace ns ON ns.oid=child.relnamespace
+                   WHERE c.contype='f' AND ns.nspname='public'
+                     AND c.confrelid IN ('public.accounts'::regclass, 'public.workspaces'::regclass, 'public.users'::regclass)
+                     AND c.confdeltype NOT IN ('c','n')
+                   ORDER BY child.relname,c.conname"""
+            ).fetchall()
+            _log_deletion(
+                deletion_id, stage, "COMPLETED",
+                incompatible_fk_count=len(incompatible),
+                incompatible_constraints=[f"{row['child_table']}.{row['constraint_name']}" for row in incompatible],
+            )
+
+            stage = "ACCOUNT_DELETE"
+            deleted = conn.execute(
+                "DELETE FROM accounts WHERE id=%s RETURNING id",
+                (account_id,),
+            ).fetchone()
+            if not deleted:
+                raise HTTPException(status_code=404, detail="La cuenta ya no existe.")
+            _log_deletion(deletion_id, stage, "COMPLETED")
+
+            stage = "LEGACY_DELETE"
+            # Some historical finance rows use users.id. The workspace cascade
+            # removes their data. Production users is keyed by email and does
+            # not have the stale schema.sql allowed_user_id column.
+            conn.execute("DELETE FROM users WHERE lower(email)=lower(%s)", (canonical_email,))
+            conn.execute("DELETE FROM allowed_users WHERE id=%s", (canonical_allowed_user_id,))
+            _log_deletion(deletion_id, stage, "COMPLETED")
+
+            stage = "SUPABASE_AUTH_DELETE"
             response = requests.delete(
                 f"{SUPABASE_URL.rstrip('/')}/auth/v1/admin/users/{auth_user_id}",
                 headers=_supabase_admin_headers(SUPABASE_ADMIN_KEY),
                 timeout=10,
             )
             if response.status_code not in {200, 204, 404}:
-                logger.error(
-                    "Supabase Auth account deletion failed with status %s for account %s",
-                    response.status_code,
-                    account_id,
-                )
+                _log_deletion(deletion_id, stage, "FAILED", error_type="SupabaseAdminResponse", http_status=response.status_code)
                 raise HTTPException(
                     status_code=502,
                     detail="No pudimos eliminar tu acceso en este momento. El intento quedó registrado; probá nuevamente o contactá a soporte.",
                 )
+            _log_deletion(deletion_id, stage, "COMPLETED", http_status=response.status_code)
+
+            stage = "COMMIT"
             conn.commit()
-    except HTTPException:
-        raise
+            _log_deletion(deletion_id, stage, "COMPLETED")
+    except HTTPException as exc:
+        _log_deletion(deletion_id, stage, "FAILED", **_deletion_error_metadata(exc))
+        message = exc.detail if isinstance(exc.detail, str) else "No pudimos completar la eliminación."
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"message": message, "deletion_id": deletion_id, "stage": stage},
+        ) from exc
     except Exception as exc:
-        logger.exception("Permanent account deletion failed for account %s", account_id)
+        _log_deletion(deletion_id, stage, "FAILED", **_deletion_error_metadata(exc))
+        logger.exception("Account deletion failed deletion_id=%s stage=%s", deletion_id, stage)
         raise HTTPException(
             status_code=500,
-            detail="No pudimos completar la eliminación. Tus datos permanecen protegidos; intentá nuevamente o contactá a soporte.",
+            detail={
+                "message": "No pudimos completar la eliminación. Tus datos permanecen protegidos; intentá nuevamente o contactá a soporte.",
+                "deletion_id": deletion_id,
+                "stage": stage,
+            },
         ) from exc
 
-    return {"status": "OK", "message": "Cuenta eliminada permanentemente."}
+    stage = "DONE"
+    _log_deletion(deletion_id, stage, "COMPLETED")
+    return {"status": "OK", "message": "Cuenta eliminada permanentemente.", "deletion_id": deletion_id}
 
 
 def check_user_access(email: str):

@@ -1,22 +1,29 @@
 import { recordError } from "./telemetry";
+import { captureIncident } from "./incidentReporter";
 
 export const SUPPORT_CONTEXT_KEY = "finva:support-context";
 
 const GENERIC_MESSAGE = "No pudimos completar esta acción. Intentá nuevamente o pedí ayuda a soporte.";
 
 export class FinvaApiError extends Error {
-  constructor(message, { status, errorId, path, technicalMessage } = {}) {
+  constructor(message, { status, errorId, requestId, retryCount, path, method, technicalMessage } = {}) {
     super(message);
     this.name = "FinvaApiError";
     this.status = status;
     this.errorId = errorId || "";
+    this.requestId = requestId || errorId || "";
+    this.retryCount = retryCount || 0;
     this.path = path || "";
+    this.method = method || "GET";
     this.technicalMessage = technicalMessage || "";
   }
 }
 
-export function apiError(response, payload, path) {
-  const detail = typeof payload === "string" ? payload : payload?.detail || payload?.error || "";
+export function apiError(response, payload, path, method = "GET", autoReport = false) {
+  const rawDetail = typeof payload === "string" ? payload : payload?.detail || payload?.error || "";
+  const detail = typeof rawDetail === "object" ? rawDetail?.message || "" : rawDetail;
+  const deletionId = typeof rawDetail === "object" ? rawDetail?.deletion_id || "" : "";
+  const deletionStage = typeof rawDetail === "object" ? rawDetail?.stage || "" : "";
   const status = response?.status || 0;
   let message = GENERIC_MESSAGE;
   if (status === 401) message = "Tu sesión venció. Iniciá sesión nuevamente.";
@@ -28,16 +35,54 @@ export function apiError(response, payload, path) {
 
   const error = new FinvaApiError(message, {
     status,
-    errorId: typeof payload === "object" ? payload?.error_id : "",
+    errorId: deletionId || (typeof payload === "object" ? payload?.error_id : ""),
+    requestId: response?.finvaRequestId || response?.headers?.get?.("X-Request-ID") || payload?.request_id || "",
+    retryCount: response?.finvaRetryCount || 0,
     path,
-    technicalMessage: detail,
+    method,
+    technicalMessage: deletionStage ? `${detail} [${deletionStage}]` : detail,
   });
-  if (status >= 500 || status === 0) {
-    window.dispatchEvent(new CustomEvent("finva:api-error", { detail: {
+  if (autoReport && (status >= 500 || status === 0)) {
+    const incident = {
       screen: path,
       errorReference: error.errorId,
-      summary: "FINVA no pudo completar una acción.",
-    } }));
+      requestId: error.requestId,
+      retryCount: error.retryCount,
+      status,
+      path,
+      method,
+      errorType: `http_${status || "network"}`,
+      summary: "DINCR no pudo completar una acción.",
+    };
+    window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));
+    captureIncident(incident);
+  }
+  recordError(error, `api:${path || "unknown"}`);
+  return error;
+}
+
+export function apiNetworkError(cause, path, method = "GET", autoReport = true) {
+  const queued = Boolean(cause?.finvaOperationQueued);
+  const error = new FinvaApiError(queued
+    ? "Guardamos este cambio en el dispositivo. DINCR lo enviará cuando vuelva la conexión."
+    : GENERIC_MESSAGE, {
+    status: 0,
+    errorId: cause?.finvaRequestId || "",
+    requestId: cause?.finvaRequestId || "",
+    retryCount: cause?.finvaRetryCount || 0,
+    path,
+    method,
+    technicalMessage: cause?.name || "NetworkError",
+  });
+  error.operationQueued = queued;
+  const incident = {
+    screen: path, errorReference: error.errorId, requestId: error.requestId,
+    retryCount: error.retryCount, status: 0, path, method,
+    errorType: cause?.name || "network_error", summary: "DINCR perdió comunicación con el servicio.",
+  };
+  if (autoReport) {
+    window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));
+    captureIncident(incident);
   }
   recordError(error, `api:${path || "unknown"}`);
   return error;

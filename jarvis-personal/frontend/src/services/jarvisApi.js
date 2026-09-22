@@ -242,6 +242,8 @@ export const uploadPaymentReceipt = (orderId, file) => {
   return request(`/product-ops/billing/orders/${orderId}/receipt`, { method: "POST", body });
 };
 export const getProductOperations = () => request("/product-ops/owner/dashboard");
+export const updateReleasePolicy = (platform, payload) => jsonRequest(`/product-ops/owner/release-policy/${platform}`, "PATCH", payload);
+export const updateOperationalFeatureFlag = (flagKey, payload) => jsonRequest(`/product-ops/owner/feature-flags/${flagKey}`, "PATCH", payload);
 export const resolveTestPayment = (orderId, action = "confirm") => jsonRequest(`/product-ops/owner/orders/${orderId}`, "POST", { action });
 export const openTestPaymentReceipt = async (orderId) => {
   const preview = window.open("", "_blank");

@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 
 from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -39,11 +39,16 @@ from backend.user_product.gmail_service import (
     finish_gmail_connection,
     gmail_maintenance,
     gmail_status,
+    list_gmail_emails,
     process_gmail_push,
+    review_gmail_candidate,
     sync_current_gmail,
 )
+from backend.user_product.financial_identity import confirm_financial_account, list_financial_identity
+from backend.user_product.trust_analytics import get_gmail_trust_analytics
+from backend.user_product.gmail_consent import accept_gmail_consent
 
-router = APIRouter(prefix="/user-product", tags=["Finva Product"])
+router = APIRouter(prefix="/user-product", tags=["DINCR Product"])
 
 @router.get("/finance/summary")
 def finance_summary():
@@ -204,7 +209,7 @@ def vip_command_center():
 
 @router.get("/vip/strategy-dashboard")
 def vip_strategy_dashboard():
-    """Motor determinístico probado en JARVIS, aislado al workspace FINVA activo."""
+    """Motor determinístico probado en JARVIS, aislado al workspace DINCR activo."""
     require_feature("strategy_vip"); return get_premium_strategy_dashboard()
 
 @router.get("/vip/debt-advisory")
@@ -225,15 +230,23 @@ def vip_salvavidas_update(request: SalvavidasUpdateRequest):
 
 @router.get("/vip/aguinaldo")
 def vip_aguinaldo():
-    require_feature("strategy_vip"); return calculate_aguinaldo()
+    require_feature("gmail_automation")
+    if not gmail_status().get("connected"):
+        raise HTTPException(status_code=409, detail="Debes sincronizar tu email para calcular el aguinaldo.")
+    return calculate_aguinaldo()
 
 @router.get("/vip/gmail/status")
 def vip_gmail_status():
-    require_feature("strategy_vip"); return gmail_status()
+    require_feature("gmail_automation"); return gmail_status()
 
 @router.post("/vip/gmail/connect")
 def vip_gmail_connect():
-    require_feature("strategy_vip"); return begin_gmail_connection()
+    require_feature("gmail_automation"); return begin_gmail_connection()
+
+@router.post("/vip/gmail/consent")
+def vip_gmail_consent(request: GmailConsentRequest):
+    require_feature("gmail_automation")
+    return accept_gmail_consent(accepted=request.accepted, version=request.version)
 
 @router.get("/vip/gmail/callback")
 def vip_gmail_callback(code: str | None = None, state: str | None = None, error: str | None = None):
@@ -241,11 +254,41 @@ def vip_gmail_callback(code: str | None = None, state: str | None = None, error:
 
 @router.post("/vip/gmail/sync")
 def vip_gmail_sync():
-    require_feature("strategy_vip"); return sync_current_gmail()
+    require_feature("gmail_automation"); return sync_current_gmail()
+
+@router.get("/vip/gmail/emails")
+def vip_gmail_emails(status: str | None = None):
+    require_feature("gmail_automation"); return list_gmail_emails(status)
+
+@router.get("/vip/gmail/trust-analytics")
+def vip_gmail_trust_analytics():
+    require_feature("gmail_automation"); return get_gmail_trust_analytics()
+
+@router.get("/vip/financial-identity")
+def vip_financial_identity():
+    require_feature("gmail_automation"); return list_financial_identity()
+
+@router.put("/vip/financial-identity/accounts/{account_balance_id}")
+def vip_financial_identity_confirm(account_balance_id: int, request: FinancialAccountIdentityRequest):
+    require_feature("gmail_automation")
+    return confirm_financial_account(account_balance_id, request.ownership_status, request.display_name)
+
+@router.post("/vip/gmail/candidates/{candidate_id}/accept")
+def vip_gmail_candidate_accept(candidate_id: int):
+    require_feature("gmail_automation"); return review_gmail_candidate(candidate_id, "accept")
+
+@router.post("/vip/gmail/candidates/{candidate_id}/reject")
+def vip_gmail_candidate_reject(candidate_id: int):
+    require_feature("gmail_automation"); return review_gmail_candidate(candidate_id, "reject")
+
+@router.put("/vip/gmail/candidates/{candidate_id}/accept")
+def vip_gmail_candidate_correct(candidate_id: int, request: GmailCandidateReviewRequest):
+    require_feature("gmail_automation")
+    return review_gmail_candidate(candidate_id, "accept", request.model_dump())
 
 @router.delete("/vip/gmail")
 def vip_gmail_disconnect():
-    require_feature("strategy_vip"); return disconnect_gmail()
+    require_feature("gmail_automation"); return disconnect_gmail()
 
 @router.post("/vip/gmail/maintenance")
 def vip_gmail_maintenance(x_finva_cron_secret: str | None = Header(default=None)):

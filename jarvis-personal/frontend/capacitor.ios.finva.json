@@ -1,0 +1,14 @@
+{
+  "appId": "com.finva.app",
+  "appName": "DINCR",
+  "webDir": "dist",
+  "includePlugins": [
+    "@capacitor/app",
+    "@capacitor/browser",
+    "@aparajita/capacitor-biometric-auth",
+    "@capawesome/capacitor-file-picker"
+  ],
+  "ios": {
+    "path": "ios-finva"
+  }
+}

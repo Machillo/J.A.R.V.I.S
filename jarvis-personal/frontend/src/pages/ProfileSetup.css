@@ -1,5 +1,5 @@
-/* Canonical profile onboarding for JARVIS and FINVA.
-   Figma source: JARVIS + FINVA — Product Design / FINVA iOS onboarding. */
+/* Canonical profile onboarding for JARVIS and DINCR.
+   Figma source: JARVIS + DINCR — Product Design / DINCR iOS onboarding. */
 
 .profile-setup {
   --setup-bg: #060e1a;
@@ -206,7 +206,9 @@
 .profile-bank-search svg { width: 1.15rem; color: var(--setup-muted); }
 .profile-bank-search input { min-height: 3.2rem; padding: 0; border: 0; background: transparent; box-shadow: none !important; }
 .profile-bank-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
-.profile-bank-card { min-width: 0; min-height: 5.2rem; padding: 0.75rem; display: grid; grid-template-columns: 2.45rem minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 0.65rem; border: 1px solid var(--setup-line); border-radius: 1rem; text-align: left; background: var(--setup-surface); }
+.profile-bank-card { min-width: 0; min-height: 5.2rem; padding: 0.75rem; display: grid; grid-template-columns: 2.45rem minmax(0, 1fr) auto; grid-template-rows: auto auto; align-items: center; column-gap: 0.65rem; border: 1px solid var(--setup-line); border-radius: 1rem; color: var(--setup-text); text-align: left; background: var(--setup-surface); cursor: pointer; }
+.profile-bank-card.selected { border-color: var(--setup-accent); box-shadow: inset 0 0 0 1px var(--setup-accent); }
+.profile-bank-card > svg { grid-column: 3; grid-row: 1 / span 2; width: 1rem; color: var(--setup-accent); }
 .profile-bank-card strong { min-width: 0; font-size: 0.86rem; line-height: 1.2; overflow-wrap: anywhere; }
 .profile-bank-card small { color: var(--setup-muted); font-size: 0.7rem; }
 .bank-mark { grid-row: 1 / 3; min-width: 2.45rem; height: 2.45rem; padding: 0 0.25rem; display: grid; place-items: center; border-radius: 0.75rem; color: white; font-size: 0.7rem; font-weight: 950; }
