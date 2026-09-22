@@ -485,6 +485,45 @@ def test_account_deletion_stage_contract_is_complete():
     )
 
 
+def test_self_deletion_rejects_mismatched_auth_identity_before_writes(monkeypatch):
+    queries = []
+
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def execute(self, query, params=()):
+            queries.append(" ".join(query.split()))
+            return SimpleNamespace(fetchone=lambda: {
+                "legacy_allowed_user_id": 42,
+                "supabase_user_id": "different-auth-user",
+                "primary_email": "person@example.com",
+            })
+        def commit(self):
+            pytest.fail("A mismatched identity must not be committed")
+
+    monkeypatch.setattr(auth_service, "get_connection", lambda: Connection())
+    monkeypatch.setattr(auth_service, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", "sb_secret_example")
+    monkeypatch.setattr(
+        auth_service.requests, "delete",
+        lambda *_args, **_kwargs: pytest.fail("A mismatched identity must not delete Auth"),
+    )
+    token = set_current_user({
+        "id": 42,
+        "account_id": "11111111-1111-1111-1111-111111111111",
+        "supabase_user_id": "22222222-2222-2222-2222-222222222222",
+        "email": "person@example.com",
+    })
+    try:
+        with pytest.raises(HTTPException) as error:
+            auth_service.delete_current_account()
+    finally:
+        reset_current_user(token)
+
+    assert error.value.status_code == 409
+    assert all(not query.startswith("DELETE") for query in queries)
+
+
 def test_database_baseline_v1_matches_production_legacy_identity():
     baseline = (
         Path(__file__).parents[1] / "database" / "baseline" / "v1_identity_ownership.sql"
