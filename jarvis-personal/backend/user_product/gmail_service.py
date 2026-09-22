@@ -33,6 +33,7 @@ from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import resolve_candidate
 from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
 from backend.user_product.gmail_retention import apply_gmail_retention, retention_policy
+from backend.user_product.payroll_income import identify_received_payroll, link_received_payroll
 from backend.user_product.statement_candidate import (
     PARSER_NAME as STATEMENT_PARSER_NAME,
     PARSER_VERSION as STATEMENT_PARSER_VERSION,
@@ -617,6 +618,10 @@ def _insert_finva_candidate(
         account_id=str(connection["account_id"]), workspace_id=str(connection["workspace_id"]),
         legacy_user_id=int(connection["legacy_user_id"]),
     )
+    link_received_payroll(
+        conn, candidate_id=candidate_id, candidate=candidate,
+        workspace_id=str(connection["workspace_id"]),
+    )
     return resolve_candidate(conn, candidate_id)
 
 
@@ -651,6 +656,8 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
             _adapt_identity(financial_text, display_name), received_at,
         )
     )
+    if parsed and not payroll_report:
+        parsed = identify_received_payroll(parsed, subject=subject, body=financial_text)
     kind = "payroll_statement" if payroll_report else str(parsed.get("email_kind") or "ignored")
     if kind == "ignored" and parsed.get("transaction_type") == "internal_transfer" and parsed.get("amount"):
         # Legacy parser ownership hints become reviewable evidence, never the
