@@ -6,7 +6,7 @@ import re
 from datetime import date
 from typing import Any
 
-from backend.auth.current_user import get_current_account_id, get_current_workspace_id
+from backend.auth.current_user import get_current_account_id, get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.financial_lifecycle.progress import build_longitudinal_progress, compare_states
 from backend.financial_lifecycle.monthly_review import build_monthly_review
@@ -17,8 +17,15 @@ def capture_financial_snapshot() -> dict[str, Any]:
     state = build_financial_state()
     workspace_id = get_current_workspace_id()
     account_id = get_current_account_id()
+    user_id = get_current_user_id()
     payload = json.dumps(state, ensure_ascii=False, sort_keys=True, default=str)
     with get_connection() as conn:
+        previous = conn.execute(
+            """SELECT snapshot_date,state FROM financial_state_snapshots
+               WHERE workspace_id=%s AND snapshot_date<CURRENT_DATE
+               ORDER BY snapshot_date DESC,id DESC LIMIT 1""",
+            (workspace_id,),
+        ).fetchone()
         row = conn.execute(
             """INSERT INTO financial_state_snapshots(
                    workspace_id,account_id,snapshot_date,period,schema_version,state
@@ -32,8 +39,33 @@ def capture_financial_snapshot() -> dict[str, Any]:
                RETURNING id,snapshot_date,captured_at""",
             (workspace_id, account_id, date.today(), state["period"], state["schema_version"], payload),
         ).fetchone()
+        advisor = build_proactive_advisor(
+            current=state,
+            previous=(previous or {}).get("state"),
+            baseline_date=str(previous.get("snapshot_date")) if previous else None,
+        )
+        for alert in advisor.get("alerts") or []:
+            conn.execute(
+                """INSERT INTO notification_jobs(
+                       user_id,workspace_id,title,body,category,scheduled_at,
+                       reference_type,reference_id,dedupe_key,payload
+                   ) VALUES(%s,%s,%s,%s,'financial_lifecycle',NOW(),
+                            'financial_alert',%s,%s,%s::jsonb)
+                   ON CONFLICT DO NOTHING""",
+                (
+                    user_id, workspace_id, alert["title"], alert["explanation"],
+                    alert["id"], f"financial-lifecycle:{alert['id']}",
+                    json.dumps({
+                        "alert_id": alert["id"], "code": alert["code"],
+                        "severity": alert["severity"], "action": alert["action"],
+                    }, ensure_ascii=False, default=str),
+                ),
+            )
         conn.commit()
-    return {"status": "OK", "snapshot": dict(row), "state": state}
+    return {
+        "status": "OK", "snapshot": dict(row), "state": state,
+        "alerts_queued": len(advisor.get("alerts") or []),
+    }
 
 
 def list_financial_snapshots(limit: int = 90) -> list[dict[str, Any]]:
