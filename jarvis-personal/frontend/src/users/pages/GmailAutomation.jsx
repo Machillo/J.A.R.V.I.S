@@ -15,6 +15,7 @@ import {
   syncVipGmail,
 } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
+import { trackEvent } from "../../lib/telemetry";
 
 export default function GmailAutomation() {
   const [gmail, setGmail] = useState(null);
@@ -42,6 +43,13 @@ export default function GmailAutomation() {
     try {
       if (action === "reject") await rejectVipGmailCandidate(item.candidate_id);
       else await acceptVipGmailCandidate(item.candidate_id, corrections);
+      trackEvent("email_candidate_reviewed", {
+        decision: action === "reject" ? "rejected" : corrections ? "corrected" : "accepted",
+        bank: item.bank || "unknown",
+        institution_country: item.institution_country || "unknown",
+        source_type: item.source_type || "email",
+        is_internal_transfer: Boolean(item.is_internal_transfer),
+      });
       setEditing(null);
       setMessage(action === "reject" ? tx("Correo descartado.", "Email dismissed.") : item.is_internal_transfer ? tx("Transferencia interna confirmada sin contarla como gasto o ingreso.", "Internal transfer confirmed without counting it as income or expense.") : tx("Movimiento guardado.", "Transaction saved."));
       await load();
@@ -53,6 +61,11 @@ export default function GmailAutomation() {
     setBusy(`account-${item.id}`); setError(""); setMessage("");
     try {
       await confirmVipFinancialAccount(item.id, ownershipStatus);
+      trackEvent("financial_account_ownership_reviewed", {
+        bank: item.bank_name || "unknown",
+        institution_country: item.institution_country || "unknown",
+        ownership_status: ownershipStatus,
+      });
       setMessage(ownershipStatus === "own" ? tx("Cuenta confirmada como propia.", "Account confirmed as yours.") : tx("Cuenta marcada como ajena.", "Account marked as not yours."));
       await load();
     } catch (err) { setError(err.message || tx("No se pudo confirmar la cuenta.", "Couldn’t confirm the account.")); }
@@ -83,6 +96,7 @@ export default function GmailAutomation() {
         await acceptVipGmailConsent(gmail.consent.version);
       }
       const response = await connectVipGmail();
+      trackEvent("gmail_connection_started");
       if (!response?.authorization_url) throw new Error(tx("Google no devolvió una dirección de autorización.", "Google did not return an authorization URL."));
       await Browser.open({ url: response.authorization_url, presentationStyle: "popover" });
     } catch (err) { setError(err.message || tx("No se pudo abrir Google.", "Couldn’t open Google.")); }
@@ -93,6 +107,12 @@ export default function GmailAutomation() {
     setBusy("sync"); setError(""); setMessage("");
     try {
       const result = await syncVipGmail();
+      trackEvent("gmail_sync_completed", {
+        scan_scope: result.scan_scope || "unknown",
+        initial_scan_complete: Boolean(result.initial_scan_complete),
+        auto_saved: result.auto_saved || 0,
+        pending: result.pending || 0,
+      });
       await load();
       const progress = result.scan_scope === "year_to_date" && !result.initial_scan_complete
         ? tx(" DINCR continuará recorriendo el resto del año en las próximas actualizaciones.", " DINCR will continue scanning the rest of the year during the next refreshes.")
@@ -106,6 +126,7 @@ export default function GmailAutomation() {
     setBusy("disconnect"); setError(""); setMessage("");
     try {
       await disconnectVipGmail();
+      trackEvent("gmail_disconnected");
       setGmail({ connected: false, status: "disconnected" });
       setMessage(tx("Gmail quedó desconectado de DINCR.", "Gmail was disconnected from DINCR."));
     } catch (err) { setError(err.message || tx("No se pudo desconectar Gmail.", "Couldn’t disconnect Gmail.")); }
