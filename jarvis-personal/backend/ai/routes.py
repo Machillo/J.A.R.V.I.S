@@ -63,6 +63,7 @@ def jarvis_premium_strategy_summary():
 
 @router.post("/premium/initial-strategy")
 def jarvis_premium_initial_strategy():
+    """Compatibility endpoint: calculate a live strategy without AI or persistence."""
     return create_initial_financial_strategy()
 
 
@@ -144,4 +145,3 @@ def jarvis_profile_preferences():
 @router.post("/preferences/profile")
 def jarvis_update_profile_preferences(request: ProfilePreferencesRequest):
     return update_profile_preferences(request.model_dump(exclude_none=True))
-
