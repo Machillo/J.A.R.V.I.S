@@ -62,7 +62,7 @@ def test_accept_candidate_creates_one_transaction_and_confirms(monkeypatch):
         "amount": 1250, "transaction_type": "expense", "category": "food", "bank": "bac",
         "status": "pending", "legacy_user_id": 77,
     }
-    connection = _Connection([_Result(one=candidate), _Result(one={"id": 55}), _Result(), _Result()])
+    connection = _Connection([_Result(one=candidate), _Result(one={"id": 55}), _Result(), _Result(), _Result(), _Result()])
     monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
 
     result = gmail_service.review_gmail_candidate(4, "accept")
@@ -71,6 +71,8 @@ def test_accept_candidate_creates_one_transaction_and_confirms(monkeypatch):
     assert "c.account_id=%s AND c.workspace_id=%s" in first_query
     assert first_params == (4, "account-a", "workspace-a")
     assert sum("INSERT INTO transactions" in query for query, _ in connection.calls) == 1
+    assert sum("INSERT INTO financial_input_events" in query for query, _ in connection.calls) == 1
+    assert sum("INSERT INTO notification_jobs" in query for query, _ in connection.calls) == 1
     assert result == {"status": "confirmed", "candidate_id": 4, "transaction_id": 55}
     assert connection.committed is True
     update_params = next(params for query, params in connection.calls if "corrected_fields" in query)
@@ -85,7 +87,7 @@ def test_accept_records_fields_corrected_by_user(monkeypatch):
         "amount": 1250, "transaction_type": "expense", "category": "food", "bank": "bac",
         "status": "pending", "legacy_user_id": 77,
     }
-    connection = _Connection([_Result(one=candidate), _Result(one={"id": 55}), _Result(), _Result()])
+    connection = _Connection([_Result(one=candidate), _Result(one={"id": 55}), _Result(), _Result(), _Result(), _Result()])
     monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
 
     gmail_service.review_gmail_candidate(
@@ -184,6 +186,30 @@ def test_statement_confirmation_records_statement_source():
     )
     _query, params = connection.calls[0]
     assert params[6] == "finva_statement"
+
+
+def test_phase_1_contract_excludes_raw_email_and_is_idempotent():
+    connection = _Connection([_Result(), _Result()])
+    candidate = {
+        "account_id": "account-a", "workspace_id": "workspace-a", "legacy_user_id": 77,
+        "currency": "CRC", "source_type": "gmail", "financial_account_id": None,
+        "raw_payload": {"body": "must never leave ingestion"},
+    }
+    values = {
+        "transaction_date": date(2026, 9, 22), "description": "Supermercado",
+        "amount": 4200, "transaction_type": "expense", "category": "food",
+    }
+
+    gmail_service._publish_confirmed_financial_input(connection, candidate, values, 55)
+
+    event_query, event_params = connection.calls[0]
+    notification_query, notification_params = connection.calls[1]
+    assert "financial-input-v1" in event_query
+    assert "ON CONFLICT(transaction_id,event_name,contract_version) DO NOTHING" in event_query
+    assert "raw_payload" not in event_params[-1]
+    assert "must never leave ingestion" not in event_params[-1]
+    assert "ON CONFLICT DO NOTHING" in notification_query
+    assert notification_params[-2] == "financial-input-v1:55"
 
 
 def test_first_sync_query_covers_current_calendar_year(monkeypatch):

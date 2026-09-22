@@ -345,6 +345,54 @@ def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[
     return int(row["id"])
 
 
+def _publish_confirmed_financial_input(
+    conn, candidate: dict[str, Any], values: dict[str, Any], transaction_id: int,
+) -> None:
+    """Publish the privacy-safe Phase 1 boundary in the same DB transaction.
+
+    Downstream phases consume this canonical event instead of Gmail bodies,
+    attachment text or parser evidence. Both inserts are idempotent so a retry
+    cannot duplicate either the event or the user notification.
+    """
+    category = normalize_category(values["category"], values["transaction_type"])
+    payload = {
+        "transaction_id": transaction_id,
+        "transaction_date": str(values["transaction_date"]),
+        "amount": float(values["amount"]),
+        "currency": str(candidate.get("currency") or "CRC"),
+        "transaction_type": str(values["transaction_type"]),
+        "category": category,
+        "financial_account_id": candidate.get("financial_account_id"),
+        "source": "statement" if candidate.get("source_type") == "statement" else "gmail",
+    }
+    conn.execute(
+        """INSERT INTO financial_input_events(
+               account_id,workspace_id,user_id,event_name,contract_version,
+               transaction_id,payload,created_at
+           ) VALUES(%s,%s,%s,'transaction_confirmed','financial-input-v1',%s,%s::jsonb,NOW())
+           ON CONFLICT(transaction_id,event_name,contract_version) DO NOTHING""",
+        (
+            candidate["account_id"], candidate["workspace_id"], int(candidate["legacy_user_id"]),
+            transaction_id, json.dumps(payload, default=str),
+        ),
+    )
+    conn.execute(
+        """INSERT INTO notification_jobs(
+               user_id,workspace_id,title,body,category,scheduled_at,
+               reference_type,reference_id,dedupe_key,payload
+           ) VALUES(%s,%s,%s,%s,'financial_import',NOW(),
+                    'transaction',%s,%s,%s::jsonb)
+           ON CONFLICT DO NOTHING""",
+        (
+            int(candidate["legacy_user_id"]), candidate["workspace_id"],
+            "Movimiento confirmado",
+            f"DINCR guardó {values['description'].strip()} por {float(values['amount']):,.2f} {payload['currency']}.",
+            str(transaction_id), f"financial-input-v1:{transaction_id}",
+            json.dumps({"event": "transaction_confirmed", "transaction_id": transaction_id}),
+        ),
+    )
+
+
 def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str, Any] | None = None) -> dict[str, Any]:
     if action not in {"accept", "reject"}:
         raise HTTPException(status_code=422, detail="Acción de revisión inválida.")
@@ -401,6 +449,7 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             if value != candidate.get(key)
         )
         transaction_id = _create_candidate_transaction(conn, candidate, values)
+        _publish_confirmed_financial_input(conn, candidate, values, transaction_id)
         category = normalize_category(values["category"], values["transaction_type"])
         conn.execute(
             """UPDATE finva_email_candidates
