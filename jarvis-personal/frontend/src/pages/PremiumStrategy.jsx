@@ -249,6 +249,16 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
   const investmentRecommended = Number(strategy.investment_recommended || 0);
   const investmentState = allocationBase <= 0 ? "blocked" : investmentRecommended > 0 ? "ready" : "limited";
   const formula = strategy.distribution_formula || {};
+  const hasDistributionFormula = Object.prototype.hasOwnProperty.call(formula, "cash_available_now");
+  const distributionDeficit = Math.max(0, Number(formula.deficit || 0));
+  const distributionBreakdown = [
+    ["Saldo disponible en MultiMoney", formula.cash_available_now],
+    ["Ingreso previsto aún por recibir", formula.income],
+    ["Gastos del estado de cuenta", formula.statement_spending],
+    ["Gastos nuevos después del corte", formula.new_spending_after_cut],
+    ["Cuotas de deuda pendientes", formula.debt_commitment],
+    ["Gastos fijos pendientes", formula.mandatory_fixed_pending],
+  ];
   const distributionBalanced = Math.abs(allocationBase - allocationTotal) <= 1;
   const distributionDestinations = [
     {
@@ -530,8 +540,27 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
       <div className="strategy-surplus-card">
         <span>SOBRANTE REAL PARA REPARTIR</span>
         <strong>{money(allocationBase)}</strong>
-        <small>{Number(strategy.new_expenses_after_cut_count || 0) > 0 ? `${strategy.new_expenses_after_cut_count} gasto(s) nuevo(s) ya redujeron este monto.` : "Se recalcula cuando aparece un nuevo gasto."}</small>
+        <small>{distributionDeficit > 0
+          ? `Los compromisos registrados superan los fondos previstos por ${money(distributionDeficit)}. Por eso no hay dinero para repartir en este ciclo.`
+          : Number(strategy.new_expenses_after_cut_count || 0) > 0
+            ? `${strategy.new_expenses_after_cut_count} gasto(s) nuevo(s) ya redujeron este monto.`
+            : "Se recalcula cuando aparece un nuevo gasto."}</small>
       </div>
+
+      {hasDistributionFormula && (
+        <div className="strategy-allocation-v3" aria-label="Cálculo de la distribución">
+          {distributionBreakdown.map(([label, amount], index) => (
+            <div className="strategy-allocation-row-v3" key={label}>
+              <div><span>{label}</span></div>
+              <strong>{index < 2 ? "+" : "−"}{money(amount)}</strong>
+            </div>
+          ))}
+          <div className="strategy-allocation-row-v3">
+            <div><strong>Resultado antes de repartir</strong></div>
+            <strong>{money(formula.surplus || 0)}{distributionDeficit > 0 ? ` · faltan ${money(distributionDeficit)}` : ""}</strong>
+          </div>
+        </div>
+      )}
 
       <div className="strategy-allocation-v3">
         {distributionDestinations.filter((item) => !item.optional || item.amount > 0).map((item) => (
