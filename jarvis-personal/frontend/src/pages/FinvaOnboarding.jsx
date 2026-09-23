@@ -6,8 +6,11 @@ import { markFinvaWelcomeSeen, shouldShowFinvaWelcome } from "../lib/firstRunExp
 import FinvaWelcomeStory from "./FinvaWelcomeStory";
 import { confirmedPlanProfile } from "../lib/planSelection";
 import { identifyTelemetryUser, trackEvent } from "../lib/telemetry";
+import { localeTag, tx } from "../lib/locale";
 
 const iconMap = { free: WalletCards, basic: Sparkles, vip: Crown };
+const billingUnavailable = () => tx("No pudimos confirmar los precios y la promoción. Reintentá para elegir Basic o VIP.", "We couldn’t confirm prices and the promotion. Retry to choose Basic or VIP.");
+const formatColones = (amount) => `₡${Number(amount || 0).toLocaleString(localeTag())}`;
 
 export default function FinvaOnboarding({ user, onComplete }) {
   const completedRef = useRef(false);
@@ -33,7 +36,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
     getBillingCatalog().then((catalog) => {
       if (!active) return;
       setBilling(catalog);
-    }).catch(() => { if (active) setBillingError("No pudimos confirmar los precios y la promoción. Reintentá para elegir Basic o VIP."); });
+    }).catch(() => { if (active) setBillingError(billingUnavailable()); });
     return () => { active = false; };
   }, []);
 
@@ -49,13 +52,13 @@ export default function FinvaOnboarding({ user, onComplete }) {
     getBillingCatalog().then((catalog) => {
       setBilling(catalog);
     })
-      .catch(() => setBillingError("No pudimos confirmar los precios y la promoción. Reintentá para elegir Basic o VIP."));
+      .catch(() => setBillingError(billingUnavailable()));
   };
 
   const retryPlans = () => {
     setLoading(true); setError("");
     getPlans().then(setPlans)
-      .catch((e) => setError(e.message || "No pudimos cargar los planes."))
+      .catch((e) => setError(e.message || tx("No pudimos cargar los planes.", "We couldn’t load the plans.")))
       .finally(() => setLoading(false));
   };
 
@@ -70,7 +73,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
 
   const choosePlan = async (code) => {
     if (code !== "free" && !billing) {
-      setBillingError("Esperá a que podamos confirmar los precios antes de elegir este plan.");
+      setBillingError(tx("Esperá a que podamos confirmar los precios antes de elegir este plan.", "Wait until we can confirm prices before choosing this plan."));
       return;
     }
     if (code !== "free" && !promotionActive) return;
@@ -101,40 +104,40 @@ export default function FinvaOnboarding({ user, onComplete }) {
   if (!profile?.plan_selected) return <main className="unified-onboarding-shell">
     <section className="unified-onboarding-card unified-plan-stage">
       <div className="unified-onboarding-top">
-        <div><strong>DINCR</strong><small>Elegí tu plan personal</small></div>
-        <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> Salir</button>
+        <div><strong>DINCR</strong><small>{tx("Elegí tu plan personal", "Choose your personal plan")}</small></div>
+        <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> {tx("Salir", "Sign out")}</button>
       </div>
       <div className="unified-onboarding-intro">
-        <span className="unified-eyebrow">BIENVENIDO</span>
-        <h1>Tu espacio financiero empieza acá</h1>
-        <p>Cada cuenta recibe su propio espacio aislado. Podés empezar gratis y cambiar de plan cuando corresponda.</p>
+        <span className="unified-eyebrow">{tx("BIENVENIDO", "WELCOME")}</span>
+        <h1>{tx("Tu espacio financiero empieza acá", "Your financial space starts here")}</h1>
+        <p>{tx("Cada cuenta recibe su propio espacio aislado. Podés empezar gratis y cambiar de plan cuando corresponda.", "Each account gets its own private space. You can start for free and change plans whenever it makes sense.")}</p>
       </div>
-      {loading ? <div className="unified-loading"><div className="unified-spinner"/><span>Preparando tus planes...</span></div> : <div className="unified-plan-list">{plans.map((item) => {
+      {loading ? <div className="unified-loading"><div className="unified-spinner"/><span>{tx("Preparando tus planes...", "Preparing your plans...")}</span></div> : <div className="unified-plan-list">{plans.map((item) => {
         const Icon = iconMap[item.code] || WalletCards;
         const expanded = expandedPlan === item.code;
         return <article key={item.code} className={`unified-plan-card ${item.code} ${expanded ? "is-expanded" : ""}`}>
           <button type="button" className="unified-plan-summary" aria-expanded={expanded} onClick={() => { setExpandedPlan(expanded ? "" : item.code); setError(""); }}>
             <span className="unified-plan-icon"><Icon size={22}/></span>
-            <span className="unified-plan-copy"><span>{item.code === "free" ? "EMPEZÁ HOY" : item.code === "basic" ? "MÁS CONTROL" : "EXPERIENCIA COMPLETA"}</span><strong>{item.name}</strong><small>{item.tagline}</small></span>
-            <span className="unified-plan-price">{item.code === "free" ? "₡0" : !billing ? "—" : promotionActive ? "₡0" : `₡${Number(item.regular_price_crc || 0).toLocaleString("es-CR")}`}<small>{item.code === "free" || !billing ? "" : promotionActive ? " hasta 31 dic" : "/mes"}</small></span>
+            <span className="unified-plan-copy"><span>{item.code === "free" ? tx("EMPEZÁ HOY", "START TODAY") : item.code === "basic" ? tx("MÁS CONTROL", "MORE CONTROL") : tx("EXPERIENCIA COMPLETA", "FULL EXPERIENCE")}</span><strong>{item.name}</strong><small>{item.tagline}</small></span>
+            <span className="unified-plan-price">{item.code === "free" ? "₡0" : !billing ? "—" : promotionActive ? "₡0" : formatColones(item.regular_price_crc)}<small>{item.code === "free" || !billing ? "" : promotionActive ? tx(" hasta 31 dic", " until Dec 31") : tx("/mes", "/mo")}</small></span>
             {expanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
           </button>
           {expanded && <div className="unified-plan-details">
             <ul>{item.features.map(f => <li key={f}><Check size={16}/><span>{f}</span></li>)}</ul>
-            {item.code !== "free" && billing && <div className="unified-payment-preview"><CheckCircle2 size={18}/><span>{promotionActive ? `Acceso gratuito hasta el 31 de diciembre de 2026. Después el precio previsto es ₡${Number(item.regular_price_crc || 0).toLocaleString("es-CR")}/mes, sin cobro automático.` : "Las compras desde Google Play y App Store estarán disponibles más adelante. Mientras tanto podés usar Gratis."}</span></div>}
-            <button className="unified-plan-button" disabled={saving || (item.code !== "free" && (!billing || !promotionActive))} onClick={() => choosePlan(item.code)}>{saving ? "Preparando..." : item.code === "free" ? "Empezar gratis" : !billing ? "Verificando precio..." : promotionActive ? `Activar ${item.name} gratis` : "Próximamente en las tiendas"}</button>
+            {item.code !== "free" && billing && <div className="unified-payment-preview"><CheckCircle2 size={18}/><span>{promotionActive ? tx(`Acceso gratuito hasta el 31 de diciembre de 2026. Después el precio previsto es ${formatColones(item.regular_price_crc)}/mes, sin cobro automático.`, `Free access until December 31, 2026. After that, the expected price is ${formatColones(item.regular_price_crc)}/month, with no automatic charge.`) : tx("Las compras desde Google Play y App Store estarán disponibles más adelante. Mientras tanto podés usar Gratis.", "Purchases through Google Play and the App Store will be available later. Meanwhile, you can use Free.")}</span></div>}
+            <button className="unified-plan-button" disabled={saving || (item.code !== "free" && (!billing || !promotionActive))} onClick={() => choosePlan(item.code)}>{saving ? tx("Preparando...", "Preparing...") : item.code === "free" ? tx("Empezar gratis", "Start for free") : !billing ? tx("Verificando precio...", "Checking price...") : promotionActive ? tx(`Activar ${item.name} gratis`, `Activate ${item.name} for free`) : tx("Próximamente en las tiendas", "Coming soon to the stores")}</button>
           </div>}
         </article>;
       })}</div>}
-      {error && <div className="unified-onboarding-error" role="alert">{error} {!plans.length && <button type="button" onClick={retryPlans}>Reintentar</button>}</div>}
-      {billingError && <div role="status" className="unified-onboarding-error">{billingError} <button type="button" onClick={retryBilling}>Reintentar</button></div>}
+      {error && <div className="unified-onboarding-error" role="alert">{error} {!plans.length && <button type="button" onClick={retryPlans}>{tx("Reintentar", "Retry")}</button>}</div>}
+      {billingError && <div role="status" className="unified-onboarding-error">{billingError} <button type="button" onClick={retryBilling}>{tx("Reintentar", "Retry")}</button></div>}
     </section>
   </main>;
 
   return <main className="unified-onboarding-shell">
     <section className="unified-onboarding-card unified-loading">
       <div className="unified-spinner"/>
-      <span>Abriendo DINCR…</span>
+      <span>{tx("Abriendo DINCR…", "Opening DINCR…")}</span>
     </section>
   </main>;
 }
