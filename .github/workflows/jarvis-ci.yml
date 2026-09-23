@@ -37,6 +37,16 @@ jobs:
       - run: npm run test:android-identity
       - run: npm run test:mail-oauth
       - run: npm run test:phase0j
+      - run: npm run test:phase0h
+      - run: npm run test:unified-movements
+      - run: npm run test:phase0a
+      - run: npm run test:phase0b
+      - run: npm run test:phase0d
+      - run: npm run test:phase0e
+      - run: npm run test:phase0f
+      - run: npm run test:phase0i
+      - run: npm run test:locale
+      - run: npm run test:plans
 
   frontend-lint-report:
     name: Frontend lint report

@@ -13,11 +13,15 @@ const styles = read("../src/pages/FinvaOnboarding.css");
 
 assert.match(onboarding, /shouldShowFinvaWelcome\(user\?\.id\)/);
 assert.match(onboarding, /markFinvaWelcomeSeen\(user\?\.id\)/);
-assert.match(onboarding, /<FinvaWelcomeStory onFinish=\{finishWelcome\}/);
+assert.match(onboarding, /<FinvaWelcomeStory [^>]*onFinish=\{finishWelcome\}/);
 assert.match(storage, /finva:first-run-welcome:/);
-assert.match(story, /AUTO_ADVANCE_MS = 3500/);
+// Since f166dcc the story is user-paced (no auto-advance), personalized by profile.
+assert.doesNotMatch(story, /setTimeout|setInterval|AUTO_ADVANCE/, "slides never advance on their own");
+assert.match(story, /const slides = story\(user\)/);
+assert.match(story, /className="finva-welcome-next" type="button" onClick=\{next\}/);
+assert.match(story, /aria-live="polite"/);
 assert.match(story, /Omitir/);
-assert.match(story, /sin pedirte llenar un formulario financiero/);
+
 assert.match(styles, /prefers-reduced-motion: reduce/);
 
 const stored = new Map();
