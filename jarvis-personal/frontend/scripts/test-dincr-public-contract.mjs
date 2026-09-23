@@ -19,9 +19,10 @@ assert.match(support, /mailto:soporte@dincr\.com/);
 assert.match(support, /mailto:privacidad@dincr\.com/);
 for (const legal of ['terminos', 'privacidad']) {
   const html = await readFile(new URL(`${legal}/index.html`, out), 'utf8');
-  assert.match(html, /2026-09-23-v2/);
+  assert.match(html, legal === 'terminos' ? /2026-09-23-v3/ : /2026-09-23-v2/);
   assert.match(html, /soporte@dincr\.com/);
 }
+assert.doesNotMatch(await readFile(new URL('terminos/index.html', out), 'utf8'), /SINPE/i);
 const listing = await readdir(out, {recursive: true});
 assert.ok(listing.includes('404.html'));
 assert.ok(listing.includes('sitemap.xml'));

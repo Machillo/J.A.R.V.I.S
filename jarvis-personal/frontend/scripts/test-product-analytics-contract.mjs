@@ -16,5 +16,8 @@ assert.match(source, /role !== "owner" && role !== "admin"/);
 assert.match(source, /legalAccepted/);
 assert.match(source, /allowedEvents/);
 assert.match(source, /allowedProperties/);
+assert.match(source, /"plan_access_granted"/);
+assert.match(source, /"access_type"/);
+assert.match(source, /product: "dincr"/);
 
 console.log("PostHog privacy contract: OK");

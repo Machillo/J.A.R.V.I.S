@@ -401,7 +401,7 @@ def launch_promotion_status(now: datetime | None = None):
         "message": (
             "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No se realizará ningún cobro automático."
             if active else
-            "La promoción terminó. Basic y VIP utilizan sus precios mensuales normales."
+            "La promoción terminó. Las compras de Basic y VIP desde Google Play y App Store estarán disponibles más adelante."
         ),
     }
 
@@ -539,12 +539,6 @@ def catalog():
             order = conn.execute("""SELECT id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
               receipt_submitted_at,receipt_status,verified_at,verification_source,created_at,updated_at FROM billing_orders
               WHERE account_id=%s ORDER BY created_at DESC LIMIT 1""", (account_id,)).fetchone()
-            if order and order["status"] == "payment_pending" and not order.get("payment_code"):
-                order = conn.execute("""UPDATE billing_orders SET provider='sinpe_mobile',payment_code=%s,
-                  code_expires_at=NOW()+INTERVAL '2 hours',updated_at=NOW() WHERE id=%s
-                  RETURNING id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
-                    receipt_submitted_at,receipt_status,verified_at,verification_source,created_at,updated_at""",
-                  (_new_payment_code(conn), order["id"])).fetchone()
             subscription = conn.execute("SELECT * FROM billing_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
             conn.commit()
     except Exception:
@@ -555,9 +549,9 @@ def catalog():
     for code, info in PRICES.items():
         plans.append({"code": code, "regular_price_crc": info["regular"]})
     return {"program": BETA_CODE, "plans": plans, "order": _public_order(order), "subscription": subscription,
-            "payment": _sinpe_instructions(),
+            "payment": None,
             "promotion": promotion,
-            "notice": promotion["message"] if promotion["active"] else "Basic y VIP se activan al confirmar el pago mensual por SINPE Móvil."}
+            "notice": promotion["message"] if promotion["active"] else "Las compras de Basic y VIP en Google Play y App Store estarán disponibles más adelante."}
 
 
 def create_checkout(plan_code: str, accepted: bool, consent_version: str):
@@ -565,40 +559,9 @@ def create_checkout(plan_code: str, accepted: bool, consent_version: str):
         raise HTTPException(400, "Plan de pago no válido.")
     if launch_promotion_status()["active"]:
         return activate_launch_promotion(plan_code)
-    if not accepted:
-        raise HTTPException(422, "Debés aceptar el precio mensual normal para continuar.")
-    account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
-    with get_connection() as conn:
-        ensure_schema(conn)
-        conn.execute("""UPDATE billing_orders SET status='expired',updated_at=NOW()
-          WHERE account_id=%s AND status='payment_pending' AND receipt_submitted_at IS NULL
-            AND code_expires_at IS NOT NULL AND code_expires_at<NOW()""", (account_id,))
-        existing = conn.execute("""SELECT id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
-          receipt_submitted_at,receipt_status,created_at,updated_at FROM billing_orders
-          WHERE account_id=%s AND plan_code=%s AND status='payment_pending' ORDER BY created_at DESC LIMIT 1""", (account_id, plan_code)).fetchone()
-        if existing:
-            if not existing.get("payment_code"):
-                existing = conn.execute("""UPDATE billing_orders SET provider='sinpe_mobile',payment_code=%s,
-                  code_expires_at=NOW()+INTERVAL '2 hours',updated_at=NOW() WHERE id=%s
-                  RETURNING id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
-                    receipt_submitted_at,receipt_status,created_at,updated_at""",
-                  (_new_payment_code(conn), existing["id"])).fetchone()
-            conn.commit()
-            return {"status": "payment_pending", "order": _public_order(existing), "payment": _sinpe_instructions(),
-                    "message": "Ya tenés una solicitud pendiente. Completá el SINPE y subí el comprobante."}
-        conn.execute("""UPDATE billing_orders SET status='canceled',updated_at=NOW()
-          WHERE account_id=%s AND status='payment_pending'""", (account_id,))
-        payment_code = _new_payment_code(conn)
-        order = conn.execute("""INSERT INTO billing_orders(
-            account_id,workspace_id,plan_code,amount,provider,beta_code,beta_price,consent_version,consent_at,payment_code,code_expires_at
-          ) VALUES(%s,%s,%s,%s,'sinpe_mobile',%s,FALSE,%s,NOW(),%s,NOW()+INTERVAL '2 hours')
-          RETURNING id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
-            receipt_submitted_at,receipt_status,created_at,updated_at""",
-          (account_id, workspace_id, plan_code, PRICES[plan_code]["regular"], None, consent_version, payment_code)).fetchone()
-        conn.commit()
-    record_event("checkout_started", "plan_selection")
-    return {"status": "payment_pending", "order": _public_order(order), "payment": _sinpe_instructions(),
-            "message": "Código listo. Pegalo en el detalle del SINPE y subí el comprobante."}
+    # Store billing and server-side purchase verification are not implemented yet.
+    # Never issue an off-store payment order for access to mobile features.
+    raise HTTPException(503, "Las compras de Basic y VIP en Google Play y App Store estarán disponibles más adelante. Podés seguir con el plan Gratis.")
 
 
 def has_active_payment(conn, account_id: str, plan_code: str | None = None):

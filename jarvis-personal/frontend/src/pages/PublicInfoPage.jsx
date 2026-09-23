@@ -35,7 +35,7 @@ function AboutPage() {
 
 function TermsPage() {
   return <>
-    <span className="public-kicker">VERSIÓN 2026-09-23-v2 · VIGENTE DESDE EL 23 DE SEPTIEMBRE DE 2026</span>
+    <span className="public-kicker">VERSIÓN 2026-09-23-v3 · VIGENTE DESDE EL 23 DE SEPTIEMBRE DE 2026</span>
     <h1>Términos y Condiciones</h1>
     <p className="public-lead">Estos términos regulan el acceso y uso de DINCR, servicio digital desarrollado y operado desde Costa Rica por Kenneth Andrés Alvarado Obando.</p>
     <section className="public-copy legal-copy">
@@ -45,7 +45,7 @@ function TermsPage() {
       <h2>4. Cuenta y seguridad</h2><p>El usuario debe suministrar información correcta, proteger el acceso a su cuenta, mantener seguro su dispositivo y avisar sobre accesos no autorizados. No puede compartir cuentas, suplantar personas, intentar vulnerar el sistema ni usarlo con fines ilícitos.</p>
       <h2>5. Datos ingresados y autorizaciones</h2><p>El usuario conserva la titularidad de sus datos y autoriza su tratamiento únicamente para prestar, mantener, proteger y mejorar las funciones solicitadas. Es responsable de contar con autorización cuando incorpore información de terceras personas.</p>
       <h2>6. Planes, promoción y pagos</h2><p>El plan Gratis no tiene costo. Basic y VIP estarán disponibles gratuitamente hasta el 31 de diciembre de 2026. A partir del 1 de enero de 2027 sus precios mensuales de lanzamiento son ₡2.990 y ₡4.990, respectivamente. La promoción no genera cobros automáticos ni obliga a contratar. Para continuar con un plan pagado, el usuario deberá iniciar y confirmar un pago por el método disponible en ese momento.</p>
-      <h2>7. Activación y comprobantes</h2><p>Cuando existan pagos por SINPE Móvil, el plan se activa únicamente después de validar monto, código y confirmación bancaria. Subir un comprobante no constituye por sí solo confirmación del pago. Los pagos duplicados o incorrectos serán revisados individualmente.</p>
+      <h2>7. Activación de planes pagados</h2><p>Las compras de Basic y VIP todavía no están habilitadas. Cuando estén disponibles, la contratación dentro de la aplicación se realizará mediante Google Play o App Store, según el dispositivo, con las condiciones que se muestren antes de confirmar la compra. La promoción actual no inicia una suscripción ni genera un cargo automático.</p>
       <h2>8. Disponibilidad y cambios</h2><p>El servicio puede cambiar, suspender funciones o presentar interrupciones por mantenimiento, seguridad, proveedores o causas fuera de control razonable. Los cambios materiales en precios o condiciones se informarán antes de aplicarse y podrán requerir una nueva aceptación.</p>
       <h2>9. Propiedad intelectual</h2><p>El software, diseño, marca, contenido y modelos propios pertenecen a sus respectivos titulares. La cuenta otorga una licencia personal, limitada, revocable y no transferible para usar el servicio; no permite copiar, revender, descompilar o explotar indebidamente sus componentes.</p>
       <h2>10. Suspensión y cierre</h2><p>Una cuenta puede suspenderse por fraude, abuso, incumplimiento, riesgo de seguridad o exigencia legal. El usuario puede dejar de usar el servicio y solicitar la eliminación de su cuenta y datos, sujeto a información que deba conservarse para cumplir obligaciones legales, resolver pagos o defender reclamaciones.</p>

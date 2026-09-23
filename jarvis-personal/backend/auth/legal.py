@@ -6,9 +6,8 @@ from backend.auth.current_user import get_current_account_id
 from backend.core.database import get_connection
 
 
-LEGAL_VERSION = "2026-09-23-v2"
-TERMS_VERSION = LEGAL_VERSION
-PRIVACY_VERSION = LEGAL_VERSION
+TERMS_VERSION = "2026-09-23-v3"
+PRIVACY_VERSION = "2026-09-23-v2"
 
 
 def ensure_legal_schema(conn) -> None:

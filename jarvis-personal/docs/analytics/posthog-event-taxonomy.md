@@ -1,11 +1,11 @@
-# FINVA product analytics
+# DINCR product analytics
 
-PostHog is the behavioral analytics layer for FINVA. Operational records remain
+PostHog is the behavioral analytics layer for DINCR. Operational records remain
 in PostgreSQL/Supabase and crash diagnostics remain in Firebase.
 
 ## Privacy contract
 
-- Analytics starts only after the FINVA user has accepted the active legal documents.
+- Analytics starts only after the DINCR user has accepted the active legal documents.
 - Owner, admin and J.A.R.V.I.S. sessions are excluded.
 - Autocapture, session replay, console capture and pageview capture are disabled.
 - Never send email addresses or bodies, names, subjects, senders, descriptions,
@@ -27,6 +27,7 @@ property must be added there deliberately before PostHog can receive it.
 | `gmail_disconnected` | Gmail churn signal | `plan`, `platform` |
 | `email_candidate_reviewed` | Trust and parser outcomes | `decision`, `bank`, `institution_country`, `source_type`, `is_internal_transfer` |
 | `financial_account_ownership_reviewed` | Detected-account trust | `ownership_status`, `bank`, `institution_country` |
+| `plan_access_granted` | Plan activation during free launch and later access changes | `plan`, `access_type` (`free` or `promotion`), `platform` |
 
 ## Dashboards
 
@@ -41,7 +42,7 @@ events.
 
 ## Deployment
 
-Set these frontend environment variables in the FINVA deployment and rebuild:
+Set these frontend environment variables in the DINCR build environment and rebuild the APK/IPA:
 
 ```text
 VITE_POSTHOG_KEY=<project token from PostHog>
@@ -50,3 +51,8 @@ VITE_POSTHOG_HOST=https://us.i.posthog.com
 
 The project token is public by design but must still be managed as deployment
 configuration so development, staging and production projects can remain separate.
+Existing APKs compiled without `VITE_POSTHOG_KEY` cannot start sending events from
+this code change alone; distribute a new build and verify real events in the
+connected PostHog project. The event captures plan access, not payment or
+financial contents. After store purchases are implemented, introduce a verified
+`store` access type and compare cohorts by event time and plan in PostHog.

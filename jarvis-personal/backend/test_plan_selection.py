@@ -5,6 +5,17 @@ import pytest
 
 from backend.auth import saas
 from backend.product_ops import service as billing
+from fastapi import HTTPException
+
+
+@pytest.mark.parametrize("plan", ["basic", "vip"])
+def test_no_off_store_checkout_after_promotion(monkeypatch, plan):
+    monkeypatch.setattr(billing, "launch_promotion_status", lambda: {"active": False})
+    monkeypatch.setattr(billing, "get_connection", lambda: pytest.fail("Checkout must not write a SINPE order"))
+    with pytest.raises(HTTPException) as error:
+        billing.create_checkout(plan, accepted=True, consent_version="2026-09-23-v3")
+    assert error.value.status_code == 503
+    assert "Google Play" in error.value.detail
 
 
 class _Result:

@@ -1,14 +1,14 @@
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, Clock3, Copy, Crown, Smartphone, Sparkles, Upload, WalletCards, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, Crown, Sparkles, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { getBillingCatalog, getMe, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
+import { getBillingCatalog, getMe, getPlans, selectPlan } from "../services/jarvisApi";
 import AccountSecurity from "../components/AccountSecurity";
-import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../../lib/receiptPicker";
 import AppearanceSelector from "../../components/AppearanceSelector";
 import AppLockSettings from "../components/AppLockSettings";
-import { deviceLanguage, localeTag } from "../../lib/locale";
+import { deviceLanguage } from "../../lib/locale";
 import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
 import AccountActions from "../../products/finva/components/AccountActions";
 import { confirmedPlanProfile } from "../../lib/planSelection";
+import { identifyTelemetryUser, trackEvent } from "../../lib/telemetry";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -21,26 +21,15 @@ export default function Settings({ user, onUserChange, onLogout }) {
   const [confirming, setConfirming] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [betaAccepted, setBetaAccepted] = useState(false);
   const [billing, setBilling] = useState(null);
   const [billingError, setBillingError] = useState("");
-  const [paymentFlow, setPaymentFlow] = useState(null);
-  const [receipt, setReceipt] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [copied, setCopied] = useState("");
-  useFinvaBackHandler(() => {
-    if (changing || uploading) return;
-    if (paymentFlow) setPaymentFlow(null);
-    else setConfirming("");
-  }, Boolean(confirming || paymentFlow));
+  useFinvaBackHandler(() => { if (!changing) setConfirming(""); }, Boolean(confirming));
 
   const currentPlan = user?.subscription?.plan || "free";
   const currentPlanInfo = useMemo(
     () => plans.find((plan) => plan.code === currentPlan),
     [plans, currentPlan],
   );
-  const pendingOrder = paymentFlow?.order?.status === "payment_pending" ? paymentFlow.order : billing?.order?.status === "payment_pending" ? billing.order : null;
-  const receiptSubmittedAt = pendingOrder?.receipt_submitted_at;
   const promotionActive = Boolean(billing?.promotion?.active);
 
   useEffect(() => {
@@ -60,79 +49,26 @@ export default function Settings({ user, onUserChange, onLogout }) {
   };
 
 
-  useEffect(() => {
-    if (!receiptSubmittedAt) return undefined;
-    const timer = window.setInterval(async () => {
-      try {
-        const next = await getBillingCatalog();
-        setBilling(next);
-        if (next?.order?.status === "paid" || next?.subscription?.status === "active") {
-          const profile = await getMe();
-          if (profile?.subscription?.plan !== pendingOrder?.plan_code || profile?.subscription?.status !== "active") return;
-          onUserChange?.(profile);
-          setPaymentFlow(null);
-          setMessage(`Pago confirmado. Tu plan ${profile?.subscription?.plan?.toUpperCase() || "DINCR"} ya está activo.`);
-        } else if (next?.order) {
-          setPaymentFlow((current) => current ? { ...current, order: next.order, payment: next.payment } : current);
-        }
-      } catch {
-        // La pantalla conserva el estado y vuelve a intentar sin interrumpir al usuario.
-      }
-    }, 8000);
-    return () => window.clearInterval(timer);
-  }, [receiptSubmittedAt, onUserChange, pendingOrder?.plan_code]);
-
   const openPlanDialog = (planCode) => {
     if (planCode === currentPlan) return;
     if (planCode !== "free" && !billing) { setError("Confirmá los precios antes de elegir un plan de pago."); return; }
     setConfirming(planCode);
     setMessage("");
     setError("");
-    setBetaAccepted(false);
-  };
-
-  const copyValue = async (value, field) => {
-    if (!value) return;
-    const fallbackCopy = () => {
-      const input = document.createElement("textarea");
-      input.value = value;
-      input.style.position = "fixed";
-      input.style.opacity = "0";
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand("copy");
-      input.remove();
-    };
-    try {
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
-      else fallbackCopy();
-    } catch {
-      fallbackCopy();
-    }
-    setCopied(field);
-    window.setTimeout(() => setCopied(""), 1800);
   };
 
   const changePlan = async () => {
     const planCode = confirming;
     if (!planCode || planCode === currentPlan) return;
-    if (planCode !== "free" && !promotionActive && !betaAccepted) {
-      setError("Debés aceptar el precio mensual normal para continuar.");
-      return;
-    }
+    if (planCode !== "free" && !promotionActive) return;
     setChanging(planCode);
     setError("");
     setMessage("");
     try {
-      const response = await selectPlan(planCode, planCode === "free" || promotionActive ? false : betaAccepted);
-      if (response.status === "payment_pending") {
-        setConfirming("");
-        setBilling((current) => ({ ...current, order: response.order, payment: response.payment }));
-        setPaymentFlow({ order: response.order, payment: response.payment });
-        setReceipt(null);
-        return;
-      }
+      const response = await selectPlan(planCode, false);
       const activeProfile = await confirmedPlanProfile(response, planCode, getMe);
+      identifyTelemetryUser(activeProfile);
+      trackEvent("plan_access_granted", { plan: planCode, access_type: planCode === "free" ? "free" : "promotion" });
       onUserChange?.(activeProfile);
       setConfirming("");
       setMessage(`Plan cambiado a ${activeProfile.subscription.plan.toUpperCase()}.`);
@@ -142,39 +78,6 @@ export default function Settings({ user, onUserChange, onLogout }) {
       setChanging("");
     }
   };
-
-  const sendReceipt = async () => {
-    if (!receipt || !paymentFlow?.order?.id) {
-      setError("Seleccioná la imagen o PDF del comprobante.");
-      return;
-    }
-    setUploading(true);
-    setError("");
-    try {
-      const response = await uploadPaymentReceipt(paymentFlow.order.id, receipt);
-      const nextFlow = { ...paymentFlow, order: response.order };
-      setPaymentFlow(nextFlow);
-      setBilling((current) => ({ ...current, order: response.order }));
-      setMessage("");
-    } catch (err) {
-      setError(err.message || "No se pudo subir el comprobante.");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const chooseNativeReceipt = async () => {
-    setError("");
-    try {
-      const file = await pickNativeReceipt();
-      if (file) setReceipt(file);
-    } catch (err) {
-      if (!String(err?.message || "").toLowerCase().includes("cancel")) {
-        setError(err.message || "No pudimos abrir el comprobante.");
-      }
-    }
-  };
-
 
   return (
     <section className="mobile-page settings-page">
@@ -225,7 +128,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
         <div>
           <p className="eyebrow">{tx("Desarrollo", "Development")}</p>
           <h2>{tx("Cambiar de plan","Change plan")}</h2>
-          <span>{!billing ? "Estamos confirmando los precios de Basic y VIP." : promotionActive ? "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático." : "Basic y VIP utilizan sus precios normales y se activan al confirmar el SINPE."}</span>
+          <span>{!billing ? "Estamos confirmando los precios de Basic y VIP." : promotionActive ? "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático." : "Las compras de Basic y VIP desde Google Play y App Store estarán disponibles más adelante."}</span>
         </div>
       </div>
 
@@ -246,13 +149,15 @@ export default function Settings({ user, onUserChange, onLogout }) {
                   </div>
                 </div>
 
+                <ul className="settings-plan-features">{(plan.features || []).map((feature) => <li key={feature}><Check size={15} aria-hidden="true"/>{feature}</li>)}</ul>
+
                 {isCurrent ? (
                   <span className="selected-plan-label"><Check size={16} /> {tx("Seleccionado","Selected")}</span>
                 ) : (
                   <button
                     type="button"
                     className="change-plan-button"
-                    disabled={Boolean(changing) || (plan.code !== "free" && !billing)}
+                    disabled={Boolean(changing) || (plan.code !== "free" && (!billing || !promotionActive))}
                     onClick={() => openPlanDialog(plan.code)}
                   >
                     <>{tx("Elegir","Choose")} <ChevronRight size={17} /></>
@@ -266,19 +171,8 @@ export default function Settings({ user, onUserChange, onLogout }) {
 
       {billingError && <p className="onboarding-error" role="status">{billingError} <button type="button" onClick={retryBilling}>Reintentar</button></p>}
 
-      {pendingOrder && !paymentFlow && (
-        <article className="pending-payment-card">
-          <div className="pending-payment-icon"><Clock3 size={21} /></div>
-          <div>
-            <strong>{tx("Pago", "Payment")} {pendingOrder.plan_code.toUpperCase()} {tx("pendiente", "pending")}</strong>
-            <small>{tx("Continuá el SINPE con el código", "Continue the SINPE payment with code")} {pendingOrder.payment_code}.</small>
-          </div>
-          <button type="button" onClick={() => setPaymentFlow({ order: pendingOrder, payment: billing?.payment })}>{tx("Continuar","Continue")}</button>
-        </article>
-      )}
-
       {message && <p className="success-banner">{message}</p>}
-      {!confirming && !paymentFlow && error && <p className="onboarding-error">{error}</p>}
+      {!confirming && error && <p className="onboarding-error">{error}</p>}
 
       {confirming && confirming !== currentPlan && (() => {
         const selected = plans.find((plan) => plan.code === confirming);
@@ -290,49 +184,9 @@ export default function Settings({ user, onUserChange, onLogout }) {
             <p className="eyebrow">{tx("Confirmar cambio","Confirm change")}</p>
             <h2 id="plan-dialog-title">{tx("Cambiar a", "Switch to")} {selected?.name || confirming.toUpperCase()}</h2>
             <p>{selected?.tagline || "Tu nuevo plan DINCR"}</p>
-            {confirming !== "free" && (promotionActive ? <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio normal será ${confirming === "basic" ? "₡2.990" : "₡4.990"}/mes, sin cobro automático.`, `This plan will be free until December 31, 2026. Starting in January, its regular price will be ${confirming === "basic" ? "₡2,990" : "₡4,990"}/month, with no automatic charge.`)}</span></div> : <><div className="plan-payment-notice"><Smartphone size={19}/><span>{tx("Al continuar, DINCR generará un código para el detalle del SINPE. El plan se activa cuando confirmemos el depósito.", "When you continue, DINCR will generate a code for the SINPE payment detail. The plan activates after we confirm the deposit.")}</span></div><label className="beta-consent dialog-consent"><input type="checkbox" checked={betaAccepted} onChange={(e)=>{setBetaAccepted(e.target.checked);setError("");}}/><span>{tx(`Acepto el precio normal de ${confirming === "basic" ? "₡2.990" : "₡4.990"} al mes.`, `I accept the regular price of ${confirming === "basic" ? "₡2,990" : "₡4,990"} per month.`)}</span></label></>)}
+            {confirming !== "free" && <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio previsto será ${confirming === "basic" ? "₡2.990" : "₡4.990"}/mes, sin cobro automático.`, `This plan will be free until December 31, 2026. From January its planned price will be ${confirming === "basic" ? "₡2,990" : "₡4,990"}/month, with no automatic charge.`)}</span></div>}
             {error && <div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
             <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>{tx("Cancelar","Cancel")}</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? tx("Procesando...","Processing...") : `${tx("Confirmar","Confirm")} ${selected?.name || confirming.toUpperCase()}`}</button></div>
-          </section>
-        </div>;
-      })()}
-
-      {paymentFlow && (() => {
-        const order = paymentFlow.order;
-        const payment = paymentFlow.payment || billing?.payment || {};
-        const submitted = Boolean(order?.receipt_submitted_at);
-        return <div className="plan-dialog-backdrop" role="presentation">
-          <section className={`plan-dialog payment-dialog plan-${order?.plan_code || "basic"}`} role="dialog" aria-modal="true" aria-labelledby="payment-dialog-title">
-            <button className="plan-dialog-close" type="button" aria-label={tx("Cerrar","Close")} disabled={uploading} onClick={()=>{setPaymentFlow(null);setReceipt(null);setError("");}}><X size={20}/></button>
-            <div className="plan-dialog-icon"><Smartphone size={26}/></div>
-            <p className="eyebrow">{tx("Pago mensual por SINPE","Monthly payment by SINPE")}</p>
-            <h2 id="payment-dialog-title">{tx("Activar", "Activate")} {order?.plan_code?.toUpperCase()}</h2>
-            {!submitted ? <>
-              <p>{tx("Realizá el SINPE con estos datos. El código debe ir completo en el detalle del pago.", "Make the SINPE payment using these details. Include the full code in the payment description.")}</p>
-              <div className="sinpe-payment-data">
-                <div><span>{tx("Monto exacto","Exact amount")}</span><strong>₡{Number(order?.amount || 0).toLocaleString(localeTag(language))}</strong></div>
-                <div><span>{tx("Número SINPE","SINPE number")}</span><strong>{payment.phone || "Pendiente de configurar"}</strong>{payment.phone&&<button type="button" onClick={()=>copyValue(payment.phone,"phone")}><Copy size={16}/>{copied==="phone"?tx("Copiado","Copied"):tx("Copiar","Copy")}</button>}</div>
-                {payment.recipient&&<div><span>{tx("Destinatario","Recipient")}</span><strong>{payment.recipient}</strong></div>}
-                <div className="payment-code-row"><span>{tx("Código para el detalle","Payment detail code")}</span><strong>{order?.payment_code}</strong><button type="button" onClick={()=>copyValue(order?.payment_code,"code")}><Copy size={16}/>{copied==="code"?tx("Copiado","Copied"):tx("Copiar código","Copy code")}</button></div>
-              </div>
-              <small className="payment-expiry-note">{tx("Código válido hasta", "Code valid until")} {order?.code_expires_at ? new Date(order.code_expires_at).toLocaleTimeString(localeTag(language), { hour: "2-digit", minute: "2-digit" }) : tx("dentro de 2 horas", "within 2 hours")}.</small>
-              {!payment.phone&&<div className="plan-dialog-error"><AlertTriangle size={18}/><span>{tx("El número SINPE todavía no está configurado. No realicés el pago hasta que aparezca.", "The SINPE number has not been configured yet. Do not make the payment until it appears.")}</span></div>}
-              <div className="receipt-upload-field">
-                <Upload size={19}/>
-                <span>{receipt ? `Listo: ${receipt.name}` : "Seleccioná una imagen o PDF"}</span>
-              </div>
-              {hasNativeReceiptPicker
-                ? <button className="native-receipt-picker-button" type="button" onClick={chooseNativeReceipt}>{receipt ? tx("Cambiar comprobante","Change receipt") : tx("Abrir archivos del teléfono","Open phone files")}</button>
-                : <input className="native-receipt-input" type="file" accept="image/*,.pdf,application/pdf" onChange={(event)=>{try{setReceipt(receiptFromWebInput(event.currentTarget));setError("");}catch(err){setReceipt(null);setError(err.message);}}}/>
-              }
-              {error&&<div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
-              <button className="payment-submit-button" type="button" disabled={uploading||!receipt||!payment.phone} onClick={sendReceipt}>{uploading?tx("Subiendo...","Uploading..."):tx("Enviar comprobante","Send receipt")}</button>
-            </> : <div className="payment-waiting-state">
-              <CheckCircle2 size={34}/>
-              <strong>{tx("Comprobante recibido","Receipt received")}</strong>
-              <p>{tx("DINCR está esperando la confirmación del BAC. Cuando coincidan el código y el monto, tu plan se activará automáticamente.", "DINCR is waiting for BAC confirmation. When the code and amount match, your plan will activate automatically.")}</p>
-              <small>{tx("Podés cerrar esta pantalla; también volveremos a comprobarlo cuando abras la app.", "You can close this screen; we will check again when you open the app.")}</small>
-            </div>}
           </section>
         </div>;
       })()}
