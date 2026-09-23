@@ -61,6 +61,11 @@ for (const [path,html] of Object.entries(pages)) { const dir=join(out,path); awa
 await writeFile(join(out,'404.html'),layout('/404/', 'Página no encontrada', '<section class="wrap section"><h1>Página no encontrada</h1><p>Revisá la dirección o volvé al <a href="/">inicio de DINCR</a>.</p></section>',{noindex:true}));
 await copyFile(join(root,'public/favicon.svg'),join(out,'favicon.svg'));
 await copyFile(join(import.meta.dirname,'style.css'),join(out,'style.css'));
+await mkdir(join(out,'.well-known'),{recursive:true});
+await copyFile(
+  join(import.meta.dirname,'.well-known','microsoft-identity-association.json'),
+  join(out,'.well-known','microsoft-identity-association.json')
+);
 await writeFile(join(out,'robots.txt'),`User-agent: *\n${base ? `Allow: /\nSitemap: ${base}/sitemap.xml` : 'Disallow: /'}\n`);
 if (base) await writeFile(join(out,'sitemap.xml'),`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Object.keys(pages).filter(x=>!['/bancos-compatibles/'].includes(x) && (cfg.supportEmail || x!='/soporte/') && (cfg.googlePlayUrl || cfg.appStoreUrl || x!='/descargar/')).map(x=>`<url><loc>${escape(url(x))}</loc></url>`).join('')}</urlset>`);
 console.log(`Built ${Object.keys(pages).length} static public routes in ${out}`);
