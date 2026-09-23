@@ -19,7 +19,7 @@ const story = [
   {
     eyebrow: "AVANZÁ CON DIRECCIÓN",
     title: "Siempre sabés qué sigue",
-    copy: "DINCR y JARVIS transforman tu información en próximos pasos concretos para recuperar control y construir tranquilidad.",
+    copy: "DINCR transforma tu información en próximos pasos concretos para recuperar control y construir tranquilidad.",
     Icon: Compass,
   },
 ];

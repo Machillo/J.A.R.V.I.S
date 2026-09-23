@@ -139,7 +139,7 @@ export default function Settings({ status }) {
     setOwnerBridgeMessage("Verificando ambas identidades...");
     try {
       const result = await linkOwnerToUsers();
-      setOwnerBridgeMessage(result?.verified ? "JARVIS Personal quedó vinculado con tu cuenta owner de JARVIS Users." : "No se pudo verificar el vínculo.");
+      setOwnerBridgeMessage(result?.verified ? "Tu espacio interno quedó vinculado con tu cuenta Owner de DINCR." : "No se pudo verificar el vínculo.");
     } catch (error) {
       setOwnerBridgeMessage(error.message);
     } finally {
@@ -187,7 +187,7 @@ export default function Settings({ status }) {
   </JarvisScreen>;
 
   if (section === "owner") return <JarvisScreen eyebrow="Owner" title="Centro Owner" subtitle="Identidad privada y operación" actions={back} className="settings-screen settings-owner">
-    <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">IDENTIDAD JARVIS</span><h3>Personal ↔ Cuenta pública</h3><p>Vinculación segura por UUID verificado</p><JarvisStatusPill tone="success">CONECTADA</JarvisStatusPill><button className="jarvis-primary-button" type="button" onClick={handleLinkOwnerBridge} disabled={ownerBridgeBusy}>{ownerBridgeBusy ? "Verificando..." : "Administrar vínculo"}</button>{ownerBridgeMessage && <small>{ownerBridgeMessage}</small>}</JarvisGlassCard>
+    <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">IDENTIDAD DINCR</span><h3>Personal ↔ Cuenta pública</h3><p>Vinculación segura por UUID verificado</p><JarvisStatusPill tone="success">CONECTADA</JarvisStatusPill><button className="jarvis-primary-button" type="button" onClick={handleLinkOwnerBridge} disabled={ownerBridgeBusy}>{ownerBridgeBusy ? "Verificando..." : "Administrar vínculo"}</button>{ownerBridgeMessage && <small>{ownerBridgeMessage}</small>}</JarvisGlassCard>
     <h3 className="settings-section-title">Monitor de despliegues</h3>{Object.entries(deployments?.latest || {}).map(([provider, item]) => <JarvisGlassCard className="deployment-card" key={provider}><span>{provider.toUpperCase()}</span><strong>{item.service_name || provider}</strong><small>Commit {item.commit_sha?.slice(0, 7) || "—"}</small><JarvisStatusPill tone={item.status === "success" ? "success" : item.status === "failure" ? "danger" : "warning"}>{item.status === "success" ? "Correcto" : item.status}</JarvisStatusPill></JarvisGlassCard>)}
     <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">EVENTOS RECIENTES</span><div className="settings-compact-list">{(deployments?.events || []).slice(0, 5).map((item) => <div key={item.id}><b>{item.provider}</b><span>{item.summary || item.event_type}</span>{item.log_url && <a href={item.log_url} target="_blank" rel="noreferrer">Abrir log</a>}</div>)}</div></JarvisGlassCard>
     {isAdmin && adminUsage?.users?.length > 0 && <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">CONSUMO POR USUARIO</span><div className="settings-compact-list">{adminUsage.users.map((user) => <div key={user.user_id}><b>{user.role}</b><span>{user.email} · {Number(user.total_tokens || 0).toLocaleString("es-CR")}</span></div>)}</div></JarvisGlassCard>}
@@ -197,7 +197,7 @@ export default function Settings({ status }) {
     <JarvisGlassCard className="settings-user-card"><span>USUARIO ACTUAL</span><strong>{me?.email || "—"}</strong><small>{me?.role || "—"}</small><JarvisStatusPill tone="success">{String(me?.status || "activo").toUpperCase()}</JarvisStatusPill></JarvisGlassCard>
     <JarvisGlassCard className="settings-usage-card"><span>CONSUMO DE IA HOY</span><strong>{usage?.total_tokens?.toLocaleString("es-CR") || 0}</strong><small>Límite {usage?.daily_limit?.toLocaleString("es-CR") || "—"} · disponibles {usage?.remaining_tokens?.toLocaleString("es-CR") || "—"}</small><div className="usage-bar"><i style={{ width: `${Math.min(usage?.percent_used || 0, 100)}%` }} /></div></JarvisGlassCard>
     <div className="settings-menu"><h3>Preferencias</h3><JarvisMenuRow icon={Bell} title="Notificaciones" detail="Web Push, calendario y deportes" onClick={() => setSection("notifications")} />{isOwner && <><JarvisMenuRow icon={Sparkles} title="IA Premium" detail="Modelo y presupuesto" onClick={() => setSection("premium")} /><JarvisMenuRow icon={RadioTower} title="Centro Owner" detail="Identidad y despliegues" onClick={() => setSection("owner")} /></>}<JarvisMenuRow icon={CalendarDays} title="Calendario" detail={`${calendar.length} próximos compromisos`} onClick={() => setSection("notifications")} /><JarvisMenuRow icon={Trophy} title="Deportes" detail="F1 · UFC · Fútbol" onClick={() => setSection("notifications")} /></div>
-    {status?.config && <small className="settings-system-note">Sistema JARVIS sincronizado</small>}
+    {status?.config && <small className="settings-system-note">Sistema DINCR sincronizado</small>}
   </JarvisScreen>;
 }
 

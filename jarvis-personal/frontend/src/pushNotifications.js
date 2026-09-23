@@ -39,7 +39,7 @@ export const enableJarvisPushNotifications = async () => {
 
   const registration = await registerJarvisServiceWorker();
   if (!registration) {
-    throw new Error("No pude registrar el service worker de JARVIS.");
+    throw new Error("No pude registrar el service worker de DINCR.");
   }
 
   let subscription = await registration.pushManager.getSubscription();

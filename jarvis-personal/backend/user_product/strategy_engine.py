@@ -56,7 +56,7 @@ def build_basic_strategy(snapshot: dict, extra_monthly: float = 0) -> dict:
             "status": "needs_income", "priority": "income", "monthly_income": 0,
             "essential_expenses": essentials, "minimum_debt_payments": round(minimums, 2),
             "strategic_margin": 0, "allocations": [], "target_debt": None,
-            "recommendation": "Completá tus ingresos para que JARVIS pueda construir una estrategia mensual.",
+            "recommendation": "Completá tus ingresos para que DINCR pueda construir una estrategia mensual.",
             "warnings": ["No hay un ingreso mensual estimable."], "projection": None,
         }
 
@@ -64,7 +64,7 @@ def build_basic_strategy(snapshot: dict, extra_monthly: float = 0) -> dict:
         warnings.append("Tus gastos esenciales son desconocidos; completalos para mejorar la precisión.")
     missing_minimums = sum(1 for d in debts if d.get("monthly_payment") is None)
     if missing_minimums:
-        warnings.append(f"Falta la cuota mensual de {missing_minimums} deuda(s); JARVIS no la inventó.")
+        warnings.append(f"Falta la cuota mensual de {missing_minimums} deuda(s); DINCR no la inventó.")
     missing_rates = sum(1 for d in debts if d.get("interest_rate") is None)
     if missing_rates:
         warnings.append(f"Falta la tasa de interés de {missing_rates} deuda(s); la prioridad usa los datos disponibles.")
@@ -161,7 +161,7 @@ def build_vip_strategy(snapshot: dict) -> dict:
     return {
         **result, "director_mode": True, "strategy_preference": preference,
         "vip_allocations": allocations,
-        "director_note": "JARVIS coordinó deuda, seguridad, metas y tu mínimo personal según la prioridad elegida.",
+        "director_note": "DINCR coordinó deuda, seguridad, metas y tu mínimo personal según la prioridad elegida.",
     }
 
 

@@ -107,7 +107,7 @@ export default function App() {
 
   useEffect(() => {
     const isPersonal = ownerBridgeMode || currentUser?.role === "owner" || currentUser?.role === "admin";
-    document.title = isPersonal ? "J.A.R.V.I.S." : "DINCR";
+    document.title = isPersonal ? "DINCR Owner" : "DINCR";
   }, [ownerBridgeMode, currentUser]);
 
   useEffect(() => {

@@ -31,7 +31,7 @@ export default function NetWorth() {
 
   return <section className="net-worth-page jarvis-v2-screen net-worth-v2">
     <div className="net-worth-hero net-worth-v2-hero">
-      <div><span className="strategy-eyebrow">JARVIS 06 · LIVE WEALTH</span><h2>{tx("Patrimonio neto", "Net worth")}</h2><p>Todo lo que tenés menos todo lo que debés, usando únicamente saldos reales.</p></div>
+      <div><span className="strategy-eyebrow">DINCR 06 · LIVE WEALTH</span><h2>{tx("Patrimonio neto", "Net worth")}</h2><p>Todo lo que tenés menos todo lo que debés, usando únicamente saldos reales.</p></div>
       <button className="strategy-refresh-btn" onClick={load}><RefreshCw size={17}/> {tx("Actualizar", "Refresh")}</button>
       <div className="net-worth-total"><span>{tx("Patrimonio actual", "Current net worth")}</span><strong className={Number(data.net_worth) < 0 ? "negative" : "positive"}>{crc(data.net_worth)}</strong><small>{data.interpretation}</small></div>
     </div>

@@ -56,14 +56,14 @@ const firstName = (user) => {
 };
 
 function BrandArt({ isJarvis }) {
-  const product = isJarvis ? "JARVIS" : "DINCR";
+  const product = "DINCR";
   return (
     <div className="profile-setup-art" aria-hidden="true">
       <span className="profile-setup-orbit orbit-one" />
       <span className="profile-setup-orbit orbit-two" />
       <span className="profile-setup-art-card art-card-one"><Banknote /></span>
       <span className="profile-setup-art-card art-card-two"><PiggyBank /></span>
-      <span className="profile-setup-art-core">{isJarvis ? "J" : "F"}</span>
+      <span className="profile-setup-art-core">D</span>
       <div className="profile-setup-art-copy">
         <strong>{product}</strong>
         <span>{isJarvis
@@ -77,7 +77,7 @@ function BrandArt({ isJarvis }) {
 
 export default function ProfileSetup({ user, onComplete }) {
   const isJarvis = user?.role === "owner" || user?.role === "admin";
-  const product = isJarvis ? "JARVIS" : "DINCR";
+  const product = "DINCR";
   const platform = Capacitor.getPlatform();
   const initialCurrency = user?.base_currency || "CRC";
   const [step, setStep] = useState(0);

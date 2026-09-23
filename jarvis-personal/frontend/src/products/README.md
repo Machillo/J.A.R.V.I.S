@@ -1,11 +1,11 @@
-# Frontend por producto y plataforma
+# Frontend por experiencia y plataforma
 
-Esta carpeta mantiene separadas las experiencias de JARVIS y DINCR sin duplicar cálculos ni llamadas de API.
+Esta carpeta mantiene separadas la experiencia comercial DINCR y la experiencia interna DINCR Owner sin duplicar cálculos ni llamadas de API. Los nombres de carpetas son identificadores históricos.
 
-## Productos
+## Experiencias
 
 - `finva/`: navegación, estilos y módulos de la aplicación comercial.
-- `jarvis/`: navegación, estilos y módulos del laboratorio personal.
+- `jarvis/`: navegación, estilos y módulos internos DINCR Owner (nombre histórico de carpeta).
 
 Cada función nueva debe vivir en `products/<producto>/features/<función>/`. El resumen de DINCR es el ejemplo completo: componente y estilos están juntos en `finva/features/overview/`.
 
@@ -22,7 +22,7 @@ La lógica financiera nunca debe duplicarse por plataforma. Android y iOS compar
 
 ## Sistema visual
 
-- JARVIS y DINCR comparten tarjetas, formularios, encabezados, hojas y espaciado desde `ui/native`.
-- Los archivos de cada producto solo definen color y compatibilidad con sus pantallas existentes.
+- DINCR y DINCR Owner comparten tarjetas, formularios, encabezados, hojas y espaciado desde `ui/native`.
+- Los archivos de cada experiencia solo definen color y compatibilidad con sus pantallas existentes.
 - DINCR aplica una variante de color por plan: `free`, `basic` o `vip`.
-- Cada producto mantiene cinco accesos principales. Las funciones secundarias se organizan en **Más** para que ninguna ruta desaparezca cuando la app crezca.
+- Cada experiencia mantiene cinco accesos principales. Las funciones secundarias se organizan en **Más** para que ninguna ruta desaparezca cuando la app crezca.

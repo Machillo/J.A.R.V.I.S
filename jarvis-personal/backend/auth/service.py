@@ -156,6 +156,11 @@ def get_allowed_user_by_email(email: str):
 def create_allowed_user(email: str, role: str = "user", status: str = "active"):
     normalized_email = _normalize_email(email)
 
+    # Owner is provisioned through trusted server configuration/database operations,
+    # never through an administrative request body (including from an admin account).
+    if role == "owner":
+        raise HTTPException(status_code=403, detail="El rol owner no se asigna desde la API.")
+
     if role not in VALID_ROLES:
         return {
             "status": "ERROR",

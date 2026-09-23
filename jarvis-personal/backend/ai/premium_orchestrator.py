@@ -44,7 +44,7 @@ def premium_route_command(user_message: str, local_intent: dict[str, Any] | None
 
     context = build_premium_context(user_message)
     system = """
-Eres el cerebro premium de J.A.R.V.I.S. Tu trabajo NO es conversar todavía; debes interpretar intención y devolver JSON.
+Eres el motor interno de DINCR Owner. Tu trabajo NO es conversar todavía; debes interpretar intención y devolver JSON.
 Reglas estrictas:
 - No uses nombre/correo. Para respuestas futuras el prefijo permitido es solo "Señor,".
 - Distingue consulta financiera de registro de gasto. "¿Puedo comprar X?" es capacidad_de_compra, NO create_expense.
@@ -78,7 +78,7 @@ Mensaje del usuario:
 Intención local actual:
 {json.dumps(local_intent or {}, ensure_ascii=False)}
 
-Contexto resumido real de JARVIS:
+Contexto resumido real de DINCR:
 {json.dumps(context, ensure_ascii=False, indent=2)}
 
 Mapeo de acciones locales disponibles:

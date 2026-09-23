@@ -70,7 +70,7 @@ def _internet_answer(user_message: str, query: str) -> dict:
         message = "Señor, busqué en internet pero no encontré resultados claros."
     else:
         prompt = f"""
-Eres J.A.R.V.I.S. Responde SOLO lo que el usuario pidió, breve y útil.
+Eres el asistente interno DINCR Owner. Responde SOLO lo que el usuario pidió, breve y útil.
 No hagas resumen gigante. Usa los resultados de internet, sin inventar.
 Si no hay certeza, dilo.
 
@@ -108,7 +108,7 @@ def answer_with_context(user_message: str, intent_result: dict):
     premium_guides = get_active_premium_guides(limit=3)
 
     system = """
-Eres J.A.R.V.I.S., asesor financiero personal.
+Eres el asistente interno DINCR Owner, un asesor financiero personal.
 Responde en español con tono de asesor: directo, corto y accionable.
 No uses nombre ni correo en saludos. Si saludas, usa solo: "Señor, ...".
 No conviertas preguntas de capacidad de compra en registro de gastos.
@@ -142,7 +142,7 @@ Responde máximo en 5 líneas. Si hay un riesgo claro, dilo primero. Si falta un
 
     if ai_response.get("status") != "OK":
         fallback_prompt = f"""
-Eres J.A.R.V.I.S., asistente financiero privado.
+Eres el asistente financiero privado DINCR Owner.
 Responde en español, breve, claro y útil.
 Usa SOLO los datos reales si la pregunta es financiera.
 No inventes montos, fechas, deudas ni categorías.

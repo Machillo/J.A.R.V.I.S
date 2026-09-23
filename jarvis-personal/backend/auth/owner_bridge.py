@@ -51,7 +51,7 @@ def verify_personal_owner(personal_supabase_user_id: str) -> dict:
     if not row:
         raise HTTPException(
             status_code=404,
-            detail="La identidad no existe todavía en JARVIS Personal. Iniciá sesión una vez en Personal con tu cuenta original.",
+            detail="La identidad interna todavía no existe. Iniciá sesión una vez con tu cuenta original.",
         )
     if row["status"] != "active":
         raise HTTPException(status_code=403, detail="La identidad Personal no está activa.")
@@ -108,7 +108,7 @@ def authenticate_owner_bridge_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Sesión owner inválida.") from exc
 
     if payload.get("aud") != "jarvis-personal-owner" or int(payload.get("exp", 0)) <= int(time.time()):
-        raise HTTPException(status_code=401, detail="La sesión owner expiró. Volvé a entrar desde JARVIS.")
+        raise HTTPException(status_code=401, detail="La sesión owner expiró. Volvé a entrar desde DINCR.")
 
     personal_uid = str(payload.get("sub") or "")
     allowed_user_id = int(payload.get("allowed_user_id") or 0)

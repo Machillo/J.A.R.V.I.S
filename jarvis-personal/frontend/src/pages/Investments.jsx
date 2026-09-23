@@ -39,7 +39,7 @@ export default function Investments() {
   const syncLabel = syncMethod === "flex" ? "FLEX DIARIO" : "PUENTE TWS";
   return <section className="investments-page">
     <div className="investment-hero hud-panel">
-      <div><span className="strategy-eyebrow">WEALTH BUILDING</span><h2>{tx("Inversiones", "Investments")}</h2><p>JARVIS separa inversión de dinero libre y aumenta el aporte solo cuando tu flujo lo permite.</p>{c.read_only ? <small className={`ibkr-sync-badge ${c.sync_status}`}>IBKR READ-ONLY · {String(p.account_mode || "").toUpperCase()} · {syncLabel} · {c.sync_status === "current" ? "ACTUALIZADO" : "SIN ACTUALIZAR"} · {p.account_id_masked}</small> : null}</div>
+      <div><span className="strategy-eyebrow">WEALTH BUILDING</span><h2>{tx("Inversiones", "Investments")}</h2><p>DINCR separa inversión de dinero libre y aumenta el aporte solo cuando tu flujo lo permite.</p>{c.read_only ? <small className={`ibkr-sync-badge ${c.sync_status}`}>IBKR READ-ONLY · {String(p.account_mode || "").toUpperCase()} · {syncLabel} · {c.sync_status === "current" ? "ACTUALIZADO" : "SIN ACTUALIZAR"} · {p.account_id_masked}</small> : null}</div>
       <button className="strategy-refresh-btn" onClick={c.flex_configured ? syncIbkr : load}><RefreshCw size={17}/> {c.flex_configured ? "Sincronizar IBKR" : "Actualizar"}</button>
     </div>
 
@@ -56,7 +56,7 @@ export default function Investments() {
     </div> : null}
 
     <div className="hud-panel investment-plan-panel"><div className="panel-heading"><div><span className="strategy-eyebrow">DIRECTOR FINANCIERO</span><h3>Aporte recomendado</h3></div><strong className="investment-recommendation">{crc(recommended)}</strong></div>
-      <p>Meta base actual: <b>{crc(target)}/mes</b>. Si obligaciones, fondo de emergencia o una meta urgente necesitan la caja, JARVIS puede bajar este aporte hasta ₡0.</p>
+      <p>Meta base actual: <b>{crc(target)}/mes</b>. Si obligaciones, fondo de emergencia o una meta urgente necesitan la caja, DINCR puede bajar este aporte hasta ₡0.</p>
       <div className="investment-progress"><span style={{width:`${Math.min(100, target ? (Number(c.reserved_to_invest_crc||0)/target)*100 : 0)}%`}} /></div>
     </div>
 
@@ -76,8 +76,8 @@ export default function Investments() {
     </div>
 
     <div className="hud-panel"><div className="panel-heading"><div><span className="strategy-eyebrow">FONDEO INTELIGENTE</span><h3>Acumular antes de enviar</h3></div><ArrowDownToLine/></div>
-      <p>Modelo inicial: Wise ≈ <b>{c.funding_model?.wise_percent_estimate || 1.23}%</b> + <b>${c.funding_model?.wise_to_ibkr_fixed_usd || 1.13}</b> hacia IBKR. JARVIS puede reservar ₡5.000 varios meses y esperar antes de transferir para que el costo fijo pese menos.</p>
-      <small className="muted-text">{c.read_only ? `Datos recibidos por ${syncMethod === "flex" ? "IBKR Flex, sin depender de una PC" : "el puente local"}. JARVIS no puede enviar órdenes.` : "IBKR: integración read-only preparada. Hasta conectarla, cartera, comisiones, dividendos e impuestos pueden venir de snapshots/manuales."}</small>
+      <p>Modelo inicial: Wise ≈ <b>{c.funding_model?.wise_percent_estimate || 1.23}%</b> + <b>${c.funding_model?.wise_to_ibkr_fixed_usd || 1.13}</b> hacia IBKR. DINCR puede reservar ₡5.000 varios meses y esperar antes de transferir para que el costo fijo pese menos.</p>
+      <small className="muted-text">{c.read_only ? `Datos recibidos por ${syncMethod === "flex" ? "IBKR Flex, sin depender de una PC" : "el puente local"}. DINCR no puede enviar órdenes.` : "IBKR: integración read-only preparada. Hasta conectarla, cartera, comisiones, dividendos e impuestos pueden venir de snapshots/manuales."}</small>
     </div>
   </section>;
 }

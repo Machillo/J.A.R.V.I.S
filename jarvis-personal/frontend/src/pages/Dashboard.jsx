@@ -21,7 +21,7 @@ export default function Dashboard({ jarvisResponse, chatHistory = [], userName =
         <div className="jarvis-home-v2-mark" aria-hidden="true"><Brain size={24} /></div>
         <div>
           <p>{tx("Hola", "Hello")} {userName || "Kenneth"}</p>
-          <h1>J.A.R.V.I.S.</h1>
+          <h1>DINCR Owner</h1>
           <span>{tx("¿Qué hacemos ahora?", "What shall we do now?")}</span>
         </div>
         <button type="button" className="jarvis-home-profile" onClick={onOpenProfile} aria-label={tx("Abrir perfil", "Open profile")}>

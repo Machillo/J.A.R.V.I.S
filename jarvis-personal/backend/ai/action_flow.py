@@ -102,7 +102,7 @@ ACTION_CONFIG = {
             "transaction_date": None,
             "account": "",
             "source": "chat",
-            "notes": "Registrado por JARVIS Chat",
+            "notes": "Registrado por DINCR Chat",
             "original_amount": None,
             "original_currency": None,
             "exchange_rate": None,
@@ -329,7 +329,7 @@ def _initial_payload(action_type: str, user_message: str) -> dict[str, Any]:
         if amount is not None:
             payload["amount"] = amount
 
-        # Gastos cotidianos conocidos por JARVIS.  Se guardan con una categoría
+        # Gastos cotidianos conocidos por DINCR.  Se guardan con una categoría
         # útil sin obligar al usuario a responder otra pregunta cada vez.
         if "muay thai" in lower or "muaythai" in lower or "thai" in lower:
             payload["category"] = "Deporte"
@@ -447,7 +447,7 @@ def _save_action(action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
             category=final["category"],
             account="",
             source="jarvis_chat",
-            notes="Gasto registrado manualmente por JARVIS Chat",
+            notes="Gasto registrado manualmente por DINCR Chat",
         )
 
     if action_type == "create_income":
@@ -465,7 +465,7 @@ def _save_action(action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
             category=final["category"],
             account=final.get("account", ""),
             source=final.get("source", "chat"),
-            notes=final.get("notes", "Registrado por JARVIS Chat"),
+            notes=final.get("notes", "Registrado por DINCR Chat"),
             original_amount=final.get("original_amount"),
             original_currency=final.get("original_currency"),
             exchange_rate=final.get("exchange_rate"),

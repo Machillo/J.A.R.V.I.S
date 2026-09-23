@@ -6,7 +6,7 @@ from backend.auth.current_user import get_current_account_id
 from backend.core.database import get_connection
 
 
-LEGAL_VERSION = "2026-09-16-v1"
+LEGAL_VERSION = "2026-09-23-v2"
 TERMS_VERSION = LEGAL_VERSION
 PRIVACY_VERSION = LEGAL_VERSION
 

@@ -94,7 +94,7 @@ def _concise_sports_answer(scope: str, query_type: str, user_query: str, search_
 
     now_cr = datetime.now(CR_TZ).strftime("%Y-%m-%d %H:%M Costa Rica")
     prompt = f"""
-Eres J.A.R.V.I.S. Responde SOLO lo que el usuario pidió sobre deportes.
+Eres el asistente interno DINCR Owner. Responde SOLO lo que el usuario pidió sobre deportes.
 No mandes calendarios completos salvo que el usuario pida "calendario" o "radar".
 Usa hora de Costa Rica si aparece o conviértela si el resultado la trae clara.
 Si no hay fecha/hora clara, dilo.
