@@ -31,6 +31,8 @@ const MAIL_ERRORS = {
   vip_required: ["Conectar {provider} requiere el plan VIP activo.", "Connecting {provider} requires an active VIP plan."],
   already_connected_elsewhere: ["Ese correo ya está conectado de otra forma en DINCR.", "That mailbox is already connected to DINCR another way."],
   mailbox_missing: ["Esa cuenta no tiene un buzón de correo disponible.", "That account has no mailbox available."],
+  already_processed: ["Esta autorización de {provider} ya se procesó. Si no aparece conectado, volvé a conectarlo.", "This {provider} authorization was already processed. If it doesn’t show as connected, connect it again."],
+  completion_pending: ["No pudimos terminar de conectar {provider} por la conexión. DINCR lo reintentará cuando vuelvas a estar en línea.", "We couldn’t finish connecting {provider} because of the connection. DINCR will retry when you’re back online."],
 };
 
 function mailErrorMessage(provider, code) {
