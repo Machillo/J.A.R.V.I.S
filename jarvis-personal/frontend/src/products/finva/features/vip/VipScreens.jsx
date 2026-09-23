@@ -100,7 +100,7 @@ export default function VipScreens({ view = "dashboard", onNavigate, onLogout, u
     if (error) return <section className="vip-screen"><Card tone="danger"><h2>{error}</h2><PrimaryButton onClick={load}>{tx("Reintentar", "Try again")}</PrimaryButton></Card></section>;
     return <LoadingScreen/>;
   }
-  const props = { data, profile, budget, onNavigate, onLogout, user, reload: load };
+  const props = { data, profile, budget, onNavigate, onLogout, user, reload: load, onProfileSaved: setProfile };
   const needsActivation = !profile.strategy_preference || profile.emergency_fund_target == null || profile.discretionary_monthly_minimum == null;
   if (needsActivation && view === "dashboard") return <VipActivation {...props}/>;
   const screens = {
@@ -114,7 +114,7 @@ export default function VipScreens({ view = "dashboard", onNavigate, onLogout, u
   return <Screen {...props}/>;
 }
 
-function VipActivation({ profile, user, onNavigate, reload }) {
+function VipActivation({ profile, user, onNavigate, reload, onProfileSaved }) {
   const [form, setForm] = useState({
     ...profile,
     emergency_fund_target: profile.emergency_fund_target ?? 0,
@@ -122,25 +122,40 @@ function VipActivation({ profile, user, onNavigate, reload }) {
     discretionary_monthly_minimum: profile.discretionary_monthly_minimum ?? 0,
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const needsFinancialSituation = !profile.income_type ||
+    (profile.income_type === "fixed" && !profile.fixed_monthly_salary) ||
+    (profile.income_type === "hourly" && (!profile.hourly_rate || !profile.hours_per_day)) ||
+    profile.essential_monthly_expenses == null;
   const save = async () => {
-    setSaving(true);
+    setSaving(true); setError("");
     try {
-      await updateFinancialSituation({
+      const result = await updateFinancialSituation({
         ...form,
         emergency_fund_target: Number(form.emergency_fund_target) || 0,
         discretionary_monthly_minimum: Number(form.discretionary_monthly_minimum) || 0,
       });
-      await reload(); onNavigate?.("overview");
+      onProfileSaved(result.financial_profile);
+      reload();
+      onNavigate?.("overview");
+    } catch (cause) {
+      setError(cause.message || tx("No pudimos guardar tus preferencias. Intentá de nuevo.", "We couldn't save your preferences. Please try again."));
     } finally { setSaving(false); }
   };
   return <section className="vip-screen">
     <VipHeader title={tx("Completemos VIP", "Let's complete VIP")} user={user} onNavigate={onNavigate}/>
-    <Focus eyebrow={tx("TODO FREE + BASIC SE CONSERVA", "EVERYTHING IN FREE + BASIC STAYS")} caption={tx("Solo necesitamos 3 decisiones para personalizar tu estrategia.", "We only need 3 decisions to personalize your strategy.")}/>
+    <Focus eyebrow={tx("TU PLAN VIP YA ESTÁ ACTIVO", "YOUR VIP PLAN IS ACTIVE")} caption={tx("Personalizá tu estrategia para empezar a usarla.", "Personalize your strategy to start using it.")}/>
+    {needsFinancialSituation ? <>
+      <Card tone="gold"><h2>{tx("Completá tu situación financiera", "Complete your financial situation")}</h2><p>{tx("Para crear una estrategia VIP necesitamos conocer tus ingresos y gastos esenciales. Tu plan VIP sigue activo.", "To build a VIP strategy, we need your income and essential expenses. Your VIP plan remains active.")}</p></Card>
+      <PrimaryButton onClick={() => onNavigate?.("situation")}>{tx("Completar situación financiera", "Complete financial situation")}</PrimaryButton>
+    </> : <>
     <label className="vip-field"><span>{tx("Fondo de emergencia objetivo", "Emergency fund target")}</span><input type="number" min="0" value={form.emergency_fund_target} onChange={(e) => setForm({...form, emergency_fund_target:e.target.value})}/></label>
     <label className="vip-field"><span>{tx("Prioridad estratégica", "Strategic priority")}</span><select value={form.strategy_preference} onChange={(e) => setForm({...form, strategy_preference:e.target.value})}><option value="balanced">{tx("Equilibrado", "Balanced")}</option><option value="debt">{tx("Deuda", "Debt")}</option><option value="emergency">{tx("Emergencia", "Emergency")}</option><option value="goals">{tx("Metas", "Goals")}</option></select></label>
     <label className="vip-field"><span>{tx("Dinero mínimo para tus gustos", "Minimum personal spending")}</span><input type="number" min="0" value={form.discretionary_monthly_minimum} onChange={(e) => setForm({...form, discretionary_monthly_minimum:e.target.value})}/></label>
     <Card tone="gold"><h2>{tx("Tu estrategia será ajustable", "Your strategy will be adjustable")}</h2><p>{tx("Podés cambiar estas preferencias cuando tu vida financiera cambie.", "You can change these preferences when your financial life changes.")}</p></Card>
-    <PrimaryButton disabled={saving} onClick={save}>{saving ? tx("Activando…", "Activating…") : tx("Activar VIP", "Activate VIP")}</PrimaryButton>
+    {error && <p className="vip-form-error" role="alert">{error}</p>}
+    <PrimaryButton disabled={saving} onClick={save}>{saving ? tx("Guardando…", "Saving…") : tx("Guardar estrategia VIP", "Save VIP strategy")}</PrimaryButton>
+    </>}
   </section>;
 }
 
@@ -392,15 +407,16 @@ function VipAguinaldo({ user, onNavigate }) {
   </section>;
 }
 
-function VipPreferences({ profile, user, onNavigate, reload }) {
+function VipPreferences({ profile, user, onNavigate, reload, onProfileSaved }) {
   const [form, setForm] = useState({...profile});
   const [saving, setSaving] = useState(false), [message, setMessage] = useState("");
   const save = async (event) => {
     event.preventDefault(); setSaving(true); setMessage("");
     try {
-      await updateFinancialSituation({...form, emergency_fund_target:Number(form.emergency_fund_target) || 0, discretionary_monthly_minimum:Number(form.discretionary_monthly_minimum) || 0});
-      setMessage(tx("Preferencias guardadas.", "Preferences saved.")); await reload();
-    } catch { setMessage(tx("No pudimos guardar los cambios.", "We couldn't save your changes.")); }
+      const result = await updateFinancialSituation({...form, emergency_fund_target:Number(form.emergency_fund_target) || 0, discretionary_monthly_minimum:Number(form.discretionary_monthly_minimum) || 0});
+      onProfileSaved(result.financial_profile);
+      setMessage(tx("Preferencias guardadas.", "Preferences saved.")); reload();
+    } catch (cause) { setMessage(cause.message || tx("No pudimos guardar los cambios.", "We couldn't save your changes.")); }
     finally { setSaving(false); }
   };
   return <section className="vip-screen"><VipHeader title={tx("Preferencias VIP", "VIP preferences")} user={user} onNavigate={onNavigate}/><Focus eyebrow={tx("ESTRATEGIA PERSONAL", "PERSONAL STRATEGY")} caption={tx("DINCR adapta sus recomendaciones a estas reglas.", "DINCR adapts its recommendations to these rules.")}/><form className="vip-form" onSubmit={save}><label className="vip-field"><span>{tx("Prioridad", "Priority")}</span><select value={form.strategy_preference || "balanced"} onChange={(e) => setForm({...form, strategy_preference:e.target.value})}><option value="balanced">{tx("Equilibrado", "Balanced")}</option><option value="debt">{tx("Deuda", "Debt")}</option><option value="emergency">{tx("Emergencia", "Emergency")}</option><option value="goals">{tx("Metas", "Goals")}</option></select></label><label className="vip-field"><span>{tx("Fondo de emergencia", "Emergency fund")}</span><input type="number" min="0" value={form.emergency_fund_target ?? 0} onChange={(e) => setForm({...form, emergency_fund_target:e.target.value})}/></label><label className="vip-field"><span>{tx("Mínimo para gustos", "Personal minimum")}</span><input type="number" min="0" value={form.discretionary_monthly_minimum ?? 0} onChange={(e) => setForm({...form, discretionary_monthly_minimum:e.target.value})}/></label><Card title={tx("Cómo usa DINCR estos datos", "How DINCR uses this data")} tone="gold"><p><ShieldCheck size={16}/>{tx("Protege tus límites antes de sugerir pagos, ahorro o aportes a metas.", "It protects your limits before suggesting payments, savings, or goal contributions.")}</p></Card>{message && <p className="vip-form-message"><Sparkles size={15}/>{message}</p>}<button className="vip-primary" disabled={saving}>{saving ? tx("Guardando…", "Saving…") : tx("Guardar preferencias", "Save preferences")}</button></form></section>;
