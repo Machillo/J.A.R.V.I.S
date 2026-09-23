@@ -23,6 +23,21 @@ import LegalLink from "../../components/LegalLink";
 import gmailLogo from "../../assets/institutions/gmail.png";
 import outlookLogo from "../../assets/institutions/outlook.svg";
 
+// Codes returned by the backend callback in com.<app>://gmail/callback?microsoft=<code>.
+const OUTLOOK_ERRORS = {
+  denied: ["No autorizaste el acceso a Outlook. Podés intentarlo de nuevo cuando quieras.", "You didn’t authorize Outlook access. You can try again anytime."],
+  invalid_state: ["La autorización venció. Volvé a tocar “Conectar Outlook / Hotmail”.", "The authorization expired. Tap “Connect Outlook / Hotmail” again."],
+  permission_missing: ["Microsoft no concedió el permiso de lectura de correo. Volvé a conectar y aceptá el acceso de lectura.", "Microsoft didn’t grant mail read access. Connect again and accept read access."],
+  vip_required: ["Conectar Outlook requiere el plan VIP activo.", "Connecting Outlook requires an active VIP plan."],
+  already_connected_elsewhere: ["Ese correo ya está conectado de otra forma en DINCR.", "That mailbox is already connected to DINCR another way."],
+  mailbox_missing: ["Esa cuenta de Microsoft no tiene un buzón de correo disponible.", "That Microsoft account has no mailbox available."],
+};
+
+function outlookErrorMessage(code) {
+  const [es, en] = OUTLOOK_ERRORS[code] || ["No pudimos conectar Outlook. Intentalo de nuevo en unos minutos.", "We couldn’t connect Outlook. Please try again in a few minutes."];
+  return tx(es, en);
+}
+
 function MailProviderLogo({ provider }) {
   return <img className="mail-provider-logo" src={provider === "microsoft" ? outlookLogo : gmailLogo} alt="" aria-hidden="true" />;
 }
@@ -110,7 +125,7 @@ export default function GmailAutomation() {
       try { await Browser.close(); } catch { /* El navegador ya puede estar cerrado. */ }
       const result = new URL(url).searchParams.get("microsoft");
       if (result === "connected") trackEvent("mail_connected", { source_type: "email" });
-      if (result && result !== "connected") setError(tx(`No se pudo conectar Outlook (${result}). Revisá la configuración o volvé a intentarlo.`, `Couldn’t connect Outlook (${result}). Check the configuration or try again.`));
+      if (result && result !== "connected") setError(outlookErrorMessage(result));
       await load();
     }).then((listener) => { appUrlListener = listener; });
     return () => {

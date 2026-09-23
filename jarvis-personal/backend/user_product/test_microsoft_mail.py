@@ -45,7 +45,7 @@ def test_oauth_begin_requires_consent_and_exact_read_scopes(monkeypatch):
     uri = mail.begin_connection()["authorization_url"]
     params = parse_qs(urlparse(uri).query)
     assert urlparse(uri).hostname == "login.microsoftonline.com"
-    assert urlparse(uri).path.startswith("/consumers/")
+    assert urlparse(uri).path.startswith("/common/")
     assert params["scope"] == ["offline_access User.Read Mail.Read"]
     assert "Mail.Send" not in uri and "Mail.ReadWrite" not in uri
     assert mail._verify_state(params["state"][0])["a"] == "account"
@@ -134,11 +134,12 @@ def test_callback_saves_refresh_token_in_vault_after_mailbox_validation(monkeypa
     monkeypatch.setattr(mail, "sync_connection", lambda connection_id: {"id": connection_id})
 
     class OAuthResponse:
-        def raise_for_status(self):
-            return None
+        status_code = 200
 
         def json(self):
-            return {"access_token": "access", "refresh_token": "refresh", "scope": mail.SCOPE}
+            # Microsoft returns Graph scopes fully qualified.
+            return {"access_token": "access", "refresh_token": "refresh",
+                    "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read"}
 
     monkeypatch.setattr(mail.requests, "post", lambda *_args, **_kwargs: OAuthResponse())
     graph_calls = []
@@ -169,11 +170,10 @@ def test_callback_rejects_missing_scope_before_any_database_write(monkeypatch):
     monkeypatch.setattr(mail, "get_connection", lambda: db)
 
     class OAuthResponse:
-        def raise_for_status(self):
-            return None
+        status_code = 200
 
         def json(self):
-            return {"access_token": "access", "refresh_token": "refresh", "scope": "User.Read"}
+            return {"access_token": "access", "refresh_token": "refresh", "scope": "https://graph.microsoft.com/User.Read"}
 
     monkeypatch.setattr(mail.requests, "post", lambda *_args, **_kwargs: OAuthResponse())
     result = mail.finish_connection("code", mail._state("account", "workspace"))

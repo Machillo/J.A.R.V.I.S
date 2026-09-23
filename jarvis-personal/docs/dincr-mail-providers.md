@@ -8,19 +8,24 @@ guardan en Supabase Vault en el backend y se eliminan al desconectar.
 
 ## Habilitar Outlook/Hotmail
 
-1. Registrar una aplicación en Microsoft Entra para **cuentas personales Microsoft**.
-   La autorización usa el tenant `consumers` y un redirect web HTTPS del backend.
-2. Agregar el URI de redirección del backend:
-   `https://<backend-oficial>/user-product/vip/mail/microsoft/callback`.
+1. Registrar una aplicación en Microsoft Entra para **cuentas de cualquier
+   directorio y cuentas personales Microsoft**. La autorización usa el
+   endpoint `common`, que acepta Outlook.com/Hotmail/Live y Microsoft 365.
+2. En *Authentication → Web*, agregar el URI de redirección del backend:
+   `https://api.dincr.com/user-product/vip/mail/microsoft/callback`.
 3. Permitir permisos delegados Microsoft Graph `Mail.Read` y `User.Read`.
-   `offline_access` se solicita para sincronizaciones posteriores. Crear un
-   client secret para el backend. **No** ponerlo en el frontend, la APK ni Git.
+   `offline_access` se solicita en la autorización para obtener el refresh
+   token de las sincronizaciones posteriores. Crear un client secret para el
+   backend. **No** ponerlo en el frontend, la APK ni Git.
 4. Configurar solamente en el backend:
-   - `FINVA_MICROSOFT_CLIENT_ID`
-   - `FINVA_MICROSOFT_CLIENT_SECRET`
-   - `FINVA_MICROSOFT_REDIRECT_URI` (idéntico al registrado)
-5. Desplegar backend y APK actualizados. La opción de Outlook permanece
-   desactivada hasta que las tres variables estén configuradas.
+   - `MICROSOFT_CLIENT_ID`
+   - `MICROSOFT_CLIENT_SECRET`
+   - `MICROSOFT_REDIRECT_URI` (idéntico al registrado)
+
+   Los nombres anteriores `FINVA_MICROSOFT_*` siguen aceptándose.
+5. Desplegar el backend. La opción de Outlook permanece desactivada hasta que
+   las tres variables estén configuradas. Outlook no tiene notificaciones push:
+   se actualiza con "Actualizar todos" y con el cron de mantenimiento de Gmail.
 6. Probar autorización, primer escaneo, otro Gmail conectado, revisión de un
    aviso bancario, sincronización de mantenimiento y desconexión en dispositivo.
 

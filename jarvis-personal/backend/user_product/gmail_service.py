@@ -262,6 +262,17 @@ def _mark_reconnect(connection_id: int, message: str = "Google solicitó reconec
         conn.commit()
 
 
+def _mail_provider(connection: dict[str, Any]) -> str:
+    """Mail connections share one table; the granted scope identifies the provider."""
+    return "microsoft" if "Mail.Read" in (connection.get("granted_scopes") or []) else "gmail"
+
+
+def _microsoft_configured() -> bool:
+    from backend.user_product.microsoft_mail import microsoft_configured  # avoids a circular import
+
+    return microsoft_configured()
+
+
 def gmail_status() -> dict[str, Any]:
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
@@ -292,9 +303,7 @@ def gmail_status() -> dict[str, Any]:
         "pending": int((pending or {}).get("total") or 0),
         **data,
         "connections": [{**row, "automatic_updates": bool(row.get("watch_expiration"))} for row in connections],
-        "microsoft_available": all(os.getenv(name, "").strip() for name in (
-            "FINVA_MICROSOFT_CLIENT_ID", "FINVA_MICROSOFT_CLIENT_SECRET", "FINVA_MICROSOFT_REDIRECT_URI",
-        )),
+        "microsoft_available": _microsoft_configured(),
         "consent": gmail_consent_status(),
         "retention": retention_policy(),
     }
@@ -890,6 +899,7 @@ def _ingest_message(
                 parsed,
                 provider_message_id=message_id,
                 subject=subject,
+                source_provider=_mail_provider(connection),
             )
             resolution = _insert_finva_candidate(
                 conn, email_message_id=int(email_row["id"]), connection=connection,

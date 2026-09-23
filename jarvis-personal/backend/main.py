@@ -76,6 +76,9 @@ PUBLIC_PATHS = {
     "/email-monitor/gmail-watch",
     "/email-monitor/gmail-push",
     "/user-product/vip/gmail/callback",
+    # Microsoft redirects the system browser here without a DINCR session; the
+    # signed state identifies the account, as in the Gmail callback.
+    "/user-product/vip/mail/microsoft/callback",
     "/user-product/vip/gmail/maintenance",
     "/user-product/vip/gmail/push",
     "/notifications/cron",

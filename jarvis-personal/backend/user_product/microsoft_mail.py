@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import html
 import json
+import logging
 import os
 import re
 import secrets
@@ -30,19 +31,51 @@ from backend.user_product.gmail_service import (
     _ingest_message, _vault_create, _vault_delete, _vault_read,
 )
 
+logger = logging.getLogger(__name__)
+
+# offline_access is required for a refresh token (background and later syncs).
+# Mail.Read is read-only; DINCR never requests Mail.ReadWrite or Mail.Send.
 SCOPE = "offline_access User.Read Mail.Read"
-AUTHORITY = "https://login.microsoftonline.com/consumers/oauth2/v2.0"
+REQUIRED_SCOPE = "mail.read"
+# "common" accepts personal Microsoft accounts (Outlook.com, Hotmail, Live) and
+# work/school accounts, matching the multitenant + personal app registration.
+AUTHORITY = "https://login.microsoftonline.com/common/oauth2/v2.0"
 GRAPH = "https://graph.microsoft.com/v1.0"
+GRAPH_SCOPE_PREFIX = "https://graph.microsoft.com/"
 ALLOWED_SENDERS = frozenset(re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)) | {"ccss.sa.cr"}
+
+# Render names first; the legacy FINVA_MICROSOFT_* names keep working.
+CONFIG_NAMES = (
+    ("MICROSOFT_CLIENT_ID", "FINVA_MICROSOFT_CLIENT_ID"),
+    ("MICROSOFT_CLIENT_SECRET", "FINVA_MICROSOFT_CLIENT_SECRET"),
+    ("MICROSOFT_REDIRECT_URI", "FINVA_MICROSOFT_REDIRECT_URI"),
+)
+
+
+def _config_values() -> tuple[str, str, str]:
+    return tuple(
+        next((value for value in (os.getenv(name, "").strip() for name in names) if value), "")
+        for names in CONFIG_NAMES
+    )
+
+
+def microsoft_configured() -> bool:
+    return all(_config_values())
 
 
 def _config() -> tuple[str, str, str]:
-    values = tuple(os.getenv(name, "").strip() for name in (
-        "FINVA_MICROSOFT_CLIENT_ID", "FINVA_MICROSOFT_CLIENT_SECRET", "FINVA_MICROSOFT_REDIRECT_URI",
-    ))
+    values = _config_values()
     if not all(values):
         raise HTTPException(status_code=503, detail="Outlook todavía no está configurado en DINCR.")
     return values
+
+
+def _granted_scopes(value: str | None) -> set[str]:
+    """Microsoft may return Graph scopes fully qualified and in any case."""
+    return {
+        item.lower().removeprefix(GRAPH_SCOPE_PREFIX)
+        for item in str(value or "").split()
+    }
 
 
 def _state(account_id: str, workspace_id: str) -> str:
@@ -98,9 +131,13 @@ def _graph_get(token: str, path: str, params: dict | None = None) -> dict:
 
 def finish_connection(code: str | None, state: str | None, error: str | None = None):
     if error or not code:
+        # Only Microsoft's error code (e.g. access_denied, consent_required) is
+        # logged; error_description can echo tenant or account details.
+        logger.warning("Outlook authorization not completed error=%s", str(error or "missing_code")[:60])
         return RedirectResponse(_return_url("denied"), status_code=302)
     payload = _verify_state(state)
     if not payload:
+        logger.warning("Outlook authorization rejected: invalid or expired state")
         return RedirectResponse(_return_url("invalid_state"), status_code=302)
     account_id, workspace_id = payload["a"], payload["w"]
     with get_connection() as conn:
@@ -112,16 +149,21 @@ def finish_connection(code: str | None, state: str | None, error: str | None = N
             "client_id": client_id, "client_secret": client_secret, "code": code,
             "redirect_uri": redirect_uri, "grant_type": "authorization_code", "scope": SCOPE,
         }, timeout=20)
-        response.raise_for_status()
+        if response.status_code != 200:
+            logger.warning("Outlook token exchange failed status=%s", response.status_code)
+            return RedirectResponse(_return_url("exchange_failed"), status_code=302)
         tokens = response.json()
-        if not tokens.get("refresh_token") or "Mail.Read" not in tokens.get("scope", "").split():
+        if not tokens.get("refresh_token") or REQUIRED_SCOPE not in _granted_scopes(tokens.get("scope")):
+            logger.warning("Outlook authorization missing Mail.Read or offline access")
             return RedirectResponse(_return_url("permission_missing"), status_code=302)
         profile = _graph_get(tokens["access_token"], "/me")
         address = str(profile.get("mail") or profile.get("userPrincipalName") or "").strip().lower()
         if not address or "@" not in address:
             return RedirectResponse(_return_url("mailbox_missing"), status_code=302)
         _graph_get(tokens["access_token"], "/me/messages", {"$top": "1", "$select": "id"})
-    except (requests.RequestException, ValueError, KeyError):
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        logger.warning("Outlook mailbox validation failed error=%s status=%s", type(exc).__name__,
+                       getattr(getattr(exc, "response", None), "status_code", None))
         return RedirectResponse(_return_url("mailbox_unavailable"), status_code=302)
     legacy_user_id = _financial_user_id_for_account(account_id)
     with get_connection() as conn:
@@ -143,7 +185,8 @@ def finish_connection(code: str | None, state: str | None, error: str | None = N
                    WHERE id=%s RETURNING id""",
                 (legacy_user_id, secret_id, ["Mail.Read"], existing["id"]),
             ).fetchone()
-            _vault_delete(conn, str(existing["refresh_token_secret_id"]))
+            if existing.get("refresh_token_secret_id"):
+                _vault_delete(conn, str(existing["refresh_token_secret_id"]))
         else:
             row = conn.execute(
                 """INSERT INTO finva_gmail_connections(
@@ -167,6 +210,12 @@ def _refresh(connection: dict, refresh_token: str) -> str:
         "grant_type": "refresh_token", "scope": SCOPE,
     }, timeout=20)
     if response.status_code in {400, 401}:
+        try:
+            error_code = str(response.json().get("error") or "")[:60]
+        except ValueError:
+            error_code = ""
+        logger.warning("Outlook token refresh rejected connection_id=%s status=%s error=%s",
+                       connection["id"], response.status_code, error_code)
         with get_connection() as conn:
             conn.execute("UPDATE finva_gmail_connections SET status='reauthorization_required' WHERE id=%s", (connection["id"],))
             conn.commit()

@@ -31,6 +31,7 @@ def canonical_candidate(
     provider_message_id: str,
     subject: str,
     movement_index: int = 0,
+    source_provider: str = "gmail",
 ) -> dict[str, Any]:
     """Adapt a producer payload into DINCR's provider-independent candidate shape."""
     transaction_type = str(parsed.get("transaction_type") or "")
@@ -50,8 +51,8 @@ def canonical_candidate(
     return {
         "movement_index": movement_index,
         "source_type": "email",
-        "source_provider": "gmail",
-        "source_record_key": f"gmail:{provider_message_id}:{movement_index}",
+        "source_provider": source_provider,
+        "source_record_key": f"{source_provider}:{provider_message_id}:{movement_index}",
         "institution_country": str(parsed.get("institution_country") or "CR").upper(),
         "transaction_date": parsed.get("transaction_date") or datetime.utcnow().date().isoformat(),
         "transaction_time": parsed.get("transaction_time"),
