@@ -43,7 +43,7 @@ export default function Recurring({ plan = "basic" }) {
   const activeItems = data?.items?.filter((item) => item.is_active) || [];
 
   return <section className="content-first-page finva-basic-recurring">
-    {plan === "free" && <div className="hero"><span>BASIC 06</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>}
+    {plan === "free" && <div className="hero"><span>DINCR · BASIC</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>}
     {error && <div className="panel error">{error}</div>}
     {data && <>
       <article className="basic-recurring-summary"><small>{copy("PRÓXIMOS 30 DÍAS","NEXT 30 DAYS")}</small><strong>{money(data.monthly_expenses)} {copy("comprometidos","committed")}</strong><span>{activeItems.length} {copy("movimientos recurrentes","recurring items")}</span></article>

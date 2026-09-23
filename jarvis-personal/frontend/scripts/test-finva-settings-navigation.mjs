@@ -18,7 +18,8 @@ assert.match(free, /onNavigate\("plan-settings"\)/, "Free must expose account an
 assert.match(free, /onNavigate\("feedback"\)/, "Free must expose support reporting");
 assert.match(vip, /Debes sincronizar tu email/, "VIP aguinaldo must explain that email sync is required");
 assert.match(vip, /onNavigate\?\.\("gmail"\)/, "VIP aguinaldo must link to Gmail setup");
-assert.match(registry, /"vip-aguinaldo": plan === "vip" \? gated\("gmail_automation"/, "Aguinaldo must remain VIP-only and Gmail-gated");
+assert.match(registry, /"vip-aguinaldo": plan === "vip" \? advisory\(gated\("gmail_automation", .*\), "aguinaldo"\)/, "Aguinaldo must remain VIP-only, Gmail-gated and show its estimate disclaimer");
+assert.match(registry, /strategy: advisory\(/, "Strategy must show the not-financial-advice disclaimer");
 assert.match(hubs, /item\(navigate, "vip-aguinaldo", tx\("Aguinaldo"/, "VIP Plan hub must expose Aguinaldo");
 assert.match(hubs, /if \(plan === "vip"\).*item\(navigate, "gmail"/s, "Financial email review must remain VIP-only");
 for (const key of ["overview", "finance", "plan", "advisor", "profile"]) {

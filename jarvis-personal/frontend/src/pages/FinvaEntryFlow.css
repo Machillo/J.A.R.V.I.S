@@ -81,6 +81,9 @@
 }
 .login-page .login-google-btn.auth-google-btn:hover{transform:none;filter:brightness(1.04);box-shadow:none}
 .login-page .login-google-btn.auth-google-btn:active{transform:scale(.99)}
+/* Sign in with Apple: same size and prominence as Google (App Store guideline 4.8, Apple HIG). */
+.login-page .login-google-btn.auth-google-btn.login-apple-btn{margin-top:10px;background:#000;color:#fff;border:1px solid rgba(255,255,255,.28)}
+.login-page .login-apple-btn .apple-icon{width:18px;height:18px;fill:currentColor}
 .login-page .login-warning.auth-secure-note{
   display:block;margin:12px 0 0;color:var(--finva-onb-muted);font-size:10px;line-height:1.35;text-align:left;
 }

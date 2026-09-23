@@ -21,9 +21,10 @@ OWNER_EMAILS = {email.strip().lower() for email in os.getenv("OWNER_EMAILS", "")
 logger = logging.getLogger(__name__)
 
 DELETION_STAGES = (
-    "IDENTITY", "FK_CHECK", "ACCOUNT_DELETE", "LEGACY_DELETE",
-    "SUPABASE_AUTH_DELETE", "COMMIT", "DONE",
+    "IDENTITY", "FK_CHECK", "MAIL_CREDENTIALS_DELETE", "ACCOUNT_DELETE", "LEGACY_DELETE",
+    "SUPABASE_AUTH_DELETE", "COMMIT", "MAIL_TOKEN_REVOKE", "DONE",
 )
+GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 
 
 def _log_deletion(deletion_id: str, stage: str, status: str, **technical) -> None:
@@ -315,6 +316,26 @@ def delete_current_account() -> dict[str, str]:
                 incompatible_constraints=[f"{row['child_table']}.{row['constraint_name']}" for row in incompatible],
             )
 
+            stage = "MAIL_CREDENTIALS_DELETE"
+            # Vault secrets do not cascade from accounts. Read the Google tokens
+            # so they can be revoked after commit, then drop every stored
+            # mail credential inside the same transaction as the account.
+            mail_credentials = conn.execute(
+                """SELECT c.refresh_token_secret_id, c.granted_scopes, s.decrypted_secret
+                   FROM finva_gmail_connections c
+                   LEFT JOIN vault.decrypted_secrets s ON s.id=c.refresh_token_secret_id
+                   WHERE c.account_id=%s""",
+                (account_id,),
+            ).fetchall()
+            secret_ids = [str(row["refresh_token_secret_id"]) for row in mail_credentials if row.get("refresh_token_secret_id")]
+            google_tokens = [
+                str(row["decrypted_secret"]) for row in mail_credentials
+                if row.get("decrypted_secret") and GMAIL_SCOPE in (row.get("granted_scopes") or [])
+            ]
+            if secret_ids:
+                conn.execute("DELETE FROM vault.secrets WHERE id = ANY(%s::uuid[])", (secret_ids,))
+            _log_deletion(deletion_id, stage, "COMPLETED", secrets_deleted=len(secret_ids))
+
             stage = "ACCOUNT_DELETE"
             deleted = conn.execute(
                 "DELETE FROM accounts WHERE id=%s RETURNING id",
@@ -367,6 +388,18 @@ def delete_current_account() -> dict[str, str]:
                 "stage": stage,
             },
         ) from exc
+
+    stage = "MAIL_TOKEN_REVOKE"
+    # Best effort after commit: the account is already gone and the secrets are
+    # deleted, so a Google outage must not turn a completed deletion into an error.
+    revoked = 0
+    for google_token in google_tokens:
+        try:
+            response = requests.post("https://oauth2.googleapis.com/revoke", params={"token": google_token}, timeout=10)
+            revoked += int(response.status_code in {200, 400})
+        except Exception:
+            pass
+    _log_deletion(deletion_id, stage, "COMPLETED", google_tokens=len(google_tokens), revoked=revoked)
 
     stage = "DONE"
     _log_deletion(deletion_id, stage, "COMPLETED")

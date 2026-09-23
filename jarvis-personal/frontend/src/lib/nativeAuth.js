@@ -7,24 +7,23 @@ const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.finva.app";
 export const NATIVE_AUTH_REDIRECT = `${nativeAppId}://auth/callback`;
 export const isNativeApp = () => Capacitor.isNativePlatform();
 
-export async function startGoogleLogin() {
+const PROVIDER_OPTIONS = {
+  google: { queryParams: { prompt: "select_account" } },
+  apple: { scopes: "name email" },
+};
+
+export async function startOAuthLogin(provider) {
+  const providerOptions = PROVIDER_OPTIONS[provider] || {};
   if (!isNativeApp()) {
-    return supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { queryParams: { prompt: "select_account" } },
-    });
+    return supabase.auth.signInWithOAuth({ provider, options: providerOptions });
   }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: NATIVE_AUTH_REDIRECT,
-      skipBrowserRedirect: true,
-      queryParams: { prompt: "select_account" },
-    },
+    provider,
+    options: { ...providerOptions, redirectTo: NATIVE_AUTH_REDIRECT, skipBrowserRedirect: true },
   });
 
-  if (error || !data?.url) return { data, error: error || new Error("Google no devolvió una dirección de acceso.") };
+  if (error || !data?.url) return { data, error: error || new Error("El proveedor no devolvió una dirección de acceso.") };
   await Browser.open({ url: data.url, presentationStyle: "popover" });
   return { data, error: null };
 }
@@ -36,18 +35,12 @@ export async function finishNativeLogin(url) {
   const oauthError = parsed.searchParams.get("error_description") || parsed.searchParams.get("error");
   if (oauthError) throw new Error(decodeURIComponent(oauthError));
 
+  // Only accept the PKCE code: its verifier lives on this device, so a crafted
+  // deep link cannot inject someone else's session tokens.
   const code = parsed.searchParams.get("code");
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) throw error;
-  } else {
-    const hash = new URLSearchParams(parsed.hash.replace(/^#/, ""));
-    const accessToken = hash.get("access_token");
-    const refreshToken = hash.get("refresh_token");
-    if (!accessToken || !refreshToken) throw new Error("Google regresó sin una sesión válida.");
-    const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-    if (error) throw error;
-  }
+  if (!code) throw new Error("El proveedor regresó sin una sesión válida.");
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) throw error;
 
   await Browser.close().catch(() => {});
   return true;
@@ -57,7 +50,7 @@ export async function registerNativeAuthListener(onError) {
   if (!isNativeApp()) return () => {};
   const processUrl = async (url) => {
     try { await finishNativeLogin(url); }
-    catch (error) { onError?.(error?.message || "No pudimos completar el acceso con Google."); }
+    catch (error) { onError?.(error?.message || "No pudimos completar el acceso."); }
   };
   const listener = await CapacitorApp.addListener("appUrlOpen", ({ url }) => processUrl(url));
   const launch = await CapacitorApp.getLaunchUrl();

@@ -23,7 +23,7 @@ export default function FinancialTimeline() {
   const events = data.events || [];
   return <section className="financial-timeline-page">
     <div className="hud-panel financial-timeline-hero">
-      <div><span className="strategy-eyebrow">DINCR 07 · LIQUIDITY MAP</span><h2>{tx("Timeline financiero", "Financial timeline")}</h2><p>Cómo cambia tu saldo disponible con los ingresos, obligaciones y compromisos conocidos.</p></div>
+      <div><span className="strategy-eyebrow">DINCR · LIQUIDITY MAP</span><h2>{tx("Timeline financiero", "Financial timeline")}</h2><p>Cómo cambia tu saldo disponible con los ingresos, obligaciones y compromisos conocidos.</p></div>
       <button className="strategy-refresh-btn" onClick={load}><RefreshCw size={17}/> {tx("Actualizar", "Refresh")}</button>
       <div className="timeline-kpis"><div><WalletCards size={18}/><span>{tx("Disponible hoy", "Available today")}</span><strong>{crc(data.opening_available)}</strong></div><div><CalendarDays size={18}/><span>Al cierre proyectado</span><strong className={Number(data.ending_available) < 0 ? "negative" : "positive"}>{crc(data.ending_available)}</strong></div><div><Target size={18}/><span>{tx("Eventos", "Events")}</span><strong>{data.event_count || 0}</strong></div></div>
     </div>

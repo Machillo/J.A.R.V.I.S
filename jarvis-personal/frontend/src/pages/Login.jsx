@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import { startGoogleLogin } from "../lib/nativeAuth";
+import { startOAuthLogin } from "../lib/nativeAuth";
 import { tx } from "../lib/locale";
 
 function GoogleIcon() {
@@ -14,20 +14,24 @@ function GoogleIcon() {
   );
 }
 
+function AppleIcon() {
+  return (
+    <svg className="apple-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M16.37 12.6c-.02-2.1 1.72-3.12 1.8-3.17-.98-1.43-2.5-1.63-3.05-1.65-1.3-.13-2.54.76-3.2.76-.66 0-1.68-.74-2.76-.72-1.42.02-2.73.83-3.46 2.1-1.48 2.56-.38 6.35 1.06 8.43.7 1.02 1.54 2.16 2.63 2.12 1.06-.04 1.46-.68 2.73-.68 1.28 0 1.63.68 2.75.66 1.14-.02 1.86-1.04 2.55-2.06.8-1.18 1.13-2.32 1.15-2.38-.03-.01-2.2-.85-2.2-3.4ZM14.27 6.4c.58-.7.97-1.68.86-2.65-.83.03-1.84.55-2.44 1.25-.54.62-1.01 1.61-.88 2.56.93.07 1.88-.47 2.46-1.16Z" />
+    </svg>
+  );
+}
+
 export default function Login({ nativeError = "" }) {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
 
-  const loginWithGoogle = async () => {
-    setLoading(true);
+  const login = async (provider) => {
+    setLoading(provider);
     setError("");
-    const { error: authError } = await startGoogleLogin();
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return;
-    }
-    setLoading(false);
+    const { error: authError } = await startOAuthLogin(provider);
+    if (authError) setError(authError.message);
+    setLoading("");
   };
 
   return (
@@ -51,9 +55,13 @@ export default function Login({ nativeError = "" }) {
           {tx("Una cuenta, tus espacios financieros", "One account, your financial spaces")}
         </h3>
 
-        <button className="login-google-btn auth-google-btn" onClick={loginWithGoogle} disabled={loading} type="button">
+        <button className="login-google-btn auth-google-btn" onClick={() => login("google")} disabled={Boolean(loading)} type="button">
           <GoogleIcon />
-          {loading ? tx("Conectando con Google...", "Connecting to Google...") : tx("Continuar con Google", "Continue with Google")}
+          {loading === "google" ? tx("Conectando con Google...", "Connecting to Google...") : tx("Continuar con Google", "Continue with Google")}
+        </button>
+        <button className="login-google-btn auth-google-btn login-apple-btn" onClick={() => login("apple")} disabled={Boolean(loading)} type="button">
+          <AppleIcon />
+          {loading === "apple" ? tx("Conectando con Apple...", "Connecting to Apple...") : tx("Continuar con Apple", "Continue with Apple")}
         </button>
 
         {(error || nativeError) && <p className="auth-message auth-error">{error || nativeError}</p>}
@@ -61,8 +69,8 @@ export default function Login({ nativeError = "" }) {
         <p className="login-warning auth-secure-note">
           <ShieldCheck size={15} />
           {tx(
-            "Google es actualmente nuestro único método de acceso seguro. Se abrirá el navegador para continuar.",
-            "Google is currently our only secure sign-in method. Your browser will open to continue."
+            "Accedé con tu cuenta de Google o Apple. Se abrirá el navegador para continuar.",
+            "Sign in with your Google or Apple account. Your browser will open to continue."
           )}
         </p>
       </section>

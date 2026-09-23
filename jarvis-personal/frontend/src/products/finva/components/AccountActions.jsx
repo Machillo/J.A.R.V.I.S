@@ -1,13 +1,30 @@
 import { useState } from "react";
-import { LogOut, Trash2, X } from "lucide-react";
+import { Download, LogOut, Trash2, X } from "lucide-react";
 import { tx } from "../../../lib/locale";
-import { deleteMyAccount } from "../../../users/services/jarvisApi";
+import { deleteMyAccount, exportMyData } from "../../../users/services/jarvisApi";
+import { saveDataExport } from "../../../lib/dataExport";
 import { trackEvent } from "../../../lib/telemetry";
 
 export default function AccountActions({ onLogout, variant = "free" }) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+
+  const downloadData = async () => {
+    setExporting(true);
+    setExportError("");
+    try {
+      await saveDataExport(await exportMyData());
+      trackEvent("data_export_completed");
+    } catch (requestError) {
+      // Closing the share sheet is not an error.
+      if (!/cancel/i.test(requestError?.message || "")) setExportError(requestError?.message || tx("No pudimos preparar tus datos. Intentá nuevamente.", "We couldn't prepare your data. Please try again."));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const removeAccount = async () => {
     trackEvent("account_deletion_started");
@@ -32,6 +49,10 @@ export default function AccountActions({ onLogout, variant = "free" }) {
     <button className="finva-account-actions__row" type="button" onClick={onLogout}>
       <span><LogOut size={19}/><span><strong>{tx("Cerrar sesión", "Log out")}</strong><small>{tx("Salir de este dispositivo", "Sign out on this device")}</small></span></span>
     </button>
+    <button className="finva-account-actions__row" type="button" onClick={downloadData} disabled={exporting}>
+      <span><Download size={19}/><span><strong>{exporting ? tx("Preparando tus datos…", "Preparing your data…") : tx("Descargar mis datos", "Download my data")}</strong><small>{tx("Copia de tu información en formato JSON", "A copy of your information as JSON")}</small></span></span>
+    </button>
+    {exportError && <p className="finva-delete-dialog__error" role="alert">{exportError}</p>}
     <button className="finva-account-actions__row finva-account-actions__row--danger" type="button" onClick={() => { setError(""); setConfirming(true); }}>
       <span><Trash2 size={19}/><span><strong>{tx("Eliminar cuenta", "Delete account")}</strong><small>{tx("Borrar permanentemente tu cuenta y tus datos", "Permanently erase your account and data")}</small></span></span>
     </button>
@@ -42,7 +63,7 @@ export default function AccountActions({ onLogout, variant = "free" }) {
         <button className="finva-delete-dialog__close" type="button" aria-label={tx("Cerrar", "Close")} onClick={() => setConfirming(false)} disabled={deleting}><X size={20}/></button>
         <span className="finva-delete-dialog__icon"><Trash2 size={24}/></span>
         <h2 id="finva-delete-title">{tx("¿Eliminar tu cuenta?", "Delete your account?")}</h2>
-        <p>{tx("Se borrarán permanentemente tu perfil, movimientos, deudas, metas y configuraciones. Esta acción no se puede deshacer.", "Your profile, transactions, debts, goals, and settings will be permanently erased. This action cannot be undone.")}</p>
+        <p>{tx("Se borrarán permanentemente tu perfil, movimientos, deudas, metas y configuraciones, y se revocará el acceso a tu correo conectado. Esta acción no se puede deshacer.", "Your profile, transactions, debts, goals, and settings will be permanently erased, and access to your connected email will be revoked. This action cannot be undone.")}</p>
         {error && <p className="finva-delete-dialog__error" role="alert">{error}</p>}
         <div>
           <button type="button" onClick={() => setConfirming(false)} disabled={deleting}>{tx("Conservar cuenta", "Keep account")}</button>
