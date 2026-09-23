@@ -33,4 +33,14 @@ assert.match(gmail, /getVipFinancialIdentity/, "VIP Gmail must load the user's f
 assert.match(gmail, /confirmVipFinancialAccount/, "Detected accounts must require an explicit ownership decision");
 assert.match(gmail, /DINCR no incluirá una cuenta detectada en tu patrimonio sin tu confirmación/, "Detected accounts must explain that ownership is not assumed");
 
+// Movements confirmed from Gmail or statements live in the full history, not in the
+// manual income/expense list, so every plan must reach it from "Movimientos".
+const finance = readFileSync(new URL("../src/users/pages/Finance.jsx", import.meta.url), "utf8");
+const history = readFileSync(new URL("../src/users/pages/Transactions.jsx", import.meta.url), "utf8");
+assert.match(registry, /finance: <Finance plan=\{plan\} onNavigate=\{navigate\} \/>/, "Movimientos must receive navigation for every plan");
+assert.match(finance, /onNavigate\("transactions"\)/, "Movimientos must link to the full history");
+assert.match(registry, /transactions: <Transactions plan=\{plan\} \/>/, "The full history must know the current plan");
+assert.doesNotMatch(history, /DINCR · FREE/, "The full history must not label Basic or VIP users as Free");
+assert.match(free, /onNavigate\("transactions"\)/, "Free must keep its existing full-history entry");
+
 console.log("DINCR information architecture, settings and VIP Gmail contracts passed.");
