@@ -203,10 +203,10 @@ def _financial_user_id_for_account(account_id: str) -> int:
         return int(created["id"])
 
 
-def _vault_create(conn, token: str, account_id: str) -> str:
+def _vault_create(conn, token: str, account_id: str, provider: str = "Gmail") -> str:
     row = conn.execute(
         "SELECT vault.create_secret(%s, NULL, %s) AS secret_id",
-        (token, f"DINCR Gmail refresh token for account {account_id}"),
+        (token, f"DINCR {provider} refresh token for account {account_id}"),
     ).fetchone()
     if not row or not row.get("secret_id"):
         raise RuntimeError("No se pudo proteger la autorización de Gmail.")
@@ -275,7 +275,9 @@ def gmail_status() -> dict[str, Any]:
             "SELECT COUNT(*) AS total FROM finva_email_candidates WHERE workspace_id=%s AND status='pending'",
             (workspace_id,),
         ).fetchone()
-    connections = [dict(row) for row in rows]
+    connections = [{**dict(row), "provider": (
+        "microsoft" if "Mail.Read" in (row.get("granted_scopes") or []) else "gmail"
+    )} for row in rows]
     active = [row for row in connections if row["status"] == "active"]
     data = active[0] if active else connections[0] if connections else {}
     return {
@@ -286,6 +288,9 @@ def gmail_status() -> dict[str, Any]:
         "pending": int((pending or {}).get("total") or 0),
         **data,
         "connections": [{**row, "automatic_updates": bool(row.get("watch_expiration"))} for row in connections],
+        "microsoft_available": all(os.getenv(name, "").strip() for name in (
+            "FINVA_MICROSOFT_CLIENT_ID", "FINVA_MICROSOFT_CLIENT_SECRET", "FINVA_MICROSOFT_REDIRECT_URI",
+        )),
         "consent": gmail_consent_status(),
         "retention": retention_policy(),
     }
@@ -555,10 +560,12 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
         if not _has_active_vip_access(conn, account_id):
             return RedirectResponse(_return_url("vip_required"), status_code=302)
         current = conn.execute(
-            """SELECT id,refresh_token_secret_id FROM finva_gmail_connections
+            """SELECT id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections
                WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
             (account_id, workspace_id, google_email),
         ).fetchone()
+        if current and "Mail.Read" in (current.get("granted_scopes") or []):
+            return RedirectResponse(_return_url("already_connected_elsewhere"), status_code=302)
         secret_id = _vault_create(conn, refresh_token, account_id)
         if current:
             row = conn.execute(
@@ -595,7 +602,7 @@ def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT id,refresh_token_secret_id,status FROM finva_gmail_connections
+            """SELECT id,refresh_token_secret_id,status,granted_scopes FROM finva_gmail_connections
                WHERE account_id=%s AND workspace_id=%s AND (%s::bigint IS NULL OR id=%s)
                AND status<>'disabled' FOR UPDATE""",
             (account_id, workspace_id, connection_id, connection_id),
@@ -605,11 +612,12 @@ def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
         row = rows[0] if rows else None
         if not row:
             return {"status": "disconnected"}
-        try:
-            token = _vault_read(conn, str(row["refresh_token_secret_id"]))
-            requests.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
-        except Exception:
-            pass
+        if GMAIL_SCOPE in (row.get("granted_scopes") or []):
+            try:
+                token = _vault_read(conn, str(row["refresh_token_secret_id"]))
+                requests.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
+            except Exception:
+                pass
         conn.execute(
             """UPDATE finva_gmail_connections
                SET status='disabled',history_id=NULL,watch_expiration=NULL,last_error=NULL,
@@ -714,6 +722,21 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
             received_at = parsedate_to_datetime(headers["date"]).astimezone(timezone.utc).isoformat()
         except Exception:
             received_at = None
+
+    return _ingest_message(
+        connection, message_id, subject=subject, sender=sender, body=body,
+        attachment_text=attachment_text, attachment_names=attachment_names,
+        received_at=received_at,
+    )
+
+
+def _ingest_message(
+    connection: dict[str, Any], message_id: str, *, subject: str, sender: str,
+    body: str, attachment_text: str = "", attachment_names: list[str] | None = None,
+    received_at: str | None = None,
+) -> str:
+    """Shared candidate pipeline for mail providers; no raw message persists."""
+    attachment_names = attachment_names or []
 
     display_name = str(connection.get("display_name") or "")
     payroll_report = parse_ccss_order_patronal(subject, sender, attachment_text or body)
@@ -867,6 +890,8 @@ def _connection_with_token(connection_id: int) -> tuple[dict[str, Any], str]:
         ).fetchone()
         if not row:
             raise RuntimeError("Conexión Gmail no encontrada.")
+        if GMAIL_SCOPE not in (row.get("granted_scopes") or []):
+            raise RuntimeError("Este correo no está conectado mediante Gmail.")
         if not _has_active_vip_access(conn, str(row["account_id"])):
             raise HTTPException(
                 status_code=403,
@@ -938,7 +963,7 @@ def sync_current_gmail() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT id FROM finva_gmail_connections
+            """SELECT id,granted_scopes FROM finva_gmail_connections
                WHERE account_id=%s AND workspace_id=%s AND status='active' ORDER BY id""",
             (account_id, workspace_id),
         ).fetchall()
@@ -948,7 +973,11 @@ def sync_current_gmail() -> dict[str, Any]:
     errors = []
     for row in rows:
         try:
-            results.append(_sync_connection(int(row["id"])))
+            if "Mail.Read" in (row.get("granted_scopes") or []):
+                from backend.user_product.microsoft_mail import sync_connection
+                results.append(sync_connection(int(row["id"])))
+            else:
+                results.append(_sync_connection(int(row["id"])))
         except Exception:
             errors.append(int(row["id"]))
     if not results:
@@ -996,7 +1025,7 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
         raise HTTPException(status_code=403, detail="Secreto de mantenimiento inválido.")
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT c.id
+            """SELECT c.id,c.granted_scopes
                FROM finva_gmail_connections c
                JOIN account_subscriptions s ON s.account_id=c.account_id
                JOIN plans p ON p.id=s.plan_id
@@ -1014,10 +1043,14 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
     for row in rows:
         connection_id = int(row["id"])
         try:
-            _, token = _connection_with_token(connection_id)
-            service = _credentials(token)
-            _start_watch(connection_id, service, suppress_errors=True)
-            _sync_connection(connection_id, service=service, max_results=100)
+            if "Mail.Read" in (row.get("granted_scopes") or []):
+                from backend.user_product.microsoft_mail import sync_connection
+                sync_connection(connection_id)
+            else:
+                _, token = _connection_with_token(connection_id)
+                service = _credentials(token)
+                _start_watch(connection_id, service, suppress_errors=True)
+                _sync_connection(connection_id, service=service, max_results=100)
             completed += 1
         except HTTPException as exc:
             if exc.status_code == 409:
@@ -1048,7 +1081,7 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
                FROM finva_gmail_connections c
                JOIN account_subscriptions s ON s.account_id=c.account_id
                JOIN plans p ON p.id=s.plan_id
-               WHERE c.google_email=%s
+               WHERE c.google_email=%s AND %s=ANY(c.granted_scopes)
                  AND c.status='active'
                  AND s.status='active'
                  AND p.code='vip'
@@ -1056,7 +1089,7 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
                    s.access_source<>'courtesy'
                    OR (s.expires_at IS NOT NULL AND s.expires_at>NOW())
                  )""",
-            (email,),
+            (email, GMAIL_SCOPE),
         ).fetchall()
     if not rows:
         return {"status": "ignored"}

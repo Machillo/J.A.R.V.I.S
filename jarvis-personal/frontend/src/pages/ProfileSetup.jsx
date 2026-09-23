@@ -16,6 +16,10 @@ import {
 } from "lucide-react";
 import { completeProfileSetup } from "../services/jarvisApi";
 import { deviceLanguage } from "../lib/locale";
+import bacLogo from "../assets/institutions/bac.svg";
+import multimoneyLogo from "../assets/institutions/multimoney.svg";
+import popularLogo from "../assets/institutions/popular.svg";
+import promericaLogo from "../assets/institutions/promerica.png";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -40,14 +44,14 @@ const CURRENCIES = [
 ];
 
 const BANKS = [
-  { id: "bac", name: "BAC Credomatic", short: "BAC", tone: "red", supported: true },
+  { id: "bac", name: "BAC Credomatic", short: "BAC", tone: "red", logo: bacLogo, supported: true },
   { id: "bn", name: "Banco Nacional", short: "BN", tone: "blue" },
   { id: "bcr", name: "Banco de Costa Rica", short: "BCR", tone: "navy" },
-  { id: "popular", name: "Banco Popular", short: "BP", tone: "orange" },
+  { id: "popular", name: "Banco Popular", short: "BP", tone: "orange", logo: popularLogo },
   { id: "davivienda", name: "Davivienda", short: "DAV", tone: "yellow" },
   { id: "scotiabank", name: "Scotiabank", short: "S", tone: "red" },
-  { id: "promerica", name: "Promerica", short: "PRO", tone: "green" },
-  { id: "multimoney", name: "MultiMoney", short: "MM", tone: "violet", supported: true },
+  { id: "promerica", name: "Promerica", short: "PRO", tone: "green", logo: promericaLogo },
+  { id: "multimoney", name: "MultiMoney", short: "MM", tone: "violet", logo: multimoneyLogo, supported: true },
 ];
 
 const firstName = (user) => {
@@ -284,16 +288,15 @@ export default function ProfileSetup({ user, onComplete }) {
               <div className="profile-setup-title">
                 <span>{tx("TUS INSTITUCIONES", "YOUR INSTITUTIONS")}</span>
                 <h1>{tx("Tus bancos en un solo lugar", "Your banks in one place")}</h1>
-                <p>{tx("Seleccioná los bancos que utilizás. DINCR VIP ya puede aprender de notificaciones y estados de cuenta de BAC y MultiMoney cuando conectés Gmail.", "Select the banks you use. DINCR VIP can already learn from BAC and MultiMoney notifications and statements when you connect Gmail.")}</p>
+                <p>{tx("Seleccioná las instituciones que utilizás. Esta selección no conecta tus cuentas; podrás autorizar por separado la lectura de correos financieros compatibles.", "Select the institutions you use. This selection does not connect your accounts; you can separately authorize reading compatible financial emails.")}</p>
               </div>
               <div className="profile-bank-security"><ShieldCheck /><span><strong>{tx("Tu seguridad primero", "Your security comes first")}</strong><small>{tx(`${product} nunca te pedirá la contraseña de tu banco.`, `${product} will never ask for your bank password.`)}</small></span></div>
               <label className="profile-bank-search"><Search /><input value={bankSearch} onChange={(event) => setBankSearch(event.target.value)} placeholder={tx("Buscar banco", "Search bank")} /></label>
               <div className="profile-bank-grid">
                 {filteredBanks.map((bank) => (
                   <button type="button" className={`profile-bank-card ${selectedBanks.includes(bank.id) ? "selected" : ""}`} aria-pressed={selectedBanks.includes(bank.id)} key={bank.name} onClick={() => toggleBank(bank.id)}>
-                    <span className={`bank-mark bank-mark--${bank.tone}`}>{bank.short}</span>
-                    <strong>{bank.name}</strong>
-                    <small>{bank.supported ? tx("Compatible con Gmail VIP", "Works with VIP Gmail") : tx("Registrado para futuras conexiones", "Saved for future connections")}</small>
+                    <span className={`bank-mark bank-mark--${bank.tone} ${bank.logo ? "bank-mark--logo" : ""}`} aria-hidden="true">{bank.logo ? <img src={bank.logo} alt="" /> : bank.short}</span>
+                    <span className="profile-bank-copy"><strong>{bank.name}</strong><small>{bank.supported ? tx("Disponible para la suscripción VIP", "Available with the VIP subscription") : tx("Solo para personalizar tu perfil", "Only to personalize your profile")}</small></span>
                     {selectedBanks.includes(bank.id) && <Check />}
                   </button>
                 ))}

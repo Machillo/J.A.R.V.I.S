@@ -48,6 +48,7 @@ from backend.user_product.financial_identity import confirm_financial_account, l
 from backend.user_product.own_transfer_review import confirm_own_transfer, list_own_transfer_suggestions
 from backend.user_product.trust_analytics import get_gmail_trust_analytics
 from backend.user_product.gmail_consent import accept_gmail_consent
+from backend.user_product.microsoft_mail import begin_connection as begin_microsoft_connection, finish_connection as finish_microsoft_connection
 
 router = APIRouter(prefix="/user-product", tags=["DINCR Product"])
 
@@ -252,6 +253,14 @@ def vip_gmail_consent(request: GmailConsentRequest):
 @router.get("/vip/gmail/callback")
 def vip_gmail_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     return finish_gmail_connection(code=code, state=state, error=error)
+
+@router.post("/vip/mail/microsoft/connect")
+def vip_microsoft_connect():
+    require_feature("gmail_automation"); return begin_microsoft_connection()
+
+@router.get("/vip/mail/microsoft/callback")
+def vip_microsoft_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+    return finish_microsoft_connection(code=code, state=state, error=error)
 
 @router.post("/vip/gmail/sync")
 def vip_gmail_sync():

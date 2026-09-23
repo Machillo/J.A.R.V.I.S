@@ -6,7 +6,7 @@ from backend.auth.current_user import get_current_account_id, get_current_worksp
 from backend.core.database import get_connection
 
 
-GMAIL_CONSENT_VERSION = "gmail-monitor-2026-09-v1"
+GMAIL_CONSENT_VERSION = "mail-monitor-2026-09-v2"
 
 
 def _status(conn, account_id: str, workspace_id: str) -> dict:
@@ -54,4 +54,4 @@ def accept_gmail_consent(*, accepted: bool, version: str) -> dict:
 def require_gmail_consent() -> None:
     status = gmail_consent_status()
     if status["required"]:
-        raise HTTPException(status_code=409, detail="Aceptá la explicación y privacidad de Email Monitor antes de conectar Gmail.")
+        raise HTTPException(status_code=409, detail="Aceptá la explicación y privacidad de Email Monitor antes de conectar un buzón.")
