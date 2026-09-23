@@ -25,6 +25,8 @@ jobs:
           cache: npm
           cache-dependency-path: jarvis-personal/frontend/package-lock.json
       - run: npm ci
+      - run: npm run build:landing
+      - run: npm run test:landing
       - run: npm run build
       - run: npm run test:navigation
       - run: npm run test:native-navigation
