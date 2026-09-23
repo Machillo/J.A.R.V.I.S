@@ -42,3 +42,39 @@ def test_owner_can_still_sync_their_gmail(as_role, monkeypatch):
     monkeypatch.setattr(email_monitor_routes, "sync_gmail_for_owner", lambda **kwargs: calls.append(kwargs) or {"status": "OK"})
     assert as_role("owner").post("/email-monitor/sync-gmail", headers=AUTH).status_code == 200
     assert len(calls) == 1
+
+
+# Legacy DINCR Owner (JARVIS Personal) APIs: scoped to the caller's workspace, but they
+# bypassed plans, edited bank-confirmed movements and let any account trigger the
+# owner's IBKR sync. The public app only uses /user-product, /product-ops and /auth.
+LEGACY = [
+    ("get", "/finance/summary"), ("delete", "/finance/debts/1"), ("get", "/goals/"), ("put", "/transactions/1"),
+    ("delete", "/transactions/1"), ("get", "/reports/monthly"), ("get", "/advisor/summary"),
+    ("post", "/decisions/extra-money"), ("post", "/imports/bac-pdf/preview"),
+    ("post", "/finance/investment-center/sync-ibkr"), ("get", "/finance/business-center"),
+    ("post", "/ask"), ("get", "/events"), ("get", "/logs"), ("get", "/deployment-monitor"),
+]
+
+
+@pytest.mark.parametrize(("method", "path"), LEGACY)
+def test_regular_accounts_cannot_use_owner_apis(as_role, method, path):
+    assert getattr(as_role("user"), method)(path, headers=AUTH).status_code == 403
+
+
+@pytest.mark.parametrize(("method", "path"), LEGACY)
+def test_owner_keeps_access_to_owner_apis(as_role, method, path):
+    assert getattr(as_role("owner"), method)(path, headers=AUTH).status_code != 403
+
+
+def test_every_legacy_route_requires_an_internal_role():
+    prefixes = ("/finance", "/goals", "/transactions", "/reports", "/advisor", "/decisions", "/imports")
+    for route in main.app.routes:
+        path = getattr(route, "path", "")
+        if path.startswith(prefixes) or path in {"/ask", "/events", "/logs"}:
+            assert main.INTERNAL_ONLY[0] in route.dependencies, f"{path} must require owner/admin"
+
+
+def test_public_dincr_app_routes_are_not_role_gated(as_role):
+    # DINCR customers keep their product APIs (they fail later on the missing test DB, not with 403).
+    for path in ("/user-product/free/movements", "/auth/me", "/product-ops/feature-flags"):
+        assert as_role("user").get(path, headers=AUTH).status_code != 403

@@ -8,7 +8,7 @@ import time
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from backend.deployment_monitor.service import deployment_summary, save_event
-from backend.auth.current_user import get_current_user
+from backend.auth.current_user import require_roles
 
 router = APIRouter(prefix="/deployment-monitor", tags=["Deployment monitor"])
 
@@ -45,8 +45,8 @@ def _check_render_signature(raw: bytes, webhook_id: str | None, webhook_timestam
 
 @router.get("")
 def deployments():
-    # Defense in depth: this endpoint is also protected by main.auth_middleware.
-    get_current_user()
+    # Deployment history is internal operations data, not for DINCR customers.
+    require_roles("owner", "admin")
     return deployment_summary()
 
 
