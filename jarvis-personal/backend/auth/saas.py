@@ -11,7 +11,7 @@ from backend.core.database import get_connection
 PLAN_COPY = {
     "free": {"name": "Gratis", "tagline": "Organizá y entendé tus números.", "features": ["Resumen financiero", "Ingresos y gastos", "Deudas", "Metas", "Transacciones", "Horas extra"]},
     "basic": {"name": "Basic", "tagline": "DINCR organiza y guía tu mes.", "features": ["Todo Gratis", "Dashboard completo", "Presupuesto guiado", "Deudas y metas completas", "Calendario", "Recurrentes", "Reportes"]},
-    "vip": {"name": "VIP", "tagline": "Director financiero personal.", "features": ["Todo Basic", "Estrategia dinámica", "Proyecciones", "Metas inteligentes", "Escenarios"]},
+    "vip": {"name": "VIP", "tagline": "Una estrategia más completa con información que vos autorizás.", "features": ["Todo Basic", "Estrategia dinámica, proyecciones y escenarios", "Con tu permiso, detecta avisos financieros en correos compatibles para que revisés movimientos y mantengás al día tus cuentas y deudas", "Estimación del aguinaldo si DINCR detecta órdenes patronales de la CCSS en un correo conectado"]},
 }
 PLAN_RANK = {"free": 1, "basic": 2, "vip": 3}
 BUILTIN_FEATURE_MIN_PLAN = {
@@ -73,7 +73,7 @@ def _restore_expired_launch_promotion(conn, account_id: str):
         "message": (
             f"Continuás con tu plan {fallback_code.upper()}."
             if fallback_code != "free"
-            else "Ahora estás en el plan Gratis. Podés volver a Basic o VIP cuando querás."
+            else "Ahora estás en el plan Gratis. Las compras de Basic y VIP estarán disponibles más adelante en las tiendas oficiales."
         ),
     }
 
@@ -103,7 +103,7 @@ def _expire_unpaid_subscription(conn, account_id: str):
     return {
         "code": "subscription_expired",
         "title": "Tu suscripción terminó",
-        "message": "Ahora estás en el plan Gratis. Podés renovar Basic o VIP cuando querás.",
+        "message": "Ahora estás en el plan Gratis. Las compras de Basic y VIP estarán disponibles más adelante en las tiendas oficiales.",
         "previous_plan": expired.get("plan_code"),
         "expired_at": expired.get("current_period_end"),
     }

@@ -12,6 +12,7 @@ const allowedEvents = new Set([
   "gmail_disconnected",
   "email_candidate_reviewed",
   "financial_account_ownership_reviewed",
+  "plan_access_granted",
 ]);
 
 const allowedProperties = new Set([
@@ -30,6 +31,7 @@ const allowedProperties = new Set([
   "auto_saved_bucket",
   "pending_bucket",
   "ownership_status",
+  "access_type",
 ]);
 
 let initialized = false;
@@ -95,7 +97,7 @@ export const setProductAnalyticsUser = (user) => {
   const platform = cleanString(Capacitor.getPlatform(), 16);
   context = { plan, platform };
   posthog.opt_in_capturing();
-  posthog.identify(userId, { plan, platform, product: "finva" });
+  posthog.identify(userId, { plan, platform, product: "dincr" });
 };
 
 export const captureProductEvent = (eventName, properties = {}) => {

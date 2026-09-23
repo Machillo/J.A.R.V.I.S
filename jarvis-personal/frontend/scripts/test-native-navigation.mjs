@@ -17,7 +17,7 @@ assert.match(hook, /finva:native-back/, "nested flows can consume back before pa
 assert.match(dialog, /useFinvaBackHandler/, "system back closes an open confirmation or amount dialog first");
 assert.match(sheet, /useFinvaBackHandler\(onClose, open\)/, "system back closes an open form sheet first");
 assert.match(feedback, /useFinvaBackHandler/, "system back closes the support chat before leaving support");
-assert.match(settings, /Boolean\(confirming \|\| paymentFlow\)/, "system back closes plan and payment flows before leaving settings");
+assert.match(settings, /Boolean\(confirming\)/, "system back closes the plan dialog before leaving settings");
 assert.match(app, /useFinvaNavigation\(initialPage\)/, "all DINCR plans share the native history stack");
 assert.doesNotMatch(app, /navigate:\s*setPage/, "feature navigation cannot bypass the history stack");
 
