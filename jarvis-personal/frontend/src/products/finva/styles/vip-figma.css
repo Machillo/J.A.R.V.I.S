@@ -59,8 +59,10 @@ body:has(.native-product--finva.native-plan--vip){background:var(--vip-bg)}
 
 .native-product--finva.native-plan--vip .vip-form{display:flex;flex-direction:column;gap:9px}
 .native-product--finva.native-plan--vip .vip-field{min-height:74px;display:flex;flex-direction:column;justify-content:center;gap:6px;background:var(--vip-surface);color:var(--vip-muted);font-size:12px;font-weight:650}
-.native-product--finva.native-plan--vip .vip-field :is(input,select){width:100%;min-height:32px;padding:0;border:0;border-radius:0;outline:0;background:transparent;color:var(--vip-text);font:650 16px/1.2 Inter,system-ui,sans-serif;box-shadow:none}
-.native-product--finva.native-plan--vip .vip-field select{color:var(--vip-violet)}
+.native-product--finva.native-plan--vip .vip-field :is(input,select){width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--vip-border);border-radius:10px;outline:0;background:var(--vip-surface-raised)!important;color:var(--vip-text)!important;-webkit-text-fill-color:var(--vip-text);color-scheme:dark;font:650 16px/1.2 Inter,system-ui,sans-serif;box-shadow:none}
+.native-product--finva.native-plan--vip .vip-field :is(input,select):focus-visible{border-color:var(--vip-violet);box-shadow:0 0 0 2px rgba(156,122,255,.22)}
+.native-product--finva.native-plan--vip .vip-field select{color:var(--vip-violet)!important;-webkit-text-fill-color:var(--vip-violet)}
+.native-product--finva.native-plan--vip .vip-field select option{background:var(--vip-surface-raised);color:var(--vip-text)}
 .native-product--finva.native-plan--vip .vip-form-error{margin:0;color:#ff8195;font-size:13px}
 .native-product--finva.native-plan--vip .vip-form-message{margin:0;display:flex;align-items:center;gap:6px;color:var(--vip-mint);font-size:13px}
 
