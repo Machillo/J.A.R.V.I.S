@@ -180,7 +180,7 @@ def support_email_configuration() -> dict[str, object]:
     """Return non-secret SMTP readiness details for the owner dashboard."""
     username = os.getenv("SUPPORT_SMTP_USER", "").strip()
     password = re.sub(r"\s+", "", os.getenv("SUPPORT_SMTP_APP_PASSWORD", ""))
-    recipient = os.getenv("SUPPORT_EMAIL_TO", "soporte.finva@gmail.com").strip()
+    recipient = os.getenv("SUPPORT_EMAIL_TO", "soporte@dincr.com").strip()
     missing = [name for name, value in (
         ("SUPPORT_SMTP_USER", username),
         ("SUPPORT_SMTP_APP_PASSWORD", password),
@@ -215,7 +215,7 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
     # Google displays app passwords grouped with spaces. SMTP expects the
     # sixteen characters without whitespace.
     password = re.sub(r"\s+", "", os.getenv("SUPPORT_SMTP_APP_PASSWORD", ""))
-    recipient = os.getenv("SUPPORT_EMAIL_TO", "soporte.finva@gmail.com").strip()
+    recipient = os.getenv("SUPPORT_EMAIL_TO", "soporte@dincr.com").strip()
     sender = os.getenv("SUPPORT_SMTP_FROM", username).strip() or username
     if not username or not password or not recipient:
         missing = support_email_configuration()["missing"]

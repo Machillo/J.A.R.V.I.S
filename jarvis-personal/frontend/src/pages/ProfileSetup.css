@@ -222,8 +222,8 @@
 .bank-mark--yellow { color: #451a03; background: #f3c52d; }
 .bank-mark--green { background: #168d6a; }
 .bank-mark--violet { background: #644ee5; }
-.bank-mark--logo.bank-mark--orange, .bank-mark--logo.bank-mark--violet { background: #203046; }
-.bank-mark--logo.bank-mark--red, .bank-mark--logo.bank-mark--green { background: #fff; }
+.bank-mark--logo { background: #fff; }
+.bank-mark--logo.bank-mark--violet { background: #203046; }
 .profile-bank-empty,
 .profile-data-note { margin: 0; color: var(--setup-muted); font-size: 0.78rem; text-align: center; line-height: 1.45; }
 .profile-data-note { padding: 0.8rem; border-radius: 0.9rem; background: rgba(255, 255, 255, 0.025); }
