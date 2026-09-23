@@ -1,5 +1,6 @@
 import { useEffect,useMemo,useState } from "react";
 import { deviceLanguage, localeTag } from "../../lib/locale";
+import { categoryLabel } from "../../lib/categories";
 import { getBasicReport } from "../services/jarvisApi";
 const language=deviceLanguage();
 const tx=(es,en)=>language==="es"?es:en;
@@ -29,7 +30,7 @@ export default function Reports({ plan = "basic" }){
         <div className="basic-report-bars">{rows.map(row=><div key={row.period}><small>{row.period.slice(5)}</small><i><b className="income" style={{width:`${Number(row.income)/max*100}%`}}/></i><i><b className="expense" style={{width:`${Number(row.expenses)/max*100}%`}}/></i></div>)}</div>
         <footer><span>{tx("Ingresos","Income")} {money(data.income)}</span><span>{tx("Gastos","Expenses")} {money(data.expenses)}</span></footer>
       </article>
-      <article className="basic-report-categories"><h3>{tx("Tendencia por categoría","Category trend")}</h3>{categoryRows.slice(0,4).map(item=><div key={item.category}><span>{item.category}</span><strong>{money(item.amount)}</strong></div>)}</article>
+      <article className="basic-report-categories"><h3>{tx("Tendencia por categoría","Category trend")}</h3>{categoryRows.slice(0,4).map(item=><div key={item.category}><span>{categoryLabel(item.category)}</span><strong>{money(item.amount)}</strong></div>)}</article>
       <article className="basic-report-balance"><h3>{tx("Balance comparado","Balance comparison")}</h3>{rows.slice(-2).map(row=><div key={row.period}><span>{new Date(`${row.period}-01T12:00:00`).toLocaleDateString(localeTag(language),{month:"long"})}</span><strong>{money(row.balance)}</strong></div>)}{data.comparison&&<b className={Number(data.comparison.expenses)<=0?"positive":"negative"}>{tx("Variación de gastos","Expense change")}: {money(data.comparison.expenses)}</b>}</article>
     </>}
   </section>;

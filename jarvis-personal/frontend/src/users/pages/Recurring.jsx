@@ -4,11 +4,12 @@ import { createRecurring, deleteRecurring, getRecurring, updateRecurring } from 
 import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
 import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import { categoryLabel, categoryValue } from "../../lib/categories";
 
 const language=deviceLanguage();
 const copy=(es,en)=>tx(es,en,language);
 const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
-const empty = { name:"", amount:"", category:"general", item_type:"expense", frequency:"monthly", due_day:"", is_active:true };
+const empty = { name:"", amount:"", category:categoryLabel("general"), item_type:"expense", frequency:"monthly", due_day:"", is_active:true };
 
 export default function Recurring({ plan = "basic" }) {
   const [data,setData] = useState(null);
@@ -23,7 +24,7 @@ export default function Recurring({ plan = "basic" }) {
   const submit = async (event) => {
     event.preventDefault();
     try {
-      await createRecurring({...form,amount:Number(form.amount),due_day:form.due_day ? Number(form.due_day) : null});
+      await createRecurring({...form,category:categoryValue(form.category),amount:Number(form.amount),due_day:form.due_day ? Number(form.due_day) : null});
       setForm(empty);
       setCreating(false);
       load();

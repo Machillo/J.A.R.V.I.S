@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
 import { deviceLanguage, localeTag } from "../../lib/locale";
 import { movementPreview } from "./movementPreview";
+import { categoryLabel, categoryValue } from "../../lib/categories";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -12,15 +13,15 @@ const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"cur
 const today = () => new Date().toISOString().slice(0,10);
 const incomeCategories = ["Boleta de pago","Bono","Reembolso","Otros ingresos"];
 const expenseCategories = ["Vivienda","Servicios","Internet","Teléfono","Seguros","Comida","Restaurante","Transporte","Gasolina","Entretenimiento","Compras","Salud","Deporte","Servicios personales","Mascotas","Otros"];
-const incomeEmpty = () => ({ amount:"", description:"", category:"Salario", entry_date:today() });
-const expenseEmpty = () => ({ amount:"", description:"", category:"Compras", entry_date:today() });
+const incomeEmpty = () => ({ amount:"", description:"", category:categoryLabel("Salario"), entry_date:today() });
+const expenseEmpty = () => ({ amount:"", description:"", category:categoryLabel("Compras"), entry_date:today() });
 
 function EntryFields({ form, setForm, categories }) {
   return <>
     <label className="entry-amount-field"><span>{tx("Monto", "Amount")}</span><div><b>₡</b><input required inputMode="decimal" type="number" min="0.01" step="0.01" placeholder="0" value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></div></label>
     <label><span>{tx("Descripción", "Description")}</span><input required placeholder={tx("¿Qué movimiento fue?", "What was this transaction?")} value={form.description} onChange={(e) => setForm({...form,description:e.target.value})}/></label>
     <div className="entry-field-row">
-      <label><span><Tag size={14}/> {tx("Categoría", "Category")}</span><input list={`${categories[0]}-categories`} placeholder={tx("Categoría", "Category")} value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/><datalist id={`${categories[0]}-categories`}>{categories.map((item) => <option key={item} value={item}/>)}</datalist></label>
+      <label><span><Tag size={14}/> {tx("Categoría", "Category")}</span><input list={`${categories[0]}-categories`} placeholder={tx("Categoría", "Category")} value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/><datalist id={`${categories[0]}-categories`}>{categories.map((item) => <option key={item} value={categoryLabel(item)}/>)}</datalist></label>
       <label><span><CalendarDays size={14}/> {tx("Fecha", "Date")}</span><input required type="date" value={form.entry_date} onChange={(e) => setForm({...form,entry_date:e.target.value})}/></label>
     </div>
   </>;
@@ -75,17 +76,17 @@ export default function Finance({ plan = "basic", onNavigate }) {
   }), [compact, run]);
   useEffect(() => { load(); }, [load]);
 
-  const submitIncome = async (event) => { event.preventDefault(); if (await run(() => createIncome({...incomeForm,amount:Number(incomeForm.amount)}))) { setIncomeForm(incomeEmpty()); setEntryKind(null); load(); } };
-  const submitExpense = async (event) => { event.preventDefault(); if (await run(() => createExpense({...expenseForm,amount:Number(expenseForm.amount)}))) { setExpenseForm(expenseEmpty()); setEntryKind(null); load(); } };
+  const submitIncome = async (event) => { event.preventDefault(); if (await run(() => createIncome({...incomeForm,category:categoryValue(incomeForm.category),amount:Number(incomeForm.amount)}))) { setIncomeForm(incomeEmpty()); setEntryKind(null); load(); } };
+  const submitExpense = async (event) => { event.preventDefault(); if (await run(() => createExpense({...expenseForm,category:categoryValue(expenseForm.category),amount:Number(expenseForm.amount)}))) { setExpenseForm(expenseEmpty()); setEntryKind(null); load(); } };
   const remove = async () => { setDeletingBusy(true); const removed=await run(() => deleting.kind === "income" ? deleteIncome(deleting.id) : deleteExpense(deleting.id)); setDeletingBusy(false); if (removed) { setDeleting(null); load(); } };
-  const saveEdit = async (event) => { event.preventDefault(); const payload={...editing,amount:Number(editing.amount)}; const saved=await run(() => editing.kind === "income" ? updateIncome(editing.id,payload) : updateExpense(editing.id,payload)); if (saved) { setEditing(null); load(); } };
-  const openEdit = (kind,item) => setEditing({ kind,id:item.id,amount:item.amount,description:item.description || item.source || "",category:item.category || (kind === "income" ? "Salario" : "Compras"),entry_date:item.entry_date || String(item.created_at).slice(0,10) });
+  const saveEdit = async (event) => { event.preventDefault(); const payload={...editing,category:categoryValue(editing.category),amount:Number(editing.amount)}; const saved=await run(() => editing.kind === "income" ? updateIncome(editing.id,payload) : updateExpense(editing.id,payload)); if (saved) { setEditing(null); load(); } };
+  const openEdit = (kind,item) => setEditing({ kind,id:item.id,amount:item.amount,description:item.description || item.source || "",category:categoryLabel(item.category || (kind === "income" ? "Salario" : "Compras")),entry_date:item.entry_date || String(item.created_at).slice(0,10) });
   const isIncome = entryKind === "income"; const activeForm = isIncome ? incomeForm : expenseForm;
   const incomeTotal = income.reduce((sum,item)=>sum+Number(item.amount||0),0);
   const expenseTotal = expenses.reduce((sum,item)=>sum+Number(item.amount||0),0);
   const movements = movementPreview(movementRows, query, filter);
 
-  const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="finva-fold-row" key={item.id}><span><strong>{item.description || item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b className={tone}>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || item.category})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="finva-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
+  const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="finva-fold-row" key={item.id}><span><strong>{item.description || categoryLabel(item.category)}</strong><small>{item.entry_date} · {categoryLabel(item.category)}</small></span><span><b className={tone}>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || categoryLabel(item.category)})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="finva-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
 
   const content = compact ? <section className={`free-screen free-movements-screen ${plan !== "free" ? "basic-movements-screen" : ""}`}>
     <small className="free-plan-label">{plan === "free" ? tx("Gratis", "Free") : plan === "vip" ? "VIP" : "Basic"}</small>
@@ -104,7 +105,7 @@ export default function Finance({ plan = "basic", onNavigate }) {
           });
           else onNavigate?.("transactions");
         } : undefined}>
-        <span><strong>{item.description || item.category || tx("Movimiento", "Transaction")}</strong><small>{String(item.transaction_date || "").slice(0,10)} · {item.category}{!item.editable && ` · ${tx("Solo lectura", "Read only")}`}</small></span>
+        <span><strong>{item.description || categoryLabel(item.category) || tx("Movimiento", "Transaction")}</strong><small>{String(item.transaction_date || "").slice(0,10)} · {categoryLabel(item.category)}{!item.editable && ` · ${tx("Solo lectura", "Read only")}`}</small></span>
         <b className={item.kind}>{item.kind === "income" ? "+" : "−"}{money(item.amount)}</b>
       </Row>;
       }) : <p className="free-empty">{tx("No hay movimientos con esos filtros.", "No transactions match those filters.")}</p>}

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getBasicDashboard, getBudget, getFinancialCalendar, getFreeDashboard } from "../../../../users/services/jarvisApi";
 import "./overview.css";
 import { deviceLanguage, localeTag } from "../../../../lib/locale";
+import { categoryLabel } from "../../../../lib/categories";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -152,7 +153,7 @@ export default function FinvaOverview({ user, plan = "free", onNavigate }) {
         <header><div><small>{tx("EN QUÉ SE VA", "WHERE IT GOES")}</small><h2>{tx("Gastos por categoría", "Expenses by category")}</h2></div></header>
         {computed.categories.length ? computed.categories.map((item) => (
           <div key={item.category}>
-            <span>{item.category}</span><strong>{money(item.amount)}</strong>
+            <span>{categoryLabel(item.category)}</span><strong>{money(item.amount)}</strong>
             <i><b style={{ width: `${Number(item.amount) / computed.maxCategory * 100}%` }} /></i>
           </div>
         )) : <p className="finva-overview-empty">{tx("Cuando registrés gastos, los agruparemos acá automáticamente.", "When you record expenses, we will group them here automatically.")}</p>}

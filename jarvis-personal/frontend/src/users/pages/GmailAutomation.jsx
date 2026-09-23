@@ -17,6 +17,7 @@ import {
   syncVipGmail,
 } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
+import { categoryLabel, categoryValue } from "../../lib/categories";
 import { trackEvent } from "../../lib/telemetry";
 import { MAIL_OAUTH_RESULT_EVENT, takeMailOAuthOutcome } from "../../lib/mailOAuth";
 import LegalLink from "../../components/LegalLink";
@@ -252,10 +253,10 @@ export default function GmailAutomation() {
           <small>{item.sender}</small>
           {item.source_type === "statement" && <p className="gmail-resolution-note">{tx("Detectado en un estado de cuenta PDF. Revisalo igual que cualquier otro movimiento antes de guardarlo.", "Detected in a PDF statement. Review it like any other movement before saving it.")}</p>}
           {item.resolution_reason === "possible_cross_source_match" && <p className="gmail-resolution-note">{tx("Posible coincidencia con una notificación bancaria anterior. DINCR la deja para tu revisión en vez de eliminarla automáticamente.", "Possible match with an earlier bank notification. DINCR leaves it for your review instead of deleting it automatically.")}</p>}
-          {item.candidate_id ? edit ? <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); review(item, "accept", { transaction_date: form.get("transaction_date"), description: form.get("description"), amount: Number(form.get("amount")), transaction_type: form.get("transaction_type"), category: form.get("category") }); }} className="gmail-candidate-editor">
+          {item.candidate_id ? edit ? <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); review(item, "accept", { transaction_date: form.get("transaction_date"), description: form.get("description"), amount: Number(form.get("amount")), transaction_type: form.get("transaction_type"), category: categoryValue(form.get("category")) }); }} className="gmail-candidate-editor">
             <input name="description" defaultValue={item.description} required aria-label={tx("Descripción", "Description")}/>
             <div><input name="amount" type="number" step="0.01" min="0.01" defaultValue={item.amount} required aria-label={tx("Monto", "Amount")}/><input name="transaction_date" type="date" defaultValue={item.transaction_date} required aria-label={tx("Fecha", "Date")}/></div>
-            <div><select name="transaction_type" defaultValue={item.transaction_type}><option value="expense">{tx("Gasto", "Expense")}</option><option value="income">{tx("Ingreso", "Income")}</option><option value="debt_payment">{tx("Pago de deuda", "Debt payment")}</option></select><input name="category" defaultValue={item.category || "general"} required aria-label={tx("Categoría", "Category")}/></div>
+            <div><select name="transaction_type" defaultValue={item.transaction_type}><option value="expense">{tx("Gasto", "Expense")}</option><option value="income">{tx("Ingreso", "Income")}</option><option value="debt_payment">{tx("Pago de deuda", "Debt payment")}</option></select><input name="category" defaultValue={categoryLabel(item.category || "general")} required aria-label={tx("Categoría", "Category")}/></div>
             <div className="gmail-review-actions"><button type="button" onClick={() => setEditing(null)}><X size={16}/>{tx("Cancelar", "Cancel")}</button><button className="primary" disabled={Boolean(busy)}><Check size={16}/>{tx("Guardar", "Save")}</button></div>
           </form> : <>
             <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>₡{Number(item.amount || 0).toLocaleString()}</b></span></div>
