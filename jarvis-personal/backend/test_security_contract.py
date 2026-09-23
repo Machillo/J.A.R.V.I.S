@@ -355,17 +355,22 @@ def test_finva_gmail_scope_is_read_only_and_identity_adapter_is_user_specific():
     assert "Kenneth" in text
 
 
-def test_finva_gmail_oauth_state_is_signed_and_does_not_require_database(monkeypatch):
-    monkeypatch.setenv("FINVA_GMAIL_CLIENT_ID", "client")
-    monkeypatch.setenv("FINVA_GMAIL_CLIENT_SECRET", "secret")
-    monkeypatch.setenv("FINVA_GMAIL_REDIRECT_URI", "https://example.test/callback")
-    state = gmail_service._encode_oauth_state("account-1", "workspace-1")
-    assert gmail_service._decode_oauth_state(state)["account_id"] == "account-1"
-    assert gmail_service._decode_oauth_state(f"{state}tampered") is None
-
+def test_mail_oauth_state_is_server_side_single_use_and_session_bound():
+    # A self-contained signed state let anyone holding the authorization link attach
+    # their mailbox to the initiating account (account-linking CSRF). Flows now live
+    # server-side and a mailbox is attached only by the initiating session.
     source = Path(gmail_service.__file__).read_text(encoding="utf-8")
-    connect_source = source.split("def begin_gmail_connection", 1)[1].split("def finish_gmail_connection", 1)[0]
-    assert "finva_gmail_oauth_states" not in connect_source
+    assert "_encode_oauth_state" not in source and "_decode_oauth_state" not in source
+    connect = source.split("def begin_gmail_connection", 1)[1].split("def finish_gmail_connection", 1)[0]
+    assert 'mail_oauth.start_flow("gmail")' in connect and '"code_challenge_method": "S256"' in connect
+    callback = source.split("def finish_gmail_connection", 1)[1].split("def _attach_gmail_connection", 1)[0]
+    assert "INSERT INTO finva_gmail_connections" not in callback, "the public callback must never attach a mailbox"
+    migration = (
+        Path(__file__).parents[1] / "database" / "migrations" / "20260924120000_mail_oauth_flows.sql"
+    ).read_text(encoding="utf-8")
+    assert "state_hash TEXT NOT NULL UNIQUE" in migration
+    assert "CHECK (provider IN ('gmail', 'microsoft'))" in migration
+    assert "ENABLE ROW LEVEL SECURITY" in migration and "REVOKE ALL PRIVILEGES" in migration
 
 
 def test_overtime_accepts_decimal_hours_and_common_multipliers():
@@ -512,6 +517,11 @@ def test_self_deletion_drops_mail_secrets_and_revokes_google_after_commit(monkey
                     {"refresh_token_secret_id": "aaaaaaaa-0000-0000-0000-000000000002",
                      "granted_scopes": ["Mail.Read"], "decrypted_secret": "microsoft-refresh"},
                 ])
+            if "to_regclass('public.mail_oauth_flows')" in normalized:
+                return Result({"present": "mail_oauth_flows"})
+            if "FROM mail_oauth_flows f" in normalized:
+                return Result(rows=[{"refresh_token_secret_id": "aaaaaaaa-0000-0000-0000-000000000003",
+                                     "granted_scopes": [auth_service.GMAIL_SCOPE], "decrypted_secret": "pending-google-refresh"}])
             if normalized.startswith("DELETE FROM vault.secrets"):
                 events.append(("VAULT_DELETE", params[0]))
             if normalized.startswith("DELETE FROM accounts"):
@@ -536,7 +546,9 @@ def test_self_deletion_drops_mail_secrets_and_revokes_google_after_commit(monkey
     finally:
         reset_current_user(token)
 
-    assert events[0] == ("VAULT_DELETE", ["aaaaaaaa-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000002"])
+    assert events[0] == ("VAULT_DELETE", ["aaaaaaaa-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000002",
+                                         "aaaaaaaa-0000-0000-0000-000000000003"])
+    assert ("REVOKE", "https://oauth2.googleapis.com/revoke", "pending-google-refresh") in events
     assert events.index("COMMIT") < events.index(("REVOKE", "https://oauth2.googleapis.com/revoke", "google-refresh"))
     assert not any(event[0] == "REVOKE" and event[2] == "microsoft-refresh" for event in events if isinstance(event, tuple))
 

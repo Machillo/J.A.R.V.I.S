@@ -7,7 +7,8 @@ import { detectNativePlatform } from "../ui/native/platform";
 import { createFinvaFeatureRegistry } from "../products/finva/features/registry";
 import FinvaNavigation from "../products/finva/navigation/FinvaNavigation";
 import useFinvaNavigation from "../products/finva/navigation/useFinvaNavigation";
-import { getPlatformHealth, trackProductEvent } from "./services/jarvisApi";
+import { completeVipMailConnection, getPlatformHealth, trackProductEvent } from "./services/jarvisApi";
+import { MAIL_OAUTH_RETURN_EVENT, captureMailOAuthReturns, redeemPendingMailOAuth } from "../lib/mailOAuth";
 import { supabase } from "../lib/supabase";
 import { trackScreen } from "../lib/telemetry";
 import { tx } from "../lib/locale";
@@ -91,6 +92,16 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
       window.removeEventListener("offline", offline);
       window.removeEventListener("online", online);
     };
+  }, [navigate]);
+
+  // Mail OAuth returns by deep link, even when the app was relaunched from it:
+  // this signed-in session redeems the one-time completion, then shows the result.
+  useEffect(() => {
+    captureMailOAuthReturns();
+    const redeem = () => redeemPendingMailOAuth(completeVipMailConnection).then((outcome) => { if (outcome) navigate("gmail"); });
+    redeem();
+    window.addEventListener(MAIL_OAUTH_RETURN_EVENT, redeem);
+    return () => window.removeEventListener(MAIL_OAUTH_RETURN_EVENT, redeem);
   }, [navigate]);
 
   useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);

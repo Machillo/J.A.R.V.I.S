@@ -1,7 +1,6 @@
 import { Building2, Check, CheckCircle2, Mail, Pencil, RefreshCw, ShieldCheck, Unplug, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Browser } from "@capacitor/browser";
-import { App } from "@capacitor/app";
 import {
   connectVipGmail,
   connectVipMicrosoftMail,
@@ -19,24 +18,25 @@ import {
 } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
 import { trackEvent } from "../../lib/telemetry";
-import { isMailOAuthCallback } from "../../lib/appIdentity";
+import { MAIL_OAUTH_RESULT_EVENT, takeMailOAuthOutcome } from "../../lib/mailOAuth";
 import LegalLink from "../../components/LegalLink";
 import gmailLogo from "../../assets/institutions/gmail.png";
 import outlookLogo from "../../assets/institutions/outlook.svg";
 
-// Codes returned by the backend callback in com.<app>://gmail/callback?microsoft=<code>.
-const OUTLOOK_ERRORS = {
-  denied: ["No autorizaste el acceso a Outlook. Podés intentarlo de nuevo cuando quieras.", "You didn’t authorize Outlook access. You can try again anytime."],
-  invalid_state: ["La autorización venció. Volvé a tocar “Conectar Outlook / Hotmail”.", "The authorization expired. Tap “Connect Outlook / Hotmail” again."],
-  permission_missing: ["Microsoft no concedió el permiso de lectura de correo. Volvé a conectar y aceptá el acceso de lectura.", "Microsoft didn’t grant mail read access. Connect again and accept read access."],
-  vip_required: ["Conectar Outlook requiere el plan VIP activo.", "Connecting Outlook requires an active VIP plan."],
+// Codes returned by the backend callback in com.<app>://gmail/callback?<gmail|microsoft>=<code>.
+const MAIL_ERRORS = {
+  denied: ["No autorizaste el acceso a {provider}. Podés intentarlo de nuevo cuando quieras.", "You didn’t authorize {provider} access. You can try again anytime."],
+  invalid_state: ["La autorización venció o ya se usó. Volvé a conectar {provider}.", "The authorization expired or was already used. Connect {provider} again."],
+  permission_missing: ["No se concedió el permiso de lectura de correo. Volvé a conectar {provider} y aceptá el acceso de lectura.", "Mail read access wasn’t granted. Connect {provider} again and accept read access."],
+  vip_required: ["Conectar {provider} requiere el plan VIP activo.", "Connecting {provider} requires an active VIP plan."],
   already_connected_elsewhere: ["Ese correo ya está conectado de otra forma en DINCR.", "That mailbox is already connected to DINCR another way."],
-  mailbox_missing: ["Esa cuenta de Microsoft no tiene un buzón de correo disponible.", "That Microsoft account has no mailbox available."],
+  mailbox_missing: ["Esa cuenta no tiene un buzón de correo disponible.", "That account has no mailbox available."],
 };
 
-function outlookErrorMessage(code) {
-  const [es, en] = OUTLOOK_ERRORS[code] || ["No pudimos conectar Outlook. Intentalo de nuevo en unos minutos.", "We couldn’t connect Outlook. Please try again in a few minutes."];
-  return tx(es, en);
+function mailErrorMessage(provider, code) {
+  const name = provider === "microsoft" ? "Outlook" : "Gmail";
+  const [es, en] = MAIL_ERRORS[code] || ["No pudimos conectar {provider}. Intentalo de nuevo en unos minutos.", "We couldn’t connect {provider}. Please try again in a few minutes."];
+  return tx(es, en).replaceAll("{provider}", name);
 }
 
 function MailProviderLogo({ provider }) {
@@ -120,18 +120,25 @@ export default function GmailAutomation() {
     load();
     const refresh = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", refresh);
-    let appUrlListener;
-    App.addListener("appUrlOpen", async ({ url }) => {
-      if (!isMailOAuthCallback(url)) return;
-      try { await Browser.close(); } catch { /* El navegador ya puede estar cerrado. */ }
-      const result = new URL(url).searchParams.get("microsoft");
-      if (result === "connected") trackEvent("mail_connected", { source_type: "email" });
-      if (result && result !== "connected") setError(outlookErrorMessage(result));
-      await load();
-    }).then((listener) => { appUrlListener = listener; });
+    // UsersApp redeems the OAuth return; this screen only reports the outcome.
+    const showOutcome = () => {
+      const outcome = takeMailOAuthOutcome();
+      if (!outcome) return;
+      if (outcome.ok) {
+        trackEvent("mail_connected", { source_type: "email" });
+        setError("");
+        setMessage(tx("Correo conectado. DINCR está revisando tus avisos financieros.", "Mailbox connected. DINCR is reviewing your financial notices."));
+      } else {
+        setMessage("");
+        setError(outcome.code === "completion_failed" && outcome.message ? outcome.message : mailErrorMessage(outcome.provider, outcome.code));
+      }
+      load();
+    };
+    showOutcome();
+    window.addEventListener(MAIL_OAUTH_RESULT_EVENT, showOutcome);
     return () => {
       document.removeEventListener("visibilitychange", refresh);
-      appUrlListener?.remove();
+      window.removeEventListener(MAIL_OAUTH_RESULT_EVENT, showOutcome);
     };
   }, [load]);
 

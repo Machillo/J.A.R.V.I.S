@@ -42,7 +42,7 @@ assert.match(finance, /onNavigate\("transactions"\)/, "Movimientos must link to 
 assert.match(registry, /transactions: <Transactions plan=\{plan\} \/>/, "The full history must know the current plan");
 assert.doesNotMatch(history, /DINCR · FREE/, "The full history must not label Basic or VIP users as Free");
 assert.match(free, /onNavigate\("transactions"\)/, "Free must keep its existing full-history entry");
-assert.match(gmail, /setError\(outlookErrorMessage\(result\)\)/, "Outlook callback errors must be shown as readable messages");
+assert.match(gmail, /mailErrorMessage\(outcome\.provider, outcome\.code\)/, "Mail OAuth errors must be shown as readable messages");
 assert.doesNotMatch(gmail, /No se pudo conectar Outlook \(\$\{result\}\)/, "Raw Outlook error codes must not be shown to users");
 
 console.log("DINCR information architecture, settings and VIP Gmail contracts passed.");

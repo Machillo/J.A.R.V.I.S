@@ -5,7 +5,7 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -50,6 +50,7 @@ from backend.user_product.own_transfer_review import confirm_own_transfer, list_
 from backend.user_product.trust_analytics import get_gmail_trust_analytics
 from backend.user_product.gmail_consent import accept_gmail_consent
 from backend.user_product.microsoft_mail import begin_connection as begin_microsoft_connection, finish_connection as finish_microsoft_connection
+from backend.user_product.mail_oauth import complete_mail_connection
 
 router = APIRouter(prefix="/user-product", tags=["DINCR Product"])
 
@@ -252,11 +253,19 @@ def vip_gmail_consent(request: GmailConsentRequest):
     return accept_gmail_consent(accepted=request.accepted, version=request.version)
 
 @router.get("/vip/gmail/callback")
-def vip_gmail_callback(background_tasks: BackgroundTasks, code: str | None = None, state: str | None = None, error: str | None = None):
-    response = finish_gmail_connection(code=code, state=state, error=error)
-    if response.headers.get("location", "").endswith("gmail=connected"):
+def vip_gmail_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+    # Public: Google redirects the system browser here. The callback only parks the
+    # authorization; /vip/mail/oauth/complete attaches it for the initiating session.
+    return finish_gmail_connection(code=code, state=state, error=error)
+
+@router.post("/vip/mail/oauth/complete")
+def vip_mail_oauth_complete(request: MailConnectionCompleteRequest, background_tasks: BackgroundTasks):
+    # Authenticated: only the DINCR session that started the flow can attach the mailbox.
+    require_feature("gmail_automation")
+    result = complete_mail_connection(request.flow, request.completion)
+    if result["provider"] == "gmail":
         background_tasks.add_task(capture_backend_event, "gmail_connected")
-    return response
+    return result
 
 @router.post("/vip/mail/microsoft/connect")
 def vip_microsoft_connect():

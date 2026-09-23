@@ -8,6 +8,11 @@ class GmailConsentRequest(BaseModel):
     version: str = Field(max_length=80)
 
 
+class MailConnectionCompleteRequest(BaseModel):
+    flow: str = Field(max_length=64)
+    completion: str = Field(max_length=256)
+
+
 class IncomeCreateRequest(BaseModel):
     amount: float = Field(gt=0)
     description: str = ""

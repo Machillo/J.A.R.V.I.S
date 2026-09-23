@@ -1,11 +1,7 @@
 """Outlook/Hotmail end-to-end contracts: OAuth, token handling, read-only Graph,
 shared candidate pipeline, isolation, disconnection and Gmail non-regression."""
-import base64
-import hashlib
-import hmac
-import json
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
@@ -54,11 +50,6 @@ class Db:
         self.committed = True
 
 
-def _signed_state(payload):
-    encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
-    return f"{encoded}.{hmac.new(CONFIG[1].encode(), encoded.encode(), hashlib.sha256).hexdigest()}"
-
-
 @pytest.fixture(autouse=True)
 def configured(monkeypatch):
     monkeypatch.setattr(mail, "_config", lambda: CONFIG)
@@ -95,68 +86,22 @@ def test_outlook_keeps_the_same_vip_entitlement_as_gmail():
 
 def test_authorization_url_uses_common_authority_and_read_only_scopes(monkeypatch):
     monkeypatch.setattr(mail, "require_gmail_consent", lambda: None)
-    monkeypatch.setattr(mail, "get_current_account_id", lambda: "account-a")
-    monkeypatch.setattr(mail, "get_current_workspace_id", lambda: "workspace-a")
+    monkeypatch.setattr(mail.mail_oauth, "start_flow", lambda provider: ("server-side-state", "pkce-challenge"))
     url = urlparse(mail.begin_connection()["authorization_url"])
     params = parse_qs(url.query)
     assert (url.scheme, url.hostname, url.path) == ("https", "login.microsoftonline.com", "/common/oauth2/v2.0/authorize")
     assert params["scope"] == ["offline_access User.Read Mail.Read"]
     assert params["redirect_uri"] == [CONFIG[2]]
     assert params["response_type"] == ["code"] and params["client_id"] == ["client-id"]
+    assert params["state"] == ["server-side-state"]
+    assert params["code_challenge"] == ["pkce-challenge"] and params["code_challenge_method"] == ["S256"]
     assert "client-secret" not in url.geturl()
-    assert mail._verify_state(params["state"][0])["a"] == "account-a"
 
 
 def test_authorization_requires_the_mail_consent_first(monkeypatch):
     monkeypatch.setattr(mail, "require_gmail_consent", lambda: (_ for _ in ()).throw(HTTPException(status_code=409)))
     with pytest.raises(HTTPException):
         mail.begin_connection()
-
-
-def test_expired_or_forged_state_is_rejected():
-    expired = _signed_state({"a": "account-a", "w": "workspace-a", "nonce": "n",
-                             "exp": int((datetime.now(timezone.utc) - timedelta(seconds=1)).timestamp())})
-    assert mail._verify_state(expired) is None
-    valid = _signed_state({"a": "account-a", "w": "workspace-a", "nonce": "n",
-                           "exp": int((datetime.now(timezone.utc) + timedelta(minutes=5)).timestamp())})
-    assert mail._verify_state(valid)["w"] == "workspace-a"
-    encoded, signature = valid.rsplit(".", 1)
-    tampered = base64.urlsafe_b64encode(json.dumps({"a": "account-b", "w": "workspace-b", "exp": 9_999_999_999}).encode()).decode().rstrip("=")
-    assert mail._verify_state(f"{tampered}.{signature}") is None
-    assert mail._verify_state(None) is None
-
-
-def test_microsoft_error_redirects_without_contacting_microsoft_or_db(monkeypatch, caplog):
-    monkeypatch.setattr(mail.requests, "post", lambda *_a, **_k: pytest.fail("token endpoint must not be called"))
-    monkeypatch.setattr(mail, "get_connection", lambda: pytest.fail("no database access"))
-    with caplog.at_level(logging.WARNING):
-        result = mail.finish_connection(None, "state", error="access_denied")
-    assert result.status_code == 302 and "microsoft=denied" in result.headers["location"]
-    assert "access_denied" in caplog.text
-
-
-def test_invalid_state_redirects_before_any_token_exchange(monkeypatch):
-    monkeypatch.setattr(mail.requests, "post", lambda *_a, **_k: pytest.fail("token endpoint must not be called"))
-    result = mail.finish_connection("code", "forged.state")
-    assert "microsoft=invalid_state" in result.headers["location"]
-
-
-def test_non_vip_account_cannot_complete_the_connection(monkeypatch):
-    monkeypatch.setattr(mail, "_has_active_vip_access", lambda *_args: False)
-    monkeypatch.setattr(mail, "get_connection", lambda: Db())
-    monkeypatch.setattr(mail.requests, "post", lambda *_a, **_k: pytest.fail("token endpoint must not be called"))
-    result = mail.finish_connection("code", mail._state("account-a", "workspace-a"))
-    assert "microsoft=vip_required" in result.headers["location"]
-
-
-def test_token_exchange_failure_is_reported_without_secrets(monkeypatch, caplog):
-    monkeypatch.setattr(mail, "_has_active_vip_access", lambda *_args: True)
-    monkeypatch.setattr(mail, "get_connection", lambda: Db())
-    monkeypatch.setattr(mail.requests, "post", lambda *_a, **_k: SimpleNamespace(status_code=400, json=lambda: {"error": "invalid_client"}))
-    with caplog.at_level(logging.WARNING):
-        result = mail.finish_connection("auth-code", mail._state("account-a", "workspace-a"))
-    assert "microsoft=exchange_failed" in result.headers["location"]
-    assert "auth-code" not in caplog.text and not any(value in caplog.text for value in SECRET_VALUES)
 
 
 @pytest.mark.parametrize("scope", [
@@ -290,30 +235,6 @@ def test_manual_sync_only_reads_the_callers_connections_and_routes_by_provider(m
     assert db.calls[0][1] == ("account-a", "workspace-a")
     assert "account_id=%s AND workspace_id=%s" in db.calls[0][0]
     assert routed == [("gmail", 1), ("microsoft", 2)]
-
-
-def test_callback_stores_the_mailbox_under_the_account_in_the_signed_state(monkeypatch):
-    monkeypatch.setattr(mail, "_has_active_vip_access", lambda *_a: True)
-    monkeypatch.setattr(mail, "_financial_user_id_for_account", lambda *_a: 8)
-    monkeypatch.setattr(mail, "_vault_create", lambda *_a: "vault-id")
-    monkeypatch.setattr(mail, "sync_connection", lambda *_a: None)
-    monkeypatch.setattr(mail.requests, "post", lambda *_a, **_k: SimpleNamespace(status_code=200, json=lambda: {
-        "access_token": "access-secret", "refresh_token": "refresh-secret",
-        "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read"}))
-    monkeypatch.setattr(mail, "_graph_get", lambda _t, path, *_a: {"userPrincipalName": "Person@Hotmail.com"} if path == "/me" else {"value": []})
-    persisted = Db(Rows(one=None), Rows(one={"id": 42}))
-    dbs = iter([Db(), persisted])
-    monkeypatch.setattr(mail, "get_connection", lambda: next(dbs))
-
-    result = mail.finish_connection("code", mail._state("account-b", "workspace-b"))
-
-    assert "microsoft=connected" in result.headers["location"]
-    lookup_params = persisted.calls[0][1]
-    insert_params = next(params for sql, params in persisted.calls if "INSERT INTO finva_gmail_connections" in sql)
-    assert lookup_params == ("account-b", "workspace-b", "person@hotmail.com")
-    assert insert_params[:4] == ("account-b", "workspace-b", 8, "person@hotmail.com")
-    assert insert_params[5] == ["Mail.Read"]
-    assert not any(value in str(persisted.calls) for value in SECRET_VALUES)
 
 
 def test_disconnecting_outlook_deletes_the_secret_without_calling_google(monkeypatch):
