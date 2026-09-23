@@ -28,6 +28,7 @@
 .public-info-nav div {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .public-info-nav div a,
