@@ -65,7 +65,7 @@ export default function Goals() {
 
   if (editingId !== null) {
     return (
-      <JarvisScreen eyebrow={tx("Metas", "Goals")} title={editingId === "new" ? tx("Nueva meta", "New goal") : tx("Editar meta", "Edit goal")} subtitle={tx("Definí el objetivo y JARVIS arma la ruta", "Set the objective and JARVIS builds the path")} className="goals-screen goal-form-screen" actions={<button className="jarvis-circle-button" type="button" onClick={closeForm} aria-label={tx("Volver", "Back")}><ArrowLeft size={19} /></button>}>
+      <JarvisScreen eyebrow={tx("Metas", "Goals")} title={editingId === "new" ? tx("Nueva meta", "New goal") : tx("Editar meta", "Edit goal")} subtitle={tx("Definí el objetivo y DINCR arma la ruta", "Set the objective and DINCR builds the path")} className="goals-screen goal-form-screen" actions={<button className="jarvis-circle-button" type="button" onClick={closeForm} aria-label={tx("Volver", "Back")}><ArrowLeft size={19} /></button>}>
         {error && <div className="jarvis-inline-message is-warning">{error}</div>}
         <form className="goal-form" onSubmit={saveGoal}>
           <GoalField label={tx("Nombre", "Name")}><input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={tx("Ej. Viaje Japón", "E.g. Japan trip")} /></GoalField>
@@ -74,7 +74,7 @@ export default function Goals() {
           <GoalField label={tx("Fecha objetivo", "Target date")}><input type="date" value={form.target_date} onChange={(e) => setForm({ ...form, target_date: e.target.value })} /></GoalField>
           <GoalField label={tx("Prioridad", "Priority")}><select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}><option value="low">{tx("Baja", "Low")}</option><option value="medium">{tx("Media", "Medium")}</option><option value="high">{tx("Alta", "High")}</option><option value="critical">{tx("Prioritaria", "Priority")}</option></select></GoalField>
           <GoalField label={tx("Tipo", "Type")}><select value={form.goal_type} onChange={(e) => setForm({ ...form, goal_type: e.target.value })}><option value="general">{tx("General", "General")}</option><option value="travel">{tx("Viaje", "Travel")}</option><option value="vehicle">{tx("Vehículo", "Vehicle")}</option><option value="purchase">{tx("Compra", "Purchase")}</option></select></GoalField>
-          <JarvisGlassCard className="goal-route-note"><Sparkles size={18} /><span>{tx("JARVIS financiará esta meta según su prioridad, sin usar dinero ya comprometido.", "JARVIS will fund this goal by priority without using committed money.")}</span></JarvisGlassCard>
+          <JarvisGlassCard className="goal-route-note"><Sparkles size={18} /><span>{tx("DINCR financiará esta meta según su prioridad, sin usar dinero ya comprometido.", "DINCR will fund this goal by priority without using committed money.")}</span></JarvisGlassCard>
           <button className="jarvis-primary-button" type="submit" disabled={saving}>{saving ? tx("Guardando...", "Saving...") : tx("Guardar meta", "Save goal")}</button>
         </form>
       </JarvisScreen>

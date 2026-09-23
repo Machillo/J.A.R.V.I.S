@@ -38,7 +38,7 @@ export default function UserManagement() {
       if (Array.isArray(result) && result.length === 1) setSelected(result[0]);
       if (!result?.length) setMessage("No encontré usuarios con ese correo.");
     } catch (error) {
-      setMessage(error.message || "No pude consultar JARVIS Users.");
+      setMessage(error.message || "No pude consultar DINCR Users.");
     } finally {
       setLoading(false);
     }

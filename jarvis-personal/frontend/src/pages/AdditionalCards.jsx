@@ -69,7 +69,7 @@ export default function AdditionalCards() {
           </JarvisGlassCard>
         ))}
       </div>
-      <p className="additional-cards-note"><Sparkles size={13} /> {tx("JARVIS agrupa cada compra por los últimos 4 dígitos detectados.", "JARVIS groups each purchase by its detected last four digits.")}</p>
+      <p className="additional-cards-note"><Sparkles size={13} /> {tx("DINCR agrupa cada compra por los últimos 4 dígitos detectados.", "DINCR groups each purchase by its detected last four digits.")}</p>
     </JarvisScreen>
   );
 }

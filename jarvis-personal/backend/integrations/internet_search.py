@@ -9,8 +9,7 @@ from backend.auth.current_user import get_current_user
 
 def is_owner() -> bool:
     user = get_current_user()
-    owner_emails = {email.strip().lower() for email in os.getenv("OWNER_EMAILS", "").split(",") if email.strip()}
-    return user.get("role") == "owner" or str(user.get("email") or "").lower() in owner_emails
+    return user.get("role") == "owner"
 
 
 def internet_search(query: str) -> dict:

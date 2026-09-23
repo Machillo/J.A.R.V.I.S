@@ -57,7 +57,7 @@ const sanitizeCourtesy = (text = "") =>
     .replace(/Señor,\s*Señor,\s*/gi, "Señor, ");
 
 const appSectionsFor = (language) => ({
-  dashboard: { title: "J.A.R.V.I.S.", eyebrow: language === "es" ? "Asistente" : "Assistant" },
+  dashboard: { title: "DINCR Owner", eyebrow: language === "es" ? "Espacio interno" : "Internal space" },
   strategy: { title: t("nav.strategy", language), eyebrow: language === "es" ? "Director financiero" : "Financial Director" },
   finance: { title: t("nav.finance", language), eyebrow: language === "es" ? "Centro financiero" : "Financial Center" },
   receivables: { title: t("nav.receivables", language), eyebrow: language === "es" ? "Personas y pagos" : "People & Payments" },
@@ -141,7 +141,7 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
       <div className="profile-link-list">
         <AppListItem icon={Brain} title={t("nav.memory", language)} subtitle={tx("Memoria y contexto personal", "Memory and personal context", language)} onClick={() => navigatePage("memory")} />
         <AppListItem icon={Target} title={t("nav.goals", language)} subtitle={tx("Objetivos y prioridades", "Objectives and priorities", language)} onClick={() => navigatePage("goals")} />
-        <AppListItem icon={SettingsIcon} title={t("nav.settings", language)} subtitle={tx("Preferencias de JARVIS", "JARVIS preferences", language)} onClick={() => navigatePage("settings")} />
+        <AppListItem icon={SettingsIcon} title={t("nav.settings", language)} subtitle={tx("Preferencias de DINCR Owner", "DINCR Owner preferences", language)} onClick={() => navigatePage("settings")} />
         <AppListItem icon={HandCoins} title={tx("Datos financieros", "Financial data", language)} subtitle={tx("Control · Email · historial · tarjetas", "Control · Email · history · cards", language)} onClick={() => navigatePage("moneyControl")} />
         {currentUser?.role === "owner" && (
           <><AppListItem icon={UsersRound} title={t("nav.manageUsers", language)} subtitle={tx("Buscar cuentas y otorgar cortesías", "Find accounts and grant courtesy access", language)} onClick={() => navigatePage("userManagement")} />
@@ -525,7 +525,7 @@ export default function App() {
   const userName = rawUserName.trim().split(/\s+/)[0] || "";
 
   if (!sessionLoaded) {
-    return <main className="jarvis-boot-screen"><strong>J.A.R.V.I.S.</strong><span>Inicializando sesión...</span></main>;
+    return <main className="jarvis-boot-screen"><strong>DINCR Owner</strong><span>Inicializando sesión...</span></main>;
   }
 
   if (!session) {
@@ -533,7 +533,7 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <main className="jarvis-boot-screen"><strong>J.A.R.V.I.S.</strong><span>Preparando tu espacio...</span></main>;
+    return <main className="jarvis-boot-screen"><strong>DINCR Owner</strong><span>Preparando tu espacio...</span></main>;
   }
 
   if (!currentUser.profile_setup_completed) {

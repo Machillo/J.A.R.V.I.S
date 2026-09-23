@@ -2,8 +2,8 @@
   "baseUrl": "https://dincr.com",
   "googlePlayUrl": "",
   "appStoreUrl": "",
-  "supportEmail": "",
+  "supportEmail": "soporte@dincr.com",
   "socialLinks": [],
   "reviews": { "enabled": false, "googlePlay": null, "appStore": null },
-  "candidatePricesCRC": { "free": 0, "basic": 2990, "vip": 4990 }
+  "pricesCRC": { "free": 0, "basic": 2990, "vip": 4990 }
 }

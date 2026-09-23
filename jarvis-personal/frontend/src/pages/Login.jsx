@@ -35,7 +35,7 @@ export default function Login({ nativeError = "" }) {
       <section className="login-card auth-card">
         <div className="finva-login-top">
           <strong>DINCR</strong>
-          <small>JARVIS Financial Intelligence</small>
+          <small>Finanzas personales · Costa Rica</small>
         </div>
 
         <div className="finva-login-hero">

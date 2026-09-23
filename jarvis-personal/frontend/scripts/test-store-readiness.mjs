@@ -9,7 +9,8 @@ const registry = read("../src/products/finva/features/registry.jsx");
 const android = read("../android/variables.gradle");
 
 assert.match(entry, /"\/delete-account"/, "Public deletion page must load without authentication");
-assert.match(publicPage, /href="\/"[^>]*>Ingresar a DINCR para eliminar mi cuenta/, "Deletion page must link to the authenticated deletion path");
+assert.match(publicPage, /Perfil o Más → Ajustes de cuenta y plan → Eliminar cuenta/, "Deletion page must describe the in-app deletion path");
+assert.match(publicPage, /mailto:soporte@dincr\.com/, "Deletion page must provide public support contact");
 assert.match(publicPage, /href="\/privacy"/, "Deletion page must link to the retention policy");
 assert.match(accountActions, /await deleteMyAccount\(\)/, "In-app deletion must remain actionable");
 for (const plan of ["vip", "basic", "free"]) {

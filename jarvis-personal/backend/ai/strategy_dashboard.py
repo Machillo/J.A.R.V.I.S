@@ -750,7 +750,7 @@ def _build_current_priority(
         return {
             "kind": "goal",
             "title": f"Meta: {goal.get('name') or 'prioritaria'}",
-            "detail": "JARVIS la protege primero porque tiene una fecha/prioridad activa.",
+            "detail": "DINCR la protege primero porque tiene una fecha/prioridad activa.",
         }
     if timeline and _f(amounts.get("ataque_de_deuda")) > 0:
         target = timeline[0]
@@ -774,7 +774,7 @@ def _build_current_priority(
     return {
         "kind": "control",
         "title": "Mantener control del flujo",
-        "detail": director.get("mode_reason") or "JARVIS mantiene el sobrante bajo control.",
+        "detail": director.get("mode_reason") or "DINCR mantiene el sobrante bajo control.",
     }
 
 def _rate_to_monthly(rate: float) -> float:

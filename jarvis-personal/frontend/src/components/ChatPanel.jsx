@@ -12,13 +12,13 @@ export default function ChatPanel({ response }) {
     <section className={`jarvis-chat-panel ${isPending ? "pending" : ""}`}>
       <div className="panel-title">
         <div>
-          <h3>{copy("CONSOLA DE J.A.R.V.I.S.", "J.A.R.V.I.S. CONSOLE")}</h3>
+          <h3>{copy("CONSOLA DE DINCR", "DINCR CONSOLE")}</h3>
           <p>{isPending ? copy("Esperando datos", "Waiting for data") : copy("Respuesta generada", "Response generated")}</p>
         </div>
       </div>
 
       <div className="jarvis-message">
-        <span className="message-label">JARVIS</span>
+        <span className="message-label">DINCR</span>
         <p>{message}</p>
       </div>
     </section>

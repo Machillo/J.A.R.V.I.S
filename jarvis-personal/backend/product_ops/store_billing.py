@@ -15,8 +15,8 @@ PRODUCTS = {
         "annual": {"price_crc": int(os.getenv("FINVA_BASIC_ANNUAL_CRC", "29900")), "product_id": os.getenv("FINVA_BASIC_ANNUAL_PRODUCT_ID", "finva.basic.annual")},
     },
     "vip": {
-        "monthly": {"price_crc": 5990, "product_id": os.getenv("FINVA_VIP_MONTHLY_PRODUCT_ID", "finva.vip.monthly")},
-        "annual": {"price_crc": int(os.getenv("FINVA_VIP_ANNUAL_CRC", "59900")), "product_id": os.getenv("FINVA_VIP_ANNUAL_PRODUCT_ID", "finva.vip.annual")},
+        "monthly": {"price_crc": 4990, "product_id": os.getenv("FINVA_VIP_MONTHLY_PRODUCT_ID", "finva.vip.monthly")},
+        "annual": {"price_crc": int(os.getenv("FINVA_VIP_ANNUAL_CRC", "49900")), "product_id": os.getenv("FINVA_VIP_ANNUAL_PRODUCT_ID", "finva.vip.annual")},
     },
 }
 TRIAL_DAYS = int(os.getenv("FINVA_STORE_TRIAL_DAYS", "7"))

@@ -1481,7 +1481,7 @@ export default function Finance({
           <DebtsPanel sortedDebts={sortedDebts} loading={debtsLoading} debtSort={debtSort} setDebtSort={setDebtSort} onChanged={async () => { await loadSupportingData(); await onRefresh?.(); }} />
           </JarvisDisclosure>
           <JarvisDisclosure title="Alertas" summary={alerts.length ? `${alerts.length} por revisar` : "Todo bajo control"} defaultOpen={alerts.length > 0} className="finance-disclosure">
-          <article className="hud-panel"><div className="panel-title"><div><h3>ALERTS</h3></div></div><div className="alert-list">{alerts.length === 0 ? <EmptyPanel title="No critical alerts" description="JARVIS will flag cash-flow and debt risks here." /> : alerts.map((alert, index) => <div className={`alert-item ${alert.level}`} key={index}><AlertTriangle size={18} /><span>{alert.message}</span></div>)}</div></article>
+          <article className="hud-panel"><div className="panel-title"><div><h3>ALERTS</h3></div></div><div className="alert-list">{alerts.length === 0 ? <EmptyPanel title="No critical alerts" description="DINCR will flag cash-flow and debt risks here." /> : alerts.map((alert, index) => <div className={`alert-item ${alert.level}`} key={index}><AlertTriangle size={18} /><span>{alert.message}</span></div>)}</div></article>
           </JarvisDisclosure>
         </div>
       </>}

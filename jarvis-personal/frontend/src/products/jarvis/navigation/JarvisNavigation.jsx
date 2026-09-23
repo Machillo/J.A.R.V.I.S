@@ -17,7 +17,7 @@ export default function JarvisNavigation({ activePage, onNavigate }) {
   const language = deviceLanguage();
   const tr = (key) => t(`nav.${key}`, language);
   const items = [
-    { key: "dashboard", label: "JARVIS", icon: Bot },
+    { key: "dashboard", label: "Owner", icon: Bot },
     { key: "strategy", label: tr("strategy"), icon: ChartNoAxesCombined },
     { key: "finance", label: tr("finance"), icon: Landmark },
     { key: "financialAccounts", label: tr("accounts"), icon: WalletCards },

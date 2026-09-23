@@ -1,6 +1,6 @@
 {
   "appId": "com.jarvis.personal",
-  "appName": "J.A.R.V.I.S.",
+  "appName": "DINCR Owner",
   "webDir": "dist",
   "includePlugins": [
     "@capacitor/app",

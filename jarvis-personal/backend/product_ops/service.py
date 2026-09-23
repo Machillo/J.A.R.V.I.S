@@ -23,7 +23,7 @@ LAUNCH_PROMOTION_CODE = "launch-free-2026"
 LAUNCH_PROMOTION_END = datetime(2027, 1, 1, 6, 0, 0, tzinfo=timezone.utc)
 PRICES = {
     "basic": {"regular": 2990},
-    "vip": {"regular": 5990},
+    "vip": {"regular": 4990},
 }
 PAYMENT_CODE_PATTERN = re.compile(r"\b(?:DINCR|FINVA)-[A-Z0-9]{6}\b", re.I)
 RECEIPT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}

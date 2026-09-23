@@ -51,7 +51,7 @@ def resolve_personal_workspace_context(conn, legacy_allowed_user_id: int) -> dic
     if data.get("account_status") != "active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="La cuenta JARVIS no está activa.",
+            detail="La cuenta DINCR no está activa.",
         )
 
     if data.get("workspace_status") != "active":

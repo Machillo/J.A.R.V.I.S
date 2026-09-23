@@ -89,7 +89,7 @@ export default function Memory() {
   };
 
   return (
-    <JarvisScreen eyebrow={tx("Memoria", "Memory")} title={tx("Núcleo de memoria", "Memory core")} subtitle={tx("Contexto personal utilizado por JARVIS", "Personal context used by JARVIS")} className="memory-screen">
+    <JarvisScreen eyebrow={tx("Memoria", "Memory")} title={tx("Núcleo de memoria", "Memory core")} subtitle={tx("Contexto personal utilizado por DINCR", "Personal context used by DINCR")} className="memory-screen">
       <JarvisGlassCard className="memory-status-card">
         <Brain size={29} />
         <div><strong>{summary?.total || 0} {tx("recuerdos", "memories")}</strong><small>{Object.keys(summary?.profile_preferences || {}).length} {tx("preferencias activas · sincronizado", "active preferences · synced")}</small></div>

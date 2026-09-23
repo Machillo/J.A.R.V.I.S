@@ -280,7 +280,7 @@ def send_test_notification() -> dict[str, Any]:
     user = get_current_user()
     user_id = int(user["id"])
     workspace_id = get_current_workspace_id()
-    title = "J.A.R.V.I.S."
+    title = "DINCR Owner"
     body = "Señor, notificaciones reales activadas en este dispositivo."
 
     with get_connection() as conn:

@@ -118,7 +118,7 @@ export default function Emails({ onFinanceChanged }) {
   };
 
   const handleClassification = async (item) => {
-    setMessage("JARVIS está guardando y aprendiendo esta clasificación...");
+    setMessage("DINCR está guardando y aprendiendo esta clasificación...");
     try {
       const result = await classifyEmailCandidate({ candidate_id: item.id, ...classification, auto_commit_future: classification.remember_rule });
       setMessage(result?.message || "Movimiento clasificado.");

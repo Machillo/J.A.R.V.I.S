@@ -105,5 +105,5 @@ def test_launch_promotion_ends_at_costa_rica_new_year():
 def test_only_regular_prices_remain():
     assert service.PRICES == {
         "basic": {"regular": 2990},
-        "vip": {"regular": 5990},
+        "vip": {"regular": 4990},
     }

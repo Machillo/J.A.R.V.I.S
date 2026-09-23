@@ -117,7 +117,7 @@ export default function MoneyControl({ onNavigate }) {
         />
       </div>
 
-      <p className="money-control-footnote">JARVIS sincroniza estos datos con Finanzas</p>
+      <p className="money-control-footnote">DINCR sincroniza estos datos con Finanzas</p>
     </JarvisScreen>
   );
 }

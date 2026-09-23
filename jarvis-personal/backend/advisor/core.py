@@ -259,7 +259,7 @@ def build_advisor_strategy(*, persist: bool = True) -> dict[str, Any]:
     actions: list[dict[str, Any]] = []
     if not quality["sufficient"]:
         issue = next(item for item in quality["issues"] if item["severity"] == "blocking")
-        actions.append({"type": "complete_data", "title": issue["message"], "amount": 0, "why": "Sin este dato JARVIS no puede autorizar uso de dinero."})
+        actions.append({"type": "complete_data", "title": issue["message"], "amount": 0, "why": "Sin este dato DINCR no puede autorizar uso de dinero."})
     elif first_negative:
         actions.append({"type": "stabilize_cashflow", "title": f"Evitar saldo negativo antes de {first_negative.get('date')}", "amount": abs(round(_n(first_negative.get("projected_balance")), 2)), "why": first_negative.get("name")})
     elif (deterioration.get("primary_cause") or {}).get("severity") == "high" and (deterioration.get("primary_cause") or {}).get("code") != "salvavidas":

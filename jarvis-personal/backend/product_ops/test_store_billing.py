@@ -11,8 +11,8 @@ def test_store_catalog_has_monthly_and_annual_products():
     assert set(plans) == {"basic", "vip"}
     assert plans["basic"]["monthly"]["price_crc"] == 2990
     assert plans["basic"]["annual"]["price_crc"] == 29900
-    assert plans["vip"]["monthly"]["price_crc"] == 5990
-    assert plans["vip"]["annual"]["price_crc"] == 59900
+    assert plans["vip"]["monthly"]["price_crc"] == 4990
+    assert plans["vip"]["annual"]["price_crc"] == 49900
     for code in ("basic", "vip"):
         assert plans[code]["monthly"]["product_id"] == PRODUCTS[code]["monthly"]["product_id"]
         assert plans[code]["annual"]["product_id"] == PRODUCTS[code]["annual"]["product_id"]

@@ -340,7 +340,7 @@ def detect_intent(user_message: str) -> dict[str, Any]:
         return fallback
 
     prompt = f"""
-Eres el clasificador de intención de J.A.R.V.I.S. No respondes al usuario.
+Eres el clasificador de intención de DINCR Owner. No respondes al usuario.
 
 Devuelve SOLO JSON válido con esta forma:
 {{"intent":"...","action_type":null,"entity":null,"confidence":0.0}}

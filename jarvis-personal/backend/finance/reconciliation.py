@@ -57,7 +57,7 @@ def get_financial_reconciliation() -> dict[str, Any]:
         "unlinked_transactions": [dict(row) for row in unlinked],
         "possible_duplicates": [dict(row) for row in duplicate_rows],
         "summary": {"accounts": len(details), "needs_review": len(discrepancies), "unlinked": len(unlinked), "possible_duplicates": len(duplicate_rows)},
-        "note": "JARVIS solo detecta y propone revisión. Ningún movimiento se borra, duplica o corrige automáticamente.",
+        "note": "DINCR solo detecta y propone revisión. Ningún movimiento se borra, duplica o corrige automáticamente.",
     }
 
 
