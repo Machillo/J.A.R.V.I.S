@@ -37,7 +37,7 @@
 `financial_account_confirmed`, `financial_account_ownership_reviewed`,
 `email_candidate_reviewed`, `transaction_candidate_reviewed`, `transaction_confirmed`,
 `transaction_rejected`, `account_deletion_started`,
-`account_deletion_failed`.
+`account_deletion_failed`, `data_export_completed`.
 
 `financial_account_detected` está reservado en la lista, pero no se emite
 todavía: no hay un punto de creación único confirmado para todos los proveedores.

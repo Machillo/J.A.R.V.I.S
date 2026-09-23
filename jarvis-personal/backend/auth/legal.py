@@ -7,7 +7,7 @@ from backend.core.database import get_connection
 
 
 TERMS_VERSION = "2026-09-23-v3"
-PRIVACY_VERSION = "2026-09-23-v2"
+PRIVACY_VERSION = "2026-09-23-v3"
 
 
 def ensure_legal_schema(conn) -> None:

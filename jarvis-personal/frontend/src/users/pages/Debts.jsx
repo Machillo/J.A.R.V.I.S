@@ -109,7 +109,7 @@ export default function Debts({ plan = "free" }) {
   </section>;
 
   const content = !advanced ? freeContent : <section className="content-first-page finva-debts-page">
-    <div className="hero"><span>{advanced ? "BASIC 03" : "FREE 04"}</span><h1>{tx("Deudas", "Debts")}</h1><p>{advanced ? tx("Gestión completa con tasa, plazo y finalización estimada.", "Complete management with interest, term, and estimated payoff.") : tx("Saldos, pagos y progreso visual, sin recomendaciones.", "Balances, payments, and visual progress without recommendations.")}</p></div>
+    <div className="hero"><span>{advanced ? "DINCR · BASIC" : "DINCR · FREE"}</span><h1>{tx("Deudas", "Debts")}</h1><p>{advanced ? tx("Gestión completa con tasa, plazo y finalización estimada.", "Complete management with interest, term, and estimated payoff.") : tx("Saldos, pagos y progreso visual, sin recomendaciones.", "Balances, payments, and visual progress without recommendations.")}</p></div>
     {!advanced && <article className="finva-free-debt-summary"><small>{tx("SALDO TOTAL", "TOTAL BALANCE")}</small><strong>{money(totalBalance)}</strong><span>{rows.length} {rows.length === 1 ? tx("deuda registrada", "recorded debt") : tx("deudas registradas", "recorded debts")}</span></article>}
     {error && <div className="panel error">{error}</div>}
     <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><CreditCard size={20}/></span><div><strong>{tx("Agregar deuda", "Add debt")}</strong><small>{tx("Registrá una nueva obligación", "Record a new obligation")}</small></div><Plus size={19}/></button>

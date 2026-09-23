@@ -7,7 +7,7 @@ export const analyticsEvents = new Set([
   "financial_account_detected", "financial_account_confirmed",
   "financial_account_ownership_reviewed", "email_candidate_reviewed", "transaction_candidate_reviewed",
   "transaction_confirmed", "transaction_rejected", "account_deletion_started",
-  "account_deletion_failed",
+  "account_deletion_failed", "data_export_completed",
 ]);
 
 const categories = {

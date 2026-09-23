@@ -3,6 +3,7 @@ from backend.product_ops.posthog_events import capture_backend_event
 
 from backend.auth.models import AllowedUserRequest, CheckAccessRequest, LegalAcceptanceRequest, PlanSelectionRequest, ProfileSetupRequest, UnifiedOnboardingRequest
 from backend.auth.legal import accept_legal_documents
+from backend.auth.data_export import export_current_account_data
 from backend.auth.service import (
     get_allowed_users,
     create_allowed_user,
@@ -58,6 +59,11 @@ def check_access(request: CheckAccessRequest):
 @router.get("/me")
 def me():
     return enrich_identity(get_current_user())
+
+
+@router.get("/me/export")
+def export_my_data():
+    return export_current_account_data()
 
 
 @router.delete("/me")

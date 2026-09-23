@@ -37,3 +37,7 @@
 @media (min-width: 720px) {
   .finva-delete-dialog { align-items: center; }
 }
+
+/* Informational disclaimer under strategy, projection and aguinaldo screens. */
+.finva-disclaimer{display:flex;gap:8px;align-items:flex-start;margin:16px;padding:12px 14px;border-radius:14px;background:color-mix(in srgb,currentColor 6%,transparent);font-size:12px;line-height:1.45;opacity:.82}
+.finva-disclaimer svg{flex:none;margin-top:2px}

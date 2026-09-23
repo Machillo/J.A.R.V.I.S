@@ -480,9 +480,65 @@ def test_self_deletion_uses_same_account_owned_flow_for_every_plan(monkeypatch, 
 
 def test_account_deletion_stage_contract_is_complete():
     assert auth_service.DELETION_STAGES == (
-        "IDENTITY", "FK_CHECK", "ACCOUNT_DELETE", "LEGACY_DELETE",
-        "SUPABASE_AUTH_DELETE", "COMMIT", "DONE",
+        "IDENTITY", "FK_CHECK", "MAIL_CREDENTIALS_DELETE", "ACCOUNT_DELETE", "LEGACY_DELETE",
+        "SUPABASE_AUTH_DELETE", "COMMIT", "MAIL_TOKEN_REVOKE", "DONE",
     )
+
+
+def test_self_deletion_drops_mail_secrets_and_revokes_google_after_commit(monkeypatch):
+    events = []
+
+    class Result:
+        def __init__(self, row=None, rows=None): self.row = row; self.rows = rows or []
+        def fetchone(self): return self.row
+        def fetchall(self): return self.rows
+
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def commit(self): events.append("COMMIT")
+        def execute(self, query, params=()):
+            normalized = " ".join(query.split())
+            if normalized.startswith("SELECT legacy_allowed_user_id"):
+                return Result({
+                    "legacy_allowed_user_id": 42,
+                    "supabase_user_id": "22222222-2222-2222-2222-222222222222",
+                    "primary_email": "person@example.com",
+                })
+            if "FROM finva_gmail_connections" in normalized:
+                return Result(rows=[
+                    {"refresh_token_secret_id": "aaaaaaaa-0000-0000-0000-000000000001",
+                     "granted_scopes": [auth_service.GMAIL_SCOPE], "decrypted_secret": "google-refresh"},
+                    {"refresh_token_secret_id": "aaaaaaaa-0000-0000-0000-000000000002",
+                     "granted_scopes": ["Mail.Read"], "decrypted_secret": "microsoft-refresh"},
+                ])
+            if normalized.startswith("DELETE FROM vault.secrets"):
+                events.append(("VAULT_DELETE", params[0]))
+            if normalized.startswith("DELETE FROM accounts"):
+                return Result({"id": "11111111-1111-1111-1111-111111111111"})
+            return Result()
+
+    def fake_post(url, params=None, **_kwargs):
+        events.append(("REVOKE", url, params["token"]))
+        return SimpleNamespace(status_code=200)
+
+    monkeypatch.setattr(auth_service, "get_connection", lambda: Connection())
+    monkeypatch.setattr(auth_service, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", "sb_secret_example")
+    monkeypatch.setattr(auth_service.requests, "delete", lambda *_args, **_kwargs: SimpleNamespace(status_code=204))
+    monkeypatch.setattr(auth_service.requests, "post", fake_post)
+    token = set_current_user({
+        "id": 42, "account_id": "11111111-1111-1111-1111-111111111111",
+        "supabase_user_id": "22222222-2222-2222-2222-222222222222", "email": "person@example.com",
+    })
+    try:
+        assert auth_service.delete_current_account()["status"] == "OK"
+    finally:
+        reset_current_user(token)
+
+    assert events[0] == ("VAULT_DELETE", ["aaaaaaaa-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000002"])
+    assert events.index("COMMIT") < events.index(("REVOKE", "https://oauth2.googleapis.com/revoke", "google-refresh"))
+    assert not any(event[0] == "REVOKE" and event[2] == "microsoft-refresh" for event in events if isinstance(event, tuple))
 
 
 def test_self_deletion_rejects_mismatched_auth_identity_before_writes(monkeypatch):

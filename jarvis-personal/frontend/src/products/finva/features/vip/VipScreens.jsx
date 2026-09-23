@@ -342,7 +342,7 @@ function VipAguinaldo({ user, onNavigate }) {
   if (loading) return <LoadingScreen/>;
   if (!gmail?.connected) return <section className="vip-screen">
     <VipHeader title={tx("Aguinaldo", "Annual bonus")} user={user} onNavigate={onNavigate}/>
-    <Focus eyebrow={tx("DATOS OFICIALES CCSS", "OFFICIAL CCSS DATA")} title={tx("Debes sincronizar tu email", "You must sync your email")} caption={tx("DINCR necesita leer tus órdenes patronales de la CCSS para calcular el aguinaldo con salarios oficiales.", "DINCR needs to read your CCSS payroll orders to calculate your annual bonus from official salaries.")} tone="gold"/>
+    <Focus eyebrow={tx("ÓRDENES PATRONALES CCSS", "CCSS PAYROLL ORDERS")} title={tx("Debes sincronizar tu email", "You must sync your email")} caption={tx("DINCR necesita leer tus órdenes patronales de la CCSS para calcular el aguinaldo con salarios oficiales.", "DINCR needs to read your CCSS payroll orders to calculate your annual bonus from official salaries.")} tone="gold"/>
     <Card title={tx("Permiso de solo lectura", "Read-only access")}><p><ShieldCheck size={16}/>{tx("DINCR no puede enviar, modificar ni borrar tus correos.", "DINCR cannot send, modify, or delete your emails.")}</p></Card>
     {error && <Card tone="danger"><p>{error}</p></Card>}
     <PrimaryButton onClick={() => onNavigate?.("gmail")}><Mail size={18}/>{tx("Sincronizar email", "Sync email")}</PrimaryButton>
