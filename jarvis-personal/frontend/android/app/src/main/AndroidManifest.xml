@@ -24,11 +24,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Supabase login returns to com.dincr.app://auth/callback; Gmail/Outlook
+                 connection returns to <scheme>://gmail/callback with a one-time completion. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="com.finva.app" android:host="auth" android:pathPrefix="/callback" />
+                <data android:scheme="com.dincr.app" android:host="auth" android:pathPrefix="/callback" />
+                <data android:scheme="com.dincr.app" android:host="gmail" android:pathPrefix="/callback" />
+            </intent-filter>
+
+            <!-- Transitional: the backend returns mail OAuth to one scheme for every platform
+                 (FINVA_GMAIL_RETURN_URL, com.finva.app://gmail/callback). Remove once it is
+                 com.dincr.app://gmail/callback. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.finva.app" android:host="gmail" android:pathPrefix="/callback" />
             </intent-filter>
 
         </activity>

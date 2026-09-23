@@ -1,12 +1,12 @@
 import posthog from "posthog-js";
 import { Capacitor } from "@capacitor/core";
 import { analyticsEvents, safeAnalyticsProperties } from "./analyticsContract";
-import { LEGACY_DINCR_APP_ID, isDincrAppId } from "./appIdentity";
+import { DINCR_APP_ID, isDincrAppId } from "./appIdentity";
 
 const key = import.meta.env.VITE_POSTHOG_KEY?.trim();
 const host = import.meta.env.VITE_POSTHOG_HOST?.trim();
 const validHost = /^https:\/\/(?:us|eu)\.i\.posthog\.com\/?$/.test(host || "");
-const isDincrBuild = isDincrAppId(import.meta.env.VITE_NATIVE_APP_ID || LEGACY_DINCR_APP_ID);
+const isDincrBuild = isDincrAppId(import.meta.env.VITE_NATIVE_APP_ID || DINCR_APP_ID);
 
 let initialized = false;
 let eligible = false;

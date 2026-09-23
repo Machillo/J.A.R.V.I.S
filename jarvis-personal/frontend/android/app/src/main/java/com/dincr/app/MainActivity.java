@@ -1,4 +1,4 @@
-package com.finva.app;
+package com.dincr.app;
 
 import android.Manifest;
 import android.content.pm.PackageManager;

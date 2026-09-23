@@ -23,9 +23,8 @@
 			</array>
 		</dict>
 		<!-- Transitional: the backend returns Gmail/Outlook OAuth to one scheme for
-		     every platform, and Android still ships com.finva.app. Remove once the
-		     backend mail return URL is com.dincr.app://gmail/callback
-		     (see docs/IOS_LOCAL_SETUP.md). -->
+		     every platform (still com.finva.app). Remove once the backend mail return
+		     URL is com.dincr.app://gmail/callback (see docs/IOS_LOCAL_SETUP.md). -->
 		<dict>
 			<key>CFBundleURLName</key>
 			<string>com.dincr.app.legacy-mail-callback</string>
