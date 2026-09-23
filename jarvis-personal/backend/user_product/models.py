@@ -172,6 +172,12 @@ class GmailCandidateReviewRequest(BaseModel):
     category: str = Field(default="general", max_length=100)
 
 
+class OwnTransferConfirmRequest(BaseModel):
+    counterpart_id: int = Field(gt=0)
+    confirm_owned_accounts: Literal[True]
+    unknown_direction: Literal["in", "out"] | None = None
+
+
 class FinancialAccountIdentityRequest(BaseModel):
     ownership_status: Literal["own", "not_mine"]
     display_name: str | None = Field(default=None, max_length=120)

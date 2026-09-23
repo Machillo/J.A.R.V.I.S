@@ -93,6 +93,11 @@ export const acceptVipGmailConsent = (version) => json("/user-product/vip/gmail/
 export const syncVipGmail = () => request("/user-product/vip/gmail/sync", { method: "POST" });
 export const disconnectVipGmail = (connectionId) => request(`/user-product/vip/gmail?connection_id=${encodeURIComponent(connectionId)}`, { method: "DELETE" });
 export const getVipGmailEmails = (status = "") => request(`/user-product/vip/gmail/emails${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+export const getVipOwnTransferSuggestions = () => request("/user-product/vip/gmail/own-transfer-suggestions");
+export const confirmVipOwnTransfer = (id, counterpartId, unknownDirection = null) => json(
+  `/user-product/vip/gmail/candidates/${id}/own-transfer`, "POST",
+  { counterpart_id: counterpartId, confirm_owned_accounts: true, unknown_direction: unknownDirection },
+);
 export const acceptVipGmailCandidate = (id, corrections = null) => corrections
   ? json(`/user-product/vip/gmail/candidates/${id}/accept`, "PUT", corrections)
   : request(`/user-product/vip/gmail/candidates/${id}/accept`, { method: "POST" });

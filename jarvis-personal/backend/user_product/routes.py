@@ -4,7 +4,7 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -45,6 +45,7 @@ from backend.user_product.gmail_service import (
     sync_current_gmail,
 )
 from backend.user_product.financial_identity import confirm_financial_account, list_financial_identity
+from backend.user_product.own_transfer_review import confirm_own_transfer, list_own_transfer_suggestions
 from backend.user_product.trust_analytics import get_gmail_trust_analytics
 from backend.user_product.gmail_consent import accept_gmail_consent
 
@@ -259,6 +260,15 @@ def vip_gmail_sync():
 @router.get("/vip/gmail/emails")
 def vip_gmail_emails(status: str | None = None):
     require_feature("gmail_automation"); return list_gmail_emails(status)
+
+@router.get("/vip/gmail/own-transfer-suggestions")
+def vip_own_transfer_suggestions():
+    require_feature("gmail_automation"); return list_own_transfer_suggestions()
+
+@router.post("/vip/gmail/candidates/{candidate_id}/own-transfer")
+def vip_confirm_own_transfer(candidate_id: int, request: OwnTransferConfirmRequest):
+    require_feature("gmail_automation")
+    return confirm_own_transfer(candidate_id, request.counterpart_id, request.unknown_direction)
 
 @router.get("/vip/gmail/trust-analytics")
 def vip_gmail_trust_analytics():
