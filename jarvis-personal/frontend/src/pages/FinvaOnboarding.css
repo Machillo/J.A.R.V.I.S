@@ -318,7 +318,7 @@
 .finva-welcome-stage h1{margin:12px 0 14px;font-size:clamp(2rem,9vw,3rem);line-height:1.02;letter-spacing:-.045em}
 .finva-welcome-stage p{max-width:390px;margin:0 auto;color:#a9bacb;font-size:1rem;line-height:1.65}
 .finva-welcome-footer{display:grid;gap:18px}
-.finva-welcome-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.finva-welcome-progress{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px}
 .finva-welcome-progress span{height:4px;overflow:hidden;border-radius:999px;background:#173044}
 .finva-welcome-progress span.active{background:linear-gradient(90deg,#0ac7b2,#67e4d5);box-shadow:0 0 12px rgba(10,199,178,.25)}
 .finva-welcome-next{min-height:52px;display:flex;align-items:center;justify-content:center;gap:9px;border:1px solid rgba(103,228,213,.24);border-radius:16px;color:#031916;background:linear-gradient(180deg,#6ce9da,#28cbb8);font:inherit;font-weight:850;box-shadow:0 14px 34px rgba(10,199,178,.18)}

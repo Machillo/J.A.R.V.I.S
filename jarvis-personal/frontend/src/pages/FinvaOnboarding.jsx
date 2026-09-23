@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Crown, LogOut, Smartphone, Sparkles, Upload, WalletCards } from "lucide-react";
-import { getBillingCatalog, getOnboarding, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
+import { getBillingCatalog, getMe, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../lib/receiptPicker";
 import { markFinvaWelcomeSeen, shouldShowFinvaWelcome } from "../lib/firstRunExperience";
 import FinvaWelcomeStory from "./FinvaWelcomeStory";
+import { confirmedPlanProfile } from "../lib/planSelection";
 
 const iconMap = { free: WalletCards, basic: Sparkles, vip: Crown };
 
@@ -18,30 +19,46 @@ export default function FinvaOnboarding({ user, onComplete }) {
   const [betaAccepted, setBetaAccepted] = useState(false);
   const [expandedPlan, setExpandedPlan] = useState("");
   const [billing, setBilling] = useState(null);
+  const [billingError, setBillingError] = useState("");
   const [paymentFlow, setPaymentFlow] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState("");
   const [showWelcome, setShowWelcome] = useState(() => shouldShowFinvaWelcome(user?.id));
 
-  const hydrate = (data) => {
-    const p = data?.profile;
-    if (p) setProfile(p);
+  useEffect(() => {
+    let active = true;
+    getPlans().then((rows) => { if (active) setPlans(rows); })
+      .catch((e) => { if (active) setError(e.message); })
+      .finally(() => { if (active) setLoading(false); });
+    getMe().then((fresh) => {
+      if (active && fresh?.plan_selected) setProfile(fresh);
+    }).catch(() => {});
+    getBillingCatalog().then((catalog) => {
+      if (!active) return;
+      setBilling(catalog);
+      if (catalog?.order?.status === "payment_pending") {
+        setPaymentFlow({ order: catalog.order, payment: catalog.payment });
+      }
+    }).catch(() => { if (active) setBillingError("No pudimos confirmar los precios y la promoción. Reintentá para elegir Basic o VIP."); });
+    return () => { active = false; };
+  }, []);
+
+  const retryBilling = () => {
+    setBillingError("");
+    getBillingCatalog().then((catalog) => {
+      setBilling(catalog);
+      if (catalog?.order?.status === "payment_pending") setPaymentFlow({ order: catalog.order, payment: catalog.payment });
+    })
+      .catch(() => setBillingError("No pudimos confirmar los precios y la promoción. Reintentá para elegir Basic o VIP."));
   };
 
-  useEffect(() => {
-    Promise.all([getPlans(), getOnboarding(), getBillingCatalog()])
-      .then(([planRows, onboarding, billingCatalog]) => {
-        setPlans(planRows);
-        hydrate(onboarding);
-        setBilling(billingCatalog);
-        if (!onboarding?.profile?.plan_selected && billingCatalog?.order?.status === "payment_pending") {
-          setPaymentFlow({ order: billingCatalog.order, payment: billingCatalog.payment });
-        }
-      })
-      .catch(e => setError(e.message))
+  const retryPlans = () => {
+    setLoading(true); setError("");
+    getPlans().then(setPlans)
+      .catch((e) => setError(e.message || "No pudimos cargar los planes."))
       .finally(() => setLoading(false));
-  }, []);
+  };
 
   const receiptSubmittedAt = paymentFlow?.order?.receipt_submitted_at;
   const promotionActive = Boolean(billing?.promotion?.active);
@@ -53,9 +70,11 @@ export default function FinvaOnboarding({ user, onComplete }) {
         const next = await getBillingCatalog();
         setBilling(next);
         if (next?.order?.status === "paid" || next?.subscription?.status === "active") {
-          const onboarding = await getOnboarding();
-          hydrate(onboarding);
-          setPaymentFlow(null);
+          const activeProfile = await getMe();
+          if (activeProfile?.plan_selected && activeProfile?.subscription?.status === "active") {
+            setProfile(activeProfile);
+            setPaymentFlow(null);
+          }
         } else if (next?.order) {
           setPaymentFlow((current) => current ? { ...current, order: next.order, payment: next.payment } : current);
         }
@@ -74,6 +93,10 @@ export default function FinvaOnboarding({ user, onComplete }) {
   }, [profile, onComplete]);
 
   const choosePlan = async (code) => {
+    if (code !== "free" && !billing) {
+      setBillingError("Esperá a que podamos confirmar los precios antes de elegir este plan.");
+      return;
+    }
     setSaving(true); setError("");
     try {
       const result = await selectPlan(code, code === "free" || promotionActive ? false : betaAccepted);
@@ -83,9 +106,10 @@ export default function FinvaOnboarding({ user, onComplete }) {
         setReceipt(null);
         return;
       }
-      setProfile(result.profile);
-      const onboarding = await getOnboarding();
-      hydrate(onboarding);
+      // The plan mutation already returns the updated identity. A second
+      // request here could fail after activation and strand the onboarding UI.
+      const activeProfile = await confirmedPlanProfile(result, code, getMe);
+      setProfile(activeProfile);
     } catch (e) { setError(e.message); }
     finally { setSaving(false); }
   };
@@ -142,7 +166,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
   };
 
   if (!profile?.plan_selected && showWelcome) {
-    return <FinvaWelcomeStory onFinish={finishWelcome} />;
+    return <FinvaWelcomeStory user={profile} onFinish={finishWelcome} />;
   }
 
   if (!profile?.plan_selected && paymentFlow) {
@@ -196,17 +220,18 @@ export default function FinvaOnboarding({ user, onComplete }) {
           <button type="button" className="unified-plan-summary" aria-expanded={expanded} onClick={() => { setExpandedPlan(expanded ? "" : item.code); setBetaAccepted(false); setError(""); }}>
             <span className="unified-plan-icon"><Icon size={22}/></span>
             <span className="unified-plan-copy"><span>{item.code === "free" ? "EMPEZÁ HOY" : item.code === "basic" ? "MÁS CONTROL" : "EXPERIENCIA COMPLETA"}</span><strong>{item.name}</strong><small>{item.tagline}</small></span>
-            <span className="unified-plan-price">{item.code === "free" || promotionActive ? "₡0" : `₡${Number(item.regular_price_crc || 0).toLocaleString("es-CR")}`}<small>{item.code === "free" ? "" : promotionActive ? " hasta 31 dic" : "/mes"}</small></span>
+            <span className="unified-plan-price">{item.code === "free" ? "₡0" : !billing ? "—" : promotionActive ? "₡0" : `₡${Number(item.regular_price_crc || 0).toLocaleString("es-CR")}`}<small>{item.code === "free" || !billing ? "" : promotionActive ? " hasta 31 dic" : "/mes"}</small></span>
             {expanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
           </button>
           {expanded && <div className="unified-plan-details">
             <ul>{item.features.map(f => <li key={f}><Check size={16}/><span>{f}</span></li>)}</ul>
-            {item.code !== "free" && (promotionActive ? <div className="unified-payment-preview"><CheckCircle2 size={18}/><span>Acceso gratuito hasta el 31 de diciembre de 2026. Después costará ₡{Number(item.regular_price_crc || 0).toLocaleString("es-CR")}/mes y no se cobrará automáticamente.</span></div> : <><small className="beta-price">Precio normal: ₡{Number(item.regular_price_crc || 0).toLocaleString("es-CR")}/mes.</small><div className="unified-payment-preview"><Smartphone size={18}/><span>Al continuar generaremos el código para el detalle del SINPE y podrás subir el comprobante aquí mismo.</span></div><label className="beta-consent"><input type="checkbox" checked={betaAccepted} onChange={(e) => { setBetaAccepted(e.target.checked); setError(""); }}/><span>Acepto el precio normal de ₡{Number(item.regular_price_crc || 0).toLocaleString("es-CR")} al mes y entiendo que el plan se activa al confirmar el pago.</span></label></>)}
-            <button className="unified-plan-button" disabled={saving || (item.code !== "free" && !promotionActive && !betaAccepted)} onClick={() => choosePlan(item.code)}>{saving ? "Preparando..." : item.code === "free" ? "Empezar gratis" : promotionActive ? `Activar ${item.name} gratis` : `Continuar con ${item.name}`}</button>
+            {item.code !== "free" && billing && (promotionActive ? <div className="unified-payment-preview"><CheckCircle2 size={18}/><span>Acceso gratuito hasta el 31 de diciembre de 2026. Después costará ₡{Number(item.regular_price_crc || 0).toLocaleString("es-CR")}/mes y no se cobrará automáticamente.</span></div> : <><small className="beta-price">Precio normal: ₡{Number(item.regular_price_crc || 0).toLocaleString("es-CR")}/mes.</small><div className="unified-payment-preview"><Smartphone size={18}/><span>Al continuar generaremos el código para el detalle del SINPE y podrás subir el comprobante aquí mismo.</span></div><label className="beta-consent"><input type="checkbox" checked={betaAccepted} onChange={(e) => { setBetaAccepted(e.target.checked); setError(""); }}/><span>Acepto el precio normal de ₡{Number(item.regular_price_crc || 0).toLocaleString("es-CR")} al mes y entiendo que el plan se activa al confirmar el pago.</span></label></>)}
+            <button className="unified-plan-button" disabled={saving || (item.code !== "free" && (!billing || (!promotionActive && !betaAccepted)))} onClick={() => choosePlan(item.code)}>{saving ? "Preparando..." : item.code === "free" ? "Empezar gratis" : !billing ? "Verificando precio..." : promotionActive ? `Activar ${item.name} gratis` : `Continuar con ${item.name}`}</button>
           </div>}
         </article>;
       })}</div>}
-      {error && <p className="unified-onboarding-error">{error}</p>}
+      {error && <div className="unified-onboarding-error" role="alert">{error} {!plans.length && <button type="button" onClick={retryPlans}>Reintentar</button>}</div>}
+      {billingError && <div role="status" className="unified-onboarding-error">{billingError} <button type="button" onClick={retryBilling}>Reintentar</button></div>}
     </section>
   </main>;
 
