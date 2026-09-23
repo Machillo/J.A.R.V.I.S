@@ -1,9 +1,10 @@
 import { recordError } from "./telemetry";
 import { captureIncident } from "./incidentReporter";
+import { deviceLanguage, tx } from "./locale";
 
 export const SUPPORT_CONTEXT_KEY = "finva:support-context";
 
-const GENERIC_MESSAGE = "No pudimos completar esta acción. Intentá nuevamente o pedí ayuda a soporte.";
+const genericMessage = () => tx("No pudimos completar esta acción. Intentá nuevamente o pedí ayuda a soporte.", "We couldn’t complete this action. Try again or ask support for help.");
 
 export class FinvaApiError extends Error {
   constructor(message, { status, errorId, requestId, retryCount, path, method, technicalMessage } = {}) {
@@ -25,13 +26,15 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
   const deletionId = typeof rawDetail === "object" ? rawDetail?.deletion_id || "" : "";
   const deletionStage = typeof rawDetail === "object" ? rawDetail?.stage || "" : "";
   const status = response?.status || 0;
-  let message = GENERIC_MESSAGE;
-  if (status === 401) message = "Tu sesión venció. Iniciá sesión nuevamente.";
-  else if (status === 402) message = "Esta función necesita una suscripción activa.";
-  else if (status === 403) message = detail || "No tenés permiso para realizar esta acción.";
-  else if (status === 404) message = detail || "No encontramos la información solicitada.";
-  else if (status === 409 || status === 422) message = detail || "Revisá la información e intentá nuevamente.";
-  else if (status >= 400 && status < 500) message = detail || "No pudimos procesar la solicitud.";
+  // Backend details are written in Spanish; English sessions get the status message instead.
+  const shownDetail = deviceLanguage() === "es" ? detail : "";
+  let message = genericMessage();
+  if (status === 401) message = tx("Tu sesión venció. Iniciá sesión nuevamente.", "Your session expired. Please sign in again.");
+  else if (status === 402) message = tx("Esta función necesita una suscripción activa.", "This feature needs an active subscription.");
+  else if (status === 403) message = shownDetail || tx("No tenés permiso para realizar esta acción.", "You don’t have permission to do this.");
+  else if (status === 404) message = shownDetail || tx("No encontramos la información solicitada.", "We couldn’t find what you asked for.");
+  else if (status === 409 || status === 422) message = shownDetail || tx("Revisá la información e intentá nuevamente.", "Check the information and try again.");
+  else if (status >= 400 && status < 500) message = shownDetail || tx("No pudimos procesar la solicitud.", "We couldn’t process the request.");
 
   const error = new FinvaApiError(message, {
     status,
@@ -52,7 +55,7 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
       path,
       method,
       errorType: `http_${status || "network"}`,
-      summary: "DINCR no pudo completar una acción.",
+      summary: tx("DINCR no pudo completar una acción.", "DINCR couldn’t complete an action."),
     };
     window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));
     captureIncident(incident);
@@ -64,8 +67,8 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
 export function apiNetworkError(cause, path, method = "GET", autoReport = true) {
   const queued = Boolean(cause?.finvaOperationQueued);
   const error = new FinvaApiError(queued
-    ? "Guardamos este cambio en el dispositivo. DINCR lo enviará cuando vuelva la conexión."
-    : GENERIC_MESSAGE, {
+    ? tx("Guardamos este cambio en el dispositivo. DINCR lo enviará cuando vuelva la conexión.", "We saved this change on your device. DINCR will send it when you’re back online.")
+    : genericMessage(), {
     status: 0,
     errorId: cause?.finvaRequestId || "",
     requestId: cause?.finvaRequestId || "",
@@ -78,7 +81,7 @@ export function apiNetworkError(cause, path, method = "GET", autoReport = true) 
   const incident = {
     screen: path, errorReference: error.errorId, requestId: error.requestId,
     retryCount: error.retryCount, status: 0, path, method,
-    errorType: cause?.name || "network_error", summary: "DINCR perdió comunicación con el servicio.",
+    errorType: cause?.name || "network_error", summary: tx("DINCR perdió comunicación con el servicio.", "DINCR lost connection to the service."),
   };
   if (autoReport) {
     window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));
