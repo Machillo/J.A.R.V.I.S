@@ -38,4 +38,9 @@ const [, returnScheme, returnHost] = backend.match(/FINVA_GMAIL_RETURN_URL", "([
 assert.ok(links.includes(`${returnScheme}://${returnHost}/callback`), "Android receives the mail OAuth return");
 assert.match(read("ios-dincr/App/App/Info.plist"), new RegExp(`<string>${returnScheme.replaceAll(".", "\\.")}</string>`), "iOS receives the mail OAuth return");
 
+// Apple sign-in is iOS-only until the Apple provider is enabled for Android users.
+const login = read("src/pages/Login.jsx");
+assert.match(login, /const offersApple = detectNativePlatform\(\) !== "android"/);
+assert.match(login, /\{offersApple && <button[^\n]*login\("apple"\)/);
+
 console.log("DINCR Android is com.dincr.app and receives login and mail OAuth returns.");
