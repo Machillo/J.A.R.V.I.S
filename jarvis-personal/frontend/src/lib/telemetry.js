@@ -36,7 +36,7 @@ export const trackScreen = (screenName, surface = "unknown") => {
   safely(() => FirebaseAnalytics.setCurrentScreen({ screenName: cleanScreen, screenClassOverride: cleanSurface }));
   safely(() => FirebaseCrashlytics.setCustomKey({ key: "screen", value: cleanScreen, type: "string" }));
   safely(() => FirebaseCrashlytics.log({ message: `screen:${cleanScreen}` }));
-  captureProductEvent("screen_viewed", { screen: cleanScreen, surface: cleanSurface });
+  captureProductEvent("screen_viewed", { screen: cleanScreen.replace(/^finva_/, "") });
 };
 
 export const trackEvent = (name, params = {}) => {

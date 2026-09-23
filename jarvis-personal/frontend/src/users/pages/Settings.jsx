@@ -68,6 +68,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
       const response = await selectPlan(planCode, false);
       const activeProfile = await confirmedPlanProfile(response, planCode, getMe);
       identifyTelemetryUser(activeProfile);
+      trackEvent("plan_selected", { plan: planCode });
       trackEvent("plan_access_granted", { plan: planCode, access_type: planCode === "free" ? "free" : "promotion" });
       onUserChange?.(activeProfile);
       setConfirming("");

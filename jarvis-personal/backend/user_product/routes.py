@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
+from backend.product_ops.posthog_events import capture_backend_event
 
 from backend.auth.saas import require_feature
 from backend.user_product.models import (
@@ -251,8 +252,11 @@ def vip_gmail_consent(request: GmailConsentRequest):
     return accept_gmail_consent(accepted=request.accepted, version=request.version)
 
 @router.get("/vip/gmail/callback")
-def vip_gmail_callback(code: str | None = None, state: str | None = None, error: str | None = None):
-    return finish_gmail_connection(code=code, state=state, error=error)
+def vip_gmail_callback(background_tasks: BackgroundTasks, code: str | None = None, state: str | None = None, error: str | None = None):
+    response = finish_gmail_connection(code=code, state=state, error=error)
+    if response.headers.get("location", "").endswith("gmail=connected"):
+        background_tasks.add_task(capture_backend_event, "gmail_connected")
+    return response
 
 @router.post("/vip/mail/microsoft/connect")
 def vip_microsoft_connect():

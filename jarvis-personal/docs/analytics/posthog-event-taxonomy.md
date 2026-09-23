@@ -1,58 +1,99 @@
-# DINCR product analytics
+# DINCR: PostHog en producción
 
-PostHog is the behavioral analytics layer for DINCR. Operational records remain
-in PostgreSQL/Supabase and crash diagnostics remain in Firebase.
+## Auditoría de `main` antes del cambio
 
-## Privacy contract
+- Existían `posthog-js`, `src/lib/productAnalytics.js`, eventos puntuales y la
+  infraestructura Firebase Analytics/Crashlytics. La clave `VITE_POSTHOG_KEY`
+  estaba vacía en `.env.example`; ningún evento podía confirmarse en producción.
+- La versión anterior permitía todas las propiedades que empezaran con `$` y
+  valores libres como nombres de bancos. Ahora se eliminan esas propiedades.
+- Render guarda `product_events` en PostgreSQL: no son eventos PostHog y no se
+  reenvían automáticamente. No había SDK Python ni clave PostHog en Render.
 
-- Analytics starts only after the DINCR user has accepted the active legal documents.
-- Owner, admin and J.A.R.V.I.S. sessions are excluded.
-- Autocapture, session replay, console capture and pageview capture are disabled.
-- Never send email addresses or bodies, names, subjects, senders, descriptions,
-  amounts, balances, account/card identifiers, tokens or free-form text.
-- Counts from Gmail sync are bucketed (`0`, `1`, `2_5`, `6_20`, `21_plus`).
-- `bank` and `institution_country` are normalized categorical values only.
+## Contrato de privacidad
 
-The runtime allowlist lives in `src/lib/productAnalytics.js`. A new event or
-property must be added there deliberately before PostHog can receive it.
+- Solo la compilación **nativa DINCR** (Android/iOS), después de aceptar las
+  versiones legales vigentes, envía eventos explícitos. Se excluyen JARVIS,
+  propietario/admin, Vercel y la landing pública.
+- PostHog usa un identificador **anónimo del dispositivo** que cambia al salir
+  de la sesión. No se llama `identify`, no se crean perfiles de persona y no se
+  envían ID de cuenta/workspace, correo ni etiquetas libres.
+- Desactivados: autocapture, pageviews automáticas, Replay, excepciones,
+  encuestas, flags, parámetros de campañas, referente y geolocalización por IP.
+  `before_send` reconstruye el evento con una lista cerrada de propiedades.
+- El servidor solo emite eventos agregados `gmail_connected` y
+  `account_deletion_completed`, usando un ID aleatorio **nuevo por evento**;
+  no envía IDs, IP del usuario, Gmail ni datos financieros. Se envían después
+  de una operación exitosa y en `BackgroundTasks`. Se mantiene el registro
+  operativo existente en PostgreSQL, que no se reenvía a PostHog.
+- Si falta configuración o PostHog falla, la app y la API continúan operando.
 
-## Event catalog
+## Eventos del móvil
 
-| Event | Purpose | Safe properties |
+`app_opened`, `app_resumed`, `screen_viewed`, `onboarding_started`,
+`onboarding_completed`, `plan_selected`, `plan_access_granted`,
+`gmail_connection_started`, `mail_connected` (Outlook), `gmail_sync_started`,
+`gmail_sync_completed`, `gmail_sync_failed`, `gmail_disconnected`,
+`financial_account_confirmed`, `financial_account_ownership_reviewed`,
+`email_candidate_reviewed`, `transaction_candidate_reviewed`, `transaction_confirmed`,
+`transaction_rejected`, `account_deletion_started`,
+`account_deletion_failed`.
+
+`financial_account_detected` está reservado en la lista, pero no se emite
+todavía: no hay un punto de creación único confirmado para todos los proveedores.
+`gmail_connected` se confirma en el callback OAuth del backend; una conexión
+Outlook/Hotmail se registra como `mail_connected` desde la app.
+
+## Propiedades permitidas
+
+`plan` (free/basic/vip), `platform` (android/ios), `screen` (lista cerrada de
+destinos), `access_type` (free/promotion), `source_type` (email/manual),
+`decision` (accepted/corrected/rejected), `ownership_status` (own/not_mine),
+`scan_scope` (recent/year_to_date), `success`, `initial_scan_complete`,
+`app_version` (versión numérica) y `duration_ms` (redondeada al segundo y
+limitada a 60 s). El contrato está en `frontend/src/lib/analyticsContract.js`.
+Ninguna cifra económica, nombre de banco, correo, ruta/URL, descripción, saldo,
+deuda, token, documento ni valor escrito por un usuario está permitido.
+
+## Variables manuales
+
+| Destino | Variable | Valor |
 | --- | --- | --- |
-| `screen_viewed` | Product navigation and feature adoption | `screen`, `surface`, `plan`, `platform` |
-| `app_resumed` | Returning use | `plan`, `platform` |
-| `gmail_connection_started` | Gmail activation funnel | `plan`, `platform` |
-| `gmail_sync_completed` | Sync activation and usefulness | `scan_scope`, `initial_scan_complete`, count buckets |
-| `gmail_disconnected` | Gmail churn signal | `plan`, `platform` |
-| `email_candidate_reviewed` | Trust and parser outcomes | `decision`, `bank`, `institution_country`, `source_type`, `is_internal_transfer` |
-| `financial_account_ownership_reviewed` | Detected-account trust | `ownership_status`, `bank`, `institution_country` |
-| `plan_access_granted` | Plan activation during free launch and later access changes | `plan`, `access_type` (`free` or `promotion`), `platform` |
+| Compilación móvil `jarvis-personal/frontend` (Mac/CI) | `VITE_POSTHOG_KEY` | **Project API key** del proyecto DINCR, nunca personal/admin API key |
+| Compilación móvil `jarvis-personal/frontend` (Mac/CI) | `VITE_POSTHOG_HOST` | `https://us.i.posthog.com` o `https://eu.i.posthog.com`, según la región real |
+| Backend Render (opcional para dos eventos agregados) | `POSTHOG_API_KEY` | La **misma Project API key**, no una clave administrativa |
+| Backend Render (opcional para dos eventos agregados) | `POSTHOG_HOST` | El **mismo host** que el build móvil |
 
-## Dashboards
+Render **no** inyecta variables `VITE_*` en una APK ya compilada. Recompilar
+`npm run build` y sincronizar Capacitor para ambos sistemas operativos. La
+landing Cloudflare Pages no necesita ni debe recibir estas variables.
+Sin las claves, la integración permanece desactivada de forma segura.
 
-- **Producto y Retención:** activation, feature adoption, return usage and plan.
-- **Gmail y Confianza:** connection, sync, accepted/corrected/rejected candidates.
-- **Retención VIP:** VIP return usage and lifecycle feature adoption.
-- **Mercado:** country, institution and platform signals from categorical events.
+## Revisión legal antes de encender las claves
 
-Saved insights are created only after a real deployment emits each event. This
-prevents synthetic production data and dashboards that silently query nonexistent
-events.
+La Política de Privacidad v2 menciona eventos de uso, diagnósticos, proveedores
+de monitoreo y transferencias internacionales, pero **no nombra PostHog**, su
+región ni la retención de identificadores anónimos. Antes de activar PostHog
+en producción, revisar jurídicamente si hay que mencionar proveedor, país,
+propósitos de analítica, período de conservación, revocación y eliminación; si
+es un cambio material, publicar versión nueva y renovar la aceptación. No se
+modificó el texto legal en esta implementación.
 
-## Deployment
+## Verificación tras configurar y desplegar
 
-Set these frontend environment variables in the DINCR build environment and rebuild the APK/IPA:
+1. En PostHog, verificar organización/proyecto DINCR, host regional y obtener
+   **Project API key** en Project Settings. No copiar una personal API key.
+2. Definir variables en el entorno de build de la APK/IPA y, si se activan los
+   eventos agregados del backend, en Render. Desplegar la nueva versión.
+3. Abrir la APK nueva en Android/iOS con una cuenta normal que aceptó la política.
+   En PostHog → Activity / Live events buscar `app_opened`, `screen_viewed`,
+   `plan_selected` o `gmail_sync_started`.
+4. Inspeccionar un evento: confirmar que solo lleva las propiedades permitidas;
+   revisar que NO contiene URL, correo, banco, cuentas ni montos. Confirmar
+   ausencia de Replay y de eventos de JARVIS o la landing.
+5. Para probar Render, completar una conexión Gmail real y buscar
+   `gmail_connected` como evento agregado. La eliminación de una cuenta real
+   es irreversible: no usarla como prueba de humo.
 
-```text
-VITE_POSTHOG_KEY=<project token from PostHog>
-VITE_POSTHOG_HOST=https://us.i.posthog.com
-```
-
-The project token is public by design but must still be managed as deployment
-configuration so development, staging and production projects can remain separate.
-Existing APKs compiled without `VITE_POSTHOG_KEY` cannot start sending events from
-this code change alone; distribute a new build and verify real events in the
-connected PostHog project. The event captures plan access, not payment or
-financial contents. After store purchases are implemented, introduce a verified
-`store` access type and compare cohorts by event time and plan in PostHog.
+No hay retroactividad: los usuarios con APK anterior o sin `VITE_POSTHOG_KEY`
+seguirán sin emitir nuevos eventos hasta instalar una versión recompilada.

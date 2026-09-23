@@ -58,11 +58,11 @@ export default function GmailAutomation() {
       else await acceptVipGmailCandidate(item.candidate_id, corrections);
       trackEvent("email_candidate_reviewed", {
         decision: action === "reject" ? "rejected" : corrections ? "corrected" : "accepted",
-        bank: item.bank || "unknown",
-        institution_country: item.institution_country || "unknown",
-        source_type: item.source_type || "email",
-        is_internal_transfer: Boolean(item.is_internal_transfer),
+        source_type: "email",
       });
+      trackEvent("transaction_candidate_reviewed", { decision: action === "reject" ? "rejected" : corrections ? "corrected" : "accepted", source_type: "email" });
+      if (action === "reject") trackEvent("transaction_rejected", { source_type: "email" });
+      else if (!item.is_internal_transfer) trackEvent("transaction_confirmed", { source_type: "email" });
       setEditing(null);
       setMessage(action === "reject" ? tx("Correo descartado.", "Email dismissed.") : item.is_internal_transfer ? tx("Transferencia interna confirmada sin contarla como gasto o ingreso.", "Internal transfer confirmed without counting it as income or expense.") : tx("Movimiento guardado.", "Transaction saved."));
       await load();
@@ -75,10 +75,9 @@ export default function GmailAutomation() {
     try {
       await confirmVipFinancialAccount(item.id, ownershipStatus);
       trackEvent("financial_account_ownership_reviewed", {
-        bank: item.bank_name || "unknown",
-        institution_country: item.institution_country || "unknown",
         ownership_status: ownershipStatus,
       });
+      if (ownershipStatus === "own") trackEvent("financial_account_confirmed");
       setMessage(ownershipStatus === "own" ? tx("Cuenta confirmada como propia.", "Account confirmed as yours.") : tx("Cuenta marcada como ajena.", "Account marked as not yours."));
       await load();
     } catch (err) { setError(err.message || tx("No se pudo confirmar la cuenta.", "Couldn’t confirm the account.")); }
@@ -109,6 +108,7 @@ export default function GmailAutomation() {
       if (!url?.startsWith("com.finva.app://gmail/callback")) return;
       try { await Browser.close(); } catch { /* El navegador ya puede estar cerrado. */ }
       const result = new URL(url).searchParams.get("microsoft");
+      if (result === "connected") trackEvent("mail_connected", { source_type: "email" });
       if (result && result !== "connected") setError(tx(`No se pudo conectar Outlook (${result}). Revisá la configuración o volvé a intentarlo.`, `Couldn’t connect Outlook (${result}). Check the configuration or try again.`));
       await load();
     }).then((listener) => { appUrlListener = listener; });
@@ -126,7 +126,7 @@ export default function GmailAutomation() {
         await acceptVipGmailConsent(gmail.consent.version);
       }
       const response = await (provider === "microsoft" ? connectVipMicrosoftMail() : connectVipGmail());
-      trackEvent("gmail_connection_started", { provider });
+      trackEvent("gmail_connection_started", { source_type: "email" });
       if (!response?.authorization_url) throw new Error(tx("El proveedor no devolvió una dirección de autorización.", "The provider did not return an authorization URL."));
       await Browser.open({ url: response.authorization_url, presentationStyle: "popover" });
     } catch (err) { setError(err.message || tx("No se pudo abrir Google.", "Couldn’t open Google.")); }
@@ -134,14 +134,14 @@ export default function GmailAutomation() {
   };
 
   const sync = async () => {
+    trackEvent("gmail_sync_started", { source_type: "email" });
     setBusy("sync"); setError(""); setMessage("");
     try {
       const result = await syncVipGmail();
       trackEvent("gmail_sync_completed", {
         scan_scope: result.scan_scope || "unknown",
         initial_scan_complete: Boolean(result.initial_scan_complete),
-        auto_saved: result.auto_saved || 0,
-        pending: result.pending || 0,
+        success: result.status === "ok",
       });
       await load();
       const progress = result.scan_scope === "year_to_date" && !result.initial_scan_complete
@@ -149,6 +149,7 @@ export default function GmailAutomation() {
         : "";
       setMessage(tx(`Listo: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`, `Done: ${result.auto_saved || 0} new transactions and ${result.pending || 0} to review.`) + progress + (result.failed_connections?.length ? tx(" Algunas conexiones necesitan atención.", "Some connections need attention.") : ""));
     } catch (err) {
+      trackEvent("gmail_sync_failed", { success: false });
       setError(err.message || tx("No se pudo actualizar Gmail.", "Couldn’t refresh Gmail."));
       await load();
     }

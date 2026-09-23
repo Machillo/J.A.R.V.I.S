@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, BackgroundTasks, Request
+from backend.product_ops.posthog_events import capture_backend_event
 
 from backend.auth.models import AllowedUserRequest, CheckAccessRequest, LegalAcceptanceRequest, PlanSelectionRequest, ProfileSetupRequest, UnifiedOnboardingRequest
 from backend.auth.legal import accept_legal_documents
@@ -60,8 +61,10 @@ def me():
 
 
 @router.delete("/me")
-def remove_my_account():
-    return delete_current_account()
+def remove_my_account(background_tasks: BackgroundTasks):
+    result = delete_current_account()
+    background_tasks.add_task(capture_backend_event, "account_deletion_completed")
+    return result
 
 
 @router.post("/legal/accept")
