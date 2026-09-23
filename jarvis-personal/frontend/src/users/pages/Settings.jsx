@@ -8,12 +8,16 @@ import { deviceLanguage } from "../../lib/locale";
 import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
 import AccountActions from "../../products/finva/components/AccountActions";
 import { confirmedPlanProfile } from "../../lib/planSelection";
+import { planDisplayName } from "../../lib/planCopy";
 import { identifyTelemetryUser, trackEvent } from "../../lib/telemetry";
 import LegalLink from "../../components/LegalLink";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
 const icons = { free: WalletCards, basic: Sparkles, vip: Crown };
+const ROLE_LABELS = { owner: ["Propietario", "Owner"], admin: ["Administrador", "Admin"], user: ["Usuario", "User"] };
+const roleLabel = (role) => ROLE_LABELS[role] ? tx(...ROLE_LABELS[role]) : role;
+const pricesUnavailable = () => tx("No pudimos confirmar los precios. Reintentá antes de elegir Basic o VIP.", "We couldn’t confirm prices. Retry before choosing Basic or VIP.");
 
 export default function Settings({ user, onUserChange, onLogout }) {
   const [plans, setPlans] = useState([]);
@@ -36,23 +40,23 @@ export default function Settings({ user, onUserChange, onLogout }) {
   useEffect(() => {
     let active = true;
     getPlans().then((availablePlans) => { if (active) setPlans(availablePlans); })
-      .catch((err) => { if (active) setError(err.message || "No se pudieron cargar los planes."); })
+      .catch((err) => { if (active) setError(err.message || tx("No se pudieron cargar los planes.", "We couldn’t load the plans.")); })
       .finally(() => { if (active) setLoading(false); });
     getBillingCatalog().then((catalog) => { if (active) setBilling(catalog); })
-      .catch(() => { if (active) setBillingError("No pudimos confirmar los precios. Reintentá antes de elegir Basic o VIP."); });
+      .catch(() => { if (active) setBillingError(pricesUnavailable()); });
     return () => { active = false; };
   }, []);
 
   const retryBilling = () => {
     setBillingError("");
     getBillingCatalog().then(setBilling)
-      .catch(() => setBillingError("No pudimos confirmar los precios. Reintentá antes de elegir Basic o VIP."));
+      .catch(() => setBillingError(pricesUnavailable()));
   };
 
 
   const openPlanDialog = (planCode) => {
     if (planCode === currentPlan) return;
-    if (planCode !== "free" && !billing) { setError("Confirmá los precios antes de elegir un plan de pago."); return; }
+    if (planCode !== "free" && !billing) { setError(tx("Confirmá los precios antes de elegir un plan de pago.", "Confirm prices before choosing a paid plan.")); return; }
     setConfirming(planCode);
     setMessage("");
     setError("");
@@ -73,9 +77,10 @@ export default function Settings({ user, onUserChange, onLogout }) {
       trackEvent("plan_access_granted", { plan: planCode, access_type: planCode === "free" ? "free" : "promotion" });
       onUserChange?.(activeProfile);
       setConfirming("");
-      setMessage(`Plan cambiado a ${activeProfile.subscription.plan.toUpperCase()}.`);
+      const newPlan = activeProfile.subscription.plan;
+      setMessage(tx(`Plan cambiado a ${newPlan === "free" ? "Gratis" : newPlan.toUpperCase()}.`, `Plan changed to ${newPlan === "free" ? "Free" : newPlan.toUpperCase()}.`));
     } catch (err) {
-      setError(err.message || "No se pudo cambiar el plan.");
+      setError(err.message || tx("No se pudo cambiar el plan.", "We couldn’t change the plan."));
     } finally {
       setChanging("");
     }
@@ -91,10 +96,10 @@ export default function Settings({ user, onUserChange, onLogout }) {
 
       <div className="account-card">
         <div>
-          <strong>{user?.display_name || "Usuario"}</strong>
+          <strong>{user?.display_name || tx("Usuario", "User")}</strong>
           <small>{user?.email}</small>
         </div>
-        <span className="role-pill">{user?.role}</span>
+        <span className="role-pill">{roleLabel(user?.role)}</span>
       </div>
 
       <AccountSecurity user={user} />
@@ -120,8 +125,8 @@ export default function Settings({ user, onUserChange, onLogout }) {
           {currentPlan === "vip" ? <Crown size={24} /> : currentPlan === "basic" ? <Sparkles size={24} /> : <WalletCards size={24} />}
         </div>
         <div className="current-plan-copy">
-          <strong>{currentPlanInfo?.name || currentPlan.toUpperCase()}</strong>
-          <span>{currentPlanInfo?.tagline || "Plan personal DINCR"}</span>
+          <strong>{currentPlanInfo?.name || planDisplayName(currentPlan, currentPlan.toUpperCase())}</strong>
+          <span>{currentPlanInfo?.tagline || tx("Plan personal DINCR", "DINCR personal plan")}</span>
         </div>
         <span className="plan-status-pill">{tx("Actual","Current")}</span>
       </article>
@@ -130,7 +135,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
         <div>
           <p className="eyebrow">{tx("Desarrollo", "Development")}</p>
           <h2>{tx("Cambiar de plan","Change plan")}</h2>
-          <span>{!billing ? "Estamos confirmando los precios de Basic y VIP." : promotionActive ? "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático." : "Las compras de Basic y VIP desde Google Play y App Store estarán disponibles más adelante."}</span>
+          <span>{!billing ? tx("Estamos confirmando los precios de Basic y VIP.", "We’re confirming Basic and VIP prices.") : promotionActive ? tx("Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático.", "Basic and VIP are free until December 31, 2026. There will be no automatic charge.") : tx("Las compras de Basic y VIP desde Google Play y App Store estarán disponibles más adelante.", "Basic and VIP purchases through Google Play and the App Store will be available later.")}</span>
         </div>
       </div>
 
@@ -171,7 +176,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
         </div>
       )}
 
-      {billingError && <p className="onboarding-error" role="status">{billingError} <button type="button" onClick={retryBilling}>Reintentar</button></p>}
+      {billingError && <p className="onboarding-error" role="status">{billingError} <button type="button" onClick={retryBilling}>{tx("Reintentar", "Retry")}</button></p>}
 
       {message && <p className="success-banner">{message}</p>}
       {!confirming && error && <p className="onboarding-error">{error}</p>}
@@ -185,7 +190,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
             <div className="plan-dialog-icon"><SelectedIcon size={28}/></div>
             <p className="eyebrow">{tx("Confirmar cambio","Confirm change")}</p>
             <h2 id="plan-dialog-title">{tx("Cambiar a", "Switch to")} {selected?.name || confirming.toUpperCase()}</h2>
-            <p>{selected?.tagline || "Tu nuevo plan DINCR"}</p>
+            <p>{selected?.tagline || tx("Tu nuevo plan DINCR", "Your new DINCR plan")}</p>
             {confirming !== "free" && <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio previsto será ${confirming === "basic" ? "₡2.990" : "₡4.990"}/mes, sin cobro automático.`, `This plan will be free until December 31, 2026. From January its planned price will be ${confirming === "basic" ? "₡2,990" : "₡4,990"}/month, with no automatic charge.`)}</span></div>}
             {error && <div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
             <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>{tx("Cancelar","Cancel")}</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? tx("Procesando...","Processing...") : `${tx("Confirmar","Confirm")} ${selected?.name || confirming.toUpperCase()}`}</button></div>
