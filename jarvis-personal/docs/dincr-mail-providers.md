@@ -16,9 +16,9 @@ guardan en Supabase Vault en el backend y se eliminan al desconectar.
    `offline_access` se solicita para sincronizaciones posteriores. Crear un
    client secret para el backend. **No** ponerlo en el frontend, la APK ni Git.
 4. Configurar solamente en el backend:
-   - `FINVA_MICROSOFT_CLIENT_ID`
-   - `FINVA_MICROSOFT_CLIENT_SECRET`
-   - `FINVA_MICROSOFT_REDIRECT_URI` (idéntico al registrado)
+   - `DINCR_MICROSOFT_CLIENT_ID`
+   - `DINCR_MICROSOFT_CLIENT_SECRET`
+   - `DINCR_MICROSOFT_REDIRECT_URI` (idéntico al registrado)
 5. Desplegar backend y APK actualizados. La opción de Outlook permanece
    desactivada hasta que las tres variables estén configuradas.
 6. Probar autorización, primer escaneo, otro Gmail conectado, revisión de un

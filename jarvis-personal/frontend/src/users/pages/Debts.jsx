@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronRight, CreditCard, Plus } from "lucide-react";
 import { createDebt, deleteDebt, getDebts, payDebt, updateDebt } from "../services/jarvisApi";
-import { AmountDialog, ConfirmDialog } from "../components/FinvaDialog";
-import FinvaFormSheet from "../components/FinvaFormSheet";
+import { AmountDialog, ConfirmDialog } from "../components/DincrDialog";
+import DincrFormSheet from "../components/DincrFormSheet";
 import { deviceLanguage, localeTag } from "../../lib/locale";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
@@ -21,7 +21,7 @@ const monthsLeft = (debt) => {
 };
 
 function DebtFields({ value, setValue, advanced }) {
-  return <div className="finva-compact-fields">
+  return <div className="dincr-compact-fields">
     <label><span>{tx("Nombre de la deuda", "Debt name")}</span><input required placeholder={tx("Ej. Tarjeta BAC", "E.g. BAC credit card")} value={value.name} onChange={(e) => setValue({...value,name:e.target.value})}/></label>
     {advanced && <label><span>{tx("Tipo", "Type")}</span><select value={value.debt_type} onChange={(e) => setValue({...value,debt_type:e.target.value})}><option value="credit_card">{tx("Tarjeta", "Credit card")}</option><option value="loan">{tx("Préstamo", "Loan")}</option><option value="other">{tx("Otra", "Other")}</option></select></label>}
     <label><span>{tx("Saldo pendiente", "Outstanding balance")}</span><input required type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.remaining_amount} onChange={(e) => setValue({...value,remaining_amount:e.target.value})}/></label>
@@ -108,11 +108,11 @@ export default function Debts({ plan = "free" }) {
     <button className="free-primary-button" type="button" onClick={() => setCreating(true)}><Plus size={18}/>{tx("Agregar deuda", "Add debt")}</button>
   </section>;
 
-  const content = !advanced ? freeContent : <section className="content-first-page finva-debts-page">
+  const content = !advanced ? freeContent : <section className="content-first-page dincr-debts-page">
     <div className="hero"><span>{advanced ? "DINCR · BASIC" : "DINCR · FREE"}</span><h1>{tx("Deudas", "Debts")}</h1><p>{advanced ? tx("Gestión completa con tasa, plazo y finalización estimada.", "Complete management with interest, term, and estimated payoff.") : tx("Saldos, pagos y progreso visual, sin recomendaciones.", "Balances, payments, and visual progress without recommendations.")}</p></div>
-    {!advanced && <article className="finva-free-debt-summary"><small>{tx("SALDO TOTAL", "TOTAL BALANCE")}</small><strong>{money(totalBalance)}</strong><span>{rows.length} {rows.length === 1 ? tx("deuda registrada", "recorded debt") : tx("deudas registradas", "recorded debts")}</span></article>}
+    {!advanced && <article className="dincr-free-debt-summary"><small>{tx("SALDO TOTAL", "TOTAL BALANCE")}</small><strong>{money(totalBalance)}</strong><span>{rows.length} {rows.length === 1 ? tx("deuda registrada", "recorded debt") : tx("deudas registradas", "recorded debts")}</span></article>}
     {error && <div className="panel error">{error}</div>}
-    <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><CreditCard size={20}/></span><div><strong>{tx("Agregar deuda", "Add debt")}</strong><small>{tx("Registrá una nueva obligación", "Record a new obligation")}</small></div><Plus size={19}/></button>
+    <button className="dincr-add-strip" type="button" onClick={() => setCreating(true)}><span><CreditCard size={20}/></span><div><strong>{tx("Agregar deuda", "Add debt")}</strong><small>{tx("Registrá una nueva obligación", "Record a new obligation")}</small></div><Plus size={19}/></button>
 
     <div className="debt-grid content-first-grid">{rows.length ? rows.map((debt) => {
       const total = Math.max(Number(debt.total_amount) || Number(debt.remaining_amount) || 1,1);
@@ -124,21 +124,21 @@ export default function Debts({ plan = "free" }) {
         <p>{Number(progress).toFixed(1)}% {tx("pagado · cuota", "paid · payment")} {money(debt.monthly_payment)}</p>
         {advanced && <div className="record-meta"><span>{tx("Próximo pago", "Next payment")}: {(debt.next_payment_date || debt.payment_day) ? `${tx("día", "day")} ${debt.payment_day || String(debt.next_payment_date).slice(8,10)}` : tx("sin fecha", "no date")}</span><span>{tx("Finalización", "Payoff")}: {months ? `~${months} ${tx("meses", "months")}` : tx("faltan datos", "missing data")}</span></div>}
         <div className="actions">
-          <button className="finva-button finva-button-primary" type="button" onClick={() => { setPayment(debt); setPaymentAmount(""); }}>{tx("Registrar pago", "Record payment")}</button>
-          {advanced && <button className="finva-button finva-button-secondary" type="button" onClick={() => setEdit({...debt})}>{tx("Editar", "Edit")}</button>}
-          <button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(debt)}>{tx("Eliminar", "Delete")}</button>
+          <button className="dincr-button dincr-button-primary" type="button" onClick={() => { setPayment(debt); setPaymentAmount(""); }}>{tx("Registrar pago", "Record payment")}</button>
+          {advanced && <button className="dincr-button dincr-button-secondary" type="button" onClick={() => setEdit({...debt})}>{tx("Editar", "Edit")}</button>}
+          <button className="dincr-button dincr-button-danger" type="button" onClick={() => setDeleting(debt)}>{tx("Eliminar", "Delete")}</button>
         </div>
       </article>;
-    }) : <div className="panel finva-empty-state">{tx("No tenés deudas registradas.", "You have no recorded debts.")}</div>}</div>
+    }) : <div className="panel dincr-empty-state">{tx("No tenés deudas registradas.", "You have no recorded debts.")}</div>}</div>
 
   </section>;
 
-  return <>{content}<FinvaFormSheet open={creating} eyebrow={tx("Nueva deuda", "New debt")} title={tx("Agregar deuda", "Add debt")} onClose={() => setCreating(false)}>
-      <form className="form finva-sheet-form" onSubmit={submit}><DebtFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar deuda", "Save debt")}</button></form>
-    </FinvaFormSheet>
-    <FinvaFormSheet open={Boolean(edit)} eyebrow={tx("Deuda", "Debt")} title={tx("Editar deuda", "Edit debt")} onClose={() => setEdit(null)}>
-      {edit && <form className="form finva-sheet-form" onSubmit={save}><DebtFields value={edit} setValue={setEdit} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}
-    </FinvaFormSheet>
+  return <>{content}<DincrFormSheet open={creating} eyebrow={tx("Nueva deuda", "New debt")} title={tx("Agregar deuda", "Add debt")} onClose={() => setCreating(false)}>
+      <form className="form dincr-sheet-form" onSubmit={submit}><DebtFields value={form} setValue={setForm} advanced={advanced}/><button className="dincr-button dincr-button-primary">{tx("Guardar deuda", "Save debt")}</button></form>
+    </DincrFormSheet>
+    <DincrFormSheet open={Boolean(edit)} eyebrow={tx("Deuda", "Debt")} title={tx("Editar deuda", "Edit debt")} onClose={() => setEdit(null)}>
+      {edit && <form className="form dincr-sheet-form" onSubmit={save}><DebtFields value={edit} setValue={setEdit} advanced={advanced}/><button className="dincr-button dincr-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}
+    </DincrFormSheet>
     <AmountDialog open={Boolean(payment)} title={tx("Registrar pago", "Record payment")} description={payment ? `Aplicar un pago a ${payment.name}.` : ""} value={paymentAmount} onValueChange={setPaymentAmount} confirmLabel={tx("Registrar pago", "Record payment")} onConfirm={registerPayment} onClose={() => { if (!busyDialog) setPayment(null); }} busy={busyDialog}/>
     <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar deuda", "Delete debt")} description={deleting ? tx(`Se eliminará ${deleting.name}. Esta acción no se puede deshacer.`, `${deleting.name} will be deleted. This action cannot be undone.`) : ""} onConfirm={removeDebt} onClose={() => { if (!busyDialog) setDeleting(null); }} busy={busyDialog}/>
   </>;

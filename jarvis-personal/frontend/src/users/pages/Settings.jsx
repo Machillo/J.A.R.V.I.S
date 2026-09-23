@@ -5,8 +5,8 @@ import AccountSecurity from "../components/AccountSecurity";
 import AppearanceSelector from "../../components/AppearanceSelector";
 import AppLockSettings from "../components/AppLockSettings";
 import { deviceLanguage } from "../../lib/locale";
-import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
-import AccountActions from "../../products/finva/components/AccountActions";
+import { useDincrBackHandler } from "../../products/dincr/navigation/useDincrNavigation";
+import AccountActions from "../../products/dincr/components/AccountActions";
 import { confirmedPlanProfile } from "../../lib/planSelection";
 import { identifyTelemetryUser, trackEvent } from "../../lib/telemetry";
 const language = deviceLanguage();
@@ -23,7 +23,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
   const [error, setError] = useState("");
   const [billing, setBilling] = useState(null);
   const [billingError, setBillingError] = useState("");
-  useFinvaBackHandler(() => { if (!changing) setConfirming(""); }, Boolean(confirming));
+  useDincrBackHandler(() => { if (!changing) setConfirming(""); }, Boolean(confirming));
 
   const currentPlan = user?.subscription?.plan || "free";
   const currentPlanInfo = useMemo(

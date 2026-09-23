@@ -6,7 +6,7 @@ Run from jarvis-personal with a configured development/test database:
 
 It uses the owner account/workspace supplied through environment variables and
 executes the same service used by the owner-only sandbox endpoint. It is
-intentionally blocked unless FINVA_BILLING_SMOKE_ALLOW=1 is set.
+intentionally blocked unless DINCR_BILLING_SMOKE_ALLOW=1 is set.
 """
 
 import os
@@ -36,17 +36,17 @@ def _expect(expected_plan: str, expected_period: str | None = None, *, canceled:
 
 
 def main():
-    if os.getenv("FINVA_BILLING_SMOKE_ALLOW") != "1":
+    if os.getenv("DINCR_BILLING_SMOKE_ALLOW") != "1":
         raise SystemExit(
-            "Refusing to mutate subscription data. Set FINVA_BILLING_SMOKE_ALLOW=1 "
+            "Refusing to mutate subscription data. Set DINCR_BILLING_SMOKE_ALLOW=1 "
             "only against the intended development/test account."
         )
 
-    account_id = _required("FINVA_BILLING_SMOKE_ACCOUNT_ID")
-    workspace_id = _required("FINVA_BILLING_SMOKE_WORKSPACE_ID")
+    account_id = _required("DINCR_BILLING_SMOKE_ACCOUNT_ID")
+    workspace_id = _required("DINCR_BILLING_SMOKE_WORKSPACE_ID")
     token = set_current_user(
         {
-            "id": int(os.getenv("FINVA_BILLING_SMOKE_LEGACY_USER_ID", "1")),
+            "id": int(os.getenv("DINCR_BILLING_SMOKE_LEGACY_USER_ID", "1")),
             "account_id": account_id,
             "workspace_id": workspace_id,
             "workspace_role": "owner",

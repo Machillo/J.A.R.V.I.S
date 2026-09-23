@@ -10,7 +10,7 @@ export default function FinancialCalendar({ plan = "basic" }){
   const [period,setPeriod]=useState(now()),[data,setData]=useState(null),[error,setError]=useState("");
   useEffect(()=>{setData(null);getFinancialCalendar(period).then(setData).catch(e=>setError(e.message))},[period]);
   const grouped=(data?.events||[]).reduce((acc,event)=>{(acc[event.date] ||= []).push(event);return acc},{});
-  return <section className="finva-basic-calendar">
+  return <section className="dincr-basic-calendar">
     {plan === "free" && <div className="hero"><span>BASIC</span><h1>{tx("Calendario financiero","Financial calendar")}</h1><p>{tx("Pagos, ingresos, deudas y fechas importantes del mes.","Payments, income, debt, and important dates for the month.")}</p></div>}
     <div className="basic-calendar-picker"><input className="month-picker" type="month" value={period} onChange={e=>setPeriod(e.target.value)}/></div>
     {error&&<div className="panel error">{error}</div>}
@@ -22,7 +22,7 @@ export default function FinancialCalendar({ plan = "basic" }){
           {events.map((event,index)=><div className={`basic-calendar-event ${event.kind}`} key={`${date}-${event.name}-${index}`}>
             <span><b>{event.name}</b><small>{event.kind}</small></span><strong>{event.amount?money(event.amount):"—"}</strong>
           </div>)}
-        </article>):<div className="panel finva-empty-state">{tx("No hay eventos configurados para este mes.","No events configured for this month.")}</div>}
+        </article>):<div className="panel dincr-empty-state">{tx("No hay eventos configurados para este mes.","No events configured for this month.")}</div>}
       </div>
     </>}
   </section>;

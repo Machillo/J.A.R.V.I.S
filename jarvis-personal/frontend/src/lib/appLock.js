@@ -6,18 +6,18 @@ import {
   BiometryType,
 } from "@aparajita/capacitor-biometric-auth";
 
-export const APP_LOCK_CHANGED_EVENT = "finva:app-lock-changed";
-export const APP_LOCK_REQUESTED_EVENT = "finva:app-lock-requested";
+export const APP_LOCK_CHANGED_EVENT = "dincr:app-lock-changed";
+export const APP_LOCK_REQUESTED_EVENT = "dincr:app-lock-requested";
 export const DEFAULT_APP_LOCK_TIMEOUT = 300_000;
 
-const storageKey = (userId) => `finva:app-lock:${userId}`;
-const onboardingKey = (userId) => `finva:app-lock-onboarding:v2:${userId}`;
+const storageKey = (userId) => `dincr:app-lock:${userId}`;
+const onboardingKey = (userId) => `dincr:app-lock-onboarding:v2:${userId}`;
 
 export function isNativeAppLockSupported() {
   // Capacitor's bridge can report `web` during the first iOS render. The
   // product-specific build id is deterministic and keeps the DINCR gate from
   // being skipped while WebKit finishes attaching the native bridge.
-  return Capacitor.isNativePlatform() || import.meta.env?.VITE_NATIVE_APP_ID === "com.finva.app";
+  return Capacitor.isNativePlatform() || import.meta.env?.VITE_NATIVE_APP_ID === "com.dincr.app";
 }
 
 export function normalizeAppLockConfig(value = {}) {

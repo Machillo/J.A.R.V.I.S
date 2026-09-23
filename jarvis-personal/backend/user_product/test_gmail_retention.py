@@ -17,15 +17,15 @@ class _Connection:
 
 
 def test_retention_policy_defaults_and_clamps(monkeypatch):
-    monkeypatch.delenv("FINVA_GMAIL_REVIEW_EVIDENCE_DAYS", raising=False)
-    monkeypatch.delenv("FINVA_GMAIL_METADATA_DAYS", raising=False)
+    monkeypatch.delenv("DINCR_GMAIL_REVIEW_EVIDENCE_DAYS", raising=False)
+    monkeypatch.delenv("DINCR_GMAIL_METADATA_DAYS", raising=False)
     assert gmail_retention.retention_policy() == {
         "review_evidence_days": 30,
         "email_metadata_days": 90,
         "canonical_history": "until_account_deletion",
     }
-    monkeypatch.setenv("FINVA_GMAIL_REVIEW_EVIDENCE_DAYS", "0")
-    monkeypatch.setenv("FINVA_GMAIL_METADATA_DAYS", "99999")
+    monkeypatch.setenv("DINCR_GMAIL_REVIEW_EVIDENCE_DAYS", "0")
+    monkeypatch.setenv("DINCR_GMAIL_METADATA_DAYS", "99999")
     assert gmail_retention.retention_policy()["review_evidence_days"] == 1
     assert gmail_retention.retention_policy()["email_metadata_days"] == 3650
 

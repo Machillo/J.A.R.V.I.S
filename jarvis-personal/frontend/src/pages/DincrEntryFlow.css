@@ -1,0 +1,202 @@
+/* Canonical DINCR entry flow: login, legal consent and plan selection.
+   Profile onboarding lives in ProfileSetup.css for both JARVIS and DINCR. */
+
+:root{
+  --dincr-onb-bg:#060e1a;
+  --dincr-onb-surface:#0b1726;
+  --dincr-onb-surface-strong:#08262b;
+  --dincr-onb-line:#142b40;
+  --dincr-onb-accent:#0ac7b2;
+  --dincr-onb-accent-soft:#083333;
+  --dincr-onb-text:#f7fbff;
+  --dincr-onb-muted:#9eb0c4;
+  --dincr-onb-gold:#d6a12e;
+  --dincr-onb-gold-bg:#1f1a0e;
+}
+
+.login-page.auth-shell,
+.legal-consent-shell,
+.unified-onboarding-shell:has(.unified-plan-stage){
+  color-scheme:dark;
+  background:var(--dincr-onb-bg);
+  color:var(--dincr-onb-text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+
+/* 01 · Login — DINCR ID */
+.login-page.auth-shell{
+  min-height:100dvh;
+  display:flex;
+  align-items:stretch;
+  justify-content:center;
+  padding:0;
+  overflow-y:auto;
+}
+.login-page .auth-grid-lines,
+.login-page .auth-aura,
+.login-page .auth-orb-wrap{display:none}
+.login-page .login-card.auth-card{
+  width:min(100%,402px);
+  min-height:100dvh;
+  margin:0;
+  padding:calc(50px + env(safe-area-inset-top)) 18px calc(22px + env(safe-area-inset-bottom));
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  text-align:left;
+  border:0;
+  border-radius:0;
+  clip-path:none;
+  background:var(--dincr-onb-bg);
+  box-shadow:none;
+  backdrop-filter:none;
+}
+.login-page .auth-card::before,.login-page .auth-card::after{display:none}
+.dincr-login-top{display:grid;gap:3px}
+.dincr-login-top strong{color:var(--dincr-onb-accent);font-size:13px;letter-spacing:.08em}
+.dincr-login-top small{color:var(--dincr-onb-muted);font-size:10px}
+.dincr-login-hero{
+  min-height:350px;
+  padding:30px 0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:16px;
+}
+.dincr-login-mark{
+  width:42px;height:42px;display:grid;place-items:center;border-radius:12px;
+  color:var(--dincr-onb-accent);background:#022420;font-size:18px;font-weight:800;
+}
+.login-page .auth-title{
+  margin:0;padding:0;color:var(--dincr-onb-text);font-size:38px;line-height:1.05;
+  letter-spacing:-.04em;text-shadow:none;white-space:normal;font-weight:750;
+}
+.dincr-login-hero h2{max-width:330px;margin:0;color:var(--dincr-onb-text);font-size:19px;line-height:1.22}
+.dincr-login-pillars{margin:0;color:var(--dincr-onb-accent);font-size:11px;font-weight:700;letter-spacing:.02em}
+.dincr-login-account-title{margin:0 0 14px;color:var(--dincr-onb-text);font-size:18px;line-height:1.2}
+.login-page .login-google-btn.auth-google-btn{
+  width:100%;min-height:52px;border:0;border-radius:14px;clip-path:none;
+  background:var(--dincr-onb-accent);color:var(--dincr-onb-bg);
+  box-shadow:none;font-size:15px;font-weight:800;
+}
+.login-page .login-google-btn.auth-google-btn:hover{transform:none;filter:brightness(1.04);box-shadow:none}
+.login-page .login-google-btn.auth-google-btn:active{transform:scale(.99)}
+/* Sign in with Apple: same size and prominence as Google (App Store guideline 4.8, Apple HIG). */
+.login-page .login-google-btn.auth-google-btn.login-apple-btn{margin-top:10px;background:#000;color:#fff;border:1px solid rgba(255,255,255,.28)}
+.login-page .login-apple-btn .apple-icon{width:18px;height:18px;fill:currentColor}
+.login-page .login-warning.auth-secure-note{
+  display:block;margin:12px 0 0;color:var(--dincr-onb-muted);font-size:10px;line-height:1.35;text-align:left;
+}
+.login-page .login-warning svg{display:none}
+.login-page .auth-message{margin:10px 0 0}
+
+/* 02 · Legal consent */
+.legal-consent-shell{
+  min-height:100dvh;
+  display:flex;
+  justify-content:center;
+  align-items:stretch;
+  padding:0;
+}
+.legal-consent-card{
+  width:min(100%,402px);min-height:100dvh;margin:0;
+  padding:calc(50px + env(safe-area-inset-top)) 18px calc(22px + env(safe-area-inset-bottom));
+  border:0;border-radius:0;background:var(--dincr-onb-bg);box-shadow:none;
+}
+.legal-consent-top{align-items:flex-start}
+.legal-consent-top>div{display:grid;gap:3px}
+.legal-consent-top strong{color:var(--dincr-onb-accent);font-size:13px;letter-spacing:.08em}
+.legal-consent-top small{color:var(--dincr-onb-muted);font-size:10px}
+.legal-consent-top button{
+  min-height:34px;padding:0 10px;border:1px solid var(--dincr-onb-line);border-radius:10px;
+  background:var(--dincr-onb-surface);color:var(--dincr-onb-muted);font-size:10px;
+}
+.legal-consent-heading{margin:22px 0 14px}
+.legal-consent-heading>span{color:var(--dincr-onb-accent);font-size:10px;letter-spacing:.14em}
+.legal-consent-heading h1{margin:7px 0 8px;font-size:28px;line-height:1.08;letter-spacing:-.035em}
+.legal-consent-heading p{font-size:12px;line-height:1.4;color:var(--dincr-onb-muted)}
+.legal-document-link{
+  min-height:94px;margin:10px 0;padding:14px;gap:12px;
+  border:1px solid var(--dincr-onb-line);border-radius:17px;background:var(--dincr-onb-surface);
+}
+.legal-document-link>svg{width:42px;height:42px;padding:10px;border-radius:12px;background:#022420;color:var(--dincr-onb-accent)}
+.legal-document-link strong{font-size:12px}.legal-document-link small{font-size:9px;color:var(--dincr-onb-muted)}
+.legal-document-link>span:last-child{font-size:10px;color:var(--dincr-onb-accent);font-weight:800}
+.legal-check{margin:13px 0;grid-template-columns:22px 1fr;gap:9px;font-size:12px;line-height:1.35}
+.legal-check input{accent-color:var(--dincr-onb-accent)}
+.legal-check a{color:var(--dincr-onb-text)}
+.legal-safety-note{
+  margin:15px 0 0;padding:14px;border:1px solid var(--dincr-onb-line);border-radius:17px;
+  background:var(--dincr-onb-surface);color:var(--dincr-onb-accent);font-size:11px;font-weight:700;
+}
+.legal-consent-submit{
+  min-height:52px;margin-top:14px;border-radius:14px;background:var(--dincr-onb-accent);
+  color:var(--dincr-onb-bg);font-size:15px;font-weight:800;
+}
+.legal-version{color:var(--dincr-onb-muted);font-size:9px}
+
+/* 07 · Plan selection */
+.unified-onboarding-shell:has(.unified-plan-stage){
+  min-height:100dvh;height:100dvh;padding:0;overflow-y:auto;background:var(--dincr-onb-bg);
+}
+.unified-plan-stage.unified-onboarding-card{
+  width:min(100%,402px);min-height:100dvh;margin:0 auto;padding:calc(50px + env(safe-area-inset-top)) 18px calc(22px + env(safe-area-inset-bottom));
+  border:0;border-radius:0;background:var(--dincr-onb-bg);box-shadow:none;
+}
+.unified-plan-stage .unified-onboarding-top{
+  padding:0 0 8px;border:0;align-items:flex-start;
+}
+.unified-plan-stage .unified-onboarding-top>div{gap:3px}
+.unified-plan-stage .unified-onboarding-top strong{color:var(--dincr-onb-accent);font-size:12px;letter-spacing:.08em}
+.unified-plan-stage .unified-onboarding-top small{color:var(--dincr-onb-muted);font-size:9px}
+.unified-plan-stage .unified-onboarding-top button{
+  min-height:32px;padding:0 9px;border:1px solid var(--dincr-onb-line);border-radius:10px;background:var(--dincr-onb-surface);font-size:9px;color:var(--dincr-onb-muted);
+}
+.unified-plan-stage .unified-onboarding-intro{padding:0 0 10px}
+.unified-plan-stage .unified-eyebrow{display:none}
+.unified-plan-stage .unified-onboarding-intro h1{margin:4px 0 7px;font-size:26px;line-height:1.1;letter-spacing:-.035em}
+.unified-plan-stage .unified-onboarding-intro p{font-size:10px;line-height:1.4;color:var(--dincr-onb-muted)}
+.unified-plan-stage .unified-plan-list{display:grid;gap:10px}
+.unified-plan-stage .unified-plan-card{
+  overflow:hidden;border:1px solid var(--dincr-onb-line);border-radius:17px;background:var(--dincr-onb-surface);box-shadow:none;
+}
+.unified-plan-stage .unified-plan-card.basic,
+.unified-plan-stage .unified-plan-card.vip{border-color:var(--dincr-onb-gold);background:var(--dincr-onb-gold-bg)}
+.unified-plan-stage .unified-plan-summary{
+  min-height:88px;padding:12px 13px;grid-template-columns:38px minmax(0,1fr) auto auto;gap:9px;background:transparent;color:var(--dincr-onb-text);
+}
+.unified-plan-stage .unified-plan-summary>.unified-plan-icon{
+  width:38px;height:38px;border-radius:11px;color:var(--dincr-onb-accent);background:#082e2e;
+}
+.unified-plan-stage .unified-plan-card.basic .unified-plan-icon,
+.unified-plan-stage .unified-plan-card.vip .unified-plan-icon{color:var(--dincr-onb-gold);background:#47330d}
+.unified-plan-stage .unified-plan-copy>span{font-size:8px;color:var(--dincr-onb-muted);letter-spacing:.08em}
+.unified-plan-stage .unified-plan-copy>strong{font-size:14px}
+.unified-plan-stage .unified-plan-copy>small{font-size:9px;color:var(--dincr-onb-muted)}
+.unified-plan-stage .unified-plan-price{font-size:12px;color:var(--dincr-onb-text)}
+.unified-plan-stage .unified-plan-price small{font-size:7px;color:var(--dincr-onb-muted)}
+.unified-plan-stage .unified-plan-details{padding:0 13px 13px;border-top:1px solid rgba(158,176,196,.1)}
+.unified-plan-stage .unified-plan-details ul{margin:10px 0;padding:0;display:grid;grid-template-columns:1fr;gap:5px}
+.unified-plan-stage .unified-plan-details li{font-size:9px;color:var(--dincr-onb-muted)}
+.unified-plan-stage .unified-plan-details li svg{width:13px;color:var(--dincr-onb-accent)}
+.unified-plan-stage .unified-plan-card.basic .unified-plan-details li svg,
+.unified-plan-stage .unified-plan-card.vip .unified-plan-details li svg{color:var(--dincr-onb-gold)}
+.unified-plan-stage .unified-plan-button{
+  width:100%;min-height:50px;border:0;border-radius:14px;background:var(--dincr-onb-accent);color:var(--dincr-onb-bg);font-size:14px;font-weight:800;
+}
+.unified-plan-stage .unified-plan-card.basic .unified-plan-button,
+.unified-plan-stage .unified-plan-card.vip .unified-plan-button{background:var(--dincr-onb-gold);color:var(--dincr-onb-bg)}
+.unified-plan-stage .unified-payment-preview,.unified-plan-stage .beta-consent,.unified-plan-stage .beta-price{font-size:9px;line-height:1.35}
+.unified-plan-stage .unified-loading{min-height:180px}
+.unified-plan-stage .unified-onboarding-error{font-size:10px}
+
+/* Keep the approved dark onboarding independent from the app appearance setting. */
+@media(min-width:520px){
+  .login-page .login-card.auth-card,.legal-consent-card,.unified-plan-stage.unified-onboarding-card{
+    min-height:min(874px,calc(100dvh - 32px));height:min(874px,calc(100dvh - 32px));margin:16px auto;border:1px solid var(--dincr-onb-line);border-radius:38px;overflow:hidden;
+  }
+  .legal-consent-shell{align-items:center}
+}
+@media(max-height:760px){
+  .dincr-login-hero{min-height:280px}
+}

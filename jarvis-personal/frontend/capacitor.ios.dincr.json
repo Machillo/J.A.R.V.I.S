@@ -1,0 +1,16 @@
+{
+  "appId": "com.dincr.app",
+  "appName": "DINCR",
+  "webDir": "dist",
+  "includePlugins": [
+    "@capacitor/app",
+    "@capacitor/browser",
+    "@capacitor/filesystem",
+    "@capacitor/share",
+    "@aparajita/capacitor-biometric-auth",
+    "@capawesome/capacitor-file-picker"
+  ],
+  "ios": {
+    "path": "ios-dincr"
+  }
+}

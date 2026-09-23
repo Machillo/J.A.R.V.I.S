@@ -36,7 +36,7 @@ import Reconciliation from "../pages/Reconciliation";
 import FinancialDeterioration from "../pages/FinancialDeterioration";
 import Login from "../pages/Login";
 import UserManagement from "../pages/UserManagement";
-import FinvaOnboarding from "../pages/FinvaOnboarding";
+import DincrOnboarding from "../pages/DincrOnboarding";
 import ProfileSetup from "../pages/ProfileSetup";
 import ProductOperations from "../pages/ProductOperations";
 import MoneyControl from "../products/jarvis/pages/MoneyControl";
@@ -79,7 +79,7 @@ const appSectionsFor = (language) => ({
   settings: { title: t("nav.settings", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   goals: { title: t("nav.goals", language), eyebrow: language === "es" ? "Configuración" : "Settings" },
   userManagement: { title: t("nav.manageUsers", language), eyebrow: language === "es" ? "Control de propietario" : "Owner Control" },
-  productOperations: { title: t("nav.finvaOperations", language), eyebrow: "DINCR Beta" },
+  productOperations: { title: t("nav.dincrOperations", language), eyebrow: "DINCR Beta" },
 });
 
 const getBottomGroup = (page) => {
@@ -145,7 +145,7 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
         <AppListItem icon={HandCoins} title={tx("Datos financieros", "Financial data", language)} subtitle={tx("Control · Email · historial · tarjetas", "Control · Email · history · cards", language)} onClick={() => navigatePage("moneyControl")} />
         {currentUser?.role === "owner" && (
           <><AppListItem icon={UsersRound} title={t("nav.manageUsers", language)} subtitle={tx("Buscar cuentas y otorgar cortesías", "Find accounts and grant courtesy access", language)} onClick={() => navigatePage("userManagement")} />
-          <AppListItem icon={Activity} title={t("nav.finvaOperations", language)} subtitle={tx("Promoción, pagos, uso y reportes", "Promotions, payments, usage, and reports", language)} onClick={() => navigatePage("productOperations")} /></>
+          <AppListItem icon={Activity} title={t("nav.dincrOperations", language)} subtitle={tx("Promoción, pagos, uso y reportes", "Promotions, payments, usage, and reports", language)} onClick={() => navigatePage("productOperations")} /></>
         )}
       </div>
 
@@ -541,7 +541,7 @@ export default function App() {
   }
 
   if (currentUser.role !== "owner" && !currentUser.plan_selected) {
-    return <FinvaOnboarding user={currentUser} onComplete={(profile) => { setCurrentUser(profile); refreshAppData(); }} />;
+    return <DincrOnboarding user={currentUser} onComplete={(profile) => { setCurrentUser(profile); refreshAppData(); }} />;
   }
 
   const renderPage = () => {

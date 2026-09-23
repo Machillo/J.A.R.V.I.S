@@ -3,7 +3,7 @@ import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "./supabase";
 
-const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.finva.app";
+const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.dincr.app";
 export const NATIVE_AUTH_REDIRECT = `${nativeAppId}://auth/callback`;
 export const isNativeApp = () => Capacitor.isNativePlatform();
 

@@ -16,8 +16,8 @@ def _days(name: str, default: int) -> int:
 
 def retention_policy() -> dict[str, Any]:
     return {
-        "review_evidence_days": _days("FINVA_GMAIL_REVIEW_EVIDENCE_DAYS", 30),
-        "email_metadata_days": _days("FINVA_GMAIL_METADATA_DAYS", 90),
+        "review_evidence_days": _days("DINCR_GMAIL_REVIEW_EVIDENCE_DAYS", 30),
+        "email_metadata_days": _days("DINCR_GMAIL_METADATA_DAYS", 90),
         "canonical_history": "until_account_deletion",
     }
 

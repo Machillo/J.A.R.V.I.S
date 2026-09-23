@@ -91,14 +91,14 @@ export async function authenticatedFetch(url, options = {}) {
         await delay(retryCount === 1 ? 250 : 750);
         continue;
       }
-      response.finvaRequestId = response.headers.get("X-Request-ID") || requestId;
-      response.finvaRetryCount = retryCount;
+      response.dincrRequestId = response.headers.get("X-Request-ID") || requestId;
+      response.dincrRetryCount = retryCount;
       return response;
     } catch (error) {
       if (error?.message === SESSION_EXPIRED_MESSAGE) throw error;
       if (!safeToRetry || retryCount >= maxRetries) {
-        error.finvaRequestId = requestId;
-        error.finvaRetryCount = retryCount;
+        error.dincrRequestId = requestId;
+        error.dincrRetryCount = retryCount;
         throw error;
       }
       retryCount += 1;

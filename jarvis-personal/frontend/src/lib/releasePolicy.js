@@ -1,7 +1,7 @@
 import { API_URL } from "./apiUrl";
 
 export const APP_VERSION = import.meta.env.VITE_APP_VERSION || "0.0.0";
-const DISMISS_PREFIX = "finva:release-dismissed:";
+const DISMISS_PREFIX = "dincr:release-dismissed:";
 
 export async function getReleasePolicy(platform, version = APP_VERSION) {
   const controller = new AbortController();

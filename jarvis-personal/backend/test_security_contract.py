@@ -151,13 +151,13 @@ def test_phase_0f_database_failure_uses_per_feature_safe_defaults(monkeypatch):
     assert flags["advanced_reports"]["enabled"] is True
 
 
-def test_finva_gmail_is_a_vip_only_product_entitlement():
+def test_dincr_gmail_is_a_vip_only_product_entitlement():
     from backend.auth.saas import BUILTIN_FEATURE_MIN_PLAN
 
     assert BUILTIN_FEATURE_MIN_PLAN["gmail_automation"] == "vip"
 
 
-def test_finva_gmail_background_access_requires_active_vip():
+def test_dincr_gmail_background_access_requires_active_vip():
     class Result:
         def __init__(self, row):
             self.row = row
@@ -345,7 +345,7 @@ def test_internal_function_hardening_is_explicit_and_future_safe():
     assert "ALTER DEFAULT PRIVILEGES IN SCHEMA public" in migration
 
 
-def test_finva_gmail_scope_is_read_only_and_identity_adapter_is_user_specific():
+def test_dincr_gmail_scope_is_read_only_and_identity_adapter_is_user_specific():
     assert gmail_service.GMAIL_SCOPE == "https://www.googleapis.com/auth/gmail.readonly"
     text = gmail_service._adapt_identity(
         "Compra para María Fernanda por ₡12.500",
@@ -355,10 +355,10 @@ def test_finva_gmail_scope_is_read_only_and_identity_adapter_is_user_specific():
     assert "Kenneth" in text
 
 
-def test_finva_gmail_oauth_state_is_signed_and_does_not_require_database(monkeypatch):
-    monkeypatch.setenv("FINVA_GMAIL_CLIENT_ID", "client")
-    monkeypatch.setenv("FINVA_GMAIL_CLIENT_SECRET", "secret")
-    monkeypatch.setenv("FINVA_GMAIL_REDIRECT_URI", "https://example.test/callback")
+def test_dincr_gmail_oauth_state_is_signed_and_does_not_require_database(monkeypatch):
+    monkeypatch.setenv("DINCR_GMAIL_CLIENT_ID", "client")
+    monkeypatch.setenv("DINCR_GMAIL_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("DINCR_GMAIL_REDIRECT_URI", "https://example.test/callback")
     state = gmail_service._encode_oauth_state("account-1", "workspace-1")
     assert gmail_service._decode_oauth_state(state)["account_id"] == "account-1"
     assert gmail_service._decode_oauth_state(f"{state}tampered") is None

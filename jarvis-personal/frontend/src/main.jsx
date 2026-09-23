@@ -1,3 +1,4 @@
+import "./lib/storageMigration";
 import React from "react";
 import ReactDOM from "react-dom/client";
 
@@ -17,15 +18,15 @@ import "./styles/10-finance-stability.css";
 import "./styles/11-strategy-v3.css";
 import "./styles/12-mobile-native-compat.css";
 import "./pages/PublicInfoPage.css";
-import "./pages/FinvaOnboarding.css";
+import "./pages/DincrOnboarding.css";
 import "./pages/LegalConsent.css";
 import "./pages/ProfileSetup.css";
-import "./pages/FinvaEntryFlow.css";
+import "./pages/DincrEntryFlow.css";
 import "./ui/native/styles/tokens.css";
 import "./ui/native/styles/ios.css";
 import "./ui/native/styles/android.css";
 import "./ui/native/styles/sheets.css";
-import "./products/finva/styles/product.css";
+import "./products/dincr/styles/product.css";
 import "./products/jarvis/styles/product.css";
 import "./products/jarvis/styles/foundation.css";
 import "./products/jarvis/styles/disclosure.css";

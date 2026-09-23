@@ -1,4 +1,4 @@
-export const COLOR_MODE_STORAGE_KEY = "finva-color-mode";
+export const COLOR_MODE_STORAGE_KEY = "dincr-color-mode";
 export const COLOR_MODES = ["dark", "light", "system"];
 
 export const resolveColorMode = (mode) => (

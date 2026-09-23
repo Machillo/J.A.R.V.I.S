@@ -58,7 +58,7 @@ export default function StrategyBasic({ plan = "basic" }) {
   if (!vip) {
     const basicAllocations = data.allocations || [];
     const covered = Number(data.strategic_margin || 0) >= 0;
-    return <section className="finva-basic-strategy">
+    return <section className="dincr-basic-strategy">
       <article className="basic-strategy-hero">
         <small>{copy("GUÍA DEL MES","MONTHLY GUIDE")}</small>
         <strong>{covered ? copy("Tu mes está cubierto.","Your month is covered.") : copy("Tu mes necesita ajustes.","Your month needs adjustments.")}</strong>
@@ -283,7 +283,7 @@ export default function StrategyBasic({ plan = "basic" }) {
               onChange={(event) => setExtra(event.target.value)}
             />
             <button
-              className="finva-button finva-button-secondary"
+              className="dincr-button dincr-button-secondary"
               type="button"
               onClick={runSimulation}
               disabled={loadingSimulation}
@@ -366,7 +366,7 @@ export default function StrategyBasic({ plan = "basic" }) {
             </label>
           </div>
           <button
-            className="scenario-button finva-button finva-button-primary"
+            className="scenario-button dincr-button dincr-button-primary"
             type="button"
             onClick={runSimulation}
             disabled={loadingSimulation}

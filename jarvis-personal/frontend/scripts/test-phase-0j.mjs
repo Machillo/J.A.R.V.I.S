@@ -16,16 +16,16 @@ assert.equal(hasSeenAppLockOnboarding("existing-user"), true, "completed onboard
 
 const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 const settings = readFileSync(new URL("../src/users/components/AppLockSettings.jsx", import.meta.url), "utf8");
-const lock = readFileSync(new URL("../src/components/FinvaAppLock.jsx", import.meta.url), "utf8");
+const lock = readFileSync(new URL("../src/components/DincrAppLock.jsx", import.meta.url), "utf8");
 const appLock = readFileSync(new URL("../src/lib/appLock.js", import.meta.url), "utf8");
-const onboarding = readFileSync(new URL("../src/components/FinvaAppLockOnboarding.jsx", import.meta.url), "utf8");
-const iosConfig = readFileSync(new URL("../capacitor.ios.finva.json", import.meta.url), "utf8");
-const infoPlist = readFileSync(new URL("../ios-finva/App/App/Info.plist", import.meta.url), "utf8");
+const onboarding = readFileSync(new URL("../src/components/DincrAppLockOnboarding.jsx", import.meta.url), "utf8");
+const iosConfig = readFileSync(new URL("../capacitor.ios.dincr.json", import.meta.url), "utf8");
+const infoPlist = readFileSync(new URL("../ios-dincr/App/App/Info.plist", import.meta.url), "utf8");
 const iosProductScript = readFileSync(new URL("./ios-product.mjs", import.meta.url), "utf8");
 
-assert.match(app, /<FinvaAppLock/, "authenticated DINCR is protected by the local lock gate");
-assert.match(app, /if \(!isFinvaDistribution\) return personalApp;[\s\S]*<FinvaAppLock userId=\{currentUser\.id\}/, "DINCR protects owner and admin sessions without changing the standalone JARVIS app");
-assert.match(app, /nativeAppId === "com\.finva\.app"/, "owner protection is scoped to the DINCR distribution");
+assert.match(app, /<DincrAppLock/, "authenticated DINCR is protected by the local lock gate");
+assert.match(app, /if \(!isDincrDistribution\) return personalApp;[\s\S]*<DincrAppLock userId=\{currentUser\.id\}/, "DINCR protects owner and admin sessions without changing the standalone JARVIS app");
+assert.match(app, /nativeAppId === "com\.dincr\.app"/, "owner protection is scoped to the DINCR distribution");
 assert.match(settings, /Bloquear ahora/, "settings provide a manual lock action");
 assert.doesNotMatch(settings, /<select/, "users cannot weaken the DINCR-owned timeout");
 assert.match(settings, /5 minutos/, "settings explain the fixed five-minute timeout");
@@ -37,7 +37,7 @@ assert.match(onboarding, /Ahora no/, "onboarding never traps a user without comp
 assert.match(iosConfig, /capacitor-biometric-auth/, "DINCR iOS bundles the biometric plugin");
 assert.match(infoPlist, /NSFaceIDUsageDescription/, "DINCR declares why it uses Face ID");
 assert.match(iosProductScript, /verifyNativeBundle\(\)/, "the iOS workflow verifies the generated native bundle before opening Xcode");
-assert.match(appLock, /VITE_NATIVE_APP_ID.*com\.finva\.app/, "DINCR iOS does not skip security while the Capacitor bridge is attaching");
-assert.match(iosProductScript, /finva:app-lock-onboarding:v2/, "the DINCR iOS workflow rejects a stale bundle without biometric onboarding");
+assert.match(appLock, /VITE_NATIVE_APP_ID.*com\.dincr\.app/, "DINCR iOS does not skip security while the Capacitor bridge is attaching");
+assert.match(iosProductScript, /dincr:app-lock-onboarding:v2/, "the DINCR iOS workflow rejects a stale bundle without biometric onboarding");
 
 console.log("Phase 0J biometric lock contract passed.");

@@ -105,7 +105,7 @@ export default function GmailAutomation() {
     document.addEventListener("visibilitychange", refresh);
     let appUrlListener;
     App.addListener("appUrlOpen", async ({ url }) => {
-      if (!url?.startsWith("com.finva.app://gmail/callback")) return;
+      if (!url?.startsWith("com.dincr.app://gmail/callback")) return;
       try { await Browser.close(); } catch { /* El navegador ya puede estar cerrado. */ }
       const result = new URL(url).searchParams.get("microsoft");
       if (result === "connected") trackEvent("mail_connected", { source_type: "email" });
@@ -192,8 +192,8 @@ export default function GmailAutomation() {
         <p className="gmail-legal-links"><a href="/terms" target="_blank" rel="noreferrer">{tx("Términos", "Terms")}</a> · <a href="/privacy" target="_blank" rel="noreferrer">{tx("Privacidad", "Privacy")}</a></p>
         {gmail?.consent?.required && <label className="gmail-consent-check"><input type="checkbox" checked={consentAccepted} onChange={(event) => { setConsentAccepted(event.target.checked); setError(""); }}/><span>{tx("Entiendo y acepto que DINCR analice los correos financieros de la cuenta que autorice bajo estas condiciones.", "I understand and agree that DINCR may analyze financial emails from the account I authorize under these conditions.")}</span></label>}
         <div className="gmail-provider-actions">
-          <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("gmail")}><MailProviderLogo provider="gmail"/>{busy === "connect" ? tx("Abriendo…", "Opening…") : tx("Conectar Gmail", "Connect Gmail")}</button>
-          <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || !gmail?.microsoft_available || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("microsoft")}><MailProviderLogo provider="microsoft"/>{gmail?.microsoft_available ? tx("Conectar Outlook / Hotmail", "Connect Outlook / Hotmail") : tx("Outlook / Hotmail: pendiente de configurar", "Outlook / Hotmail: setup pending")}</button>
+          <button type="button" className="dincr-button dincr-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("gmail")}><MailProviderLogo provider="gmail"/>{busy === "connect" ? tx("Abriendo…", "Opening…") : tx("Conectar Gmail", "Connect Gmail")}</button>
+          <button type="button" className="dincr-button dincr-button-primary" disabled={Boolean(busy) || !gmail?.microsoft_available || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("microsoft")}><MailProviderLogo provider="microsoft"/>{gmail?.microsoft_available ? tx("Conectar Outlook / Hotmail", "Connect Outlook / Hotmail") : tx("Outlook / Hotmail: pendiente de configurar", "Outlook / Hotmail: setup pending")}</button>
         </div>
         <p>{tx("Yahoo aún no está disponible: su permiso para leer buzones requiere aprobación de Yahoo. No ingresés tu contraseña de Yahoo en DINCR.", "Yahoo is not available yet: mailbox read access requires Yahoo approval. Do not enter your Yahoo password in DINCR.")}</p>
       {gmail?.connected && <>

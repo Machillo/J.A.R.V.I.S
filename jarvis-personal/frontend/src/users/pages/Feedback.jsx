@@ -3,7 +3,7 @@ import { Activity, AlertCircle, Bot, Bug, CheckCircle2, Lightbulb, MessageCircle
 import { SUPPORT_CONTEXT_KEY } from "../../lib/apiErrors";
 import { createFeedback, getFeedback, getPlatformHealth, updateFeedbackResolution } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
-import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
+import { useDincrBackHandler } from "../../products/dincr/navigation/useDincrNavigation";
 
 const EMPTY = { category: "", subject: "", screen: "", happened: "", expected: "", benefit: "", reproducible: "", errorReference: "" };
 const ERROR_STEPS = ["subject", "screen", "happened", "expected", "reproducible", "review"];
@@ -45,7 +45,7 @@ export default function Feedback() {
   const [resolving, setResolving] = useState(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  useFinvaBackHandler(() => { if (!busy) setChatOpen(false); }, chatOpen);
+  useDincrBackHandler(() => { if (!busy) setChatOpen(false); }, chatOpen);
   const load = () => getFeedback().then(setReports).catch(() => setReports([]));
   const loadHealth = useCallback(async () => {
     setHealthBusy(true);
@@ -161,7 +161,7 @@ export default function Feedback() {
           {step === "category" && <div className="support-quick-actions"><button type="button" onClick={() => chooseCategory("error")}><Bug size={18}/>{tx("Tengo un problema", "I have a problem")}</button><button type="button" onClick={() => chooseCategory("improvement")}><Lightbulb size={18}/>{tx("Quiero proponer una mejora", "I want to suggest an improvement")}</button></div>}
           {needsText && <div className="support-composer"><textarea rows="2" autoFocus value={draft} maxLength={step === "subject" ? 140 : 1000} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && canSendText) { event.preventDefault(); answer(); } }} placeholder={tx("Escribí tu respuesta…", "Type your answer…")}/><button type="button" disabled={!canSendText} onClick={() => answer()} aria-label={tx("Enviar respuesta", "Send answer")}><Send size={19}/></button>{(step === "expected" || (step === "screen" && form.category === "improvement")) && <button className="support-skip" type="button" onClick={() => answer("")}>{tx("Omitir", "Skip")}</button>}</div>}
           {step === "reproducible" && <div className="support-quick-actions">{[tx("Siempre", "Always"), tx("Algunas veces", "Sometimes"), tx("Solo ocurrió una vez", "It only happened once")].map((option) => <button type="button" key={option} onClick={() => answer(option)}>{option}</button>)}</div>}
-          {step === "review" && <div className="support-review-actions"><button type="button" className="primary-button finva-button finva-button-primary" disabled={busy} onClick={submit}><Send size={17}/>{busy ? tx("Enviando…", "Sending…") : tx("Sí, enviar a soporte", "Yes, send to support")}</button><button type="button" onClick={restart}><RotateCcw size={16}/>{tx("Empezar de nuevo", "Start over")}</button></div>}
+          {step === "review" && <div className="support-review-actions"><button type="button" className="primary-button dincr-button dincr-button-primary" disabled={busy} onClick={submit}><Send size={17}/>{busy ? tx("Enviando…", "Sending…") : tx("Sí, enviar a soporte", "Yes, send to support")}</button><button type="button" onClick={restart}><RotateCcw size={16}/>{tx("Empezar de nuevo", "Start over")}</button></div>}
           {form.category && step !== "review" && <button className="support-restart" type="button" onClick={restart}><RotateCcw size={14}/>{tx("Reiniciar conversación", "Restart conversation")}</button>}
           <p className="support-privacy">{tx("No incluyás contraseñas, códigos ni números completos de cuentas o tarjetas.", "Do not include passwords, codes, or full account or card numbers.")}</p>
           {error && <p className="onboarding-error">{error}</p>}

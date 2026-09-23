@@ -19,7 +19,7 @@ export default function Budget({ plan = "basic" }){
   const save=async()=>{setSaving(true);setError("");try{setData(await saveBudget({items:data.items.map(x=>({category:x.category,monthly_limit:Number(x.monthly_limit)||0}))}));setEditing(false)}catch(e){setError(e.message)}finally{setSaving(false)}};
   if(!data)return <div className={`panel ${error?"error":""}`}>{error||copy("Preparando presupuesto...","Preparing budget...")}</div>;
 
-  return <section className="finva-basic-budget">
+  return <section className="dincr-basic-budget">
     {plan === "free" && <div className="hero"><span>BASIC</span><h1>{copy("Presupuesto guiado","Guided budget")}</h1><p>{copy("Organizá cuánto querés usar por categoría y comparalo con lo que ya gastaste.","Organize how much you want to use by category and compare it with what you've already spent.")}</p></div>}
     {error&&<div className="panel error">{error}</div>}
     <article className="basic-budget-summary">
@@ -40,7 +40,7 @@ export default function Budget({ plan = "basic" }){
       })}
     </div>
     {editing
-      ? <div className="basic-budget-actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>{load();setEditing(false)}}>{copy("Cancelar","Cancel")}</button><button className="finva-button finva-button-primary" type="button" onClick={save} disabled={saving}>{saving?copy("Guardando...","Saving..."):copy("Guardar presupuesto","Save budget")}</button></div>
-      : <button className="finva-button finva-button-primary basic-wide-action" type="button" onClick={()=>setEditing(true)}>{copy("Editar presupuesto","Edit budget")}</button>}
+      ? <div className="basic-budget-actions"><button className="dincr-button dincr-button-secondary" type="button" onClick={()=>{load();setEditing(false)}}>{copy("Cancelar","Cancel")}</button><button className="dincr-button dincr-button-primary" type="button" onClick={save} disabled={saving}>{saving?copy("Guardando...","Saving..."):copy("Guardar presupuesto","Save budget")}</button></div>
+      : <button className="dincr-button dincr-button-primary basic-wide-action" type="button" onClick={()=>setEditing(true)}>{copy("Editar presupuesto","Edit budget")}</button>}
   </section>;
 }

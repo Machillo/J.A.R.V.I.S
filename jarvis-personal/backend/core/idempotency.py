@@ -8,7 +8,7 @@ from typing import Any
 from backend.core.database import get_connection
 
 
-logger = logging.getLogger("finva.idempotency")
+logger = logging.getLogger("dincr.idempotency")
 
 IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,80}$")
 RECOVERABLE_METHODS = {"POST", "PUT", "PATCH"}

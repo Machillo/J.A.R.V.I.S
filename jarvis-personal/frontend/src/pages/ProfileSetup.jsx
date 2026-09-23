@@ -168,7 +168,7 @@ export default function ProfileSetup({ user, onComplete }) {
   };
 
   return (
-    <main className={`profile-setup profile-setup--${platform} ${isJarvis ? "profile-setup--jarvis" : "profile-setup--finva"}`}>
+    <main className={`profile-setup profile-setup--${platform} ${isJarvis ? "profile-setup--jarvis" : "profile-setup--dincr"}`}>
       <section className="profile-setup-shell">
         <header className="profile-setup-header">
           <button

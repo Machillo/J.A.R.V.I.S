@@ -4,10 +4,10 @@ Esta carpeta mantiene separadas la experiencia comercial DINCR y la experiencia 
 
 ## Experiencias
 
-- `finva/`: navegación, estilos y módulos de la aplicación comercial.
+- `dincr/`: navegación, estilos y módulos de la aplicación comercial.
 - `jarvis/`: navegación, estilos y módulos internos DINCR Owner (nombre histórico de carpeta).
 
-Cada función nueva debe vivir en `products/<producto>/features/<función>/`. El resumen de DINCR es el ejemplo completo: componente y estilos están juntos en `finva/features/overview/`.
+Cada función nueva debe vivir en `products/<producto>/features/<función>/`. El resumen de DINCR es el ejemplo completo: componente y estilos están juntos en `dincr/features/overview/`.
 
 ## Plataformas
 

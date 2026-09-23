@@ -61,16 +61,16 @@ export default function AccountSecurity({ user }) {
 
         <article className="security-method-row">
           <div><Apple size={20} /><span><strong>Apple</strong><small>{hasProvider("apple") ? tx("Vinculado a esta misma cuenta", "Linked to this account") : tx("Podés agregar Iniciar sesión con Apple", "You can add Sign in with Apple")}</small></span></div>
-          {hasProvider("apple") ? <CheckCircle2 size={18} /> : <button className="finva-button finva-button-secondary" type="button" onClick={linkApple} disabled={Boolean(busy)}>{busy === "apple" ? tx("Abriendo...", "Opening...") : tx("Vincular", "Link")}</button>}
+          {hasProvider("apple") ? <CheckCircle2 size={18} /> : <button className="dincr-button dincr-button-secondary" type="button" onClick={linkApple} disabled={Boolean(busy)}>{busy === "apple" ? tx("Abriendo...", "Opening...") : tx("Vincular", "Link")}</button>}
         </article>
 
         <article className="security-method-row">
           <div><Fingerprint size={21} /><span><strong>Passkey / Face ID</strong><small>{passkeys.length ? tx(`${passkeys.length} registrada${passkeys.length === 1 ? "" : "s"}`, `${passkeys.length} registered`) : tx("Usá biometría/PIN del dispositivo", "Use device biometrics/PIN")}</small></span></div>
-          <button className="finva-button finva-button-secondary" type="button" onClick={registerPasskey} disabled={Boolean(busy)}>{busy === "passkey" ? tx("Registrando...", "Registering...") : passkeys.length ? tx("Agregar otra", "Add another") : tx("Registrar", "Register")}</button>
+          <button className="dincr-button dincr-button-secondary" type="button" onClick={registerPasskey} disabled={Boolean(busy)}>{busy === "passkey" ? tx("Registrando...", "Registering...") : passkeys.length ? tx("Agregar otra", "Add another") : tx("Registrar", "Register")}</button>
         </article>
       </div>
 
-      <button className="security-refresh finva-button finva-button-ghost" type="button" onClick={reload}><RefreshCw size={15} /> {tx("Actualizar métodos", "Refresh methods")}</button>
+      <button className="security-refresh dincr-button dincr-button-ghost" type="button" onClick={reload}><RefreshCw size={15} /> {tx("Actualizar métodos", "Refresh methods")}</button>
       {message && <p className="success-banner">{message}</p>}
       {error && <p className="onboarding-error">{error}</p>}
     </>

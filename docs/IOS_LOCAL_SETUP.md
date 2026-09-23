@@ -4,7 +4,7 @@ El repositorio contiene dos aplicaciones iOS independientes que comparten el fro
 
 | Aplicación | Bundle ID | Proyecto Xcode |
 | --- | --- | --- |
-| FINVA | `com.finva.app` | `frontend/ios-finva/App/App.xcodeproj` |
+| FINVA | `com.dincr.app` | `frontend/ios-dincr/App/App.xcodeproj` |
 | J.A.R.V.I.S. | `com.jarvis.personal` | `frontend/ios-jarvis/App/App.xcodeproj` |
 
 Ambas pueden permanecer instaladas al mismo tiempo. La configuración Android existente continúa usando `frontend/capacitor.config.json` y no cambia.
@@ -20,11 +20,11 @@ npm install
 Crear el build, sincronizar Capacitor y abrir Xcode:
 
 ```bash
-npm run ios:open:finva
+npm run ios:open:dincr
 npm run ios:open:jarvis
 ```
 
-Los comandos preservan automáticamente la configuración canónica de Android. Para sincronizar sin abrir Xcode se pueden usar `ios:sync:finva` e `ios:sync:jarvis`.
+Los comandos preservan automáticamente la configuración canónica de Android. Para sincronizar sin abrir Xcode se pueden usar `ios:sync:dincr` e `ios:sync:jarvis`.
 
 ## Firma gratuita para un iPhone personal
 
@@ -39,7 +39,7 @@ En cada proyecto de Xcode:
 
 Los callbacks usados son:
 
-- `com.finva.app://auth/callback`
+- `com.dincr.app://auth/callback`
 - `com.jarvis.personal://auth/callback`
 
 Ambos deben estar permitidos en la configuración de redirecciones de Supabase Auth. Los esquemas ya están registrados en cada `Info.plist`.

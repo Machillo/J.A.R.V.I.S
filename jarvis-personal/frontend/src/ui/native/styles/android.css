@@ -67,7 +67,7 @@
 
 .native-platform--android :is(input,select,textarea),
 .native-platform--web :is(input,select,textarea) { border-radius: 10px; }
-.native-platform--android :is(.primary-button,.finva-button,.jarvis-action-button,.action-primary),
-.native-platform--web :is(.primary-button,.finva-button,.jarvis-action-button,.action-primary) { border-radius: 12px; }
+.native-platform--android :is(.primary-button,.dincr-button,.jarvis-action-button,.action-primary),
+.native-platform--web :is(.primary-button,.dincr-button,.jarvis-action-button,.action-primary) { border-radius: 12px; }
 .native-platform--android .native-scroll-content,
 .native-platform--web .native-scroll-content { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }

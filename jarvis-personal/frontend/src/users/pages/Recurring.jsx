@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Repeat2 } from "lucide-react";
 import { createRecurring, deleteRecurring, getRecurring, updateRecurring } from "../services/jarvisApi";
-import { ConfirmDialog } from "../components/FinvaDialog";
-import FinvaFormSheet from "../components/FinvaFormSheet";
+import { ConfirmDialog } from "../components/DincrDialog";
+import DincrFormSheet from "../components/DincrFormSheet";
 import { deviceLanguage, localeTag, tx } from "../../lib/locale";
 
 const language=deviceLanguage();
@@ -42,7 +42,7 @@ export default function Recurring({ plan = "basic" }) {
 
   const activeItems = data?.items?.filter((item) => item.is_active) || [];
 
-  return <section className="content-first-page finva-basic-recurring">
+  return <section className="content-first-page dincr-basic-recurring">
     {plan === "free" && <div className="hero"><span>DINCR · BASIC</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>}
     {error && <div className="panel error">{error}</div>}
     {data && <>
@@ -50,14 +50,14 @@ export default function Recurring({ plan = "basic" }) {
       <div className="basic-recurring-list">{data.items.length ? data.items.map((item) => <article className={`basic-recurring-item ${item.is_active ? "" : "muted-row"}`} key={item.id}>
         <header><strong>{item.name}</strong><b>{item.item_type === "income" ? "+" : "−"}{money(item.amount)}</b></header>
         <p>{copy("día","day")} {item.due_day || "—"} · {item.frequency}</p>
-        <div className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={() => toggle(item)}>{item.is_active ? copy("Pausar","Pause") : copy("Activar","Activate")}</button><button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(item)}>{copy("Eliminar","Delete")}</button></div>
-      </article>) : <p className="panel finva-empty-state">{copy("No tenés movimientos recurrentes.","You have no recurring items.")}</p>}</div>
+        <div className="actions"><button className="dincr-button dincr-button-secondary" type="button" onClick={() => toggle(item)}>{item.is_active ? copy("Pausar","Pause") : copy("Activar","Activate")}</button><button className="dincr-button dincr-button-danger" type="button" onClick={() => setDeleting(item)}>{copy("Eliminar","Delete")}</button></div>
+      </article>) : <p className="panel dincr-empty-state">{copy("No tenés movimientos recurrentes.","You have no recurring items.")}</p>}</div>
     </>}
-    <button className="finva-add-strip basic-recurring-add" type="button" onClick={() => setCreating(true)}><span><Repeat2 size={20}/></span><div><strong>{copy("Crear recurrente","Create recurring item")}</strong><small>{copy("Ingreso o gasto periódico","Recurring income or expense")}</small></div><Plus size={19}/></button>
+    <button className="dincr-add-strip basic-recurring-add" type="button" onClick={() => setCreating(true)}><span><Repeat2 size={20}/></span><div><strong>{copy("Crear recurrente","Create recurring item")}</strong><small>{copy("Ingreso o gasto periódico","Recurring income or expense")}</small></div><Plus size={19}/></button>
 
-    <FinvaFormSheet open={creating} eyebrow={copy("Nuevo recurrente","New recurring item")} title={copy("Agregar recurrente","Add recurring item")} onClose={() => setCreating(false)}>
-      <form className="form finva-sheet-form" onSubmit={submit}>
-        <div className="finva-compact-fields">
+    <DincrFormSheet open={creating} eyebrow={copy("Nuevo recurrente","New recurring item")} title={copy("Agregar recurrente","Add recurring item")} onClose={() => setCreating(false)}>
+      <form className="form dincr-sheet-form" onSubmit={submit}>
+        <div className="dincr-compact-fields">
           <label><span>{copy("Nombre","Name")}</span><input required placeholder={copy("Ej. Netflix","E.g. Netflix")} value={form.name} onChange={(e) => setForm({...form,name:e.target.value})}/></label>
           <label><span>{copy("Monto","Amount")}</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="₡0" value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></label>
           <label><span>{copy("Categoría","Category")}</span><input placeholder={copy("Categoría","Category")} value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/></label>
@@ -65,9 +65,9 @@ export default function Recurring({ plan = "basic" }) {
           <label><span>{copy("Frecuencia","Frequency")}</span><select value={form.frequency} onChange={(e) => setForm({...form,frequency:e.target.value})}><option value="weekly">{copy("Semanal","Weekly")}</option><option value="biweekly">{copy("Quincenal","Twice monthly")}</option><option value="monthly">{copy("Mensual","Monthly")}</option><option value="quarterly">{copy("Trimestral","Quarterly")}</option><option value="annual">{copy("Anual","Annual")}</option></select></label>
           <label><span>{copy("Día de cobro","Due day")}</span><input type="number" inputMode="numeric" min="1" max="31" placeholder="1–31" value={form.due_day} onChange={(e) => setForm({...form,due_day:e.target.value})}/></label>
         </div>
-        <button className="finva-button finva-button-primary">{copy("Guardar recurrente","Save recurring item")}</button>
+        <button className="dincr-button dincr-button-primary">{copy("Guardar recurrente","Save recurring item")}</button>
       </form>
-    </FinvaFormSheet>
+    </DincrFormSheet>
     <ConfirmDialog open={Boolean(deleting)} title={copy("Eliminar recurrente","Delete recurring item")} description={deleting ? copy(`Se eliminará ${deleting.name} de tus movimientos recurrentes.`, `${deleting.name} will be removed from your recurring items.`) : ""} onConfirm={remove} onClose={() => { if (!busy) setDeleting(null); }} busy={busy}/>
   </section>;
 }

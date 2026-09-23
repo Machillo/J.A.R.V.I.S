@@ -41,7 +41,7 @@ def test_matching_bank_confirmation_activates_order(monkeypatch):
     order = {"id": 17, "plan_code": "basic", "amount": 1990}
     conn = _Connection(order)
     activated = []
-    monkeypatch.setenv("FINVA_SINPE_PHONE", "8888-8888")
+    monkeypatch.setenv("DINCR_SINPE_PHONE", "8888-8888")
     monkeypatch.setattr(service, "_activate_order", lambda *args: activated.append(args))
 
     result = service.match_sinpe_payment(conn, _candidate())
@@ -55,7 +55,7 @@ def test_legacy_finva_payment_code_still_activates_existing_order(monkeypatch):
     order = {"id": 18, "plan_code": "vip", "amount": 1990}
     conn = _Connection(order)
     activated = []
-    monkeypatch.setenv("FINVA_SINPE_PHONE", "8888-8888")
+    monkeypatch.setenv("DINCR_SINPE_PHONE", "8888-8888")
     monkeypatch.setattr(service, "_activate_order", lambda *args: activated.append(args))
 
     result = service.match_sinpe_payment(
@@ -70,7 +70,7 @@ def test_legacy_finva_payment_code_still_activates_existing_order(monkeypatch):
 def test_outgoing_or_wrong_amount_does_not_activate(monkeypatch):
     conn = _Connection({"id": 17, "plan_code": "basic", "amount": 1990})
     activated = []
-    monkeypatch.delenv("FINVA_SINPE_PHONE", raising=False)
+    monkeypatch.delenv("DINCR_SINPE_PHONE", raising=False)
     monkeypatch.setattr(service, "_activate_order", lambda *args: activated.append(args))
 
     assert service.match_sinpe_payment(conn, _candidate(movement_direction="out")) is None
@@ -80,7 +80,7 @@ def test_outgoing_or_wrong_amount_does_not_activate(monkeypatch):
 
 def test_wrong_destination_phone_does_not_activate(monkeypatch):
     conn = _Connection({"id": 17, "plan_code": "basic", "amount": 1990})
-    monkeypatch.setenv("FINVA_SINPE_PHONE", "8777-7777")
+    monkeypatch.setenv("DINCR_SINPE_PHONE", "8777-7777")
     monkeypatch.setattr(service, "_activate_order", lambda *args: None)
 
     assert service.match_sinpe_payment(conn, _candidate()) is None

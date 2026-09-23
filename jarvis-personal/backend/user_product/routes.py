@@ -314,8 +314,11 @@ def vip_gmail_disconnect(connection_id: int | None = None):
     require_feature("gmail_automation"); return disconnect_gmail(connection_id)
 
 @router.post("/vip/gmail/maintenance")
-def vip_gmail_maintenance(x_finva_cron_secret: str | None = Header(default=None)):
-    return gmail_maintenance(x_finva_cron_secret)
+def vip_gmail_maintenance(
+    x_dincr_cron_secret: str | None = Header(default=None),
+    x_finva_cron_secret: str | None = Header(default=None),  # legacy header until the cron caller is updated
+):
+    return gmail_maintenance(x_dincr_cron_secret or x_finva_cron_secret)
 
 @router.post("/vip/gmail/push")
 def vip_gmail_push(payload: dict, token: str | None = Query(default=None)):
