@@ -3,6 +3,22 @@ import { LockKeyhole, MailCheck, ShieldCheck } from "lucide-react";
 const path = window.location.pathname;
 const isPrivacy = path === "/privacy";
 const isTerms = path === "/terms";
+const isDeletion = path === "/delete-account";
+
+function DeleteAccountPage() {
+  return <>
+    <span className="public-kicker">CONTROL DE TUS DATOS</span>
+    <h1>Eliminar tu cuenta de DINCR</h1>
+    <p className="public-lead">Podés solicitar la eliminación de tu cuenta y de los datos asociados desde DINCR, también si ingresás desde un navegador.</p>
+    <section className="public-copy legal-copy">
+      <h2>Cómo solicitarla</h2>
+      <p>Ingresá a tu cuenta, abrí Perfil o Más → Ajustes de cuenta y plan → Eliminar cuenta, y confirmá la solicitud. Si ya no tenés acceso a tu cuenta, abrí la aplicación y usá la opción de soporte para pedir ayuda con la recuperación del acceso antes de eliminarla.</p>
+      <p><a href="/">Ingresar a DINCR para eliminar mi cuenta</a></p>
+      <h2>Qué se elimina</h2>
+      <p>Se eliminan el perfil y los datos financieros asociados, incluidos movimientos, deudas, metas y configuraciones. Algunos registros pueden conservarse temporalmente cuando sea necesario por obligaciones legales, seguridad, pagos, copias de respaldo o reclamaciones, según la <a href="/privacy">Política de Privacidad</a>.</p>
+    </section>
+  </>;
+}
 
 function AboutPage() {
   return <>
@@ -63,8 +79,8 @@ function PrivacyPage() {
 
 export default function PublicInfoPage() {
   return <main className="public-info-shell">
-    <nav className="public-info-nav" aria-label="Información pública"><a className="public-brand" href="/about">DINCR</a><div><a className={!isPrivacy&&!isTerms?"active":""} href="/about">Acerca de</a><a className={isTerms?"active":""} href="/terms">Términos</a><a className={isPrivacy?"active":""} href="/privacy">Privacidad</a></div></nav>
-    <div className="public-info-content">{isTerms ? <TermsPage/> : isPrivacy ? <PrivacyPage/> : <AboutPage/>}</div>
-    <footer><span>DINCR + J.A.R.V.I.S. · Costa Rica</span><div><a href="/terms">Términos</a> · <a href="/privacy">Privacidad</a></div></footer>
+    <nav className="public-info-nav" aria-label="Información pública"><a className="public-brand" href="/about">DINCR</a><div><a className={!isPrivacy&&!isTerms&&!isDeletion?"active":""} href="/about">Acerca de</a><a className={isTerms?"active":""} href="/terms">Términos</a><a className={isPrivacy?"active":""} href="/privacy">Privacidad</a><a className={isDeletion?"active":""} href="/delete-account">Eliminar cuenta</a></div></nav>
+    <div className="public-info-content">{isDeletion ? <DeleteAccountPage/> : isTerms ? <TermsPage/> : isPrivacy ? <PrivacyPage/> : <AboutPage/>}</div>
+    <footer><span>DINCR + J.A.R.V.I.S. · Costa Rica</span><div><a href="/terms">Términos</a> · <a href="/privacy">Privacidad</a> · <a href="/delete-account">Eliminar cuenta</a></div></footer>
   </main>;
 }
