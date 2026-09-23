@@ -2,7 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { API_URL } from "./apiUrl";
 import { authenticatedFetch } from "./authenticatedFetch";
 
-const QUEUE_KEY = "finva:incident-queue:v1";
+const QUEUE_KEY = "dincr:incident-queue:v1";
 const DEDUPE_MS = 15 * 60 * 1000;
 let flushing = false;
 
@@ -28,7 +28,7 @@ const safeIncident = (incident) => ({
   error_type: clean(incident.errorType || "api_error", 80),
   app_version: clean(import.meta.env.VITE_APP_VERSION || "dev", 30),
   platform: clean(Capacitor.getPlatform(), 30),
-  screen: clean(window.sessionStorage.getItem("finva:current-screen") || window.location.pathname, 80),
+  screen: clean(window.sessionStorage.getItem("dincr:current-screen") || window.location.pathname, 80),
   retry_count: Math.min(Math.max(Number(incident.retryCount) || 0, 0), 3),
 });
 
@@ -50,7 +50,7 @@ export async function flushIncidentQueue() {
     if (!response.ok) return null;
     const result = await response.json();
     writeQueue(queue.slice(1));
-    window.dispatchEvent(new CustomEvent("finva:incident-reported", { detail: result }));
+    window.dispatchEvent(new CustomEvent("dincr:incident-reported", { detail: result }));
     return result;
   } catch {
     return null;

@@ -6,15 +6,15 @@ import { dirname, resolve } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (path) => readFileSync(resolve(here, path), "utf8");
 
-const onboarding = read("../src/pages/FinvaOnboarding.jsx");
-const story = read("../src/pages/FinvaWelcomeStory.jsx");
+const onboarding = read("../src/pages/DincrOnboarding.jsx");
+const story = read("../src/pages/DincrWelcomeStory.jsx");
 const storage = read("../src/lib/firstRunExperience.js");
-const styles = read("../src/pages/FinvaOnboarding.css");
+const styles = read("../src/pages/DincrOnboarding.css");
 
-assert.match(onboarding, /shouldShowFinvaWelcome\(user\?\.id\)/);
-assert.match(onboarding, /markFinvaWelcomeSeen\(user\?\.id\)/);
-assert.match(onboarding, /<FinvaWelcomeStory onFinish=\{finishWelcome\}/);
-assert.match(storage, /finva:first-run-welcome:/);
+assert.match(onboarding, /shouldShowDincrWelcome\(user\?\.id\)/);
+assert.match(onboarding, /markDincrWelcomeSeen\(user\?\.id\)/);
+assert.match(onboarding, /<DincrWelcomeStory [^>]*onFinish=\{finishWelcome\}/);
+assert.match(storage, /dincr:first-run-welcome:/);
 assert.match(story, /AUTO_ADVANCE_MS = 3500/);
 assert.match(story, /Omitir/);
 assert.match(story, /sin pedirte llenar un formulario financiero/);
@@ -28,9 +28,9 @@ globalThis.window = {
   },
 };
 const firstRun = await import("../src/lib/firstRunExperience.js");
-assert.equal(firstRun.shouldShowFinvaWelcome("account-a"), true);
-firstRun.markFinvaWelcomeSeen("account-a");
-assert.equal(firstRun.shouldShowFinvaWelcome("account-a"), false);
-assert.equal(firstRun.shouldShowFinvaWelcome("account-b"), true);
+assert.equal(firstRun.shouldShowDincrWelcome("account-a"), true);
+firstRun.markDincrWelcomeSeen("account-a");
+assert.equal(firstRun.shouldShowDincrWelcome("account-a"), false);
+assert.equal(firstRun.shouldShowDincrWelcome("account-b"), true);
 
 console.log("Phase 0H first-run welcome contract passed.");

@@ -2,7 +2,7 @@ import { API_URL } from "./apiUrl";
 import { authenticatedFetch } from "./authenticatedFetch";
 import { supabase } from "./supabase";
 
-const QUEUE_PREFIX = "finva:operation-queue:v1:";
+const QUEUE_PREFIX = "dincr:operation-queue:v1:";
 const MAX_OPERATIONS = 20;
 const MAX_BODY_BYTES = 32 * 1024;
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -46,7 +46,7 @@ const readQueue = (userId) => {
   }
 };
 
-const emitQueue = (items) => window.dispatchEvent(new CustomEvent("finva:operation-queue-changed", {
+const emitQueue = (items) => window.dispatchEvent(new CustomEvent("dincr:operation-queue-changed", {
   detail: { pending: items.length },
 }));
 
@@ -115,7 +115,7 @@ export async function recoverableFetch(url, options = {}) {
     if (response.ok || (response.status < 500 && !processing)) removeOperation(userId, operation.id);
     return response;
   } catch (error) {
-    error.finvaOperationQueued = true;
+    error.dincrOperationQueued = true;
     throw error;
   }
 }
@@ -137,14 +137,14 @@ export async function flushPendingOperations() {
         if (response.ok) {
           queue = removeOperation(userId, operation.id);
           recovered += 1;
-          window.dispatchEvent(new CustomEvent("finva:operation-recovered", {
+          window.dispatchEvent(new CustomEvent("dincr:operation-recovered", {
             detail: { path: operation.path, pending: queue.length },
           }));
           continue;
         }
         if (response.status < 500 && !processing) {
           queue = removeOperation(userId, operation.id);
-          window.dispatchEvent(new CustomEvent("finva:operation-recovery-failed", {
+          window.dispatchEvent(new CustomEvent("dincr:operation-recovery-failed", {
             detail: { path: operation.path, status: response.status, pending: queue.length },
           }));
           continue;

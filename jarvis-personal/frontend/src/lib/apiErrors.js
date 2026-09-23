@@ -1,14 +1,14 @@
 import { recordError } from "./telemetry";
 import { captureIncident } from "./incidentReporter";
 
-export const SUPPORT_CONTEXT_KEY = "finva:support-context";
+export const SUPPORT_CONTEXT_KEY = "dincr:support-context";
 
 const GENERIC_MESSAGE = "No pudimos completar esta acción. Intentá nuevamente o pedí ayuda a soporte.";
 
-export class FinvaApiError extends Error {
+export class DincrApiError extends Error {
   constructor(message, { status, errorId, requestId, retryCount, path, method, technicalMessage } = {}) {
     super(message);
-    this.name = "FinvaApiError";
+    this.name = "DincrApiError";
     this.status = status;
     this.errorId = errorId || "";
     this.requestId = requestId || errorId || "";
@@ -33,11 +33,11 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
   else if (status === 409 || status === 422) message = detail || "Revisá la información e intentá nuevamente.";
   else if (status >= 400 && status < 500) message = detail || "No pudimos procesar la solicitud.";
 
-  const error = new FinvaApiError(message, {
+  const error = new DincrApiError(message, {
     status,
     errorId: deletionId || (typeof payload === "object" ? payload?.error_id : ""),
-    requestId: response?.finvaRequestId || response?.headers?.get?.("X-Request-ID") || payload?.request_id || "",
-    retryCount: response?.finvaRetryCount || 0,
+    requestId: response?.dincrRequestId || response?.headers?.get?.("X-Request-ID") || payload?.request_id || "",
+    retryCount: response?.dincrRetryCount || 0,
     path,
     method,
     technicalMessage: deletionStage ? `${detail} [${deletionStage}]` : detail,
@@ -54,7 +54,7 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
       errorType: `http_${status || "network"}`,
       summary: "DINCR no pudo completar una acción.",
     };
-    window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));
+    window.dispatchEvent(new CustomEvent("dincr:api-error", { detail: incident }));
     captureIncident(incident);
   }
   recordError(error, `api:${path || "unknown"}`);
@@ -62,14 +62,14 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
 }
 
 export function apiNetworkError(cause, path, method = "GET", autoReport = true) {
-  const queued = Boolean(cause?.finvaOperationQueued);
-  const error = new FinvaApiError(queued
+  const queued = Boolean(cause?.dincrOperationQueued);
+  const error = new DincrApiError(queued
     ? "Guardamos este cambio en el dispositivo. DINCR lo enviará cuando vuelva la conexión."
     : GENERIC_MESSAGE, {
     status: 0,
-    errorId: cause?.finvaRequestId || "",
-    requestId: cause?.finvaRequestId || "",
-    retryCount: cause?.finvaRetryCount || 0,
+    errorId: cause?.dincrRequestId || "",
+    requestId: cause?.dincrRequestId || "",
+    retryCount: cause?.dincrRetryCount || 0,
     path,
     method,
     technicalMessage: cause?.name || "NetworkError",
@@ -81,7 +81,7 @@ export function apiNetworkError(cause, path, method = "GET", autoReport = true) 
     errorType: cause?.name || "network_error", summary: "DINCR perdió comunicación con el servicio.",
   };
   if (autoReport) {
-    window.dispatchEvent(new CustomEvent("finva:api-error", { detail: incident }));
+    window.dispatchEvent(new CustomEvent("dincr:api-error", { detail: incident }));
     captureIncident(incident);
   }
   recordError(error, `api:${path || "unknown"}`);
@@ -96,5 +96,5 @@ export function openSupport(context = {}) {
     summary: String(context.summary || "").slice(0, 240),
   };
   window.sessionStorage.setItem(SUPPORT_CONTEXT_KEY, JSON.stringify(safeContext));
-  window.dispatchEvent(new CustomEvent("finva:open-support", { detail: safeContext }));
+  window.dispatchEvent(new CustomEvent("dincr:open-support", { detail: safeContext }));
 }

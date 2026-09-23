@@ -46,6 +46,6 @@
 }
 
 .native-platform--ios :is(input,select,textarea) { border-radius: 16px; }
-.native-platform--ios :is(.primary-button,.finva-button,.jarvis-action-button,.action-primary) { border-radius: 18px; }
+.native-platform--ios :is(.primary-button,.dincr-button,.jarvis-action-button,.action-primary) { border-radius: 18px; }
 
 .native-platform--ios .native-scroll-content { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }

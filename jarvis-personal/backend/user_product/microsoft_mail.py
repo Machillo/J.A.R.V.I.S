@@ -26,19 +26,19 @@ from backend.auth.current_user import get_current_account_id, get_current_worksp
 from backend.core.database import get_connection
 from backend.user_product.gmail_consent import require_gmail_consent
 from backend.user_product.gmail_service import (
-    FINVA_QUERY, _financial_user_id_for_account, _has_active_vip_access,
+    DINCR_QUERY, _financial_user_id_for_account, _has_active_vip_access,
     _ingest_message, _vault_create, _vault_delete, _vault_read,
 )
 
 SCOPE = "offline_access User.Read Mail.Read"
 AUTHORITY = "https://login.microsoftonline.com/consumers/oauth2/v2.0"
 GRAPH = "https://graph.microsoft.com/v1.0"
-ALLOWED_SENDERS = frozenset(re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)) | {"ccss.sa.cr"}
+ALLOWED_SENDERS = frozenset(re.findall(r"from:([\w@.\-]+)", DINCR_QUERY, flags=re.I)) | {"ccss.sa.cr"}
 
 
 def _config() -> tuple[str, str, str]:
     values = tuple(os.getenv(name, "").strip() for name in (
-        "FINVA_MICROSOFT_CLIENT_ID", "FINVA_MICROSOFT_CLIENT_SECRET", "FINVA_MICROSOFT_REDIRECT_URI",
+        "DINCR_MICROSOFT_CLIENT_ID", "DINCR_MICROSOFT_CLIENT_SECRET", "DINCR_MICROSOFT_REDIRECT_URI",
     ))
     if not all(values):
         raise HTTPException(status_code=503, detail="Outlook todavía no está configurado en DINCR.")
@@ -69,7 +69,7 @@ def _verify_state(value: str | None) -> dict | None:
 
 
 def _return_url(status: str) -> str:
-    base = os.getenv("FINVA_GMAIL_RETURN_URL", "com.finva.app://gmail/callback").strip()
+    base = os.getenv("DINCR_GMAIL_RETURN_URL", "com.dincr.app://gmail/callback").strip()
     return f"{base}{'&' if '?' in base else '?'}{urlencode({'microsoft': status})}"
 
 

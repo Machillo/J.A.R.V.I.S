@@ -166,7 +166,7 @@ def test_canonical_insert_keeps_statement_link_and_valid_parameter_shape(monkeyp
 
     monkeypatch.setattr(gmail_service, "discover_candidate_account", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(gmail_service, "resolve_candidate", lambda *_args, **_kwargs: {"status": "pending"})
-    result = gmail_service._insert_finva_candidate(
+    result = gmail_service._insert_dincr_candidate(
         _StrictConnection(), email_message_id=9,
         connection={"account_id": "account-a", "workspace_id": "workspace-a", "legacy_user_id": 7},
         candidate=candidate, statement_document_id=88,
@@ -214,7 +214,7 @@ def test_phase_1_contract_excludes_raw_email_and_is_idempotent():
 
 
 def test_first_sync_query_covers_current_calendar_year(monkeypatch):
-    monkeypatch.setattr(gmail_service, "FINVA_QUERY", "(from:bank@example.com) newer_than:45d -in:spam")
+    monkeypatch.setattr(gmail_service, "DINCR_QUERY", "(from:bank@example.com) newer_than:45d -in:spam")
     query = gmail_service._year_to_date_query(date(2026, 9, 21))
     assert "newer_than" not in query
     assert "after:2026/01/01" in query
@@ -222,9 +222,9 @@ def test_first_sync_query_covers_current_calendar_year(monkeypatch):
 
 
 def test_finva_query_includes_all_verified_popular_domains():
-    assert "from:bancopopular.fi.cr" in gmail_service.FINVA_QUERY
-    assert "from:bancopopularinforma.fi.cr" in gmail_service.FINVA_QUERY
-    assert "from:bpdc.fi.cr" in gmail_service.FINVA_QUERY
+    assert "from:bancopopular.fi.cr" in gmail_service.DINCR_QUERY
+    assert "from:bancopopularinforma.fi.cr" in gmail_service.DINCR_QUERY
+    assert "from:bpdc.fi.cr" in gmail_service.DINCR_QUERY
 
 
 def test_message_listing_paginates_but_respects_hard_limit():

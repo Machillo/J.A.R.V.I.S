@@ -5,7 +5,7 @@ import { analyticsEvents, safeAnalyticsProperties } from "./analyticsContract";
 const key = import.meta.env.VITE_POSTHOG_KEY?.trim();
 const host = import.meta.env.VITE_POSTHOG_HOST?.trim();
 const validHost = /^https:\/\/(?:us|eu)\.i\.posthog\.com\/?$/.test(host || "");
-const isDincrBuild = (import.meta.env.VITE_NATIVE_APP_ID || "com.finva.app") === "com.finva.app";
+const isDincrBuild = (import.meta.env.VITE_NATIVE_APP_ID || "com.dincr.app") === "com.dincr.app";
 
 let initialized = false;
 let eligible = false;

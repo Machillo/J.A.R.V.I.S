@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const entry = read("../src/main.jsx");
 const publicPage = read("../src/pages/PublicInfoPage.jsx");
-const accountActions = read("../src/products/finva/components/AccountActions.jsx");
-const registry = read("../src/products/finva/features/registry.jsx");
+const accountActions = read("../src/products/dincr/components/AccountActions.jsx");
+const registry = read("../src/products/dincr/features/registry.jsx");
 const android = read("../android/variables.gradle");
 
 assert.match(entry, /"\/delete-account"/, "Public deletion page must load without authentication");

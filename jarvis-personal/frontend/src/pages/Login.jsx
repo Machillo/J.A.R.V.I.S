@@ -37,21 +37,21 @@ export default function Login({ nativeError = "" }) {
   return (
     <main className="login-page auth-shell">
       <section className="login-card auth-card">
-        <div className="finva-login-top">
+        <div className="dincr-login-top">
           <strong>DINCR</strong>
           <small>Finanzas personales · Costa Rica</small>
         </div>
 
-        <div className="finva-login-hero">
-          <span className="finva-login-mark" aria-hidden="true">D</span>
+        <div className="dincr-login-hero">
+          <span className="dincr-login-mark" aria-hidden="true">D</span>
           <h1 className="auth-title">DINCR</h1>
           <h2>{tx("Tu dinero, con propósito", "Your money, with purpose")}</h2>
-          <p className="finva-login-pillars">
+          <p className="dincr-login-pillars">
             {tx("Organizá · Planificá · Avanzá · Lográ más", "Organize · Plan · Move forward · Achieve more")}
           </p>
         </div>
 
-        <h3 className="finva-login-account-title">
+        <h3 className="dincr-login-account-title">
           {tx("Una cuenta, tus espacios financieros", "One account, your financial spaces")}
         </h3>
 

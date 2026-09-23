@@ -7,7 +7,7 @@ import {
   updateVipSalvavidas,
 } from "../services/jarvisApi";
 
-const finvaStrategyApi = {
+const dincrStrategyApi = {
   getStrategyDashboard: getVipStrategyDashboard,
   getDebtAdvisory: getVipDebtAdvisory,
   getSalvavidas: getVipSalvavidas,
@@ -16,5 +16,5 @@ const finvaStrategyApi = {
 };
 
 export default function VipStrategy() {
-  return <PremiumStrategy api={finvaStrategyApi} brandName="DINCR" />;
+  return <PremiumStrategy api={dincrStrategyApi} brandName="DINCR" />;
 }

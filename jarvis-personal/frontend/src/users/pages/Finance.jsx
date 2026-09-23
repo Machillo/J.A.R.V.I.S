@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronDown, Plus, Search, Tag } from "lucide-react";
 import { createExpense, createIncome, deleteExpense, deleteIncome, getExpenses, getIncome, updateExpense, updateIncome } from "../services/jarvisApi";
-import { ConfirmDialog } from "../components/FinvaDialog";
-import FinvaFormSheet from "../components/FinvaFormSheet";
+import { ConfirmDialog } from "../components/DincrDialog";
+import DincrFormSheet from "../components/DincrFormSheet";
 import { deviceLanguage, localeTag } from "../../lib/locale";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
@@ -26,13 +26,13 @@ function EntryFields({ form, setForm, categories }) {
 }
 
 function Fold({ id, title, subtitle, total, open, onToggle, children }) {
-  return <section className={`finva-fold ${open ? "open" : ""}`}>
-    <button className="finva-fold-head" type="button" onClick={() => onToggle(id)} aria-expanded={open}>
-      <span className="finva-fold-chevron"><ChevronDown size={18}/></span>
-      <span className="finva-fold-copy"><strong>{title}</strong>{subtitle && <small>{subtitle}</small>}</span>
+  return <section className={`dincr-fold ${open ? "open" : ""}`}>
+    <button className="dincr-fold-head" type="button" onClick={() => onToggle(id)} aria-expanded={open}>
+      <span className="dincr-fold-chevron"><ChevronDown size={18}/></span>
+      <span className="dincr-fold-copy"><strong>{title}</strong>{subtitle && <small>{subtitle}</small>}</span>
       <b>{total}</b>
     </button>
-    {open && <div className="finva-fold-body">{children}</div>}
+    {open && <div className="dincr-fold-body">{children}</div>}
   </section>;
 }
 
@@ -49,12 +49,12 @@ export default function Finance({ plan = "basic" }) {
   const [query,setQuery] = useState("");
   const [filter,setFilter] = useState("all");
   const [openGroups,setOpenGroups] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("finva:finance-folds")) || ["income","expenses"]; } catch { return ["income","expenses"]; }
+    try { return JSON.parse(localStorage.getItem("dincr:finance-folds")) || ["income","expenses"]; } catch { return ["income","expenses"]; }
   });
 
   const toggleGroup = (id) => setOpenGroups((current) => {
     const next = current.includes(id) ? current.filter((item) => item !== id) : [...current,id];
-    localStorage.setItem("finva:finance-folds", JSON.stringify(next));
+    localStorage.setItem("dincr:finance-folds", JSON.stringify(next));
     return next;
   });
   const run = useCallback(async (fn) => {
@@ -87,7 +87,7 @@ export default function Finance({ plan = "basic" }) {
   ].filter((item) => (filter === "all" || item.kind === filter) && `${item.description || ""} ${item.category || ""}`.toLowerCase().includes(query.toLowerCase()))
     .sort((a,b) => String(b.date || "").localeCompare(String(a.date || "")));
 
-  const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="finva-fold-row" key={item.id}><span><strong>{item.description || item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b className={tone}>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || item.category})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="finva-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
+  const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="dincr-fold-row" key={item.id}><span><strong>{item.description || item.category}</strong><small>{item.entry_date} · {item.category}</small></span><span><b className={tone}>{money(item.amount)}</b><span className="actions"><button className="dincr-button dincr-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="dincr-button dincr-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || item.category})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="dincr-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
 
   const compact = plan === "free" || plan === "basic" || plan === "vip";
   const content = compact ? <section className={`free-screen free-movements-screen ${plan !== "free" ? "basic-movements-screen" : ""}`}>
@@ -104,17 +104,17 @@ export default function Finance({ plan = "basic" }) {
       </button>) : <p className="free-empty">{tx("No hay movimientos con esos filtros.", "No transactions match those filters.")}</p>}
     </div>
     <button className="free-primary-button" type="button" onClick={() => setEntryKind("choose")}><Plus size={18}/>{tx("Agregar movimiento", "Add transaction")}</button>
-  </section> : <section className="finance-page finva-progressive-page">
+  </section> : <section className="finance-page dincr-progressive-page">
     <div className="hero"><span>{tx("MOVIMIENTOS", "TRANSACTIONS")}</span><h1>{tx("Tu dinero día a día", "Your money day by day")}</h1><p>{tx("Registrá lo que realmente entra y sale de tus cuentas. Sin proyecciones de salario.", "Record what actually enters and leaves your accounts, without projected income.")}</p></div>
     {error && <div className="panel error">{error}</div>}
-    <div className="finva-money-summary"><small>{tx("Balance de movimientos", "Transaction balance")}</small><strong>{money(incomeTotal-expenseTotal)}</strong><span>{money(incomeTotal)} {tx("ingresado", "received")} · {money(expenseTotal)} {tx("gastado", "spent")}</span></div>
+    <div className="dincr-money-summary"><small>{tx("Balance de movimientos", "Transaction balance")}</small><strong>{money(incomeTotal-expenseTotal)}</strong><span>{money(incomeTotal)} {tx("ingresado", "received")} · {money(expenseTotal)} {tx("gastado", "spent")}</span></div>
 
     <div className="entry-quick-actions compact">
-      <button className="finva-quick-action income" type="button" onClick={()=>setEntryKind("income")}><span><ArrowDownLeft size={20}/></span><div><strong>{tx("Ingreso", "Income")}</strong><small>{tx("Agregar movimiento", "Add transaction")}</small></div><Plus size={18}/></button>
-      <button className="finva-quick-action expense" type="button" onClick={()=>setEntryKind("expense")}><span><ArrowUpRight size={20}/></span><div><strong>{tx("Gasto", "Expense")}</strong><small>{tx("Agregar movimiento", "Add transaction")}</small></div><Plus size={18}/></button>
+      <button className="dincr-quick-action income" type="button" onClick={()=>setEntryKind("income")}><span><ArrowDownLeft size={20}/></span><div><strong>{tx("Ingreso", "Income")}</strong><small>{tx("Agregar movimiento", "Add transaction")}</small></div><Plus size={18}/></button>
+      <button className="dincr-quick-action expense" type="button" onClick={()=>setEntryKind("expense")}><span><ArrowUpRight size={20}/></span><div><strong>{tx("Gasto", "Expense")}</strong><small>{tx("Agregar movimiento", "Add transaction")}</small></div><Plus size={18}/></button>
     </div>
 
-    <div className="finva-fold-list">
+    <div className="dincr-fold-list">
       <Fold id="income" title={tx("Ingresos", "Income")} subtitle={`${income.length} ${tx("movimientos", "transactions")}`} total={money(incomeTotal)} open={openGroups.includes("income")} onToggle={toggleGroup}>{rows(income,"income","positive")}</Fold>
       <Fold id="expenses" title={tx("Gastos", "Expenses")} subtitle={`${expenses.length} ${tx("movimientos", "transactions")}`} total={money(expenseTotal)} open={openGroups.includes("expenses")} onToggle={toggleGroup}>{rows(expenses,"expense","negative")}</Fold>
     </div>
@@ -122,10 +122,10 @@ export default function Finance({ plan = "basic" }) {
   </section>;
 
   return <>{content}
-    <FinvaFormSheet open={Boolean(entryKind)} eyebrow={tx("Nuevo movimiento", "New transaction")} title={entryKind === "choose" ? tx("¿Qué querés registrar?", "What do you want to record?") : isIncome ? tx("Agregar ingreso", "Add income") : tx("Agregar gasto", "Add expense")} onClose={()=>setEntryKind(null)}>
-      {entryKind === "choose" ? <div className="free-entry-choices"><button type="button" onClick={() => setEntryKind("income")}><ArrowDownLeft/>{tx("Ingreso", "Income")}</button><button type="button" onClick={() => setEntryKind("expense")}><ArrowUpRight/>{tx("Gasto", "Expense")}</button></div> : <form className={`form finva-sheet-form entry-form ${isIncome ? "income":"expense"}`} onSubmit={isIncome ? submitIncome:submitExpense}><EntryFields form={activeForm} setForm={isIncome ? setIncomeForm:setExpenseForm} categories={isIncome ? incomeCategories:expenseCategories}/>{isIncome && <p className="finva-form-hint">{tx("Ingresá el monto real que recibiste según tu boleta o depósito bancario.", "Enter the actual amount received according to your pay stub or bank deposit.")}</p>}<button className={`finva-button ${isIncome ? "finva-button-success":"finva-button-primary"}`}>{isIncome ? tx("Guardar ingreso", "Save income") : tx("Guardar gasto", "Save expense")}</button></form>}
-    </FinvaFormSheet>
-    <FinvaFormSheet open={Boolean(editing)} eyebrow={tx("Movimiento", "Transaction")} title={editing?.kind === "income" ? tx("Editar ingreso", "Edit income") : tx("Editar gasto", "Edit expense")} onClose={()=>setEditing(null)}>{editing && <form className="form finva-sheet-form entry-form" onSubmit={saveEdit}><EntryFields form={editing} setForm={setEditing} categories={editing.kind === "income" ? incomeCategories:expenseCategories}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}</FinvaFormSheet>
+    <DincrFormSheet open={Boolean(entryKind)} eyebrow={tx("Nuevo movimiento", "New transaction")} title={entryKind === "choose" ? tx("¿Qué querés registrar?", "What do you want to record?") : isIncome ? tx("Agregar ingreso", "Add income") : tx("Agregar gasto", "Add expense")} onClose={()=>setEntryKind(null)}>
+      {entryKind === "choose" ? <div className="free-entry-choices"><button type="button" onClick={() => setEntryKind("income")}><ArrowDownLeft/>{tx("Ingreso", "Income")}</button><button type="button" onClick={() => setEntryKind("expense")}><ArrowUpRight/>{tx("Gasto", "Expense")}</button></div> : <form className={`form dincr-sheet-form entry-form ${isIncome ? "income":"expense"}`} onSubmit={isIncome ? submitIncome:submitExpense}><EntryFields form={activeForm} setForm={isIncome ? setIncomeForm:setExpenseForm} categories={isIncome ? incomeCategories:expenseCategories}/>{isIncome && <p className="dincr-form-hint">{tx("Ingresá el monto real que recibiste según tu boleta o depósito bancario.", "Enter the actual amount received according to your pay stub or bank deposit.")}</p>}<button className={`dincr-button ${isIncome ? "dincr-button-success":"dincr-button-primary"}`}>{isIncome ? tx("Guardar ingreso", "Save income") : tx("Guardar gasto", "Save expense")}</button></form>}
+    </DincrFormSheet>
+    <DincrFormSheet open={Boolean(editing)} eyebrow={tx("Movimiento", "Transaction")} title={editing?.kind === "income" ? tx("Editar ingreso", "Edit income") : tx("Editar gasto", "Edit expense")} onClose={()=>setEditing(null)}>{editing && <form className="form dincr-sheet-form entry-form" onSubmit={saveEdit}><EntryFields form={editing} setForm={setEditing} categories={editing.kind === "income" ? incomeCategories:expenseCategories}/><button className="dincr-button dincr-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}</DincrFormSheet>
     <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar movimiento", "Delete transaction")} description={deleting ? tx(`Se eliminará ${deleting.label}. Esta acción no se puede deshacer.`, `${deleting.label} will be deleted. This action cannot be undone.`):""} onConfirm={remove} onClose={()=>{if(!deletingBusy)setDeleting(null);}} busy={deletingBusy}/>
   </>;
 }

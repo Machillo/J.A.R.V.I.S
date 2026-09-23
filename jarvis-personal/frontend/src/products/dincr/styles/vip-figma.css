@@ -1,0 +1,81 @@
+/* DINCR VIP — canonical implementation of Figma section 56:880. */
+.native-product--dincr.native-plan--vip{--vip-bg:#060e1a;--vip-surface:#0b1726;--vip-surface-raised:#0f1f33;--vip-focus:#140f26;--vip-border:#1a2945;--vip-text:#f7fbff;--vip-muted:#9eb0c4;--vip-violet:#9c7aff;--vip-mint:#0ac7b2;--vip-gold:#e0b861;--vip-coral:#f5405e;--vip-blue:#1aa6f5;color-scheme:dark;min-height:100dvh;background:var(--vip-bg);color:var(--vip-text)}
+body:has(.native-product--dincr.native-plan--vip){background:var(--vip-bg)}
+.native-product--dincr.native-plan--vip::before,.native-product--dincr.native-plan--vip>.mobile-app-shell>.native-product-header{display:none}
+.native-product--dincr.native-plan--vip .mobile-app-shell{width:min(100%,402px);min-height:100dvh;border:0;border-radius:0;background:var(--vip-bg);box-shadow:none}
+.native-product--dincr.native-plan--vip .mobile-content{width:100%;padding:max(46px,calc(env(safe-area-inset-top) + 12px)) 18px calc(90px + env(safe-area-inset-bottom));background:var(--vip-bg)}
+.native-product--dincr.native-plan--vip .vip-screen{width:100%;display:flex;flex-direction:column;gap:12px;color:var(--vip-text);font-size:16px}
+
+.native-product--dincr.native-plan--vip .vip-screen-header{height:60px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--vip-surface-raised);overflow:hidden}
+.native-product--dincr.native-plan--vip .vip-screen-header>div{width:calc(100% - 54px);height:58px;padding:0;display:flex;flex-direction:column;justify-content:center;gap:2px;background:var(--vip-surface);overflow:hidden}
+.native-product--dincr.native-plan--vip .vip-screen-header small{color:var(--vip-violet);font-size:12px;font-weight:650}
+.native-product--dincr.native-plan--vip .vip-screen-header h1{margin:0;color:var(--vip-text);font-size:28px;line-height:1.08;font-weight:650;letter-spacing:-.025em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.native-product--dincr.native-plan--vip .vip-screen-header button{width:46px;height:46px;flex:0 0 46px;display:grid;place-items:center;border:1px solid var(--vip-violet);border-radius:50%;background:#1a132e;color:var(--vip-violet);font-size:14px;font-weight:650}
+
+.native-product--dincr.native-plan--vip :is(.vip-focus,.vip-card,.vip-field,.vip-link-card){width:100%;padding:14px 16px;border:1px solid var(--vip-border);border-radius:18px;overflow:hidden}
+.native-product--dincr.native-plan--vip .vip-focus{min-height:88px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;background:var(--vip-focus)}
+.native-product--dincr.native-plan--vip .vip-focus>small{color:var(--vip-violet);font-size:12px;font-weight:650;letter-spacing:.01em}
+.native-product--dincr.native-plan--vip .vip-focus>strong{display:block;color:var(--vip-text);font-size:26px;line-height:1.12;font-weight:650;letter-spacing:-.025em}
+.native-product--dincr.native-plan--vip .vip-focus>p{margin:0;color:var(--vip-muted);font-size:14px;line-height:1.45}
+.native-product--dincr.native-plan--vip .vip-focus.vip-tone-gold>:is(small,p){color:var(--vip-gold)}
+.native-product--dincr.native-plan--vip .vip-focus.vip-tone-mint>p{color:var(--vip-mint)}
+.native-product--dincr.native-plan--vip .vip-focus.vip-tone-coral>p{color:var(--vip-coral)}
+.native-product--dincr.native-plan--vip .vip-focus progress{width:100%;height:7px;margin-top:2px;border:0;border-radius:999px;accent-color:var(--vip-gold)}
+
+.native-product--dincr.native-plan--vip .vip-card{min-height:67px;display:flex;flex-direction:column;justify-content:center;gap:5px;background:var(--vip-surface)}
+.native-product--dincr.native-plan--vip .vip-card h2{margin:0;color:var(--vip-text);font-size:16px;line-height:1.25;font-weight:650}
+.native-product--dincr.native-plan--vip .vip-card p{margin:0;color:var(--vip-muted);font-size:14px;line-height:1.45}
+.native-product--dincr.native-plan--vip .vip-card p svg{margin-right:6px;vertical-align:-3px;color:var(--vip-gold)}
+.native-product--dincr.native-plan--vip .vip-card--violet h2{color:var(--vip-violet)}
+.native-product--dincr.native-plan--vip .vip-card--gold h2{color:var(--vip-gold)}
+.native-product--dincr.native-plan--vip .vip-card--danger h2{color:#ff8195}
+
+.native-product--dincr.native-plan--vip .vip-data-row{min-height:38px;padding:0;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--vip-surface-raised);color:var(--vip-text);font-size:14px;font-weight:650}
+.native-product--dincr.native-plan--vip .vip-data-row span{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.native-product--dincr.native-plan--vip .vip-data-row strong{flex:0 1 45%;text-align:right}
+.native-product--dincr.native-plan--vip :is(.mint,.vip-text-mint){color:var(--vip-mint)}
+.native-product--dincr.native-plan--vip :is(.gold,.vip-text-gold){color:var(--vip-gold)}
+.native-product--dincr.native-plan--vip .violet{color:var(--vip-violet)}
+.native-product--dincr.native-plan--vip .coral{color:var(--vip-coral)}
+.native-product--dincr.native-plan--vip .blue{color:var(--vip-blue)}
+
+.native-product--dincr.native-plan--vip .vip-primary{width:100%;min-height:50px;padding:12px 18px;display:flex;align-items:center;justify-content:center;border:0;border-radius:15px;background:var(--vip-violet);color:var(--vip-bg);font-size:16px;font-weight:700;box-shadow:none}
+.native-product--dincr.native-plan--vip .vip-primary:disabled{opacity:.55}
+.native-product--dincr.native-plan--vip .vip-link-card{min-height:70px;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;background:var(--vip-surface);color:var(--vip-violet)}
+.native-product--dincr.native-plan--vip .vip-link-card>span{min-width:0;display:grid;gap:5px}
+.native-product--dincr.native-plan--vip .vip-link-card strong{color:var(--vip-text);font-size:15px}
+.native-product--dincr.native-plan--vip .vip-link-card small{color:var(--vip-muted);font-size:13px;line-height:1.4}
+.native-product--dincr.native-plan--vip .vip-link-card--gold strong{color:var(--vip-gold)}
+.native-product--dincr.native-plan--vip .vip-link-card--mint strong{color:var(--vip-mint)}
+.native-product--dincr.native-plan--vip .vip-link-card--violet strong{color:var(--vip-violet)}
+.native-product--dincr.native-plan--vip .vip-link-card--blue strong{color:var(--vip-blue)}
+.native-product--dincr.native-plan--vip .vip-priority-card{min-height:72px}
+.native-product--dincr.native-plan--vip .vip-priority-card p{font-size:13px}
+
+.native-product--dincr.native-plan--vip .vip-chart{height:90px;display:flex;align-items:flex-end;justify-content:space-around;gap:8px;padding-top:4px}
+.native-product--dincr.native-plan--vip .vip-chart>div{height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px}
+.native-product--dincr.native-plan--vip .vip-chart i{width:24px;min-height:8px;border-radius:5px 5px 1px 1px;background:var(--vip-violet)}
+.native-product--dincr.native-plan--vip .vip-chart small{color:var(--vip-muted);font-size:12px}
+
+.native-product--dincr.native-plan--vip .vip-form{display:flex;flex-direction:column;gap:9px}
+.native-product--dincr.native-plan--vip .vip-field{min-height:74px;display:flex;flex-direction:column;justify-content:center;gap:6px;background:var(--vip-surface);color:var(--vip-muted);font-size:12px;font-weight:650}
+.native-product--dincr.native-plan--vip .vip-field :is(input,select){width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--vip-border);border-radius:10px;outline:0;background:var(--vip-surface-raised)!important;color:var(--vip-text)!important;-webkit-text-fill-color:var(--vip-text);color-scheme:dark;font:650 16px/1.2 Inter,system-ui,sans-serif;box-shadow:none}
+.native-product--dincr.native-plan--vip .vip-field :is(input,select):focus-visible{border-color:var(--vip-violet);box-shadow:0 0 0 2px rgba(156,122,255,.22)}
+.native-product--dincr.native-plan--vip .vip-field select{color:var(--vip-violet)!important;-webkit-text-fill-color:var(--vip-violet)}
+.native-product--dincr.native-plan--vip .vip-field select option{background:var(--vip-surface-raised);color:var(--vip-text)}
+.native-product--dincr.native-plan--vip .vip-form-error{margin:0;color:#ff8195;font-size:13px}
+.native-product--dincr.native-plan--vip .vip-form-message{margin:0;display:flex;align-items:center;gap:6px;color:var(--vip-mint);font-size:13px}
+
+.native-product--dincr.native-plan--vip .vip-loading>div{border-radius:16px;background:linear-gradient(90deg,var(--vip-surface) 20%,var(--vip-surface-raised) 45%,var(--vip-surface) 70%);background-size:300% 100%;animation:vip-shimmer 1.25s linear infinite}
+.native-product--dincr.native-plan--vip .vip-loading-header{height:60px}.native-product--dincr.native-plan--vip .vip-loading-focus{height:108px}.native-product--dincr.native-plan--vip .vip-loading-card{height:100px}
+.native-product--dincr.native-plan--vip .vip-loading>span{color:var(--vip-muted);font-size:13px}
+@keyframes vip-shimmer{to{background-position:-150% 0}}
+
+.native-product--dincr.native-plan--vip .native-bottom-nav{left:50%;right:auto;bottom:max(6px,env(safe-area-inset-bottom));width:min(calc(100% - 36px),366px);min-height:58px;padding:6px 4px;transform:translateX(-50%);gap:2px;border:0;border-radius:20px;background:var(--vip-surface-raised);box-shadow:none;backdrop-filter:none}
+.native-product--dincr.native-plan--vip .native-bottom-nav>button{min-height:44px;padding:3px 2px;border:0;border-radius:0;background:var(--vip-surface);color:var(--vip-muted)}
+.native-product--dincr.native-plan--vip .native-bottom-nav>button::before{display:none}
+.native-product--dincr.native-plan--vip .native-bottom-nav>button.active{background:var(--vip-surface);color:var(--vip-violet)}
+.native-product--dincr.native-plan--vip .native-nav-icon{min-height:22px}.native-product--dincr.native-plan--vip .native-nav-icon svg{width:20px;height:20px}.native-product--dincr.native-plan--vip .native-nav-label{font-size:10px;font-weight:650}
+html[data-color-mode-resolved="light"] .native-product--dincr.native-plan--vip,html[data-theme="light"] .native-product--dincr.native-plan--vip{color-scheme:dark;background:var(--vip-bg)}
+@media(max-width:390px){.native-product--dincr.native-plan--vip .mobile-content{padding-inline:14px}.native-product--dincr.native-plan--vip .native-bottom-nav{width:calc(100% - 20px)}}
+@media(prefers-reduced-motion:reduce){.native-product--dincr.native-plan--vip .vip-loading>div{animation:none}}

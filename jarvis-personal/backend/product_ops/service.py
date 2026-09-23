@@ -449,8 +449,8 @@ def activate_launch_promotion(plan_code: str):
 def _sinpe_instructions():
     return {
         "method": "SINPE Móvil",
-        "recipient": os.getenv("FINVA_SINPE_RECIPIENT", "").strip(),
-        "phone": os.getenv("FINVA_SINPE_PHONE", "").strip(),
+        "recipient": os.getenv("DINCR_SINPE_RECIPIENT", "").strip(),
+        "phone": os.getenv("DINCR_SINPE_PHONE", "").strip(),
         "message": "Copiá el código y pegalo en el detalle del SINPE. Luego subí el comprobante.",
     }
 
@@ -997,7 +997,7 @@ def match_sinpe_payment(conn, candidate: dict):
     code_match = PAYMENT_CODE_PATTERN.search(searchable.upper())
     if not code_match:
         return None
-    configured_phone = re.sub(r"\D", "", os.getenv("FINVA_SINPE_PHONE", ""))[-8:]
+    configured_phone = re.sub(r"\D", "", os.getenv("DINCR_SINPE_PHONE", ""))[-8:]
     destination_match = re.search(r"telefono destino:\s*(\d{8})", searchable, re.I)
     if configured_phone and (
         not destination_match or destination_match.group(1)[-8:] != configured_phone

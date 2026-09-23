@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const flags = read("../src/lib/featureFlags.js");
 const users = read("../src/users/UsersApp.jsx");
-const registry = read("../src/products/finva/features/registry.jsx");
-const navigation = read("../src/products/finva/navigation/FinvaNavigation.jsx");
+const registry = read("../src/products/dincr/features/registry.jsx");
+const navigation = read("../src/products/dincr/navigation/DincrNavigation.jsx");
 const owner = read("../src/pages/ProductOperations.jsx");
 
 for (const key of ["financial_writes", "gmail_automation", "vip_intelligence", "advanced_reports", "store_billing"]) {

@@ -7,7 +7,7 @@ const dictionaries = {
       businesses: "Negocios", netWorth: "Patrimonio neto", financialTimeline: "Cronología financiera",
       reconciliation: "Conciliación", deterioration: "Deterioro financiero", personal: "DINCR Owner",
       goals: "Metas", memory: "Memoria", settings: "Configuración", profile: "Perfil y apariencia",
-      administration: "Administración", manageUsers: "Administrar usuarios", finvaOperations: "Operaciones DINCR",
+      administration: "Administración", manageUsers: "Administrar usuarios", dincrOperations: "Operaciones DINCR",
       logout: "Cerrar sesión", profileAlt: "Perfil",
     },
     accounts: {
@@ -26,7 +26,7 @@ const dictionaries = {
       businesses: "Businesses", netWorth: "Net worth", financialTimeline: "Financial timeline",
       reconciliation: "Reconciliation", deterioration: "Financial deterioration", personal: "DINCR Owner",
       goals: "Goals", memory: "Memory", settings: "Settings", profile: "Profile & appearance",
-      administration: "Administration", manageUsers: "Manage users", finvaOperations: "DINCR operations",
+      administration: "Administration", manageUsers: "Manage users", dincrOperations: "DINCR operations",
       logout: "Log out", profileAlt: "Profile",
     },
     accounts: {

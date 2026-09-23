@@ -7,18 +7,18 @@ Estado de referencia: `main` del 23 de septiembre de 2026. Esta lista separa las
 - `PYTHONPATH=. python -m pytest backend -q`: 190 pruebas aprobadas en la revisión inicial.
 - `npm run build`, `npm run test:navigation`, `npm run test:native-navigation`, `npm run test:product-analytics`: aprobados.
 - La eliminación autenticada existe para los planes Free, Basic y VIP. La página pública `/delete-account` documenta cómo solicitarla desde la versión web e incluye la política de privacidad; `npm run test:store-readiness` comprueba el contrato y corre en CI.
-- Android configura `targetSdkVersion = 36`. El identificador Android y el de iOS DINCR son `com.finva.app`.
+- Android configura `targetSdkVersion = 36`. El identificador Android y el de iOS DINCR son `com.dincr.app`.
 - El escaneo inicial de Gmail cubre el año calendario actual en páginas de 50 correos; no se debe anunciar como análisis automático de los últimos 12 meses.
 
 ## Correcciones de la auditoría del 23 de septiembre (rama `fix/store-audit-remediation`)
 
 - **Borrado de cuenta:** ahora borra de Supabase Vault las autorizaciones de Gmail/Outlook dentro de la misma transacción y, tras confirmar, revoca los tokens de Gmail ante Google. Microsoft no ofrece revocación por token: el usuario puede quitar DINCR desde su cuenta Microsoft.
-- **Iniciar sesión con Apple:** botón junto a Google (norma 4.8). Requiere el proveedor Apple activo en Supabase Auth con `com.finva.app://auth/callback` en las URL de redirección. Pendiente: revocar el token de Apple al borrar la cuenta (norma 5.1.1(v)); Supabase no expone el refresh token de Apple, así que hay que resolverlo con la clave `.p8` del equipo.
+- **Iniciar sesión con Apple:** botón junto a Google (norma 4.8). Requiere el proveedor Apple activo en Supabase Auth con `com.dincr.app://auth/callback` en las URL de redirección. Pendiente: revocar el token de Apple al borrar la cuenta (norma 5.1.1(v)); Supabase no expone el refresh token de Apple, así que hay que resolverlo con la clave `.p8` del equipo.
 - **Cuenta de revisores:** `python -m backend.scripts.seed_review_demo --email <cuenta> [--apply]` da VIP de cortesía y carga datos ficticios. La cuenta debe iniciar sesión y aceptar los documentos legales una vez antes.
 - **Seguridad Android:** `allowBackup="false"` con reglas de extracción; se quitó `POST_NOTIFICATIONS` (no hay push nativo). El deep link de login solo acepta el código PKCE.
 - **Avisos:** estrategia, recomendación, proyecciones, escenarios, revisión mensual y aguinaldo muestran que son estimaciones y no asesoría.
 - **Privacidad v3 (2026-09-23-v3):** nombra PostHog, Microsoft, Firebase y el tratamiento de correos; todos los usuarios deben volver a aceptarla.
-- **Exportación de datos:** `GET /auth/me/export` y botón "Descargar mis datos" en Ajustes (hoja de compartir en iOS/Android). iOS necesita `npm run ios:sync:finva` en la Mac.
+- **Exportación de datos:** `GET /auth/me/export` y botón "Descargar mis datos" en Ajustes (hoja de compartir en iOS/Android). iOS necesita `npm run ios:sync:dincr` en la Mac.
 
 ## Pendiente antes de pagar o abrir las cuentas de desarrollador
 

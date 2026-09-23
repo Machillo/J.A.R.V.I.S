@@ -15,8 +15,8 @@ export default function ReleaseUpdateNotice({ policy, required = false, onDismis
 
   if (required) {
     return (
-      <main className="finva-release-gate" role="alert" aria-live="assertive">
-        <section className="finva-release-gate__card">
+      <main className="dincr-release-gate" role="alert" aria-live="assertive">
+        <section className="dincr-release-gate__card">
           <ShieldAlert size={42} aria-hidden="true" />
           <small>DINCR · {policy?.current_version}</small>
           <h1>{tx("Actualización necesaria", "Update required")}</h1>
@@ -33,10 +33,10 @@ export default function ReleaseUpdateNotice({ policy, required = false, onDismis
   }
 
   return (
-    <aside className="finva-release-banner" role="status">
+    <aside className="dincr-release-banner" role="status">
       <div><strong>{tx("Nueva versión disponible", "New version available")}</strong><span>{message}</span></div>
       {policy?.update_url && <button type="button" onClick={() => openUpdateUrl(policy.update_url)}><Download size={17} /> {tx("Actualizar", "Update")}</button>}
-      <button className="finva-release-banner__close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={onDismiss}><X size={18} /></button>
+      <button className="dincr-release-banner__close" type="button" aria-label={tx("Cerrar aviso", "Close notice")} onClick={onDismiss}><X size={18} /></button>
     </aside>
   );
 }

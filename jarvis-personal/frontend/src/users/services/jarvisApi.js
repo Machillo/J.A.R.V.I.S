@@ -23,7 +23,7 @@ async function request(path, options = {}) {
   if (path !== "/product-ops/incidents") flushIncidentQueue();
   if (path !== "/product-ops/incidents") flushPendingOperations();
   if (!OBSERVABILITY_PATHS.has(path)) {
-    window.dispatchEvent(new CustomEvent("finva:api-recovered"));
+    window.dispatchEvent(new CustomEvent("dincr:api-recovered"));
   }
   return payload;
 }

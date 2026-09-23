@@ -3,7 +3,7 @@ import { Sparkles, X } from "lucide-react";
 import { tx } from "../../lib/locale";
 import { getFinancialSituation } from "../services/jarvisApi";
 
-const dismissedKey = (user, prompt) => `finva:profile-prompt:${user?.id || user?.email || "account"}:${prompt}`;
+const dismissedKey = (user, prompt) => `dincr:profile-prompt:${user?.id || user?.email || "account"}:${prompt}`;
 
 export default function ProgressiveProfileNudge({ user, plan, page, onNavigate }) {
   const [data, setData] = useState(null);
@@ -40,9 +40,9 @@ export default function ProgressiveProfileNudge({ user, plan, page, onNavigate }
     goals: [tx("¿Qué querés lograr primero?", "What do you want to achieve first?"), tx("Una meta concreta permite que VIP ordene mejor sus recomendaciones.", "A concrete goal helps VIP prioritize recommendations."), "goals"],
   }[prompt];
   const dismiss = () => { window.sessionStorage.setItem(dismissedKey(user, prompt), "1"); setDismissed(true); };
-  return <aside className="finva-profile-nudge" role="status">
+  return <aside className="dincr-profile-nudge" role="status">
     <Sparkles size={20}/><div><strong>{content[0]}</strong><span>{content[1]}</span></div>
     <button type="button" onClick={() => onNavigate(content[2])}>{tx("Revisar", "Review")}</button>
-    <button className="finva-profile-nudge-close" type="button" aria-label={tx("Recordar después", "Remind me later")} onClick={dismiss}><X size={16}/></button>
+    <button className="dincr-profile-nudge-close" type="button" aria-label={tx("Recordar después", "Remind me later")} onClick={dismiss}><X size={16}/></button>
   </aside>;
 }

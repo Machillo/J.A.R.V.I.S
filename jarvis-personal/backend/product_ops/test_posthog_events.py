@@ -50,11 +50,11 @@ def test_invalid_host_and_network_error_are_fail_open(monkeypatch):
 
 
 def test_oauth_callback_reports_only_success(monkeypatch):
-    monkeypatch.setattr(product_routes, "finish_gmail_connection", lambda **kwargs: RedirectResponse("com.finva.app://gmail/callback?gmail=denied"))
+    monkeypatch.setattr(product_routes, "finish_gmail_connection", lambda **kwargs: RedirectResponse("com.dincr.app://gmail/callback?gmail=denied"))
     tasks = BackgroundTasks()
     product_routes.vip_gmail_callback(tasks)
     assert tasks.tasks == []
-    monkeypatch.setattr(product_routes, "finish_gmail_connection", lambda **kwargs: RedirectResponse("com.finva.app://gmail/callback?gmail=connected"))
+    monkeypatch.setattr(product_routes, "finish_gmail_connection", lambda **kwargs: RedirectResponse("com.dincr.app://gmail/callback?gmail=connected"))
     product_routes.vip_gmail_callback(tasks)
     assert len(tasks.tasks) == 1
     assert tasks.tasks[0].args == ("gmail_connected",)

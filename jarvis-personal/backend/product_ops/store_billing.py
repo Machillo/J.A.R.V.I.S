@@ -11,15 +11,15 @@ from backend.product_ops.service import record_event
 # products are created. The backend remains the source of truth for entitlements.
 PRODUCTS = {
     "basic": {
-        "monthly": {"price_crc": 2990, "product_id": os.getenv("FINVA_BASIC_MONTHLY_PRODUCT_ID", "finva.basic.monthly")},
-        "annual": {"price_crc": int(os.getenv("FINVA_BASIC_ANNUAL_CRC", "29900")), "product_id": os.getenv("FINVA_BASIC_ANNUAL_PRODUCT_ID", "finva.basic.annual")},
+        "monthly": {"price_crc": 2990, "product_id": os.getenv("DINCR_BASIC_MONTHLY_PRODUCT_ID", "dincr.basic.monthly")},
+        "annual": {"price_crc": int(os.getenv("DINCR_BASIC_ANNUAL_CRC", "29900")), "product_id": os.getenv("DINCR_BASIC_ANNUAL_PRODUCT_ID", "dincr.basic.annual")},
     },
     "vip": {
-        "monthly": {"price_crc": 4990, "product_id": os.getenv("FINVA_VIP_MONTHLY_PRODUCT_ID", "finva.vip.monthly")},
-        "annual": {"price_crc": int(os.getenv("FINVA_VIP_ANNUAL_CRC", "49900")), "product_id": os.getenv("FINVA_VIP_ANNUAL_PRODUCT_ID", "finva.vip.annual")},
+        "monthly": {"price_crc": 4990, "product_id": os.getenv("DINCR_VIP_MONTHLY_PRODUCT_ID", "dincr.vip.monthly")},
+        "annual": {"price_crc": int(os.getenv("DINCR_VIP_ANNUAL_CRC", "49900")), "product_id": os.getenv("DINCR_VIP_ANNUAL_PRODUCT_ID", "dincr.vip.annual")},
     },
 }
-TRIAL_DAYS = int(os.getenv("FINVA_STORE_TRIAL_DAYS", "7"))
+TRIAL_DAYS = int(os.getenv("DINCR_STORE_TRIAL_DAYS", "7"))
 ACTIVE_STATES = {"trialing", "active", "grace_period"}
 
 
@@ -83,8 +83,8 @@ def store_catalog():
             for plan in ("basic", "vip")
         ],
         "stores": {
-            "apple": {"ready": bool(os.getenv("FINVA_APPLE_BUNDLE_ID")), "billing": "App Store"},
-            "google": {"ready": bool(os.getenv("FINVA_GOOGLE_PACKAGE_NAME")), "billing": "Google Play"},
+            "apple": {"ready": bool(os.getenv("DINCR_APPLE_BUNDLE_ID")), "billing": "App Store"},
+            "google": {"ready": bool(os.getenv("DINCR_GOOGLE_PACKAGE_NAME")), "billing": "Google Play"},
         },
     }
 

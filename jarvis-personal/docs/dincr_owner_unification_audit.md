@@ -16,7 +16,7 @@ Las pruebas cubren Free/Basic/VIP con `isOwner=true`, plan `owner` inválido, cr
 
 ## Precio y datos
 
-Free ₡0, Basic ₡2.990/mes, VIP ₡4.990/mes en `product_ops/service.py`, catálogo store, ajustes de frontend, landing y términos. La migración nueva corrige el default y filas antiguas de `finva_beta_programs` con 5990, dejando intactos pedidos, pagos y suscripciones históricos. Debe aplicarse en la base de datos antes de ofrecer el precio nuevo; no se aplicó aquí. El valor 5990 de la migración histórica de 20260910 y el `WHERE` de la migración correctiva permanecen como evidencia histórica. `FINVA_VIP_ANNUAL_CRC` puede sobreescribir el precio anual en el entorno; el precio anual no fue aprobado y los product IDs existentes son valores provisionales, no productos de store configurados.
+Free ₡0, Basic ₡2.990/mes, VIP ₡4.990/mes en `product_ops/service.py`, catálogo store, ajustes de frontend, landing y términos. La migración nueva corrige el default y filas antiguas de `finva_beta_programs` con 5990, dejando intactos pedidos, pagos y suscripciones históricos. Debe aplicarse en la base de datos antes de ofrecer el precio nuevo; no se aplicó aquí. El valor 5990 de la migración histórica de 20260910 y el `WHERE` de la migración correctiva permanecen como evidencia histórica. `DINCR_VIP_ANNUAL_CRC` puede sobreescribir el precio anual en el entorno; el precio anual no fue aprobado y los product IDs existentes son valores provisionales, no productos de store configurados.
 
 ## Legal y contacto
 

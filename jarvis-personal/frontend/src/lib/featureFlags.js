@@ -1,7 +1,7 @@
 import { API_URL } from "./apiUrl";
 import { authenticatedFetch } from "./authenticatedFetch";
 
-const CACHE_KEY = "finva:operational-feature-flags:v1";
+const CACHE_KEY = "dincr:operational-feature-flags:v1";
 
 export const SAFE_FEATURE_DEFAULTS = {
   financial_writes: { flag_key:"financial_writes", enabled:false, safe_default_enabled:false, disabled_message_es:"Los cambios financieros están pausados temporalmente. Tus datos guardados siguen disponibles.", disabled_message_en:"Financial changes are temporarily paused. Your saved data remains available." },

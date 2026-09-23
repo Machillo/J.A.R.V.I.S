@@ -42,7 +42,7 @@ function runSdk({ key = "", mobile = true, legal = false } = {}) {
   const context = {
     posthog: sdkStub, analyticsEvents, safeAnalyticsProperties,
     Capacitor: { isNativePlatform: () => mobile, getPlatform: () => "android" },
-    env: { VITE_POSTHOG_KEY: key, VITE_POSTHOG_HOST: "https://us.i.posthog.com", VITE_NATIVE_APP_ID: "com.finva.app" },
+    env: { VITE_POSTHOG_KEY: key, VITE_POSTHOG_HOST: "https://us.i.posthog.com", VITE_NATIVE_APP_ID: "com.dincr.app" },
     window: {},
   };
   vm.runInNewContext(`${source}\nglobalThis.run = { setProductAnalyticsUser, captureProductEvent };`, context);

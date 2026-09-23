@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { flushPendingOperations } from "./lib/operationRecovery";
 import Login from "./pages/Login";
-import FinvaOnboarding from "./pages/FinvaOnboarding";
+import DincrOnboarding from "./pages/DincrOnboarding";
 import ProfileSetup from "./pages/ProfileSetup";
 import LegalConsent from "./pages/LegalConsent";
 import PersonalApp from "./personal/PersonalApp";
@@ -16,10 +16,10 @@ import { tx } from "./lib/locale";
 import ReleaseUpdateNotice from "./components/ReleaseUpdateNotice";
 import { getReleasePolicy } from "./lib/releasePolicy";
 import { detectNativePlatform } from "./ui/native/platform";
-import FinvaAppLock from "./components/FinvaAppLock";
+import DincrAppLock from "./components/DincrAppLock";
 
-const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.finva.app";
-const isFinvaDistribution = nativeAppId === "com.finva.app";
+const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.dincr.app";
+const isDincrDistribution = nativeAppId === "com.dincr.app";
 
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
@@ -220,17 +220,17 @@ export default function App() {
 
   if (currentUser.role === "owner" || currentUser.role === "admin") {
     const personalApp = <PersonalApp />;
-    if (!isFinvaDistribution) return personalApp;
+    if (!isDincrDistribution) return personalApp;
     return (
-      <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
+      <DincrAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
         {personalApp}
-      </FinvaAppLock>
+      </DincrAppLock>
     );
   }
 
   if (!currentUser.plan_selected) {
     return (
-      <FinvaOnboarding
+      <DincrOnboarding
         user={currentUser}
         onComplete={(profile) => setCurrentUser(profile)}
       />
@@ -238,8 +238,8 @@ export default function App() {
   }
 
   return (
-    <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
+    <DincrAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
       <UsersApp user={currentUser} onUserChange={setCurrentUser} releasePolicy={releasePolicy} />
-    </FinvaAppLock>
+    </DincrAppLock>
   );
 }

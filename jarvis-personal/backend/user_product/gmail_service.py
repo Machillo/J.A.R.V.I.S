@@ -43,8 +43,8 @@ from backend.user_product.statement_candidate import (
 
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
-FINVA_QUERY = os.getenv(
-    "FINVA_GMAIL_QUERY",
+DINCR_QUERY = os.getenv(
+    "DINCR_GMAIL_QUERY",
     "(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr "
     "OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr "
     "OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net "
@@ -57,7 +57,7 @@ FINVA_QUERY = os.getenv(
 def _year_to_date_query(as_of: date | None = None) -> str:
     """Use the current calendar year only for a connection's first sync."""
     current = as_of or date.today()
-    query = re.sub(r"\s+newer_than:\d+d\b", "", FINVA_QUERY, flags=re.IGNORECASE)
+    query = re.sub(r"\s+newer_than:\d+d\b", "", DINCR_QUERY, flags=re.IGNORECASE)
     return f"{query} after:{current.year}/01/01"
 
 
@@ -127,9 +127,9 @@ def _has_active_vip_access(conn, account_id: str) -> bool:
 
 
 def _google_config() -> tuple[str, str, str]:
-    client_id = os.getenv("FINVA_GMAIL_CLIENT_ID") or os.getenv("GMAIL_CLIENT_ID")
-    client_secret = os.getenv("FINVA_GMAIL_CLIENT_SECRET") or os.getenv("GMAIL_CLIENT_SECRET")
-    redirect_uri = os.getenv("FINVA_GMAIL_REDIRECT_URI", "").strip()
+    client_id = os.getenv("DINCR_GMAIL_CLIENT_ID") or os.getenv("GMAIL_CLIENT_ID")
+    client_secret = os.getenv("DINCR_GMAIL_CLIENT_SECRET") or os.getenv("GMAIL_CLIENT_SECRET")
+    redirect_uri = os.getenv("DINCR_GMAIL_REDIRECT_URI", "").strip()
     if not client_id or not client_secret or not redirect_uri:
         raise HTTPException(
             status_code=503,
@@ -139,7 +139,7 @@ def _google_config() -> tuple[str, str, str]:
 
 
 def _return_url(status: str) -> str:
-    base = os.getenv("FINVA_GMAIL_RETURN_URL", "com.finva.app://gmail/callback").strip()
+    base = os.getenv("DINCR_GMAIL_RETURN_URL", "com.dincr.app://gmail/callback").strip()
     separator = "&" if "?" in base else "?"
     return f"{base}{separator}{urlencode({'gmail': status})}"
 
@@ -289,7 +289,7 @@ def gmail_status() -> dict[str, Any]:
         **data,
         "connections": [{**row, "automatic_updates": bool(row.get("watch_expiration"))} for row in connections],
         "microsoft_available": all(os.getenv(name, "").strip() for name in (
-            "FINVA_MICROSOFT_CLIENT_ID", "FINVA_MICROSOFT_CLIENT_SECRET", "FINVA_MICROSOFT_REDIRECT_URI",
+            "DINCR_MICROSOFT_CLIENT_ID", "DINCR_MICROSOFT_CLIENT_SECRET", "DINCR_MICROSOFT_REDIRECT_URI",
         )),
         "consent": gmail_consent_status(),
         "retention": retention_policy(),
@@ -655,7 +655,7 @@ def _adapt_identity(value: str, display_name: str) -> str:
     return adapted
 
 
-def _insert_finva_candidate(
+def _insert_dincr_candidate(
     conn, *, email_message_id: int, connection: dict[str, Any],
     candidate: dict[str, Any], statement_document_id: int | None = None,
 ) -> dict[str, Any]:
@@ -854,7 +854,7 @@ def _ingest_message(
                     document_hash=document_hash, movement_index=index,
                     statement_text=document_text,
                 )
-                resolutions.append(_insert_finva_candidate(
+                resolutions.append(_insert_dincr_candidate(
                     conn, email_message_id=int(email_row["id"]), connection=connection,
                     candidate=candidate, statement_document_id=int(document_row["id"]),
                 ))
@@ -871,7 +871,7 @@ def _ingest_message(
                 provider_message_id=message_id,
                 subject=subject,
             )
-            resolution = _insert_finva_candidate(
+            resolution = _insert_dincr_candidate(
                 conn, email_message_id=int(email_row["id"]), connection=connection,
                 candidate=candidate,
             )
@@ -913,7 +913,7 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
                 page_token=connection.get("initial_scan_page_token"), limit=50,
             )
         else:
-            financial_messages = _list_message_refs(service, FINVA_QUERY, max_results)
+            financial_messages = _list_message_refs(service, DINCR_QUERY, max_results)
         payroll_messages = _list_message_refs(service, _aguinaldo_gmail_query(), 100)
         messages = {
             item["id"]: item
@@ -996,7 +996,7 @@ def sync_current_gmail() -> dict[str, Any]:
 
 
 def _start_watch(connection_id: int, service, suppress_errors: bool = False) -> None:
-    topic = os.getenv("FINVA_GMAIL_PUBSUB_TOPIC", "").strip()
+    topic = os.getenv("DINCR_GMAIL_PUBSUB_TOPIC", "").strip()
     if not topic:
         return
     try:
@@ -1018,9 +1018,9 @@ def _start_watch(connection_id: int, service, suppress_errors: bool = False) -> 
 
 
 def gmail_maintenance(secret: str | None) -> dict[str, Any]:
-    expected = os.getenv("FINVA_GMAIL_CRON_SECRET", "")
+    expected = os.getenv("DINCR_GMAIL_CRON_SECRET", "")
     if not expected:
-        raise HTTPException(status_code=503, detail="FINVA_GMAIL_CRON_SECRET no está configurado.")
+        raise HTTPException(status_code=503, detail="DINCR_GMAIL_CRON_SECRET no está configurado.")
     if not secret or not secrets.compare_digest(secret, expected):
         raise HTTPException(status_code=403, detail="Secreto de mantenimiento inválido.")
     with get_connection() as conn:
@@ -1062,7 +1062,7 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
 
 
 def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, Any]:
-    expected = os.getenv("FINVA_GMAIL_PUBSUB_VERIFICATION_TOKEN", "")
+    expected = os.getenv("DINCR_GMAIL_PUBSUB_VERIFICATION_TOKEN", "")
     if not expected:
         raise HTTPException(status_code=503, detail="Verificación Pub/Sub no configurada.")
     if not token or not secrets.compare_digest(token, expected):
