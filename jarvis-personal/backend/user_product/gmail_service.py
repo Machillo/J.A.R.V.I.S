@@ -144,7 +144,8 @@ def _google_config() -> tuple[str, str, str]:
 def _return_url(status: str, **extra: str) -> str:
     base = os.getenv("FINVA_GMAIL_RETURN_URL", "com.finva.app://gmail/callback").strip()
     separator = "&" if "?" in base else "?"
-    return f"{base}{separator}{urlencode({'gmail': status, **extra})}"
+    # ret identifies this response so the app handles each delivery once.
+    return f"{base}{separator}{urlencode({'gmail': status, **extra, 'ret': secrets.token_urlsafe(8)})}"
 
 
 def _financial_user_id_for_account(account_id: str) -> int:
@@ -504,8 +505,9 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     """OAuth callback (public). Parks the refresh token; the app completes the link."""
     flow = mail_oauth.claim_callback("gmail", state)
     if not flow:
-        logger.warning("Gmail authorization rejected: unknown, used or expired state")
-        return RedirectResponse(_return_url("invalid_state"), status_code=302)
+        status = mail_oauth.rejected_callback_status("gmail", state)
+        logger.warning("Gmail authorization rejected: %s", "state already processed" if status == "already_processed" else "unknown, failed or expired state")
+        return RedirectResponse(_return_url(status), status_code=302)
     if error or not code:
         logger.warning("Gmail authorization not completed error=%s", str(error or "missing_code")[:60])
         mail_oauth.fail_flow(flow["id"])
