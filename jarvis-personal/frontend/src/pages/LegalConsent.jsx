@@ -3,6 +3,7 @@ import { useState } from "react";
 import { acceptLegal } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { tx } from "../lib/locale";
+import LegalLink from "../components/LegalLink";
 
 export default function LegalConsent({ user, onAccepted }) {
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -47,20 +48,20 @@ export default function LegalConsent({ user, onAccepted }) {
         <p>{tx("Leé y aceptá los documentos que explican cómo funciona el servicio y cómo protegemos tus datos.", "Read and accept the documents explaining how the service works and how we protect your data.")}</p>
       </div>
 
-      <a className="legal-document-link" href="/terms" target="_blank" rel="noreferrer">
+      <LegalLink kind="terms" className="legal-document-link">
         <FileText size={23}/><span><strong>{tx("Términos y Condiciones", "Terms and Conditions")}</strong><small>{tx("Uso del servicio, planes, pagos y responsabilidades.", "Service use, plans, payments, and responsibilities.")}</small></span><span>{tx("Leer", "Read")}</span>
-      </a>
-      <a className="legal-document-link" href="/privacy" target="_blank" rel="noreferrer">
+      </LegalLink>
+      <LegalLink kind="privacy" className="legal-document-link">
         <LockKeyhole size={23}/><span><strong>{tx("Política de Privacidad", "Privacy Policy")}</strong><small>{tx("Datos recopilados, finalidad, seguridad y tus derechos.", "Data collected, purpose, security, and your rights.")}</small></span><span>{tx("Leer", "Read")}</span>
-      </a>
+      </LegalLink>
 
       <label className="legal-check">
         <input type="checkbox" checked={termsAccepted} onChange={(event) => { setTermsAccepted(event.target.checked); setError(""); }}/>
-        <span>{tx("Acepto los", "I accept the")} <a href="/terms" target="_blank" rel="noreferrer">{tx("Términos y Condiciones", "Terms and Conditions")}</a>.</span>
+        <span>{tx("Acepto los", "I accept the")} <LegalLink kind="terms">{tx("Términos y Condiciones", "Terms and Conditions")}</LegalLink>.</span>
       </label>
       <label className="legal-check">
         <input type="checkbox" checked={privacyAccepted} onChange={(event) => { setPrivacyAccepted(event.target.checked); setError(""); }}/>
-        <span>{tx("He leído y acepto la", "I have read and accept the")} <a href="/privacy" target="_blank" rel="noreferrer">{tx("Política de Privacidad", "Privacy Policy")}</a> {tx("y el tratamiento necesario de mis datos para prestar el servicio.", "and the processing of my data required to provide the service.")}</span>
+        <span>{tx("He leído y acepto la", "I have read and accept the")} <LegalLink kind="privacy">{tx("Política de Privacidad", "Privacy Policy")}</LegalLink> {tx("y el tratamiento necesario de mis datos para prestar el servicio.", "and the processing of my data required to provide the service.")}</span>
       </label>
 
       <div className="legal-safety-note"><CheckCircle2 size={18}/><span>{tx("No vendemos tus datos ni los usamos para publicidad de terceros.", "We do not sell your data or use it for third-party advertising.")}</span></div>

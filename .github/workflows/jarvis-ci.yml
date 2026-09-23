@@ -32,6 +32,7 @@ jobs:
       - run: npm run test:native-navigation
       - run: npm run test:product-analytics
       - run: npm run test:store-readiness
+      - run: npm run test:legal-links
 
   frontend-lint-report:
     name: Frontend lint report
