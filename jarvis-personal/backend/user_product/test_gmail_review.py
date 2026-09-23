@@ -30,15 +30,22 @@ class _Connection:
 
     def execute(self, query, params=()):
         self.calls.append((query, params))
+        if query.startswith(("SAVEPOINT", "RELEASE SAVEPOINT", "ROLLBACK TO SAVEPOINT")):
+            return _Result()
         return next(self.results)
 
     def commit(self):
         self.committed = True
 
 
+ALLOWED_USER_ID = 12  # allowed_users.id of the authenticated person
+LEGACY_USER_ID = 77   # users.id stored on the Gmail connection (legacy finance FK)
+
+
 def _identity(monkeypatch):
     monkeypatch.setattr(gmail_service, "get_current_account_id", lambda: "account-a")
     monkeypatch.setattr(gmail_service, "get_current_workspace_id", lambda: "workspace-a")
+    monkeypatch.setattr(gmail_service, "get_current_user_id", lambda: ALLOWED_USER_ID)
 
 
 def test_email_inbox_is_scoped_to_account_and_workspace(monkeypatch):
@@ -201,10 +208,12 @@ def test_phase_1_contract_excludes_raw_email_and_is_idempotent():
         "amount": 4200, "transaction_type": "expense", "category": "food",
     }
 
-    gmail_service._publish_confirmed_financial_input(connection, candidate, values, 55)
+    gmail_service._publish_confirmed_financial_input(connection, candidate, values, 55, ALLOWED_USER_ID)
 
     event_query, event_params = connection.calls[0]
-    notification_query, notification_params = connection.calls[1]
+    notification_query, notification_params = next(
+        call for call in connection.calls if "INSERT INTO notification_jobs" in call[0]
+    )
     assert "financial-input-v1" in event_query
     assert "ON CONFLICT(transaction_id,event_name,contract_version) DO NOTHING" in event_query
     assert "raw_payload" not in event_params[-1]
