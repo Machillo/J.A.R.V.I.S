@@ -838,9 +838,8 @@ def _parse_bac_sinpe_movil(subject: str, sender: str, body: str, received_at: st
     recipient = _normalize_person_name_from_text(recipient_match.group(1) if recipient_match else "")
     detail = re.sub(r"[_\s]+", " ", detail_match.group(1)).strip(" .") if detail_match else "SINPE Móvil recibido"
 
-    is_to_owner = recipient.lower().startswith("kenneth") or "kenneth" in normalize(recipient)
-    if not is_to_owner:
-        # Not enough context to say it is money entering Kenneth's finances.
+    if not recipient:
+        # A named recipient is needed to classify this as an incoming alert.
         return None
 
     description = f"SINPE recibido de {payer}" if payer and payer != "Kenneth" else "SINPE Móvil recibido"
@@ -862,6 +861,11 @@ def _parse_bac_sinpe_movil(subject: str, sender: str, body: str, received_at: st
     if payer in {"Emily", "Sidey"}:
         category = "Cuentas por cobrar"
 
+    # Some SINPE Móvil notices include the credited bank account as well as
+    # the phone number. Only capture an explicitly labeled account here; a
+    # phone number or payer name must never become an account identity.
+    destination_account = _extract_account_near(text, ["cuenta destino", "cuenta acreditada", "a su cuenta"])
+
     return {
         **_base_result("bac", "movement", received_at),
         "transaction_date": transaction_date,
@@ -876,6 +880,7 @@ def _parse_bac_sinpe_movil(subject: str, sender: str, body: str, received_at: st
         "confidence": 0.99,
         "confidence_reason": "BAC SINPE Móvil: ingreso, pagador, monto, fecha y referencia extraídos por plantilla exacta.",
         "movement_direction": "in",
+        "destination_account": destination_account,
         "payer_name": payer,
         "recipient_name": recipient,
     }
@@ -909,9 +914,13 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
         or "se acredito en la cuenta" in clean
         or "se acreditó" in (body or "").lower()
         or "acreditando" in clean
-        or "a su cuenta" in clean
+        or ("a su cuenta" in clean and not is_out)
     )
-    direction = "out" if is_out else "in" if is_in else "unknown"
+    # If both debit and credit appear in one notice, the posting direction is
+    # ambiguous. Leave it for review instead of counting it as a debit.
+    direction = "out" if is_out and not is_in else "in" if is_in and not is_out else "unknown"
+    if direction == "unknown":
+        is_out = is_in = False
 
     concept_match = re.search(r"por\s+concepto\s+de\s+(.+?)(?:\s+Monto\b|\.?D[ií]a\s+y\s+hora|\n|$)", text, re.I | re.S)
     concept = re.sub(r"[_\s]+", " ", concept_match.group(1)).strip(" .") if concept_match else ""
@@ -926,19 +935,6 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
     if not destination_account and direction == "in" and ibans:
         # Incoming notifications usually mention the credited own account.
         destination_account = ibans[-1]
-
-    # Some BAC templates omit explicit debit/credit wording but still
-    # identify Kenneth in the origin or destination account block. Use that
-    # structured ownership signal before falling back to an unknown transfer.
-    if direction == "unknown":
-        origin_is_owner = "kenneth" in normalize(origin_account)
-        destination_is_owner = "kenneth" in normalize(destination_account)
-        if origin_is_owner and not destination_is_owner:
-            is_out = True
-            direction = "out"
-        elif destination_is_owner and not origin_is_owner:
-            is_in = True
-            direction = "in"
 
     description_base = concept or ("SINPE enviado" if is_out else "SINPE recibido" if is_in else "Transferencia SINPE")
     notes = ["BAC SINPE por plantilla", "salida" if is_out else "entrada" if is_in else "dirección por revisar"]
@@ -1048,6 +1044,9 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
         or "recibimos tu pago" in clean
         or "depositamos tu credito" in clean
         or "depositamos tu crédito" in clean
+        or "se aplico un credito" in clean
+        or "credito en tiempo real" in clean
+        or "acreditamos tu cuenta" in clean
     ):
         return None
 
@@ -1065,21 +1064,16 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
     reference = _label_value(text, "Referencia") or ""
 
     is_debit = "se aplico un debito" in clean or "se aplicó un débito" in clean or "debito en tiempo real" in clean or "débito en tiempo real" in clean
-    is_received = "recepcion de fondos" in clean or "recepción de fondos" in clean or "depositamos tu credito" in clean or "depositamos tu crédito" in clean
+    is_received = (
+        "recepcion de fondos" in clean or "recepción de fondos" in clean
+        or "depositamos tu credito" in clean or "depositamos tu crédito" in clean
+        or "se aplico un credito" in clean or "credito en tiempo real" in clean
+        or "acreditamos tu cuenta" in clean
+    )
     is_payment_received = "recibimos tu pago" in clean
-    direction = "out" if is_debit else "in" if is_received else "payment" if is_payment_received else "unknown"
-
-    # "Operación realizada" can omit explicit debit wording even though the
-    # structured account blocks clearly show Kenneth as the sender/recipient.
+    direction = "unknown" if is_debit and is_received else "out" if is_debit else "in" if is_received else "payment" if is_payment_received else "unknown"
     if direction == "unknown":
-        origin_is_owner = "kenneth" in normalize(origin)
-        destination_is_owner = "kenneth" in normalize(destination)
-        if origin_is_owner and not destination_is_owner:
-            is_debit = True
-            direction = "out"
-        elif destination_is_owner and not origin_is_owner:
-            is_received = True
-            direction = "in"
+        is_debit = is_received = False
 
     notes = ["MultiMoney transferencia por plantilla"]
     if origin:

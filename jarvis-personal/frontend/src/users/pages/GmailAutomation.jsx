@@ -9,6 +9,8 @@ import {
   disconnectVipGmail,
   acceptVipGmailCandidate,
   getVipGmailEmails,
+  getVipOwnTransferSuggestions,
+  confirmVipOwnTransfer,
   getVipGmailStatus,
   getVipFinancialIdentity,
   confirmVipFinancialAccount,
@@ -24,6 +26,8 @@ export default function GmailAutomation() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [emails, setEmails] = useState([]);
+  const [transferSuggestions, setTransferSuggestions] = useState([]);
+  const [transferReview, setTransferReview] = useState(null);
   const [filter, setFilter] = useState("pending");
   const [editing, setEditing] = useState(null);
   const [identity, setIdentity] = useState({ items: [], summary: {} });
@@ -35,6 +39,8 @@ export default function GmailAutomation() {
         getVipGmailStatus(), getVipGmailEmails(filter), getVipFinancialIdentity(),
       ]);
       setGmail(status); setEmails(inbox?.items || []); setIdentity(accounts || { items: [], summary: {} });
+      const proposed = await getVipOwnTransferSuggestions().catch(() => ({ items: [] }));
+      setTransferSuggestions(proposed.items || []);
     }
     catch (err) { setError(err.message || tx("No se pudo consultar el correo.", "Couldn’t check mail.")); }
   }, [filter]);
@@ -70,6 +76,21 @@ export default function GmailAutomation() {
       setMessage(ownershipStatus === "own" ? tx("Cuenta confirmada como propia.", "Account confirmed as yours.") : tx("Cuenta marcada como ajena.", "Account marked as not yours."));
       await load();
     } catch (err) { setError(err.message || tx("No se pudo confirmar la cuenta.", "Couldn’t confirm the account.")); }
+    finally { setBusy(""); }
+  };
+
+  const confirmTransfer = async () => {
+    if (!transferReview?.confirmed) return;
+    setBusy("own-transfer"); setError(""); setMessage("");
+    try {
+      await confirmVipOwnTransfer(
+        transferReview.firstId, transferReview.secondId,
+        transferReview.needsDirection ? transferReview.unknownDirection : null,
+      );
+      setTransferReview(null);
+      await load();
+      setMessage(tx("Ambos avisos quedaron como una transferencia propia, sin sumarse a ingresos ni gastos.", "Both notices are now an own-account transfer, excluded from income and expenses."));
+    } catch (err) { setError(err.message || tx("No pudimos confirmar la transferencia.", "Couldn’t confirm the transfer.")); }
     finally { setBusy(""); }
   };
 
@@ -142,7 +163,7 @@ export default function GmailAutomation() {
   // Each bank sends its own notification. Show one review item for a matched
   // own-account transfer while retaining both source records in the backend.
   const inboxIds = new Set(emails.map((item) => item.candidate_id));
-  const visibleEmails = emails.filter((item) => !(item.resolution_reason === "paired_owned_transfer" &&
+  const visibleEmails = emails.filter((item) => !(["paired_owned_transfer", "user_confirmed_own_transfer"].includes(item.resolution_reason) &&
     item.related_candidate_id && item.candidate_id > item.related_candidate_id &&
     inboxIds.has(item.related_candidate_id)));
 
@@ -192,6 +213,8 @@ export default function GmailAutomation() {
       <div className="gmail-email-list">{visibleEmails.map((item) => {
         const pending = item.review_status === "pending";
         const edit = editing?.candidate_id === item.candidate_id;
+        const possibleTransfers = transferSuggestions.filter(({ first, second }) =>
+          first.candidate_id === item.candidate_id || second.candidate_id === item.candidate_id);
         return <article className="gmail-email-card" key={item.candidate_id || item.email_id}>
           <div className="gmail-email-meta"><span>{item.bank || tx("Banco", "Bank")}</span><time>{item.received_at ? new Date(item.received_at).toLocaleDateString() : ""}</time></div>
           <strong>{item.subject || item.description || tx("Movimiento bancario", "Bank transaction")}</strong>
@@ -207,6 +230,35 @@ export default function GmailAutomation() {
             <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>₡{Number(item.amount || 0).toLocaleString()}</b></span></div>
             {item.is_internal_transfer && <p className="gmail-resolution-note">{item.resolution_reason === "paired_owned_transfer" ? tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, ambos quedan revisados sin sumarse a ingresos o gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming reviews both without adding income or expense.") : tx("DINCR encontró ambas cuentas entre las que confirmaste como propias. Al aceptar, no se registrará como gasto ni ingreso.", "DINCR matched both endpoints to accounts you confirmed as yours. Accepting won’t record income or expense.")}</p>}
             {item.review_status === "duplicate" && <p className="gmail-resolution-note">{tx("DINCR detectó que este correo representa el mismo movimiento que otro registro y evitó contarlo dos veces.", "DINCR detected that this email represents the same movement as another record and avoided double counting it.")}</p>}
+            {possibleTransfers.length > 0 && <div className="gmail-transfer-review">
+              <strong>{tx("¿Es un traslado entre tus cuentas?", "Is this a transfer between your accounts?")}</strong>
+              <small>{tx("DINCR encontró avisos con el mismo monto y fecha. Cada banco puede usar una referencia distinta; verificá que el débito y el crédito sean del mismo traslado.", "DINCR found notices with the same amount and date. Banks may use different references; check that the debit and credit describe the same transfer.")}</small>
+              {possibleTransfers.slice(0, 4).map(({ first, second }) => {
+                const other = first.candidate_id === item.candidate_id ? second : first;
+                const otherVisible = visibleEmails.some((row) => row.candidate_id === other.candidate_id);
+                if (otherVisible && item.candidate_id < other.candidate_id) return null;
+                const selected = transferReview?.firstId === item.candidate_id && transferReview?.secondId === other.candidate_id;
+                return <div key={other.candidate_id}>
+                  <button type="button" disabled={Boolean(busy)} onClick={() => setTransferReview({
+                    firstId: item.candidate_id, secondId: other.candidate_id,
+                    needsDirection: first.direction === "unknown" || second.direction === "unknown",
+                    unknownDirection: "", confirmed: false,
+                  })}>{tx(`Comparar con ${other.bank} · ${other.date} · ${other.direction === "in" ? "crédito" : other.direction === "out" ? "débito" : "dirección por confirmar"}${other.reference_end ? ` · ref. …${other.reference_end}` : ""}`, `Compare with ${other.bank} · ${other.date} · ${other.direction === "in" ? "credit" : other.direction === "out" ? "debit" : "direction to confirm"}${other.reference_end ? ` · ref. …${other.reference_end}` : ""}`)}</button>
+                  {selected && <div className="gmail-transfer-confirm">
+                    <p>{tx("Confirmá únicamente si ambas cuentas son tuyas y estos dos avisos corresponden al mismo traslado. Si ya guardaste uno, dejará de contar como ingreso o gasto.", "Confirm only if you own both accounts and these two notices describe one transfer. Previously saved movements will stop counting as income or expense.")}</p>
+                    {transferReview.needsDirection && <label>{tx("El aviso sin dirección fue un", "The notice without direction was a")}
+                      <select value={transferReview.unknownDirection} onChange={(event) => setTransferReview((current) => ({ ...current, unknownDirection: event.target.value }))}>
+                        <option value="">{tx("Seleccioná crédito o débito", "Choose credit or debit")}</option>
+                        <option value="in">{tx("Crédito (entró dinero)", "Credit (money came in)")}</option>
+                        <option value="out">{tx("Débito (salió dinero)", "Debit (money went out)")}</option>
+                      </select>
+                    </label>}
+                    <label><input type="checkbox" checked={transferReview.confirmed} onChange={(event) => setTransferReview((current) => ({ ...current, confirmed: event.target.checked }))}/>{tx("Confirmo que son mis cuentas y la misma transferencia.", "I confirm that I own both accounts and this is the same transfer.")}</label>
+                    <div className="gmail-review-actions"><button type="button" onClick={() => setTransferReview(null)}>{tx("Cancelar", "Cancel")}</button><button type="button" className="primary" disabled={Boolean(busy) || !transferReview.confirmed || (transferReview.needsDirection && !transferReview.unknownDirection)} onClick={confirmTransfer}>{tx("Confirmar traslado propio", "Confirm own transfer")}</button></div>
+                  </div>}
+                </div>;
+              })}
+            </div>}
             {pending ? <div className="gmail-review-actions"><button type="button" className="reject" disabled={Boolean(busy)} onClick={() => review(item, "reject")}><X size={16}/>{tx("Rechazar", "Reject")}</button>{!item.is_internal_transfer && <button type="button" disabled={Boolean(busy)} onClick={() => setEditing(item)}><Pencil size={16}/>{tx("Corregir", "Edit")}</button>}<button type="button" className="primary" disabled={Boolean(busy)} onClick={() => review(item, "accept")}><Check size={16}/>{item.is_internal_transfer ? tx("Confirmar transferencia", "Confirm transfer") : tx("Aceptar", "Accept")}</button></div> : <span className={`gmail-review-state ${item.review_status}`}>{item.review_status === "confirmed" || item.review_status === "auto_saved" ? tx("Guardado", "Saved") : item.review_status === "rejected" ? tx("Rechazado", "Rejected") : item.review_status === "duplicate" ? tx("Duplicado", "Duplicate") : item.review_status}</span>}
           </> : <p>{item.parse_reason || tx("DINCR no detectó un movimiento en este correo.", "DINCR did not detect a transaction in this email.")}</p>}
         </article>;

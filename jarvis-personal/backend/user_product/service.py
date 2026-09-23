@@ -556,7 +556,8 @@ def list_user_transactions():
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT id,transaction_date,description,amount,transaction_type,category,notes,created_at
-               FROM transactions WHERE workspace_id=%s ORDER BY transaction_date DESC,id DESC""",
+               FROM transactions WHERE workspace_id=%s AND transaction_type<>'internal_transfer'
+               ORDER BY transaction_date DESC,id DESC""",
             (workspace_id,),
         ).fetchall()
     return rows
