@@ -11,6 +11,7 @@ const iconMap = { free: WalletCards, basic: Sparkles, vip: Crown };
 
 export default function FinvaOnboarding({ user, onComplete }) {
   const completedRef = useRef(false);
+  const analyticsStartedRef = useRef(false);
   const [profile, setProfile] = useState(user);
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +36,13 @@ export default function FinvaOnboarding({ user, onComplete }) {
     }).catch(() => { if (active) setBillingError("No pudimos confirmar los precios y la promoción. Reintentá para elegir Basic o VIP."); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (analyticsStartedRef.current || user?.legal?.required !== false) return;
+    analyticsStartedRef.current = true;
+    identifyTelemetryUser(user);
+    trackEvent("onboarding_started");
+  }, [user]);
 
   const retryBilling = () => {
     setBillingError("");
@@ -73,7 +81,9 @@ export default function FinvaOnboarding({ user, onComplete }) {
       // request here could fail after activation and strand the onboarding UI.
       const activeProfile = await confirmedPlanProfile(result, code, getMe);
       identifyTelemetryUser(activeProfile);
+      trackEvent("plan_selected", { plan: code });
       trackEvent("plan_access_granted", { plan: code, access_type: code === "free" ? "free" : "promotion" });
+      trackEvent("onboarding_completed");
       setProfile(activeProfile);
     } catch (e) { setError(e.message); }
     finally { setSaving(false); }

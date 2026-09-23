@@ -2,6 +2,7 @@ import { useState } from "react";
 import { LogOut, Trash2, X } from "lucide-react";
 import { tx } from "../../../lib/locale";
 import { deleteMyAccount } from "../../../users/services/jarvisApi";
+import { trackEvent } from "../../../lib/telemetry";
 
 export default function AccountActions({ onLogout, variant = "free" }) {
   const [confirming, setConfirming] = useState(false);
@@ -9,12 +10,14 @@ export default function AccountActions({ onLogout, variant = "free" }) {
   const [error, setError] = useState("");
 
   const removeAccount = async () => {
+    trackEvent("account_deletion_started");
     setDeleting(true);
     setError("");
     try {
       await deleteMyAccount();
       await onLogout?.();
     } catch (requestError) {
+      trackEvent("account_deletion_failed");
       const reference = requestError?.errorId ? ` (${tx("referencia", "reference")}: ${requestError.errorId})` : "";
       setError(`${requestError?.message || tx("No pudimos eliminar tu cuenta. Intentá nuevamente.", "We couldn't delete your account. Please try again.")}${reference}`);
       setDeleting(false);
