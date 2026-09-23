@@ -25,7 +25,8 @@
     "ios:sync:finva": "node scripts/ios-product.mjs finva sync",
     "ios:sync:jarvis": "node scripts/ios-product.mjs jarvis sync",
     "ios:open:finva": "node scripts/ios-product.mjs finva open",
-    "ios:open:jarvis": "node scripts/ios-product.mjs jarvis open"
+    "ios:open:jarvis": "node scripts/ios-product.mjs jarvis open",
+    "build:landing": "node landing/build.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

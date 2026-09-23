@@ -19,6 +19,7 @@
 # Node / frontend
 **/node_modules/
 **/dist/
+**/landing-dist/
 **/build/
 **/.vite/
 **/.cache/
