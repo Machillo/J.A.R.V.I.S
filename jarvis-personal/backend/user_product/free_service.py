@@ -126,7 +126,7 @@ def list_free_movements() -> list[dict]:
               SELECT 'transaction:'||id,id,'transaction',{transaction_date},description,amount,
                      CASE WHEN transaction_type='income' THEN 'income' ELSE 'expense' END,category,COALESCE(notes,''),
                      (source IN ('finva','manual','manual_expense'))
-              FROM transactions WHERE workspace_id=%s
+              FROM transactions WHERE workspace_id=%s AND transaction_type<>'internal_transfer'
             ) movements ORDER BY transaction_date DESC,source_id DESC""",
             (workspace_id,workspace_id,workspace_id,workspace_id),
         ).fetchall()
