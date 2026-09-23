@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronDown, Plus, Search, Tag } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronDown, History, Plus, Search, Tag } from "lucide-react";
 import { createExpense, createIncome, deleteExpense, deleteIncome, getExpenses, getIncome, updateExpense, updateIncome } from "../services/jarvisApi";
 import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
@@ -36,7 +36,7 @@ function Fold({ id, title, subtitle, total, open, onToggle, children }) {
   </section>;
 }
 
-export default function Finance({ plan = "basic" }) {
+export default function Finance({ plan = "basic", onNavigate }) {
   const [income,setIncome] = useState([]);
   const [expenses,setExpenses] = useState([]);
   const [error,setError] = useState("");
@@ -91,7 +91,7 @@ export default function Finance({ plan = "basic" }) {
 
   const compact = plan === "free" || plan === "basic" || plan === "vip";
   const content = compact ? <section className={`free-screen free-movements-screen ${plan !== "free" ? "basic-movements-screen" : ""}`}>
-    <small className="free-plan-label">{plan === "free" ? tx("Gratis", "Free") : "Basic"}</small>
+    <small className="free-plan-label">{plan === "free" ? tx("Gratis", "Free") : plan === "vip" ? "VIP" : "Basic"}</small>
     {error && <div className="free-error">{error}</div>}
     <label className="free-search"><Search size={18}/><input aria-label={tx("Buscar movimientos", "Search transactions")} placeholder={tx("Buscar movimientos", "Search transactions")} value={query} onChange={(event) => setQuery(event.target.value)}/></label>
     <div className="free-filter-tabs" role="tablist">
@@ -103,6 +103,9 @@ export default function Finance({ plan = "basic" }) {
         <b className={item.kind}>{item.kind === "income" ? "+" : "−"}{money(item.amount)}</b>
       </button>) : <p className="free-empty">{tx("No hay movimientos con esos filtros.", "No transactions match those filters.")}</p>}
     </div>
+    {/* This list shows manual income and expenses; the full history also includes
+        movements confirmed from bank emails and statements. */}
+    {onNavigate && <button className="free-secondary-button" type="button" onClick={() => onNavigate("transactions")}><History size={18}/>{tx("Ver historial completo", "View full history")}</button>}
     <button className="free-primary-button" type="button" onClick={() => setEntryKind("choose")}><Plus size={18}/>{tx("Agregar movimiento", "Add transaction")}</button>
   </section> : <section className="finance-page finva-progressive-page">
     <div className="hero"><span>{tx("MOVIMIENTOS", "TRANSACTIONS")}</span><h1>{tx("Tu dinero día a día", "Your money day by day")}</h1><p>{tx("Registrá lo que realmente entra y sale de tus cuentas. Sin proyecciones de salario.", "Record what actually enters and leaves your accounts, without projected income.")}</p></div>
