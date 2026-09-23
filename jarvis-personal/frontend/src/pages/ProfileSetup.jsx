@@ -17,9 +17,13 @@ import {
 import { completeProfileSetup } from "../services/jarvisApi";
 import { deviceLanguage } from "../lib/locale";
 import bacLogo from "../assets/institutions/bac.svg";
-import multimoneyLogo from "../assets/institutions/multimoney.svg";
-import popularLogo from "../assets/institutions/popular.svg";
+import bnLogo from "../assets/institutions/bn.png";
+import bcrLogo from "../assets/institutions/bcr.png";
+import popularLogo from "../assets/institutions/popular.png";
+import daviviendaLogo from "../assets/institutions/davivienda.png";
+import davibankLogo from "../assets/institutions/davibank.png";
 import promericaLogo from "../assets/institutions/promerica.png";
+import multimoneyLogo from "../assets/institutions/multimoney.png";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -45,11 +49,11 @@ const CURRENCIES = [
 
 const BANKS = [
   { id: "bac", name: "BAC Credomatic", short: "BAC", tone: "red", logo: bacLogo, supported: true },
-  { id: "bn", name: "Banco Nacional", short: "BN", tone: "blue" },
-  { id: "bcr", name: "Banco de Costa Rica", short: "BCR", tone: "navy" },
+  { id: "bn", name: "Banco Nacional", short: "BN", tone: "blue", logo: bnLogo },
+  { id: "bcr", name: "Banco de Costa Rica", short: "BCR", tone: "navy", logo: bcrLogo },
   { id: "popular", name: "Banco Popular", short: "BP", tone: "orange", logo: popularLogo },
-  { id: "davivienda", name: "Davivienda", short: "DAV", tone: "yellow" },
-  { id: "scotiabank", name: "Scotiabank", short: "S", tone: "red" },
+  { id: "davivienda", name: "Davivienda", short: "DAV", tone: "yellow", logo: daviviendaLogo },
+  { id: "scotiabank", name: "DAVIbank (antes Scotiabank)", short: "S", tone: "red", logo: davibankLogo },
   { id: "promerica", name: "Promerica", short: "PRO", tone: "green", logo: promericaLogo },
   { id: "multimoney", name: "MultiMoney", short: "MM", tone: "violet", logo: multimoneyLogo, supported: true },
 ];
@@ -58,6 +62,13 @@ const firstName = (user) => {
   const source = user?.display_name || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "";
   return source.trim().split(/\s+/)[0] || "";
 };
+
+function BankLogo({ bank }) {
+  const [failed, setFailed] = useState(false);
+  return <span className={`bank-mark bank-mark--${bank.tone} ${bank.logo && !failed ? "bank-mark--logo" : ""}`} aria-hidden="true">
+    {bank.logo && !failed ? <img src={bank.logo} alt="" onError={() => setFailed(true)} /> : bank.short}
+  </span>;
+}
 
 function BrandArt({ isJarvis }) {
   const product = "DINCR";
@@ -295,7 +306,7 @@ export default function ProfileSetup({ user, onComplete }) {
               <div className="profile-bank-grid">
                 {filteredBanks.map((bank) => (
                   <button type="button" className={`profile-bank-card ${selectedBanks.includes(bank.id) ? "selected" : ""}`} aria-pressed={selectedBanks.includes(bank.id)} key={bank.name} onClick={() => toggleBank(bank.id)}>
-                    <span className={`bank-mark bank-mark--${bank.tone} ${bank.logo ? "bank-mark--logo" : ""}`} aria-hidden="true">{bank.logo ? <img src={bank.logo} alt="" /> : bank.short}</span>
+                    <BankLogo bank={bank} />
                     <span className="profile-bank-copy"><strong>{bank.name}</strong><small>{bank.supported ? tx("Disponible para la suscripción VIP", "Available with the VIP subscription") : tx("Solo para personalizar tu perfil", "Only to personalize your profile")}</small></span>
                     {selectedBanks.includes(bank.id) && <Check />}
                   </button>

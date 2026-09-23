@@ -3,6 +3,7 @@
   "googlePlayUrl": "",
   "appStoreUrl": "",
   "supportEmail": "soporte@dincr.com",
+  "privacyEmail": "privacidad@dincr.com",
   "socialLinks": [],
   "reviews": { "enabled": false, "googlePlay": null, "appStore": null },
   "pricesCRC": { "free": 0, "basic": 2990, "vip": 4990 }

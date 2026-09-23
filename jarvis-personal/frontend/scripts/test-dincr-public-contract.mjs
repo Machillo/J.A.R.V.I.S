@@ -16,6 +16,7 @@ const price = await readFile(new URL('precios/index.html', out), 'utf8');
 assert.match(price, /₡4\.990/);
 const support = await readFile(new URL('soporte/index.html', out), 'utf8');
 assert.match(support, /mailto:soporte@dincr\.com/);
+assert.match(support, /mailto:privacidad@dincr\.com/);
 for (const legal of ['terminos', 'privacidad']) {
   const html = await readFile(new URL(`${legal}/index.html`, out), 'utf8');
   assert.match(html, /2026-09-23-v2/);
