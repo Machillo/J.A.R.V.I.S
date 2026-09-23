@@ -39,7 +39,7 @@ import { initializeTelemetry } from "./lib/telemetry";
 import { initializeColorMode } from "./lib/colorMode";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 
-const publicPages = new Set(["/about", "/privacy", "/terms"]);
+const publicPages = new Set(["/about", "/privacy", "/terms", "/delete-account"]);
 const isPublicPage = publicPages.has(window.location.pathname);
 initializeTelemetry();
 initializeColorMode();
