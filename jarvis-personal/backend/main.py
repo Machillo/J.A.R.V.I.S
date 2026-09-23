@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import logging
 import re
+import traceback
+from pathlib import Path
 from uuid import uuid4
 
 from backend.core.brain import process_input
@@ -103,6 +105,37 @@ def _request_id(request: Request) -> str:
     return value
 
 
+def _safe_exception_summary(exc: BaseException) -> str:
+    """One log line that explains an unexpected error without leaking data.
+
+    Keeps exception types, Postgres error codes, schema identifiers (table,
+    constraint, column) and code locations. Exception messages are dropped on
+    purpose: driver messages can quote row values (emails, amounts, tokens).
+    """
+    parts: list[str] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen and len(parts) < 3:
+        seen.add(id(current))
+        info = [type(current).__name__]
+        pgcode = getattr(current, "pgcode", None)
+        if pgcode:
+            info.append(f"pgcode={pgcode}")
+        diag = getattr(current, "diag", None)
+        for label, attr in (("table", "table_name"), ("constraint", "constraint_name"), ("column", "column_name")):
+            value = getattr(diag, attr, None) if diag is not None else None
+            if value:
+                info.append(f"{label}={value}")
+        frames = [frame for frame in traceback.extract_tb(current.__traceback__) if "backend" in frame.filename.replace("\\", "/")]
+        if frames:
+            info.append("at " + " <- ".join(
+                f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}" for frame in reversed(frames[-6:])
+            ))
+        parts.append(" ".join(info))
+        current = current.__cause__ or current.__context__
+    return " | caused by ".join(parts)
+
+
 def _internal_error_payload(error_id: str) -> dict[str, str]:
     return {
         "detail": "Ocurrió un error interno. Intentá nuevamente.",
@@ -123,7 +156,7 @@ async def safe_http_error_handler(request: Request, exc: HTTPException):
 @app.exception_handler(Exception)
 async def safe_unhandled_error_handler(request: Request, exc: Exception):
     error_id = _request_id(request)
-    logger.exception("Unhandled API error id=%s path=%s", error_id, request.url.path, exc_info=exc)
+    logger.error("Unhandled API error id=%s path=%s error=%s", error_id, request.url.path, _safe_exception_summary(exc))
     return JSONResponse(status_code=500, content=_internal_error_payload(error_id))
 
 
@@ -284,11 +317,11 @@ async def auth_middleware(request: Request, call_next):
                 safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
         return response
 
-    except Exception:
+    except Exception as exc:
         if idempotency_reserved:
             safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
         error_id = request_id
-        logger.exception("Unhandled API error id=%s path=%s", error_id, request.url.path)
+        logger.error("Unhandled API error id=%s path=%s error=%s", error_id, request.url.path, _safe_exception_summary(exc))
         return JSONResponse(
             status_code=500,
             content=_internal_error_payload(error_id),

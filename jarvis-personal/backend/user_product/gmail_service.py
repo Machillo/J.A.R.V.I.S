@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import html
 import json
+import logging
 import os
 import re
 import secrets
@@ -19,6 +20,7 @@ from fastapi.responses import RedirectResponse
 
 from backend.auth.current_user import (
     get_current_account_id,
+    get_current_user_id,
     get_current_workspace_id,
 )
 from backend.core.database import get_connection
@@ -41,6 +43,8 @@ from backend.user_product.statement_candidate import (
     statement_hash,
 )
 
+
+logger = logging.getLogger(__name__)
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 FINVA_QUERY = os.getenv(
@@ -353,13 +357,17 @@ def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[
 
 
 def _publish_confirmed_financial_input(
-    conn, candidate: dict[str, Any], values: dict[str, Any], transaction_id: int,
+    conn, candidate: dict[str, Any], values: dict[str, Any], transaction_id: int, allowed_user_id: int,
 ) -> None:
     """Publish the privacy-safe Phase 1 boundary in the same DB transaction.
 
     Downstream phases consume this canonical event instead of Gmail bodies,
     attachment text or parser evidence. Both inserts are idempotent so a retry
     cannot duplicate either the event or the user notification.
+
+    ``allowed_user_id`` is the authenticated allowed_users.id: both tables
+    reference allowed_users. ``candidate["legacy_user_id"]`` is a users.id
+    (legacy finance FK) and must not be used here.
     """
     category = normalize_category(values["category"], values["transaction_type"])
     payload = {
@@ -379,25 +387,37 @@ def _publish_confirmed_financial_input(
            ) VALUES(%s,%s,%s,'transaction_confirmed','financial-input-v1',%s,%s::jsonb,NOW())
            ON CONFLICT(transaction_id,event_name,contract_version) DO NOTHING""",
         (
-            candidate["account_id"], candidate["workspace_id"], int(candidate["legacy_user_id"]),
+            candidate["account_id"], candidate["workspace_id"], allowed_user_id,
             transaction_id, json.dumps(payload, default=str),
         ),
     )
-    conn.execute(
-        """INSERT INTO notification_jobs(
-               user_id,workspace_id,title,body,category,scheduled_at,
-               reference_type,reference_id,dedupe_key,payload
-           ) VALUES(%s,%s,%s,%s,'financial_import',NOW(),
-                    'transaction',%s,%s,%s::jsonb)
-           ON CONFLICT DO NOTHING""",
-        (
-            int(candidate["legacy_user_id"]), candidate["workspace_id"],
-            "Movimiento confirmado",
-            f"DINCR guardó {values['description'].strip()} por {float(values['amount']):,.2f} {payload['currency']}.",
-            str(transaction_id), f"financial-input-v1:{transaction_id}",
-            json.dumps({"event": "transaction_confirmed", "transaction_id": transaction_id}),
-        ),
-    )
+    # The confirmation notice is secondary: a failure here must not undo a
+    # confirmed movement, so it runs in its own savepoint.
+    conn.execute("SAVEPOINT confirmed_input_notification")
+    try:
+        conn.execute(
+            """INSERT INTO notification_jobs(
+                   user_id,workspace_id,title,body,category,scheduled_at,
+                   reference_type,reference_id,dedupe_key,payload
+               ) VALUES(%s,%s,%s,%s,'financial_import',NOW(),
+                        'transaction',%s,%s,%s::jsonb)
+               ON CONFLICT DO NOTHING""",
+            (
+                allowed_user_id, candidate["workspace_id"],
+                "Movimiento confirmado",
+                f"DINCR guardó {values['description'].strip()} por {float(values['amount']):,.2f} {payload['currency']}.",
+                str(transaction_id), f"financial-input-v1:{transaction_id}",
+                json.dumps({"event": "transaction_confirmed", "transaction_id": transaction_id}),
+            ),
+        )
+    except Exception as exc:
+        conn.execute("ROLLBACK TO SAVEPOINT confirmed_input_notification")
+        logger.warning(
+            "Confirmed movement notification skipped transaction_id=%s error=%s pgcode=%s",
+            transaction_id, type(exc).__name__, getattr(exc, "pgcode", None),
+        )
+    else:
+        conn.execute("RELEASE SAVEPOINT confirmed_input_notification")
 
 
 def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -472,7 +492,7 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             if value != candidate.get(key)
         )
         transaction_id = _create_candidate_transaction(conn, candidate, values)
-        _publish_confirmed_financial_input(conn, candidate, values, transaction_id)
+        _publish_confirmed_financial_input(conn, candidate, values, transaction_id, get_current_user_id())
         category = normalize_category(values["category"], values["transaction_type"])
         conn.execute(
             """UPDATE finva_email_candidates
