@@ -26,6 +26,10 @@ jobs:
           cache-dependency-path: jarvis-personal/frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+      - run: npm run test:navigation
+      - run: npm run test:native-navigation
+      - run: npm run test:product-analytics
+      - run: npm run test:store-readiness
 
   frontend-lint-report:
     name: Frontend lint report
