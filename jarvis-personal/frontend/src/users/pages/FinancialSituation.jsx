@@ -192,6 +192,7 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
 
       {editing && <button type="button" className="situation-save-button" disabled={saving} onClick={save}><Save size={18}/>{saving ? tx("Guardando...", "Saving...") : tx("Guardar cambios", "Save changes")}</button>}
       {message && <p className="success-banner">{message}</p>}
+      {message && plan === "vip" && <button type="button" className="situation-save-button" onClick={() => onNavigate?.("overview")}>{tx("Continuar con mi estrategia VIP", "Continue to my VIP strategy")}</button>}
       {error && <p className="onboarding-error">{error}</p>}
     </section>
   );

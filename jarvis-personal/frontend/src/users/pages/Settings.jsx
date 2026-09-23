@@ -8,6 +8,7 @@ import AppLockSettings from "../components/AppLockSettings";
 import { deviceLanguage, localeTag } from "../../lib/locale";
 import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
 import AccountActions from "../../products/finva/components/AccountActions";
+import { confirmedPlanProfile } from "../../lib/planSelection";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -22,6 +23,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
   const [error, setError] = useState("");
   const [betaAccepted, setBetaAccepted] = useState(false);
   const [billing, setBilling] = useState(null);
+  const [billingError, setBillingError] = useState("");
   const [paymentFlow, setPaymentFlow] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -37,18 +39,25 @@ export default function Settings({ user, onUserChange, onLogout }) {
     () => plans.find((plan) => plan.code === currentPlan),
     [plans, currentPlan],
   );
-  const receiptSubmittedAt = paymentFlow?.order?.receipt_submitted_at || billing?.order?.receipt_submitted_at;
+  const pendingOrder = paymentFlow?.order?.status === "payment_pending" ? paymentFlow.order : billing?.order?.status === "payment_pending" ? billing.order : null;
+  const receiptSubmittedAt = pendingOrder?.receipt_submitted_at;
   const promotionActive = Boolean(billing?.promotion?.active);
 
   useEffect(() => {
-    Promise.all([getPlans(), getBillingCatalog()])
-      .then(([availablePlans, billingCatalog]) => {
-        setPlans(availablePlans);
-        setBilling(billingCatalog);
-      })
-      .catch((err) => setError(err.message || "No se pudieron cargar los planes."))
-      .finally(() => setLoading(false));
+    let active = true;
+    getPlans().then((availablePlans) => { if (active) setPlans(availablePlans); })
+      .catch((err) => { if (active) setError(err.message || "No se pudieron cargar los planes."); })
+      .finally(() => { if (active) setLoading(false); });
+    getBillingCatalog().then((catalog) => { if (active) setBilling(catalog); })
+      .catch(() => { if (active) setBillingError("No pudimos confirmar los precios. Reintentá antes de elegir Basic o VIP."); });
+    return () => { active = false; };
   }, []);
+
+  const retryBilling = () => {
+    setBillingError("");
+    getBillingCatalog().then(setBilling)
+      .catch(() => setBillingError("No pudimos confirmar los precios. Reintentá antes de elegir Basic o VIP."));
+  };
 
 
   useEffect(() => {
@@ -59,6 +68,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
         setBilling(next);
         if (next?.order?.status === "paid" || next?.subscription?.status === "active") {
           const profile = await getMe();
+          if (profile?.subscription?.plan !== pendingOrder?.plan_code || profile?.subscription?.status !== "active") return;
           onUserChange?.(profile);
           setPaymentFlow(null);
           setMessage(`Pago confirmado. Tu plan ${profile?.subscription?.plan?.toUpperCase() || "DINCR"} ya está activo.`);
@@ -70,10 +80,11 @@ export default function Settings({ user, onUserChange, onLogout }) {
       }
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [receiptSubmittedAt, onUserChange]);
+  }, [receiptSubmittedAt, onUserChange, pendingOrder?.plan_code]);
 
   const openPlanDialog = (planCode) => {
     if (planCode === currentPlan) return;
+    if (planCode !== "free" && !billing) { setError("Confirmá los precios antes de elegir un plan de pago."); return; }
     setConfirming(planCode);
     setMessage("");
     setError("");
@@ -121,9 +132,10 @@ export default function Settings({ user, onUserChange, onLogout }) {
         setReceipt(null);
         return;
       }
-      onUserChange?.(response.profile);
+      const activeProfile = await confirmedPlanProfile(response, planCode, getMe);
+      onUserChange?.(activeProfile);
       setConfirming("");
-      setMessage(`Plan cambiado a ${response.profile?.subscription?.plan?.toUpperCase() || planCode.toUpperCase()}.`);
+      setMessage(`Plan cambiado a ${activeProfile.subscription.plan.toUpperCase()}.`);
     } catch (err) {
       setError(err.message || "No se pudo cambiar el plan.");
     } finally {
@@ -163,7 +175,6 @@ export default function Settings({ user, onUserChange, onLogout }) {
     }
   };
 
-  const pendingOrder = billing?.order?.status === "payment_pending" ? billing.order : null;
 
   return (
     <section className="mobile-page settings-page">
@@ -214,7 +225,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
         <div>
           <p className="eyebrow">{tx("Desarrollo", "Development")}</p>
           <h2>{tx("Cambiar de plan","Change plan")}</h2>
-          <span>{promotionActive ? "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático." : "Basic y VIP utilizan sus precios normales y se activan al confirmar el SINPE."}</span>
+          <span>{!billing ? "Estamos confirmando los precios de Basic y VIP." : promotionActive ? "Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático." : "Basic y VIP utilizan sus precios normales y se activan al confirmar el SINPE."}</span>
         </div>
       </div>
 
@@ -241,7 +252,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
                   <button
                     type="button"
                     className="change-plan-button"
-                    disabled={Boolean(changing)}
+                    disabled={Boolean(changing) || (plan.code !== "free" && !billing)}
                     onClick={() => openPlanDialog(plan.code)}
                   >
                     <>{tx("Elegir","Choose")} <ChevronRight size={17} /></>
@@ -252,6 +263,8 @@ export default function Settings({ user, onUserChange, onLogout }) {
           })}
         </div>
       )}
+
+      {billingError && <p className="onboarding-error" role="status">{billingError} <button type="button" onClick={retryBilling}>Reintentar</button></p>}
 
       {pendingOrder && !paymentFlow && (
         <article className="pending-payment-card">
