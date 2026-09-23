@@ -54,7 +54,8 @@ for (const pattern of ["xcuserdata", "DerivedData", "App/App/public", "*.mobilep
 }
 
 // OAuth returns: login uses the build's own scheme; mail OAuth accepts both DINCR schemes.
-assert.ok(isDincrAppId("com.dincr.app") && isDincrAppId("com.finva.app"));
+assert.ok(isDincrAppId("com.dincr.app"));
+assert.equal(isDincrAppId("com.finva.app"), false, "the legacy id only survives as a mail callback scheme");
 assert.equal(isDincrAppId("com.jarvis.personal"), false);
 assert.ok(isMailOAuthCallback("com.dincr.app://gmail/callback?microsoft=connected"));
 assert.ok(isMailOAuthCallback("com.finva.app://gmail/callback?gmail=connected"));

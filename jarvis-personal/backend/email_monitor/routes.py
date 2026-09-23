@@ -4,7 +4,7 @@ from fastapi import APIRouter, Header, Query
 
 from backend.email_monitor.models import EmailCandidateBulkDecisionRequest, EmailCandidateClassifyRequest, EmailCandidateDecisionRequest, EmailStatementReconcileRequest, EmailTextScanRequest
 from backend.email_monitor.statement_reconciliation import reconcile_statement
-from backend.auth.current_user import get_current_user_id
+from backend.auth.current_user import get_current_user_id, require_roles
 from backend.core.database import get_connection
 from backend.email_monitor.service import (
     cron_sync,
@@ -79,6 +79,10 @@ def email_monitor_candidate_bulk_decision(request: EmailCandidateBulkDecisionReq
 
 @router.post("/sync-gmail")
 def email_monitor_sync_gmail(max_results: int = 150, auto_commit: bool = False, query: str | None = None, current_month_only: bool = True):
+    # The owner's mailbox is read with server credentials (GMAIL_REFRESH_TOKEN) and the
+    # response lists message subjects and senders: never reachable by other accounts.
+    # The guard lives here because cron and Pub/Sub call sync_gmail_for_owner without a user.
+    require_roles("owner")
     return sync_gmail_for_owner(
         max_results=max_results,
         auto_commit=auto_commit,

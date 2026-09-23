@@ -37,10 +37,11 @@ onboarding biométrico y abre Xcode. Para sincronizar sin abrir Xcode: `npm run 
 
 - `com.dincr.app` — scheme principal. Inicio de sesión nativo:
   `com.dincr.app://auth/callback` (debe estar permitido en Supabase Auth → URL Configuration).
-- `com.finva.app` — **transitorio**. El backend devuelve el OAuth de Gmail/Outlook a un
-  único scheme para todas las plataformas (`FINVA_GMAIL_RETURN_URL`, hoy
-  `com.finva.app://gmail/callback`) y Android aún usa ese paquete. Quitarlo cuando
-  Android migre a `com.dincr.app` y esa variable apunte a `com.dincr.app://gmail/callback`.
+- `com.finva.app` — **transitorio**, solo para `/gmail/callback`. El backend devuelve el OAuth
+  de Gmail/Outlook a un único scheme para todas las plataformas (`FINVA_GMAIL_RETURN_URL`,
+  hoy `com.finva.app://gmail/callback`). Android e iOS ya son `com.dincr.app` y registran
+  ese callback transitorio. Quitarlo en ambas plataformas cuando esa variable apunte a
+  `com.dincr.app://gmail/callback`.
 
 Desinstalar cualquier build iOS anterior (`com.finva.app` o `com.jarvis.personal`)
 antes de probar: dos apps con el mismo scheme hacen impredecible el regreso del OAuth.

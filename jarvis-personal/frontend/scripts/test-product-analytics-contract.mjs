@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { analyticsEvents, safeAnalyticsProperties } from "../src/lib/analyticsContract.js";
-import { LEGACY_DINCR_APP_ID, isDincrAppId } from "../src/lib/appIdentity.js";
+import { DINCR_APP_ID, isDincrAppId } from "../src/lib/appIdentity.js";
 
 const sdk = fs.readFileSync(new URL("../src/lib/productAnalytics.js", import.meta.url), "utf8");
 const gmail = fs.readFileSync(new URL("../src/users/pages/GmailAutomation.jsx", import.meta.url), "utf8");
@@ -30,7 +30,7 @@ assert.match(sdk, /user\?\.legal\?\.required === false/);
 assert.doesNotMatch(sdk, /posthog\.identify\(/);
 assert.doesNotMatch(gmail, /bank: item\.|institution_country: item\.|auto_saved: result\./);
 
-function runSdk({ key = "", mobile = true, legal = false, appId = "com.finva.app" } = {}) {
+function runSdk({ key = "", mobile = true, legal = false, appId = "com.dincr.app" } = {}) {
   const calls = [];
   const sdkStub = {
     init: (_token, config) => { calls.push(["init", config]); sdkStub.config = config; },
@@ -41,7 +41,7 @@ function runSdk({ key = "", mobile = true, legal = false, appId = "com.finva.app
   };
   const source = sdk.replace(/^import .*;\r?\n/gm, "").replaceAll("import.meta.env", "env").replace(/export const /g, "const ");
   const context = {
-    posthog: sdkStub, analyticsEvents, safeAnalyticsProperties, LEGACY_DINCR_APP_ID, isDincrAppId,
+    posthog: sdkStub, analyticsEvents, safeAnalyticsProperties, DINCR_APP_ID, isDincrAppId,
     Capacitor: { isNativePlatform: () => mobile, getPlatform: () => "android" },
     env: { VITE_POSTHOG_KEY: key, VITE_POSTHOG_HOST: "https://us.i.posthog.com", VITE_NATIVE_APP_ID: appId },
     window: {},

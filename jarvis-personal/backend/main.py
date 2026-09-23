@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import logging
 import re
@@ -25,7 +25,7 @@ from backend.email_monitor.routes import router as email_monitor_router
 from backend.notifications.routes import router as notifications_router
 from backend.finance.investment_center import router as investment_center_router
 from backend.finance.business_center import router as business_center_router
-from backend.auth.current_user import set_current_user, reset_current_user
+from backend.auth.current_user import require_roles, set_current_user, reset_current_user
 from backend.auth.service import authenticate_access_token
 from backend.auth.owner_bridge import authenticate_owner_bridge_token
 from backend.users_admin.routes import router as users_admin_router
@@ -334,20 +334,26 @@ async def auth_middleware(request: Request, call_next):
     finally:
         reset_current_user(context_token)
 
-app.include_router(finance_router)
-app.include_router(goals_router)
-app.include_router(decision_router)
-app.include_router(reports_router)
-app.include_router(transactions_router)
-app.include_router(importers_router)
-app.include_router(advisor_router)
+# Legacy DINCR Owner (JARVIS Personal) APIs. Any Google/Apple login provisions an
+# account, so these must check the role server-side: the public DINCR app only uses
+# /user-product, /product-ops and /auth. Routers with public cron/webhook endpoints
+# (notifications, IBKR bridge, email monitor) enforce roles per route instead.
+INTERNAL_ONLY = [Depends(lambda: require_roles("owner", "admin"))]
+
+app.include_router(finance_router, dependencies=INTERNAL_ONLY)
+app.include_router(goals_router, dependencies=INTERNAL_ONLY)
+app.include_router(decision_router, dependencies=INTERNAL_ONLY)
+app.include_router(reports_router, dependencies=INTERNAL_ONLY)
+app.include_router(transactions_router, dependencies=INTERNAL_ONLY)
+app.include_router(importers_router, dependencies=INTERNAL_ONLY)
+app.include_router(advisor_router, dependencies=INTERNAL_ONLY)
 app.include_router(auth_router)
 app.include_router(ai_router)
 app.include_router(email_monitor_router)
 app.include_router(notifications_router)
-app.include_router(investment_center_router)
+app.include_router(investment_center_router, dependencies=INTERNAL_ONLY)
 app.include_router(ibkr_readonly_router)
-app.include_router(business_center_router)
+app.include_router(business_center_router, dependencies=INTERNAL_ONLY)
 app.include_router(users_admin_router)
 app.include_router(owner_bridge_router)
 app.include_router(user_product_router)
@@ -383,17 +389,17 @@ def status():
     return {"status": "ok"}
 
 
-@app.post("/ask")
+@app.post("/ask", dependencies=INTERNAL_ONLY)
 def ask(request: AskRequest):
     return process_input(request.text)
 
 
-@app.get("/events")
+@app.get("/events", dependencies=INTERNAL_ONLY)
 def events():
     return get_events()
 
 
-@app.post("/events")
+@app.post("/events", dependencies=INTERNAL_ONLY)
 def create_event(request: EventRequest):
     return add_event(
         title=request.title,
@@ -403,6 +409,6 @@ def create_event(request: EventRequest):
     )
 
 
-@app.get("/logs")
+@app.get("/logs", dependencies=INTERNAL_ONLY)
 def logs():
     return get_logs()

@@ -2,6 +2,11 @@ import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { startOAuthLogin } from "../lib/nativeAuth";
 import { tx } from "../lib/locale";
+import { detectNativePlatform } from "../ui/native/platform";
+
+// Sign in with Apple is required on iOS (App Store guideline 4.8) and needs the Apple
+// provider enabled in Supabase Auth. Android users sign in with Google.
+const offersApple = detectNativePlatform() !== "android";
 
 function GoogleIcon() {
   return (
@@ -59,18 +64,21 @@ export default function Login({ nativeError = "" }) {
           <GoogleIcon />
           {loading === "google" ? tx("Conectando con Google...", "Connecting to Google...") : tx("Continuar con Google", "Continue with Google")}
         </button>
-        <button className="login-google-btn auth-google-btn login-apple-btn" onClick={() => login("apple")} disabled={Boolean(loading)} type="button">
+        {offersApple && <button className="login-google-btn auth-google-btn login-apple-btn" onClick={() => login("apple")} disabled={Boolean(loading)} type="button">
           <AppleIcon />
           {loading === "apple" ? tx("Conectando con Apple...", "Connecting to Apple...") : tx("Continuar con Apple", "Continue with Apple")}
-        </button>
+        </button>}
 
         {(error || nativeError) && <p className="auth-message auth-error">{error || nativeError}</p>}
 
         <p className="login-warning auth-secure-note">
           <ShieldCheck size={15} />
-          {tx(
+          {offersApple ? tx(
             "Accedé con tu cuenta de Google o Apple. Se abrirá el navegador para continuar.",
             "Sign in with your Google or Apple account. Your browser will open to continue."
+          ) : tx(
+            "Accedé con tu cuenta de Google. Se abrirá el navegador para continuar.",
+            "Sign in with your Google account. Your browser will open to continue."
           )}
         </p>
       </section>
