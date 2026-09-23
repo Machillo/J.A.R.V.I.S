@@ -6,6 +6,24 @@ Microsoft Graph con permisos delegados `Mail.Read`, `User.Read` y `offline_acces
 No se solicita ni se almacena la contraseña del correo. Los refresh tokens se
 guardan en Supabase Vault en el backend y se eliminan al desconectar.
 
+## Cómo se vincula un buzón (Gmail y Outlook)
+
+1. La app autenticada llama a `connect`. El backend crea un flujo en
+   `mail_oauth_flows` (solo el hash del `state`, proveedor, cuenta, workspace,
+   verificador PKCE, 10 minutos) y devuelve la URL de autorización con PKCE (S256).
+2. Google/Microsoft redirigen el navegador del sistema al callback público. El
+   callback acepta el `state` una sola vez y solo para su proveedor, canjea el
+   código con el verificador PKCE, guarda el refresh token en Vault como
+   *pendiente* y vuelve a la app con un código de un solo uso.
+3. La app, con la sesión que inició el flujo, canjea ese código en
+   `POST /user-product/vip/mail/oauth/complete`. Solo entonces se vincula el buzón.
+   Si otra cuenta o workspace intenta canjearlo, el token pendiente se elimina.
+
+Así, quien comparta su enlace de autorización no puede vincular el correo de otra
+persona a su cuenta (account-linking CSRF). Los flujos abandonados liberan su
+token pendiente en el mantenimiento programado. Requiere la migración
+`20260924120000_mail_oauth_flows.sql` antes de desplegar el backend.
+
 ## Habilitar Outlook/Hotmail
 
 1. Registrar una aplicación en Microsoft Entra para **cuentas de cualquier

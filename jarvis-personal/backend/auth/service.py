@@ -327,7 +327,17 @@ def delete_current_account() -> dict[str, str]:
                    WHERE c.account_id=%s""",
                 (account_id,),
             ).fetchall()
-            secret_ids = [str(row["refresh_token_secret_id"]) for row in mail_credentials if row.get("refresh_token_secret_id")]
+            # A mailbox authorized but not yet attached keeps its token on the OAuth flow.
+            flows_table = conn.execute("SELECT to_regclass('public.mail_oauth_flows') AS present").fetchone()
+            if flows_table and flows_table.get("present"):
+                mail_credentials = list(mail_credentials) + list(conn.execute(
+                    """SELECT f.pending_secret_id AS refresh_token_secret_id, f.granted_scopes, s.decrypted_secret
+                       FROM mail_oauth_flows f
+                       LEFT JOIN vault.decrypted_secrets s ON s.id=f.pending_secret_id
+                       WHERE f.account_id=%s AND f.pending_secret_id IS NOT NULL""",
+                    (account_id,),
+                ).fetchall())
+            secret_ids =[str(row["refresh_token_secret_id"]) for row in mail_credentials if row.get("refresh_token_secret_id")]
             google_tokens = [
                 str(row["decrypted_secret"]) for row in mail_credentials
                 if row.get("decrypted_secret") and GMAIL_SCOPE in (row.get("granted_scopes") or [])

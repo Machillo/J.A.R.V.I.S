@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import base64
-import hashlib
-import hmac
 import html
 import json
 import logging
 import os
 import re
 import secrets
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlencode
@@ -32,6 +30,7 @@ from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import resolve_candidate, reevaluate_workspace_candidates
+from backend.user_product import mail_oauth
 from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
 from backend.user_product.gmail_retention import apply_gmail_retention, retention_policy
 from backend.user_product.payroll_income import identify_received_payroll, link_received_payroll
@@ -142,46 +141,10 @@ def _google_config() -> tuple[str, str, str]:
     return client_id, client_secret, redirect_uri
 
 
-def _return_url(status: str) -> str:
+def _return_url(status: str, **extra: str) -> str:
     base = os.getenv("FINVA_GMAIL_RETURN_URL", "com.finva.app://gmail/callback").strip()
     separator = "&" if "?" in base else "?"
-    return f"{base}{separator}{urlencode({'gmail': status})}"
-
-
-def _oauth_state_key() -> bytes:
-    _, client_secret, _ = _google_config()
-    return client_secret.encode("utf-8")
-
-
-def _encode_oauth_state(account_id: str, workspace_id: str) -> str:
-    payload = {
-        "account_id": account_id,
-        "workspace_id": workspace_id,
-        "expires_at": int((datetime.now(timezone.utc) + timedelta(minutes=10)).timestamp()),
-        "nonce": secrets.token_urlsafe(16),
-    }
-    raw = base64.urlsafe_b64encode(
-        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    ).decode("ascii").rstrip("=")
-    signature = hmac.new(_oauth_state_key(), raw.encode("ascii"), hashlib.sha256).hexdigest()
-    return f"{raw}.{signature}"
-
-
-def _decode_oauth_state(state: str) -> dict[str, Any] | None:
-    try:
-        raw, signature = state.rsplit(".", 1)
-        expected = hmac.new(_oauth_state_key(), raw.encode("ascii"), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            return None
-        padded = raw + "=" * (-len(raw) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
-        if int(payload.get("expires_at") or 0) < int(datetime.now(timezone.utc).timestamp()):
-            return None
-        if not payload.get("account_id") or not payload.get("workspace_id"):
-            return None
-        return payload
-    except (ValueError, TypeError, json.JSONDecodeError):
-        return None
+    return f"{base}{separator}{urlencode({'gmail': status, **extra})}"
 
 
 def _financial_user_id_for_account(account_id: str) -> int:
@@ -520,9 +483,7 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
 def begin_gmail_connection() -> dict[str, str]:
     require_gmail_consent()
     client_id, _, redirect_uri = _google_config()
-    account_id = get_current_account_id()
-    workspace_id = get_current_workspace_id()
-    state = _encode_oauth_state(account_id, workspace_id)
+    state, code_challenge = mail_oauth.start_flow("gmail")
 
     params = {
         "client_id": client_id,
@@ -533,23 +494,31 @@ def begin_gmail_connection() -> dict[str, str]:
         "include_granted_scopes": "true",
         "prompt": "consent select_account",
         "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
     }
     return {"authorization_url": f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"}
 
 
 def finish_gmail_connection(code: str | None, state: str | None, error: str | None = None):
-    if error or not code or not state:
+    """OAuth callback (public). Parks the refresh token; the app completes the link."""
+    flow = mail_oauth.claim_callback("gmail", state)
+    if not flow:
+        logger.warning("Gmail authorization rejected: unknown, used or expired state")
+        return RedirectResponse(_return_url("invalid_state"), status_code=302)
+    if error or not code:
+        logger.warning("Gmail authorization not completed error=%s", str(error or "missing_code")[:60])
+        mail_oauth.fail_flow(flow["id"])
         return RedirectResponse(_return_url("denied"), status_code=302)
 
-    oauth_state = _decode_oauth_state(state)
-    if not oauth_state:
-        return RedirectResponse(_return_url("invalid_state"), status_code=302)
+    def failed(status: str) -> RedirectResponse:
+        mail_oauth.fail_flow(flow["id"])
+        return RedirectResponse(_return_url(status), status_code=302)
 
-    account_id = str(oauth_state["account_id"])
-    workspace_id = str(oauth_state["workspace_id"])
+    account_id = str(flow["account_id"])
     with get_connection() as conn:
         if not _has_active_vip_access(conn, account_id):
-            return RedirectResponse(_return_url("vip_required"), status_code=302)
+            return failed("vip_required")
 
     client_id, client_secret, redirect_uri = _google_config()
     response = requests.post(
@@ -560,70 +529,78 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
             "client_secret": client_secret,
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
+            "code_verifier": flow["code_verifier"],
         },
         timeout=20,
     )
     if response.status_code != 200:
-        return RedirectResponse(_return_url("exchange_failed"), status_code=302)
+        logger.warning("Gmail token exchange failed status=%s", response.status_code)
+        return failed("exchange_failed")
     tokens = response.json()
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:
-        return RedirectResponse(_return_url("missing_refresh_token"), status_code=302)
+        return failed("missing_refresh_token")
 
     try:
-        service = _credentials(refresh_token)
-        profile = service.users().getProfile(userId="me").execute()
+        profile = _credentials(refresh_token).users().getProfile(userId="me").execute()
     except Exception:
-        return RedirectResponse(_return_url("profile_failed"), status_code=302)
+        return failed("profile_failed")
     google_email = str(profile.get("emailAddress") or "").strip().lower()
     if not google_email:
-        return RedirectResponse(_return_url("profile_failed"), status_code=302)
+        return failed("profile_failed")
 
-    try:
-        legacy_user_id = _financial_user_id_for_account(account_id)
-    except Exception:
-        return RedirectResponse(_return_url("identity_failed"), status_code=302)
     with get_connection() as conn:
-        # Recheck after the external OAuth exchange so a concurrent downgrade
-        # cannot persist credentials for an account that is no longer VIP.
-        if not _has_active_vip_access(conn, account_id):
-            return RedirectResponse(_return_url("vip_required"), status_code=302)
-        current = conn.execute(
-            """SELECT id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections
-               WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
-            (account_id, workspace_id, google_email),
-        ).fetchone()
-        if current and "Mail.Read" in (current.get("granted_scopes") or []):
-            return RedirectResponse(_return_url("already_connected_elsewhere"), status_code=302)
         secret_id = _vault_create(conn, refresh_token, account_id)
-        if current:
-            row = conn.execute(
-                """UPDATE finva_gmail_connections SET
-                   legacy_user_id=%s,refresh_token_secret_id=%s::uuid,granted_scopes=%s,
-                   status='active',last_error=NULL,history_id=NULL,watch_expiration=NULL,
-                   connected_at=NOW(),updated_at=NOW() WHERE id=%s RETURNING id""",
-                (legacy_user_id, secret_id, [GMAIL_SCOPE], current["id"]),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                """INSERT INTO finva_gmail_connections(
-                   account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
-                   granted_scopes,status,connected_at,updated_at
-               ) VALUES(%s,%s,%s,%s,%s::uuid,%s,'active',NOW(),NOW())
-               RETURNING id""",
-                (account_id, workspace_id, legacy_user_id, google_email, secret_id, [GMAIL_SCOPE]),
-            ).fetchone()
-        old_secret = (current or {}).get("refresh_token_secret_id")
-        if old_secret and str(old_secret) != secret_id:
-            _vault_delete(conn, str(old_secret))
+        completion = mail_oauth.authorize_flow(conn, flow["id"], secret_id=secret_id, mailbox=google_email, scopes=[GMAIL_SCOPE])
         conn.commit()
+    return RedirectResponse(_return_url("authorized", flow=str(flow["id"]), completion=completion), status_code=302)
 
-    _start_watch(int(row["id"]), service, suppress_errors=True)
-    try:
-        _sync_connection(int(row["id"]), service=service, max_results=100)
-    except Exception:
-        pass
-    return RedirectResponse(_return_url("connected"), status_code=302)
+
+def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) -> int:
+    """Attach an authorized Gmail flow to its account/workspace (caller commits)."""
+    if flow["provider"] != "gmail" or GMAIL_SCOPE not in (flow.get("granted_scopes") or []):
+        raise HTTPException(status_code=409, detail="La autorización no corresponde a Gmail. Volvé a conectarlo.")
+    account_id, workspace_id = str(flow["account_id"]), str(flow["workspace_id"])
+    # Recheck at completion so a downgrade after consent cannot attach a mailbox.
+    if not _has_active_vip_access(conn, account_id):
+        raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
+    google_email = str(flow["mailbox_address"])
+    secret_id = str(flow["pending_secret_id"])
+    current = conn.execute(
+        """SELECT id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections
+           WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
+        (account_id, workspace_id, google_email),
+    ).fetchone()
+    if current and "Mail.Read" in (current.get("granted_scopes") or []):
+        raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
+    if current:
+        row = conn.execute(
+            """UPDATE finva_gmail_connections SET
+               legacy_user_id=%s,refresh_token_secret_id=%s::uuid,granted_scopes=%s,
+               status='active',last_error=NULL,history_id=NULL,watch_expiration=NULL,
+               connected_at=NOW(),updated_at=NOW() WHERE id=%s RETURNING id""",
+            (legacy_user_id, secret_id, [GMAIL_SCOPE], current["id"]),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """INSERT INTO finva_gmail_connections(
+               account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
+               granted_scopes,status,connected_at,updated_at
+           ) VALUES(%s,%s,%s,%s,%s::uuid,%s,'active',NOW(),NOW())
+           RETURNING id""",
+            (account_id, workspace_id, legacy_user_id, google_email, secret_id, [GMAIL_SCOPE]),
+        ).fetchone()
+    old_secret = (current or {}).get("refresh_token_secret_id")
+    if old_secret and str(old_secret) != secret_id:
+        _vault_delete(conn, str(old_secret))
+    return int(row["id"])
+
+
+def _after_gmail_connected(connection_id: int) -> None:
+    _, token = _connection_with_token(connection_id)
+    service = _credentials(token)
+    _start_watch(connection_id, service, suppress_errors=True)
+    _sync_connection(connection_id, service=service, max_results=100)
 
 
 def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
@@ -1053,6 +1030,10 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="FINVA_GMAIL_CRON_SECRET no está configurado.")
     if not secret or not secrets.compare_digest(secret, expected):
         raise HTTPException(status_code=403, detail="Secreto de mantenimiento inválido.")
+    with get_connection() as conn:
+        # Abandoned OAuth flows must not keep a pending refresh token in Vault.
+        mail_oauth.discard_stale_flows(conn)
+        conn.commit()
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT c.id,c.granted_scopes

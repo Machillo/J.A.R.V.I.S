@@ -39,18 +39,16 @@ class Connection:
 
 def test_oauth_begin_requires_consent_and_exact_read_scopes(monkeypatch):
     monkeypatch.setattr(mail, "require_gmail_consent", lambda: None)
-    monkeypatch.setattr(mail, "get_current_account_id", lambda: "account")
-    monkeypatch.setattr(mail, "get_current_workspace_id", lambda: "workspace")
     monkeypatch.setattr(mail, "_config", lambda: ("client", "secret", "https://api.example/callback"))
+    monkeypatch.setattr(mail.mail_oauth, "start_flow", lambda provider: (f"opaque-{provider}-state", "challenge"))
     uri = mail.begin_connection()["authorization_url"]
     params = parse_qs(urlparse(uri).query)
     assert urlparse(uri).hostname == "login.microsoftonline.com"
     assert urlparse(uri).path.startswith("/common/")
     assert params["scope"] == ["offline_access User.Read Mail.Read"]
-    assert "Mail.Send" not in uri and "Mail.ReadWrite" not in uri
-    assert mail._verify_state(params["state"][0])["a"] == "account"
-    assert mail._verify_state(params["state"][0] + "wrong") is None
-
+    assert params["state"] == ["opaque-microsoft-state"]
+    assert params["code_challenge"] == ["challenge"] and params["code_challenge_method"] == ["S256"]
+    assert "Mail.Send" not in uri and "Mail.ReadWrite" not in uri and "secret" not in uri
 
 def test_graph_pagination_rejects_third_party_url_before_request(monkeypatch):
     monkeypatch.setattr(mail.requests, "get", lambda *_args, **_kwargs: pytest.fail("token leaked"))
@@ -125,57 +123,4 @@ def test_failed_message_does_not_advance_initial_cursor(monkeypatch):
     assert not db.committed
     assert not any("UPDATE finva_gmail_connections" in sql for sql, _ in db.calls)
 
-
-def test_callback_saves_refresh_token_in_vault_after_mailbox_validation(monkeypatch):
-    monkeypatch.setattr(mail, "_config", lambda: ("client", "secret", "https://api.example/callback"))
-    monkeypatch.setattr(mail, "_has_active_vip_access", lambda *_args: True)
-    monkeypatch.setattr(mail, "_financial_user_id_for_account", lambda *_args: 8)
-    monkeypatch.setattr(mail, "_vault_create", lambda _conn, token, *_args: "vault-id" if token == "refresh" else pytest.fail("wrong token"))
-    monkeypatch.setattr(mail, "sync_connection", lambda connection_id: {"id": connection_id})
-
-    class OAuthResponse:
-        status_code = 200
-
-        def json(self):
-            # Microsoft returns Graph scopes fully qualified.
-            return {"access_token": "access", "refresh_token": "refresh",
-                    "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read"}
-
-    monkeypatch.setattr(mail.requests, "post", lambda *_args, **_kwargs: OAuthResponse())
-    graph_calls = []
-    def graph(token, path, *_args):
-        graph_calls.append((token, path))
-        return {"mail": "father@outlook.com"} if path == "/me" else {"value": []}
-    monkeypatch.setattr(mail, "_graph_get", graph)
-    verified = Connection([Result(one={"id": 1})])
-    persisted = Connection([Result(one=None), Result(one={"id": 42})])
-    connections = iter([verified, persisted])
-    monkeypatch.setattr(mail, "get_connection", lambda: next(connections))
-
-    result = mail.finish_connection("code", mail._state("account", "workspace"))
-
-    assert result.status_code == 302
-    assert "microsoft=connected" in result.headers["location"]
-    assert [path for _, path in graph_calls] == ["/me", "/me/messages"]
-    assert persisted.committed
-    insert = next(params for sql, params in persisted.calls if "INSERT INTO finva_gmail_connections" in sql)
-    assert "refresh" not in str(insert)
-    assert insert[3] == "father@outlook.com" and insert[4] == "vault-id"
-
-
-def test_callback_rejects_missing_scope_before_any_database_write(monkeypatch):
-    monkeypatch.setattr(mail, "_config", lambda: ("client", "secret", "https://api.example/callback"))
-    monkeypatch.setattr(mail, "_has_active_vip_access", lambda *_args: True)
-    db = Connection([Result(one={"id": 1})])
-    monkeypatch.setattr(mail, "get_connection", lambda: db)
-
-    class OAuthResponse:
-        status_code = 200
-
-        def json(self):
-            return {"access_token": "access", "refresh_token": "refresh", "scope": "https://graph.microsoft.com/User.Read"}
-
-    monkeypatch.setattr(mail.requests, "post", lambda *_args, **_kwargs: OAuthResponse())
-    result = mail.finish_connection("code", mail._state("account", "workspace"))
-    assert "permission_missing" in result.headers["location"]
-    assert not db.committed
+# OAuth callback and completion are covered in test_mail_oauth.py.

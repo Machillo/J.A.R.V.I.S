@@ -1,3 +1,5 @@
+import pytest
+
 from backend.product_ops import posthog_events
 from backend.user_product import routes as product_routes
 from backend.auth import routes as auth_routes
@@ -49,13 +51,22 @@ def test_invalid_host_and_network_error_are_fail_open(monkeypatch):
     posthog_events.capture_backend_event("gmail_connected")
 
 
-def test_oauth_callback_reports_only_success(monkeypatch):
-    monkeypatch.setattr(product_routes, "finish_gmail_connection", lambda **kwargs: RedirectResponse("com.finva.app://gmail/callback?gmail=denied"))
+def test_gmail_connected_is_reported_only_when_the_session_completes_the_link(monkeypatch):
+    # The public callback only parks the authorization; it never reports a connection.
+    monkeypatch.setattr(product_routes, "finish_gmail_connection", lambda **kwargs: RedirectResponse("com.finva.app://gmail/callback?gmail=authorized"))
+    product_routes.vip_gmail_callback(code="code", state="state")
+    monkeypatch.setattr(product_routes, "require_feature", lambda *_args: True)
+    request = product_routes.MailConnectionCompleteRequest(flow="00000000-0000-0000-0000-000000000000", completion="c")
     tasks = BackgroundTasks()
-    product_routes.vip_gmail_callback(tasks)
+    monkeypatch.setattr(product_routes, "complete_mail_connection", lambda *_args: (_ for _ in ()).throw(RuntimeError("rejected")))
+    with pytest.raises(RuntimeError):
+        product_routes.vip_mail_oauth_complete(request, tasks)
     assert tasks.tasks == []
-    monkeypatch.setattr(product_routes, "finish_gmail_connection", lambda **kwargs: RedirectResponse("com.finva.app://gmail/callback?gmail=connected"))
-    product_routes.vip_gmail_callback(tasks)
+    monkeypatch.setattr(product_routes, "complete_mail_connection", lambda *_args: {"status": "connected", "provider": "microsoft"})
+    product_routes.vip_mail_oauth_complete(request, tasks)
+    assert tasks.tasks == []
+    monkeypatch.setattr(product_routes, "complete_mail_connection", lambda *_args: {"status": "connected", "provider": "gmail"})
+    product_routes.vip_mail_oauth_complete(request, tasks)
     assert len(tasks.tasks) == 1
     assert tasks.tasks[0].args == ("gmail_connected",)
 

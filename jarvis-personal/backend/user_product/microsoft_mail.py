@@ -7,15 +7,11 @@ Microsoft credentials remain in Supabase Vault and never reach the client.
 from __future__ import annotations
 
 import base64
-import hashlib
-import hmac
 import html
-import json
 import logging
 import os
 import re
-import secrets
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from io import BytesIO
 from urllib.parse import quote, urlencode, urlparse
 
@@ -23,11 +19,11 @@ import requests
 from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
 
-from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.user_product import mail_oauth
 from backend.user_product.gmail_consent import require_gmail_consent
 from backend.user_product.gmail_service import (
-    FINVA_QUERY, _financial_user_id_for_account, _has_active_vip_access,
+    FINVA_QUERY, _has_active_vip_access,
     _ingest_message, _vault_create, _vault_delete, _vault_read,
 )
 
@@ -78,40 +74,18 @@ def _granted_scopes(value: str | None) -> set[str]:
     }
 
 
-def _state(account_id: str, workspace_id: str) -> str:
-    payload = {"a": account_id, "w": workspace_id,
-               "exp": int((datetime.now(timezone.utc) + timedelta(minutes=10)).timestamp()),
-               "nonce": secrets.token_urlsafe(20)}
-    encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
-    signature = hmac.new(_config()[1].encode(), encoded.encode(), hashlib.sha256).hexdigest()
-    return f"{encoded}.{signature}"
-
-
-def _verify_state(value: str | None) -> dict | None:
-    try:
-        encoded, signature = (value or "").rsplit(".", 1)
-        expected = hmac.new(_config()[1].encode(), encoded.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            return None
-        payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-        if payload["exp"] < datetime.now(timezone.utc).timestamp() or not payload["a"] or not payload["w"]:
-            return None
-        return payload
-    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
-        return None
-
-
-def _return_url(status: str) -> str:
+def _return_url(status: str, **extra: str) -> str:
     base = os.getenv("FINVA_GMAIL_RETURN_URL", "com.finva.app://gmail/callback").strip()
-    return f"{base}{'&' if '?' in base else '?'}{urlencode({'microsoft': status})}"
+    return f"{base}{'&' if '?' in base else '?'}{urlencode({'microsoft': status, **extra})}"
 
 
 def begin_connection() -> dict[str, str]:
     require_gmail_consent()
     client_id, _, redirect_uri = _config()
+    state, code_challenge = mail_oauth.start_flow("microsoft")
     params = {"client_id": client_id, "response_type": "code", "redirect_uri": redirect_uri,
               "response_mode": "query", "scope": SCOPE, "prompt": "select_account",
-              "state": _state(get_current_account_id(), get_current_workspace_id())}
+              "state": state, "code_challenge": code_challenge, "code_challenge_method": "S256"}
     return {"authorization_url": f"{AUTHORITY}/authorize?{urlencode(params)}"}
 
 
@@ -130,77 +104,91 @@ def _graph_get(token: str, path: str, params: dict | None = None) -> dict:
 
 
 def finish_connection(code: str | None, state: str | None, error: str | None = None):
+    """OAuth callback (public). Parks the refresh token; the app completes the link."""
+    flow = mail_oauth.claim_callback("microsoft", state)
+    if not flow:
+        logger.warning("Outlook authorization rejected: unknown, used or expired state")
+        return RedirectResponse(_return_url("invalid_state"), status_code=302)
     if error or not code:
         # Only Microsoft's error code (e.g. access_denied, consent_required) is
         # logged; error_description can echo tenant or account details.
         logger.warning("Outlook authorization not completed error=%s", str(error or "missing_code")[:60])
+        mail_oauth.fail_flow(flow["id"])
         return RedirectResponse(_return_url("denied"), status_code=302)
-    payload = _verify_state(state)
-    if not payload:
-        logger.warning("Outlook authorization rejected: invalid or expired state")
-        return RedirectResponse(_return_url("invalid_state"), status_code=302)
-    account_id, workspace_id = payload["a"], payload["w"]
+
+    def failed(status: str) -> RedirectResponse:
+        mail_oauth.fail_flow(flow["id"])
+        return RedirectResponse(_return_url(status), status_code=302)
+
+    account_id = str(flow["account_id"])
     with get_connection() as conn:
         if not _has_active_vip_access(conn, account_id):
-            return RedirectResponse(_return_url("vip_required"), status_code=302)
+            return failed("vip_required")
     client_id, client_secret, redirect_uri = _config()
     try:
         response = requests.post(f"{AUTHORITY}/token", data={
             "client_id": client_id, "client_secret": client_secret, "code": code,
             "redirect_uri": redirect_uri, "grant_type": "authorization_code", "scope": SCOPE,
+            "code_verifier": flow["code_verifier"],
         }, timeout=20)
         if response.status_code != 200:
             logger.warning("Outlook token exchange failed status=%s", response.status_code)
-            return RedirectResponse(_return_url("exchange_failed"), status_code=302)
+            return failed("exchange_failed")
         tokens = response.json()
         if not tokens.get("refresh_token") or REQUIRED_SCOPE not in _granted_scopes(tokens.get("scope")):
             logger.warning("Outlook authorization missing Mail.Read or offline access")
-            return RedirectResponse(_return_url("permission_missing"), status_code=302)
+            return failed("permission_missing")
         profile = _graph_get(tokens["access_token"], "/me")
         address = str(profile.get("mail") or profile.get("userPrincipalName") or "").strip().lower()
         if not address or "@" not in address:
-            return RedirectResponse(_return_url("mailbox_missing"), status_code=302)
+            return failed("mailbox_missing")
         _graph_get(tokens["access_token"], "/me/messages", {"$top": "1", "$select": "id"})
     except (requests.RequestException, ValueError, KeyError) as exc:
         logger.warning("Outlook mailbox validation failed error=%s status=%s", type(exc).__name__,
                        getattr(getattr(exc, "response", None), "status_code", None))
-        return RedirectResponse(_return_url("mailbox_unavailable"), status_code=302)
-    legacy_user_id = _financial_user_id_for_account(account_id)
+        return failed("mailbox_unavailable")
     with get_connection() as conn:
-        if not _has_active_vip_access(conn, account_id):
-            return RedirectResponse(_return_url("vip_required"), status_code=302)
-        existing = conn.execute(
-            """SELECT id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections
-               WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
-            (account_id, workspace_id, address),
-        ).fetchone()
-        if existing and "Mail.Read" not in (existing.get("granted_scopes") or []):
-            return RedirectResponse(_return_url("already_connected_elsewhere"), status_code=302)
         secret_id = _vault_create(conn, tokens["refresh_token"], account_id, "Microsoft")
-        if existing:
-            row = conn.execute(
-                """UPDATE finva_gmail_connections SET legacy_user_id=%s,
-                     refresh_token_secret_id=%s::uuid,granted_scopes=%s,
-                     status='active',last_error=NULL,connected_at=NOW(),updated_at=NOW()
-                   WHERE id=%s RETURNING id""",
-                (legacy_user_id, secret_id, ["Mail.Read"], existing["id"]),
-            ).fetchone()
-            if existing.get("refresh_token_secret_id"):
-                _vault_delete(conn, str(existing["refresh_token_secret_id"]))
-        else:
-            row = conn.execute(
-                """INSERT INTO finva_gmail_connections(
-                       account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
-                       granted_scopes,status,connected_at,updated_at)
-                   VALUES(%s,%s,%s,%s,%s::uuid,%s,'active',NOW(),NOW()) RETURNING id""",
-                (account_id, workspace_id, legacy_user_id, address, secret_id, ["Mail.Read"]),
-            ).fetchone()
+        completion = mail_oauth.authorize_flow(conn, flow["id"], secret_id=secret_id, mailbox=address, scopes=["Mail.Read"])
         conn.commit()
-    try:
-        sync_connection(int(row["id"]))
-    except Exception:
-        pass  # Connection remains available for an explicit retry.
-    return RedirectResponse(_return_url("connected"), status_code=302)
+    return RedirectResponse(_return_url("authorized", flow=str(flow["id"]), completion=completion), status_code=302)
+
+
+def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
+    """Attach an authorized Outlook flow to its account/workspace (caller commits)."""
+    if flow["provider"] != "microsoft" or "Mail.Read" not in (flow.get("granted_scopes") or []):
+        raise HTTPException(status_code=409, detail="La autorización no corresponde a Outlook. Volvé a conectarlo.")
+    account_id, workspace_id = str(flow["account_id"]), str(flow["workspace_id"])
+    if not _has_active_vip_access(conn, account_id):
+        raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
+    address = str(flow["mailbox_address"])
+    secret_id = str(flow["pending_secret_id"])
+    existing = conn.execute(
+        """SELECT id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections
+           WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
+        (account_id, workspace_id, address),
+    ).fetchone()
+    if existing and "Mail.Read" not in (existing.get("granted_scopes") or []):
+        raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
+    if existing:
+        row = conn.execute(
+            """UPDATE finva_gmail_connections SET legacy_user_id=%s,
+                 refresh_token_secret_id=%s::uuid,granted_scopes=%s,
+                 status='active',last_error=NULL,connected_at=NOW(),updated_at=NOW()
+               WHERE id=%s RETURNING id""",
+            (legacy_user_id, secret_id, ["Mail.Read"], existing["id"]),
+        ).fetchone()
+        if existing.get("refresh_token_secret_id") and str(existing["refresh_token_secret_id"]) != secret_id:
+            _vault_delete(conn, str(existing["refresh_token_secret_id"]))
+    else:
+        row = conn.execute(
+            """INSERT INTO finva_gmail_connections(
+                   account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
+                   granted_scopes,status,connected_at,updated_at)
+               VALUES(%s,%s,%s,%s,%s::uuid,%s,'active',NOW(),NOW()) RETURNING id""",
+            (account_id, workspace_id, legacy_user_id, address, secret_id, ["Mail.Read"]),
+        ).fetchone()
+    return int(row["id"])
 
 
 def _refresh(connection: dict, refresh_token: str) -> str:
