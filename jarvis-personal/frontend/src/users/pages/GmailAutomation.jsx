@@ -117,41 +117,53 @@ export default function GmailAutomation() {
       const progress = result.scan_scope === "year_to_date" && !result.initial_scan_complete
         ? tx(" DINCR continuará recorriendo el resto del año en las próximas actualizaciones.", " DINCR will continue scanning the rest of the year during the next refreshes.")
         : "";
-      setMessage(tx(`Listo: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`, `Done: ${result.auto_saved || 0} new transactions and ${result.pending || 0} to review.`) + progress);
-    } catch (err) { setError(err.message || tx("No se pudo actualizar Gmail.", "Couldn’t refresh Gmail.")); }
+      setMessage(tx(`Listo: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`, `Done: ${result.auto_saved || 0} new transactions and ${result.pending || 0} to review.`) + progress + (result.failed_connections?.length ? tx(" Algunas conexiones necesitan atención.", "Some connections need attention.") : ""));
+    } catch (err) {
+      setError(err.message || tx("No se pudo actualizar Gmail.", "Couldn’t refresh Gmail."));
+      await load();
+    }
     finally { setBusy(""); }
   };
 
-  const disconnect = async () => {
+  const disconnect = async (connectionId) => {
     setBusy("disconnect"); setError(""); setMessage("");
     try {
-      await disconnectVipGmail();
+      await disconnectVipGmail(connectionId);
       trackEvent("gmail_disconnected");
-      setGmail({ connected: false, status: "disconnected" });
-      setMessage(tx("Gmail quedó desconectado de DINCR.", "Gmail was disconnected from DINCR."));
+      await load();
+      setMessage(tx("Ese Gmail quedó desconectado de DINCR.", "That Gmail was disconnected from DINCR."));
     } catch (err) { setError(err.message || tx("No se pudo desconectar Gmail.", "Couldn’t disconnect Gmail.")); }
     finally { setBusy(""); }
   };
+
+  // Each bank sends its own notification. Show one review item for a matched
+  // own-account transfer while retaining both source records in the backend.
+  const inboxIds = new Set(emails.map((item) => item.candidate_id));
+  const visibleEmails = emails.filter((item) => !(item.resolution_reason === "paired_owned_transfer" &&
+    item.related_candidate_id && item.candidate_id > item.related_candidate_id &&
+    inboxIds.has(item.related_candidate_id)));
 
   return <section className="mobile-page gmail-automation-page">
     <div className="mobile-page-heading">
       <p className="eyebrow">{tx("Automatización VIP", "VIP automation")}</p>
       <h1>{tx("Movimientos desde Gmail", "Transactions from Gmail")}</h1>
-      <span>{tx("DINCR importa notificaciones bancarias de la cuenta que autoricés.", "DINCR imports bank notifications from the account you authorize.")}</span>
+      <span>{tx("DINCR revisa los correos financieros de cada Gmail que autoricés.", "DINCR reviews financial messages in each Gmail account you authorize.")}</span>
     </div>
     <article className={`gmail-connection-card ${gmail?.needs_reauthorization ? "needs-attention" : ""}`}>
-      <div className="gmail-connection-heading"><span><Mail size={21}/></span><div><strong>{tx("Tu correo bancario", "Your banking email")}</strong><small>{tx("Permiso individual · solo lectura", "Individual permission · read only")}</small></div></div>
-      <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Cada usuario conecta únicamente su propio Gmail. DINCR no puede enviar, modificar ni borrar correos.", "Each user connects only their own Gmail. DINCR cannot send, modify, or delete emails.")}</p></div>
-      {!gmail?.connected ? <>
-        <p>{gmail?.needs_reauthorization ? tx("El permiso venció o fue revocado. Reconectalo para continuar.", "Permission expired or was revoked. Reconnect to continue.") : tx("DINCR revisará el historial financiero del Gmail que autoricés para detectar cuentas, movimientos, ingresos y estados bancarios. Cada hallazgo requiere tu revisión antes de guardarse.", "DINCR will review the financial history of the Gmail account you authorize to detect accounts, transactions, income, and bank statements. Every finding requires your review before it is saved.")}</p>
+      <div className="gmail-connection-heading"><span><Mail size={21}/></span><div><strong>{tx("Tus correos bancarios", "Your banking emails")}</strong><small>{tx("Permiso individual · solo lectura", "Individual permission · read only")}</small></div></div>
+      <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Podés conectar varios Gmail que controlés. DINCR no puede enviar, modificar ni borrar correos.", "You can connect multiple Gmail accounts you control. DINCR cannot send, edit or delete emails.")}</p></div>
+      {!gmail?.connected && <p>{tx("DINCR revisará el historial financiero de los Gmail que autoricés para detectar cuentas y movimientos. Cada hallazgo requiere tu revisión antes de guardarse.", "DINCR will review financial history in the Gmail accounts you authorize to detect accounts and transactions. You review findings before saving them.")}</p>}
+      {gmail?.connections?.filter((item) => item.status !== "disabled").map((item) => <div className="gmail-connected-item" key={item.id}>
+        <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{item.google_email}</strong><small>{item.status === "reauthorization_required" ? tx("Necesita reconexión", "Reconnect required") : item.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span></div>
+        <div className="gmail-connection-actions"><button type="button" className="danger" disabled={Boolean(busy)} onClick={() => disconnect(item.id)}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
+      </div>)}
         <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("El acceso es solo lectura. El detalle técnico usado para revisar un hallazgo se elimina después de 30 días y los datos identificativos del correo después de 90 días, cuando no haya revisiones pendientes. El movimiento financiero confirmado se conserva hasta que eliminés tu cuenta. Podés desconectar Gmail cuando querás.", "Access is read-only. Technical evidence used to review a finding is removed after 30 days and identifying email metadata after 90 days when no review is pending. Confirmed financial history is retained until you delete your account. You can disconnect Gmail at any time.")}</p></div>
         <p className="gmail-legal-links"><a href="/terms" target="_blank" rel="noreferrer">{tx("Términos", "Terms")}</a> · <a href="/privacy" target="_blank" rel="noreferrer">{tx("Privacidad", "Privacy")}</a></p>
         {gmail?.consent?.required && <label className="gmail-consent-check"><input type="checkbox" checked={consentAccepted} onChange={(event) => { setConsentAccepted(event.target.checked); setError(""); }}/><span>{tx("Entiendo y acepto que DINCR analice los correos financieros de la cuenta que autorice bajo estas condiciones.", "I understand and agree that DINCR may analyze financial emails from the account I authorize under these conditions.")}</span></label>}
-        <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={connect}>{busy === "connect" ? tx("Abriendo Google…", "Opening Google…") : gmail?.needs_reauthorization ? tx("Reconectar Gmail", "Reconnect Gmail") : tx("Aceptar y conectar Gmail", "Accept and connect Gmail")}</button>
-      </> : <>
-        <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{gmail.google_email}</strong><small>{gmail.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span></div>
+        <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={connect}>{busy === "connect" ? tx("Abriendo Google…", "Opening Google…") : gmail?.connected ? tx("Conectar otro Gmail", "Connect another Gmail") : tx("Aceptar y conectar Gmail", "Accept and connect Gmail")}</button>
+      {gmail?.connected && <>
         {gmail.pending > 0 && <p>{gmail.pending} {tx("movimiento(s) necesitan revisión.", "transaction(s) need review.")}</p>}
-        <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar ahora", "Refresh now")}</button><button type="button" className="danger" disabled={Boolean(busy)} onClick={disconnect}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
+        <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar todos", "Refresh all")}</button></div>
       </>}
     </article>
     {gmail?.connected && identity.items.length > 0 && <section className="gmail-identity" aria-label={tx("Cuentas detectadas", "Detected accounts")}>
@@ -164,13 +176,13 @@ export default function GmailAutomation() {
       </article>)}</div>
     </section>}
     {gmail?.connected && <section className="gmail-inbox" aria-label={tx("Correos financieros", "Financial emails")}>
-      <header><div><p className="eyebrow">{tx("Bandeja financiera", "Financial inbox")}</p><h2>{tx("Correos recibidos", "Received emails")}</h2></div><span>{emails.length}</span></header>
+      <header><div><p className="eyebrow">{tx("Bandeja financiera", "Financial inbox")}</p><h2>{tx("Movimientos detectados", "Detected transactions")}</h2></div><span>{visibleEmails.length}</span></header>
       <div className="gmail-inbox-tabs">
         <button type="button" className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>{tx("Por revisar", "To review")}</button>
         <button type="button" className={filter === "" ? "active" : ""} onClick={() => setFilter("")}>{tx("Todos", "All")}</button>
       </div>
-      {!emails.length && <div className="gmail-inbox-empty"><Mail size={25}/><strong>{filter ? tx("No hay correos por revisar", "No emails to review") : tx("Todavía no hay correos financieros", "No financial emails yet")}</strong><small>{tx("Cuando DINCR detecte un movimiento bancario aparecerá acá.", "When DINCR detects a bank transaction, it will appear here.")}</small></div>}
-      <div className="gmail-email-list">{emails.map((item) => {
+      {!visibleEmails.length && <div className="gmail-inbox-empty"><Mail size={25}/><strong>{filter ? tx("No hay correos por revisar", "No emails to review") : tx("Todavía no hay correos financieros", "No financial emails yet")}</strong><small>{tx("Cuando DINCR detecte un movimiento bancario aparecerá acá.", "When DINCR detects a bank transaction, it will appear here.")}</small></div>}
+      <div className="gmail-email-list">{visibleEmails.map((item) => {
         const pending = item.review_status === "pending";
         const edit = editing?.candidate_id === item.candidate_id;
         return <article className="gmail-email-card" key={item.candidate_id || item.email_id}>
@@ -186,7 +198,7 @@ export default function GmailAutomation() {
             <div className="gmail-review-actions"><button type="button" onClick={() => setEditing(null)}><X size={16}/>{tx("Cancelar", "Cancel")}</button><button className="primary" disabled={Boolean(busy)}><Check size={16}/>{tx("Guardar", "Save")}</button></div>
           </form> : <>
             <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>₡{Number(item.amount || 0).toLocaleString()}</b></span></div>
-            {item.is_internal_transfer && <p className="gmail-resolution-note">{tx("DINCR encontró ambas cuentas entre las que confirmaste como propias. Al aceptar, no se registrará como gasto ni ingreso.", "DINCR matched both endpoints to accounts you confirmed as yours. Accepting won’t record income or expense.")}</p>}
+            {item.is_internal_transfer && <p className="gmail-resolution-note">{item.resolution_reason === "paired_owned_transfer" ? tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, ambos quedan revisados sin sumarse a ingresos o gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming reviews both without adding income or expense.") : tx("DINCR encontró ambas cuentas entre las que confirmaste como propias. Al aceptar, no se registrará como gasto ni ingreso.", "DINCR matched both endpoints to accounts you confirmed as yours. Accepting won’t record income or expense.")}</p>}
             {item.review_status === "duplicate" && <p className="gmail-resolution-note">{tx("DINCR detectó que este correo representa el mismo movimiento que otro registro y evitó contarlo dos veces.", "DINCR detected that this email represents the same movement as another record and avoided double counting it.")}</p>}
             {pending ? <div className="gmail-review-actions"><button type="button" className="reject" disabled={Boolean(busy)} onClick={() => review(item, "reject")}><X size={16}/>{tx("Rechazar", "Reject")}</button>{!item.is_internal_transfer && <button type="button" disabled={Boolean(busy)} onClick={() => setEditing(item)}><Pencil size={16}/>{tx("Corregir", "Edit")}</button>}<button type="button" className="primary" disabled={Boolean(busy)} onClick={() => review(item, "accept")}><Check size={16}/>{item.is_internal_transfer ? tx("Confirmar transferencia", "Confirm transfer") : tx("Aceptar", "Accept")}</button></div> : <span className={`gmail-review-state ${item.review_status}`}>{item.review_status === "confirmed" || item.review_status === "auto_saved" ? tx("Guardado", "Saved") : item.review_status === "rejected" ? tx("Rechazado", "Rejected") : item.review_status === "duplicate" ? tx("Duplicado", "Duplicate") : item.review_status}</span>}
           </> : <p>{item.parse_reason || tx("DINCR no detectó un movimiento en este correo.", "DINCR did not detect a transaction in this email.")}</p>}

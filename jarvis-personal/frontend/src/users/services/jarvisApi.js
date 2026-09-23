@@ -91,7 +91,7 @@ export const getVipGmailStatus = () => request("/user-product/vip/gmail/status")
 export const connectVipGmail = () => request("/user-product/vip/gmail/connect", { method: "POST" });
 export const acceptVipGmailConsent = (version) => json("/user-product/vip/gmail/consent", "POST", { accepted: true, version });
 export const syncVipGmail = () => request("/user-product/vip/gmail/sync", { method: "POST" });
-export const disconnectVipGmail = () => request("/user-product/vip/gmail", { method: "DELETE" });
+export const disconnectVipGmail = (connectionId) => request(`/user-product/vip/gmail?connection_id=${encodeURIComponent(connectionId)}`, { method: "DELETE" });
 export const getVipGmailEmails = (status = "") => request(`/user-product/vip/gmail/emails${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 export const acceptVipGmailCandidate = (id, corrections = null) => corrections
   ? json(`/user-product/vip/gmail/candidates/${id}/accept`, "PUT", corrections)

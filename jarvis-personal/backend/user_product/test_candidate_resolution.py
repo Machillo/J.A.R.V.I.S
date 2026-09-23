@@ -1,6 +1,6 @@
 from datetime import date
 
-from backend.user_product.candidate_resolution import resolve_candidate, semantic_fingerprint
+from backend.user_product.candidate_resolution import _paired_owned_transfer, resolve_candidate, semantic_fingerprint
 
 
 class _Result:
@@ -83,3 +83,55 @@ def test_links_one_possible_cross_source_match_without_auto_rejecting():
     query, params = connection.calls[-1]
     assert "related_candidate_id=%s" in query
     assert params[-3:] == (4, "possible_cross_source_match", 9)
+
+
+def test_opposite_owned_notifications_pair_with_distinct_accounts_and_close_times():
+    candidate = _candidate(
+        movement_kind="transfer", movement_direction="out", external_reference=None,
+        destination_account_reference=None,
+    )
+    connection = _Connection([_Result(rows=[{
+        "id": 10, "transaction_date": date(2026, 9, 21),
+        "transaction_time": "10:17:00", "account_last4": "2222",
+        "source_account_reference": None, "destination_account_reference": "2222",
+        "external_reference": None,
+    }])])
+    assert _paired_owned_transfer(connection, candidate, 11) == 10
+    assert "a.ownership_status='own'" in connection.calls[0][0]
+    assert "c.status='pending'" in connection.calls[0][0]
+
+
+def test_same_amount_at_different_time_or_ambiguous_pairs_stay_pending():
+    candidate = _candidate(movement_kind="transfer", movement_direction="out", external_reference=None,
+                           destination_account_reference=None)
+    def other(id, time):
+        return {"id": id, "transaction_date": date(2026, 9, 21),
+                "transaction_time": time, "account_last4": "2222",
+                "source_account_reference": None, "destination_account_reference": "2222",
+                "external_reference": None}
+    late = _Connection([_Result(rows=[other(10, "12:30:00")])])
+    assert _paired_owned_transfer(late, candidate, 11) is None
+    ambiguous = _Connection([_Result(rows=[other(10, "10:17:00"), other(12, "10:20:00")])])
+    assert _paired_owned_transfer(ambiguous, candidate, 11) is None
+
+
+def test_resolving_second_bank_notice_links_both_without_financial_transaction():
+    candidate = _candidate(
+        movement_kind="transfer", movement_direction="out", external_reference=None,
+        destination_account_reference=None,
+    )
+    other = {"id": 10, "transaction_date": date(2026, 9, 21),
+             "transaction_time": "10:17:00", "account_last4": "2222",
+             "source_account_reference": None, "destination_account_reference": "2222",
+             "external_reference": None}
+    connection = _Connection([
+        _Result(one=candidate), _Result(one=None), _Result(one={"id": 11}),
+        _Result(rows=[other]), _Result(), _Result(),
+    ])
+    assert resolve_candidate(connection, 9) == {"status": "internal_transfer"}
+    query, params = connection.calls[-2]
+    assert "is_internal_transfer=%s" in query
+    assert params[-3:] == (10, "paired_owned_transfer", 9)
+    query, params = connection.calls[-1]
+    assert "related_candidate_id=%s" in query
+    assert params == (9, 10, "account-a", "workspace-a")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -86,6 +87,69 @@ def _possible_cross_source_match(conn, candidate: dict[str, Any]) -> int | None:
     return matches[0] if len(matches) == 1 else None
 
 
+def _paired_owned_transfer(conn, candidate: dict[str, Any], own_account_id: int | None) -> int | None:
+    """Match opposite notifications only with two distinct confirmed owned accounts.
+
+    A same-amount purchase must never disappear merely because a transfer was
+    made that day. Require an explicit endpoint, shared bank reference or close
+    transaction times; ambiguous matches stay pending for review.
+    """
+    direction = (candidate.get("raw_payload") or {}).get("movement_direction") or candidate.get("movement_direction")
+    if candidate.get("movement_kind") != "transfer" or direction not in {"in", "out"} or not own_account_id:
+        return None
+    own_reference = _last4(candidate.get("source_account_reference") if direction == "out" else candidate.get("destination_account_reference"))
+    if not own_reference:
+        return None
+    opposite = "in" if direction == "out" else "out"
+    rows = conn.execute(
+        """SELECT c.id,c.transaction_time,c.transaction_date,c.external_reference,
+                  c.source_account_reference,c.destination_account_reference,
+                  a.account_last4
+           FROM finva_email_candidates c
+           JOIN account_balances a ON a.id=c.financial_account_id
+           WHERE c.account_id=%s AND c.workspace_id=%s AND c.id<>%s
+             AND c.transaction_date BETWEEN %s::date-1 AND %s::date+1
+             AND c.amount=%s AND c.currency=%s AND c.movement_kind='transfer'
+             AND COALESCE(c.raw_payload->>'movement_direction',c.movement_direction)=%s
+             AND c.status='pending' AND c.transaction_id IS NULL
+             AND a.id<>%s AND a.account_id=%s AND a.workspace_id=%s
+             AND a.ownership_status='own' AND a.is_active=TRUE
+           ORDER BY c.id""",
+        (candidate["account_id"], candidate["workspace_id"], candidate["id"],
+         candidate["transaction_date"], candidate["transaction_date"], candidate["amount"],
+         candidate.get("currency") or "CRC", opposite, own_account_id,
+         candidate["account_id"], candidate["workspace_id"]),
+    ).fetchall()
+    matches = []
+    for row in rows:
+        other = dict(row)
+        other_own = _last4(other["account_last4"])
+        if not other_own or other_own == own_reference:
+            continue
+        if direction == "out":
+            destination, origin = _last4(candidate.get("destination_account_reference")), _last4(other.get("source_account_reference"))
+        else:
+            destination, origin = _last4(other.get("destination_account_reference")), _last4(candidate.get("source_account_reference"))
+        if destination and destination != (other_own if direction == "out" else own_reference):
+            continue
+        if origin and origin != (own_reference if direction == "out" else other_own):
+            continue
+        reference = _plain(candidate.get("external_reference"))
+        shared_reference = reference and reference == _plain(other.get("external_reference"))
+        cross_reference = bool(destination and origin)
+        close_time = False
+        if candidate.get("transaction_time") and other.get("transaction_time"):
+            try:
+                first = datetime.fromisoformat(f"{candidate['transaction_date']}T{str(candidate['transaction_time'])[:8]}")
+                second = datetime.fromisoformat(f"{other['transaction_date']}T{str(other['transaction_time'])[:8]}")
+                close_time = abs(first - second) <= timedelta(minutes=30)
+            except ValueError:
+                pass
+        if shared_reference or cross_reference or close_time:
+            matches.append(int(other["id"]))
+    return matches[0] if len(matches) == 1 else None
+
+
 def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
     """Resolve semantic duplicates and own-account transfers conservatively."""
     row = conn.execute(
@@ -120,7 +184,12 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
     source_id = _confirmed_account(conn, candidate, candidate.get("source_account_reference"))
     destination_id = _confirmed_account(conn, candidate, candidate.get("destination_account_reference"))
     is_internal = bool(source_id and destination_id and source_id != destination_id)
-    reason = "confirmed_owned_endpoints" if is_internal else "possible_cross_source_match" if possible_match_id else None
+    original_direction = (candidate.get("raw_payload") or {}).get("movement_direction") or candidate.get("movement_direction")
+    pair_id = _paired_owned_transfer(
+        conn, candidate, source_id if original_direction == "out" else destination_id,
+    )
+    is_internal = is_internal or bool(pair_id)
+    reason = "paired_owned_transfer" if pair_id else "confirmed_owned_endpoints" if is_internal else "possible_cross_source_match" if possible_match_id else None
     raw = candidate.get("raw_payload") or {}
     base_type = str(raw.get("transaction_type") or candidate.get("transaction_type") or "transfer")
     base_direction = str(raw.get("movement_direction") or candidate.get("movement_direction") or "unknown")
@@ -135,9 +204,19 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
            WHERE id=%s""",
         (
             fingerprint, is_internal, is_internal, base_type, is_internal, base_direction,
-            is_internal, base_category, possible_match_id, reason, candidate_id,
+            is_internal, base_category, pair_id or possible_match_id, reason, candidate_id,
         ),
     )
+    if pair_id:
+        conn.execute(
+            """UPDATE finva_email_candidates SET is_internal_transfer=TRUE,
+                   transaction_type='internal_transfer',movement_direction='internal',
+                   category='Movimiento interno',related_candidate_id=%s,
+                   resolution_reason='paired_owned_transfer',updated_at=NOW()
+               WHERE id=%s AND account_id=%s AND workspace_id=%s
+                 AND status='pending' AND transaction_id IS NULL""",
+            (candidate_id, pair_id, candidate["account_id"], candidate["workspace_id"]),
+        )
     return {"status": "internal_transfer" if is_internal else "pending"}
 
 
