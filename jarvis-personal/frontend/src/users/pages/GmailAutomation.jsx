@@ -19,6 +19,7 @@ import {
 } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
 import { trackEvent } from "../../lib/telemetry";
+import LegalLink from "../../components/LegalLink";
 import gmailLogo from "../../assets/institutions/gmail.png";
 import outlookLogo from "../../assets/institutions/outlook.svg";
 
@@ -189,7 +190,7 @@ export default function GmailAutomation() {
         <div className="gmail-connection-actions"><button type="button" className="danger" disabled={Boolean(busy)} onClick={() => disconnect(item.id)}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
       </div>)}
         <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("El acceso es solo lectura. El detalle técnico usado para revisar un hallazgo se elimina después de 30 días y los datos identificativos del correo después de 90 días, cuando no haya revisiones pendientes. El movimiento financiero confirmado se conserva hasta que eliminés tu cuenta. Podés desconectar cada correo cuando querás.", "Access is read-only. Technical evidence used to review a finding is removed after 30 days and identifying email metadata after 90 days when no review is pending. Confirmed financial history is retained until you delete your account. You can disconnect each mailbox at any time.")}</p></div>
-        <p className="gmail-legal-links"><a href="/terms" target="_blank" rel="noreferrer">{tx("Términos", "Terms")}</a> · <a href="/privacy" target="_blank" rel="noreferrer">{tx("Privacidad", "Privacy")}</a></p>
+        <p className="gmail-legal-links"><LegalLink kind="terms">{tx("Términos", "Terms")}</LegalLink> · <LegalLink kind="privacy">{tx("Privacidad", "Privacy")}</LegalLink></p>
         {gmail?.consent?.required && <label className="gmail-consent-check"><input type="checkbox" checked={consentAccepted} onChange={(event) => { setConsentAccepted(event.target.checked); setError(""); }}/><span>{tx("Entiendo y acepto que DINCR analice los correos financieros de la cuenta que autorice bajo estas condiciones.", "I understand and agree that DINCR may analyze financial emails from the account I authorize under these conditions.")}</span></label>}
         <div className="gmail-provider-actions">
           <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("gmail")}><MailProviderLogo provider="gmail"/>{busy === "connect" ? tx("Abriendo…", "Opening…") : tx("Conectar Gmail", "Connect Gmail")}</button>

@@ -9,6 +9,7 @@ import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNav
 import AccountActions from "../../products/finva/components/AccountActions";
 import { confirmedPlanProfile } from "../../lib/planSelection";
 import { identifyTelemetryUser, trackEvent } from "../../lib/telemetry";
+import LegalLink from "../../components/LegalLink";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -104,7 +105,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
 
       <article className="account-card">
         <div><strong>{tx("Información legal","Legal information")}</strong><small>{tx("Consultá los documentos vigentes cuando querás.", "Review the current documents whenever you want.")}</small></div>
-        <span><a href="/terms" target="_blank" rel="noreferrer">{tx("Términos","Terms")}</a> · <a href="/privacy" target="_blank" rel="noreferrer">{tx("Privacidad","Privacy")}</a></span>
+        <span><LegalLink kind="terms">{tx("Términos","Terms")}</LegalLink> · <LegalLink kind="privacy">{tx("Privacidad","Privacy")}</LegalLink></span>
       </article>
 
       <div className="section-heading compact">
