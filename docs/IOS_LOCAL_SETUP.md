@@ -1,49 +1,51 @@
-# FINVA y J.A.R.V.I.S. en iPhone
+# DINCR en iPhone
 
-El repositorio contiene dos aplicaciones iOS independientes que comparten el frontend y la API:
+El repositorio contiene **una sola** aplicación iOS, DINCR. DINCR Owner no es una
+app aparte: aparece dentro de DINCR según el rol de la cuenta.
 
-| Aplicación | Bundle ID | Proyecto Xcode |
-| --- | --- | --- |
-| FINVA | `com.finva.app` | `frontend/ios-finva/App/App.xcodeproj` |
-| J.A.R.V.I.S. | `com.jarvis.personal` | `frontend/ios-jarvis/App/App.xcodeproj` |
+| Aplicación | Bundle ID | Proyecto Xcode | Target / scheme |
+| --- | --- | --- | --- |
+| DINCR | `com.dincr.app` | `jarvis-personal/frontend/ios-dincr/App/App.xcodeproj` | `App` |
 
-Ambas pueden permanecer instaladas al mismo tiempo. La configuración Android existente continúa usando `frontend/capacitor.config.json` y no cambia.
+La configuración de Capacitor para iOS es `frontend/capacitor.ios.dincr.json`. La
+configuración por defecto (`frontend/capacitor.config.json`) sigue siendo la de
+Android y no cambia al trabajar con iOS.
 
 ## Preparar la Mac
 
 Desde `jarvis-personal/frontend`:
 
 ```bash
-npm install
+npm ci
+npm run ios:open
 ```
 
-Crear el build, sincronizar Capacitor y abrir Xcode:
+`ios:open` crea el build web con `VITE_NATIVE_APP_ID=com.dincr.app`, sincroniza
+Capacitor, verifica que el proyecto generado sea `com.dincr.app` con el
+onboarding biométrico y abre Xcode. Para sincronizar sin abrir Xcode: `npm run ios:sync`.
 
-```bash
-npm run ios:open:finva
-npm run ios:open:jarvis
-```
+## Firma
 
-Los comandos preservan automáticamente la configuración canónica de Android. Para sincronizar sin abrir Xcode se pueden usar `ios:sync:finva` e `ios:sync:jarvis`.
+1. En Xcode, abrir el target `App` → **Signing & Capabilities**.
+2. Activar **Automatically manage signing** y elegir el equipo de Apple Developer.
+   El equipo no se guarda en Git; certificados y perfiles tampoco.
+3. Conectar y desbloquear el iPhone, seleccionarlo como destino y ejecutar con **Run**.
 
-## Firma gratuita para un iPhone personal
+## Deep links
 
-En cada proyecto de Xcode:
+`Info.plist` registra:
 
-1. Abrir el target `App` y entrar a **Signing & Capabilities**.
-2. Activar **Automatically manage signing**.
-3. Elegir el Apple ID personal en **Team**.
-4. Conectar y desbloquear el iPhone, seleccionarlo como destino y ejecutar con **Run**.
+- `com.dincr.app` — scheme principal. Inicio de sesión nativo:
+  `com.dincr.app://auth/callback` (debe estar permitido en Supabase Auth → URL Configuration).
+- `com.finva.app` — **transitorio**. El backend devuelve el OAuth de Gmail/Outlook a un
+  único scheme para todas las plataformas (`FINVA_GMAIL_RETURN_URL`, hoy
+  `com.finva.app://gmail/callback`) y Android aún usa ese paquete. Quitarlo cuando
+  Android migre a `com.dincr.app` y esa variable apunte a `com.dincr.app://gmail/callback`.
 
-## Inicio de sesión nativo
+Desinstalar cualquier build iOS anterior (`com.finva.app` o `com.jarvis.personal`)
+antes de probar: dos apps con el mismo scheme hacen impredecible el regreso del OAuth.
 
-Los callbacks usados son:
+## Firebase
 
-- `com.finva.app://auth/callback`
-- `com.jarvis.personal://auth/callback`
-
-Ambos deben estar permitidos en la configuración de redirecciones de Supabase Auth. Los esquemas ya están registrados en cada `Info.plist`.
-
-## Firebase para una etapa posterior
-
-Analytics y Crashlytics quedan fuera del build iOS inicial hasta registrar las dos aplicaciones iOS en Firebase y agregar su `GoogleService-Info.plist` correspondiente. Esto evita inicializar Firebase con una configuración inexistente durante las pruebas personales. Android conserva su integración actual.
+El build iOS no incluye Firebase Analytics ni Crashlytics. Para agregarlos hay que
+registrar `com.dincr.app` en Firebase y añadir su `GoogleService-Info.plist`.

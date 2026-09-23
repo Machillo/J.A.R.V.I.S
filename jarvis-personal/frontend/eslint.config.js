@@ -13,10 +13,8 @@ export default defineConfig([
     'android/app/build/**',
     'android/build/**',
     'android/.gradle/**',
-    'ios-finva/App/App/public/**',
-    'ios-finva/DerivedData/**',
-    'ios-jarvis/App/App/public/**',
-    'ios-jarvis/DerivedData/**',
+    'ios-dincr/App/App/public/**',
+    'ios-dincr/DerivedData/**',
   ]),
   {
     files: ['**/*.{js,jsx}'],

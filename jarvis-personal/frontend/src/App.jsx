@@ -17,9 +17,8 @@ import ReleaseUpdateNotice from "./components/ReleaseUpdateNotice";
 import { getReleasePolicy } from "./lib/releasePolicy";
 import { detectNativePlatform } from "./ui/native/platform";
 import FinvaAppLock from "./components/FinvaAppLock";
+import { isDincrDistribution } from "./lib/appIdentity";
 
-const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.finva.app";
-const isFinvaDistribution = nativeAppId === "com.finva.app";
 
 function BootScreen({ message = "Preparando tu espacio..." }) {
   return (
@@ -220,7 +219,7 @@ export default function App() {
 
   if (currentUser.role === "owner" || currentUser.role === "admin") {
     const personalApp = <PersonalApp />;
-    if (!isFinvaDistribution) return personalApp;
+    if (!isDincrDistribution) return personalApp;
     return (
       <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
         {personalApp}

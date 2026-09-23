@@ -6,7 +6,7 @@
 
 ## Capacidades internas preservadas
 
-`PersonalApp` sigue montando asistente/chat, estrategia, finanzas, patrimonio, inversiones/IBKR, negocios, cuentas, conciliación, deterioro, correos, transacciones, memoria, notificaciones, calendario, deportes, configuración, usuarios y operaciones. La UI se presenta como DINCR Owner; los nombres de código `jarvis`, clases CSS, rutas `/jarvis/*`, variables del puente, carpetas y `com.jarvis.personal` quedan por compatibilidad. Ninguna tabla, workspace ni dato se renombró o movió. La antigua configuración de iOS Owner conserva su bundle ID pero muestra DINCR Owner como nombre de pantalla; no debe distribuirse como segundo producto.
+`PersonalApp` sigue montando asistente/chat, estrategia, finanzas, patrimonio, inversiones/IBKR, negocios, cuentas, conciliación, deterioro, correos, transacciones, memoria, notificaciones, calendario, deportes, configuración, usuarios y operaciones. La UI se presenta como DINCR Owner; los nombres de código `jarvis`, clases CSS, rutas `/jarvis/*`, variables del puente, carpetas y `com.jarvis.personal` quedan por compatibilidad. Ninguna tabla, workspace ni dato se renombró o movió. El proyecto iOS Owner separado (`com.jarvis.personal`) se eliminó: DINCR Owner vive dentro de la única app iOS, DINCR (`com.dincr.app`).
 
 ## Límite de seguridad
 

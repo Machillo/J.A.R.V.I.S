@@ -5,6 +5,7 @@ import {
   BiometryErrorType,
   BiometryType,
 } from "@aparajita/capacitor-biometric-auth";
+import { isDincrAppId } from "./appIdentity.js";
 
 export const APP_LOCK_CHANGED_EVENT = "finva:app-lock-changed";
 export const APP_LOCK_REQUESTED_EVENT = "finva:app-lock-requested";
@@ -17,7 +18,7 @@ export function isNativeAppLockSupported() {
   // Capacitor's bridge can report `web` during the first iOS render. The
   // product-specific build id is deterministic and keeps the DINCR gate from
   // being skipped while WebKit finishes attaching the native bridge.
-  return Capacitor.isNativePlatform() || import.meta.env?.VITE_NATIVE_APP_ID === "com.finva.app";
+  return Capacitor.isNativePlatform() || isDincrAppId(import.meta.env?.VITE_NATIVE_APP_ID);
 }
 
 export function normalizeAppLockConfig(value = {}) {

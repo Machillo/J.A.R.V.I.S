@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { analyticsEvents, safeAnalyticsProperties } from "../src/lib/analyticsContract.js";
+import { LEGACY_DINCR_APP_ID, isDincrAppId } from "../src/lib/appIdentity.js";
 
 const sdk = fs.readFileSync(new URL("../src/lib/productAnalytics.js", import.meta.url), "utf8");
 const gmail = fs.readFileSync(new URL("../src/users/pages/GmailAutomation.jsx", import.meta.url), "utf8");
@@ -29,7 +30,7 @@ assert.match(sdk, /user\?\.legal\?\.required === false/);
 assert.doesNotMatch(sdk, /posthog\.identify\(/);
 assert.doesNotMatch(gmail, /bank: item\.|institution_country: item\.|auto_saved: result\./);
 
-function runSdk({ key = "", mobile = true, legal = false } = {}) {
+function runSdk({ key = "", mobile = true, legal = false, appId = "com.finva.app" } = {}) {
   const calls = [];
   const sdkStub = {
     init: (_token, config) => { calls.push(["init", config]); sdkStub.config = config; },
@@ -38,11 +39,11 @@ function runSdk({ key = "", mobile = true, legal = false } = {}) {
     opt_out_capturing: () => calls.push(["opt_out"]),
     reset: () => calls.push(["reset"]),
   };
-  const source = sdk.replace(/^import .*;\n/gm, "").replaceAll("import.meta.env", "env").replace(/export const /g, "const ");
+  const source = sdk.replace(/^import .*;\r?\n/gm, "").replaceAll("import.meta.env", "env").replace(/export const /g, "const ");
   const context = {
-    posthog: sdkStub, analyticsEvents, safeAnalyticsProperties,
+    posthog: sdkStub, analyticsEvents, safeAnalyticsProperties, LEGACY_DINCR_APP_ID, isDincrAppId,
     Capacitor: { isNativePlatform: () => mobile, getPlatform: () => "android" },
-    env: { VITE_POSTHOG_KEY: key, VITE_POSTHOG_HOST: "https://us.i.posthog.com", VITE_NATIVE_APP_ID: "com.finva.app" },
+    env: { VITE_POSTHOG_KEY: key, VITE_POSTHOG_HOST: "https://us.i.posthog.com", VITE_NATIVE_APP_ID: appId },
     window: {},
   };
   vm.runInNewContext(`${source}\nglobalThis.run = { setProductAnalyticsUser, captureProductEvent };`, context);
@@ -53,6 +54,8 @@ function runSdk({ key = "", mobile = true, legal = false } = {}) {
 assert.deepEqual(runSdk().calls, [], "missing key is a no-op");
 assert.deepEqual(runSdk({ key: "public-key" }).calls, [], "missing legal acceptance is a no-op");
 assert.deepEqual(runSdk({ key: "public-key", legal: true, mobile: false }).calls, [], "Vercel preview is excluded");
+assert.ok(runSdk({ key: "public-key", legal: true, appId: "com.dincr.app" }).calls.length, "the DINCR iOS build (com.dincr.app) keeps product analytics");
+assert.deepEqual(runSdk({ key: "public-key", legal: true, appId: "com.jarvis.personal" }).calls, [], "a non-DINCR build never sends analytics");
 const { calls, context } = runSdk({ key: "public-key", legal: true });
 assert.deepEqual(calls.filter(([name]) => name === "capture").map(([, event]) => event.event), ["app_opened"]);
 context.run.captureProductEvent("transaction_confirmed", { amount: 1234, bank: "BAC", source_type: "email" });

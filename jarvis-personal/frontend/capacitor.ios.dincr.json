@@ -1,5 +1,5 @@
 {
-  "appId": "com.finva.app",
+  "appId": "com.dincr.app",
   "appName": "DINCR",
   "webDir": "dist",
   "includePlugins": [
@@ -11,6 +11,6 @@
     "@capawesome/capacitor-file-picker"
   ],
   "ios": {
-    "path": "ios-finva"
+    "path": "ios-dincr"
   }
 }

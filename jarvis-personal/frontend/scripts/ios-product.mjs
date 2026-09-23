@@ -1,16 +1,14 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-const products = {
-  finva: { config: "capacitor.ios.finva.json", appId: "com.finva.app", nativePath: "ios-finva" },
-  jarvis: { config: "capacitor.ios.jarvis.json", appId: "com.jarvis.personal", nativePath: "ios-jarvis" },
-};
+// DINCR is the only iOS app. The iOS Capacitor config differs from the default
+// (Android/web) one only by its app id, native path and plugin list.
+const product = { config: "capacitor.ios.dincr.json", appId: "com.dincr.app", nativePath: "ios-dincr" };
 
-const [productName, action = "sync"] = process.argv.slice(2);
-const product = products[productName];
+const [action = "sync"] = process.argv.slice(2);
 
-if (!product || !["sync", "open"].includes(action)) {
-  console.error("Uso: node scripts/ios-product.mjs <finva|jarvis> <sync|open>");
+if (!["sync", "open"].includes(action)) {
+  console.error("Uso: node scripts/ios-product.mjs <sync|open>");
   process.exit(1);
 }
 
@@ -43,14 +41,17 @@ function verifyNativeBundle() {
   if (generatedConfig.appId !== product.appId) {
     throw new Error(`El proyecto iOS generado no corresponde a ${product.appId}.`);
   }
+  const xcodeProject = readFileSync(`${product.nativePath}/App/App.xcodeproj/project.pbxproj`, "utf8");
+  const bundleIds = [...xcodeProject.matchAll(/PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);/g)].map((match) => match[1]);
+  if (!bundleIds.length || bundleIds.some((id) => id !== product.appId)) {
+    throw new Error(`El proyecto Xcode debe usar solo ${product.appId}.`);
+  }
 
-  if (productName === "finva") {
-    const hasBiometricOnboarding = generatedFiles(publicPath)
-      .filter((path) => path.endsWith(".js"))
-      .some((path) => readFileSync(path, "utf8").includes("finva:app-lock-onboarding:v2"));
-    if (!hasBiometricOnboarding) {
-      throw new Error("El bundle iOS de DINCR no contiene el onboarding biométrico. No abras Xcode con archivos antiguos.");
-    }
+  const hasBiometricOnboarding = generatedFiles(publicPath)
+    .filter((path) => path.endsWith(".js"))
+    .some((path) => readFileSync(path, "utf8").includes("finva:app-lock-onboarding:v2"));
+  if (!hasBiometricOnboarding) {
+    throw new Error("El bundle iOS de DINCR no contiene el onboarding biométrico. No abras Xcode con archivos antiguos.");
   }
 }
 
