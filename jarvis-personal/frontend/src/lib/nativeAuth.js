@@ -2,8 +2,8 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "./supabase";
+import { nativeAppId } from "./appIdentity";
 
-const nativeAppId = import.meta.env.VITE_NATIVE_APP_ID || "com.finva.app";
 export const NATIVE_AUTH_REDIRECT = `${nativeAppId}://auth/callback`;
 export const isNativeApp = () => Capacitor.isNativePlatform();
 

@@ -11,3 +11,10 @@ capacitor-cordova-ios-plugins
 # Generated Config files
 App/App/capacitor.config.json
 App/App/config.xml
+
+# Signing material and local Xcode state never belong in Git
+*.mobileprovision
+*.p12
+*.cer
+*.xcuserstate
+.DS_Store

@@ -18,7 +18,7 @@ Estado de referencia: `main` del 23 de septiembre de 2026. Esta lista separa las
 - **Seguridad Android:** `allowBackup="false"` con reglas de extracción; se quitó `POST_NOTIFICATIONS` (no hay push nativo). El deep link de login solo acepta el código PKCE.
 - **Avisos:** estrategia, recomendación, proyecciones, escenarios, revisión mensual y aguinaldo muestran que son estimaciones y no asesoría.
 - **Privacidad v3 (2026-09-23-v3):** nombra PostHog, Microsoft, Firebase y el tratamiento de correos; todos los usuarios deben volver a aceptarla.
-- **Exportación de datos:** `GET /auth/me/export` y botón "Descargar mis datos" en Ajustes (hoja de compartir en iOS/Android). iOS necesita `npm run ios:sync:finva` en la Mac.
+- **Exportación de datos:** `GET /auth/me/export` y botón "Descargar mis datos" en Ajustes (hoja de compartir en iOS/Android). iOS necesita `npm run ios:sync` en la Mac.
 
 ## Pendiente antes de pagar o abrir las cuentas de desarrollador
 

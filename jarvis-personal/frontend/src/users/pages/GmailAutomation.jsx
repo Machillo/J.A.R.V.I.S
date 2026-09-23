@@ -19,6 +19,7 @@ import {
 } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
 import { trackEvent } from "../../lib/telemetry";
+import { isMailOAuthCallback } from "../../lib/appIdentity";
 import LegalLink from "../../components/LegalLink";
 import gmailLogo from "../../assets/institutions/gmail.png";
 import outlookLogo from "../../assets/institutions/outlook.svg";
@@ -121,7 +122,7 @@ export default function GmailAutomation() {
     document.addEventListener("visibilitychange", refresh);
     let appUrlListener;
     App.addListener("appUrlOpen", async ({ url }) => {
-      if (!url?.startsWith("com.finva.app://gmail/callback")) return;
+      if (!isMailOAuthCallback(url)) return;
       try { await Browser.close(); } catch { /* El navegador ya puede estar cerrado. */ }
       const result = new URL(url).searchParams.get("microsoft");
       if (result === "connected") trackEvent("mail_connected", { source_type: "email" });

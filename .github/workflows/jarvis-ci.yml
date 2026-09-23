@@ -33,6 +33,8 @@ jobs:
       - run: npm run test:product-analytics
       - run: npm run test:store-readiness
       - run: npm run test:legal-links
+      - run: npm run test:ios-identity
+      - run: npm run test:phase0j
 
   frontend-lint-report:
     name: Frontend lint report

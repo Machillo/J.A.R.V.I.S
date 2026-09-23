@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>DINCR Owner</string>
+        <string>DINCR</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,9 +15,23 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.dincr.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.jarvis.personal</string>
+				<string>com.dincr.app</string>
+			</array>
+		</dict>
+		<!-- Transitional: the backend returns Gmail/Outlook OAuth to one scheme for
+		     every platform, and Android still ships com.finva.app. Remove once the
+		     backend mail return URL is com.dincr.app://gmail/callback
+		     (see docs/IOS_LOCAL_SETUP.md). -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.dincr.app.legacy-mail-callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.finva.app</string>
 			</array>
 		</dict>
 	</array>
@@ -33,6 +47,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>DINCR usa Face ID para proteger el acceso a tu información financiera.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -35,7 +35,7 @@ for (const [file, count] of [["src/pages/LegalConsent.jsx", 2], ["src/users/page
 }
 
 // The plugin must be compiled into both native DINCR apps.
-assert.match(read("capacitor.ios.finva.json"), /"@capacitor\/browser"/, "iOS DINCR must include @capacitor/browser");
+assert.match(read("capacitor.ios.dincr.json"), /"@capacitor\/browser"/, "iOS DINCR must include @capacitor/browser");
 assert.match(read("android/capacitor.settings.gradle"), /capacitor-browser/, "Android must include @capacitor/browser");
 
 console.log("DINCR legal links open the official pages in the system browser.");
