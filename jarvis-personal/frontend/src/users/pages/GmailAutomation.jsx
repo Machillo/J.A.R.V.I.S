@@ -19,6 +19,12 @@ import {
 } from "../services/jarvisApi";
 import { tx } from "../../lib/locale";
 import { trackEvent } from "../../lib/telemetry";
+import gmailLogo from "../../assets/institutions/gmail.png";
+import outlookLogo from "../../assets/institutions/outlook.svg";
+
+function MailProviderLogo({ provider }) {
+  return <img className="mail-provider-logo" src={provider === "microsoft" ? outlookLogo : gmailLogo} alt="" aria-hidden="true" />;
+}
 
 export default function GmailAutomation() {
   const [gmail, setGmail] = useState(null);
@@ -178,15 +184,15 @@ export default function GmailAutomation() {
       <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Podés conectar varios Gmail y Outlook/Hotmail que controlés. DINCR solicita acceso de lectura, sin permiso para enviar, modificar ni borrar correos.", "You can connect multiple Gmail and Outlook/Hotmail accounts you control. DINCR requests read access, without permission to send, edit or delete emails.")}</p></div>
       {!gmail?.connected && <p>{tx("DINCR revisará los avisos financieros de los buzones que autoricés para detectar cuentas y movimientos. Cada hallazgo requiere tu revisión antes de guardarse.", "DINCR will review financial notices in the mailboxes you authorize to detect accounts and transactions. You review findings before saving them.")}</p>}
       {gmail?.connections?.filter((item) => item.status !== "disabled").map((item) => <div className="gmail-connected-item" key={item.id}>
-        <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{item.google_email}</strong><small>{item.provider === "microsoft" ? "Outlook / Hotmail · " : "Gmail · "}{item.status === "reauthorization_required" ? tx("Necesita reconexión", "Reconnect required") : item.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span></div>
+        <div className="gmail-connection-status"><MailProviderLogo provider={item.provider}/><span><strong>{item.google_email}</strong><small>{item.provider === "microsoft" ? "Outlook / Hotmail · " : "Gmail · "}{item.status === "reauthorization_required" ? tx("Necesita reconexión", "Reconnect required") : item.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span><CheckCircle2 className="mail-provider-status" size={18} aria-hidden="true"/></div>
         <div className="gmail-connection-actions"><button type="button" className="danger" disabled={Boolean(busy)} onClick={() => disconnect(item.id)}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
       </div>)}
         <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("El acceso es solo lectura. El detalle técnico usado para revisar un hallazgo se elimina después de 30 días y los datos identificativos del correo después de 90 días, cuando no haya revisiones pendientes. El movimiento financiero confirmado se conserva hasta que eliminés tu cuenta. Podés desconectar cada correo cuando querás.", "Access is read-only. Technical evidence used to review a finding is removed after 30 days and identifying email metadata after 90 days when no review is pending. Confirmed financial history is retained until you delete your account. You can disconnect each mailbox at any time.")}</p></div>
         <p className="gmail-legal-links"><a href="/terms" target="_blank" rel="noreferrer">{tx("Términos", "Terms")}</a> · <a href="/privacy" target="_blank" rel="noreferrer">{tx("Privacidad", "Privacy")}</a></p>
         {gmail?.consent?.required && <label className="gmail-consent-check"><input type="checkbox" checked={consentAccepted} onChange={(event) => { setConsentAccepted(event.target.checked); setError(""); }}/><span>{tx("Entiendo y acepto que DINCR analice los correos financieros de la cuenta que autorice bajo estas condiciones.", "I understand and agree that DINCR may analyze financial emails from the account I authorize under these conditions.")}</span></label>}
         <div className="gmail-provider-actions">
-          <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("gmail")}>{busy === "connect" ? tx("Abriendo…", "Opening…") : tx("Conectar Gmail", "Connect Gmail")}</button>
-          <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || !gmail?.microsoft_available || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("microsoft")}>{gmail?.microsoft_available ? tx("Conectar Outlook / Hotmail", "Connect Outlook / Hotmail") : tx("Outlook / Hotmail: pendiente de configurar", "Outlook / Hotmail: setup pending")}</button>
+          <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("gmail")}><MailProviderLogo provider="gmail"/>{busy === "connect" ? tx("Abriendo…", "Opening…") : tx("Conectar Gmail", "Connect Gmail")}</button>
+          <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || !gmail?.microsoft_available || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("microsoft")}><MailProviderLogo provider="microsoft"/>{gmail?.microsoft_available ? tx("Conectar Outlook / Hotmail", "Connect Outlook / Hotmail") : tx("Outlook / Hotmail: pendiente de configurar", "Outlook / Hotmail: setup pending")}</button>
         </div>
         <p>{tx("Yahoo aún no está disponible: su permiso para leer buzones requiere aprobación de Yahoo. No ingresés tu contraseña de Yahoo en DINCR.", "Yahoo is not available yet: mailbox read access requires Yahoo approval. Do not enter your Yahoo password in DINCR.")}</p>
       {gmail?.connected && <>
