@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, Crown, LogOut, Smartphone, Sparkles, Upload, WalletCards } from "lucide-react";
-import { getBillingCatalog, getOnboarding, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
+import { getBillingCatalog, getMe, getOnboarding, getPlans, selectPlan, uploadPaymentReceipt } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { hasNativeReceiptPicker, pickNativeReceipt, receiptFromWebInput } from "../lib/receiptPicker";
 import { markFinvaWelcomeSeen, shouldShowFinvaWelcome } from "../lib/firstRunExperience";
@@ -53,9 +53,11 @@ export default function FinvaOnboarding({ user, onComplete }) {
         const next = await getBillingCatalog();
         setBilling(next);
         if (next?.order?.status === "paid" || next?.subscription?.status === "active") {
-          const onboarding = await getOnboarding();
-          hydrate(onboarding);
-          setPaymentFlow(null);
+          const activeProfile = await getMe();
+          if (activeProfile?.plan_selected) {
+            setProfile(activeProfile);
+            setPaymentFlow(null);
+          }
         } else if (next?.order) {
           setPaymentFlow((current) => current ? { ...current, order: next.order, payment: next.payment } : current);
         }
@@ -83,9 +85,11 @@ export default function FinvaOnboarding({ user, onComplete }) {
         setReceipt(null);
         return;
       }
-      setProfile(result.profile);
-      const onboarding = await getOnboarding();
-      hydrate(onboarding);
+      // The plan mutation already returns the updated identity. A second
+      // request here could fail after activation and strand the onboarding UI.
+      const activeProfile = result.profile?.plan_selected ? result.profile : await getMe();
+      if (!activeProfile?.plan_selected) throw new Error("El plan se activó, pero no pudimos actualizar tu cuenta. Intentá de nuevo.");
+      setProfile(activeProfile);
     } catch (e) { setError(e.message); }
     finally { setSaving(false); }
   };
