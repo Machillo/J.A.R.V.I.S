@@ -69,6 +69,7 @@ def test_accept_candidate_creates_one_transaction_and_confirms(monkeypatch):
 
     first_query, first_params = connection.calls[0]
     assert "c.account_id=%s AND c.workspace_id=%s" in first_query
+    assert "g.id=m.connection_id" in first_query
     assert first_params == (4, "account-a", "workspace-a")
     assert sum("INSERT INTO transactions" in query for query, _ in connection.calls) == 1
     assert sum("INSERT INTO financial_input_events" in query for query, _ in connection.calls) == 1
@@ -274,7 +275,7 @@ def test_initial_scan_page_returns_resume_cursor():
 def test_disconnect_revokes_access_without_deleting_financial_history(monkeypatch):
     _identity(monkeypatch)
     connection = _Connection([
-        _Result(one={"id": 12, "refresh_token_secret_id": "secret-a"}), _Result(),
+        _Result(rows=[{"id": 12, "refresh_token_secret_id": "secret-a"}]), _Result(),
     ])
     monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
     monkeypatch.setattr(gmail_service, "_vault_read", lambda *_args: "token")
@@ -285,3 +286,67 @@ def test_disconnect_revokes_access_without_deleting_financial_history(monkeypatc
     queries = [query for query, _params in connection.calls]
     assert any("SET status='disabled'" in query for query in queries)
     assert all("DELETE FROM finva_gmail_connections" not in query for query in queries)
+
+
+def test_gmail_status_lists_independent_connections(monkeypatch):
+    _identity(monkeypatch)
+    connection = _Connection([
+        _Result(rows=[
+            {"id": 3, "google_email": "first@gmail.com", "status": "active", "watch_expiration": "tomorrow"},
+            {"id": 4, "google_email": "second@gmail.com", "status": "reauthorization_required", "watch_expiration": None},
+        ]),
+        _Result(one={"total": 2}),
+    ])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+    monkeypatch.setattr(gmail_service, "gmail_consent_status", lambda: {"required": False})
+    status = gmail_service.gmail_status()
+    assert status["connected"] is True
+    assert status["needs_reauthorization"] is True
+    assert status["pending"] == 2
+    assert [row["google_email"] for row in status["connections"]] == ["first@gmail.com", "second@gmail.com"]
+    assert "refresh_token_secret_id" not in str(status)
+
+
+def test_disconnect_requires_id_when_multiple_emails_exist(monkeypatch):
+    from fastapi import HTTPException
+    import pytest
+    _identity(monkeypatch)
+    connection = _Connection([_Result(rows=[{"id": 3}, {"id": 4}])])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+    with pytest.raises(HTTPException) as exc:
+        gmail_service.disconnect_gmail()
+    assert exc.value.status_code == 422
+    assert connection.committed is False
+
+
+def test_sync_all_gmail_connections_keeps_success_when_one_fails(monkeypatch):
+    _identity(monkeypatch)
+    connection = _Connection([_Result(rows=[{"id": 3}, {"id": 4}]), _Result()])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+    monkeypatch.setattr(gmail_service, "reevaluate_workspace_candidates", lambda *_args, **_kwargs: 0)
+    def sync(id):
+        if id == 4:
+            raise RuntimeError("expired")
+        return {"scan_scope": "recent", "initial_scan_complete": True, "found": 4, "pending": 1}
+    monkeypatch.setattr(gmail_service, "_sync_connection", sync)
+    result = gmail_service.sync_current_gmail()
+    assert result["status"] == "partial"
+    assert result["failed_connections"] == [4]
+    assert result["found"] == 4
+
+
+def test_accept_paired_own_transfer_confirms_both_notices_without_transactions(monkeypatch):
+    _identity(monkeypatch)
+    connection = _Connection([
+        _Result(one={"id": 9, "status": "pending", "email_message_id": 15,
+                     "is_internal_transfer": True, "resolution_reason": "paired_owned_transfer",
+                     "related_candidate_id": 10}),
+        _Result(), _Result(), _Result(), _Result(),
+    ])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+    result = gmail_service.review_gmail_candidate(9, "accept")
+    assert result["is_internal_transfer"] is True
+    assert connection.committed is True
+    queries = [query for query, _ in connection.calls]
+    assert not any("INSERT INTO transactions" in query for query in queries)
+    assert any("id=%s AND account_id=%s AND workspace_id=%s" in query and "status='confirmed'" in query for query in queries[3:])

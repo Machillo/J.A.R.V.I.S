@@ -19,7 +19,6 @@ from fastapi.responses import RedirectResponse
 
 from backend.auth.current_user import (
     get_current_account_id,
-    get_current_user,
     get_current_workspace_id,
 )
 from backend.core.database import get_connection
@@ -30,7 +29,7 @@ from backend.email_monitor.gmail_content import collect_attachments, extract_pdf
 from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
-from backend.user_product.candidate_resolution import resolve_candidate
+from backend.user_product.candidate_resolution import resolve_candidate, reevaluate_workspace_candidates
 from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
 from backend.user_product.gmail_retention import apply_gmail_retention, retention_policy
 from backend.user_product.payroll_income import identify_received_payroll, link_received_payroll
@@ -263,27 +262,30 @@ def gmail_status() -> dict[str, Any]:
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        row = conn.execute(
+        rows = conn.execute(
             """SELECT id,google_email,status,granted_scopes,last_sync_at,last_success_at,
                       watch_expiration,last_error,connected_at,updated_at,
                       initial_scan_started_at,initial_scan_completed_at
                FROM finva_gmail_connections
-               WHERE account_id=%s AND workspace_id=%s""",
+               WHERE account_id=%s AND workspace_id=%s
+               ORDER BY connected_at,id""",
             (account_id, workspace_id),
-        ).fetchone()
+        ).fetchall()
         pending = conn.execute(
             "SELECT COUNT(*) AS total FROM finva_email_candidates WHERE workspace_id=%s AND status='pending'",
             (workspace_id,),
         ).fetchone()
-    if not row:
-        return {"connected": False, "status": "disconnected", "pending": 0, "consent": gmail_consent_status(), "retention": retention_policy()}
-    data = dict(row)
+    connections = [dict(row) for row in rows]
+    active = [row for row in connections if row["status"] == "active"]
+    data = active[0] if active else connections[0] if connections else {}
     return {
-        "connected": data.get("status") == "active",
-        "needs_reauthorization": data.get("status") == "reauthorization_required",
-        "automatic_updates": bool(data.get("watch_expiration")),
+        "status": "disconnected",
+        "connected": bool(active),
+        "needs_reauthorization": any(row["status"] == "reauthorization_required" for row in connections),
+        "automatic_updates": any(row.get("watch_expiration") for row in active),
         "pending": int((pending or {}).get("total") or 0),
         **data,
+        "connections": [{**row, "automatic_updates": bool(row.get("watch_expiration"))} for row in connections],
         "consent": gmail_consent_status(),
         "retention": retention_policy(),
     }
@@ -402,8 +404,8 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
         candidate = conn.execute(
             """SELECT c.*,g.legacy_user_id
                FROM finva_email_candidates c
-               JOIN finva_gmail_connections g
-                 ON g.account_id=c.account_id AND g.workspace_id=c.workspace_id
+               JOIN finva_email_messages m ON m.id=c.email_message_id
+               JOIN finva_gmail_connections g ON g.id=m.connection_id
                WHERE c.id=%s AND c.account_id=%s AND c.workspace_id=%s
                FOR UPDATE""",
             (candidate_id, account_id, workspace_id),
@@ -421,6 +423,8 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
                 (candidate_id,),
             )
             conn.execute("UPDATE finva_email_messages SET status='rejected' WHERE id=%s", (candidate["email_message_id"],))
+            if candidate.get("resolution_reason") == "paired_owned_transfer" and candidate.get("related_candidate_id"):
+                resolve_candidate(conn, int(candidate["related_candidate_id"]))
             conn.commit()
             return {"status": "rejected", "candidate_id": candidate_id, "transaction_id": None}
 
@@ -432,6 +436,20 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
                 (candidate_id,),
             )
             conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
+            if candidate.get("resolution_reason") == "paired_owned_transfer" and candidate.get("related_candidate_id"):
+                conn.execute(
+                    """UPDATE finva_email_candidates SET status='confirmed',reviewed_at=NOW(),updated_at=NOW()
+                       WHERE id=%s AND account_id=%s AND workspace_id=%s
+                         AND status='pending' AND is_internal_transfer=TRUE AND transaction_id IS NULL""",
+                    (candidate["related_candidate_id"], account_id, workspace_id),
+                )
+                conn.execute(
+                    """UPDATE finva_email_messages SET status='confirmed'
+                       WHERE id IN (SELECT email_message_id FROM finva_email_candidates
+                                    WHERE id=%s AND account_id=%s AND workspace_id=%s
+                                      AND status='confirmed' AND is_internal_transfer=TRUE)""",
+                    (candidate["related_candidate_id"], account_id, workspace_id),
+                )
             conn.commit()
             return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": None, "is_internal_transfer": True}
 
@@ -468,7 +486,6 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
 def begin_gmail_connection() -> dict[str, str]:
     require_gmail_consent()
     client_id, _, redirect_uri = _google_config()
-    user = get_current_user()
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
     state = _encode_oauth_state(account_id, workspace_id)
@@ -482,7 +499,6 @@ def begin_gmail_connection() -> dict[str, str]:
         "include_granted_scopes": "true",
         "prompt": "consent select_account",
         "state": state,
-        "login_hint": user.get("email") or "",
     }
     return {"authorization_url": f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"}
 
@@ -539,23 +555,28 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
         if not _has_active_vip_access(conn, account_id):
             return RedirectResponse(_return_url("vip_required"), status_code=302)
         current = conn.execute(
-            "SELECT refresh_token_secret_id FROM finva_gmail_connections WHERE account_id=%s FOR UPDATE",
-            (account_id,),
+            """SELECT id,refresh_token_secret_id FROM finva_gmail_connections
+               WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
+            (account_id, workspace_id, google_email),
         ).fetchone()
         secret_id = _vault_create(conn, refresh_token, account_id)
-        row = conn.execute(
-            """INSERT INTO finva_gmail_connections(
+        if current:
+            row = conn.execute(
+                """UPDATE finva_gmail_connections SET
+                   legacy_user_id=%s,refresh_token_secret_id=%s::uuid,granted_scopes=%s,
+                   status='active',last_error=NULL,history_id=NULL,watch_expiration=NULL,
+                   connected_at=NOW(),updated_at=NOW() WHERE id=%s RETURNING id""",
+                (legacy_user_id, secret_id, [GMAIL_SCOPE], current["id"]),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """INSERT INTO finva_gmail_connections(
                    account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
                    granted_scopes,status,connected_at,updated_at
                ) VALUES(%s,%s,%s,%s,%s::uuid,%s,'active',NOW(),NOW())
-               ON CONFLICT(account_id) DO UPDATE SET
-                   workspace_id=EXCLUDED.workspace_id,legacy_user_id=EXCLUDED.legacy_user_id,
-                   google_email=EXCLUDED.google_email,refresh_token_secret_id=EXCLUDED.refresh_token_secret_id,
-                   granted_scopes=EXCLUDED.granted_scopes,status='active',last_error=NULL,
-                   connected_at=NOW(),updated_at=NOW()
                RETURNING id""",
-            (account_id, workspace_id, legacy_user_id, google_email, secret_id, [GMAIL_SCOPE]),
-        ).fetchone()
+                (account_id, workspace_id, legacy_user_id, google_email, secret_id, [GMAIL_SCOPE]),
+            ).fetchone()
         old_secret = (current or {}).get("refresh_token_secret_id")
         if old_secret and str(old_secret) != secret_id:
             _vault_delete(conn, str(old_secret))
@@ -569,15 +590,19 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     return RedirectResponse(_return_url("connected"), status_code=302)
 
 
-def disconnect_gmail() -> dict[str, str]:
+def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        row = conn.execute(
-            """SELECT id,refresh_token_secret_id FROM finva_gmail_connections
-               WHERE account_id=%s AND workspace_id=%s FOR UPDATE""",
-            (account_id, workspace_id),
-        ).fetchone()
+        rows = conn.execute(
+            """SELECT id,refresh_token_secret_id,status FROM finva_gmail_connections
+               WHERE account_id=%s AND workspace_id=%s AND (%s::bigint IS NULL OR id=%s)
+               AND status<>'disabled' FOR UPDATE""",
+            (account_id, workspace_id, connection_id, connection_id),
+        ).fetchall()
+        if connection_id is None and len(rows) > 1:
+            raise HTTPException(status_code=422, detail="Elegí cuál correo querés desconectar.")
+        row = rows[0] if rows else None
         if not row:
             return {"status": "disconnected"}
         try:
@@ -912,13 +937,33 @@ def sync_current_gmail() -> dict[str, Any]:
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        row = conn.execute(
-            "SELECT id FROM finva_gmail_connections WHERE account_id=%s AND workspace_id=%s",
+        rows = conn.execute(
+            """SELECT id FROM finva_gmail_connections
+               WHERE account_id=%s AND workspace_id=%s AND status='active' ORDER BY id""",
             (account_id, workspace_id),
-        ).fetchone()
-    if not row:
+        ).fetchall()
+    if not rows:
         raise HTTPException(status_code=404, detail="Primero conectá Gmail.")
-    return _sync_connection(int(row["id"]))
+    results = []
+    errors = []
+    for row in rows:
+        try:
+            results.append(_sync_connection(int(row["id"])))
+        except Exception:
+            errors.append(int(row["id"]))
+    if not results:
+        raise HTTPException(status_code=409, detail="No se pudo actualizar ningún correo. Revisá tus conexiones.")
+    # Also reconcile notifications received before the user connected the
+    # second inbox or confirmed the ownership of both financial accounts.
+    with get_connection() as conn:
+        reevaluate_workspace_candidates(conn, account_id=account_id, workspace_id=workspace_id)
+        conn.commit()
+    return {
+        "status": "partial" if errors else "ok", "connections": len(rows), "failed_connections": errors,
+        "scan_scope": "year_to_date" if any(r["scan_scope"] == "year_to_date" for r in results) else "recent",
+        "initial_scan_complete": all(r["initial_scan_complete"] for r in results),
+        **{key: sum(r.get(key, 0) for r in results) for key in ("found", "auto_saved", "pending", "payroll_reports", "duplicates")},
+    }
 
 
 def _start_watch(connection_id: int, service, suppress_errors: bool = False) -> None:
@@ -998,7 +1043,7 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
         raise HTTPException(status_code=400, detail="Notificación inválida.") from exc
     email = str(notification.get("emailAddress") or "").lower()
     with get_connection() as conn:
-        row = conn.execute(
+        rows = conn.execute(
             """SELECT c.id
                FROM finva_gmail_connections c
                JOIN account_subscriptions s ON s.account_id=c.account_id
@@ -1012,8 +1057,14 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
                    OR (s.expires_at IS NOT NULL AND s.expires_at>NOW())
                  )""",
             (email,),
-        ).fetchone()
-    if not row:
+        ).fetchall()
+    if not rows:
         return {"status": "ignored"}
-    result = _sync_connection(int(row["id"]), max_results=50)
-    return {"status": "ok", **result}
+    completed = 0
+    for row in rows:
+        try:
+            _sync_connection(int(row["id"]), max_results=50)
+            completed += 1
+        except Exception:
+            continue
+    return {"status": "ok" if completed == len(rows) else "partial", "connections": len(rows), "completed": completed}

@@ -287,8 +287,8 @@ def vip_gmail_candidate_correct(candidate_id: int, request: GmailCandidateReview
     return review_gmail_candidate(candidate_id, "accept", request.model_dump())
 
 @router.delete("/vip/gmail")
-def vip_gmail_disconnect():
-    require_feature("gmail_automation"); return disconnect_gmail()
+def vip_gmail_disconnect(connection_id: int | None = None):
+    require_feature("gmail_automation"); return disconnect_gmail(connection_id)
 
 @router.post("/vip/gmail/maintenance")
 def vip_gmail_maintenance(x_finva_cron_secret: str | None = Header(default=None)):
