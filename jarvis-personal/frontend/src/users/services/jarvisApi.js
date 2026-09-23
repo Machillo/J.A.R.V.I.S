@@ -89,6 +89,7 @@ export const updateVipSalvavidas = (payload) => json("/user-product/vip/salvavid
 export const getVipAguinaldo = () => request("/user-product/vip/aguinaldo");
 export const getVipGmailStatus = () => request("/user-product/vip/gmail/status");
 export const connectVipGmail = () => request("/user-product/vip/gmail/connect", { method: "POST" });
+export const connectVipMicrosoftMail = () => request("/user-product/vip/mail/microsoft/connect", { method: "POST" });
 export const acceptVipGmailConsent = (version) => json("/user-product/vip/gmail/consent", "POST", { accepted: true, version });
 export const syncVipGmail = () => request("/user-product/vip/gmail/sync", { method: "POST" });
 export const disconnectVipGmail = (connectionId) => request(`/user-product/vip/gmail?connection_id=${encodeURIComponent(connectionId)}`, { method: "DELETE" });

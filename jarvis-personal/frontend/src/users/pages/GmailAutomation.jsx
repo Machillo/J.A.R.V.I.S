@@ -4,6 +4,7 @@ import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import {
   connectVipGmail,
+  connectVipMicrosoftMail,
   acceptVipGmailConsent,
   disconnectVipGmail,
   acceptVipGmailCandidate,
@@ -35,7 +36,7 @@ export default function GmailAutomation() {
       ]);
       setGmail(status); setEmails(inbox?.items || []); setIdentity(accounts || { items: [], summary: {} });
     }
-    catch (err) { setError(err.message || tx("No se pudo consultar Gmail.", "Couldn’t check Gmail.")); }
+    catch (err) { setError(err.message || tx("No se pudo consultar el correo.", "Couldn’t check mail.")); }
   }, [filter]);
 
   const review = async (item, action, corrections = null) => {
@@ -80,6 +81,8 @@ export default function GmailAutomation() {
     App.addListener("appUrlOpen", async ({ url }) => {
       if (!url?.startsWith("com.finva.app://gmail/callback")) return;
       try { await Browser.close(); } catch { /* El navegador ya puede estar cerrado. */ }
+      const result = new URL(url).searchParams.get("microsoft");
+      if (result && result !== "connected") setError(tx(`No se pudo conectar Outlook (${result}). Revisá la configuración o volvé a intentarlo.`, `Couldn’t connect Outlook (${result}). Check the configuration or try again.`));
       await load();
     }).then((listener) => { appUrlListener = listener; });
     return () => {
@@ -88,16 +91,16 @@ export default function GmailAutomation() {
     };
   }, [load]);
 
-  const connect = async () => {
+  const connect = async (provider) => {
     setBusy("connect"); setError(""); setMessage("");
     try {
       if (gmail?.consent?.required) {
         if (!consentAccepted) throw new Error(tx("Debés aceptar la explicación de Email Monitor antes de conectarlo.", "You must accept the Email Monitor explanation before connecting it."));
         await acceptVipGmailConsent(gmail.consent.version);
       }
-      const response = await connectVipGmail();
-      trackEvent("gmail_connection_started");
-      if (!response?.authorization_url) throw new Error(tx("Google no devolvió una dirección de autorización.", "Google did not return an authorization URL."));
+      const response = await (provider === "microsoft" ? connectVipMicrosoftMail() : connectVipGmail());
+      trackEvent("gmail_connection_started", { provider });
+      if (!response?.authorization_url) throw new Error(tx("El proveedor no devolvió una dirección de autorización.", "The provider did not return an authorization URL."));
       await Browser.open({ url: response.authorization_url, presentationStyle: "popover" });
     } catch (err) { setError(err.message || tx("No se pudo abrir Google.", "Couldn’t open Google.")); }
     finally { setBusy(""); }
@@ -131,7 +134,7 @@ export default function GmailAutomation() {
       await disconnectVipGmail(connectionId);
       trackEvent("gmail_disconnected");
       await load();
-      setMessage(tx("Ese Gmail quedó desconectado de DINCR.", "That Gmail was disconnected from DINCR."));
+      setMessage(tx("Ese correo quedó desconectado de DINCR.", "That mailbox was disconnected from DINCR."));
     } catch (err) { setError(err.message || tx("No se pudo desconectar Gmail.", "Couldn’t disconnect Gmail.")); }
     finally { setBusy(""); }
   };
@@ -146,21 +149,25 @@ export default function GmailAutomation() {
   return <section className="mobile-page gmail-automation-page">
     <div className="mobile-page-heading">
       <p className="eyebrow">{tx("Automatización VIP", "VIP automation")}</p>
-      <h1>{tx("Movimientos desde Gmail", "Transactions from Gmail")}</h1>
-      <span>{tx("DINCR revisa los correos financieros de cada Gmail que autoricés.", "DINCR reviews financial messages in each Gmail account you authorize.")}</span>
+      <h1>{tx("Movimientos desde tu correo", "Transactions from your email")}</h1>
+      <span>{tx("DINCR revisa los correos financieros de cada buzón compatible que autoricés.", "DINCR reviews financial messages in each supported mailbox you authorize.")}</span>
     </div>
     <article className={`gmail-connection-card ${gmail?.needs_reauthorization ? "needs-attention" : ""}`}>
       <div className="gmail-connection-heading"><span><Mail size={21}/></span><div><strong>{tx("Tus correos bancarios", "Your banking emails")}</strong><small>{tx("Permiso individual · solo lectura", "Individual permission · read only")}</small></div></div>
-      <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Podés conectar varios Gmail que controlés. DINCR no puede enviar, modificar ni borrar correos.", "You can connect multiple Gmail accounts you control. DINCR cannot send, edit or delete emails.")}</p></div>
-      {!gmail?.connected && <p>{tx("DINCR revisará el historial financiero de los Gmail que autoricés para detectar cuentas y movimientos. Cada hallazgo requiere tu revisión antes de guardarse.", "DINCR will review financial history in the Gmail accounts you authorize to detect accounts and transactions. You review findings before saving them.")}</p>}
+      <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Podés conectar varios Gmail y Outlook/Hotmail que controlés. DINCR solicita acceso de lectura, sin permiso para enviar, modificar ni borrar correos.", "You can connect multiple Gmail and Outlook/Hotmail accounts you control. DINCR requests read access, without permission to send, edit or delete emails.")}</p></div>
+      {!gmail?.connected && <p>{tx("DINCR revisará los avisos financieros de los buzones que autoricés para detectar cuentas y movimientos. Cada hallazgo requiere tu revisión antes de guardarse.", "DINCR will review financial notices in the mailboxes you authorize to detect accounts and transactions. You review findings before saving them.")}</p>}
       {gmail?.connections?.filter((item) => item.status !== "disabled").map((item) => <div className="gmail-connected-item" key={item.id}>
-        <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{item.google_email}</strong><small>{item.status === "reauthorization_required" ? tx("Necesita reconexión", "Reconnect required") : item.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span></div>
+        <div className="gmail-connection-status"><CheckCircle2 size={18}/><span><strong>{item.google_email}</strong><small>{item.provider === "microsoft" ? "Outlook / Hotmail · " : "Gmail · "}{item.status === "reauthorization_required" ? tx("Necesita reconexión", "Reconnect required") : item.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span></div>
         <div className="gmail-connection-actions"><button type="button" className="danger" disabled={Boolean(busy)} onClick={() => disconnect(item.id)}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
       </div>)}
-        <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("El acceso es solo lectura. El detalle técnico usado para revisar un hallazgo se elimina después de 30 días y los datos identificativos del correo después de 90 días, cuando no haya revisiones pendientes. El movimiento financiero confirmado se conserva hasta que eliminés tu cuenta. Podés desconectar Gmail cuando querás.", "Access is read-only. Technical evidence used to review a finding is removed after 30 days and identifying email metadata after 90 days when no review is pending. Confirmed financial history is retained until you delete your account. You can disconnect Gmail at any time.")}</p></div>
+        <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("El acceso es solo lectura. El detalle técnico usado para revisar un hallazgo se elimina después de 30 días y los datos identificativos del correo después de 90 días, cuando no haya revisiones pendientes. El movimiento financiero confirmado se conserva hasta que eliminés tu cuenta. Podés desconectar cada correo cuando querás.", "Access is read-only. Technical evidence used to review a finding is removed after 30 days and identifying email metadata after 90 days when no review is pending. Confirmed financial history is retained until you delete your account. You can disconnect each mailbox at any time.")}</p></div>
         <p className="gmail-legal-links"><a href="/terms" target="_blank" rel="noreferrer">{tx("Términos", "Terms")}</a> · <a href="/privacy" target="_blank" rel="noreferrer">{tx("Privacidad", "Privacy")}</a></p>
         {gmail?.consent?.required && <label className="gmail-consent-check"><input type="checkbox" checked={consentAccepted} onChange={(event) => { setConsentAccepted(event.target.checked); setError(""); }}/><span>{tx("Entiendo y acepto que DINCR analice los correos financieros de la cuenta que autorice bajo estas condiciones.", "I understand and agree that DINCR may analyze financial emails from the account I authorize under these conditions.")}</span></label>}
-        <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={connect}>{busy === "connect" ? tx("Abriendo Google…", "Opening Google…") : gmail?.connected ? tx("Conectar otro Gmail", "Connect another Gmail") : tx("Aceptar y conectar Gmail", "Accept and connect Gmail")}</button>
+        <div className="gmail-provider-actions">
+          <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("gmail")}>{busy === "connect" ? tx("Abriendo…", "Opening…") : tx("Conectar Gmail", "Connect Gmail")}</button>
+          <button type="button" className="finva-button finva-button-primary" disabled={Boolean(busy) || !gmail?.microsoft_available || Boolean(gmail?.consent?.required && !consentAccepted)} onClick={() => connect("microsoft")}>{gmail?.microsoft_available ? tx("Conectar Outlook / Hotmail", "Connect Outlook / Hotmail") : tx("Outlook / Hotmail: pendiente de configurar", "Outlook / Hotmail: setup pending")}</button>
+        </div>
+        <p>{tx("Yahoo aún no está disponible: su permiso para leer buzones requiere aprobación de Yahoo. No ingresés tu contraseña de Yahoo en DINCR.", "Yahoo is not available yet: mailbox read access requires Yahoo approval. Do not enter your Yahoo password in DINCR.")}</p>
       {gmail?.connected && <>
         {gmail.pending > 0 && <p>{gmail.pending} {tx("movimiento(s) necesitan revisión.", "transaction(s) need review.")}</p>}
         <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar todos", "Refresh all")}</button></div>
