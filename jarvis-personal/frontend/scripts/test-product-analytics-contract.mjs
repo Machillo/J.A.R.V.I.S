@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { analyticsEvents, safeAnalyticsProperties } from "../src/lib/analyticsContract.js";
 import { DINCR_APP_ID, isDincrAppId } from "../src/lib/appIdentity.js";
 
@@ -34,7 +35,7 @@ function runSdk({ key = "", mobile = true, legal = false, appId = "com.dincr.app
   const calls = [];
   const sdkStub = {
     init: (_token, config) => { calls.push(["init", config]); sdkStub.config = config; },
-    capture: (event, props) => { calls.push(["capture", sdkStub.config.before_send({ event, uuid: "random-uuid", properties: { ...props, distinct_id: "random-device-id", $current_url: "https://x/#token=private", $set: { email: "private@example.com" } } })]); },
+    capture: (event, props) => { calls.push(["capture", sdkStub.config.before_send({ event, uuid: "random-uuid", properties: { ...props, token: "phc_public_project_key", distinct_id: "random-device-id", $process_person_profile: true, $current_url: "https://x/#token=private", $set: { email: "private@example.com" } } })]); },
     opt_in_capturing: () => calls.push(["opt_in"]),
     opt_out_capturing: () => calls.push(["opt_out"]),
     reset: () => calls.push(["reset"]),
@@ -47,6 +48,7 @@ function runSdk({ key = "", mobile = true, legal = false, appId = "com.dincr.app
     window: {},
   };
   vm.runInNewContext(`${source}\nglobalThis.run = { setProductAnalyticsUser, captureProductEvent };`, context);
+  context.posthogConfig = () => sdkStub.config;
   context.run.setProductAnalyticsUser({ id: "account-id", role: "user", legal: { required: !legal }, subscription: { plan: "vip" } });
   return { calls, context };
 }
@@ -66,6 +68,20 @@ assert.equal(event.properties.$current_url, undefined);
 assert.equal(event.properties.$set, undefined);
 assert.equal(event.properties.email, undefined);
 assert.equal(event.properties.source_type, "email");
+assert.equal(event.properties.token, "phc_public_project_key", "the public project key is required for ingestion");
+assert.equal(event.properties.$process_person_profile, false, "no person profiles");
+assert.equal(event.properties.$geoip_disable, true, "no IP geolocation");
+assert.deepEqual(Object.keys(event.properties).sort(), ["$geoip_disable", "$process_person_profile", "distinct_id", "plan", "platform", "source_type", "token"]);
+
+// The real posthog-js pipeline must accept what before_send returns. It silently
+// drops events whose required properties (`token`) were removed by the hook.
+const { PostHog } = createRequire(import.meta.url)("posthog-js/lib/src/posthog-core.js");
+const realSdk = new PostHog();
+realSdk.config = { before_send: context.posthogConfig().before_send };
+const ingested = realSdk._runBeforeSend({ event: "app_opened", uuid: "u", properties: { token: "phc_public_project_key", distinct_id: "d", $lib: "web", $current_url: "https://x/#access_token=secret", plan: "vip" } });
+assert.ok(ingested, "posthog-js keeps DINCR events after before_send");
+assert.deepEqual(JSON.parse(JSON.stringify(ingested.properties)), { token: "phc_public_project_key", distinct_id: "d", $process_person_profile: false, $geoip_disable: true, plan: "vip" });
+assert.equal(realSdk._runBeforeSend({ event: "$pageview", uuid: "u", properties: { token: "t", distinct_id: "d" } }), null, "unlisted events stay dropped");
 context.run.captureProductEvent("unapproved_event", { source_type: "email" });
 assert.equal(calls.filter(([name]) => name === "capture").length, 2);
 context.run.setProductAnalyticsUser({ id: "second-account", role: "user", legal: { required: false }, subscription: { plan: "free" } });
