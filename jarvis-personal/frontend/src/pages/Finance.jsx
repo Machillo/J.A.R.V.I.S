@@ -546,8 +546,7 @@ function MonthlyFinanceTrendChart({ monthly = [] }) {
             <text x={x(index)} y={height - 12} textAnchor="middle" className="trend-month-label">{formatMonthLabel(item.month)}</text>
           </g>
         ))}
-      </svg>
-      </div>
+      </svg></div>
       <div className="legend trend-legend"><span className="cyan"></span> Income <span className="red"></span> Expenses</div>
 
       <div className="trend-summary-grid trend-summary-grid-four">
