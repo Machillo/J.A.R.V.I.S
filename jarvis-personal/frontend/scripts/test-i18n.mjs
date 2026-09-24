@@ -42,6 +42,9 @@ const ENGLISH = /\b(the|your|you|and|with|without|for|to|of|is|are|add|save|clos
 const HUMAN = /\p{L}{2,}.*\s.*\p{L}{2,}|[áéíóúñ¿¡]/u;
 const TECHNICAL = /^(?:[a-z0-9_\-.:/@#?=&%{}]+|[A-Z0-9_]+|https?:\/\/\S+|\S+\.(?:css|svg|png|js|jsx))$/;
 const VISIBLE_ATTRS = new Set(["aria-label", "placeholder", "title", "alt", "label", "caption", "eyebrow", "summary", "subtitle", "description", "message", "confirmLabel", "cancelLabel"]);
+// Owner/JARVIS voice and legacy product names must not reach public copy.
+// "DINCR Owner" (the Owner nav and document title) is only rendered for Owner.
+const INTERNAL_PERSONA = /(?<!\p{L})(JARVIS|Jarvis|FINVA|Finva|Señor|Doctor Strange|(?<!DINCR )Owner)(?!\p{L})/u;
 const COPY_CALLS = new Set(["tx", "t", "tr", "copy"]);
 const NON_UI_CALLS = new Set(["addEventListener", "removeEventListener", "dispatchEvent", "CustomEvent", "getItem", "setItem", "removeItem", "querySelector", "trackEvent", "captureProductEvent", "recordError", "startsWith", "includes", "replace", "replaceAll", "split", "match", "test", "log", "warn", "debug", "info", "join", "DOMException", "fetch", "request", "jsonRequest", "open", "matchMedia", "RegExp", "URL", "URLSearchParams"]);
 const NON_UI_ATTRS = /^(className|key|id|type|name|role|href|src|htmlFor|inputMode|autoComplete|rel|target|method|accept|d|viewBox|fill|stroke|value|to|provider|variant|tone|kind|screen|surface|list|defaultValue|pattern|lang|min|max|step)$/;
@@ -136,6 +139,7 @@ for (const file of files) {
   traverse(parseFile(file), {
     JSXText(p) {
       const text = flatten(p.node.value);
+      if (INTERNAL_PERSONA.test(text)) report(relative, p.node, "internal-persona", text);
       if (text.length > 1 && /\p{L}/u.test(text) && !NEUTRAL_TEXT.test(text)) report(relative, p.node, "jsx-text", text);
     },
     JSXAttribute(p) {
@@ -158,6 +162,11 @@ for (const file of files) {
     },
     "StringLiteral|TemplateLiteral"(p) {
       const value = literalText(p.node);
+      // DINCR Users never shows the Owner assistant persona or legacy brands.
+      if (value && /\s/.test(value) && INTERNAL_PERSONA.test(value) && !p.parentPath.isImportDeclaration()
+          && !p.findParent((q) => q.isCallExpression() && NON_UI_CALLS.has(calleeName(q.node.callee)))) {
+        report(relative, p.node, "internal-persona", value);
+      }
       if (!value || !HUMAN.test(value) || TECHNICAL.test(value.trim()) || NEUTRAL_TEXT.test(value.trim())) return;
       const parent = p.parentPath;
       if (parent.isImportDeclaration() || parent.isExportNamedDeclaration() || parent.isJSXAttribute()) return;

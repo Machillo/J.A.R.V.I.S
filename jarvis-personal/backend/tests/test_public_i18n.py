@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from backend import main
 from backend.ai import strategy_dashboard
 from backend.auth import saas
-from backend.core.i18n import current_language, language_for_request, resolve_language, use_language
+from backend.core.i18n import current_language, language_for_request, reset_public, resolve_language, set_public, use_language
 from backend.finance import intelligence
 from backend.financial_lifecycle import state as lifecycle_state
 from backend.financial_lifecycle.monthly_review import build_monthly_review, localized_action
@@ -33,10 +33,15 @@ TEXT_KEYS = {
 
 
 def in_both(fn, *args, **kwargs):
-    with use_language("es"):
-        spanish = fn(*args, **kwargs)
-    with use_language("en"):
-        english = fn(*args, **kwargs)
+    """Run a rule as a public DINCR request in Spanish and in English."""
+    token = set_public(True)
+    try:
+        with use_language("es"):
+            spanish = fn(*args, **kwargs)
+        with use_language("en"):
+            english = fn(*args, **kwargs)
+    finally:
+        reset_public(token)
     return spanish, english
 
 
@@ -330,7 +335,7 @@ PUBLIC_TEXT_FUNCTIONS = {
     "user_product/basic_service.py": {"get_financial_calendar"},
     "goals/strategy.py": {"build_goal_portfolio"},
 }
-LOCALIZERS = {"tx", "localized", "plural"}
+LOCALIZERS = {"tx", "localized", "plural", "voice"}
 # Canonical values compared or stored (not copy): debt keywords, category names,
 # and the director mode labels, which are English in both languages (shared
 # JARVIS vocabulary; DINCR renders mode_reason/priority, never the label).
@@ -372,3 +377,33 @@ def test_public_narrative_is_localized():
     problems = [problem for relative, functions in PUBLIC_TEXT_FUNCTIONS.items()
                 for problem in _unlocalized_strings(relative, functions)]
     assert problems == []
+
+
+# --- Owner voice stays in Owner ------------------------------------------------
+
+OWNER_PERSONA = re.compile(r"\bSeñor\b|Doctor Strange|\bJARVIS\b|\bSir\b")
+
+
+def test_owner_voice_never_reaches_public_users(monkeypatch):
+    rows = [dict(DEBTS[0], debt_type="credit_card")]
+
+    class Conn:
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def execute(self, *_a, **_k): return SimpleNamespace(fetchall=lambda: [dict(r) for r in rows])
+
+    monkeypatch.setattr(intelligence, "get_current_workspace_id", lambda: "w")
+    monkeypatch.setattr(intelligence, "get_real_availability", lambda: {})
+    monkeypatch.setattr(intelligence, "get_connection", lambda: Conn())
+    public_es, public_en = in_both(intelligence.get_debt_advisory, extra_cash=150_000)
+    for text in texts(public_es) + texts(public_en):
+        assert not OWNER_PERSONA.search(text), text
+    # DINCR Owner routes keep the original assistant voice.
+    with use_language("es"):
+        owner = intelligence.get_debt_advisory(extra_cash=150_000)
+    assert owner["message"].startswith("Señor, ")
+
+    action = {"type": "debt", "title": "Abonar a Tarjeta BAC", "why": "Doctor Strange comparó las rutas posibles.", "amount": 1}
+    public_es, public_en = in_both(localized_action, action)
+    assert not OWNER_PERSONA.search(public_es[1]) and not OWNER_PERSONA.search(public_en[1])
+    assert public_es == ("Abonar a Tarjeta BAC", "Es la deuda prioritaria de tu estrategia actual.")

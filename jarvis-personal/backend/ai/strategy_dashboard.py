@@ -8,7 +8,7 @@ from typing import Any
 
 from backend.auth.current_user import get_current_user, get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
-from backend.core.i18n import tx
+from backend.core.i18n import tx, voice
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.fixed_expenses import get_fixed_expense_status
@@ -1090,10 +1090,13 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     mode_label = director.get("mode_label") or tx("PROTECCIÓN DE CAJA", "CASH PROTECTION")
     status = "critical" if no_free_cash else ("controlled" if total_debt > 0 else "strong")
     objective = (
-        tx("Señor, este ciclo no tiene sobrante real. Primero cubra obligaciones y gastos registrados.",
-           "This cycle has no real surplus. Cover obligations and recorded expenses first.")
+        voice("Señor, este ciclo no tiene sobrante real. Primero cubra obligaciones y gastos registrados.",
+              "Este ciclo no tiene sobrante real. Primero cubrí obligaciones y gastos registrados.",
+              "This cycle has no real surplus. Cover obligations and recorded expenses first.")
         if no_free_cash
-        else tx(f"Señor, modo {mode_label}: {director.get('mode_reason')}", f"{mode_label} mode: {director.get('mode_reason')}")
+        else voice(f"Señor, modo {mode_label}: {director.get('mode_reason')}",
+                   f"Modo {mode_label}: {director.get('mode_reason')}",
+                   f"{mode_label} mode: {director.get('mode_reason')}")
     )
 
     priority = _build_current_priority(

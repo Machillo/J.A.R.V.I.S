@@ -20,6 +20,7 @@ DEFAULT_LANGUAGE = "es"
 LOCALIZED_PATH_PREFIXES = ("/user-product/", "/auth/", "/product-ops/")
 
 _language: ContextVar[str] = ContextVar("dincr_response_language", default=DEFAULT_LANGUAGE)
+_public: ContextVar[bool] = ContextVar("dincr_public_request", default=False)
 
 
 def resolve_language(accept_language: str | None) -> str:
@@ -33,6 +34,18 @@ def language_for_request(path: str, accept_language: str | None) -> str:
     if not str(path or "").startswith(LOCALIZED_PATH_PREFIXES):
         return DEFAULT_LANGUAGE
     return resolve_language(accept_language)
+
+
+def is_public_path(path: str) -> bool:
+    return str(path or "").startswith(LOCALIZED_PATH_PREFIXES)
+
+
+def set_public(public: bool) -> Token:
+    return _public.set(bool(public))
+
+
+def reset_public(token: Token) -> None:
+    _public.reset(token)
 
 
 def set_language(language: str) -> Token:
@@ -60,6 +73,15 @@ def use_language(language: str) -> Iterator[None]:
 def tx(spanish: str, english: str) -> str:
     """Pick the copy for the current response language."""
     return english if _language.get() == "en" else spanish
+
+
+def voice(owner: str, spanish: str, english: str) -> str:
+    """Owner/JARVIS keeps its personal assistant voice; DINCR users get neutral copy.
+
+    Shared engines serve both products. Outside the public DINCR routes the
+    Owner text is returned unchanged.
+    """
+    return tx(spanish, english) if _public.get() else owner
 
 
 def plural(count: float | int, singular: tuple[str, str], many: tuple[str, str]) -> str:
