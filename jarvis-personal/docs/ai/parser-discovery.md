@@ -4,7 +4,9 @@
 
 Gemini (`google-genai`, `backend/ai/gemini_client.py`) was used **only by Owner/JARVIS**, never by Users (Free/Basic/VIP) or by ingestion. It served as:
 
-| Call site | Before | Now |
+> **Superseded (#232, 2026-09-24):** the OpenAI call sites in the "After #212" column were removed too. The Owner assistant, intent router, formatter, internet and sports answers are now deterministic, and no module of the application can reach a generative-AI provider (`backend/test_no_generative_ai.py`). Parser discovery below is the only remaining AI use; it is local, offline developer tooling.
+
+| Call site | Before | After #212 |
 |---|---|---|
 | `ai/jarvis_engine.py` internet answer | Gemini, falling back to the first snippet | OpenAI (`ask_openai_optional`), falling back to the first snippet |
 | `ai/jarvis_engine.py` finance chat | OpenAI → Gemini fallback | OpenAI only. On failure it returns the existing `AI_ERROR` message |
