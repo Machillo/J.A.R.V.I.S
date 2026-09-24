@@ -62,7 +62,9 @@ def excess_savings_opportunity(snapshot: dict, apr_threshold: float | None = Non
     if threshold is None or emergency_target <= 0:
         return None  # rule not approved, or target unknown: unknown is not zero
     savings = _money(snapshot.get("liquid_savings"))
-    excess = round(max(savings - emergency_target, 0), 2)
+    # liquid_savings may already hold money set aside for goals: it is not excess.
+    reserved_for_goals = round(sum(_money(g.get("current_amount")) for g in snapshot.get("goals", [])), 2)
+    excess = round(max(savings - emergency_target - reserved_for_goals, 0), 2)
     eligible = [
         d for d in snapshot.get("debts", [])
         if _money(d.get("remaining_amount")) > 0 and d.get("interest_rate") is not None and float(d["interest_rate"]) >= threshold
@@ -76,11 +78,11 @@ def excess_savings_opportunity(snapshot: dict, apr_threshold: float | None = Non
         "type": "one_time_extra_payment", "source": "excess_savings", "optional": True, "executes": False,
         "debt_id": target.get("id"), "debt_name": target.get("name"), "interest_rate": rate,
         "amount": amount, "excess_savings": excess, "emergency_fund_target": emergency_target,
-        "savings_after": round(savings - amount, 2), "apr_threshold": threshold,
+        "savings_after": round(savings - amount, 2), "reserved_for_goals": reserved_for_goals, "apr_threshold": threshold,
         "label": tx(f"Opcional: abono único a {target['name']} con ahorro excedente", f"Optional: one-time payment to {target['name']} from excess savings"),
         "explanation": tx(
-            f"Tu ahorro supera tu fondo de emergencia objetivo por {excess:.2f}. Podrías usar hasta {amount:.2f} de ese excedente para abonar a {target['name']} ({rate:g}% anual). Tu fondo de emergencia quedaría completo. Es una sugerencia: DINCR no mueve dinero.",
-            f"Your savings exceed your emergency fund target by {excess:.2f}. You could use up to {amount:.2f} of that excess toward {target['name']} ({rate:g}% annual). Your emergency fund would stay complete. This is a suggestion: DINCR does not move money.",
+            f"Tu ahorro supera tu fondo de emergencia objetivo por {excess:.2f}. Podrías usar hasta {amount:.2f} de ese excedente para abonar a {target['name']} ({rate:g}% anual). Tu fondo de emergencia y el ahorro de tus metas quedarían intactos. Antes de abonar, consultá con tu entidad posibles comisiones por pago anticipado; un abono a un préstamo no se puede revertir. Es una sugerencia: DINCR no mueve dinero.",
+            f"Your savings exceed your emergency fund target by {excess:.2f}. You could use up to {amount:.2f} of that excess toward {target['name']} ({rate:g}% annual). Your emergency fund and your goal savings would stay intact. Before paying, check with your lender for early-payment fees; a loan prepayment cannot be undone. This is a suggestion: DINCR does not move money.",
         ),
     }
 
@@ -115,6 +117,7 @@ def build_basic_strategy(snapshot: dict, extra_monthly: float = 0) -> dict:
             "strategic_margin": 0, "allocations": [], "target_debt": None,
             "recommendation": tx("Completá tus ingresos para que DINCR pueda construir una estrategia mensual.", "Add your income so DINCR can build a monthly strategy."),
             "warnings": [tx("No hay un ingreso mensual estimable.", "There is no estimable monthly income.")], "projection": None,
+            "optional_actions": [],
         }
 
     if snapshot.get("essential_monthly_expenses") is None:
@@ -144,6 +147,8 @@ def build_basic_strategy(snapshot: dict, extra_monthly: float = 0) -> dict:
                 f"Your known commitments exceed estimated income by {deficit:.2f}. Prioritize essential needs and required payments before making extra payments.",
             ),
             "warnings": warnings, "projection": None,
+            # No optional use of savings while the month itself is in deficit.
+            "optional_actions": [],
         }
 
     available = round(base_margin + extra_monthly, 2)
@@ -192,14 +197,27 @@ def build_basic_strategy(snapshot: dict, extra_monthly: float = 0) -> dict:
             amount = round(min(available, gap), 2)
             allocations.append({"bucket": "goal", "label": tx(f"Meta: {goal['name']}", f"Goal: {goal['name']}"), "amount": amount, "goal_id": goal.get("id")})
             available = round(available - amount, 2)
-        if available > 0:
+        essentials_known = snapshot.get("essential_monthly_expenses") is not None
+        if available > 0 and essentials_known:
             allocations.append({"bucket": "wealth_building", "label": tx("Construcción de patrimonio", "Wealth building"), "amount": available})
+        elif available > 0:
+            # Unknown essentials: the margin may be overstated, so it stays unassigned.
+            allocations.append({"bucket": "flex", "label": tx("Margen por confirmar", "Margin to confirm"), "amount": available})
         if not fund_complete:
-            recommendation = tx("No tenés deuda activa. Usá el margen disponible para completar tu fondo de emergencia.", "You have no active debt. Use the available margin to complete your emergency fund.")
+            recommendation = tx(
+                "No tenés deuda activa. Completá primero tu fondo de emergencia; lo que supere lo que le falta va a tus metas o a construir patrimonio.",
+                "You have no active debt. Complete your emergency fund first; anything beyond what it still needs goes to your goals or to building wealth.",
+            )
             priority = "emergency"
         elif ordered_goals:
             recommendation = tx("Sin deudas y con tu fondo de emergencia completo: dirigí el margen a tus metas activas.", "No debt and your emergency fund is complete: direct the margin to your active goals.")
             priority = "goals"
+        elif not essentials_known:
+            recommendation = tx(
+                "Sin deudas y con tu fondo de emergencia en su objetivo. Completá tus gastos esenciales para confirmar que ese objetivo alcanza antes de construir patrimonio.",
+                "No debt and your emergency fund is at its target. Add your essential expenses to confirm that target is enough before building wealth.",
+            )
+            priority = "complete_profile"
         else:
             recommendation = tx(
                 "Sin deudas, con tu fondo de emergencia completo y sin metas pendientes: podés destinar el margen a construir patrimonio de largo plazo, según tu horizonte y tolerancia al riesgo.",
@@ -216,7 +234,7 @@ def build_basic_strategy(snapshot: dict, extra_monthly: float = 0) -> dict:
         "target_debt": target, "recommendation": recommendation, "warnings": warnings,
         "projection": projection, "simulation_extra": extra_monthly,
         # P2: separate from the monthly allocations above; never executed by DINCR.
-        "optional_actions": [action] if (action := excess_savings_opportunity(snapshot)) else [],
+        "optional_actions": [action] if base_margin > 0 and (action := excess_savings_opportunity(snapshot)) else [],
     }
 
 

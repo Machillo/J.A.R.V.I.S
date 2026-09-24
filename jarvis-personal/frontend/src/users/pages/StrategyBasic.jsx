@@ -33,6 +33,7 @@ const priorityLabel = {
   emergency: copy("Construir seguridad", "Build financial security"),
   goals: copy("Avanzar tus metas", "Advance your goals"),
   wealth_building: copy("Construir patrimonio", "Build long-term wealth"),
+  complete_profile: copy("Completar tus datos", "Complete your details"),
 };
 
 export default function StrategyBasic({ plan = "basic" }) {
@@ -69,7 +70,7 @@ export default function StrategyBasic({ plan = "basic" }) {
       <div className="basic-strategy-order">
         <article><header><strong>1 · {copy("Gastos esenciales","Essential expenses")}</strong><b>{money(data.essential_expenses)}</b></header><span>{covered?copy("Cubierto","Covered"):copy("Prioridad","Priority")}</span></article>
         <article><header><strong>2 · {copy("Deudas","Debts")}</strong><b>{money(data.minimum_debt_payments)}</b></header><span>{copy("Planificado","Planned")}</span></article>
-        {basicAllocations.slice(0,2).map((allocation,index)=><article key={`${allocation.bucket}-${index}`}><header><strong>{index+3} · {allocation.label}</strong><b>{money(allocation.amount)}</b></header><span>{copy("Sugerido","Suggested")}</span></article>)}
+        {basicAllocations.map((allocation,index)=><article key={`${allocation.bucket}-${index}`}><header><strong>{index+3} · {allocation.label}</strong><b>{money(allocation.amount)}</b></header><span>{copy("Sugerido","Suggested")}</span></article>)}
       </div>
       <article className="basic-strategy-note">{copy("Basic guía la organización del mes. Las proyecciones y escenarios dinámicos pertenecen a VIP.","Basic guides monthly organization. Dynamic projections and scenarios belong to VIP.")}</article>
     </section>;

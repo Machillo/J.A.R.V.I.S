@@ -88,7 +88,7 @@ def assert_basic_invariants(snapshot, result, extra=0):
         gap = max(se._money(snapshot["emergency_fund_target"]) - se._money(snapshot["liquid_savings"]), 0)
         emergency = sum(a["amount"] for a in result["allocations"] if a["bucket"] == "emergency")
         assert emergency <= gap + TOLERANCE, "never allocate beyond the real emergency gap"
-    for action in result.get("optional_actions", []):
+    for action in result["optional_actions"]:
         assert action["source"] == "excess_savings" and action["optional"] is True and action["executes"] is False
     target = result["target_debt"]
     if target:
@@ -412,6 +412,55 @@ def test_p1_language_never_changes_decisions_or_numbers(savings, goals):
     assert es == en
 
 
+def test_p1_starter_reserve_plus_fund_never_exceeds_the_gap():
+    # Savings below 10% of income: the starter reserve and the fund line together fill exactly the gap.
+    snapshot = profile(1_500_000, 600_000, 50_000, 400_000, goals=[GOAL])
+    result = se.build_basic_strategy(snapshot)
+    emergency = [a["amount"] for a in result["allocations"] if a["bucket"] == "emergency"]
+    assert emergency == [100_000, 250_000] and sum(emergency) == 350_000
+    assert next(a for a in result["allocations"] if a["bucket"] == "goal")["amount"] == 550_000
+
+
+def test_p1_money_runs_out_across_several_goals_in_priority_order():
+    goals = [goal(3, 300_000, 0, "low"), goal(1, 500_000, 0, "critical", "2027-01-31"), goal(2, 400_000, 100_000, "high")]
+    result = se.build_basic_strategy(_no_debt(2_000_000, goals=goals))
+    assert [(a["bucket"], a.get("goal_id"), a["amount"]) for a in result["allocations"]] == [
+        ("goal", 1, 500_000), ("goal", 2, 300_000), ("goal", 3, 100_000)], "no wealth line until every goal is funded"
+
+
+def test_p1_extra_monthly_simulation_follows_the_same_order():
+    result = se.build_basic_strategy(_no_debt(1_000_000, goals=[GOAL]), extra_monthly=100_000)
+    assert [(a["bucket"], a["amount"]) for a in result["allocations"]] == [("emergency", 800_000), ("goal", 200_000)]
+
+
+@pytest.mark.parametrize("name", PROFILES)
+def test_p1_goal_lines_are_capped_and_wealth_comes_last(name):
+    snapshot = PROFILES[name]
+    result = se.build_basic_strategy(snapshot)
+    gaps = {g["id"]: g["target_amount"] - g["current_amount"] for g in snapshot["goals"]}
+    for line in result["allocations"]:
+        if line["bucket"] == "goal":
+            assert line["amount"] <= gaps[line["goal_id"]] + TOLERANCE
+    if any(a["bucket"] == "wealth_building" for a in result["allocations"]):
+        funded = {a["goal_id"]: a["amount"] for a in result["allocations"] if a["bucket"] == "goal"}
+        assert all(abs(funded.get(gid, 0) - gap) <= TOLERANCE for gid, gap in gaps.items() if gap > 0)
+
+
+def test_p1_unknown_essentials_never_become_long_term_money():
+    snapshot = {**_no_debt(2_000_000), "essential_monthly_expenses": None}
+    result = se.build_basic_strategy(snapshot)
+    assert result["priority"] == "complete_profile"
+    assert all(a["bucket"] != "wealth_building" for a in result["allocations"])
+    assert [a["bucket"] for a in result["allocations"]] == ["flex"]
+    with_goal = se.build_basic_strategy({**snapshot, "goals": [GOAL]})
+    assert with_goal["priority"] == "goals" and all(a["bucket"] != "wealth_building" for a in with_goal["allocations"])
+
+
+def test_every_status_returns_optional_actions():
+    for snapshot in (profile(0, 100, 0, 1_000), PROFILES["over_indebted"], PROFILES["no_debt"]):
+        assert se.build_basic_strategy(snapshot)["optional_actions"] == []
+
+
 # --- P2: excess savings vs. very expensive debt (optional recommendation) ---
 # The approved threshold does not exist yet (HUMAN GATE). These tests exercise the
 # rule with an explicit test-only threshold; production keeps it disabled.
@@ -481,6 +530,29 @@ def test_p2_does_not_mutate_the_snapshot_or_monthly_allocations(monkeypatch):
     assert (action["source"], action["optional"], action["executes"], action["type"]) == ("excess_savings", True, False, "one_time_extra_payment")
     assert all("source" not in a for a in with_rule["allocations"]), "clearly separate from the monthly margin"
     assert se.build_vip_strategy(snapshot)["optional_actions"] == with_rule["optional_actions"]
+
+
+def test_p2_money_already_set_aside_for_goals_is_not_excess():
+    goals = [goal(1, 900_000, 300_000), goal(2, 500_000, 100_000)]
+    snapshot = {**_p2(2_300_000, [EXPENSIVE]), "goals": goals}
+    action = se.excess_savings_opportunity(snapshot, TEST_THRESHOLD)
+    assert action["reserved_for_goals"] == 400_000
+    assert action["excess_savings"] == 100_000 and action["amount"] == 100_000
+    assert se.excess_savings_opportunity({**snapshot, "liquid_savings": 2_200_000}, TEST_THRESHOLD) is None
+
+
+def test_p2_is_not_offered_when_the_month_is_tight_or_critical(monkeypatch):
+    monkeypatch.setattr(se, "HIGH_COST_DEBT_APR_THRESHOLD", TEST_THRESHOLD)
+    tight = profile(670_000, 600_000, 3_000_000, 1_800_000, [EXPENSIVE])  # margin exactly 0
+    critical = profile(600_000, 600_000, 3_000_000, 1_800_000, [EXPENSIVE])
+    assert se.build_basic_strategy(tight)["status"] == "tight"
+    assert se.build_basic_strategy(tight)["optional_actions"] == []
+    assert se.build_basic_strategy(critical)["optional_actions"] == []
+
+
+def test_p2_copy_warns_about_irreversibility_and_fees():
+    text = se.excess_savings_opportunity(_p2(2_300_000, [EXPENSIVE]), TEST_THRESHOLD)["explanation"]
+    assert "no se puede revertir" in text and "comisiones" in text and "DINCR no mueve dinero" in text
 
 
 def test_p2_unknown_target_never_creates_an_excess():

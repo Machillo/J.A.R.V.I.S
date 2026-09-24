@@ -61,17 +61,19 @@ They are encoded as `xfail(strict=True)` tests. They start failing ("XPASS") if 
     - `wealth_building` otherwise.
   - The wealth-building text names no product, instrument or return.
   - An unknown target (None/0) keeps the previous behavior: DINCR cannot know the fund is complete, and unknown is not zero.
+  - Unknown essential expenses never produce a `wealth_building` line. The remainder stays as "margin to confirm" (`flex`), and with no goals the priority is `complete_profile`.
   - Debt logic is untouched: with any active debt the priority stays `debt`.
   - VIP inherits the priority from Basic, and its emergency line was already capped at the gap.
   - Pinned profiles that changed on purpose: `healthy_emergency_fund` and `wealth_building_ready` (→ `wealth_building`), `good_saver` and `stable` (→ `goals`). No other profile changed.
 - **P2: savings far above the target never pay expensive debt. INFRASTRUCTURE IMPLEMENTED, DISABLED (HUMAN GATE).**
-  - `excess_savings_opportunity` computes `excess_savings = max(liquid_savings − emergency_fund_target, 0)`. It considers only active debts with a **known** APR ≥ `HIGH_COST_DEBT_APR_THRESHOLD`.
+  - `excess_savings_opportunity` computes `excess_savings = max(liquid_savings − emergency_fund_target − Σ goals.current_amount, 0)`. Money already set aside for goals is never excess.
+  - It is offered only when the month's margin is positive (not `tight`, `critical` or `needs_income`). The copy warns about early-payment fees and that a loan prepayment cannot be undone. It considers only active debts with a **known** APR ≥ `HIGH_COST_DEBT_APR_THRESHOLD`.
   - It picks the debt with the existing deterministic debt score (known rate, highest rate, earliest due day, smaller balance, oldest record) and proposes `min(excess_savings, remaining_amount)`.
   - The result goes to a separate `optional_actions` list with `source="excess_savings"`, `optional=True`, `executes=False`. The monthly `allocations` never change.
   - Savings after the suggestion are always ≥ the target, and an unknown target never produces an excess.
   - DINCR never moves money, edits debts or registers payments from this rule.
 
-### P2 threshold decision (Kenneth / ChatGPT)
+### P2 threshold decision (human approval: Kenneth)
 
 `HIGH_COST_DEBT_APR_THRESHOLD` is `None` in `backend/user_product/strategy_engine.py`, so P2 never fires in production. Its test (`test_p2_is_active_for_expensive_debt_with_excess_savings_in_production`) is strict-xfail until the decision is made.
 
@@ -88,8 +90,16 @@ None of these values was approved for **using existing savings**, which is a dif
 Decision needed:
 1. the APR value for "very expensive debt" in this rule (reuse the 10 % "deuda cara" classification, or pick a stricter one such as 20–25 %);
 2. inclusive at the value (as implemented) or not;
-3. whether the rule should wait until the monthly strategy is not `critical` (today it is computed independently);
+3. whether the rule should also require fixed/stable income or an extra buffer for variable income, and whether card and installment debt should be treated differently. Today it requires a positive monthly margin and excludes goal savings;
 4. the UI placement of the optional suggestion. The Basic/VIP screens do not render `optional_actions` yet, so a screen change is needed when the rule is activated.
+
+The DINCR Finance review suggests defining the threshold relative to a reference (deposit rates or inflation), versioning it, and checking CRC vs USD debts separately. 10 % would also catch moderate-cost vehicle and personal loans; 20–25 % matches the "high cost" band (cards, unsecured consumer loans).
+
+### P1/P2 follow-ups (human decisions, not implemented)
+- **Goal funding policy.** Goals are funded fully one after another. Alternative: pay each dated goal its required monthly amount first (`_goal_monthly_need` exists), then split the rest.
+- **VIP allocations.** VIP inherits the Basic priority, but its weights still send the no-debt share to `flex` and have no `wealth_building` line.
+- **Hysteresis and reason codes** for the switch at `savings >= target`.
+- **Planned short-term expenses** (marchamo, school, holidays) are not modeled, so they can land in `wealth_building`.
 
 Once decided, set the constant, flip the xfail test to a normal test, add −ε/=/+ε boundary tests at the approved value, and render the suggestion.
 - **P3: the engine has no input for illiquid assets or income volatility.**
