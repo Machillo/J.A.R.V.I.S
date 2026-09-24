@@ -4,11 +4,10 @@ import { getBillingCatalog, getMe, getPlans, selectPlan } from "../services/jarv
 import AccountSecurity from "../components/AccountSecurity";
 import AppearanceSelector from "../../components/AppearanceSelector";
 import AppLockSettings from "../components/AppLockSettings";
-import { deviceLanguage } from "../../lib/locale";
+import { codeLabel, deviceLanguage } from "../../lib/locale";
 import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
 import AccountActions from "../../products/finva/components/AccountActions";
 import { confirmedPlanProfile } from "../../lib/planSelection";
-import { planDisplayName } from "../../lib/planCopy";
 import { identifyTelemetryUser, trackEvent } from "../../lib/telemetry";
 import LegalLink from "../../components/LegalLink";
 const language = deviceLanguage();
@@ -125,7 +124,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
           {currentPlan === "vip" ? <Crown size={24} /> : currentPlan === "basic" ? <Sparkles size={24} /> : <WalletCards size={24} />}
         </div>
         <div className="current-plan-copy">
-          <strong>{currentPlanInfo?.name || planDisplayName(currentPlan, currentPlan.toUpperCase())}</strong>
+          <strong>{currentPlanInfo?.name || codeLabel("plans", currentPlan)}</strong>
           <span>{currentPlanInfo?.tagline || tx("Plan personal DINCR", "DINCR personal plan")}</span>
         </div>
         <span className="plan-status-pill">{tx("Actual","Current")}</span>

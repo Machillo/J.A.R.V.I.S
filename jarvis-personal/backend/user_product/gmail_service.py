@@ -31,6 +31,7 @@ from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import resolve_candidate, reevaluate_workspace_candidates
 from backend.user_product import mail_oauth
+from backend.user_product.mail_copy import localized_parse_reason
 from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
 from backend.user_product.gmail_retention import apply_gmail_retention, retention_policy
 from backend.user_product.payroll_income import identify_received_payroll, link_received_payroll
@@ -301,7 +302,9 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
                 LIMIT 200""",
             tuple(params),
         ).fetchall()
-    return {"status": "ok", "items": [dict(row) for row in rows]}
+    return {"status": "ok", "items": [
+        {**dict(row), "parse_reason": localized_parse_reason(row.get("parse_reason"))} for row in rows
+    ]}
 
 
 def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any]) -> int:

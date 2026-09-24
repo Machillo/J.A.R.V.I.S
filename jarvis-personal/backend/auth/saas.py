@@ -7,11 +7,19 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.i18n import tx
 
 PLAN_COPY = {
     "free": {"name": "Gratis", "tagline": "Organizá y entendé tus números.", "features": ["Resumen financiero", "Ingresos y gastos", "Deudas", "Metas", "Transacciones", "Horas extra"]},
     "basic": {"name": "Basic", "tagline": "DINCR organiza y guía tu mes.", "features": ["Todo Gratis", "Dashboard completo", "Presupuesto guiado", "Deudas y metas completas", "Calendario", "Recurrentes", "Reportes"]},
     "vip": {"name": "VIP", "tagline": "Una estrategia más completa con información que vos autorizás.", "features": ["Todo Basic", "Estrategia dinámica, proyecciones y escenarios", "Con tu permiso, detecta avisos financieros en correos compatibles para que revisés movimientos y mantengás al día tus cuentas y deudas", "Estimación del aguinaldo si DINCR detecta órdenes patronales de la CCSS en un correo conectado"]},
+}
+# English copy for the same plans (Accept-Language: en). PLAN_COPY stays the
+# canonical catalog used for validation.
+PLAN_COPY_EN = {
+    "free": {"name": "Free", "tagline": "Organize and understand your numbers.", "features": ["Financial summary", "Income and expenses", "Debts", "Goals", "Transactions", "Overtime"]},
+    "basic": {"name": "Basic", "tagline": "DINCR organizes and guides your month.", "features": ["Everything in Free", "Full dashboard", "Guided budget", "Full debts and goals", "Calendar", "Recurring items", "Reports"]},
+    "vip": {"name": "VIP", "tagline": "A more complete strategy with information you authorize.", "features": ["Everything in Basic", "Dynamic strategy, projections, and scenarios", "With your permission, it detects financial notices in supported emails so you can review transactions and keep your accounts and debts up to date", "Annual bonus (aguinaldo) estimate if DINCR detects CCSS employer statements in a connected email"]},
 }
 PLAN_RANK = {"free": 1, "basic": 2, "vip": 3}
 BUILTIN_FEATURE_MIN_PLAN = {
@@ -242,7 +250,7 @@ def get_available_plans():
     promotion = launch_promotion_status()
     return [{
         "code": row["code"],
-        **PLAN_COPY[row["code"]],
+        **tx(PLAN_COPY[row["code"]], PLAN_COPY_EN[row["code"]]),
         "regular_price_crc": (PRICES.get(row["code"]) or {}).get("regular", 0),
         "promotion": promotion if row["code"] in {"basic", "vip"} else None,
     } for row in rows]

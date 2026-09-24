@@ -1,7 +1,6 @@
 import { API_URL } from "../lib/apiUrl";
 import { authenticatedFetch } from "../lib/authenticatedFetch";
 import { apiError } from "../lib/apiErrors";
-import { localizePlan } from "../lib/planCopy";
 
 const OWNER_BRIDGE_STORAGE_KEY = "jarvis-owner-bridge-token";
 
@@ -234,7 +233,7 @@ export const getManagedUsers = (search = "") => request(`/users-admin/users${sea
 export const grantCourtesySubscription = (userId, payload) => jsonRequest(`/users-admin/users/${userId}/courtesy`, "POST", payload);
 export const revokeCourtesySubscription = (userId) => request(`/users-admin/users/${userId}/courtesy`, { method: "DELETE" });
 
-export const getPlans = () => request("/auth/plans").then((rows) => Array.isArray(rows) ? rows.map((row) => localizePlan(row)) : rows);
+export const getPlans = () => request("/auth/plans");
 export const selectPlan = (plan, accept_beta_terms = false) => jsonRequest("/auth/plan", "POST", { plan, accept_beta_terms, consent_version: "beta-2026-01-v1" });
 export const getBillingCatalog = () => request("/product-ops/billing/catalog");
 export const uploadPaymentReceipt = (orderId, file) => {
