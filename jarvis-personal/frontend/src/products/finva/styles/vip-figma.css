@@ -75,7 +75,14 @@ body:has(.native-product--finva.native-plan--vip){background:var(--vip-bg)}
 .native-product--finva.native-plan--vip .native-bottom-nav>button{min-height:44px;padding:3px 2px;border:0;border-radius:0;background:var(--vip-surface);color:var(--vip-muted)}
 .native-product--finva.native-plan--vip .native-bottom-nav>button::before{display:none}
 .native-product--finva.native-plan--vip .native-bottom-nav>button.active{background:var(--vip-surface);color:var(--vip-violet)}
-.native-product--finva.native-plan--vip .native-nav-icon{min-height:22px}.native-product--finva.native-plan--vip .native-nav-icon svg{width:20px;height:20px}.native-product--finva.native-plan--vip .native-nav-label{font-size:10px;font-weight:650}
+.native-product--finva.native-plan--vip .native-nav-icon{min-height:22px}.native-product--finva.native-plan--vip .native-nav-icon svg{width:20px;height:20px}.native-product--finva.native-plan--vip .native-nav-label{font-size:var(--finva-nav-label-size);font-weight:650;letter-spacing:-.01em}
 html[data-color-mode-resolved="light"] .native-product--finva.native-plan--vip,html[data-theme="light"] .native-product--finva.native-plan--vip{color-scheme:dark;background:var(--vip-bg)}
 @media(max-width:390px){.native-product--finva.native-plan--vip .mobile-content{padding-inline:14px}.native-product--finva.native-plan--vip .native-bottom-nav{width:calc(100% - 20px)}}
 @media(prefers-reduced-motion:reduce){.native-product--finva.native-plan--vip .vip-loading>div{animation:none}}
+/* PremiumStrategy reuses the Owner disclosure component; give it the DINCR palette. */
+.native-product--finva .jarvis-disclosure{--jarvis-line:var(--vip-border,#1a2945);--jarvis-radius:18px;--jarvis-surface:var(--vip-surface,#0b1726);--jarvis-secondary:var(--vip-violet,#9c7aff);--jarvis-text:var(--vip-text,#f7fbff);--jarvis-text-3:var(--vip-muted,#9eb0c4)}
+/* Long goal/debt names and English labels wrap instead of being cut with "…". */
+.native-product--finva.native-plan--vip .vip-screen-header{height:auto;min-height:60px}
+.native-product--finva.native-plan--vip .vip-screen-header>div{height:auto;min-height:58px;padding-block:6px}
+.native-product--finva.native-plan--vip .vip-screen-header h1{white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.native-product--finva.native-plan--vip .vip-data-row span{white-space:normal;overflow:visible;line-height:1.3;padding-block:6px}

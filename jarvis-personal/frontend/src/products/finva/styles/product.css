@@ -1,3 +1,6 @@
+/* One bottom-navigation label size for every plan: it shrinks on narrow phones
+   so "Movimientos"/"Transactions" fit five tabs at 320-360px instead of being cut. */
+.native-product--finva{--finva-nav-label-size:clamp(8.5px,2.55vw,10px)}
 .native-product--finva {
   --native-accent: #5d58f4;
   --native-accent-2: #21d2bd;
