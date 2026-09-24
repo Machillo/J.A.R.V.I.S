@@ -72,7 +72,6 @@ PUBLIC_PATHS = {
     "/status",
     "/product-ops/release-policy",
     "/auth/health",
-    "/auth/check-access",
     "/email-monitor/cron",
     "/email-monitor/gmail-watch",
     "/email-monitor/gmail-push",

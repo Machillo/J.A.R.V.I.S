@@ -12,7 +12,7 @@ import { MAIL_OAUTH_RETURN_EVENT, captureMailOAuthReturns, redeemPendingMailOAut
 import { supabase } from "../lib/supabase";
 import { trackScreen } from "../lib/telemetry";
 import { tx } from "../lib/locale";
-import { flushPendingOperations, getPendingOperationCount } from "../lib/operationRecovery";
+import { flushPendingOperations, getPendingOperationCount, prepareLogout } from "../lib/operationRecovery";
 import "./users.css";
 import "./finva-theme.css";
 import "./finva-progressive.css";
@@ -124,7 +124,7 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
     document.addEventListener("visibilitychange", visible);
     return () => { active=false;window.clearInterval(interval);window.removeEventListener("online",refresh);document.removeEventListener("visibilitychange",visible); };
   }, []);
-  const logout = () => supabase.auth.signOut({ scope: "local" });
+  const logout = async () => { if (await prepareLogout()) await supabase.auth.signOut({ scope: "local" }); };
   const pages = createFinvaFeatureRegistry({ user, plan, navigate, onUserChange, onLogout: logout, featureFlags });
   const freeTitles = {
     overview: tx("Hola", "Hello") + `, ${(user?.display_name || user?.email || tx("bienvenido", "welcome")).split(" ")[0]}`,

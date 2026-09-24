@@ -19,7 +19,8 @@ EXPORT_FORMAT_VERSION = 1
 MAX_ROWS_PER_TABLE = 20000
 # Columns that reference secrets or internal infrastructure, not user data.
 EXCLUDED_COLUMNS = {"refresh_token_secret_id", "history_id", "watch_expiration", "initial_scan_page_token"}
-EXCLUDED_TABLES = {"accounts", "workspaces"}
+# Internal machinery, not user data: pending OAuth flows and request idempotency records.
+EXCLUDED_TABLES = {"accounts", "workspaces", "mail_oauth_flows", "operation_idempotency"}
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 

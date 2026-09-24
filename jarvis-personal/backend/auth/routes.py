@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Request
 from backend.product_ops.posthog_events import capture_backend_event
 
-from backend.auth.models import AllowedUserRequest, CheckAccessRequest, LegalAcceptanceRequest, PlanSelectionRequest, ProfileSetupRequest, UnifiedOnboardingRequest
+from backend.auth.models import AllowedUserRequest, LegalAcceptanceRequest, PlanSelectionRequest, ProfileSetupRequest, UnifiedOnboardingRequest
 from backend.auth.legal import accept_legal_documents
 from backend.auth.data_export import export_current_account_data
 from backend.auth.service import (
@@ -9,7 +9,6 @@ from backend.auth.service import (
     create_allowed_user,
     delete_allowed_user,
     delete_current_account,
-    check_user_access,
 )
 from backend.auth.current_user import get_current_user, require_roles
 from backend.auth.saas import complete_onboarding, complete_profile_setup, enrich_identity, get_available_plans, get_onboarding_status, select_plan
@@ -49,11 +48,6 @@ def add_allowed_user(request: AllowedUserRequest):
 def remove_allowed_user(user_id: int):
     require_roles("owner", "admin")
     return delete_allowed_user(user_id)
-
-
-@router.post("/check-access")
-def check_access(request: CheckAccessRequest):
-    return check_user_access(request.email)
 
 
 @router.get("/me")

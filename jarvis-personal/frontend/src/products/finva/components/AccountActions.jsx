@@ -4,6 +4,7 @@ import { tx } from "../../../lib/locale";
 import { deleteMyAccount, exportMyData } from "../../../users/services/jarvisApi";
 import { saveDataExport } from "../../../lib/dataExport";
 import { trackEvent } from "../../../lib/telemetry";
+import { clearPendingOperations } from "../../../lib/operationRecovery";
 
 export default function AccountActions({ onLogout, variant = "free" }) {
   const [confirming, setConfirming] = useState(false);
@@ -32,6 +33,8 @@ export default function AccountActions({ onLogout, variant = "free" }) {
     setError("");
     try {
       await deleteMyAccount();
+      // The account no longer exists: queued writes can never sync, so drop them silently.
+      clearPendingOperations();
       await onLogout?.();
     } catch (requestError) {
       trackEvent("account_deletion_failed");

@@ -629,6 +629,11 @@ def create_feedback(payload):
     return {**row, "public_id": public_id, "email_sent": email_sent, "discord_sent": discord_sent}
 
 
+# Client-reported incidents are untrusted input: one account may alert support at
+# most this many times per hour (the incident itself is always recorded).
+AUTOMATIC_ALERTS_PER_ACCOUNT_HOUR = 5
+
+
 def create_automatic_incident(payload):
     user = get_current_user()
     safe_path = _sanitize_incident_path(payload.path)
@@ -650,6 +655,15 @@ def create_automatic_incident(payload):
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
             (f"{user['account_id']}:{fingerprint}",),
         )
+        # Serialize the budget per account and count only incidents that actually
+        # alerted, so a burst cannot race past it and noise cannot mute a real outage.
+        conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"incident-alerts:{user['account_id']}",))
+        recent_reports = conn.execute(
+            """SELECT COUNT(*) AS total FROM feedback_reports
+               WHERE account_id=%s AND source='automatic' AND discord_alerted_at >= NOW()-INTERVAL '1 hour'""",
+            (user["account_id"],),
+        ).fetchone() or {}
+        alerts_allowed = int(recent_reports.get("total") or 0) < AUTOMATIC_ALERTS_PER_ACCOUNT_HOUR
         existing = conn.execute(
             """SELECT id,status,severity,occurrence_count,discord_alerted_at FROM feedback_reports
                WHERE account_id=%s AND fingerprint=%s AND source='automatic'
@@ -672,7 +686,7 @@ def create_automatic_incident(payload):
             conn.commit()
             public_id = f"DINCR-{int(row['id']):06d}"
             discord_sent = False
-            if row.get("severity") == "critical" and not row.get("discord_alerted_at"):
+            if alerts_allowed and row.get("severity") == "critical" and not row.get("discord_alerted_at"):
                 escalation_payload = SimpleNamespace(
                     category="error", subject=row.get("subject") or "Incidente crítico",
                     message="Incidente correlacionado escalado a crítico.", app_version=payload.app_version,
@@ -717,11 +731,11 @@ def create_automatic_incident(payload):
         screen=safe_screen or safe_path, error_reference=payload.error_reference or payload.request_id,
         platform=payload.platform,
     )
-    email_sent = _send_support_email(
+    email_sent = alerts_allowed and _send_support_email(
         public_id=public_id, email=identity.get("primary_email") or "no disponible",
         plan=identity.get("plan_code") or "", payload=notification_payload,
     )
-    discord_sent = _send_support_discord(
+    discord_sent = alerts_allowed and _send_support_discord(
         public_id=public_id, plan=identity.get("plan_code") or "",
         payload=notification_payload, severity=severity,
     )
