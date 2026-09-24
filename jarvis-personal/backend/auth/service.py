@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 import logging
 import uuid
@@ -82,6 +84,39 @@ def _serialize_allowed_user(row) -> dict[str, Any] | None:
     }
 
 
+# DINCR signs in only with OAuth (Google, Apple). The Supabase Email provider is
+# still reachable with the public anon key, so a password or magic-link session
+# must never become a DINCR identity (identities are keyed by email).
+ALLOWED_AUTH_PROVIDERS = frozenset(
+    item.strip().lower() for item in os.getenv("DINCR_AUTH_PROVIDERS", "google,apple").split(",") if item.strip()
+)
+
+
+NON_OAUTH_FIRST_FACTORS = frozenset({
+    "password", "otp", "magiclink", "anonymous", "sso/saml", "email/signup", "invite", "recovery", "email_change", "web3",
+})
+
+
+def _jwt_claims(token: str) -> dict[str, Any]:
+    """Read claims of a token Supabase has already verified; never used to trust a token."""
+    try:
+        payload = token.split(".")[1]
+        return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except (IndexError, ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _oauth_identity_allowed(access_token: str, user: dict[str, Any]) -> bool:
+    if user.get("is_anonymous"):
+        return False
+    methods = {str(item.get("method")) for item in _jwt_claims(access_token).get("amr") or [] if isinstance(item, dict)}
+    # The first factor must be OAuth; a second factor (e.g. totp) may accompany it.
+    if methods and ("oauth" not in methods or methods & NON_OAUTH_FIRST_FACTORS):
+        return False
+    provider = str((user.get("app_metadata") or {}).get("provider") or "").lower()
+    return provider in ALLOWED_AUTH_PROVIDERS
+
+
 def verify_supabase_token(access_token: str) -> dict[str, Any]:
     """
     Valida el access_token contra Supabase Auth.
@@ -116,6 +151,13 @@ def verify_supabase_token(access_token: str) -> dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Supabase no devolvió email o id de usuario.",
+        )
+
+    if not _oauth_identity_allowed(access_token, payload):
+        logger.warning("Rejected a non-OAuth Supabase session")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Iniciá sesión con Google o Apple.",
         )
 
     return {
