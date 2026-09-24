@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { flushPendingOperations } from "./lib/operationRecovery";
 import Login from "./pages/Login";
 import FinvaOnboarding from "./pages/FinvaOnboarding";
 import ProfileSetup from "./pages/ProfileSetup";
 import LegalConsent from "./pages/LegalConsent";
-import PersonalApp from "./personal/PersonalApp";
 import UsersApp from "./users/UsersApp";
 import { getMe, getOwnerBridgeToken, setOwnerBridgeToken } from "./services/jarvisApi";
 import { supabase } from "./lib/supabase";
@@ -19,6 +18,10 @@ import { detectNativePlatform } from "./ui/native/platform";
 import FinvaAppLock from "./components/FinvaAppLock";
 import { isDincrDistribution } from "./lib/appIdentity";
 
+
+// Owner (JARVIS) code and its chart library load only for Owner sessions, so
+// Free/Basic/VIP devices never download-parse them at startup.
+const PersonalApp = lazy(() => import("./personal/PersonalApp"));
 
 function BootScreen({ message = tx("Preparando tu espacio...", "Preparing your space...") }) {
   return (
@@ -176,7 +179,7 @@ export default function App() {
   }, [session, ownerBridgeMode, refreshReleasePolicy]);
 
   if (ownerBridgeMode) {
-    return <PersonalApp />;
+    return <Suspense fallback={<BootScreen />}><PersonalApp /></Suspense>;
   }
 
   if (!sessionLoaded) {
@@ -218,7 +221,7 @@ export default function App() {
   }
 
   if (currentUser.role === "owner" || currentUser.role === "admin") {
-    const personalApp = <PersonalApp />;
+    const personalApp = <Suspense fallback={<BootScreen />}><PersonalApp /></Suspense>;
     if (!isDincrDistribution) return personalApp;
     return (
       <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
