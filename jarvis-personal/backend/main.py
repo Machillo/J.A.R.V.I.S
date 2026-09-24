@@ -220,6 +220,9 @@ async def auth_middleware(request: Request, call_next):
     try:
         if access_token.startswith("jarvis-owner:"):
             user = authenticate_owner_bridge_token(access_token.removeprefix("jarvis-owner:").strip())
+        elif request.method == "DELETE" and request.url.path == "/auth/me":
+            # Only the account deletion itself may run on a deletion_pending account (retry).
+            user = authenticate_access_token(access_token, allow_deletion_pending=True)
         else:
             user = authenticate_access_token(access_token)
     except Exception as exc:

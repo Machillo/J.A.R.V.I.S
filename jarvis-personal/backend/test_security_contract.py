@@ -456,6 +456,8 @@ def test_self_deletion_uses_same_account_owned_flow_for_every_plan(monkeypatch, 
                     "supabase_user_id": "22222222-2222-2222-2222-222222222222",
                     "primary_email": "person@example.com",
                 })
+            if normalized.startswith("UPDATE allowed_users SET status"):
+                return Result({"id": 42})
             if normalized.startswith("DELETE FROM accounts"):
                 return Result({"id": "11111111-1111-1111-1111-111111111111"})
             return Result()
@@ -474,19 +476,25 @@ def test_self_deletion_uses_same_account_owned_flow_for_every_plan(monkeypatch, 
     finally:
         reset_current_user(token)
 
-    sql = [entry[0] for entry in queries if isinstance(entry, tuple)]
+    sql = [entry[0] if isinstance(entry, tuple) else entry for entry in queries]
     assert any("pg_constraint" in query for query in sql)
     assert any(query.startswith("DELETE FROM accounts") for query in sql)
     legacy_delete = next(query for query in sql if query.startswith("DELETE FROM users"))
     assert "lower(email)" in legacy_delete
     assert "allowed_user_id" not in legacy_delete
-    assert any(query.startswith("DELETE FROM allowed_users") for query in sql)
+    # Tx1 marks the tombstone, Tx2 deletes the data, Tx3 removes the tombstone.
+    mark = next(i for i, q in enumerate(sql) if q.startswith("UPDATE allowed_users SET status"))
+    account = next(i for i, q in enumerate(sql) if q.startswith("DELETE FROM accounts"))
+    tombstone = next(i for i, q in enumerate(sql) if q.startswith("DELETE FROM allowed_users"))
+    commits = [i for i, q in enumerate(sql) if q == "COMMIT"]
+    assert mark < commits[0] < account < commits[1] < tombstone < commits[2]
+    assert "status=%s AND supabase_user_id=%s" in sql[tombstone]
 
 
 def test_account_deletion_stage_contract_is_complete():
     assert auth_service.DELETION_STAGES == (
-        "IDENTITY", "FK_CHECK", "MAIL_CREDENTIALS_DELETE", "ACCOUNT_DELETE", "LEGACY_DELETE",
-        "SUPABASE_AUTH_DELETE", "COMMIT", "MAIL_TOKEN_REVOKE", "DONE",
+        "IDENTITY", "MARK_PENDING", "FK_CHECK", "MAIL_CREDENTIALS_DELETE", "ACCOUNT_DELETE", "LEGACY_DELETE",
+        "COMMIT", "MAIL_TOKEN_REVOKE", "SUPABASE_AUTH_DELETE", "FINALIZE", "DONE",
     )
 
 
@@ -524,6 +532,8 @@ def test_self_deletion_drops_mail_secrets_and_revokes_google_after_commit(monkey
                                      "granted_scopes": [auth_service.GMAIL_SCOPE], "decrypted_secret": "pending-google-refresh"}])
             if normalized.startswith("DELETE FROM vault.secrets"):
                 events.append(("VAULT_DELETE", params[0]))
+            if normalized.startswith("UPDATE allowed_users SET status"):
+                return Result({"id": 42})
             if normalized.startswith("DELETE FROM accounts"):
                 return Result({"id": "11111111-1111-1111-1111-111111111111"})
             return Result()
@@ -546,10 +556,13 @@ def test_self_deletion_drops_mail_secrets_and_revokes_google_after_commit(monkey
     finally:
         reset_current_user(token)
 
-    assert events[0] == ("VAULT_DELETE", ["aaaaaaaa-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000002",
+    # events[0] is the Tx1 tombstone commit; Vault is cleaned in the data transaction.
+    assert events[0] == "COMMIT"
+    assert events[1] == ("VAULT_DELETE", ["aaaaaaaa-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000002",
                                          "aaaaaaaa-0000-0000-0000-000000000003"])
     assert ("REVOKE", "https://oauth2.googleapis.com/revoke", "pending-google-refresh") in events
-    assert events.index("COMMIT") < events.index(("REVOKE", "https://oauth2.googleapis.com/revoke", "google-refresh"))
+    data_commit = events.index("COMMIT", 2)
+    assert data_commit < events.index(("REVOKE", "https://oauth2.googleapis.com/revoke", "google-refresh"))
     assert not any(event[0] == "REVOKE" and event[2] == "microsoft-refresh" for event in events if isinstance(event, tuple))
 
 
@@ -589,7 +602,7 @@ def test_self_deletion_rejects_mismatched_auth_identity_before_writes(monkeypatc
         reset_current_user(token)
 
     assert error.value.status_code == 409
-    assert all(not query.startswith("DELETE") for query in queries)
+    assert all(not query.startswith(("DELETE", "UPDATE")) for query in queries)
 
 
 def test_database_baseline_v1_matches_production_legacy_identity():
@@ -1016,6 +1029,8 @@ def test_self_deletion_removes_ccss_salary_reports_before_the_account(monkeypatc
                                "primary_email": "person@example.com"})
             if "to_regclass('public.payroll_salary_reports')" in normalized:
                 return Result({"present": "payroll_salary_reports"})
+            if normalized.startswith("UPDATE allowed_users SET status"):
+                return Result({"id": 42})
             if normalized.startswith("DELETE FROM accounts"):
                 return Result({"id": "11111111-1111-1111-1111-111111111111"})
             return Result()

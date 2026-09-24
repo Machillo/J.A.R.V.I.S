@@ -82,16 +82,25 @@ def sync_account_auth_identity(
     legacy_allowed_user_id: int,
     supabase_user_id: str,
     effective_role: str,
-) -> None:
-    """Mantiene accounts sincronizada mientras allowed_users sigue en compatibilidad."""
-    conn.execute(
+) -> int:
+    """Mantiene accounts sincronizada mientras allowed_users sigue en compatibilidad.
+
+    Solo liga un supabase_user_id cuando la cuenta todavía no tiene uno o ya es
+    el mismo: nunca reasigna la cuenta a otra identidad de Auth. Devuelve la
+    cantidad de cuentas actualizadas para que el llamador falle cerrado si una
+    cuenta existente no se pudo ligar.
+    """
+    rows = conn.execute(
         """
         UPDATE accounts
-        SET supabase_user_id = %s,
+        SET supabase_user_id = %s::uuid,
             role = %s,
             last_login_at = NOW(),
             updated_at = NOW()
         WHERE legacy_allowed_user_id = %s
+          AND (supabase_user_id IS NULL OR supabase_user_id = %s::uuid)
+        RETURNING id
         """,
-        (supabase_user_id, effective_role, legacy_allowed_user_id),
-    )
+        (supabase_user_id, effective_role, legacy_allowed_user_id, supabase_user_id),
+    ).fetchall()
+    return len(rows or [])
