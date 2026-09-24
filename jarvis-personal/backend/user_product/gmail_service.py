@@ -23,6 +23,7 @@ from backend.auth.current_user import (
 )
 from backend.core.database import get_connection
 from backend.email_monitor.parser import parse_financial_email
+from backend.email_monitor.parser_identity import for_account_holder
 from backend.email_monitor.popular_pdf import parse_popular_email_document
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
@@ -725,14 +726,6 @@ def _plain_text(payload: dict[str, Any]) -> str:
     return re.sub(r"\s+", " ", html.unescape(raw)).strip()
 
 
-def _adapt_identity(value: str, display_name: str) -> str:
-    adapted = value or ""
-    names = [display_name.strip(), display_name.strip().split(" ")[0] if display_name.strip() else ""]
-    for name in sorted({item for item in names if len(item) >= 3}, key=len, reverse=True):
-        adapted = re.sub(re.escape(name), "Kenneth", adapted, flags=re.I)
-    return adapted
-
-
 def _insert_finva_candidate(
     conn, *, email_message_id: int, connection: dict[str, Any],
     candidate: dict[str, Any], statement_document_id: int | None = None,
@@ -822,22 +815,21 @@ def _ingest_message(
     """Shared candidate pipeline for mail providers; no raw message persists."""
     attachment_names = attachment_names or []
 
-    display_name = str(connection.get("display_name") or "")
+    # The mailbox holder is this connection's own DINCR account; the email text
+    # is parsed as received, never rewritten into another person's identity.
+    identity = for_account_holder(str(connection.get("display_name") or ""))
     payroll_report = parse_ccss_order_patronal(subject, sender, attachment_text or body)
     financial_text = "\n".join(item for item in (body, attachment_text) if item)
     # Bank templates run only for an approved bank address. Gmail passes the raw
     # From header, whose display name an attacker controls ("alerta@banco <x@evil>").
     parsed = {} if payroll_report or not bank_sender_allowed(sender) else (
         parse_popular_email_document(
-            subject=_adapt_identity(subject, display_name),
+            subject=subject,
             sender=sender,
-            body=_adapt_identity(financial_text, display_name),
-            attachment_text=_adapt_identity(attachment_text, display_name),
+            body=financial_text,
+            attachment_text=attachment_text,
             received_at=received_at,
-        ) or parse_financial_email(
-            _adapt_identity(subject, display_name), sender,
-            _adapt_identity(financial_text, display_name), received_at,
-        )
+        ) or parse_financial_email(subject, sender, financial_text, received_at, identity=identity)
     )
     if parsed and not payroll_report:
         parsed = identify_received_payroll(parsed, subject=subject, body=financial_text)

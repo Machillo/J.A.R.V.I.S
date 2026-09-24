@@ -345,14 +345,11 @@ def test_internal_function_hardening_is_explicit_and_future_safe():
     assert "ALTER DEFAULT PRIVILEGES IN SCHEMA public" in migration
 
 
-def test_finva_gmail_scope_is_read_only_and_identity_adapter_is_user_specific():
+def test_finva_gmail_scope_is_read_only_and_mail_is_parsed_as_the_users_own_identity():
     assert gmail_service.GMAIL_SCOPE == "https://www.googleapis.com/auth/gmail.readonly"
-    text = gmail_service._adapt_identity(
-        "Compra para María Fernanda por ₡12.500",
-        "María Fernanda Solano",
-    )
-    assert "María" not in text
-    assert "Kenneth" in text
+    # A user's mail was rewritten into the Owner's name for the parser; each account
+    # is now parsed as itself (backend/email_monitor/test_parser_identity_isolation.py).
+    assert not hasattr(gmail_service, "_adapt_identity")
 
 
 def test_mail_oauth_state_is_server_side_single_use_and_session_bound():
