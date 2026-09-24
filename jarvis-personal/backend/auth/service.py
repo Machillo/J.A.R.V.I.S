@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import re
 import logging
 import uuid
 from typing import Any
@@ -9,6 +10,7 @@ import requests
 from fastapi import HTTPException, status
 
 from backend.core.database import get_connection
+from backend.core.i18n import tx
 from backend.auth.workspace_context import resolve_personal_workspace_context, sync_account_auth_identity
 from backend.auth.saas import enrich_identity
 
@@ -29,11 +31,17 @@ DELETION_STAGES = (
 # allowed_users tombstone while a self-deletion is in progress. Internal only:
 # not part of VALID_STATUSES, so the admin API can never set it.
 DELETION_PENDING_STATUS = "deletion_pending"
-IDENTITY_REJECTED_DETAIL = "No pudimos iniciar sesión con esta cuenta. Contactá a soporte."
-DELETION_PENDING_DETAIL = (
-    "Tu eliminación quedó en proceso: tus datos ya fueron borrados. "
-    "Intentá de nuevo en unos minutos para terminarla."
-)
+IDENTITY_REJECTED_ES = "No pudimos iniciar sesión con esta cuenta. Contactá a soporte."
+IDENTITY_REJECTED_EN = "We couldn't sign in with this account. Please contact support."
+DELETION_PENDING_CODE = "account_deletion_pending"
+SAFE_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
+
+
+def _deletion_pending_detail() -> str:
+    return tx(
+        "Tu eliminación quedó en proceso: tus datos ya fueron borrados. Intentá de nuevo en unos minutos para terminarla.",
+        "Your deletion is in progress: your data has already been deleted. Try again in a few minutes to finish it.",
+    )
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 
 
@@ -288,6 +296,14 @@ def delete_allowed_user(user_id: int):
                 "message": "No se puede eliminar el owner.",
             }
 
+        if existing["status"] == DELETION_PENDING_STATUS:
+            # The account is finishing its own deletion; removing the tombstone
+            # here would strand its state. The user finishes it via DELETE /auth/me.
+            return {
+                "status": "ERROR",
+                "message": "La cuenta está terminando su eliminación.",
+            }
+
         conn.execute(
             """
             DELETE FROM allowed_users
@@ -308,13 +324,14 @@ def delete_current_account() -> dict[str, str]:
     """Permanently delete the authenticated account and its owned data.
 
     Retry-safe flow, so a failure never leaves the login gone with data behind:
-    1. Tx1 marks allowed_users as a deletion_pending tombstone (account unusable).
-    2. Tx2 deletes the data (Vault secrets, payroll, account cascade, legacy users)
-       and keeps the tombstone.
-    3. The Supabase Auth user is deleted; on failure the caller gets 503 and retries
-       DELETE /auth/me, which resumes after step 1 (Tx2 is idempotent).
-    4. Tx3 removes the tombstone. If it survives, the next sign-up with the same
-       email replaces it once Supabase confirms the old Auth user is gone.
+    1. One transaction marks allowed_users as a deletion_pending tombstone AND
+       deletes the data (Vault secrets, payroll, rows that hang from allowed_users,
+       account cascade, legacy users). Either everything commits or nothing does,
+       so a failure here leaves a normal, usable account.
+    2. The Supabase Auth user is deleted; on failure the caller gets 503 and retries
+       DELETE /auth/me (the tombstone only allows that call), which resumes here.
+    3. A last transaction removes the tombstone. If it survives, the next sign-up
+       with the same email replaces it once Supabase confirms the old Auth user is gone.
     """
     from backend.auth.current_user import get_current_user
 
@@ -342,12 +359,8 @@ def delete_current_account() -> dict[str, str]:
     canonical_email = email
     google_tokens: list[str] = []
     try:
-        if resuming:
-            # authenticate_access_token only lets a tombstone through for
-            # DELETE /auth/me and only with its bound Supabase id.
-            _log_deletion(deletion_id, stage, "COMPLETED", resumed=True)
-        else:
-            with get_connection() as conn:
+        with get_connection() as conn:
+            if not resuming:
                 # Validate the request identity against the account row. Do not scan
                 # every FK in the schema: a RESTRICT constraint belonging to another
                 # account used to disable deletion globally for Free, Basic and VIP.
@@ -366,20 +379,20 @@ def delete_current_account() -> dict[str, str]:
                 canonical_email = _normalize_email(str(identity.get("primary_email") or email))
 
                 stage = "MARK_PENDING"
-                # From this commit on the account is unusable except to finish its deletion.
+                # Same transaction as the data deletion below: the tombstone only
+                # becomes visible together with the deleted data.
                 marked = conn.execute(
                     """UPDATE allowed_users SET status=%s
-                       WHERE id=%s AND supabase_user_id=%s
+                       WHERE id=%s AND lower(trim(supabase_user_id))=%s
                        RETURNING id""",
-                    (DELETION_PENDING_STATUS, canonical_allowed_user_id, auth_user_id),
+                    (DELETION_PENDING_STATUS, canonical_allowed_user_id, _auth_id(auth_user_id)),
                 ).fetchone()
                 if not marked:
                     raise HTTPException(status_code=409, detail="La identidad de la cuenta no coincide. Volvé a iniciar sesión.")
-                conn.commit()
                 _log_deletion(deletion_id, stage, "COMPLETED")
-
-        with get_connection() as conn:
-            if resuming:
+            else:
+                # authenticate_access_token only lets a tombstone through for
+                # DELETE /auth/me and only with its bound Supabase id.
                 stage = "IDENTITY"
                 # A previous attempt may have failed before its data commit.
                 remaining = conn.execute(
@@ -461,6 +474,12 @@ def delete_current_account() -> dict[str, str]:
                     raise HTTPException(status_code=404, detail="La cuenta ya no existe.")
                 _log_deletion(deletion_id, stage, "COMPLETED")
 
+            stage = "ACCOUNT_DELETE"
+            # Rows that hang from allowed_users (chat, memory, settings, reminders,
+            # advisor, ...) would otherwise survive until the tombstone is removed.
+            dependents = _delete_allowed_user_dependents(conn, canonical_allowed_user_id)
+            _log_deletion(deletion_id, stage, "COMPLETED", allowed_user_dependent_tables=dependents)
+
             stage = "LEGACY_DELETE"
             # Some historical finance rows use users.id. The workspace cascade
             # removes their data. Production users is keyed by email and does
@@ -522,7 +541,7 @@ def delete_current_account() -> dict[str, str]:
         _log_deletion(deletion_id, stage, "FAILED", error_type=auth_error, http_status=auth_status)
         raise HTTPException(
             status_code=503,
-            detail={"message": DELETION_PENDING_DETAIL, "deletion_id": deletion_id, "stage": stage},
+            detail={"message": _deletion_pending_detail(), "code": DELETION_PENDING_CODE, "deletion_id": deletion_id, "stage": stage},
         )
     _log_deletion(deletion_id, stage, "COMPLETED", http_status=auth_status)
 
@@ -534,13 +553,16 @@ def delete_current_account() -> dict[str, str]:
         with get_connection() as conn:
             conn.execute(
                 """DELETE FROM allowed_users
-                   WHERE id=%s AND status=%s AND supabase_user_id=%s""",
-                (canonical_allowed_user_id, DELETION_PENDING_STATUS, auth_user_id),
+                   WHERE id=%s AND status=%s AND lower(trim(supabase_user_id))=%s""",
+                (canonical_allowed_user_id, DELETION_PENDING_STATUS, _auth_id(auth_user_id)),
             )
             conn.commit()
         _log_deletion(deletion_id, stage, "COMPLETED")
     except Exception as exc:
+        # Login and data are already gone; the tombstone is replaced on the next
+        # sign-up with this email. Logged as an error so operations can clean it up.
         _log_deletion(deletion_id, stage, "FAILED", **_deletion_error_metadata(exc))
+        logger.error("Deletion tombstone left behind deletion_id=%s", deletion_id)
 
     stage = "DONE"
     _log_deletion(deletion_id, stage, "COMPLETED")
@@ -578,7 +600,30 @@ def _auth_id(value: Any) -> str:
 def _identity_rejected(allowed_user_id: Any, reason: str) -> HTTPException:
     # Only the internal numeric allowed_users id is logged: never emails or Auth ids.
     logger.warning("Rejected login reason=%s allowed_user_id=%s", reason, allowed_user_id)
-    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=IDENTITY_REJECTED_DETAIL)
+    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=tx(IDENTITY_REJECTED_ES, IDENTITY_REJECTED_EN))
+
+
+def _delete_allowed_user_dependents(conn, allowed_user_id: int) -> int:
+    """Delete rows whose single-column FK points at allowed_users(id), for this user only.
+
+    Table and column names come from the catalog and are whitelisted before quoting.
+    """
+    references = conn.execute(
+        """SELECT ns.nspname AS schema_name, child.relname AS table_name, att.attname AS column_name
+           FROM pg_constraint c
+           JOIN pg_class child ON child.oid=c.conrelid
+           JOIN pg_namespace ns ON ns.oid=child.relnamespace
+           JOIN pg_attribute att ON att.attrelid=c.conrelid AND att.attnum=c.conkey[1]
+           WHERE c.contype='f' AND c.confrelid='public.allowed_users'::regclass
+             AND array_length(c.conkey,1)=1 AND c.conrelid<>c.confrelid
+           ORDER BY ns.nspname, child.relname"""
+    ).fetchall() or []
+    for ref in references:
+        names = (ref["schema_name"], ref["table_name"], ref["column_name"])
+        if not all(SAFE_IDENTIFIER.match(str(name)) for name in names):
+            raise RuntimeError("Unexpected identifier in allowed_users dependents")
+        conn.execute(f'DELETE FROM "{names[0]}"."{names[1]}" WHERE "{names[2]}"=%s', (allowed_user_id,))
+    return len(references)
 
 
 def _create_personal_account(conn, supabase_user: dict[str, Any]) -> None:
@@ -639,9 +684,9 @@ def _replace_stale_deletion_tombstone(app_user: dict[str, Any], supabase_user: d
             raise _identity_rejected(app_user["id"], "deletion_pending_data_left")
         removed = conn.execute(
             """DELETE FROM allowed_users
-               WHERE id=%s AND status='deletion_pending' AND supabase_user_id=%s
+               WHERE id=%s AND status='deletion_pending' AND lower(trim(supabase_user_id))=%s
                RETURNING id""",
-            (app_user["id"], app_user["supabase_user_id"]),
+            (app_user["id"], _auth_id(app_user["supabase_user_id"])),
         ).fetchone()
         if not removed:
             raise _identity_rejected(app_user["id"], "deletion_tombstone_changed")
@@ -688,8 +733,15 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
 
         if app_user["status"] == DELETION_PENDING_STATUS:
             # The only thing a pending deletion may do is finish itself via DELETE /auth/me.
-            if not allow_deletion_pending or _auth_id(app_user.get("supabase_user_id")) != token_auth_id:
+            if _auth_id(app_user.get("supabase_user_id")) != token_auth_id:
                 raise _identity_rejected(app_user["id"], "account_unavailable")
+            if not allow_deletion_pending:
+                # Only the bound owner of the account reaches this: tell the app so it
+                # can offer "finish deletion" instead of a dead end.
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={"code": DELETION_PENDING_CODE, "message": _deletion_pending_detail()},
+                )
             return {
                 "id": app_user["id"],
                 "email": app_user["email"],
@@ -715,10 +767,10 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
                 role = %s,
                 last_login_at = NOW()
             WHERE id = %s
-              AND (supabase_user_id IS NULL OR supabase_user_id = %s)
+              AND (supabase_user_id IS NULL OR lower(trim(supabase_user_id)) = %s)
             RETURNING id
             """,
-            (supabase_user["supabase_user_id"], effective_role, app_user["id"], supabase_user["supabase_user_id"]),
+            (supabase_user["supabase_user_id"], effective_role, app_user["id"], token_auth_id),
         ).fetchone()
         if not bound:
             raise _identity_rejected(app_user["id"], "concurrent_bind")

@@ -7,7 +7,7 @@ export const SUPPORT_CONTEXT_KEY = "finva:support-context";
 const genericMessage = () => tx("No pudimos completar esta acción. Intentá nuevamente o pedí ayuda a soporte.", "We couldn’t complete this action. Try again or ask support for help.");
 
 export class FinvaApiError extends Error {
-  constructor(message, { status, errorId, requestId, retryCount, path, method, technicalMessage } = {}) {
+  constructor(message, { status, errorId, requestId, retryCount, path, method, technicalMessage, code } = {}) {
     super(message);
     this.name = "FinvaApiError";
     this.status = status;
@@ -17,6 +17,7 @@ export class FinvaApiError extends Error {
     this.path = path || "";
     this.method = method || "GET";
     this.technicalMessage = technicalMessage || "";
+    this.code = code || "";
   }
 }
 
@@ -25,6 +26,7 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
   const detail = typeof rawDetail === "object" ? rawDetail?.message || "" : rawDetail;
   const deletionId = typeof rawDetail === "object" ? rawDetail?.deletion_id || "" : "";
   const deletionStage = typeof rawDetail === "object" ? rawDetail?.stage || "" : "";
+  const code = typeof rawDetail === "object" ? rawDetail?.code || "" : "";
   const status = response?.status || 0;
   // Backend details are written in Spanish; English sessions get the status message instead.
   const shownDetail = deviceLanguage() === "es" ? detail : "";
@@ -35,6 +37,8 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
   else if (status === 404) message = shownDetail || tx("No encontramos la información solicitada.", "We couldn’t find what you asked for.");
   else if (status === 409 || status === 422) message = shownDetail || tx("Revisá la información e intentá nuevamente.", "Check the information and try again.");
   else if (status >= 400 && status < 500) message = shownDetail || tx("No pudimos procesar la solicitud.", "We couldn’t process the request.");
+  // Account deletion states carry an explicit backend message already in the session language.
+  if (code === "account_deletion_pending" && detail) message = detail;
 
   const error = new FinvaApiError(message, {
     status,
@@ -44,6 +48,7 @@ export function apiError(response, payload, path, method = "GET", autoReport = f
     path,
     method,
     technicalMessage: deletionStage ? `${detail} [${deletionStage}]` : detail,
+    code,
   });
   if (autoReport && (status >= 500 || status === 0)) {
     const incident = {

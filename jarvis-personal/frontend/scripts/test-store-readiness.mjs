@@ -17,4 +17,10 @@ for (const plan of ["vip", "basic", "free"]) {
   assert.match(registry, new RegExp(`plan === "${plan}"`), `${plan} navigation must remain present`);
 }
 assert.match(android, /targetSdkVersion\s*=\s*36/, "Android target SDK requires rechecking before store submission");
+// A deletion interrupted after the data was erased can always be finished from the app.
+const app = read("../src/App.jsx");
+const apiErrors = read("../src/lib/apiErrors.js");
+assert.match(apiErrors, /code === "account_deletion_pending" && detail\) message = detail/);
+assert.match(app, /setDeletionPending\(error\?\.code === "account_deletion_pending"\)/);
+assert.match(app, /deletionPending && <button[\s\S]*?await deleteMyAccount\(\);[\s\S]*?signOut/);
 console.log("Store readiness source contracts passed. Live store and device verification remain manual.");

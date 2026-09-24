@@ -482,13 +482,14 @@ def test_self_deletion_uses_same_account_owned_flow_for_every_plan(monkeypatch, 
     legacy_delete = next(query for query in sql if query.startswith("DELETE FROM users"))
     assert "lower(email)" in legacy_delete
     assert "allowed_user_id" not in legacy_delete
-    # Tx1 marks the tombstone, Tx2 deletes the data, Tx3 removes the tombstone.
+    # One transaction marks the tombstone and deletes the data; a last one removes the tombstone.
     mark = next(i for i, q in enumerate(sql) if q.startswith("UPDATE allowed_users SET status"))
     account = next(i for i, q in enumerate(sql) if q.startswith("DELETE FROM accounts"))
     tombstone = next(i for i, q in enumerate(sql) if q.startswith("DELETE FROM allowed_users"))
     commits = [i for i, q in enumerate(sql) if q == "COMMIT"]
-    assert mark < commits[0] < account < commits[1] < tombstone < commits[2]
-    assert "status=%s AND supabase_user_id=%s" in sql[tombstone]
+    assert len(commits) == 2
+    assert mark < account < commits[0] < tombstone < commits[1]
+    assert "status=%s AND lower(trim(supabase_user_id))=%s" in sql[tombstone]
 
 
 def test_account_deletion_stage_contract_is_complete():
@@ -556,12 +557,11 @@ def test_self_deletion_drops_mail_secrets_and_revokes_google_after_commit(monkey
     finally:
         reset_current_user(token)
 
-    # events[0] is the Tx1 tombstone commit; Vault is cleaned in the data transaction.
-    assert events[0] == "COMMIT"
-    assert events[1] == ("VAULT_DELETE", ["aaaaaaaa-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000002",
+    # Vault is cleaned in the same transaction as the tombstone mark and the account.
+    assert events[0] == ("VAULT_DELETE", ["aaaaaaaa-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000002",
                                          "aaaaaaaa-0000-0000-0000-000000000003"])
     assert ("REVOKE", "https://oauth2.googleapis.com/revoke", "pending-google-refresh") in events
-    data_commit = events.index("COMMIT", 2)
+    data_commit = events.index("COMMIT")
     assert data_commit < events.index(("REVOKE", "https://oauth2.googleapis.com/revoke", "google-refresh"))
     assert not any(event[0] == "REVOKE" and event[2] == "microsoft-refresh" for event in events if isinstance(event, tuple))
 

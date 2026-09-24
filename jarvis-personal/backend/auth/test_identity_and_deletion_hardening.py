@@ -18,6 +18,7 @@ from backend import main
 from backend.auth import routes as auth_routes
 from backend.auth import service as auth_service
 from backend.auth.current_user import reset_current_user, set_current_user
+from backend.core.i18n import use_language
 
 EMAIL = "person@example.com"
 OTHER_EMAIL = "someone.else@example.com"
@@ -28,6 +29,11 @@ ACCOUNT_ID = "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 OTHER_ACCOUNT_ID = "22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 SECRET_GOOGLE = "dddddddd-0000-4000-8000-000000000001"
 SECRET_OTHER = "dddddddd-0000-4000-8000-000000000009"
+DEPENDENTS = [{"schema_name": "public", "table_name": "memory_items", "column_name": "user_id"}]
+
+
+def _norm(value):
+    return str(value or "").strip().lower()
 
 
 def _token(auth_id: str, provider: str = "google") -> str:
@@ -57,6 +63,8 @@ def _state(*, allowed_sid=AUTH_ID, account_sid=AUTH_ID, status="active", role="u
         ],
         "payroll": [{"account_id": ACCOUNT_ID}, {"account_id": OTHER_ACCOUNT_ID}],
         "finance": [{"account_id": ACCOUNT_ID}, {"account_id": OTHER_ACCOUNT_ID}],
+        # A table whose FK points at allowed_users(id): it does not cascade from accounts.
+        "memory_items": [{"user_id": 42, "text": "synthetic note"}, {"user_id": 7, "text": "other note"}],
     }
 
 
@@ -74,6 +82,7 @@ class FakeDB:
         self.fail_commits = set()
         self.commit_attempts = 0
         self.hooks = {}
+        self.dependents = DEPENDENTS
 
     def writes(self):
         return [(sql, params) for sql, params in self.log if sql.startswith(("UPDATE", "DELETE", "INSERT"))]
@@ -122,7 +131,7 @@ class FakeConnection:
         if sql.startswith("UPDATE allowed_users SET supabase_user_id"):
             sid, role, uid, expected = params
             row = w["allowed_users"].get(uid)
-            if row and row["supabase_user_id"] in (None, expected):
+            if row and (row["supabase_user_id"] is None or _norm(row["supabase_user_id"]) == expected):
                 row.update(supabase_user_id=sid, role=role)
                 return [{"id": uid}]
             return []
@@ -159,14 +168,21 @@ class FakeConnection:
                 "accounts_left": sum(a["legacy_allowed_user_id"] == legacy for a in accounts.values()),
                 "users_left": sum(u["email"].lower() == email.lower() for u in w["users"]),
             }]
+        if sql.startswith("SELECT * FROM allowed_users WHERE id = %s"):
+            row = w["allowed_users"].get(params[0])
+            return [dict(row)] if row else []
+        if sql == "DELETE FROM allowed_users WHERE id = %s":
+            w["allowed_users"].pop(params[0], None)
+            return []
         if sql.startswith("DELETE FROM allowed_users"):
+            assert "lower(trim(supabase_user_id))=%s" in sql
             if "status='deletion_pending'" in sql:
                 uid, sid = params
                 expected_status = "deletion_pending"
             else:
                 uid, expected_status, sid = params
             row = w["allowed_users"].get(uid)
-            if row and row["status"] == expected_status and row["supabase_user_id"] == sid:
+            if row and row["status"] == expected_status and _norm(row["supabase_user_id"]) == sid:
                 del w["allowed_users"][uid]
                 return [{"id": uid}]
             return []
@@ -174,15 +190,21 @@ class FakeConnection:
             account = accounts.get(params[0])
             return [dict(account)] if account else []
         if sql.startswith("UPDATE allowed_users SET status=%s"):
+            assert "lower(trim(supabase_user_id))=%s" in sql
             new_status, uid, sid = params
             row = w["allowed_users"].get(uid)
-            if row and row["supabase_user_id"] == sid:
+            if row and _norm(row["supabase_user_id"]) == sid:
                 row["status"] = new_status
                 return [{"id": uid}]
             return []
         if sql.startswith("SELECT id, supabase_user_id, primary_email FROM accounts WHERE legacy_allowed_user_id"):
             return [dict(a) for a in accounts.values() if a["legacy_allowed_user_id"] == params[0]]
+        if "pg_constraint" in sql and "confrelid='public.allowed_users'::regclass" in sql:
+            return [dict(ref) for ref in self.db.dependents]
         if "pg_constraint" in sql:
+            return []
+        if sql.startswith('DELETE FROM "public"."memory_items" WHERE "user_id"=%s'):
+            w["memory_items"] = [m for m in w["memory_items"] if m["user_id"] != params[0]]
             return []
         if "FROM finva_gmail_connections" in sql:
             return [{
@@ -287,6 +309,7 @@ def _assert_other_account_untouched(state):
     assert state["vault"].get(SECRET_OTHER) == "other-refresh-example"
     assert {"account_id": OTHER_ACCOUNT_ID} in state["payroll"] and {"account_id": OTHER_ACCOUNT_ID} in state["finance"]
     assert {"email": OTHER_EMAIL} in state["users"]
+    assert {"user_id": 7, "text": "other note"} in state["memory_items"]
 
 
 def _assert_writes_scoped(db, allowed_ids=(42,), account_ids=(ACCOUNT_ID,), emails=(EMAIL,)):
@@ -309,6 +332,7 @@ def _assert_all_data_gone(state):
     assert {"account_id": ACCOUNT_ID} not in state["finance"]
     assert all(g["account_id"] != ACCOUNT_ID for g in state["gmail"])
     assert {"email": EMAIL} not in state["users"]
+    assert all(m["user_id"] != 42 for m in state["memory_items"])
 
 
 def _assert_data_intact(state):
@@ -316,6 +340,13 @@ def _assert_data_intact(state):
     assert state["vault"].get(SECRET_GOOGLE) == "google-refresh-example"
     assert {"account_id": ACCOUNT_ID} in state["payroll"] and {"account_id": ACCOUNT_ID} in state["finance"]
     assert {"email": EMAIL} in state["users"]
+    assert {"user_id": 42, "text": "synthetic note"} in state["memory_items"]
+
+
+def _assert_pending_409(error):
+    assert error.value.status_code == 409
+    assert error.value.detail["code"] == auth_service.DELETION_PENDING_CODE
+    assert error.value.detail["message"]
 
 
 # --- A) Stable identity binding -------------------------------------------------
@@ -328,7 +359,15 @@ def test_first_login_binds_null_ids_of_a_preauthorized_account(env):
     assert env.db.state["allowed_users"][42]["supabase_user_id"] == AUTH_ID
     assert env.db.state["accounts"][ACCOUNT_ID]["supabase_user_id"] == AUTH_ID
     binds = [sql for sql, _ in env.db.writes()]
-    assert all("supabase_user_id IS NULL OR supabase_user_id" in sql for sql in binds)
+    assert len(binds) == 2 and all("supabase_user_id IS NULL OR" in sql for sql in binds)
+
+
+def test_stored_id_with_uppercase_and_whitespace_still_binds(env):
+    env.db = FakeDB(_state(allowed_sid=f"  {AUTH_ID.upper()} ", account_sid=AUTH_ID))
+    assert _login(env)["account_id"] == ACCOUNT_ID
+    bind_params = next(params for sql, params in env.db.writes() if sql.startswith("UPDATE allowed_users"))
+    assert bind_params[-1] == AUTH_ID  # compared against the normalized token id
+    assert env.db.state["allowed_users"][42]["supabase_user_id"] == AUTH_ID
 
 
 def test_repeat_login_with_the_bound_id_keeps_working(env):
@@ -345,7 +384,7 @@ def test_same_email_with_a_different_auth_id_fails_closed_before_any_write(env, 
         with pytest.raises(HTTPException) as error:
             _login(env, NEW_AUTH_ID)
     assert error.value.status_code == 403
-    assert error.value.detail == auth_service.IDENTITY_REJECTED_DETAIL
+    assert error.value.detail == auth_service.IDENTITY_REJECTED_ES
     assert env.db.writes() == [] and env.db.committed() == []
     assert env.db.state == before
     logged = caplog.text
@@ -358,7 +397,23 @@ def test_mismatch_is_checked_before_status_so_state_is_not_revealed(env):
     env.supabase.auth_users.add(NEW_AUTH_ID)
     with pytest.raises(HTTPException) as error:
         _login(env, NEW_AUTH_ID)
-    assert error.value.detail == auth_service.IDENTITY_REJECTED_DETAIL
+    assert error.value.detail == auth_service.IDENTITY_REJECTED_ES
+
+
+def test_rejections_follow_the_response_language(env):
+    env.supabase.auth_users.add(NEW_AUTH_ID)
+    with use_language("en"):
+        with pytest.raises(HTTPException) as error:
+            _login(env, NEW_AUTH_ID)
+    assert error.value.detail == auth_service.IDENTITY_REJECTED_EN
+    env.db = FakeDB(_state(status="deletion_pending"))
+    with use_language("en"):
+        with pytest.raises(HTTPException) as pending_en:
+            _login(env)
+    with pytest.raises(HTTPException) as pending_es:
+        _login(env)
+    assert pending_en.value.detail["message"].startswith("Your deletion is in progress")
+    assert pending_es.value.detail["message"].startswith("Tu eliminación quedó en proceso")
 
 
 @pytest.mark.parametrize(("allowed_sid", "account_sid"), [(None, AUTH_ID), (AUTH_ID, None)])
@@ -417,14 +472,32 @@ def test_google_and_linked_apple_identity_share_the_same_account(env):
     assert apple["email"] == EMAIL
 
 
-def test_deletion_pending_blocks_every_request_except_delete_me(env):
-    env.db = FakeDB(_state(status="deletion_pending"))
+def test_deletion_pending_non_delete_request_by_bound_user_gets_409_code(env):
+    env.db = FakeDB(_state(status="deletion_pending", with_account=False))
     with pytest.raises(HTTPException) as error:
         _login(env)
+    _assert_pending_409(error)
+    assert env.db.writes() == []
+    assert not any(call[0] == "ADMIN_GET" for call in env.supabase.calls)
+
+
+def test_deletion_pending_other_id_gets_generic_403_without_revealing_deletion(env):
+    env.db = FakeDB(_state(status="deletion_pending", with_account=False))
+    env.supabase.auth_users.add(NEW_AUTH_ID)  # old Auth user still exists: admin GET says 200
+    with pytest.raises(HTTPException) as error:
+        _login(env, NEW_AUTH_ID)
     assert error.value.status_code == 403
-    assert error.value.detail == auth_service.IDENTITY_REJECTED_DETAIL
+    assert error.value.detail == auth_service.IDENTITY_REJECTED_ES
     assert "elimin" not in error.value.detail.lower()
     assert env.db.writes() == []
+
+
+def test_admin_api_refuses_to_delete_a_deletion_pending_row(env):
+    env.db = FakeDB(_state(status="deletion_pending", with_account=False))
+    result = auth_service.delete_allowed_user(42)
+    assert result["status"] == "ERROR"
+    assert 42 in env.db.state["allowed_users"]
+    assert not any(sql.startswith("DELETE") for sql, _ in env.db.log)
 
 
 def test_deletion_pending_delete_me_gets_a_minimal_identity(env):
@@ -463,7 +536,12 @@ def test_full_deletion_removes_data_auth_user_and_tombstone(env):
     assert 42 not in state["allowed_users"]
     assert AUTH_ID not in env.supabase.auth_users
     assert ("REVOKE", "google-refresh-example") in env.supabase.calls
-    assert env.db.committed() == ["COMMIT"] * 4  # login + mark + data + finalize
+    assert env.db.committed() == ["COMMIT"] * 3  # login + (mark + data) + finalize
+    assert state["memory_items"] == [{"user_id": 7, "text": "other note"}]
+    mark = next(i for i, (sql, _) in enumerate(env.db.log) if sql.startswith("UPDATE allowed_users SET status"))
+    data = next(i for i, (sql, _) in enumerate(env.db.log) if sql.startswith("DELETE FROM accounts"))
+    commits = [i for i, (sql, _) in enumerate(env.db.log) if sql == "COMMIT"]
+    assert commits[0] < mark < data < commits[1]  # one transaction for tombstone + data
     _assert_other_account_untouched(state)
     _assert_writes_scoped(env.db)
 
@@ -478,52 +556,47 @@ def test_missing_admin_key_fails_closed_before_marking(env, monkeypatch):
     assert env.db.log == [] and env.db.state["allowed_users"][42]["status"] == "active"
 
 
-@pytest.mark.parametrize("fault", ["mark_statement", "mark_commit"])
-def test_failure_in_tx1_marks_and_deletes_nothing(env, fault):
+@pytest.mark.parametrize("fault", [
+    "UPDATE allowed_users SET status", "DELETE FROM vault.secrets", "DELETE FROM payroll_salary_reports",
+    "DELETE FROM accounts", 'DELETE FROM "public"."memory_items"', "DELETE FROM users", "data_commit",
+])
+def test_failure_before_the_data_commit_leaves_a_normal_active_account(env, fault):
     identity = _login(env)
     before = copy.deepcopy(env.db.state)
-    if fault == "mark_statement":
-        env.db.fail_on = "UPDATE allowed_users SET status"
-    else:
-        env.db.fail_commits = {env.db.commit_attempts + 1}
-    with pytest.raises(HTTPException) as error:
-        _delete_as(identity)
-    assert error.value.status_code == 500
-    assert error.value.detail["stage"] == "MARK_PENDING"
-    assert env.db.state == before
-    assert not any(call[0] == "ADMIN_DELETE" for call in env.supabase.calls)
-    assert _login(env)["account_id"] == ACCOUNT_ID  # still fully usable
-
-
-@pytest.mark.parametrize("fault", ["DELETE FROM vault.secrets", "DELETE FROM payroll_salary_reports",
-                                   "DELETE FROM accounts", "DELETE FROM users", "data_commit"])
-def test_failure_in_tx2_keeps_tombstone_and_data_then_retry_completes(env, fault):
-    identity = _login(env)
     if fault == "data_commit":
-        env.db.fail_commits = {env.db.commit_attempts + 2}
+        env.db.fail_commits = {env.db.commit_attempts + 1}
     else:
         env.db.fail_on = fault
     with pytest.raises(HTTPException) as error:
         _delete_as(identity)
     assert error.value.status_code == 500
-    state = env.db.state
-    assert state["allowed_users"][42]["status"] == "deletion_pending"
-    _assert_data_intact(state)
+    assert env.db.state == before  # no tombstone, all data intact
+    assert env.db.state["allowed_users"][42]["status"] == "active"
+    _assert_data_intact(env.db.state)
+    assert ("ROLLBACK", ()) in env.db.log
     assert not any(call[0] in {"ADMIN_DELETE", "REVOKE"} for call in env.supabase.calls)
 
-    # The account is locked for everything except finishing the deletion.
-    with pytest.raises(HTTPException) as blocked:
-        _login(env)
-    assert blocked.value.status_code == 403
-
-    retry = _delete_as(_login(env, allow_deletion_pending=True))
-    assert retry["status"] == "OK"
+    # Still a normal account: it logs in and a retry is a fresh, complete deletion.
+    fresh_identity = _login(env)
+    assert fresh_identity["account_id"] == ACCOUNT_ID
+    assert _delete_as(fresh_identity)["status"] == "OK"
     _assert_all_data_gone(env.db.state)
     assert 42 not in env.db.state["allowed_users"]
     assert AUTH_ID not in env.supabase.auth_users
     assert ("REVOKE", "google-refresh-example") in env.supabase.calls
     _assert_other_account_untouched(env.db.state)
     _assert_writes_scoped(env.db)
+
+
+def test_unsafe_dependent_identifier_aborts_without_deleting(env):
+    identity = _login(env)
+    before = copy.deepcopy(env.db.state)
+    env.db.dependents = [{"schema_name": "public", "table_name": "memory_items; drop table x", "column_name": "user_id"}]
+    with pytest.raises(HTTPException) as error:
+        _delete_as(identity)
+    assert error.value.status_code == 500
+    assert env.db.state == before
+    assert not any("drop table" in sql.lower() for sql, _ in env.db.log)
 
 
 @pytest.mark.parametrize("failure", [500, TimeoutError("admin timeout")])
@@ -533,12 +606,17 @@ def test_supabase_failure_leaves_no_data_and_retry_finishes(env, failure):
     with pytest.raises(HTTPException) as error:
         _delete_as(identity)
     assert error.value.status_code == 503
-    assert error.value.detail["message"] == auth_service.DELETION_PENDING_DETAIL
+    assert error.value.detail["message"].startswith("Tu eliminación quedó en proceso")
+    assert error.value.detail["code"] == auth_service.DELETION_PENDING_CODE
     assert error.value.detail["stage"] == "SUPABASE_AUTH_DELETE" and error.value.detail["deletion_id"]
     state = env.db.state
     _assert_all_data_gone(state)
     assert state["allowed_users"][42]["status"] == "deletion_pending"
     assert AUTH_ID in env.supabase.auth_users
+    # The bound user can still sign in only to learn the deletion is pending.
+    with pytest.raises(HTTPException) as pending:
+        _login(env)
+    _assert_pending_409(pending)
     # Tokens were revoked right after the data commit, before the Auth failure.
     assert ("REVOKE", "google-refresh-example") in env.supabase.calls
 
@@ -579,7 +657,7 @@ def test_repeated_delete_on_a_pending_user_is_idempotent(env):
 
 def test_finalize_failure_then_resignup_gets_a_fresh_empty_account(env):
     identity = _login(env)
-    env.db.fail_commits = {env.db.commit_attempts + 3}
+    env.db.fail_commits = {env.db.commit_attempts + 2}
     assert _delete_as(identity)["status"] == "OK"
     assert env.db.state["allowed_users"][42]["status"] == "deletion_pending"
     assert AUTH_ID not in env.supabase.auth_users
@@ -609,7 +687,7 @@ def test_tombstone_is_kept_unless_supabase_confirms_the_old_user_is_gone(env, ad
     with pytest.raises(HTTPException) as error:
         _login(env, NEW_AUTH_ID)
     assert error.value.status_code == 403
-    assert error.value.detail == auth_service.IDENTITY_REJECTED_DETAIL
+    assert error.value.detail == auth_service.IDENTITY_REJECTED_ES
     assert env.db.state == before and env.db.writes() == []
 
 
@@ -629,6 +707,6 @@ def test_same_id_on_a_pending_account_must_finish_via_delete(env):
     env.db = FakeDB(_state(status="deletion_pending", with_account=False))
     with pytest.raises(HTTPException) as error:
         _login(env)
-    assert error.value.status_code == 403
+    _assert_pending_409(error)
     assert not any(call[0] == "ADMIN_GET" for call in env.supabase.calls)
     assert 42 in env.db.state["allowed_users"]
