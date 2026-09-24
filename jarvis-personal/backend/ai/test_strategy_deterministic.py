@@ -39,7 +39,7 @@ def test_owner_strategy_summary_ignores_old_ai_guides(monkeypatch):
 def test_owner_strategy_chat_skips_premium_ai_router(monkeypatch):
     monkeypatch.setattr(jarvis_engine, "get_pending_action", lambda: None)
     monkeypatch.setattr(jarvis_engine, "handle_personal_decision_request", lambda _message: None)
-    monkeypatch.setattr(jarvis_engine, "detect_intent", lambda _message: (_ for _ in ()).throw(AssertionError("AI intent detection is not needed for strategy")))
+    monkeypatch.setattr(jarvis_engine, "detect_intent", lambda _message: (_ for _ in ()).throw(AssertionError("Intent detection is not needed for strategy")))
     monkeypatch.setattr(jarvis_engine, "build_local_strategy_blueprint", _blueprint)
 
     result = jarvis_engine.process_message("Jarvis, ejecuta mi estrategia premium")

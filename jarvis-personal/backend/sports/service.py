@@ -149,7 +149,7 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
 
         created = 0
         skipped = 0
-        # Fast dedupe before spending a Serper/OpenAI request.
+        # Fast dedupe before spending a web-search (Serper) request.
         pending_by_user = {}
         for owner in owners:
             workspace_id = str(owner['workspace_id'])

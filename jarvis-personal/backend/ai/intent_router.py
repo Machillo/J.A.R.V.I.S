@@ -315,20 +315,6 @@ def _fallback_detect(user_message: str) -> dict[str, Any]:
     return {"intent": "general", "entity": user_message.strip(), "confidence": 0.4, "source": "deterministic"}
 
 
-def _valid_intent_result(parsed: dict[str, Any]) -> dict[str, Any]:
-    intent = parsed.get("intent", "unknown")
-    if intent not in AVAILABLE_INTENTS:
-        intent = "unknown"
-    action_type = parsed.get("action_type") or (intent if intent in ACTION_TYPES else None)
-    return {
-        "intent": intent,
-        "action_type": action_type,
-        "entity": parsed.get("entity"),
-        "confidence": float(parsed.get("confidence") or 0),
-        "source": parsed.get("source") or "openai",
-    }
-
-
 def detect_intent(user_message: str) -> dict[str, Any]:
     # Deterministic only: DINCR Owner no longer sends messages to a generative-AI provider.
     return _fallback_detect(user_message)

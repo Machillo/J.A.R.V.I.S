@@ -254,8 +254,8 @@ def _format_financial_engine_message(report: dict) -> str:
 
 
 def process_message(user_message: str):
-    # Decisiones personales claras (compras/viajes) se resuelven localmente antes
-    # del clasificador IA para ahorrar tokens y evitar respuestas genéricas.
+    # Decisiones personales claras (compras/viajes) se resuelven primero con su
+    # flujo local, antes de clasificar la intención, para evitar respuestas genéricas.
     pending_action = get_pending_action()
     if pending_action and str(pending_action.get("action_type") or "").startswith("decision_"):
         pending_result = handle_decision_pending_action(pending_action, user_message)
@@ -305,9 +305,9 @@ def process_message(user_message: str):
             "data": result["data"],
         }
 
-    # Advisor Core owns every number and priority. The AI only explains the
-    # deterministic result; the formatter has a local fallback, so the response
-    # can never become an empty "Respuesta recibida" payload.
+    # Advisor Core owns every number and priority; the deterministic formatter
+    # words its result, so the response can never become an empty
+    # "Respuesta recibida" payload.
     if intent_result.get("intent") == "advisor_summary":
         advice = get_financial_advice()
         return {
