@@ -8,7 +8,6 @@
 // Optional environment:
 //   JAVA_HOME             JDK 17+ (falls back to Android Studio's bundled JBR)
 //   ANDROID_HOME          Android SDK (falls back to local.properties / default paths)
-//   GOOGLE_SERVICES_JSON  path to a local google-services.json to copy into android/app
 //   DINCR_ANDROID_BUILD_DIR  where Gradle runs when the repo lives in OneDrive (see below)
 //
 // OneDrive: Gradle cannot snapshot OneDrive placeholder files ("Cannot snapshot …: not a
@@ -18,7 +17,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { homedir, platform } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -97,27 +96,9 @@ function readEnvKeys() {
   return { ...env, ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("VITE_") || key.startsWith("SUPABASE_"))) };
 }
 
-function checkGoogleServices() {
-  const target = join(androidDir, "app", "google-services.json");
-  const source = process.env.GOOGLE_SERVICES_JSON && resolve(process.env.GOOGLE_SERVICES_JSON);
-  if (source && !existsSync(source)) return fail(`GOOGLE_SERVICES_JSON apunta a un archivo inexistente: ${source}`);
-  const file = source || target;
-  if (!existsSync(file)) {
-    notes.push("Sin android/app/google-services.json: el APK se genera, pero Firebase Analytics/Crashlytics quedan desactivados. Definí GOOGLE_SERVICES_JSON=<ruta> para incluirlo (nunca se commitea).");
-    return;
-  }
-  let packages = [];
-  try {
-    packages = JSON.parse(readFileSync(file, "utf8")).client.map((c) => c.client_info.android_client_info.package_name);
-  } catch {
-    return fail(`google-services.json no es válido: ${file}`);
-  }
-  if (!packages.includes(APP_ID)) return fail(`google-services.json no incluye el paquete ${APP_ID}.`);
-  if (source && source !== target) {
-    if (!checkOnly) copyFileSync(source, target);
-    notes.push(checkOnly ? "google-services.json válido; se copiará a android/app al compilar." : "google-services.json copiado a android/app (ignorado por git).");
-  }
-}
+// Firebase is used only to distribute test APKs (App Distribution upload from the
+// console or the Firebase CLI). The app itself contains no Firebase SDK, so no
+// google-services.json is needed or copied into the build.
 
 function mirror(from, to) {
   // /MIR deletes stale sources (e.g. after a plugin upgrade); /XD keeps Gradle outputs,
@@ -165,7 +146,6 @@ if (!env.VITE_POSTHOG_KEY) notes.push("PostHog desactivado en este APK (falta VI
 const capacitorConfig = JSON.parse(readFileSync(join(root, "capacitor.config.json"), "utf8"));
 if (capacitorConfig.appId !== APP_ID) fail(`capacitor.config.json tiene appId ${capacitorConfig.appId}; se esperaba ${APP_ID}.`);
 
-checkGoogleServices();
 
 for (const note of notes) console.warn(`! ${note}`);
 if (problems.length) {

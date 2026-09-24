@@ -10,7 +10,7 @@ PostHog es la telemetría permanente de DINCR. Sirve para saber cómo funciona e
 |---|---|---|
 | Contrato del móvil | `frontend/src/lib/analyticsContract.js` | Lista cerrada de eventos y propiedades. `safeAnalyticsProperties` descarta todo lo demás y `endpointModule` convierte una ruta de API en un módulo fijo. |
 | SDK del móvil | `frontend/src/lib/productAnalytics.js` | `posthog-js`, **solo en la compilación nativa DINCR**, solo para cuentas Users (Free, Basic, VIP) con los documentos legales aceptados. `before_send` reconstruye cada evento con la lista cerrada. |
-| Fachada | `frontend/src/lib/telemetry.js` (`trackEvent`, `trackScreen`) | Un solo punto de emisión para Firebase y PostHog. |
+| Fachada | `frontend/src/lib/telemetry.js` (`trackEvent`, `trackScreen`, `recordError`) | Único punto de emisión, **solo hacia PostHog**. Firebase no recibe nada. |
 | Contrato del servidor | `backend/product_ops/posthog_events.py` | `SERVER_EVENTS` define, para cada evento, sus propiedades y tipos cerrados. `capture_backend_event` se usa desde `BackgroundTasks`; `capture_backend_event_later` es una cola en un hilo, no bloqueante, para syncs, crons y handlers. |
 | Salud de la sincronización de correo | `backend/user_product/mail_sync_analytics.py` | Un solo resultado por cada sync de Gmail/Outlook, con todos sus disparadores (manual, conexión, mantenimiento, push). |
 | Baseline histórico | `backend/scripts/posthog_signups_baseline.py` | Se corre una sola vez, a mano: agregados diarios de altas. |
@@ -226,7 +226,7 @@ Si el plan de PostHog no soporta alguna condición compuesta, usar la alerta de 
 - **Antes de distribuir un build con `VITE_POSTHOG_KEY`:**
   1. PostHog → Project settings → **Discard client IP data** activado.
   2. La Política de Privacidad publicada ya nombra a PostHog (analítica de producto anónima, sin correo, nombre ni datos financieros). Cualquier cambio a pseudónimos estables exige una versión legal nueva.
-- **Firebase Analytics/Crashlytics** (fuera de este contrato): recibe el ID interno de cuenta (`setUserId`), pantallas del Owner y el texto de errores, sin control por rol ni por aceptación legal (`src/lib/telemetry.js`). Pendiente de decisión de producto/legal. No se modificó.
+- **Firebase:** solo distribuye builds de prueba (App Distribution). No hay SDK de Firebase, Analytics ni Crashlytics en la app, y no recibe ningún dato del usuario (ver `docs/android-local-build.md`). Un fallo de render de React se reporta en PostHog como `app_error` con `error_category=render_error`, sin mensaje ni stack.
 
 ## 11. Verificación física mínima (teléfono → PostHog)
 

@@ -28,7 +28,6 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined
-            if (id.includes('firebase') || id.includes('@capacitor-firebase')) return 'firebase'
             if (id.includes('@supabase')) return 'supabase'
             // recharts and its dependency tree are only used by Owner screens: leave them to the
             // lazily loaded Owner chunk (shared modules are split out automatically).

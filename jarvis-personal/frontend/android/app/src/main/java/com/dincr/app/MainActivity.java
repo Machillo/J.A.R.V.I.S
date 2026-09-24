@@ -8,28 +8,15 @@ import android.os.Bundle;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.appdistribution.FirebaseAppDistribution;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     private static final int NOTIFICATION_PERMISSION_REQUEST = 1203;
-    private boolean updateCheckStarted = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestNotificationPermission();
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (!updateCheckStarted && !FirebaseApp.getApps(this).isEmpty()) {
-            updateCheckStarted = true;
-            FirebaseAppDistribution.getInstance()
-                .updateIfNewReleaseAvailable();
-        }
     }
 
     private void requestNotificationPermission() {

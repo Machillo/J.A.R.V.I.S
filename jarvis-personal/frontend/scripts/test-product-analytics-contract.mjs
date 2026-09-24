@@ -125,7 +125,8 @@ const walk = (dir) => {
   }
 };
 walk(new URL("../src", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
-// Owner-only screens log a few events to Firebase only; PostHog never receives Owner events.
+// Owner-only screens still call trackEvent for a few events; the contract drops them (the
+// Owner is never tracked) and no other system receives them.
 const OWNER_FIREBASE_ONLY = new Set(["salvavidas_saved", "salvavidas_target_selected"]);
 for (const [file, text] of sources) {
   for (const match of text.matchAll(/(?:trackEvent|captureProductEvent)\(\s*"([a-z_]+)"\s*(?:,\s*\{([^}]*)\})?/g)) {
@@ -154,6 +155,7 @@ assert.match(app, /event === "SIGNED_IN" && activeUserId === null && nextUserId\
 assert.ok(app.indexOf('captureProductEvent("logout")') < app.indexOf("if (identityChanged) setCurrentUser(null)"), "logout is sent before the identity reset");
 const telemetry = fs.readFileSync(new URL("../src/lib/telemetry.js", import.meta.url), "utf8");
 assert.match(telemetry, /captureProductEvent\("app_error", \{ error_category: "window_error" \}\)/, "app errors carry only a category");
+assert.match(telemetry, /captureProductEvent\("app_error", \{ error_category: "render_error" \}\)/, "React render failures are reported as a category only");
 const incidents = fs.readFileSync(new URL("../src/lib/incidentReporter.js", import.meta.url), "utf8");
 assert.match(incidents, /endpoint: endpointModule\(incident\.path\)/, "API errors carry a module, never the path");
 

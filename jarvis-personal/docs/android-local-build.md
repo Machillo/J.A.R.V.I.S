@@ -16,12 +16,25 @@ The APK ends up at `frontend/android/app/build/outputs/apk/debug/app-debug.apk`.
 - A JDK 17+: `JAVA_HOME`, falling back to Android Studio's bundled JBR.
 - The Android SDK: `ANDROID_HOME` / `ANDROID_SDK_ROOT` / `android/local.properties` / the default install path.
 - `node_modules` installed, Supabase URL and anon key present in `.env`, and `capacitor.config.json` is `com.dincr.app`.
-- `google-services.json` (optional):
-  - To include it, set `GOOGLE_SERVICES_JSON=<path>`. The script checks that it contains `com.dincr.app` and copies it into `android/app`, which git ignores.
-  - Without it, the APK still builds, but Firebase Analytics/Crashlytics are disabled.
 - Backend used by the APK: native builds call `VITE_NATIVE_API_URL` if set, otherwise **production** (see `src/lib/apiUrl.js`). The script says which one.
 
 It never prints `.env` values and never commits anything.
+
+## Firebase: distribution only
+
+> **Firebase may distribute DINCR test builds. Firebase must not observe DINCR users.**
+
+PostHog is DINCR's only analytics/observability system (`docs/analytics/posthog-event-taxonomy.md`). Firebase is kept temporarily **only** for Firebase App Distribution:
+
+1. Build the debug APK with `npm run android:apk`.
+2. Upload it: Firebase console → App Distribution → drag the APK. With the Firebase CLI: `firebase appdistribution:distribute <apk> --app <android-app-id> --groups <testers>`.
+3. Testers install from the invitation email or the Firebase App Tester app.
+
+None of this needs Firebase inside the app. The APK has no Firebase SDK, no Analytics or Crashlytics, no `google-services` Gradle plugin, and no `google-services.json`. A local `android/app/google-services.json` left over from earlier builds is ignored by the build and by git, and can be deleted.
+
+**Trade-off:** testers no longer get the in-app "new build available" prompt of the App Distribution tester SDK. The invitation and update emails replace it.
+
+`backend/tests/test_firebase_distribution_only.py` fails if a Firebase runtime SDK, Analytics or Crashlytics, the google-services plugin, native Firebase initialization or a Firebase telemetry call comes back. Only build-time upload tooling (the Firebase CLI `firebase-tools`, the `com.google.firebase.appdistribution` Gradle upload plugin) is allowlisted. Firebase can be removed completely once App Distribution is no longer used.
 
 ## Windows + OneDrive
 

@@ -36,7 +36,7 @@ const categories = {
   // Product module of a failing API call (see endpointModule), never the URL.
   endpoint: new Set(["auth", "home", "transactions", "debts", "goals", "budget", "strategy", "reports", "mail", "accounts", "notifications", "settings", "support", "billing", "other"]),
   method: new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]),
-  error_category: new Set(["window_error", "unhandled_rejection", "network", "server", "client"]),
+  error_category: new Set(["window_error", "unhandled_rejection", "render_error", "network", "server", "client"]),
 };
 
 const booleans = new Set(["success", "initial_scan_complete"]);
