@@ -24,7 +24,10 @@ import Settings from "../pages/Settings";
 import Transactions from "../pages/Transactions";
 import PremiumStrategy from "../pages/PremiumStrategy";
 import AdditionalCards from "../pages/AdditionalCards";
-import Emails from "../pages/Emails";
+// Owner connects financial mailboxes through the same OAuth flow as DINCR Users.
+import GmailAutomation from "../users/pages/GmailAutomation";
+import { completeVipMailConnection } from "../users/services/jarvisApi";
+import { MAIL_OAUTH_RETURN_EVENT, captureMailOAuthReturns, redeemPendingMailOAuth } from "../lib/mailOAuth";
 import Receivables from "../pages/Receivables";
 import Investments from "../pages/Investments";
 import Wealth from "../pages/Wealth";
@@ -314,6 +317,23 @@ export default function App() {
     setProfilePreferences(null);
   };
 
+  // Mail OAuth returns by deep link, exactly as in DINCR Users: this signed-in
+  // Owner session redeems the one-time completion, then shows its mailboxes.
+  useEffect(() => {
+    captureMailOAuthReturns();
+    const redeem = () => redeemPendingMailOAuth(completeVipMailConnection).then((outcome) => { if (outcome) setActivePage("emails"); });
+    const redeemWhenVisible = () => { if (document.visibilityState === "visible") redeem(); };
+    redeem();
+    window.addEventListener(MAIL_OAUTH_RETURN_EVENT, redeem);
+    window.addEventListener("online", redeem);
+    document.addEventListener("visibilitychange", redeemWhenVisible);
+    return () => {
+      window.removeEventListener(MAIL_OAUTH_RETURN_EVENT, redeem);
+      window.removeEventListener("online", redeem);
+      document.removeEventListener("visibilitychange", redeemWhenVisible);
+    };
+  }, []);
+
   const navigatePage = (nextPage) => {
     if (!nextPage || nextPage === activePage) return;
     setPageStack((stack) => [...stack, activePage].slice(-12));
@@ -573,7 +593,7 @@ export default function App() {
         return <AdditionalCards />;
 
       case "emails":
-        return <Emails onFinanceChanged={refreshAppData} />;
+        return <GmailAutomation />;
 
       case "settings":
         return <Settings status={status} />;
@@ -597,7 +617,8 @@ export default function App() {
   };
 
   const currentSection = appSections[activePage] || appSections[getBottomGroup(activePage)] || appSections.dashboard;
-  const immersivePages = new Set(["moneyControl", "emails", "transactions", "additionalCards", "goals", "memory", "profile", "settings"]);
+  // "emails" renders the shared product mailbox screen, which relies on the shell back bar.
+  const immersivePages = new Set(["moneyControl", "transactions", "additionalCards", "goals", "memory", "profile", "settings"]);
   const showHeader = activePage !== "dashboard" && !immersivePages.has(activePage);
   const platform = detectNativePlatform();
   const isStandalonePwa = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;

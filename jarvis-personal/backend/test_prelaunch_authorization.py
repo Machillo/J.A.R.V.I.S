@@ -25,23 +25,16 @@ def as_role(monkeypatch):
     return client
 
 
-def test_regular_account_cannot_read_the_owners_gmail(as_role, monkeypatch):
-    """Before the fix any account could list the owner's mailbox with an arbitrary Gmail query."""
-    calls = []
-    monkeypatch.setattr(email_monitor_routes, "sync_gmail_for_owner",
-                        lambda **kwargs: calls.append(kwargs) or {"processed": [{"subject": "secret", "sender": "x"}]})
-
+def test_regular_account_cannot_reach_the_retired_owner_gmail_reader(as_role):
     response = as_role("user").post("/email-monitor/sync-gmail?query=in:anywhere&current_month_only=false", headers=AUTH)
 
     assert response.status_code == 403
-    assert calls == [] and "secret" not in response.text
 
 
-def test_owner_can_still_sync_their_gmail(as_role, monkeypatch):
-    calls = []
-    monkeypatch.setattr(email_monitor_routes, "sync_gmail_for_owner", lambda **kwargs: calls.append(kwargs) or {"status": "OK"})
-    assert as_role("owner").post("/email-monitor/sync-gmail", headers=AUTH).status_code == 200
-    assert len(calls) == 1
+def test_owner_gmail_reader_is_retired(as_role):
+    """The Owner connects mailboxes through the standard OAuth flow; no server-held Gmail token is read."""
+    assert not hasattr(email_monitor_routes, "sync_gmail_for_owner")
+    assert as_role("owner").post("/email-monitor/sync-gmail", headers=AUTH).status_code == 410
 
 
 # Legacy DINCR Owner (JARVIS Personal) APIs: scoped to the caller's workspace, but they

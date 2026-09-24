@@ -1,24 +1,19 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, Query
+from fastapi import APIRouter, HTTPException
 
 from backend.email_monitor.models import EmailCandidateBulkDecisionRequest, EmailCandidateClassifyRequest, EmailCandidateDecisionRequest, EmailStatementReconcileRequest, EmailTextScanRequest
 from backend.email_monitor.statement_reconciliation import reconcile_statement
 from backend.auth.current_user import get_current_user_id, require_roles
 from backend.core.database import get_connection
 from backend.email_monitor.service import (
-    cron_sync,
     _workspace_id_for_user,
     bulk_decide_candidates,
     classify_candidate,
     decide_candidate,
     get_email_monitor_status,
     list_email_candidates,
-    process_gmail_push,
-    renew_gmail_watch,
     scan_email_text,
-    sync_ccss_payroll_orders,
-    sync_gmail_for_owner,
 )
 
 router = APIRouter(prefix="/email-monitor", tags=["Email Monitor"])
@@ -78,38 +73,40 @@ def email_monitor_candidate_bulk_decision(request: EmailCandidateBulkDecisionReq
     return bulk_decide_candidates(candidate_ids=request.candidate_ids, decision=request.decision)
 
 
+# The Owner's legacy Gmail reader (one server-held refresh token, cron, Pub/Sub
+# watch) is retired. The Owner connects each mailbox through the standard
+# per-account OAuth flow (/user-product/vip/gmail/*), like every DINCR account.
+LEGACY_READER_RETIRED = (
+    "El lector Gmail legacy fue retirado. Conectá tus correos desde Correos financieros."
+)
+
+
 @router.post("/sync-gmail")
-def email_monitor_sync_gmail(max_results: int = 150, auto_commit: bool = False, query: str | None = None, current_month_only: bool = True):
-    # The owner's mailbox is read with server credentials (GMAIL_REFRESH_TOKEN) and the
-    # response lists message subjects and senders: never reachable by other accounts.
-    # The guard lives here because cron and Pub/Sub call sync_gmail_for_owner without a user.
+def email_monitor_sync_gmail():
     require_roles("owner")
-    return sync_gmail_for_owner(
-        max_results=max_results,
-        auto_commit=auto_commit,
-        query=query,
-        current_month_only=current_month_only,
-    )
+    raise HTTPException(status_code=410, detail=LEGACY_READER_RETIRED)
 
 
 @router.post("/sync-ccss-payroll")
 def email_monitor_sync_ccss_payroll():
-    return sync_ccss_payroll_orders()
+    # CCSS payroll orders now arrive with each connected mailbox sync
+    # (payroll_salary_reports); Finance's aguinaldo refresh just reads them.
+    require_roles("owner")
+    return {"status": "OK", "source": "connected_mailboxes", "message": "Las órdenes patronales llegan con la sincronización de tus correos conectados."}
 
 
 @router.post("/cron")
-def email_monitor_cron(
-    x_jarvis_cron_secret: str | None = Header(default=None),
-    max_results: int = Query(default=150, ge=1, le=500),
-):
-    return cron_sync(secret=x_jarvis_cron_secret, max_results=max_results)
+def email_monitor_cron():
+    raise HTTPException(status_code=410, detail=LEGACY_READER_RETIRED)
 
 
 @router.post("/gmail-watch")
-def email_monitor_gmail_watch(x_jarvis_cron_secret: str | None = Header(default=None)):
-    return renew_gmail_watch(secret=x_jarvis_cron_secret)
+def email_monitor_gmail_watch():
+    raise HTTPException(status_code=410, detail=LEGACY_READER_RETIRED)
 
 
 @router.post("/gmail-push")
-def email_monitor_gmail_push(payload: dict, token: str | None = Query(default=None)):
-    return process_gmail_push(payload=payload, token=token)
+def email_monitor_gmail_push():
+    # Acknowledge without processing so a leftover Pub/Sub push subscription stops
+    # retrying; nothing is read from Gmail.
+    return {"status": "retired"}
