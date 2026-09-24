@@ -6,7 +6,7 @@ from time import perf_counter
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from backend.auth.current_user import get_current_user, get_current_user_id, get_current_workspace_id
+from backend.auth.current_user import get_current_account_id, get_current_user, get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx, voice
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
@@ -14,6 +14,7 @@ from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.ai.openai_client import get_active_premium_guides
 from backend.goals.strategy import build_goal_portfolio
+from backend.user_product.income_policy import load_income_baseline
 
 logger = logging.getLogger("jarvis.strategy")
 
@@ -964,6 +965,22 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         0.0,
     )
     current_month_extra_net = max(current_month_income - recurring_monthly_income, 0.0)
+    income_policy = None
+    if get_current_user().get("role") != "owner":
+        # DINCR Users: the Owner payroll inputs above don't apply (a Users declared
+        # salary lives in financial_profiles), and "income already received" is
+        # subtracted because the Owner's received money sits in the MultiMoney
+        # balance counted as cash. Users have no such balance, so subtracting
+        # imported deposits made them vanish. Use the shared income policy, the same
+        # baseline Home uses, and plan the whole monthly income.
+        with get_connection() as conn:
+            income_policy = load_income_baseline(
+                conn, account_id=get_current_account_id(), workspace_id=workspace_id,
+            )
+        recurring_monthly_income = current_month_income = income_policy["monthly_income"]
+        income_received_current_cycle = 0.0
+        remaining_income_current_cycle = current_month_income
+        current_month_extra_net = 0.0
 
     configured_debt_payments = sum(
         _normalize_payment(debt.get("monthly_payment"), debt.get("remaining_amount"))
@@ -1137,6 +1154,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "current_month_extra_net": round(current_month_extra_net, 2),
         "income_received_current_cycle": round(income_received_current_cycle, 2),
         "remaining_income_current_cycle": round(remaining_income_current_cycle, 2),
+        "income_policy": income_policy and {key: income_policy[key] for key in ("policy", "source", "declared", "baseline", "recurring")},
         "current_month_one_time_debt_boost": round(first_month_one_time_boost, 2),
         "monthly_expenses": round(committed_spending, 2),
         "statement_expenses": round(statement_spending, 2),
