@@ -7,7 +7,7 @@ import { getSavingsPlans } from "../../../../users/services/jarvisApi";
 
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
+const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:0 }).format(Number(value) || 0);
 
 function MenuRow({ icon: Icon, title, subtitle, onClick, danger = false }) {
   return <button className={`free-menu-row ${danger ? "danger" : ""}`} type="button" onClick={onClick}>

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from typing import Any
-from backend.core.i18n import current_language, tx
+from backend.core.i18n import current_language, tx, voice
 
 from backend.financial_lifecycle.progress import compare_states
 
@@ -165,11 +165,28 @@ _NAMED_TITLES = {
 }
 
 
+# The stored rationale comes from the Owner advisor and can carry its personal
+# assistant voice; DINCR users get the neutral rationale of the action type.
+_SPANISH_RATIONALE = {
+    "complete_data": "Sin este dato DINCR no puede autorizar el uso de dinero.",
+    "stabilize_cashflow": "Tu saldo proyectado queda negativo; cubrilo primero.",
+    "mitigate_deterioration": "DINCR detectó un cambio negativo que requiere atención primero.",
+    "reconcile": "Los saldos reales deben confirmarse antes de mover excedentes.",
+    "emergency_fund": "Es el mínimo protegido antes de acelerar deuda o invertir.",
+    "debt": "Es la deuda prioritaria de tu estrategia actual.",
+    "goal": "Es la meta activa de mayor prioridad y fecha.",
+    "investment": "No quedan bloqueos financieros previos.",
+    "hold": "No existe excedente seguro después de obligaciones y protección.",
+}
+
+
 def localized_action(action: dict[str, Any]) -> tuple[str | None, str | None]:
     """(title, rationale) of a stored strategy action in the response language."""
     title, why = action.get("title"), action.get("why")
-    if current_language() == "es" or not action:
+    if not action:
         return title, why
+    if current_language() == "es":
+        return title, voice(why, _SPANISH_RATIONALE.get(action.get("type"), why), why)
     kind = action.get("type")
     english_title, english_why = _ENGLISH_ACTIONS.get(kind, (None, None))
     prefix = _NAMED_TITLES.get(kind)

@@ -54,7 +54,7 @@ export default function AppLockSettings({ userId }) {
       <header>
         <span><ShieldCheck size={22}/></span>
         <div><strong>{tx("Bloqueo de DINCR", "DINCR app lock")}</strong><small>{tx(`Protegé la app con ${label} o el código del teléfono.`, `Protect the app with ${label} or your device passcode.`)}</small></div>
-        <button className={`app-lock-toggle ${config.enabled ? "is-on" : ""}`} type="button" role="switch" aria-checked={config.enabled} disabled={working || status === null} onClick={toggle}><i /></button>
+        <button className={`app-lock-toggle ${config.enabled ? "is-on" : ""}`} type="button" role="switch" aria-checked={config.enabled} aria-label={tx("Bloqueo de DINCR", "DINCR app lock")} disabled={working || status === null} onClick={toggle}><i /></button>
       </header>
       {config.enabled && <div className="app-lock-timeout"><span>{tx("Bloqueo automático", "Automatic lock")}</span><strong>{tx("Después de 5 minutos fuera de DINCR", "After 5 minutes away from DINCR")}</strong></div>}
       {config.enabled && <button className="app-lock-now" type="button" onClick={() => requestAppLock(userId)}><Fingerprint size={18}/>{tx("Bloquear ahora", "Lock now")}</button>}

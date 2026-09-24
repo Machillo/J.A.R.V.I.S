@@ -44,7 +44,7 @@ from backend.core.idempotency import (
     safe_abandon_operation,
 )
 from backend.core.feature_flags import disabled_feature_for_request
-from backend.core.i18n import language_for_request, reset_language, set_language
+from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language
 
 app = FastAPI(title="Jarvis Core")
 logger = logging.getLogger("jarvis.api")
@@ -168,9 +168,11 @@ async def safe_unhandled_error_handler(request: Request, exc: Exception):
 async def language_middleware(request: Request, call_next):
     # Text generated for the public DINCR app follows Accept-Language (es|en).
     token = set_language(language_for_request(request.url.path, request.headers.get("accept-language")))
+    users_token = set_dincr_users(is_dincr_users_path(request.url.path))
     try:
         return await call_next(request)
     finally:
+        reset_dincr_users(users_token)
         reset_language(token)
 
 

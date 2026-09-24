@@ -252,9 +252,16 @@
 
 .strategy-detail-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
+}
+
+/* On narrow phones a badge moves under the title instead of squeezing it. */
+.strategy-detail-heading > .strategy-title-row {
+  flex: 1 1 220px;
   min-width: 0;
 }
 

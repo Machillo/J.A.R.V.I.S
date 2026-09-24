@@ -4,12 +4,12 @@ import { deviceLanguage, localeTag, tx } from "../../lib/locale";
 import { categoryLabel } from "../../lib/categories";
 const language=deviceLanguage();
 const copy=(es,en)=>tx(es,en,language);
-const money=(v)=>new Intl.NumberFormat(localeTag(language),{style:"currency",currency:"CRC",maximumFractionDigits:0}).format(Number(v)||0);
+const money=(v)=>new Intl.NumberFormat(localeTag(language),{style:"currency",currency:"CRC",currencyDisplay:"narrowSymbol",maximumFractionDigits:0}).format(Number(v)||0);
 
 export default function Budget({ plan = "basic" }){
   const [data,setData]=useState(null),[error,setError]=useState(""),[saving,setSaving]=useState(false),[editing,setEditing]=useState(false);
   const load=()=>getBudget().then(setData).catch(e=>setError(e.message));
-  useEffect(load,[]);
+  useEffect(() => { load(); }, []);
   const totals=useMemo(()=>{
     const items=data?.items||[];
     const spent=items.reduce((sum,item)=>sum+Number(item.spent||0),0);
@@ -21,7 +21,7 @@ export default function Budget({ plan = "basic" }){
   if(!data)return <div className={`panel ${error?"error":""}`}>{error||copy("Preparando presupuesto...","Preparing budget...")}</div>;
 
   return <section className="finva-basic-budget">
-    {plan === "free" && <div className="hero"><span>BASIC</span><h1>{copy("Presupuesto guiado","Guided budget")}</h1><p>{copy("Organizá cuánto querés usar por categoría y comparalo con lo que ya gastaste.","Organize how much you want to use by category and compare it with what you've already spent.")}</p></div>}
+    {plan !== "basic" && <div className="hero"><span>DINCR · {plan === "vip" ? "VIP" : "BASIC"}</span><h1>{copy("Presupuesto guiado","Guided budget")}</h1><p>{copy("Organizá cuánto querés usar por categoría y comparalo con lo que ya gastaste.","Organize how much you want to use by category and compare it with what you've already spent.")}</p></div>}
     {error&&<div className="panel error">{error}</div>}
     <article className="basic-budget-summary">
       <small>{new Date().toLocaleDateString(localeTag(language),{month:"long"}).toUpperCase()}</small>
@@ -32,8 +32,9 @@ export default function Budget({ plan = "basic" }){
       {data.items.map((item,index)=>{
         const limit=Number(item.monthly_limit)||0, spent=Number(item.spent)||0;
         const pct=limit?Math.min(spent/limit*100,100):0;
-        return <article className="basic-budget-category" key={item.category}>
-          <header><strong>{categoryLabel(item.category)}</strong><span>{money(Math.max(limit-spent,0))} {copy("libre","left")}</span></header>
+        const over=limit>0&&spent>limit;
+        return <article className={`basic-budget-category${over?" is-over":""}`} key={item.category}>
+          <header><strong>{categoryLabel(item.category)}</strong><span>{over?`${money(spent-limit)} ${copy("excedido","over")}`:`${money(Math.max(limit-spent,0))} ${copy("libre","left")}`}</span></header>
           {editing
             ? <label><span>{copy("Límite mensual","Monthly limit")}</span><input type="number" min="0" step="0.01" value={item.monthly_limit} onChange={e=>change(index,e.target.value)}/></label>
             : <><p>{money(spent)} / {money(limit)}</p><progress max="100" value={pct}/></>}

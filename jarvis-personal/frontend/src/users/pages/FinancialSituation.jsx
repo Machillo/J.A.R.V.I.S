@@ -17,7 +17,7 @@ import { deviceLanguage, localeTag, tx as translate } from "../../lib/locale";
 
 const language = deviceLanguage();
 const tx = (es, en) => translate(es, en, language);
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style: "currency", currency: "CRC", maximumFractionDigits: 0 }).format(Number(value) || 0);
+const money = (value) => new Intl.NumberFormat(localeTag(language), { style: "currency", currency: "CRC", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }).format(Number(value) || 0);
 const empty = {
   income_type: "fixed",
   fixed_monthly_salary: "",
@@ -127,6 +127,7 @@ export default function FinancialSituation({ plan = "free", onNavigate }) {
   };
 
   if (!data && !error) return <div className="mobile-panel">{tx("Cargando tu situación financiera...", "Loading your financial situation...")}</div>;
+  if (!data) return <div className="panel error" role="alert">{error}</div>;
 
   const planName = labels[plan]?.name || plan.toUpperCase();
   return (

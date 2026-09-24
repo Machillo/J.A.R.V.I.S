@@ -95,6 +95,7 @@ export default function UserManagement() {
         <form className="user-admin-search" onSubmit={runSearch}>
           <input
             type="search"
+            aria-label="Buscar usuario por correo"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="correo@ejemplo.com"

@@ -132,14 +132,14 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
     more: tx("Ahorro y más", "Savings & more"), settings: tx("Ajustes", "Settings"),
     savings: tx("Ahorros", "Savings"),
     transactions: tx("Historial", "History"), situation: tx("Situación financiera", "Financial situation"),
-    monthly: tx("Resumen mensual", "Monthly summary"), feedback: tx("Ayuda", "Help"),
+    monthly: tx("Resumen mensual", "Monthly summary"), feedback: tx("Ayuda", "Help"), advisor: tx("Asesor", "Advisor"),
   };
   const basicTitles = {
     overview: tx("Hola", "Hello") + `, ${(user?.display_name || user?.email || tx("bienvenido", "welcome")).split(" ")[0]}`, finance: tx("Movimientos", "Transactions"), debts: tx("Deudas", "Debts"), goals: tx("Metas", "Goals"),
     more: tx("Más", "More"), budget: tx("Presupuesto", "Budget"), calendar: tx("Calendario financiero", "Financial calendar"),
     recurring: tx("Recurrentes", "Recurring"), reports: tx("Reportes", "Reports"), strategy: tx("Estrategia", "Strategy"),
     situation: tx("Situación financiera", "Financial situation"), transactions: tx("Historial", "History"), monthly: tx("Resumen mensual", "Monthly summary"),
-    settings: tx("Ajustes", "Settings"), feedback: tx("Ayuda", "Help"),
+    settings: tx("Ajustes", "Settings"), feedback: tx("Ayuda", "Help"), advisor: tx("Asesor", "Advisor"),
   };
   const customHeader = plan === "free" || plan === "basic";
   const healthMode = localHealth === "operational" ? platformHealth : localHealth;

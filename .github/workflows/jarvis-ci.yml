@@ -47,6 +47,7 @@ jobs:
       - run: npm run test:phase0i
       - run: npm run test:locale
       - run: npm run test:i18n
+      - run: npm run test:visual-freeze
       - run: npm run test:plans
 
   frontend-lint-report:

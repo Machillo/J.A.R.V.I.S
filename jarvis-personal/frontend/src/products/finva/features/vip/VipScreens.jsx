@@ -19,7 +19,7 @@ import {
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 const money = (value) => new Intl.NumberFormat(localeTag(language), {
-  style: "currency", currency: "CRC", maximumFractionDigits: 0,
+  style: "currency", currency: "CRC", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0,
 }).format(Number(value) || 0);
 const percent = (value) => `${Math.round(Number(value) || 0)}%`;
 

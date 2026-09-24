@@ -1113,7 +1113,19 @@ body:has(.users-app) { background: #050b0e; }
 .users-app .movement-row strong, .users-app .movement-row small { display:block; }
 .users-app .movement-row > span:last-child { text-align:right; }
 .users-app .movement-row .actions { margin-top:7px; }
-.users-app .movement-row .actions button { min-height:34px; padding:6px 8px; font-size:.68rem; }
+.users-app .movement-row .actions button { min-height:40px; padding:6px 10px; font-size:.68rem; }
+/* Phones: the three-column history table becomes stacked rows so the amount and
+   actions stay visible instead of scrolling sideways out of view. */
+@media (max-width: 560px) {
+  .users-app .movement-head { display:none; }
+  .users-app .movement-row { min-width:0; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"date date" "main amount" "actions actions"; gap:3px 12px; }
+  .users-app .movement-row > time { grid-area:date; }
+  .users-app .movement-row > span:first-of-type { grid-area:main; min-width:0; overflow-wrap:anywhere; }
+  .users-app .movement-row > span:last-child { display:contents; }
+  .users-app .movement-row > span:last-child > b { grid-area:amount; text-align:right; white-space:nowrap; }
+  .users-app .movement-row .actions { grid-area:actions; display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
+  .users-app .movement-row .actions button { min-height:40px; padding:8px 14px; }
+}
 .users-app .monthly-highlight { display:flex; flex-direction:column; gap:6px; }
 .users-app .monthly-highlight small { color:var(--muted); }
 .users-app .monthly-highlight strong { font-size:1.15rem; }

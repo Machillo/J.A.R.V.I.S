@@ -59,7 +59,7 @@ body:has(.native-product--finva:is(.native-plan--basic,.native-plan--vip)){backg
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .free-search input{width:100%;height:auto;min-height:0;padding:0;border:0;border-radius:0;background:transparent;color:#f7fbff;box-shadow:none}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .free-search input:focus{border:0;outline:0;box-shadow:none}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .free-filter-tabs{height:34px;padding:0;display:flex;gap:6px;border:0;background:transparent}
-.native-product--finva:is(.native-plan--basic,.native-plan--vip) .free-filter-tabs button{flex:1 0 0;height:34px;min-height:34px;padding:0 8px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#9eb0c4;font-size:9px;font-weight:700}
+.native-product--finva:is(.native-plan--basic,.native-plan--vip) .free-filter-tabs button{flex:1 0 0;height:40px;min-height:40px;padding:0 8px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#9eb0c4;font-size:9px;font-weight:700}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .free-filter-tabs button.active{background:#092938;color:#1aa6f5}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .free-transaction-list{display:grid;gap:8px}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .free-transaction-row{height:64px;min-height:64px;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#f7fbff;text-align:left}
@@ -76,7 +76,7 @@ body:has(.native-product--finva:is(.native-plan--basic,.native-plan--vip)){backg
   padding:11px 13px;display:grid;gap:5px;border:1px solid #142b40;border-radius:16px;background:#0b1726
 }
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .finva-basic-quick-card button{
-  min-height:32px;padding:0;display:flex;align-items:center;justify-content:space-between;border:0;border-bottom:1px solid #142b40;color:#f7fbff;background:#0f1f33
+  min-height:40px;padding:0;display:flex;align-items:center;justify-content:space-between;border:0;border-bottom:1px solid #142b40;color:#f7fbff;background:#0f1f33
 }
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .finva-basic-quick-card button:last-child{border-bottom:0}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .finva-basic-quick-card button span{display:flex;align-items:center;gap:8px;font-size:.72rem}
@@ -161,7 +161,7 @@ body:has(.native-product--finva:is(.native-plan--basic,.native-plan--vip)){backg
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-recurring-item header b{color:#1aa6f5;font-size:.72rem}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-recurring-item p{margin:5px 0 8px;color:#9eb0c4;font-size:.6rem}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-recurring-item .actions{display:flex;gap:6px}
-.native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-recurring-item .actions button{min-height:30px;padding:5px 9px;font-size:.58rem}
+.native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-recurring-item .actions button{min-height:40px;padding:6px 10px;font-size:.66rem}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-recurring-add{min-height:46px;border:0;background:#1aa6f5;color:#060e1a}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .finva-form-sheet,
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .finva-dialog{border:1px solid #142b40;background:#0b1726;box-shadow:0 -24px 64px rgba(0,0,0,.42)}
@@ -169,7 +169,7 @@ body:has(.native-product--finva:is(.native-plan--basic,.native-plan--vip)){backg
 /* BASIC · 06/09 Reportes */
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .finva-basic-reports{display:grid;gap:11px}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-report-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
-.native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-report-tabs button{min-height:34px;border:1px solid #142b40;border-radius:12px;background:#0b1726;color:#9eb0c4;font-size:.62rem;font-weight:750}
+.native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-report-tabs button{min-height:40px;border:1px solid #142b40;border-radius:12px;background:#0b1726;color:#9eb0c4;font-size:.62rem;font-weight:750}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-report-tabs button.active{background:#092938;color:#1aa6f5}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .finva-basic-reports>.month-picker{margin:0}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) :is(.basic-report-chart,.basic-report-categories,.basic-report-balance){
@@ -244,7 +244,7 @@ body:has(.native-product--finva:is(.native-plan--basic,.native-plan--vip)){backg
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .native-bottom-nav>button.active .native-nav-icon{color:#1aa6f5}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .native-nav-icon{min-height:21px}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .native-nav-icon svg{width:20px;height:20px}
-.native-product--finva:is(.native-plan--basic,.native-plan--vip) .native-nav-label{font-size:.55rem}
+.native-product--finva:is(.native-plan--basic,.native-plan--vip) .native-nav-label{font-size:var(--finva-nav-label-size);letter-spacing:-.01em}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .native-more-sheet{width:min(calc(100% - 20px),382px);padding:10px 14px calc(76px + env(safe-area-inset-bottom));border:1px solid #142b40;border-radius:24px 24px 0 0;background:#0b1726}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .native-more-sheet header small{color:#1aa6f5}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .native-sheet-group>small{color:#9eb0c4}
@@ -262,3 +262,9 @@ html[data-theme="light"] .native-product--finva:is(.native-plan--basic,.native-p
   .native-product--finva:is(.native-plan--basic,.native-plan--vip) .mobile-content{padding-inline:14px}
   .native-product--finva:is(.native-plan--basic,.native-plan--vip) .native-bottom-nav{width:calc(100% - 20px)}
 }
+
+/* Amount fields: the wrapper is the visible box; the plan-wide input style must not draw a second one inside it. */
+.native-product--finva:is(.native-plan--free,.native-plan--basic,.native-plan--vip) :is(.finva-money-input,.entry-amount-field>div) input{border:0;border-radius:0;background:transparent;box-shadow:none}
+/* A category over its limit says so instead of showing "0 left". */
+.native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-budget-category.is-over header span{color:#f5405e}
+.native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-budget-category.is-over progress{accent-color:#f5405e}

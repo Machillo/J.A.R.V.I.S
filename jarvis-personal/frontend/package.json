@@ -9,6 +9,7 @@
     "audit:language": "node scripts/audit-ui-language.mjs",
     "test:locale": "node scripts/test-locale.mjs",
     "test:i18n": "node scripts/test-i18n.mjs",
+    "test:visual-freeze": "node scripts/test-visual-freeze.mjs",
     "test:navigation": "node scripts/test-finva-settings-navigation.mjs",
     "test:plans": "node scripts/test-plan-selection.mjs",
     "test:unified-movements": "node scripts/test-unified-movements.mjs",
