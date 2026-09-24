@@ -7,7 +7,7 @@ import logging
 import os
 import re
 import secrets
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlencode
@@ -61,8 +61,43 @@ FINVA_QUERY = os.getenv(
 def _year_to_date_query(as_of: date | None = None) -> str:
     """Use the current calendar year only for a connection's first sync."""
     current = as_of or date.today()
+    return _initial_scan_query(date(current.year, 1, 1))
+
+
+RECENT_WINDOW_DAYS = 45  # newer_than:45d in FINVA_QUERY
+
+
+def _cr_midnight_epoch(day: date) -> int:
+    """Gmail reads after:<epoch> exactly; after:YYYY/MM/DD uses Google's own timezone."""
+    return int(datetime(day.year, day.month, day.day, tzinfo=mail_oauth.CR_TZ).timestamp())
+
+
+def _initial_scan_query(since: date) -> str:
+    """First sync: bank senders from the chosen import date (Costa Rica midnight)."""
     query = re.sub(r"\s+newer_than:\d+d\b", "", FINVA_QUERY, flags=re.IGNORECASE)
-    return f"{query} after:{current.year}/01/01"
+    return f"{query} after:{_cr_midnight_epoch(since)}"
+
+
+def _recent_query(connection: dict[str, Any], today: date | None = None) -> str:
+    """Later syncs: the recent window, never before the date the user chose."""
+    since = _connection_import_since(connection)
+    if since <= (today or date.today()) - timedelta(days=RECENT_WINDOW_DAYS):
+        return FINVA_QUERY
+    return f"{FINVA_QUERY} after:{_cr_midnight_epoch(since)}"
+
+
+def _connection_import_since(connection: dict[str, Any]) -> date:
+    """Stored import date; connections created before the choice scanned from January 1st."""
+    value = connection.get("import_since")
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10]) if value else mail_oauth.import_since(mail_oauth.DEFAULT_IMPORT_SCOPE)
+
+
+def _initial_scan_scope(connection: dict[str, Any]) -> str:
+    return "current_month" if connection.get("import_scope") == "current_month" else "year_to_date"
 
 
 def _list_message_refs(service, query: str, limit: int) -> list[dict[str, Any]]:
@@ -268,7 +303,7 @@ def gmail_status() -> dict[str, Any]:
         rows = conn.execute(
             """SELECT id,google_email,status,granted_scopes,last_sync_at,last_success_at,
                       watch_expiration,last_error,connected_at,updated_at,
-                      initial_scan_started_at,initial_scan_completed_at
+                      initial_scan_started_at,initial_scan_completed_at,import_scope,import_since
                FROM finva_gmail_connections
                WHERE account_id=%s AND workspace_id=%s
                ORDER BY connected_at,id""",
@@ -508,10 +543,10 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
     return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": transaction_id}
 
 
-def begin_gmail_connection() -> dict[str, str]:
+def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
     require_gmail_consent()
     client_id, _, redirect_uri = _google_config()
-    state, code_challenge = mail_oauth.start_flow("gmail")
+    state, code_challenge = mail_oauth.start_flow("gmail", import_scope)
 
     params = {
         "client_id": client_id,
@@ -596,28 +631,34 @@ def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) ->
     google_email = str(flow["mailbox_address"])
     secret_id = str(flow["pending_secret_id"])
     current = conn.execute(
-        """SELECT id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections
+        """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
            WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
         (account_id, workspace_id, google_email),
     ).fetchone()
     if current and "Mail.Read" in (current.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
+    window = mail_oauth.connection_import_window(dict(current) if current else None, flow)
     if current:
         row = conn.execute(
             """UPDATE finva_gmail_connections SET
                legacy_user_id=%s,refresh_token_secret_id=%s::uuid,granted_scopes=%s,
                status='active',last_error=NULL,history_id=NULL,watch_expiration=NULL,
+               import_scope=%s,import_since=%s,
+               initial_scan_page_token=CASE WHEN %s THEN NULL ELSE initial_scan_page_token END,
+               initial_scan_completed_at=CASE WHEN %s THEN NULL ELSE initial_scan_completed_at END,
                connected_at=NOW(),updated_at=NOW() WHERE id=%s RETURNING id""",
-            (legacy_user_id, secret_id, [GMAIL_SCOPE], current["id"]),
+            (legacy_user_id, secret_id, [GMAIL_SCOPE], window["import_scope"], window["import_since"],
+             window["restart_scan"], window["restart_scan"], current["id"]),
         ).fetchone()
     else:
         row = conn.execute(
             """INSERT INTO finva_gmail_connections(
                account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
-               granted_scopes,status,connected_at,updated_at
-           ) VALUES(%s,%s,%s,%s,%s::uuid,%s,'active',NOW(),NOW())
+               granted_scopes,import_scope,import_since,status,connected_at,updated_at
+           ) VALUES(%s,%s,%s,%s,%s::uuid,%s,%s,%s,'active',NOW(),NOW())
            RETURNING id""",
-            (account_id, workspace_id, legacy_user_id, google_email, secret_id, [GMAIL_SCOPE]),
+            (account_id, workspace_id, legacy_user_id, google_email, secret_id, [GMAIL_SCOPE],
+             window["import_scope"], window["import_since"]),
         ).fetchone()
     old_secret = (current or {}).get("refresh_token_secret_id")
     if old_secret and str(old_secret) != secret_id:
@@ -953,11 +994,11 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
         next_initial_page = None
         if initial_sync:
             financial_messages, next_initial_page = _list_message_page(
-                service, _year_to_date_query(),
+                service, _initial_scan_query(_connection_import_since(connection)),
                 page_token=connection.get("initial_scan_page_token"), limit=50,
             )
         else:
-            financial_messages = _list_message_refs(service, FINVA_QUERY, max_results)
+            financial_messages = _list_message_refs(service, _recent_query(connection), max_results)
         payroll_messages = _list_message_refs(service, _aguinaldo_gmail_query(), 100)
         messages = {
             item["id"]: item
@@ -979,20 +1020,24 @@ def _sync_connection(connection_id: int, service=None, max_results: int = 100) -
         raise
 
     with get_connection() as conn:
+        # A reconnection that widened the history while this sync ran reset the scan:
+        # only advance the cursor of the window this sync actually scanned.
+        started_since = connection.get("import_since")
         conn.execute(
             """UPDATE finva_gmail_connections
                SET status='active',last_sync_at=NOW(),last_success_at=NOW(),last_error=NULL,
                    initial_scan_started_at=CASE WHEN %s THEN COALESCE(initial_scan_started_at,NOW()) ELSE initial_scan_started_at END,
-                   initial_scan_page_token=CASE WHEN %s THEN %s ELSE initial_scan_page_token END,
-                   initial_scan_completed_at=CASE WHEN %s AND %s IS NULL THEN NOW() ELSE initial_scan_completed_at END,
+                   initial_scan_page_token=CASE WHEN %s AND import_since IS NOT DISTINCT FROM %s::date THEN %s ELSE initial_scan_page_token END,
+                   initial_scan_completed_at=CASE WHEN %s AND %s IS NULL AND import_since IS NOT DISTINCT FROM %s::date THEN NOW() ELSE initial_scan_completed_at END,
                    updated_at=NOW()
                WHERE id=%s""",
-            (initial_sync, initial_sync, next_initial_page, initial_sync, next_initial_page, connection_id),
+            (initial_sync, initial_sync, started_since, next_initial_page,
+             initial_sync, next_initial_page, started_since, connection_id),
         )
         conn.commit()
     return {
         "status": "ok",
-        "scan_scope": "year_to_date" if initial_sync else "recent",
+        "scan_scope": _initial_scan_scope(connection) if initial_sync else "recent",
         "initial_scan_complete": (not initial_sync) or next_initial_page is None,
         "found": len(results),
         "auto_saved": results.count("auto_saved"),
@@ -1033,7 +1078,7 @@ def sync_current_gmail() -> dict[str, Any]:
         conn.commit()
     return {
         "status": "partial" if errors else "ok", "connections": len(rows), "failed_connections": errors,
-        "scan_scope": "year_to_date" if any(r["scan_scope"] == "year_to_date" for r in results) else "recent",
+        "scan_scope": next((scope for scope in ("year_to_date", "current_month") if any(r["scan_scope"] == scope for r in results)), "recent"),
         "initial_scan_complete": all(r["initial_scan_complete"] for r in results),
         **{key: sum(r.get(key, 0) for r in results) for key in ("found", "auto_saved", "pending", "payroll_reports", "duplicates")},
     }

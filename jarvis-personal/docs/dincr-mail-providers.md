@@ -47,7 +47,13 @@ token pendiente en el mantenimiento programado. Requiere la migración
 6. Probar autorización, primer escaneo, otro Gmail conectado, revisión de un
    aviso bancario, sincronización de mantenimiento y desconexión en dispositivo.
 
-El primer escaneo procesa páginas de hasta 50 avisos desde el inicio del año;
+Antes de abrir Google o Microsoft, la persona elige el historial a revisar:
+`current_month` (desde el día 1 del mes actual) o `current_year` (desde el 1 de
+enero). La elección se guarda en el flujo OAuth del servidor y pasa a la conexión
+(`import_since`); reconectar solo reinicia el escaneo si amplía el período.
+Sin elección (versiones anteriores de la app) se usa `current_year`.
+
+El primer escaneo procesa páginas de hasta 50 avisos desde `import_since`;
 las siguientes ejecuciones continúan desde el cursor. Los escaneos posteriores
 revisan avisos recientes. Solo se procesan remitentes financieros admitidos
 por el parser y no se almacenan otros mensajes de la bandeja. Los PDFs

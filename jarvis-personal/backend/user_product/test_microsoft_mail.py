@@ -40,7 +40,7 @@ class Connection:
 def test_oauth_begin_requires_consent_and_exact_read_scopes(monkeypatch):
     monkeypatch.setattr(mail, "require_gmail_consent", lambda: None)
     monkeypatch.setattr(mail, "_config", lambda: ("client", "secret", "https://api.example/callback"))
-    monkeypatch.setattr(mail.mail_oauth, "start_flow", lambda provider: (f"opaque-{provider}-state", "challenge"))
+    monkeypatch.setattr(mail.mail_oauth, "start_flow", lambda provider, *_scope: (f"opaque-{provider}-state", "challenge"))
     uri = mail.begin_connection()["authorization_url"]
     params = parse_qs(urlparse(uri).query)
     assert urlparse(uri).hostname == "login.microsoftonline.com"
@@ -97,10 +97,10 @@ def test_sync_reuses_candidate_pipeline_and_preserves_next_page(monkeypatch):
     result = mail.sync_connection(7)
     assert result["found"] == result["pending"] == 1
     assert ingested[0]["body"] == "Transferencia"
-    assert graph_calls[0][1]["$filter"] == f"receivedDateTime ge {date.today().year}-01-01T00:00:00Z"
+    assert graph_calls[0][1]["$filter"] == f"receivedDateTime ge {date.today().year}-01-01T00:00:00-06:00"
     assert "body" not in graph_calls[0][1]["$select"]
     assert len(graph_calls) == 2  # Read the selected bank message, never the unrelated message.
-    assert updated.calls[0][1][0].startswith("https://graph.microsoft.com/")
+    assert updated.calls[0][1][1].startswith("https://graph.microsoft.com/")  # next page kept for the scanned window
     assert not result["initial_scan_complete"]
     assert updated.committed
 

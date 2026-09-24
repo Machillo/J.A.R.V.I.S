@@ -25,7 +25,9 @@ import hmac
 import logging
 import re
 import secrets
+from datetime import date, datetime
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 
@@ -36,6 +38,11 @@ logger = logging.getLogger(__name__)
 
 PROVIDERS = frozenset({"gmail", "microsoft"})
 FLOW_TTL_MINUTES = 10
+# History the user chooses to import before the provider consent. Clients that do
+# not send a choice keep the scan window that existed before the choice.
+IMPORT_SCOPES = ("current_month", "current_year")
+DEFAULT_IMPORT_SCOPE = "current_year"
+CR_TZ = ZoneInfo("America/Costa_Rica")
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
@@ -66,10 +73,25 @@ def discard_stale_flows(conn, account_id: str | None = None) -> None:
         conn.execute("DELETE FROM mail_oauth_flows WHERE id = ANY(%s::uuid[])", ([str(row["id"]) for row in stale],))
 
 
-def start_flow(provider: str) -> tuple[str, str]:
+def normalized_import_scope(value: str | None) -> str:
+    if value is None:
+        return DEFAULT_IMPORT_SCOPE
+    if value not in IMPORT_SCOPES:
+        raise HTTPException(status_code=422, detail="Elegí desde este mes o desde este año.")
+    return value
+
+
+def import_since(scope: str | None, today: date | None = None) -> date:
+    """First day to import: the 1st of the current month or January 1st (Costa Rica time)."""
+    today = today or datetime.now(CR_TZ).date()
+    return today.replace(day=1) if scope == "current_month" else date(today.year, 1, 1)
+
+
+def start_flow(provider: str, import_scope: str | None = None) -> tuple[str, str]:
     """Create a flow for the current session. Returns (state, PKCE code_challenge)."""
     if provider not in PROVIDERS:
         raise ValueError("Unknown mail provider")
+    scope = normalized_import_scope(import_scope)
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
     state = secrets.token_urlsafe(32)
@@ -77,9 +99,9 @@ def start_flow(provider: str) -> tuple[str, str]:
     with get_connection() as conn:
         discard_stale_flows(conn, account_id)
         conn.execute(
-            """INSERT INTO mail_oauth_flows(state_hash,provider,account_id,workspace_id,code_verifier,expires_at)
-               VALUES(%s,%s,%s,%s,%s,NOW()+(%s*INTERVAL '1 minute'))""",
-            (_digest(state), provider, account_id, workspace_id, verifier, FLOW_TTL_MINUTES),
+            """INSERT INTO mail_oauth_flows(state_hash,provider,account_id,workspace_id,code_verifier,import_scope,expires_at)
+               VALUES(%s,%s,%s,%s,%s,%s,NOW()+(%s*INTERVAL '1 minute'))""",
+            (_digest(state), provider, account_id, workspace_id, verifier, scope, FLOW_TTL_MINUTES),
         )
         conn.commit()
     return state, pkce_challenge(verifier)
@@ -170,7 +192,7 @@ def complete_flow(
     with get_connection() as conn:
         flow = conn.execute(
             """SELECT id,provider,account_id,workspace_id,status,completion_hash,pending_secret_id,
-                      mailbox_address,granted_scopes,expires_at>NOW() AS active
+                      mailbox_address,granted_scopes,import_scope,expires_at>NOW() AS active
                FROM mail_oauth_flows WHERE id=%s::uuid FOR UPDATE""",
             (flow_id,),
         ).fetchone()
@@ -203,6 +225,29 @@ def complete_flow(
         )
         conn.commit()
     return {"connection_id": connection_id, "provider": flow["provider"], "already_completed": False}
+
+
+def connection_import_window(existing: dict[str, Any] | None, flow: dict[str, Any]) -> dict[str, Any]:
+    """Import window for a mailbox being connected or reconnected.
+
+    A new mailbox imports from the chosen date. Reconnecting never narrows what was
+    already imported: only an earlier date restarts the initial scan (messages already
+    stored are skipped by their provider id), otherwise the stored window and scan
+    progress are kept. Connections created before the choice existed scanned from
+    January 1st.
+    """
+    scope = normalized_import_scope(flow.get("import_scope"))
+    chosen = import_since(scope)
+    if not existing:
+        return {"import_scope": scope, "import_since": chosen, "restart_scan": True}
+    stored = existing.get("import_since") or import_since(DEFAULT_IMPORT_SCOPE)
+    if isinstance(stored, datetime):
+        stored = stored.date()
+    elif not isinstance(stored, date):
+        stored = date.fromisoformat(str(stored)[:10])
+    if chosen < stored:
+        return {"import_scope": scope, "import_since": chosen, "restart_scan": True}
+    return {"import_scope": existing.get("import_scope") or DEFAULT_IMPORT_SCOPE, "import_since": stored, "restart_scan": False}
 
 
 def complete_mail_connection(flow_id: str, completion: str) -> dict[str, Any]:
