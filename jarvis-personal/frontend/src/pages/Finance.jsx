@@ -308,7 +308,7 @@ function FinanceInputPanel({ onSaved, compact = false }) {
       </div>
 
       <textarea
-        className="finance-input-textarea"
+        aria-label="Movimientos para importar" className="finance-input-textarea"
         value={text}
         onChange={(event) => setText(event.target.value)}
         placeholder={'Ejemplo:\n2026-06-05 | Salario | 90000\n2026-06-06 | Uber Eats | 6500\n2026-06-07 | PlayStation | $11.99'}

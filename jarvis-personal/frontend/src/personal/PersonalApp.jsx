@@ -643,6 +643,7 @@ export default function App() {
         {activePage === "dashboard" && (
           <section className="jarvis-home-command" aria-label="Comando principal de Jarvis">
             <input
+              aria-label="Comando para JARVIS"
               value={jarvisInput}
               onChange={(event) => setJarvisInput(event.target.value)}
               onFocus={() => setCommandInputFocused(true)}
