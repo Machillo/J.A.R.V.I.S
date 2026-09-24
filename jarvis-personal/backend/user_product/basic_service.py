@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.i18n import tx
 
 
 def _money(value: Any) -> float:
@@ -261,7 +262,7 @@ def get_financial_calendar(period: str | None = None) -> dict:
         if start<=parsed<end:events.append({"date":parsed.isoformat(),"kind":"goal","name":goal["name"],"amount":round(max(_money(goal["target_amount"])-_money(goal["current_amount"]),0),2),"source":"goal","source_id":goal["id"]})
     pay_days=[int(x) for x in re.findall(r"\b(?:[1-9]|[12]\d|3[01])\b",str(profile.get("payday_note") or ""))]
     for day in sorted(set(pay_days)):
-        events.append({"date":date(start.year,start.month,min(day,last)).isoformat(),"kind":"income","name":"Ingreso esperado","amount":0,"source":"profile"})
+        events.append({"date":date(start.year,start.month,min(day,last)).isoformat(),"kind":"income","name":tx("Ingreso esperado","Expected income"),"amount":0,"source":"profile"})
     events.sort(key=lambda item:(item["date"],0 if item["kind"]=="income" else 1,item["name"]))
     return {"period":start.strftime("%Y-%m"),"events":events,"summary":{"income_events":sum(e["kind"]=="income" for e in events),"payments":round(sum(e["amount"] for e in events if e["kind"] in {"expense","debt"}),2),"commitments":sum(e["kind"] in {"expense","debt"} for e in events)}}
 

@@ -7,6 +7,7 @@ from typing import Any
 
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.i18n import plural, tx as localized
 
 
 def _as_float(value: Any, default: float = 0.0) -> float:
@@ -745,7 +746,7 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
         ).fetchall()
     debts = [dict(row) for row in rows]
     if not debts:
-        return {"status": "EMPTY", "message": "Señor, no hay deudas activas para simular.", "scenarios": []}
+        return {"status": "EMPTY", "message": localized("Señor, no hay deudas activas para simular.", "There are no active debts to simulate."), "scenarios": []}
 
     scenarios = []
     for debt in debts:
@@ -770,16 +771,25 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
 
         debt_type = str(debt.get("debt_type") or "other").lower().strip()
         if debt_type == "tasa_cero" and rate <= 0:
-            recommendation = "Señor, esta deuda está a tasa cero: mantenga la cuota y no sacrifique Salvavidas o deuda con interés para adelantarla."
+            recommendation = localized(
+                "Señor, esta deuda está a tasa cero: mantenga la cuota y no sacrifique Salvavidas o deuda con interés para adelantarla.",
+                "This debt is at zero interest: keep the payment and don’t sacrifice your emergency fund or interest-bearing debt to pay it early.",
+            )
             recommended = "MINIMUM"
         elif rate >= 0.025:
-            recommendation = "Señor, conviene amortizar cada mes porque el costo financiero es alto."
+            recommendation = localized("Señor, conviene amortizar cada mes porque el costo financiero es alto.", "It’s best to pay extra every month because the financial cost is high.")
             recommended = "A"
         elif months_to_save and months_to_save <= 4 and monthly_extra > minimum:
-            recommendation = f"Señor, puede acumular el excedente y tener capacidad de liquidarla en aproximadamente {months_to_save} meses."
+            recommendation = localized(
+                f"Señor, puede acumular el excedente y tener capacidad de liquidarla en aproximadamente {months_to_save} {plural(months_to_save, ('mes', ''), ('meses', ''))}.",
+                f"You can save the surplus and be able to pay it off in about {months_to_save} {plural(months_to_save, ('', 'month'), ('', 'months'))}.",
+            )
             recommended = "B"
         else:
-            recommendation = "Señor, recomiendo una estrategia híbrida: mantenga la cuota y use solo parte del excedente para acelerar."
+            recommendation = localized(
+                "Señor, recomiendo una estrategia híbrida: mantenga la cuota y use solo parte del excedente para acelerar.",
+                "A hybrid strategy is recommended: keep the payment and use only part of the surplus to speed it up.",
+            )
             recommended = "C"
 
         baseline_months = baseline.get("months")
@@ -809,9 +819,12 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
         })
 
     if max(surplus, 0.0) <= 0:
-        message = "Señor, este ciclo no tiene excedente libre; mantenga pagos mínimos y no simule abonos extra hasta corregir el flujo."
+        message = localized(
+            "Señor, este ciclo no tiene excedente libre; mantenga pagos mínimos y no simule abonos extra hasta corregir el flujo.",
+            "This cycle has no free surplus; keep minimum payments and don’t plan extra payments until cash flow is fixed.",
+        )
     else:
-        message = scenarios[0]["recommendation"] if scenarios else "Señor, no hay escenario disponible."
+        message = scenarios[0]["recommendation"] if scenarios else localized("Señor, no hay escenario disponible.", "No scenario is available.")
 
     return {
         "status": "OK",
