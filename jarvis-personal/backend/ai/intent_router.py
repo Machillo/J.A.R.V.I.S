@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Any
-
-from backend.ai.openai_client import ask_openai
 
 
 ACTION_TYPES = [
@@ -333,45 +330,8 @@ def _valid_intent_result(parsed: dict[str, Any]) -> dict[str, Any]:
 
 
 def detect_intent(user_message: str) -> dict[str, Any]:
-    # Determinístico primero. Evita gastar tokens para casos claros.
-    fallback = _fallback_detect(user_message)
-    if fallback["intent"] not in {"general", "unknown"} and fallback.get("confidence", 0) >= 0.75:
-        return fallback
-
-    prompt = f"""
-Eres el clasificador de intención de DINCR Owner. No respondes al usuario.
-
-Devuelve SOLO JSON válido con esta forma:
-{{"intent":"...","action_type":null,"entity":null,"confidence":0.0}}
-
-Intenciones disponibles:
-{AVAILABLE_INTENTS}
-
-Reglas críticas:
-1. Si el usuario pide buscar/investigar/consultar algo externo, usa internet_search.
-2. Si menciona F1, UFC, fútbol, carreras, partidos, Champions o mundial, usa sports_schedule.
-3. Si dice que tiene una cita, actividad, evento, compromiso, recordatorio o fecha personal, usa create_calendar_event.
-4. Si pregunta por agenda/calendario, usa calendar_summary.
-5. Solo usa create_expense/create_debt/create_income si claramente quiere guardar datos financieros.
-6. Chimborazo, F1, UFC, fútbol, noticias o preguntas generales NO son gastos.
-7. Si el usuario pide simulación financiera o "qué pasa si", usa financial_simulation.
-8. Si pregunta por forecast, salud financiera, fondo de emergencia, estrategia de deuda, bola de nieve, avalancha, gastos hormiga o conciliación, usa financial_engine.
-9. Responde breve JSON, sin markdown.
-
-Mensaje:
-{user_message!r}
-"""
-
-    ai_response = ask_openai(prompt, route="intent_classifier_premium", max_tokens=180, temperature=0.05)
-    if ai_response.get("status") != "OK":
-        return fallback
-
-    text = (ai_response.get("text") or "").strip()
-    text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    try:
-        return _valid_intent_result(json.loads(text))
-    except Exception:
-        return fallback
+    # Deterministic only: DINCR Owner no longer sends messages to a generative-AI provider.
+    return _fallback_detect(user_message)
 
 
 def is_pending_interrupt(intent_result: dict[str, Any], user_message: str) -> bool:

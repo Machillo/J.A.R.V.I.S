@@ -12,7 +12,6 @@ from backend.core.i18n import tx, voice
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.fixed_expenses import get_fixed_expense_status
-from backend.ai.openai_client import get_active_premium_guides
 from backend.goals.strategy import build_goal_portfolio
 from backend.user_product.income_policy import load_income_baseline
 

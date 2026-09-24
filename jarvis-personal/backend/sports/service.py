@@ -5,7 +5,6 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any
 
-from backend.ai.openai_client import ask_openai_optional
 from backend.ai.preferences import get_sports_preferences, update_sports_preferences
 from backend.integrations.internet_search import internet_search
 
@@ -91,29 +90,6 @@ def _concise_sports_answer(scope: str, query_type: str, user_query: str, search_
     results = (search_result.get("results") or [])[:5]
     if not results:
         return "Señor, no encontré un resultado deportivo claro."
-
-    now_cr = datetime.now(CR_TZ).strftime("%Y-%m-%d %H:%M Costa Rica")
-    prompt = f"""
-Eres el asistente interno DINCR Owner. Responde SOLO lo que el usuario pidió sobre deportes.
-No mandes calendarios completos salvo que el usuario pida "calendario" o "radar".
-Usa hora de Costa Rica si aparece o conviértela si el resultado la trae clara.
-Si no hay fecha/hora clara, dilo.
-
-Tipo: {scope}
-Modo: {query_type}
-Pregunta del usuario: {user_query or 'próximo evento'}
-Hora actual Costa Rica: {now_cr}
-Resultados web:
-{json.dumps(results, ensure_ascii=False, indent=2)}
-
-Respuesta máxima:
-- Si preguntó por próxima carrera/pelea/partido: 1 a 3 líneas.
-- Si pidió calendario/radar: máximo 5 eventos.
-- Tono: "Señor,".
-"""
-    ai = ask_openai_optional(prompt, route="sports_answer")
-    if ai.get("status") == "OK" and (ai.get("text") or "").strip():
-        return ai["text"].strip()
 
     first = results[0]
     return f"Señor, encontré esto: {first.get('title', 'Resultado')}. {first.get('snippet', '')}".strip()

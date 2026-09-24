@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-from backend.ai.openai_client import ask_openai_json, get_active_premium_guides
-from backend.ai.memory_service import create_memory_item, get_relevant_memory_context
-from backend.auth.current_user import get_current_user
 from backend.finance.strategic_engine import get_financial_engine_report
-from backend.finance.service import get_debts, get_financial_summary, get_net_worth_report
-from backend.transactions.analyzer import get_transaction_analysis
 from backend.ai.strategy_dashboard import build_local_strategy_blueprint
 from backend.advisor.service import get_financial_advice
 
@@ -22,106 +16,6 @@ def _safe(fn, fallback):
     except Exception:
         logger.exception("Premium context source failed: %s", getattr(fn, "__name__", "callable"))
         return {"unavailable": True, "fallback": fallback}
-
-
-def build_premium_context(user_message: str = "") -> dict[str, Any]:
-    return {
-        "advisor_core": _safe(get_financial_advice, {}),
-        "financial_summary": _safe(get_financial_summary, {}),
-        "net_worth": _safe(get_net_worth_report, {}),
-        "debts": _safe(get_debts, []),
-        "transactions_summary": _safe(get_transaction_analysis, {}),
-        "strategic_engine": _safe(get_financial_engine_report, {}),
-        "memory": _safe(lambda: get_relevant_memory_context(user_message or "finanzas estrategia preferencias", limit=8), []),
-        "premium_guides": _safe(lambda: get_active_premium_guides(limit=4), []),
-    }
-
-
-def premium_route_command(user_message: str, local_intent: dict[str, Any] | None = None) -> dict[str, Any]:
-    user = get_current_user()
-    if user.get("role") not in {"owner", "admin"}:
-        return {"status": "SKIPPED", "reason": "owner_only"}
-
-    context = build_premium_context(user_message)
-    system = """
-Eres el motor interno de DINCR Owner. Tu trabajo NO es conversar todavía; debes interpretar intención y devolver JSON.
-Reglas estrictas:
-- No uses nombre/correo. Para respuestas futuras el prefijo permitido es solo "Señor,".
-- Distingue consulta financiera de registro de gasto. "¿Puedo comprar X?" es capacidad_de_compra, NO create_expense.
-- Si el usuario informa un cambio real ya ocurrido, clasifícalo como acción local si hay datos suficientes.
-- Modo director: si hay datos suficientes, decide y actúa. No preguntes permiso para crear estrategia, registrar OT, registrar bonos o recalcular.
-- Solo pide datos si es imposible ejecutar la acción sin ellos.
-- Para financial_strategy, tu trabajo es activar/actualizar la estrategia; no devuelvas preguntas consultivas.
-- No inventes números. Usa el contexto solo como resumen.
-- Para deportes/calendario/internet devuelve la intención correcta, no finanzas.
-
-Devuelve JSON con esta forma:
-{
-  "status":"OK",
-  "intent":"capacity_check|financial_strategy|salary_distribution|create_debt|create_saving|create_goal|goal_projection|create_expense|create_income|create_bonus|create_payroll_event|fixed_expense|sports_schedule|calendar|internet_search|email|memory|direct_finance_answer|general",
-  "confidence":0.0,
-  "should_use_local_action":true,
-  "action_type":"create_payroll_event|null",
-  "payload":{},
-  "query":"",
-  "needs_confirmation":true,
-  "missing_field":"",
-  "advisor_mode":"short|normal",
-  "learning_note":"frase corta que Jarvis pueda guardar para aprender"
-}
-""".strip()
-
-    prompt = f"""
-Mensaje del usuario:
-{user_message}
-
-Intención local actual:
-{json.dumps(local_intent or {}, ensure_ascii=False)}
-
-Contexto resumido real de DINCR:
-{json.dumps(context, ensure_ascii=False, indent=2)}
-
-Mapeo de acciones locales disponibles:
-- create_debt: name,total_amount,remaining_amount,interest_rate,monthly_payment,payment_day
-- create_saving: name,amount
-- create_goal: name,target_amount,current_amount,target_date,priority
-- create_expense: category,amount,description,expense_type
-- create_income: amount,source
-- create_bonus: amount,description
-- create_payroll_event: event_type ('ot','vgh','holiday'), hours, description
-- fixed_expense: cambios en gastos fijos recurrentes
-
-Ejemplos:
-"hoy hice 2.5 h de ot" => create_payroll_event payload {{"event_type":"ot","hours":2.5}}
-"agarré 2 horas de vgh" => create_payroll_event payload {{"event_type":"vgh","hours":2}}
-"me llegó 48000 de bono" => create_bonus payload {{"amount":48000}}
-"puedo comprar una cerveza de 4000" => capacity_check, no action_type
-"ejecuta mi estrategia premium" => financial_strategy, no action_type, should_use_local_action true
-"viaje a ecuador es importante" => goal_projection si pregunta planificación/meta
-"cuál es mi mayor deuda" => direct_finance_answer
-"subió el gimnasio a 27000" => fixed_expense
-"cuando es la próxima carrera" => sports_schedule
-"busca Chimborazo" => internet_search
-"tengo cita el 25 de julio" => calendar
-"""
-
-    routed = ask_openai_json(prompt, route="jarvis_premium_intent_router", system=system, max_tokens=650)
-    if routed.get("status") != "OK":
-        return routed
-    data = routed.get("data") or {}
-    if data.get("learning_note"):
-        try:
-            create_memory_item(
-                content=str(data["learning_note"]),
-                category="project",
-                title="Aprendizaje de intención premium",
-                importance=2,
-                source="openai_router",
-                metadata={"message": user_message, "intent": data.get("intent")},
-            )
-        except Exception:
-            pass
-    return {**routed, "route": data}
 
 
 def get_current_strategy_summary() -> dict[str, Any]:

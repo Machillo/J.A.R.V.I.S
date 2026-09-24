@@ -1,11 +1,6 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Bell, CalendarDays, RadioTower, Sparkles, Trophy } from "lucide-react";
+import { ArrowLeft, Bell, CalendarDays, RadioTower, Trophy } from "lucide-react";
 import {
-  getJarvisUsageAdmin,
-  getJarvisUsageToday,
-  getJarvisPremiumStatus,
-  getJarvisPremiumGuides,
-  createJarvisPremiumInitialStrategy,
   getMe,
   getSportsPreferences,
   getUpcomingCalendarEvents,
@@ -29,11 +24,6 @@ const splitTeams = (value) =>
 export default function Settings({ status }) {
   const [section, setSection] = useState("general");
   const [me, setMe] = useState(null);
-  const [usage, setUsage] = useState(null);
-  const [premiumStatus, setPremiumStatus] = useState(null);
-  const [premiumGuides, setPremiumGuides] = useState([]);
-  const [premiumMessage, setPremiumMessage] = useState("");
-  const [adminUsage, setAdminUsage] = useState(null);
   const [sports, setSports] = useState(null);
   const [teamsText, setTeamsText] = useState("");
   const [calendar, setCalendar] = useState([]);
@@ -44,20 +34,17 @@ export default function Settings({ status }) {
   const [ownerBridgeBusy, setOwnerBridgeBusy] = useState(false);
   const [deployments, setDeployments] = useState(null);
 
-  const isAdmin = me?.role === "owner" || me?.role === "admin";
   const isOwner = me?.role === "owner";
 
   const load = async () => {
     try {
-      const [meData, usageData, sportsData, calendarData] = await Promise.all([
+      const [meData, sportsData, calendarData] = await Promise.all([
         getMe(),
-        getJarvisUsageToday(),
         getSportsPreferences(),
         getUpcomingCalendarEvents(45),
       ]);
 
       setMe(meData);
-      setUsage(usageData);
       setSports(sportsData);
       setTeamsText((sportsData?.football?.teams || []).join(", "));
       setCalendar(calendarData?.events || []);
@@ -79,23 +66,6 @@ export default function Settings({ status }) {
         console.warn("No pude cargar el monitor de despliegues", error);
       }
 
-      if (meData?.role === "owner" || meData?.role === "admin") {
-        const adminData = await getJarvisUsageAdmin();
-        setAdminUsage(adminData);
-      }
-
-      if (meData?.role === "owner") {
-        try {
-          const [premiumData, guideData] = await Promise.all([
-            getJarvisPremiumStatus(),
-            getJarvisPremiumGuides(),
-          ]);
-          setPremiumStatus(premiumData);
-          setPremiumGuides(guideData?.items || []);
-        } catch (error) {
-          console.warn("No pude cargar ChatGPT Premium", error);
-        }
-      }
     } catch (error) {
       console.error(error);
     }
@@ -121,17 +91,6 @@ export default function Settings({ status }) {
     setSports(result.value || payload);
   };
 
-
-
-  const handleCreatePremiumStrategy = async () => {
-    setPremiumMessage("Calculando estrategia con el motor financiero...");
-    try {
-      const result = await createJarvisPremiumInitialStrategy();
-      setPremiumMessage(result?.status === "OK" ? "Estrategia recalculada con tus datos actuales. Podés verla en Strategy." : result?.message || "No pude calcular la estrategia.");
-    } catch (error) {
-      setPremiumMessage(error.message);
-    }
-  };
 
 
   const handleLinkOwnerBridge = async () => {
@@ -179,24 +138,15 @@ export default function Settings({ status }) {
     <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">PREFERENCIAS DEPORTIVAS</span><ToggleRow label="F1" detail="Prácticas · Qualy · Carrera" checked={Boolean(sports?.f1)} onChange={(checked) => setSports((current) => ({ ...(current || {}), f1: checked }))} /><ToggleRow label="UFC" detail="Cartelera principal" checked={Boolean(sports?.ufc)} onChange={(checked) => setSports((current) => ({ ...(current || {}), ufc: checked }))} /><label className="settings-team-field"><span>Fútbol</span><input value={teamsText} onChange={(event) => setTeamsText(event.target.value)} placeholder="Real Madrid, Costa Rica" /></label><button className="jarvis-primary-button" type="button" onClick={handleSaveSports}>Guardar preferencias</button></JarvisGlassCard>
   </JarvisScreen>;
 
-  if (section === "premium") return <JarvisScreen eyebrow="Owner" title="IA Premium" subtitle="Modelo, presupuesto y análisis guardados" actions={back} className="settings-screen settings-premium">
-    <JarvisGlassCard className="settings-detail-card"><JarvisStatusPill tone={premiumStatus?.configured ? "success" : "warning"}>{premiumStatus?.configured ? "OPENAI CONECTADO" : "OPENAI PENDIENTE"}</JarvisStatusPill><span className="settings-card-label">MODELO ACTIVO</span><h3>{premiumStatus?.model || "—"}</h3><p>Los cálculos exactos permanecen en el backend.</p></JarvisGlassCard>
-    <JarvisGlassCard className="settings-usage-card"><span>PRESUPUESTO MENSUAL</span><strong>${Number(premiumStatus?.budget_usd || 10).toFixed(2)}</strong><small>${Number(premiumStatus?.used_usd || 0).toFixed(2)} utilizados · {Number(premiumStatus?.percent_used || 0).toFixed(1)}%</small><div className="usage-bar"><i style={{ width: `${Math.min(premiumStatus?.percent_used || 0, 100)}%` }} /></div></JarvisGlassCard>
-    <button className="jarvis-primary-button settings-premium-action" type="button" onClick={handleCreatePremiumStrategy}><Sparkles size={18} />Recalcular estrategia con el motor financiero</button>
-    {premiumMessage && <div className="jarvis-inline-message">{premiumMessage}</div>}<div className="settings-saved"><h3>Análisis históricos (no determinan tu estrategia actual)</h3>{premiumGuides.map((guide) => <JarvisGlassCard key={guide.id}><strong>{guide.title || guide.guide_type}</strong><small>{String(guide.content || "").slice(0, 90)}</small></JarvisGlassCard>)}</div>
-  </JarvisScreen>;
-
   if (section === "owner") return <JarvisScreen eyebrow="Owner" title="Centro Owner" subtitle="Identidad privada y operación" actions={back} className="settings-screen settings-owner">
     <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">IDENTIDAD DINCR</span><h3>Personal ↔ Cuenta pública</h3><p>Vinculación segura por UUID verificado</p><JarvisStatusPill tone="success">CONECTADA</JarvisStatusPill><button className="jarvis-primary-button" type="button" onClick={handleLinkOwnerBridge} disabled={ownerBridgeBusy}>{ownerBridgeBusy ? "Verificando..." : "Administrar vínculo"}</button>{ownerBridgeMessage && <small>{ownerBridgeMessage}</small>}</JarvisGlassCard>
     <h3 className="settings-section-title">Monitor de despliegues</h3>{Object.entries(deployments?.latest || {}).map(([provider, item]) => <JarvisGlassCard className="deployment-card" key={provider}><span>{provider.toUpperCase()}</span><strong>{item.service_name || provider}</strong><small>Commit {item.commit_sha?.slice(0, 7) || "—"}</small><JarvisStatusPill tone={item.status === "success" ? "success" : item.status === "failure" ? "danger" : "warning"}>{item.status === "success" ? "Correcto" : item.status}</JarvisStatusPill></JarvisGlassCard>)}
     <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">EVENTOS RECIENTES</span><div className="settings-compact-list">{(deployments?.events || []).slice(0, 5).map((item) => <div key={item.id}><b>{item.provider}</b><span>{item.summary || item.event_type}</span>{item.log_url && <a href={item.log_url} target="_blank" rel="noreferrer">Abrir log</a>}</div>)}</div></JarvisGlassCard>
-    {isAdmin && adminUsage?.users?.length > 0 && <JarvisGlassCard className="settings-detail-card"><span className="settings-card-label">CONSUMO POR USUARIO</span><div className="settings-compact-list">{adminUsage.users.map((user) => <div key={user.user_id}><b>{user.role}</b><span>{user.email} · {Number(user.total_tokens || 0).toLocaleString("es-CR")}</span></div>)}</div></JarvisGlassCard>}
   </JarvisScreen>;
 
-  return <JarvisScreen eyebrow="Configuración" title="Configuración" subtitle="Cuenta, consumo y preferencias" className="settings-screen settings-general">
+  return <JarvisScreen eyebrow="Configuración" title="Configuración" subtitle="Cuenta y preferencias" className="settings-screen settings-general">
     <JarvisGlassCard className="settings-user-card"><span>USUARIO ACTUAL</span><strong>{me?.email || "—"}</strong><small>{me?.role || "—"}</small><JarvisStatusPill tone="success">{String(me?.status || "activo").toUpperCase()}</JarvisStatusPill></JarvisGlassCard>
-    <JarvisGlassCard className="settings-usage-card"><span>CONSUMO DE IA HOY</span><strong>{usage?.total_tokens?.toLocaleString("es-CR") || 0}</strong><small>Límite {usage?.daily_limit?.toLocaleString("es-CR") || "—"} · disponibles {usage?.remaining_tokens?.toLocaleString("es-CR") || "—"}</small><div className="usage-bar"><i style={{ width: `${Math.min(usage?.percent_used || 0, 100)}%` }} /></div></JarvisGlassCard>
-    <div className="settings-menu"><h3>Preferencias</h3><JarvisMenuRow icon={Bell} title="Notificaciones" detail="Web Push, calendario y deportes" onClick={() => setSection("notifications")} />{isOwner && <><JarvisMenuRow icon={Sparkles} title="IA Premium" detail="Modelo y presupuesto" onClick={() => setSection("premium")} /><JarvisMenuRow icon={RadioTower} title="Centro Owner" detail="Identidad y despliegues" onClick={() => setSection("owner")} /></>}<JarvisMenuRow icon={CalendarDays} title="Calendario" detail={`${calendar.length} próximos compromisos`} onClick={() => setSection("notifications")} /><JarvisMenuRow icon={Trophy} title="Deportes" detail="F1 · UFC · Fútbol" onClick={() => setSection("notifications")} /></div>
+    <div className="settings-menu"><h3>Preferencias</h3><JarvisMenuRow icon={Bell} title="Notificaciones" detail="Web Push, calendario y deportes" onClick={() => setSection("notifications")} />{isOwner && <JarvisMenuRow icon={RadioTower} title="Centro Owner" detail="Identidad y despliegues" onClick={() => setSection("owner")} />}<JarvisMenuRow icon={CalendarDays} title="Calendario" detail={`${calendar.length} próximos compromisos`} onClick={() => setSection("notifications")} /><JarvisMenuRow icon={Trophy} title="Deportes" detail="F1 · UFC · Fútbol" onClick={() => setSection("notifications")} /></div>
     {status?.config && <small className="settings-system-note">Sistema DINCR sincronizado</small>}
   </JarvisScreen>;
 }
