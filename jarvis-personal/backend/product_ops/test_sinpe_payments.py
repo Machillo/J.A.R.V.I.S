@@ -29,7 +29,7 @@ def _candidate(**overrides):
         "amount": 1990,
         "notes": (
             "BAC SINPE Móvil | entrada | payer: Persona Prueba | "
-            "recipient: Kenneth Alvarado | telefono destino: 88888888 | "
+            "recipient: Operador Prueba | telefono destino: 88888888 | "
             "detalle: DINCR-A2B3C4 | referencia 123456789"
         ),
     }

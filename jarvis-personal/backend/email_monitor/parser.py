@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import html
-import json
-import os
 import re
 import unicodedata
 from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
+
+from backend.email_monitor.parser_identity import ParserIdentity, current_identity, use_identity
 
 # ---------------------------------------------------------------------------
 # JARVIS Email Parser Real
@@ -100,22 +100,8 @@ FIELD_LABELS = {
     "titular", "cuenta", "resumen de operacion",
 }
 
-# Known personal accounts. These are used only to prevent internal movements
-# from becoming expenses/income. Display/masking uses the last 4 digits.
-def _env_json_mapping(name: str) -> dict[str, str]:
-    try:
-        value = json.loads(os.getenv(name, "{}") or "{}")
-    except json.JSONDecodeError:
-        return {}
-    return {str(key): str(label) for key, label in value.items()} if isinstance(value, dict) else {}
-
-
-OWN_ACCOUNT_IBANS = _env_json_mapping("JARVIS_OWN_ACCOUNT_IBANS")
-OWN_ACCOUNT_LAST4 = {iban[-4:]: label for iban, label in OWN_ACCOUNT_IBANS.items()}
-OWN_DEBIT_CARD_LAST4 = {
-    item.strip() for item in os.getenv("JARVIS_OWN_DEBIT_CARD_LAST4", "").split(",") if item.strip()
-}
-OWN_ACCOUNT_ALIASES = _env_json_mapping("JARVIS_OWN_ACCOUNT_ALIASES")
+# The mailbox holder's own names and accounts come from the caller's parser
+# identity (parser_identity.py), never from module-level Owner configuration.
 CARD_PAYMENT_KEYWORDS = [
     "pago tarjeta bac", "pago de tarjeta", "tarjeta de credito", "tarjeta de crédito",
     "monto del pago", "comprobante de pago de tarjeta",
@@ -141,15 +127,16 @@ def _own_account_label(value: str | None) -> str | None:
     compact = _compact_account(value)
     if not compact:
         return None
-    for iban, label in OWN_ACCOUNT_IBANS.items():
+    identity = current_identity()
+    for iban, label in identity.own_account_ibans.items():
         if iban in compact:
             return label
     if len(compact) >= 4:
         last4 = compact[-4:]
-        if last4 in OWN_ACCOUNT_LAST4:
-            return OWN_ACCOUNT_LAST4[last4]
-        if last4 in OWN_ACCOUNT_ALIASES:
-            return OWN_ACCOUNT_ALIASES[last4]
+        if last4 in identity.own_account_last4:
+            return identity.own_account_last4[last4]
+        if last4 in identity.own_account_aliases:
+            return identity.own_account_aliases[last4]
     return None
 
 
@@ -209,7 +196,7 @@ def _looks_like_account_reference(text: str | None, last4: str) -> bool:
 
     # Full/unmasked or compact IBAN somewhere in the body.
     compact = _compact_account(raw)
-    for iban in OWN_ACCOUNT_IBANS:
+    for iban in current_identity().own_account_ibans:
         if iban in compact and iban.endswith(last4):
             return True
 
@@ -225,10 +212,11 @@ def _looks_like_account_reference(text: str | None, last4: str) -> bool:
 
 def _own_account_labels_in_text(text: str | None) -> set[str]:
     labels: set[str] = set()
-    for iban, label in OWN_ACCOUNT_IBANS.items():
+    identity = current_identity()
+    for iban, label in identity.own_account_ibans.items():
         if iban in _compact_account(text or ""):
             labels.add(label)
-    for last4, label in OWN_ACCOUNT_ALIASES.items():
+    for last4, label in identity.own_account_aliases.items():
         if _looks_like_account_reference(text, last4):
             labels.add(label)
     return labels
@@ -244,7 +232,7 @@ def _is_internal_transfer(concept: str | None = None, origin: str | None = None,
 
     # Explicit own-account concepts from BAC/MultiMoney are never expenses.
     # Examples: INVERSION VISTA SMART, transferencia entre cuentas, debit applied
-    # by another financial entity when the account is one of Kenneth's accounts.
+    # by another financial entity when the account is one of the holder's own accounts.
     if concept_internal and (origin_own or destination_own or labels):
         return True
     if body_internal and len(labels) >= 1:
@@ -593,7 +581,7 @@ def _extract_reference(text: str) -> str | None:
 def billing_cycle_for_date(transaction_date: str | date | None, cut_day: int = 21) -> tuple[str | None, str | None]:
     """Return BAC/card cycle window using configurable cut day.
 
-    Kenneth's BAC card is reviewed by cut cycle, not calendar month. Default:
+    A BAC card is reviewed by cut cycle, not calendar month. Default:
     21 -> 21. A transaction on June 5 belongs to 2026-05-21 / 2026-06-21.
     """
     if not transaction_date:
@@ -685,14 +673,7 @@ def _card_holder_from_greeting(text: str) -> str | None:
     if not match:
         return None
     name = re.sub(r"\s+", " ", match.group(1)).strip(" :")
-    norm = normalize(name)
-    if norm.startswith("kenneth"):
-        return "Kenneth"
-    if norm.startswith("emily"):
-        return "Emily"
-    if norm.startswith("sidey"):
-        return "Sidey"
-    return name.title()
+    return current_identity().person(name, prefix=True)
 
 
 def _card_last4(text: str) -> str | None:
@@ -823,23 +804,15 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
     }
 
 def _normalize_person_name_from_text(value: str | None) -> str:
-    raw = re.sub(r"[_\s]+", " ", (value or "")).strip()
-    clean = normalize(raw)
-    if "emily" in clean:
-        return "Emily"
-    if "sidey" in clean:
-        return "Sidey"
-    if "kenneth" in clean:
-        return "Kenneth"
-    return raw.title() if raw else ""
+    return current_identity().person(value)
 
 
 def _parse_bac_sinpe_movil(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
-    """Parse BAC SINPE Móvil receipts like Emily -> Kenneth.
+    """Parse BAC SINPE Móvil receipts (someone -> the mailbox holder).
 
     These emails do not always include an IBAN. They identify payer, recipient,
-    phone, amount and detail. Incoming payments from Emily/Sidey are used later
-    to reconcile cuentas por cobrar.
+    phone, amount and detail. Incoming payments from the holder's configured
+    receivable contacts are used later to reconcile cuentas por cobrar.
     """
     text = clean_text("\n".join([subject or "", body or ""]))
     clean = normalize(text)
@@ -873,7 +846,8 @@ def _parse_bac_sinpe_movil(subject: str, sender: str, body: str, received_at: st
         # A named recipient is needed to classify this as an incoming alert.
         return None
 
-    description = f"SINPE recibido de {payer}" if payer and payer != "Kenneth" else "SINPE Móvil recibido"
+    identity = current_identity()
+    description = f"SINPE recibido de {payer}" if payer and not identity.is_holder(payer) else "SINPE Móvil recibido"
     notes = ["BAC SINPE Móvil", "entrada"]
     if payer:
         notes.append(f"payer: {payer}")
@@ -889,7 +863,7 @@ def _parse_bac_sinpe_movil(subject: str, sender: str, body: str, received_at: st
         notes.append(f"hora: {time_value}")
 
     category = "Reembolsos"
-    if payer in {"Emily", "Sidey"}:
+    if identity.is_receivable_contact(payer):
         category = "Cuentas por cobrar"
 
     # Some SINPE Móvil notices include the credited bank account as well as
@@ -1348,7 +1322,20 @@ def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
     return "ignored", "No contiene estructura confiable de movimiento bancario."
 
 
-def parse_financial_email(subject: str, sender: str, body: str, received_at: str | None = None, exchange_rate: float = 495.0) -> dict[str, Any]:
+def parse_financial_email(
+    subject: str, sender: str, body: str, received_at: str | None = None,
+    exchange_rate: float = 495.0, identity: ParserIdentity | None = None,
+) -> dict[str, Any]:
+    """Parse one bank email for the mailbox holder described by ``identity``.
+
+    Without an identity the parse is neutral: no holder name, contacts or own
+    accounts, and never the Owner's.
+    """
+    with use_identity(identity):
+        return _parse_financial_email(subject, sender, body, received_at, exchange_rate)
+
+
+def _parse_financial_email(subject: str, sender: str, body: str, received_at: str | None, exchange_rate: float) -> dict[str, Any]:
     text = "\n".join([sender or "", subject or "", body or ""])
     bank = detect_bank(sender, subject, body)
 

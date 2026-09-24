@@ -18,6 +18,7 @@ from backend.email_monitor.parser import (
     fingerprint_email,
     parse_financial_email,
 )
+from backend.email_monitor.parser_identity import owner_legacy_identity
 from backend.email_monitor.deduplication import canonical_score, find_semantic_duplicate, resolve_transaction_time
 from backend.email_monitor.normalization import normalize_description
 from backend.email_monitor.personal_rules import apply_workspace_email_rules
@@ -1419,7 +1420,11 @@ def scan_email_text(
         body=body,
         attachment_text=attachment_text,
         received_at=received_at,
-    ) or parse_financial_email(subject, sender, body, received_at)
+    ) or parse_financial_email(
+        subject, sender, body, received_at,
+        # Owner-only manual scan (guarded above): the Owner's own configured context.
+        identity=owner_legacy_identity(),
+    )
     parsed["attachment_names"] = attachment_names
 
     with get_connection() as conn:
