@@ -2,24 +2,20 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from math import ceil
-from statistics import pstdev
 from typing import Any
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx
+from backend.user_product.income_policy import imported_income_by_month, income_baseline
 from backend.user_product.basic_service import (
     _ensure_basic_schema,
-    _estimated_income,
     _ledger_totals,
     _monthly_equivalent,
     _next_month,
     _profile,
     _shift_month,
 )
-
-
-IMPORTED_SOURCES = ("finva_gmail", "finva_statement")
 
 
 def _money(value: Any) -> float:
@@ -95,17 +91,7 @@ def get_vip_command_center() -> dict:
             start = _shift_month(current, offset)
             totals = _ledger_totals(conn, workspace_id, start, _next_month(start))
             months.append({"month": start.strftime("%Y-%m"), **totals, "balance": round(totals["income"] - totals["expenses"] - totals["debt_paid"], 2)})
-        imported_income = {
-            row["month"]: _money(row["total"]) for row in conn.execute(
-                f"""SELECT to_char(transaction_date::date,'YYYY-MM') AS month,SUM(amount) AS total
-                   FROM transactions
-                   WHERE workspace_id=%s AND transaction_type='income'
-                     AND source IN ({",".join(["%s"] * len(IMPORTED_SOURCES))})
-                     AND transaction_date::date >= %s
-                   GROUP BY 1""",
-                (workspace_id, *IMPORTED_SOURCES, _shift_month(current, -11)),
-            ).fetchall()
-        }
+        imported_income = imported_income_by_month(conn, workspace_id, _shift_month(current, -11))
         recurring = [dict(row) for row in conn.execute(
             "SELECT id,name,amount,category,item_type,frequency,due_day,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE ORDER BY amount DESC",
             (workspace_id,),
@@ -146,29 +132,20 @@ def get_vip_command_center() -> dict:
                 "duplicates": counts.get("duplicate", 0),
             }
 
-    estimated_income = _estimated_income(profile)
-    # Bank-email imports are individual movements, not a complete income ledger (not
-    # every deposit sends an email and the import window can start mid-period).
-    # They must not cap an income the user declared: that made one imported deposit
-    # wipe out the available amount and the debt priority. Without a declared income
-    # they remain the only evidence and still count. Reports still show all income.
-    observed_incomes = [
-        round(_money(row["income"]) - (imported_income.get(row["month"], 0) if estimated_income > 0 else 0), 2)
-        for row in months
-    ]
-    positive_incomes = [value for value in observed_incomes if value > 0]
-    conservative_income = round(min(estimated_income or float("inf"), sum(positive_incomes[-3:]) / len(positive_incomes[-3:]) if positive_incomes else estimated_income or 0), 2)
-    if conservative_income == float("inf"):
-        conservative_income = 0
-    variability = round(pstdev(positive_incomes[-6:]) / (sum(positive_incomes[-6:]) / len(positive_incomes[-6:])) * 100, 1) if len(positive_incomes[-6:]) > 1 and sum(positive_incomes[-6:]) else 0
+    # One income policy for Home and VIP Strategy (income_policy.py): bank-email
+    # imports never replace a declared income; without one they are the evidence.
+    income = income_baseline(profile, months, imported_income, recurring)
+    estimated_income = income["declared"]
+    positive_incomes = income["observed_incomes"]
+    conservative_income = income["baseline"]
+    variability = income["variability_percent"]
     essentials = _money(profile.get("essential_monthly_expenses"))
     savings = _money(profile.get("liquid_savings"))
     emergency_target = _money(profile.get("emergency_fund_target"))
     debt_balance = round(sum(_money(row.get("remaining_amount")) for row in debts), 2)
     debt_minimums = round(sum(_money(row.get("monthly_payment")) for row in debts), 2)
     recurring_expense = round(sum(_monthly_equivalent(_money(row["amount"]), row["frequency"]) for row in recurring if row["item_type"] == "expense"), 2)
-    recurring_income = round(sum(_monthly_equivalent(_money(row["amount"]), row["frequency"]) for row in recurring if row["item_type"] == "income"), 2)
-    monthly_income = conservative_income + recurring_income
+    monthly_income = income["monthly_income"]
     known_commitments = max(essentials, recurring_expense) + debt_minimums
     margin = round(monthly_income - known_commitments, 2)
     emergency_gap = max(emergency_target - savings, 0)
