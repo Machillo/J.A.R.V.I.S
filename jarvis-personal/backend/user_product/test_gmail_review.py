@@ -226,7 +226,7 @@ def test_first_sync_query_covers_current_calendar_year(monkeypatch):
     monkeypatch.setattr(gmail_service, "FINVA_QUERY", "(from:bank@example.com) newer_than:45d -in:spam")
     query = gmail_service._year_to_date_query(date(2026, 9, 21))
     assert "newer_than" not in query
-    assert "after:2026/01/01" in query
+    assert "after:1767247200" in query  # 2026-01-01 00:00 Costa Rica
     assert "from:bank@example.com" in query
 
 

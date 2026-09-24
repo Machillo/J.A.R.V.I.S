@@ -8,6 +8,11 @@ class GmailConsentRequest(BaseModel):
     version: str = Field(max_length=80)
 
 
+class MailConnectRequest(BaseModel):
+    # History to import, chosen before the provider consent.
+    import_scope: Literal["current_month", "current_year"] = "current_year"
+
+
 class MailConnectionCompleteRequest(BaseModel):
     flow: str = Field(max_length=64)
     completion: str = Field(max_length=256)

@@ -86,7 +86,7 @@ def test_outlook_keeps_the_same_vip_entitlement_as_gmail():
 
 def test_authorization_url_uses_common_authority_and_read_only_scopes(monkeypatch):
     monkeypatch.setattr(mail, "require_gmail_consent", lambda: None)
-    monkeypatch.setattr(mail.mail_oauth, "start_flow", lambda provider: ("server-side-state", "pkce-challenge"))
+    monkeypatch.setattr(mail.mail_oauth, "start_flow", lambda provider, *_scope: ("server-side-state", "pkce-challenge"))
     url = urlparse(mail.begin_connection()["authorization_url"])
     params = parse_qs(url.query)
     assert (url.scheme, url.hostname, url.path) == ("https", "login.microsoftonline.com", "/common/oauth2/v2.0/authorize")
