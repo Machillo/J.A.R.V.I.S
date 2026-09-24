@@ -628,7 +628,8 @@ def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
                 token = _vault_read(conn, str(row["refresh_token_secret_id"]))
                 requests.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
             except Exception:
-                pass
+                # Best effort: the local secret is deleted anyway; never log the token.
+                logger.warning("Gmail token revocation failed during disconnect")
         conn.execute(
             """UPDATE finva_gmail_connections
                SET status='disabled',history_id=NULL,watch_expiration=NULL,last_error=NULL,

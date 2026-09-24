@@ -199,8 +199,8 @@ def _looks_like_account_reference(text: str | None, last4: str) -> bool:
     """Return True only when last4 appears as a bank/card/account reference.
 
     We intentionally avoid matching ordinary amounts. The real emails use both
-    full IBANs and masked formats such as CR74****6126, CR4201XXXXXXXX2572,
-    N°****1813 or Cuenta: ****6126.
+    full IBANs and masked formats such as CR00****0001, CR0000XXXXXXXX0002,
+    N°****0003 or Cuenta: ****0001.
     """
     raw = text or ""
     if not raw or not last4:
