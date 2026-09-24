@@ -30,6 +30,14 @@ def _months_to_payoff(balance: float, monthly_payment: float, annual_rate: float
     return None
 
 
+def _record_order(value: Any) -> float:
+    """Oldest record first on exact ties (same result as the snapshot's ORDER BY id)."""
+    try:
+        return -float(value)
+    except (TypeError, ValueError):
+        return float("-inf")
+
+
 def _debt_score(debt: dict) -> tuple:
     """Deterministic hybrid: known APR first, then due date and smaller balance."""
     rate = debt.get("interest_rate")
@@ -39,6 +47,7 @@ def _debt_score(debt: dict) -> tuple:
         float(rate or 0),
         -(int(debt.get("payment_day") or 32)),
         -float(debt.get("remaining_amount") or 0),
+        _record_order(debt.get("id")),
     )
 
 
@@ -142,7 +151,7 @@ def build_vip_strategy(snapshot: dict) -> dict:
     savings = _money(snapshot.get("liquid_savings"))
     emergency_target = _money(snapshot.get("emergency_fund_target"))
     emergency_gap = max(emergency_target - savings, 0)
-    debts = snapshot.get("debts", [])
+    debts = [d for d in snapshot.get("debts", []) if _money(d.get("remaining_amount")) > 0]
     target = max(debts, key=_debt_score) if debts else None
 
     weights = {
@@ -161,7 +170,7 @@ def build_vip_strategy(snapshot: dict) -> dict:
         allocations.append({"bucket": "emergency", "label": tx("Fondo de emergencia", "Emergency fund"), "amount": round(min(margin * emergency_w, emergency_gap), 2)})
     if goals and margin > 0:
         priority_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        goal = sorted(goals, key=lambda g: (priority_rank.get(g.get("priority"), 2), str(g.get("target_date") or "9999-12-31")))[0]
+        goal = sorted(goals, key=lambda g: (priority_rank.get(g.get("priority"), 2), str(g.get("target_date") or "9999-12-31"), -_record_order(g.get("id"))))[0]
         allocations.append({"bucket": "goal", "label": tx(f"Meta: {goal['name']}", f"Goal: {goal['name']}"), "amount": round(margin * goal_w, 2), "goal_id": goal.get("id")})
 
     allocated = round(sum(a["amount"] for a in allocations), 2)
