@@ -33,7 +33,7 @@ The script detects OneDrive and handles it:
 
 The first mirror takes about 30–60 s; later runs only copy changes. `--in-place` skips the mirror. The permanent fix is to keep the repository outside OneDrive, for example `C:\dev\J.A.R.V.I.S`.
 
-`npx cap sync android` rewrites `android/app/capacitor.build.gradle`, `android/capacitor.settings.gradle` and `capacitor-cordova-android-plugins/` with LF endings. `android/.gitattributes` pins them to LF, so a sync on Windows (`core.autocrlf=true`) no longer shows phantom modifications.
+`npx cap sync android` rewrites `android/app/capacitor.build.gradle` and `android/capacitor.settings.gradle` with LF endings. `android/.gitattributes` pins them to LF, so a sync on Windows (`core.autocrlf=true`) no longer shows phantom modifications.
 
 ## Out of scope
 

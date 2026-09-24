@@ -2,4 +2,3 @@
 # Pin them to LF so a sync on Windows (core.autocrlf=true) does not show phantom changes.
 app/capacitor.build.gradle text eol=lf
 capacitor.settings.gradle text eol=lf
-capacitor-cordova-android-plugins/** text eol=lf

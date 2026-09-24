@@ -71,10 +71,11 @@ function findSdk() {
     const line = readFileSync(file, "utf8").split(/\r?\n/).find((l) => l.startsWith("sdk.dir="));
     return line ? line.slice("sdk.dir=".length).replace(/\\\\/g, "\\").replace(/\\:/g, ":") : null;
   })();
+  // Same priority as Gradle: local.properties sdk.dir wins over environment variables.
   const candidates = [
+    fromLocal,
     process.env.ANDROID_HOME,
     process.env.ANDROID_SDK_ROOT,
-    fromLocal,
     isWindows && process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, "Android", "Sdk"),
     platform() === "darwin" && join(homedir(), "Library", "Android", "sdk"),
     platform() === "linux" && join(homedir(), "Android", "Sdk"),
@@ -114,19 +115,18 @@ function checkGoogleServices() {
   if (!packages.includes(APP_ID)) return fail(`google-services.json no incluye el paquete ${APP_ID}.`);
   if (source && source !== target) {
     if (!checkOnly) copyFileSync(source, target);
-    notes.push("google-services.json copiado a android/app (ignorado por git).");
+    notes.push(checkOnly ? "google-services.json válido; se copiará a android/app al compilar." : "google-services.json copiado a android/app (ignorado por git).");
   }
 }
 
-function mirror(from, to, { excludeDirs = [], keepExtra = false } = {}) {
+function mirror(from, to) {
+  // /MIR deletes stale sources (e.g. after a plugin upgrade); /XD keeps Gradle outputs,
+  // since excluded directories are neither copied nor purged.
   // robocopy exit codes 0-7 mean success (files copied/skipped); 8+ are failures.
-  // keepExtra (/XX) keeps Gradle outputs created inside the mirror, e.g. node_modules/*/android/build.
-  const args = [from, to, "/MIR", "/NFL", "/NDL", "/NJH", "/NJS", "/NP", "/R:1", "/W:1"];
-  if (keepExtra) args.push("/XX");
-  if (excludeDirs.length) args.push("/XD", ...excludeDirs);
+  const args = [from, to, "/MIR", "/XD", "build", ".gradle", ".kotlin", "/NFL", "/NDL", "/NJH", "/NJS", "/NP", "/R:1", "/W:1"];
   const result = spawnSync("robocopy", args, { stdio: "inherit" });
   if (result.error) throw result.error;
-  return result.status < 8;
+  return result.status !== null && result.status < 8;
 }
 
 function run(command, args, env) {
@@ -160,6 +160,8 @@ if (!env.VITE_NATIVE_API_URL) {
   notes.push("Backend del APK: VITE_NATIVE_API_URL (no producción).");
 }
 
+if (!env.VITE_POSTHOG_KEY) notes.push("PostHog desactivado en este APK (falta VITE_POSTHOG_KEY): no sirve para la prueba teléfono → PostHog.");
+
 const capacitorConfig = JSON.parse(readFileSync(join(root, "capacitor.config.json"), "utf8"));
 if (capacitorConfig.appId !== APP_ID) fail(`capacitor.config.json tiene appId ${capacitorConfig.appId}; se esperaba ${APP_ID}.`);
 
@@ -180,14 +182,14 @@ if (useMirror) console.log(`✓ Repo en OneDrive: Gradle correrá en ${mirrorRoo
 if (checkOnly) process.exit(0);
 
 // --- build ---------------------------------------------------------------
-const vars = { ...process.env, JAVA_HOME: java.home, ANDROID_HOME: sdk, VITE_NATIVE_APP_ID: APP_ID };
+const vars = { ...process.env, JAVA_HOME: java.home, ANDROID_HOME: sdk, ANDROID_SDK_ROOT: sdk, VITE_NATIVE_APP_ID: APP_ID };
 const gradleDir = useMirror ? join(mirrorRoot, "android") : androidDir;
 const steps = [
   ["Build web", () => run("npm", ["run", "build"], { cwd: root, vars })],
   ["Capacitor sync", () => run("npx", ["cap", "sync", "android"], { cwd: root, vars })],
   ...(useMirror ? [["Copia fuera de OneDrive", () =>
-    mirror(join(root, "node_modules"), join(mirrorRoot, "node_modules"), { keepExtra: true })
-    && mirror(androidDir, gradleDir, { excludeDirs: ["build", ".gradle", ".kotlin"] })]] : []),
+    mirror(join(root, "node_modules"), join(mirrorRoot, "node_modules"))
+    && mirror(androidDir, gradleDir)]] : []),
   // Absolute, quoted path: cmd.exe may not search the working directory for gradlew.bat.
   ["Gradle assembleDebug", () => (isWindows
     ? run(`"${join(gradleDir, "gradlew.bat")}"`, ["assembleDebug"], { cwd: gradleDir, vars })
