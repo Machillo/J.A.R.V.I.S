@@ -156,7 +156,7 @@
 .native-product--jarvis .email-monitor-kpis .is-success strong { color: var(--jarvis-good); }
 .native-product--jarvis .email-monitor-screen .email-toolbar { margin: 0; }
 .native-product--jarvis .email-monitor-screen .email-filter-tabs { display: flex; gap: 7px; overflow-x: auto; scrollbar-width: none; }
-.native-product--jarvis .email-monitor-screen .email-filter-tabs button { flex: 0 0 auto; min-height: 36px; padding: 0 13px; border: 1px solid var(--jarvis-line); border-radius: 14px; color: var(--jarvis-text-3); background: rgba(9, 27, 45, .78); font-size: .68rem; font-weight: 750; }
+.native-product--jarvis .email-monitor-screen .email-filter-tabs button { flex: 0 0 auto; min-height: 40px; padding: 0 13px; border: 1px solid var(--jarvis-line); border-radius: 14px; color: var(--jarvis-text-3); background: rgba(9, 27, 45, .78); font-size: .68rem; font-weight: 750; }
 .native-product--jarvis .email-monitor-screen .email-filter-tabs button.active { color: white; background: var(--jarvis-primary); }
 .native-product--jarvis .email-monitor-screen .email-candidate-list { display: flex; flex-direction: column; gap: 14px; }
 .native-product--jarvis .email-monitor-screen .email-candidate-card {
@@ -296,8 +296,8 @@
 .native-product--jarvis .memory-compose-card textarea { width: 100%; min-height: 45px; padding: 8px 0; resize: vertical; border: 0; outline: 0; color: var(--jarvis-text); background: transparent; font-size: .68rem; }
 .native-product--jarvis .memory-compose-card textarea::placeholder { color: #708fa8; }
 .native-product--jarvis .memory-form-row { display: flex; gap: 8px; }
-.native-product--jarvis .memory-form-row select { min-width: 0; min-height: 32px; padding: 0 8px; border: 1px solid rgba(56,163,209,.25); border-radius: 10px; color: var(--jarvis-text-2); background: #0c2135; font-size: .62rem; }
-.native-product--jarvis .memory-save-button { min-height: 32px; margin-top: 10px; margin-left: auto; padding: 0 18px; border-radius: 13px; font-size: .65rem; }
+.native-product--jarvis .memory-form-row select { min-width: 0; min-height: 40px; padding: 0 8px; border: 1px solid rgba(56,163,209,.25); border-radius: 10px; color: var(--jarvis-text-2); background: #0c2135; font-size: .62rem; }
+.native-product--jarvis .memory-save-button { min-height: 40px; margin-top: 10px; margin-left: auto; padding: 0 18px; border-radius: 13px; font-size: .65rem; }
 .native-product--jarvis .memory-section { display: flex; flex-direction: column; gap: 10px; }
 .native-product--jarvis .memory-section > h3,
 .native-product--jarvis .memory-list-header h3 { margin: 0; font-size: 1rem; }
@@ -309,7 +309,7 @@
 .native-product--jarvis .memory-search-box { display: flex; align-items: center; min-height: 42px; padding: 0 10px; border: 1px solid var(--jarvis-line); border-radius: 14px; background: rgba(8,27,44,.8); }
 .native-product--jarvis .memory-search-box > svg { color: var(--jarvis-text-3); }
 .native-product--jarvis .memory-search-box input { width: 100%; min-height: 38px; padding: 0 8px; border: 0; outline: 0; background: transparent; font-size: .7rem; }
-.native-product--jarvis .memory-search-box button { display: grid; width: 30px; height: 30px; padding: 0; place-items: center; border: 0; border-radius: 9px; color: white; background: var(--jarvis-primary); }
+.native-product--jarvis .memory-search-box button { display: grid; width: 38px; height: 38px; padding: 0; place-items: center; border: 0; border-radius: 9px; color: white; background: var(--jarvis-primary); }
 .native-product--jarvis .memory-items { display: flex; flex-direction: column; gap: 9px; }
 .native-product--jarvis .memory-item { display: grid; grid-template-columns: minmax(0, 1fr) 28px; align-items: center; min-height: 50px; padding: 8px 11px; }
 .native-product--jarvis .memory-item > div { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; }

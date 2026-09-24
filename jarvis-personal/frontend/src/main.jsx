@@ -34,6 +34,7 @@ import "./products/jarvis/styles/debt.css";
 import "./products/jarvis/styles/navigation.css";
 import "./products/jarvis/styles/home.css";
 import "./products/jarvis/styles/secondary-screens.css";
+import "./products/jarvis/styles/operations.css";
 import { registerJarvisServiceWorker } from "./pushNotifications";
 import { initializeTelemetry } from "./lib/telemetry";
 import { initializeColorMode } from "./lib/colorMode";

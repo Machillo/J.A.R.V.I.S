@@ -34,7 +34,7 @@ import {
   syncAguinaldoFromCcss,
 } from "../services/jarvisApi";
 import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
-import { deviceLanguage, localeTag, t } from "../lib/locale";
+import { deviceLanguage, localeTag, t, tx } from "../lib/locale";
 const language = deviceLanguage();
 const tr = (key) => t(key, language);
 const formatCRC = (value = 0) =>
@@ -1465,8 +1465,8 @@ export default function Finance({
         <JarvisDisclosure title="Resumen del ciclo" summary={`${cycleLabel} · ${expenseCycleLabel}`} className="finance-disclosure">
         <div className="finance-disclosure-content">
         <div className="finance-period-controls">
-          <div className="finance-period-pill">Financial cycle: {cycleLabel} · Expense cutoff: {expenseCycleLabel}{cycleReport?.expense_cycle?.closed ? " · Closed" : " · Open"}</div>
-          <label className="finance-asof-picker">View as of <input type="date" value={financeAsOf} onChange={(e) => setFinanceAsOf(e.target.value)} /></label>
+          <div className="finance-period-pill">{tx("Ciclo financiero", "Financial cycle")}: {cycleLabel} · {tx("Corte de gastos", "Expense cutoff")}: {expenseCycleLabel} · {cycleReport?.expense_cycle?.closed ? tx("Cerrado", "Closed") : tx("Abierto", "Open")}</div>
+          <label className="finance-asof-picker">{tx("Ver al", "View as of")} <input type="date" value={financeAsOf} onChange={(e) => setFinanceAsOf(e.target.value)} /></label>
         </div>
         <div className="jarvis-v2-metrics finance-v2-summary">
           <button className="jarvis-v2-metric" onClick={() => openDetail("Ingresos", incomeItems)}><small>Ingresos</small><strong>{formatCRC(incomeNet)}</strong></button>
