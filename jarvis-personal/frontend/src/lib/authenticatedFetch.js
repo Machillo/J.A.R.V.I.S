@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { tx } from "./locale";
+import { deviceLanguage, tx } from "./locale";
 
 const SESSION_EXPIRED_MESSAGE = tx("Tu sesión venció. Iniciá sesión nuevamente.", "Your session expired. Please sign in again.");
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -43,6 +43,8 @@ async function withToken(url, options, token) {
       ...options,
       signal: controller.signal,
       headers: {
+        // The backend writes its narrative text in the same language as the UI.
+        "Accept-Language": deviceLanguage(),
         ...(options.headers || {}),
         Authorization: `Bearer ${token}`,
       },

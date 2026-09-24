@@ -44,6 +44,7 @@ from backend.core.idempotency import (
     safe_abandon_operation,
 )
 from backend.core.feature_flags import disabled_feature_for_request
+from backend.core.i18n import language_for_request, reset_language, set_language
 
 app = FastAPI(title="Jarvis Core")
 logger = logging.getLogger("jarvis.api")
@@ -161,6 +162,16 @@ async def safe_unhandled_error_handler(request: Request, exc: Exception):
     error_id = _request_id(request)
     logger.error("Unhandled API error id=%s path=%s error=%s", error_id, request.url.path, _safe_exception_summary(exc))
     return JSONResponse(status_code=500, content=_internal_error_payload(error_id))
+
+
+@app.middleware("http")
+async def language_middleware(request: Request, call_next):
+    # Text generated for the public DINCR app follows Accept-Language (es|en).
+    token = set_language(language_for_request(request.url.path, request.headers.get("accept-language")))
+    try:
+        return await call_next(request)
+    finally:
+        reset_language(token)
 
 
 @app.middleware("http")
