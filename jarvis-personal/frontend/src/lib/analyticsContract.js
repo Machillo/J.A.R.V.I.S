@@ -19,7 +19,7 @@ const categories = {
   source_type: new Set(["email", "manual"]),
   decision: new Set(["accepted", "corrected", "rejected"]),
   ownership_status: new Set(["own", "not_mine"]),
-  scan_scope: new Set(["recent", "year_to_date"]),
+  scan_scope: new Set(["recent", "year_to_date", "current_month"]),
 };
 
 const booleans = new Set(["success", "initial_scan_complete"]);

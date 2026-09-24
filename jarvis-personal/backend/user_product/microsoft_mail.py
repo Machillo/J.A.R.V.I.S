@@ -24,7 +24,7 @@ from backend.core.database import get_connection
 from backend.user_product import mail_oauth
 from backend.user_product.gmail_consent import require_gmail_consent
 from backend.user_product.gmail_service import (
-    FINVA_QUERY, _has_active_vip_access,
+    FINVA_QUERY, _connection_import_since, _has_active_vip_access, _initial_scan_scope,
     _ingest_message, _vault_create, _vault_delete, _vault_read,
 )
 
@@ -81,10 +81,10 @@ def _return_url(status: str, **extra: str) -> str:
     return f"{base}{'&' if '?' in base else '?'}{urlencode({'microsoft': status, **extra, 'ret': secrets.token_urlsafe(8)})}"
 
 
-def begin_connection() -> dict[str, str]:
+def begin_connection(import_scope: str | None = None) -> dict[str, str]:
     require_gmail_consent()
     client_id, _, redirect_uri = _config()
-    state, code_challenge = mail_oauth.start_flow("microsoft")
+    state, code_challenge = mail_oauth.start_flow("microsoft", import_scope)
     params = {"client_id": client_id, "response_type": "code", "redirect_uri": redirect_uri,
               "response_mode": "query", "scope": SCOPE, "prompt": "select_account",
               "state": state, "code_challenge": code_challenge, "code_challenge_method": "S256"}
@@ -167,19 +167,24 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
     address = str(flow["mailbox_address"])
     secret_id = str(flow["pending_secret_id"])
     existing = conn.execute(
-        """SELECT id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections
+        """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
            WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
         (account_id, workspace_id, address),
     ).fetchone()
     if existing and "Mail.Read" not in (existing.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
+    window = mail_oauth.connection_import_window(dict(existing) if existing else None, flow)
     if existing:
         row = conn.execute(
             """UPDATE finva_gmail_connections SET legacy_user_id=%s,
                  refresh_token_secret_id=%s::uuid,granted_scopes=%s,
-                 status='active',last_error=NULL,connected_at=NOW(),updated_at=NOW()
+                 status='active',last_error=NULL,import_scope=%s,import_since=%s,
+                 initial_scan_page_token=CASE WHEN %s THEN NULL ELSE initial_scan_page_token END,
+                 initial_scan_completed_at=CASE WHEN %s THEN NULL ELSE initial_scan_completed_at END,
+                 connected_at=NOW(),updated_at=NOW()
                WHERE id=%s RETURNING id""",
-            (legacy_user_id, secret_id, ["Mail.Read"], existing["id"]),
+            (legacy_user_id, secret_id, ["Mail.Read"], window["import_scope"], window["import_since"],
+             window["restart_scan"], window["restart_scan"], existing["id"]),
         ).fetchone()
         if existing.get("refresh_token_secret_id") and str(existing["refresh_token_secret_id"]) != secret_id:
             _vault_delete(conn, str(existing["refresh_token_secret_id"]))
@@ -187,9 +192,10 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
         row = conn.execute(
             """INSERT INTO finva_gmail_connections(
                    account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
-                   granted_scopes,status,connected_at,updated_at)
-               VALUES(%s,%s,%s,%s,%s::uuid,%s,'active',NOW(),NOW()) RETURNING id""",
-            (account_id, workspace_id, legacy_user_id, address, secret_id, ["Mail.Read"]),
+                   granted_scopes,import_scope,import_since,status,connected_at,updated_at)
+               VALUES(%s,%s,%s,%s,%s::uuid,%s,%s,%s,'active',NOW(),NOW()) RETURNING id""",
+            (account_id, workspace_id, legacy_user_id, address, secret_id, ["Mail.Read"],
+             window["import_scope"], window["import_since"]),
         ).fetchone()
     return int(row["id"])
 
@@ -291,13 +297,15 @@ def sync_connection(connection_id: int, max_results: int = 100) -> dict:
     connection = dict(connection)
     access_token = _refresh(connection, token)
     initial = not connection.get("initial_scan_completed_at")
-    since = date.today().replace(month=1, day=1) if initial else date.today() - timedelta(days=45)
+    chosen = _connection_import_since(connection)
+    # Later syncs keep the recent window but never reach before the chosen date.
+    since = chosen if initial else max(chosen, date.today() - timedelta(days=45))
     results = []
     page = connection.get("initial_scan_page_token") if initial else None
     max_pages = 1 if initial else 10
     for _ in range(max_pages):
         response = _graph_get(access_token, page or "/me/messages", None if page else {
-            "$filter": f"receivedDateTime ge {since:%Y-%m-%d}T00:00:00Z",
+            "$filter": f"receivedDateTime ge {since:%Y-%m-%d}T00:00:00-06:00",  # Costa Rica midnight
             "$select": "id,from,receivedDateTime",
             "$top": "50", "$orderby": "receivedDateTime desc",
         })
@@ -325,13 +333,17 @@ def sync_connection(connection_id: int, max_results: int = 100) -> dict:
     with get_connection() as conn:
         conn.execute(
             """UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_success_at=NOW(),
-                 last_error=NULL,initial_scan_page_token=%s,
+                 last_error=NULL,
+                 initial_scan_page_token=CASE WHEN import_since IS NOT DISTINCT FROM %s::date THEN %s ELSE initial_scan_page_token END,
                  initial_scan_started_at=COALESCE(initial_scan_started_at,NOW()),
-                 initial_scan_completed_at=CASE WHEN %s THEN NOW() ELSE initial_scan_completed_at END,
-                 updated_at=NOW() WHERE id=%s""", (page if initial else None, initial and not page, connection_id),
+                 initial_scan_completed_at=CASE WHEN %s AND import_since IS NOT DISTINCT FROM %s::date THEN NOW() ELSE initial_scan_completed_at END,
+                 updated_at=NOW() WHERE id=%s""",
+            # A reconnection that widened the history while this sync ran keeps its reset.
+            (connection.get("import_since"), page if initial else None, initial and not page,
+             connection.get("import_since"), connection_id),
         )
         conn.commit()
-    return {"status": "ok", "scan_scope": "year_to_date" if initial else "recent",
+    return {"status": "ok", "scan_scope": _initial_scan_scope(connection) if initial else "recent",
             "initial_scan_complete": not initial or not page, "found": len(results),
             "auto_saved": results.count("auto_saved"), "pending": results.count("pending"),
             "payroll_reports": results.count("payroll_statement"), "duplicates": results.count("duplicate")}

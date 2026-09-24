@@ -269,4 +269,18 @@ for (const scheme of ["com.dincr.app", "com.finva.app"]) {
   assert.match(plist, new RegExp(`<string>${scheme.replaceAll(".", "\\.")}</string>`), `iOS receives ${scheme} mail returns`);
 }
 
+// 21. Before the provider opens, the user chooses the history to import (v1: this
+// month or this year, no custom date); the choice is sent to the server-side flow.
+assert.match(api, /connectVipGmail = \(importScope\) => json\("\/user-product\/vip\/gmail\/connect", "POST", \{ import_scope: importScope \}\)/);
+assert.match(api, /connectVipMicrosoftMail = \(importScope\) => json\("\/user-product\/vip\/mail\/microsoft\/connect", "POST", \{ import_scope: importScope \}\)/);
+const importOptions = gmail.slice(gmail.indexOf("const IMPORT_OPTIONS"), gmail.indexOf("];", gmail.indexOf("const IMPORT_OPTIONS")));
+assert.deepEqual([...importOptions.matchAll(/scope: "(\w+)"/g)].map((match) => match[1]), ["current_month", "current_year"]);
+assert.doesNotMatch(gmail, /type="date"[^>]*mail-history|custom_date/, "no custom date in v1");
+const connectStep = gmail.slice(gmail.indexOf("const connect = (provider) =>"), gmail.indexOf("const startConnection"));
+assert.match(connectStep, /setHistoryChoice\(\{ provider, scope: "current_month" \}\)/);
+assert.doesNotMatch(connectStep, /Browser\.open|connectVipGmail|connectVipMicrosoftMail/, "the provider opens only after the choice");
+assert.match(gmail, /connectVipMicrosoftMail\(scope\) : connectVipGmail\(scope\)/);
+assert.match(gmail, /DINCR buscará correos bancarios dentro del período seleccionado\. Los movimientos detectados aparecerán en Cuentas/);
+assert.match(gmail, /Si tu banco no envía estados de cuenta, DINCR solo podrá detectar la información presente en los correos bancarios que reciba\./);
+
 console.log("DINCR mail OAuth returns are completed once on Android and iOS, for Gmail and Outlook.");

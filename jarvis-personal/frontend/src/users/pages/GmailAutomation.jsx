@@ -23,6 +23,7 @@ import { categoryLabel, categoryValue } from "../../lib/categories";
 import { trackEvent } from "../../lib/telemetry";
 import { MAIL_OAUTH_RESULT_EVENT, takeMailOAuthOutcome } from "../../lib/mailOAuth";
 import LegalLink from "../../components/LegalLink";
+import FinvaFormSheet from "../components/FinvaFormSheet";
 import gmailLogo from "../../assets/institutions/gmail.png";
 import outlookLogo from "../../assets/institutions/outlook.svg";
 
@@ -63,6 +64,18 @@ const institutionFor = (code, name) => {
   return { id: "other", name: tx("Otras instituciones", "Other institutions"), short: "?", logo: null };
 };
 
+// History to import before opening the provider consent (v1: this month or this year).
+const IMPORT_OPTIONS = [
+  { scope: "current_month", label: () => tx("Desde este mes", "From this month"), detail: () => tx("Desde el primer día del mes actual.", "From the first day of the current month.") },
+  { scope: "current_year", label: () => tx("Desde este año", "From this year"), detail: () => tx("Desde el 1 de enero del año actual.", "From January 1 of the current year.") },
+];
+
+const importSinceLabel = (value) => {
+  if (!value) return "";
+  const [year, month, day] = String(value).slice(0, 10).split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(localeTag(deviceLanguage()), { day: "numeric", month: "short", year: "numeric" });
+};
+
 function MailProviderLogo({ provider }) {
   return <img className="mail-provider-logo" src={provider === "microsoft" ? outlookLogo : gmailLogo} alt="" aria-hidden="true" />;
 }
@@ -82,6 +95,7 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
   const [editing, setEditing] = useState(null);
   const [identity, setIdentity] = useState({ items: [], summary: {} });
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [historyChoice, setHistoryChoice] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -173,18 +187,31 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
     };
   }, [load]);
 
-  const connect = async (provider) => {
+  // Step 1: choose how much history to import; the provider opens only after that.
+  const connect = (provider) => {
+    setError(""); setMessage("");
+    if (gmail?.consent?.required && !consentAccepted) {
+      setError(tx("Debés aceptar la explicación de Email Monitor antes de conectarlo.", "You must accept the Email Monitor explanation before connecting it."));
+      return;
+    }
+    setHistoryChoice({ provider, scope: "current_month" });
+  };
+
+  const startConnection = async () => {
+    const { provider, scope } = historyChoice || {};
+    if (!provider || !scope) return;
     setBusy("connect"); setError(""); setMessage("");
     try {
       if (gmail?.consent?.required) {
         if (!consentAccepted) throw new Error(tx("Debés aceptar la explicación de Email Monitor antes de conectarlo.", "You must accept the Email Monitor explanation before connecting it."));
         await acceptVipGmailConsent(gmail.consent.version);
       }
-      const response = await (provider === "microsoft" ? connectVipMicrosoftMail() : connectVipGmail());
+      const response = await (provider === "microsoft" ? connectVipMicrosoftMail(scope) : connectVipGmail(scope));
+      setHistoryChoice(null);
       trackEvent("gmail_connection_started", { source_type: "email" });
       if (!response?.authorization_url) throw new Error(tx("El proveedor no devolvió una dirección de autorización.", "The provider did not return an authorization URL."));
       await Browser.open({ url: response.authorization_url, presentationStyle: "popover" });
-    } catch (err) { setError(err.message || tx("No se pudo abrir Google.", "Couldn’t open Google.")); }
+    } catch (err) { setHistoryChoice(null); setError(err.message || tx("No se pudo abrir Google.", "Couldn’t open Google.")); }
     finally { setBusy(""); }
   };
 
@@ -199,8 +226,8 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
         success: result.status === "ok",
       });
       await load();
-      const progress = result.scan_scope === "year_to_date" && !result.initial_scan_complete
-        ? tx(" DINCR continuará recorriendo el resto del año en las próximas actualizaciones.", " DINCR will continue scanning the rest of the year during the next refreshes.")
+      const progress = result.scan_scope !== "recent" && !result.initial_scan_complete
+        ? tx(" DINCR continuará revisando el resto del período elegido en las próximas actualizaciones.", " DINCR will keep scanning the rest of the chosen period during the next refreshes.")
         : "";
       setMessage(tx(`Listo: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`, `Done: ${result.auto_saved || 0} new transactions and ${result.pending || 0} to review.`) + progress + (result.failed_connections?.length ? tx(" Algunas conexiones necesitan atención.", "Some connections need attention.") : ""));
     } catch (err) {
@@ -288,7 +315,7 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
       <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Podés conectar varios Gmail y Outlook/Hotmail que controlés. DINCR solicita acceso de lectura, sin permiso para enviar, modificar ni borrar correos.", "You can connect multiple Gmail and Outlook/Hotmail accounts you control. DINCR requests read access, without permission to send, edit or delete emails.")}</p></div>
       {!gmail?.connected && <p>{tx("DINCR revisará los avisos financieros de los buzones que autoricés para detectar cuentas y movimientos. Cada hallazgo requiere tu revisión antes de guardarse.", "DINCR will review financial notices in the mailboxes you authorize to detect accounts and transactions. You review findings before saving them.")}</p>}
       {gmail?.connections?.filter((item) => item.status !== "disabled").map((item) => <div className="gmail-connected-item" key={item.id}>
-        <div className="gmail-connection-status"><MailProviderLogo provider={item.provider}/><span><strong>{item.google_email}</strong><small>{item.provider === "microsoft" ? "Outlook / Hotmail · " : "Gmail · "}{item.status === "reauthorization_required" ? tx("Necesita reconexión", "Reconnect required") : item.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small></span><CheckCircle2 className="mail-provider-status" size={18} aria-hidden="true"/></div>
+        <div className="gmail-connection-status"><MailProviderLogo provider={item.provider}/><span><strong>{item.google_email}</strong><small>{item.provider === "microsoft" ? "Outlook / Hotmail · " : "Gmail · "}{item.status === "reauthorization_required" ? tx("Necesita reconexión", "Reconnect required") : item.automatic_updates ? tx("Lectura automática activa", "Automatic reading active") : tx("Correo conectado", "Email connected")}</small>{item.import_since && <small>{tx("Historial desde", "History from")} {importSinceLabel(item.import_since)}</small>}</span><CheckCircle2 className="mail-provider-status" size={18} aria-hidden="true"/></div>
         <div className="gmail-connection-actions"><button type="button" className="danger" disabled={Boolean(busy)} onClick={() => disconnect(item.id)}><Unplug size={16}/>{tx("Desconectar", "Disconnect")}</button></div>
       </div>)}
         <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("El acceso es solo lectura. El detalle técnico usado para revisar un hallazgo se elimina después de 30 días y los datos identificativos del correo después de 90 días, cuando no haya revisiones pendientes. El movimiento financiero confirmado se conserva hasta que eliminés tu cuenta. Podés desconectar cada correo cuando querás.", "Access is read-only. Technical evidence used to review a finding is removed after 30 days and identifying email metadata after 90 days when no review is pending. Confirmed financial history is retained until you delete your account. You can disconnect each mailbox at any time.")}</p></div>
@@ -376,5 +403,21 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
     </section>}
     {message && <p className="success-banner">{message}</p>}
     {error && <p className="onboarding-error">{error}</p>}
+    <FinvaFormSheet open={Boolean(historyChoice)} eyebrow={historyChoice?.provider === "microsoft" ? "Outlook / Hotmail" : "Gmail"} title={tx("¿Cuánto historial querés revisar?", "How much history do you want to review?")} onClose={() => { if (busy !== "connect") setHistoryChoice(null); }}>
+      <div className="mail-history-sheet">
+        <div className="mail-history-options" role="radiogroup" aria-label={tx("Historial a importar", "History to import")}>
+          {IMPORT_OPTIONS.map((option) => <label key={option.scope} className={`mail-history-option ${historyChoice?.scope === option.scope ? "active" : ""}`}>
+            <input type="radio" name="mail-history" value={option.scope} checked={historyChoice?.scope === option.scope} onChange={() => setHistoryChoice((current) => ({ ...current, scope: option.scope }))}/>
+            <span><strong>{option.label()}</strong><small>{option.detail()}</small></span>
+          </label>)}
+        </div>
+        <p>{tx("DINCR buscará correos bancarios dentro del período seleccionado. Los movimientos detectados aparecerán en Cuentas para que podás revisarlos antes de agregarlos.", "DINCR will look for bank emails within the selected period. Detected transactions will appear in Accounts so you can review them before adding them.")}</p>
+        <p>{tx("Para obtener mejores resultados, asegurate de tener activadas las notificaciones y/o estados de cuenta por correo en tu banco. Si tu banco no envía estados de cuenta, DINCR solo podrá detectar la información presente en los correos bancarios que reciba.", "For best results, make sure your bank sends you transaction notifications and/or statements by email. If your bank doesn’t send statements, DINCR can only detect the information in the bank emails you receive.")}</p>
+        <div className="gmail-review-actions">
+          <button type="button" disabled={busy === "connect"} onClick={() => setHistoryChoice(null)}>{tx("Cancelar", "Cancel")}</button>
+          <button type="button" className="primary" disabled={busy === "connect"} onClick={startConnection}>{busy === "connect" ? tx("Abriendo…", "Opening…") : tx("Continuar", "Continue")}</button>
+        </div>
+      </div>
+    </FinvaFormSheet>
   </section>;
 }

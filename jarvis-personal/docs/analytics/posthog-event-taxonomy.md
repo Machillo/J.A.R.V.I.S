@@ -56,7 +56,7 @@ Outlook/Hotmail se registra como `mail_connected` desde la app.
 `plan` (free/basic/vip), `platform` (android/ios), `screen` (lista cerrada de
 destinos), `access_type` (free/promotion), `source_type` (email/manual),
 `decision` (accepted/corrected/rejected), `ownership_status` (own/not_mine),
-`scan_scope` (recent/year_to_date), `success`, `initial_scan_complete`,
+`scan_scope` (recent/year_to_date/current_month), `success`, `initial_scan_complete`,
 `app_version` (versión numérica) y `duration_ms` (redondeada al segundo y
 limitada a 60 s). El contrato está en `frontend/src/lib/analyticsContract.js`.
 Ninguna cifra económica, nombre de banco, correo, ruta/URL, descripción, saldo,
