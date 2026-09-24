@@ -5,7 +5,7 @@ from backend.auth.saas import require_feature
 from backend.user_product.models import (
     BasicSimulationRequest, BudgetUpdateRequest, DebtPaymentRequest, ExpenseCreateRequest, ExpenseUpdateRequest,
     FinancialSituationRequest, GoalContributionRequest, GoalCreateRequest, GoalUpdateRequest, IncomeCreateRequest,
-    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
+    FinancialAccountIdentityRequest, GmailCandidateReviewRequest, GmailConsentRequest, MailConnectRequest, MailConnectionCompleteRequest, OwnTransferConfirmRequest, IncomeUpdateRequest, MovementUpdateRequest, RecurringItemRequest, TransactionCreateRequest,
     SavingsPlanContributionRequest, SavingsPlanCreateRequest, SavingsPlanUpdateRequest,
     UserDebtCreateRequest, UserDebtUpdateRequest, VipSimulationRequest,
 )
@@ -244,8 +244,10 @@ def vip_gmail_status():
     require_feature("gmail_automation"); return gmail_status()
 
 @router.post("/vip/gmail/connect")
-def vip_gmail_connect():
-    require_feature("gmail_automation"); return begin_gmail_connection()
+def vip_gmail_connect(request: MailConnectRequest | None = None):
+    # No body (older app versions) keeps the previous current-year window.
+    require_feature("gmail_automation")
+    return begin_gmail_connection((request or MailConnectRequest()).import_scope)
 
 @router.post("/vip/gmail/consent")
 def vip_gmail_consent(request: GmailConsentRequest):
@@ -268,8 +270,9 @@ def vip_mail_oauth_complete(request: MailConnectionCompleteRequest, background_t
     return result
 
 @router.post("/vip/mail/microsoft/connect")
-def vip_microsoft_connect():
-    require_feature("gmail_automation"); return begin_microsoft_connection()
+def vip_microsoft_connect(request: MailConnectRequest | None = None):
+    require_feature("gmail_automation")
+    return begin_microsoft_connection((request or MailConnectRequest()).import_scope)
 
 @router.get("/vip/mail/microsoft/callback")
 def vip_microsoft_callback(code: str | None = None, state: str | None = None, error: str | None = None):

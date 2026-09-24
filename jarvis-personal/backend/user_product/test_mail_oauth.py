@@ -70,11 +70,12 @@ class FakeConnection:
                 flows.pop(flow_id, None)
             return self._rows([])
         if q.startswith("INSERT INTO mail_oauth_flows"):
-            state_hash, provider, account, workspace, verifier, minutes = params
+            state_hash, provider, account, workspace, verifier, import_scope, minutes = params
             assert all(f["state_hash"] != state_hash for f in flows.values())
             flow_id = str(uuid4())
             flows[flow_id] = {"id": flow_id, "state_hash": state_hash, "provider": provider, "account_id": account,
                               "workspace_id": workspace, "status": "started", "code_verifier": verifier,
+                              "import_scope": import_scope,
                               "completion_hash": None, "pending_secret_id": None, "mailbox_address": None,
                               "granted_scopes": None, "expires_at": now + timedelta(minutes=minutes)}
             return self._rows([])
@@ -121,20 +122,26 @@ class FakeConnection:
             return self._rows([])
         if q.startswith("SELECT 1 FROM account_subscriptions"):
             return self._rows([{"allowed": 1}] if params[0] in self.db.vip else [])
-        if q.startswith("SELECT id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections"):
+        if q.startswith("SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections"):
             account, workspace, email = params
             return self._rows(c for c in connections.values()
                               if (c["account_id"], c["workspace_id"], c["google_email"]) == (account, workspace, email))
         if q.startswith("UPDATE finva_gmail_connections SET"):
             connection = connections[params[-1]]
-            connection.update(refresh_token_secret_id=params[1], granted_scopes=params[2], status="active")
+            _legacy, secret_id, scopes, import_scope, since, restart, _restart = params[:7]
+            connection.update(refresh_token_secret_id=secret_id, granted_scopes=scopes, status="active",
+                              import_scope=import_scope, import_since=since)
+            if restart:
+                connection.update(initial_scan_page_token=None, initial_scan_completed_at=None)
             return self._rows([{"id": connection["id"]}])
         if q.startswith("INSERT INTO finva_gmail_connections"):
-            account, workspace, legacy, email, secret_id, scopes = params
+            account, workspace, legacy, email, secret_id, scopes, import_scope, since = params
             connection_id = len(connections) + 1
             connections[connection_id] = {"id": connection_id, "account_id": account, "workspace_id": workspace,
                                           "google_email": email, "refresh_token_secret_id": secret_id,
-                                          "granted_scopes": scopes, "status": "active"}
+                                          "granted_scopes": scopes, "status": "active",
+                                          "import_scope": import_scope, "import_since": since,
+                                          "initial_scan_page_token": None, "initial_scan_completed_at": None}
             return self._rows([{"id": connection_id}])
         raise AssertionError(f"Unexpected query: {q[:90]}")
 

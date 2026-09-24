@@ -362,7 +362,7 @@ def test_mail_oauth_state_is_server_side_single_use_and_session_bound():
     source = Path(gmail_service.__file__).read_text(encoding="utf-8")
     assert "_encode_oauth_state" not in source and "_decode_oauth_state" not in source
     connect = source.split("def begin_gmail_connection", 1)[1].split("def finish_gmail_connection", 1)[0]
-    assert 'mail_oauth.start_flow("gmail")' in connect and '"code_challenge_method": "S256"' in connect
+    assert 'mail_oauth.start_flow("gmail", import_scope)' in connect and '"code_challenge_method": "S256"' in connect
     callback = source.split("def finish_gmail_connection", 1)[1].split("def _attach_gmail_connection", 1)[0]
     assert "INSERT INTO finva_gmail_connections" not in callback, "the public callback must never attach a mailbox"
     migration = (
