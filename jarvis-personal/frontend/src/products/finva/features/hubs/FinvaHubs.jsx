@@ -1,5 +1,5 @@
 import {
-  BarChart3, CalendarDays, ChevronRight, CircleUserRound, CreditCard, Gift, Landmark,
+  BarChart3, Building2, CalendarDays, ChevronRight, CircleUserRound, CreditCard, Gift, Landmark,
   LifeBuoy, LogOut, Mail, ReceiptText, Repeat2, Settings, ShieldCheck,
   SlidersHorizontal, Sparkles, Target, TrendingUp, WalletCards,
 } from "lucide-react";
@@ -53,7 +53,9 @@ export function ProfileHub({ plan, navigate, onLogout }) {
     item(navigate, "situation", tx("Mi situación financiera", "My financial situation"), tx("Ingresos, gastos y datos personales", "Income, expenses and personal data"), CircleUserRound),
     item(navigate, "settings", tx("Cuenta y plan", "Account and plan"), tx("Perfil, suscripción y preferencias", "Profile, subscription and preferences"), Settings),
   ];
-  if (plan === "vip") account.splice(1, 0, item(navigate, "gmail", tx("Correos financieros", "Financial emails"), tx("Conexión, sincronización y revisión", "Connection, sync and review"), Mail));
+  if (plan === "vip") account.splice(1, 0,
+    item(navigate, "accounts", tx("Cuentas", "Accounts"), tx("Bancos, cuentas y movimientos por revisar", "Banks, accounts and transactions to review"), Building2),
+    item(navigate, "gmail", tx("Correos financieros", "Financial emails"), tx("Conexión, sincronización y revisión", "Connection, sync and review"), Mail));
   const support = [item(navigate, "feedback", tx("Ayuda y sugerencias", "Help and feedback"), tx("Soporte y estado del servicio", "Support and service status"), LifeBuoy), { key: "logout", label: tx("Cerrar sesión", "Log out"), detail: tx("Salir de DINCR en este dispositivo", "Sign out of DINCR on this device"), icon: LogOut, action: onLogout }];
   return <Hub eyebrow={tx("Tu cuenta", "Your account")} title={tx("Perfil", "Profile")} description={tx("Configuración, conexiones y soporte.", "Settings, connections and support.")} groups={[{ title: tx("Cuenta", "Account"), items: account }, { title: tx("Soporte", "Support"), items: support }]}/>;
 }
