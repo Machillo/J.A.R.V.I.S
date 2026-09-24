@@ -33,6 +33,7 @@ from backend.auth.owner_bridge_routes import router as owner_bridge_router
 from backend.user_product.routes import router as user_product_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
+from backend.product_ops.posthog_events import capture_backend_event_later
 from backend.product_ops.routes import router as product_ops_router
 from backend.financial_lifecycle.routes import router as financial_lifecycle_router
 from backend.core.idempotency import (
@@ -152,12 +153,21 @@ def _internal_error_payload(error_id: str) -> dict[str, str]:
     }
 
 
+def _report_server_error(request: Request, status_code: int, exc: Exception) -> None:
+    """Anonymous reliability signal: route template, method, status and exception type only."""
+    route = getattr(request.scope.get("route"), "path", None)
+    capture_backend_event_later("server_error", {
+        "route": route, "method": request.method, "status_code": status_code, "exception_type": type(exc).__name__,
+    })
+
+
 @app.exception_handler(HTTPException)
 async def safe_http_error_handler(request: Request, exc: HTTPException):
     if exc.status_code < 500:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     error_id = _request_id(request)
     logger.error("Internal HTTP error id=%s path=%s", error_id, request.url.path)
+    _report_server_error(request, exc.status_code, exc)
     return JSONResponse(status_code=exc.status_code, content=_internal_error_payload(error_id))
 
 
@@ -179,6 +189,7 @@ async def superseded_operation_handler(request: Request, exc: OperationSupersede
 async def safe_unhandled_error_handler(request: Request, exc: Exception):
     error_id = _request_id(request)
     logger.error("Unhandled API error id=%s path=%s error=%s", error_id, request.url.path, _safe_exception_summary(exc))
+    _report_server_error(request, 500, exc)
     return JSONResponse(status_code=500, content=_internal_error_payload(error_id))
 
 

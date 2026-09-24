@@ -36,6 +36,7 @@ def test_only_aggregate_fields_leave_render(monkeypatch):
     assert payload["properties"] == {
         "success": True,
         "source_type": "server",
+        "environment": "development",
         "$process_person_profile": False,
         "$geoip_disable": True,
     }

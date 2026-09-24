@@ -185,7 +185,7 @@ def env(monkeypatch):
     monkeypatch.setattr(ms, "_graph_get", lambda token, path, *_a: {"mail": token.removeprefix("access-for-")} if path == "/me" else {"value": []})
     monkeypatch.setattr(gmail_service, "_financial_user_id_for_account", lambda account_id: 900)
     monkeypatch.setattr(gmail_service, "_after_gmail_connected", lambda connection_id: synced.append(("gmail", connection_id)))
-    monkeypatch.setattr(ms, "sync_connection", lambda connection_id: synced.append(("microsoft", connection_id)))
+    monkeypatch.setattr(ms, "sync_connection", lambda connection_id, **_kwargs: synced.append(("microsoft", connection_id)))
     return SimpleNamespace(db=db, provider=provider, synced=synced)
 
 

@@ -31,6 +31,7 @@ from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import release_cross_source_duplicates, resolve_candidate, reevaluate_workspace_candidates
+from backend.user_product.mail_sync_analytics import observe_mail_sync
 from backend.user_product.legacy_owner_mail import legacy_transaction_for_message, mark_legacy_duplicate
 from backend.user_product import mail_oauth
 from backend.user_product.mail_copy import localized_parse_reason
@@ -672,7 +673,7 @@ def _after_gmail_connected(connection_id: int) -> None:
     _, token = _connection_with_token(connection_id)
     service = _credentials(token)
     _start_watch(connection_id, service, suppress_errors=True)
-    _sync_connection(connection_id, service=service, max_results=100)
+    _sync_connection(connection_id, service=service, max_results=100, trigger="connect")
 
 
 def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
@@ -986,7 +987,11 @@ def _connection_with_token(connection_id: int) -> tuple[dict[str, Any], str]:
     return dict(row), token
 
 
-def _sync_connection(connection_id: int, service=None, max_results: int = 100) -> dict[str, Any]:
+def _sync_connection(connection_id: int, service=None, max_results: int = 100, trigger: str = "manual") -> dict[str, Any]:
+    return observe_mail_sync("gmail", trigger, lambda: _run_sync_connection(connection_id, service, max_results))
+
+
+def _run_sync_connection(connection_id: int, service=None, max_results: int = 100) -> dict[str, Any]:
     connection, token = _connection_with_token(connection_id)
     try:
         service = service or _credentials(token)
@@ -1138,12 +1143,12 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
         try:
             if "Mail.Read" in (row.get("granted_scopes") or []):
                 from backend.user_product.microsoft_mail import sync_connection
-                sync_connection(connection_id)
+                sync_connection(connection_id, trigger="maintenance")
             else:
                 _, token = _connection_with_token(connection_id)
                 service = _credentials(token)
                 _start_watch(connection_id, service, suppress_errors=True)
-                _sync_connection(connection_id, service=service, max_results=100)
+                _sync_connection(connection_id, service=service, max_results=100, trigger="maintenance")
             completed += 1
         except HTTPException as exc:
             if exc.status_code == 409:
@@ -1189,7 +1194,7 @@ def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, 
     completed = 0
     for row in rows:
         try:
-            _sync_connection(int(row["id"]), max_results=50)
+            _sync_connection(int(row["id"]), max_results=50, trigger="push")
             completed += 1
         except Exception:
             continue

@@ -283,7 +283,12 @@ def _attachments(token: str, message_id: str) -> tuple[str, list[str]]:
     return "\n".join(texts), names
 
 
-def sync_connection(connection_id: int, max_results: int = 100) -> dict:
+def sync_connection(connection_id: int, max_results: int = 100, trigger: str = "manual") -> dict:
+    from backend.user_product.mail_sync_analytics import observe_mail_sync
+    return observe_mail_sync("microsoft", trigger, lambda: _run_sync_connection(connection_id, max_results))
+
+
+def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
     with get_connection() as conn:
         connection = conn.execute(
             """SELECT c.*,a.display_name FROM finva_gmail_connections c

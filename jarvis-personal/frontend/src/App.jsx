@@ -11,6 +11,7 @@ import { deleteMyAccount } from "./users/services/jarvisApi";
 import { supabase } from "./lib/supabase";
 import { registerNativeAuthListener } from "./lib/nativeAuth";
 import { identifyTelemetryUser, trackEvent } from "./lib/telemetry";
+import { captureProductEvent, noteLoginCompleted } from "./lib/productAnalytics";
 import { openSupport } from "./lib/apiErrors";
 import { tx } from "./lib/locale";
 import ReleaseUpdateNotice from "./components/ReleaseUpdateNotice";
@@ -97,6 +98,10 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
       const nextUserId = nextSession?.user?.id || null;
       const identityChanged = event === "SIGNED_OUT" || (activeUserId !== null && activeUserId !== nextUserId);
+      // Product analytics: a real sign-in (no previous identity) and a sign-out.
+      // The logout event is sent before the analytics identity is reset below.
+      if (event === "SIGNED_IN" && activeUserId === null && nextUserId) noteLoginCompleted();
+      if (event === "SIGNED_OUT") captureProductEvent("logout");
       activeUserId = nextUserId;
       setSession(nextSession);
       // Returning from Android's file picker can refresh the Supabase token.

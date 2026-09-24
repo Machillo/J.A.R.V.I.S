@@ -8,8 +8,15 @@ const safely = (action) => native ? Promise.resolve().then(action).catch(() => {
 
 export const initializeTelemetry = () => {
   if (!native) return () => {};
-  const onError = (event) => recordError(event.error || new Error(event.message || "Unhandled JavaScript error"), "window_error");
-  const onRejection = (event) => recordError(event.reason instanceof Error ? event.reason : new Error(String(event.reason || "Unhandled promise rejection")), "unhandled_rejection");
+  // PostHog gets only the category of an unhandled error, never its message or stack.
+  const onError = (event) => {
+    recordError(event.error || new Error(event.message || "Unhandled JavaScript error"), "window_error");
+    captureProductEvent("app_error", { error_category: "window_error" });
+  };
+  const onRejection = (event) => {
+    recordError(event.reason instanceof Error ? event.reason : new Error(String(event.reason || "Unhandled promise rejection")), "unhandled_rejection");
+    captureProductEvent("app_error", { error_category: "unhandled_rejection" });
+  };
   window.addEventListener("error", onError);
   window.addEventListener("unhandledrejection", onRejection);
   safely(() => FirebaseCrashlytics.log({ message: "app_started" }));
