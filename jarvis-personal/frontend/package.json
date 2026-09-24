@@ -17,6 +17,8 @@
     "test:store-readiness": "node scripts/test-store-readiness.mjs",
     "test:legal-links": "node scripts/test-legal-links.mjs",
     "test:ios-identity": "node scripts/test-ios-identity.mjs",
+    "test:release-identity": "node scripts/test-release-identity.mjs",
+    "release:version": "node scripts/release-version.mjs",
     "test:android-identity": "node scripts/test-android-identity.mjs",
     "test:mail-oauth": "node scripts/test-mail-oauth.mjs",
     "test:product-analytics": "node scripts/test-product-analytics-contract.mjs",
