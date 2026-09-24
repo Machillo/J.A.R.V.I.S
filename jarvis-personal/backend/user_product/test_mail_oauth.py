@@ -84,6 +84,8 @@ class FakeConnection:
             for f in match:
                 f["status"] = "callback"
             return self._rows({k: f[k] for k in ("id", "account_id", "workspace_id", "code_verifier")} for f in match)
+        if q.startswith("SELECT provider,status FROM mail_oauth_flows WHERE state_hash"):
+            return self._rows(f for f in flows.values() if f["state_hash"] == params[0])
         if q.startswith("UPDATE mail_oauth_flows SET status='failed',code_verifier=NULL"):
             f = flows.get(params[0])
             if f and f["status"] in ("started", "callback"):
@@ -107,7 +109,8 @@ class FakeConnection:
             flows[params[0]].update(status="failed", pending_secret_id=None, completion_hash=None)
             return self._rows([])
         if q.startswith("UPDATE mail_oauth_flows SET status='completed'"):
-            flows[params[0]].update(status="completed", pending_secret_id=None, completion_hash=None)
+            assert "completion_hash" not in q  # kept for the initiator's idempotent retry
+            flows[params[0]].update(status="completed", pending_secret_id=None)
             return self._rows([])
         if q.startswith("SELECT vault.create_secret"):
             secret_id = str(uuid4())
@@ -271,7 +274,9 @@ def test_state_is_single_use(env, provider):
     url = start(provider, A)
     code, state = env.provider.authorize(url, "a@example.com")
     assert callback(provider, code, state)[0] == "authorized"
-    assert callback(provider, code, state)[0] == "invalid_state"
+    status, params = callback(provider, code, state)
+    assert status == "already_processed"  # still rejected: no exchange, no completion code
+    assert "completion" not in params and "flow" not in params
     assert len(env.provider.token_requests) == 1
 
 
@@ -388,3 +393,83 @@ def test_only_the_provider_callbacks_are_public():
                  "/user-product/vip/mail/microsoft/connect", "/user-product/vip/gmail/sync",
                  "/user-product/vip/gmail"):
         assert main._is_public_path(path) is False
+
+
+# --- Duplicate deliveries (retried GET, restored tab, OS replaying the deep link) ---
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_replayed_callback_never_breaks_the_first_connection(env, provider):
+    code, state = env.provider.authorize(start(provider, A), "a@example.com")
+    status, first = callback(provider, code, state)
+    assert status == "authorized"
+    # The browser delivers the same provider redirect again before and after completion.
+    assert callback(provider, code, state)[0] == "already_processed"
+    assert complete(A, first) == {"status": "connected", "provider": provider}
+    replay_status, replay = callback(provider, code, state)
+    assert replay_status == "already_processed" and "completion" not in replay
+    assert connections_of(env, A) == [("a@example.com", A["workspace_id"])]
+    assert len(env.provider.token_requests) == 1 and env.synced == [(provider, 1)]
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_each_return_link_is_unique(env, provider):
+    code, state = env.provider.authorize(start(provider, A), "a@example.com")
+    _, first = callback(provider, code, state)
+    _, second = callback(provider, code, state)
+    _, third = callback(provider, code, state)
+    assert len({first["ret"], second["ret"], third["ret"]}) == 3
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_initiator_can_confirm_a_completion_whose_response_was_lost(env, provider):
+    _, params = callback(provider, *env.provider.authorize(start(provider, A), "a@example.com"))
+    assert complete(A, params)["status"] == "connected"
+    # The app retries because the first response never arrived: same result, nothing re-attached.
+    assert complete(A, params) == {"status": "connected", "provider": provider}
+    assert connections_of(env, A) == [("a@example.com", A["workspace_id"])]
+    assert env.synced == [(provider, 1)]
+    assert list(env.db.state["vault"].values()) == ["refresh-for-a@example.com"]
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_completed_flow_rejects_other_sessions_wrong_codes_and_expiry(env, provider):
+    _, params = callback(provider, *env.provider.authorize(start(provider, A), "a@example.com"))
+    complete(A, params)
+    for user in (B, A2):
+        with pytest.raises(HTTPException) as other:
+            complete(user, params)
+        assert other.value.status_code == 403
+    with pytest.raises(HTTPException) as wrong:
+        complete(A, {**params, "completion": "not-the-code"})
+    assert wrong.value.status_code == 409
+    Clock.now += timedelta(minutes=11)
+    try:
+        with pytest.raises(HTTPException) as expired:
+            complete(A, params)
+        assert expired.value.status_code == 409
+    finally:
+        Clock.now -= timedelta(minutes=11)
+    flow = next(iter(env.db.state["flows"].values()))
+    assert flow["status"] == "completed"  # the rejected replays did not disturb the connection
+    assert connections_of(env, A) == [("a@example.com", A["workspace_id"])]
+    assert connections_of(env, B) == []
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_authorized_flow_expires_before_completion(env, provider):
+    _, params = callback(provider, *env.provider.authorize(start(provider, A), "a@example.com"))
+    Clock.now += timedelta(minutes=11)
+    try:
+        with pytest.raises(HTTPException) as expired:
+            complete(A, params)
+        assert expired.value.status_code == 409
+    finally:
+        Clock.now -= timedelta(minutes=11)
+    assert connections_of(env, A) == []
+
+
+@pytest.mark.parametrize(("started", "used"), [("gmail", "microsoft"), ("microsoft", "gmail")])
+def test_replay_on_another_provider_is_not_reported_as_processed(env, started, used):
+    code, state = env.provider.authorize(start(started, A), "a@example.com")
+    assert callback(started, code, state)[0] == "authorized"
+    assert callback(used, code, state)[0] == "invalid_state"

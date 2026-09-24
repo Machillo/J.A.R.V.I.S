@@ -96,12 +96,20 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
 
   // Mail OAuth returns by deep link, even when the app was relaunched from it:
   // this signed-in session redeems the one-time completion, then shows the result.
+  // A completion interrupted by the network is retried when the app is back.
   useEffect(() => {
     captureMailOAuthReturns();
     const redeem = () => redeemPendingMailOAuth(completeVipMailConnection).then((outcome) => { if (outcome) navigate("gmail"); });
+    const redeemWhenVisible = () => { if (document.visibilityState === "visible") redeem(); };
     redeem();
     window.addEventListener(MAIL_OAUTH_RETURN_EVENT, redeem);
-    return () => window.removeEventListener(MAIL_OAUTH_RETURN_EVENT, redeem);
+    window.addEventListener("online", redeem);
+    document.addEventListener("visibilitychange", redeemWhenVisible);
+    return () => {
+      window.removeEventListener(MAIL_OAUTH_RETURN_EVENT, redeem);
+      window.removeEventListener("online", redeem);
+      document.removeEventListener("visibilitychange", redeemWhenVisible);
+    };
   }, [navigate]);
 
   useEffect(() => { if (user?.subscription?.access_notice) setAccessNotice(user.subscription.access_notice); }, [user?.subscription?.access_notice]);

@@ -11,6 +11,7 @@ import html
 import logging
 import os
 import re
+import secrets
 from datetime import date, timedelta
 from io import BytesIO
 from urllib.parse import quote, urlencode, urlparse
@@ -76,7 +77,8 @@ def _granted_scopes(value: str | None) -> set[str]:
 
 def _return_url(status: str, **extra: str) -> str:
     base = os.getenv("FINVA_GMAIL_RETURN_URL", "com.finva.app://gmail/callback").strip()
-    return f"{base}{'&' if '?' in base else '?'}{urlencode({'microsoft': status, **extra})}"
+    # ret identifies this response so the app handles each delivery once.
+    return f"{base}{'&' if '?' in base else '?'}{urlencode({'microsoft': status, **extra, 'ret': secrets.token_urlsafe(8)})}"
 
 
 def begin_connection() -> dict[str, str]:
@@ -107,8 +109,9 @@ def finish_connection(code: str | None, state: str | None, error: str | None = N
     """OAuth callback (public). Parks the refresh token; the app completes the link."""
     flow = mail_oauth.claim_callback("microsoft", state)
     if not flow:
-        logger.warning("Outlook authorization rejected: unknown, used or expired state")
-        return RedirectResponse(_return_url("invalid_state"), status_code=302)
+        status = mail_oauth.rejected_callback_status("microsoft", state)
+        logger.warning("Outlook authorization rejected: %s", "state already processed" if status == "already_processed" else "unknown, failed or expired state")
+        return RedirectResponse(_return_url(status), status_code=302)
     if error or not code:
         # Only Microsoft's error code (e.g. access_denied, consent_required) is
         # logged; error_description can echo tenant or account details.

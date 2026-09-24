@@ -100,6 +100,28 @@ def claim_callback(provider: str, state: str | None) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def rejected_callback_status(provider: str, state: str | None) -> str:
+    """Status for a callback whose state could not be claimed.
+
+    Browsers can deliver the provider redirect twice (a retried GET, a reloaded
+    or restored tab). The replay is still rejected -- no token exchange and no
+    completion code -- but it is reported as ``already_processed`` so the app
+    does not present it as an expired authorization while the first delivery
+    connects the mailbox. Unknown, expired, failed or cross-provider states
+    stay ``invalid_state``.
+    """
+    if provider not in PROVIDERS or not state or len(state) > 256:
+        return "invalid_state"
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT provider,status FROM mail_oauth_flows WHERE state_hash=%s",
+            (_digest(state),),
+        ).fetchone()
+    if row and row["provider"] == provider and row["status"] in ("callback", "authorized", "completed"):
+        return "already_processed"
+    return "invalid_state"
+
+
 def fail_flow(flow_id: Any) -> None:
     with get_connection() as conn:
         conn.execute(
@@ -135,6 +157,11 @@ def complete_flow(
     ``attach(conn, flow)`` persists the provider connection in the same
     transaction and returns its id. Any mismatch fails closed and discards the
     pending refresh token.
+
+    Redeeming the same completion code again from the same account and
+    workspace, before the flow expires, reports the existing result without
+    attaching anything (the app may retry after losing the first response).
+    Any other reuse is rejected.
     """
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
@@ -147,11 +174,14 @@ def complete_flow(
                FROM mail_oauth_flows WHERE id=%s::uuid FOR UPDATE""",
             (flow_id,),
         ).fetchone()
-        if (not flow or flow["status"] != "authorized" or not flow["active"]
+        if (not flow or flow["status"] not in ("authorized", "completed") or not flow["active"]
                 or not hmac.compare_digest(str(flow["completion_hash"] or ""), _digest(completion))):
             raise HTTPException(status_code=409, detail="La autorización del correo venció o ya se usó. Volvé a conectarlo.")
         flow = dict(flow)
         if str(flow["account_id"]) != str(account_id) or str(flow["workspace_id"]) != str(workspace_id):
+            if flow["status"] == "completed":
+                logger.warning("Mail OAuth completion replay rejected: flow belongs to another account provider=%s", flow["provider"])
+                raise HTTPException(status_code=403, detail="Esta autorización de correo no pertenece a tu cuenta DINCR.")
             _delete_secret(conn, flow["pending_secret_id"])
             conn.execute(
                 """UPDATE mail_oauth_flows SET status='failed',pending_secret_id=NULL,completion_hash=NULL,
@@ -161,14 +191,18 @@ def complete_flow(
             conn.commit()
             logger.warning("Mail OAuth completion rejected: flow belongs to another account provider=%s", flow["provider"])
             raise HTTPException(status_code=403, detail="Esta autorización de correo no pertenece a tu cuenta DINCR.")
+        if flow["status"] == "completed":
+            return {"connection_id": None, "provider": flow["provider"], "already_completed": True}
         connection_id = attach(conn, flow)
+        # completion_hash is kept (a hash of a spent code) so the initiating
+        # session can confirm the result idempotently until the flow expires.
         conn.execute(
-            """UPDATE mail_oauth_flows SET status='completed',pending_secret_id=NULL,completion_hash=NULL,
+            """UPDATE mail_oauth_flows SET status='completed',pending_secret_id=NULL,
                       updated_at=NOW() WHERE id=%s::uuid""",
             (flow_id,),
         )
         conn.commit()
-    return {"connection_id": connection_id, "provider": flow["provider"]}
+    return {"connection_id": connection_id, "provider": flow["provider"], "already_completed": False}
 
 
 def complete_mail_connection(flow_id: str, completion: str) -> dict[str, Any]:
@@ -187,6 +221,8 @@ def complete_mail_connection(flow_id: str, completion: str) -> dict[str, Any]:
         "microsoft": lambda conn, flow: microsoft_mail._attach_microsoft_connection(conn, flow, legacy_user_id),
     }
     result = complete_flow(flow_id, completion, attachers[provider])
+    if result["already_completed"]:
+        return {"status": "connected", "provider": result["provider"]}
     try:
         if result["provider"] == "gmail":
             gmail_service._after_gmail_connected(result["connection_id"])
