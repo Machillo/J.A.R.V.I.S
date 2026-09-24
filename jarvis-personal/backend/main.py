@@ -47,7 +47,7 @@ from backend.core.idempotency import (
     safe_abandon_operation,
 )
 from backend.core.feature_flags import disabled_feature_for_request
-from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language
+from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language, use_language
 
 app = FastAPI(title="Jarvis Core")
 logger = logging.getLogger("jarvis.api")
@@ -67,6 +67,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The offline queue reads these to tell "still processing" from a final failure.
+    expose_headers=["X-Idempotency-Status", "X-Idempotency-Replayed", "X-Request-ID", "Retry-After"],
 )
 
 
@@ -237,11 +239,15 @@ async def auth_middleware(request: Request, call_next):
     try:
         if access_token.startswith("jarvis-owner:"):
             user = authenticate_owner_bridge_token(access_token.removeprefix("jarvis-owner:").strip())
-        elif request.method == "DELETE" and request.url.path == "/auth/me":
-            # Only the account deletion itself may run on a deletion_pending account (retry).
-            user = authenticate_access_token(access_token, allow_deletion_pending=True)
         else:
-            user = authenticate_access_token(access_token)
+            # auth_middleware runs before language_middleware: resolve the language here so
+            # identity/deletion messages follow Accept-Language.
+            with use_language(language_for_request(request.url.path, request.headers.get("accept-language"))):
+                if request.method == "DELETE" and request.url.path == "/auth/me":
+                    # Only the account deletion itself may run on a deletion_pending account (retry).
+                    user = authenticate_access_token(access_token, allow_deletion_pending=True)
+                else:
+                    user = authenticate_access_token(access_token)
     except Exception as exc:
         status_code = getattr(exc, "status_code", 401)
         detail = getattr(exc, "detail", "No se pudo autenticar el usuario.")

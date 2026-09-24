@@ -605,7 +605,7 @@ def test_supabase_failure_leaves_no_data_and_retry_finishes(env, failure):
     env.supabase.delete_results = [failure]
     with pytest.raises(HTTPException) as error:
         _delete_as(identity)
-    assert error.value.status_code == 503
+    assert error.value.status_code == 409
     assert error.value.detail["message"].startswith("Tu eliminación quedó en proceso")
     assert error.value.detail["code"] == auth_service.DELETION_PENDING_CODE
     assert error.value.detail["stage"] == "SUPABASE_AUTH_DELETE" and error.value.detail["deletion_id"]
@@ -644,7 +644,7 @@ def test_repeated_delete_on_a_pending_user_is_idempotent(env):
     for attempt in range(3):
         with pytest.raises(HTTPException) as error:
             _delete_as(identity if attempt == 0 else _login(env, allow_deletion_pending=True))
-        assert error.value.status_code == 503
+        assert error.value.status_code == 409
         state = copy.deepcopy(env.db.state)
         _assert_all_data_gone(state)
         assert state["allowed_users"][42]["status"] == "deletion_pending"

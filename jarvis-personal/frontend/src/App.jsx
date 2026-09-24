@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
-import { flushPendingOperations, prepareLogout } from "./lib/operationRecovery";
+import { clearPendingOperations, flushPendingOperations, prepareLogout } from "./lib/operationRecovery";
 import Login from "./pages/Login";
 import FinvaOnboarding from "./pages/FinvaOnboarding";
 import ProfileSetup from "./pages/ProfileSetup";
@@ -206,6 +206,7 @@ export default function App() {
             setFinishingDeletion(true);
             try {
               await deleteMyAccount();
+              clearPendingOperations();
               await supabase.auth.signOut({ scope: "local" });
             } catch (error) {
               setIdentityError(error?.message || tx("No pudimos terminar la eliminación. Intentá de nuevo.", "We couldn’t finish the deletion. Try again."));

@@ -539,8 +539,9 @@ def delete_current_account() -> dict[str, str]:
         auth_error = type(exc).__name__
     if auth_error:
         _log_deletion(deletion_id, stage, "FAILED", error_type=auth_error, http_status=auth_status)
+        # 409 (not 5xx): the generic 5xx handler would drop the code the app needs.
         raise HTTPException(
-            status_code=503,
+            status_code=409,
             detail={"message": _deletion_pending_detail(), "code": DELETION_PENDING_CODE, "deletion_id": deletion_id, "stage": stage},
         )
     _log_deletion(deletion_id, stage, "COMPLETED", http_status=auth_status)
@@ -614,6 +615,7 @@ def _delete_allowed_user_dependents(conn, allowed_user_id: int) -> int:
            JOIN pg_class child ON child.oid=c.conrelid
            JOIN pg_namespace ns ON ns.oid=child.relnamespace
            JOIN pg_attribute att ON att.attrelid=c.conrelid AND att.attnum=c.conkey[1]
+           JOIN pg_attribute ref ON ref.attrelid=c.confrelid AND ref.attnum=c.confkey[1] AND ref.attname='id'
            WHERE c.contype='f' AND c.confrelid='public.allowed_users'::regclass
              AND array_length(c.conkey,1)=1 AND c.conrelid<>c.confrelid
            ORDER BY ns.nspname, child.relname"""
