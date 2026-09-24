@@ -22,7 +22,7 @@ const copy = (es, en) => tx(es, en, language);
 const money = (value) =>
   new Intl.NumberFormat(localeTag(language), {
     style: "currency",
-    currency: "CRC",
+    currency: "CRC", currencyDisplay: "narrowSymbol",
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
 

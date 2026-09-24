@@ -2,6 +2,10 @@ import { Apple, CheckCircle2, Fingerprint, Link2, RefreshCw } from "lucide-react
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { tx } from "../../lib/locale";
+import { detectNativePlatform } from "../../ui/native/platform";
+
+// Face ID is Apple's name; Android devices unlock passkeys with fingerprint or PIN.
+const passkeyTitle = () => detectNativePlatform() === "ios" ? "Passkey / Face ID" : tx("Passkey / huella", "Passkey / fingerprint");
 
 export default function AccountSecurity({ user }) {
   const [identities, setIdentities] = useState([]);
@@ -65,7 +69,7 @@ export default function AccountSecurity({ user }) {
         </article>
 
         <article className="security-method-row">
-          <div><Fingerprint size={21} /><span><strong>Passkey / Face ID</strong><small>{passkeys.length ? tx(`${passkeys.length} registrada${passkeys.length === 1 ? "" : "s"}`, `${passkeys.length} registered`) : tx("Usá biometría/PIN del dispositivo", "Use device biometrics/PIN")}</small></span></div>
+          <div><Fingerprint size={21} /><span><strong>{passkeyTitle()}</strong><small>{passkeys.length ? tx(`${passkeys.length} registrada${passkeys.length === 1 ? "" : "s"}`, `${passkeys.length} registered`) : tx("Usá biometría/PIN del dispositivo", "Use device biometrics/PIN")}</small></span></div>
           <button className="finva-button finva-button-secondary" type="button" onClick={registerPasskey} disabled={Boolean(busy)}>{busy === "passkey" ? tx("Registrando...", "Registering...") : passkeys.length ? tx("Agregar otra", "Add another") : tx("Registrar", "Register")}</button>
         </article>
       </div>

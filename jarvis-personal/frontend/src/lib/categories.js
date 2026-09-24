@@ -9,6 +9,7 @@ const ENGLISH_CATEGORY_LABELS = {
   Comida: "Food",
   Compras: "Shopping",
   Deporte: "Sports",
+  Deudas: "Debts",
   Entretenimiento: "Entertainment",
   Familiar: "Family",
   Gasolina: "Gas",

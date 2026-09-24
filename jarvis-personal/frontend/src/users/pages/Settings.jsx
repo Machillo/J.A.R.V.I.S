@@ -132,7 +132,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
 
       <div className="section-heading compact plan-change-heading">
         <div>
-          <p className="eyebrow">{tx("Desarrollo", "Development")}</p>
+          <p className="eyebrow">{tx("Planes", "Plans")}</p>
           <h2>{tx("Cambiar de plan","Change plan")}</h2>
           <span>{!billing ? tx("Estamos confirmando los precios de Basic y VIP.", "We’re confirming Basic and VIP prices.") : promotionActive ? tx("Basic y VIP están gratis hasta el 31 de diciembre de 2026. No habrá cobro automático.", "Basic and VIP are free until December 31, 2026. There will be no automatic charge.") : tx("Las compras de Basic y VIP desde Google Play y App Store estarán disponibles más adelante.", "Basic and VIP purchases through Google Play and the App Store will be available later.")}</span>
         </div>

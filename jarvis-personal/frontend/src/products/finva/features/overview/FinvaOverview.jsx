@@ -9,7 +9,7 @@ const tx = (es, en) => language === "es" ? es : en;
 
 const money = (value) => new Intl.NumberFormat(localeTag(language), {
   style: "currency",
-  currency: "CRC",
+  currency: "CRC", currencyDisplay: "narrowSymbol",
   maximumFractionDigits: 0,
 }).format(Number(value) || 0);
 
@@ -32,7 +32,9 @@ function BasicDashboard({ data, planning, onNavigate }) {
   const calendar = planning?.calendar;
   const spent = (budget?.items || []).reduce((sum, item) => sum + Number(item.spent || 0), 0);
   const budgeted = Number(budget?.total_budgeted || 0);
-  const used = budgeted > 0 ? Math.min(Math.round(spent / budgeted * 100), 100) : 0;
+  // The bar is capped at 100%; the text keeps the real figure so an exceeded budget is visible.
+  const used = budgeted > 0 ? Math.round(spent / budgeted * 100) : 0;
+  const usedBar = Math.min(used, 100);
   const available = Math.max(Number(budget?.available_for_categories || 0) - spent, 0);
   const today = new Date();
   const limit = new Date(today);
@@ -65,7 +67,7 @@ function BasicDashboard({ data, planning, onNavigate }) {
 
     <article className="finva-basic-plan-progress">
       <header><strong>{tx("Plan del mes", "Monthly plan")}</strong><b>{used}%</b></header>
-      <progress max="100" value={used}/>
+      <progress max="100" value={usedBar}/>
       <span>{used <= 100 ? tx("Vas dentro del presupuesto.", "You're within budget.") : tx("Revisá las categorías que superaron el plan.", "Review categories that exceeded the plan.")}</span>
     </article>
   </section>;

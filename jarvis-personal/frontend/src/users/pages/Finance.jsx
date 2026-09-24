@@ -9,7 +9,7 @@ import { categoryLabel, categoryValue } from "../../lib/categories";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
+const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:0 }).format(Number(value) || 0);
 const today = () => new Date().toISOString().slice(0,10);
 const incomeCategories = ["Boleta de pago","Bono","Reembolso","Otros ingresos"];
 const expenseCategories = ["Vivienda","Servicios","Internet","Teléfono","Seguros","Comida","Restaurante","Transporte","Gasolina","Entretenimiento","Compras","Salud","Deporte","Servicios personales","Mascotas","Otros"];
@@ -89,7 +89,8 @@ export default function Finance({ plan = "basic", onNavigate }) {
   const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="finva-fold-row" key={item.id}><span><strong>{item.description || categoryLabel(item.category)}</strong><small>{item.entry_date} · {categoryLabel(item.category)}</small></span><span><b className={tone}>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || categoryLabel(item.category)})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="finva-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
 
   const content = compact ? <section className={`free-screen free-movements-screen ${plan !== "free" ? "basic-movements-screen" : ""}`}>
-    <small className="free-plan-label">{plan === "free" ? tx("Gratis", "Free") : plan === "vip" ? "VIP" : "Basic"}</small>
+    {/* VIP has no app header, so the tab shows its own title like the other VIP pages. */}
+    {plan === "vip" ? <div className="hero"><span>DINCR · VIP</span><h1>{tx("Movimientos", "Transactions")}</h1></div> : <small className="free-plan-label">{plan === "free" ? tx("Gratis", "Free") : "Basic"}</small>}
     {error && <div className="free-error">{error}</div>}
     <label className="free-search"><Search size={18}/><input aria-label={tx("Buscar movimientos", "Search transactions")} placeholder={tx("Buscar movimientos", "Search transactions")} value={query} onChange={(event) => setQuery(event.target.value)}/></label>
     <div className="free-filter-tabs" role="tablist">

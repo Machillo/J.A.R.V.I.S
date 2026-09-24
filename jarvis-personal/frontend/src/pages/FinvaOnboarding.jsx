@@ -105,7 +105,7 @@ export default function FinvaOnboarding({ user, onComplete }) {
     <section className="unified-onboarding-card unified-plan-stage">
       <div className="unified-onboarding-top">
         <div><strong>DINCR</strong><small>{tx("Elegí tu plan personal", "Choose your personal plan")}</small></div>
-        <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> {tx("Salir", "Sign out")}</button>
+        <button type="button" onClick={() => supabase.auth.signOut()}><LogOut size={17}/> {tx("Salir", "Log out")}</button>
       </div>
       <div className="unified-onboarding-intro">
         <span className="unified-eyebrow">{tx("BIENVENIDO", "WELCOME")}</span>

@@ -7,7 +7,7 @@ import { codeLabel, deviceLanguage, localeTag } from "../../lib/locale";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC", maximumFractionDigits:2 }).format(Number(value) || 0);
+const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:2 }).format(Number(value) || 0);
 const today = () => new Date().toISOString().slice(0,10);
 const goalEmpty = { name:"", target_amount:"", current_amount:0, target_date:"", priority:"medium", status:"active" };
 const savingsEmpty = { name:"", monthly_amount:"", saved_amount:0, start_date:today(), end_date:"", status:"active" };

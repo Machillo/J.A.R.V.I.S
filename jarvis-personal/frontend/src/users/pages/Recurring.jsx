@@ -3,12 +3,12 @@ import { Plus, Repeat2 } from "lucide-react";
 import { createRecurring, deleteRecurring, getRecurring, updateRecurring } from "../services/jarvisApi";
 import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
-import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import { codeLabel, deviceLanguage, localeTag, tx } from "../../lib/locale";
 import { categoryLabel, categoryValue } from "../../lib/categories";
 
 const language=deviceLanguage();
 const copy=(es,en)=>tx(es,en,language);
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
+const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:0 }).format(Number(value) || 0);
 const empty = { name:"", amount:"", category:categoryLabel("general"), item_type:"expense", frequency:"monthly", due_day:"", is_active:true };
 
 export default function Recurring({ plan = "basic" }) {
@@ -44,13 +44,13 @@ export default function Recurring({ plan = "basic" }) {
   const activeItems = data?.items?.filter((item) => item.is_active) || [];
 
   return <section className="content-first-page finva-basic-recurring">
-    {plan === "free" && <div className="hero"><span>DINCR · BASIC</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>}
+    {plan !== "basic" && <div className="hero"><span>DINCR · {plan === "vip" ? "VIP" : "BASIC"}</span><h1>{copy("Recurrentes","Recurring")}</h1><p>{copy("Servicios, suscripciones, alquiler y otros cobros repetidos.","Services, subscriptions, rent, and other repeating charges.")}</p></div>}
     {error && <div className="panel error">{error}</div>}
     {data && <>
       <article className="basic-recurring-summary"><small>{copy("PRÓXIMOS 30 DÍAS","NEXT 30 DAYS")}</small><strong>{money(data.monthly_expenses)} {copy("comprometidos","committed")}</strong><span>{activeItems.length} {copy("movimientos recurrentes","recurring items")}</span></article>
       <div className="basic-recurring-list">{data.items.length ? data.items.map((item) => <article className={`basic-recurring-item ${item.is_active ? "" : "muted-row"}`} key={item.id}>
         <header><strong>{item.name}</strong><b>{item.item_type === "income" ? "+" : "−"}{money(item.amount)}</b></header>
-        <p>{copy("día","day")} {item.due_day || "—"} · {item.frequency}</p>
+        <p>{copy("día","day")} {item.due_day || "—"} · {codeLabel("frequencies", item.frequency)}</p>
         <div className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={() => toggle(item)}>{item.is_active ? copy("Pausar","Pause") : copy("Activar","Activate")}</button><button className="finva-button finva-button-danger" type="button" onClick={() => setDeleting(item)}>{copy("Eliminar","Delete")}</button></div>
       </article>) : <p className="panel finva-empty-state">{copy("No tenés movimientos recurrentes.","You have no recurring items.")}</p>}</div>
     </>}

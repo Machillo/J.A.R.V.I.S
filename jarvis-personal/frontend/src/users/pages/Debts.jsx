@@ -3,11 +3,11 @@ import { ArrowLeft, ChevronRight, CreditCard, Plus } from "lucide-react";
 import { createDebt, deleteDebt, getDebts, payDebt, updateDebt } from "../services/jarvisApi";
 import { AmountDialog, ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
-import { deviceLanguage, localeTag } from "../../lib/locale";
+import { codeLabel, deviceLanguage, localeTag } from "../../lib/locale";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
-const money = (value) => value == null ? tx("Sin dato", "No data") : new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC", maximumFractionDigits:0 }).format(Number(value) || 0);
+const money = (value) => value == null ? tx("Sin dato", "No data") : new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:0 }).format(Number(value) || 0);
 const empty = { name:"", debt_type:"other", total_amount:"", remaining_amount:"", monthly_payment:"", interest_rate:"", term_months:"", payment_day:"", next_payment_date:"" };
 const opt = (value) => value === "" ? null : Number(value);
 const monthsLeft = (debt) => {
@@ -109,7 +109,7 @@ export default function Debts({ plan = "free" }) {
   </section>;
 
   const content = !advanced ? freeContent : <section className="content-first-page finva-debts-page">
-    <div className="hero"><span>{advanced ? "DINCR · BASIC" : "DINCR · FREE"}</span><h1>{tx("Deudas", "Debts")}</h1><p>{advanced ? tx("Gestión completa con tasa, plazo y finalización estimada.", "Complete management with interest, term, and estimated payoff.") : tx("Saldos, pagos y progreso visual, sin recomendaciones.", "Balances, payments, and visual progress without recommendations.")}</p></div>
+    <div className="hero"><span>DINCR · {plan === "vip" ? "VIP" : advanced ? "BASIC" : "FREE"}</span>{plan === "vip" && <h1>{tx("Deudas", "Debts")}</h1>}<p>{advanced ? tx("Gestión completa con tasa, plazo y finalización estimada.", "Complete management with interest, term, and estimated payoff.") : tx("Saldos, pagos y progreso visual, sin recomendaciones.", "Balances, payments, and visual progress without recommendations.")}</p></div>
     {!advanced && <article className="finva-free-debt-summary"><small>{tx("SALDO TOTAL", "TOTAL BALANCE")}</small><strong>{money(totalBalance)}</strong><span>{rows.length} {rows.length === 1 ? tx("deuda registrada", "recorded debt") : tx("deudas registradas", "recorded debts")}</span></article>}
     {error && <div className="panel error">{error}</div>}
     <button className="finva-add-strip" type="button" onClick={() => setCreating(true)}><span><CreditCard size={20}/></span><div><strong>{tx("Agregar deuda", "Add debt")}</strong><small>{tx("Registrá una nueva obligación", "Record a new obligation")}</small></div><Plus size={19}/></button>
@@ -119,7 +119,7 @@ export default function Debts({ plan = "free" }) {
       const progress = debt.progress_percent ?? Math.min(Math.max((1-Number(debt.remaining_amount)/total)*100,0),100);
       const months = monthsLeft(debt);
       return <article className="panel debt-card compact-record-card" key={debt.id}>
-        <header><span><b>{debt.name}</b>{advanced && <small>{debt.debt_type}</small>}</span><strong>{money(debt.remaining_amount)}</strong></header>
+        <header><span><b>{debt.name}</b>{advanced && <small>{codeLabel("debtTypes", debt.debt_type)}</small>}</span><strong>{money(debt.remaining_amount)}</strong></header>
         <progress max="100" value={progress}/>
         <p>{Number(progress).toFixed(1)}% {tx("pagado · cuota", "paid · payment")} {money(debt.monthly_payment)}</p>
         {advanced && <div className="record-meta"><span>{tx("Próximo pago", "Next payment")}: {(debt.next_payment_date || debt.payment_day) ? `${tx("día", "day")} ${debt.payment_day || String(debt.next_payment_date).slice(8,10)}` : tx("sin fecha", "no date")}</span><span>{tx("Finalización", "Payoff")}: {months ? `~${months} ${tx("meses", "months")}` : tx("faltan datos", "missing data")}</span></div>}
