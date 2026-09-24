@@ -213,7 +213,7 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
                 """
                 INSERT INTO notification_jobs (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
                 VALUES (%s, %s, 'Radar deportivo', %s, 'sports', %s, 'sports_radar', %s, %s, %s::jsonb)
-                ON CONFLICT (workspace_id, dedupe_key) DO NOTHING
+                ON CONFLICT (workspace_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
                 RETURNING id
                 """,
                 (user_id, workspace_id, body, scheduled_utc, day_key, dedupe_key, json.dumps(summary, ensure_ascii=False)),

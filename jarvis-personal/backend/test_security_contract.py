@@ -993,3 +993,45 @@ def test_self_deletion_followup_cascades_gmail_and_validates_constraints():
     assert "finva_gmail_connections_legacy_user_id_fkey" in migration
     assert "REFERENCES public.users(id) ON DELETE CASCADE" in migration
     assert "VALIDATE CONSTRAINT" in migration
+
+
+def test_self_deletion_removes_ccss_salary_reports_before_the_account(monkeypatch):
+    """payroll_salary_reports has no FK to workspaces: the cascade alone would keep salaries."""
+    queries = []
+
+    class Result:
+        def __init__(self, row=None, rows=None): self.row = row; self.rows = rows or []
+        def fetchone(self): return self.row
+        def fetchall(self): return self.rows
+
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def commit(self): queries.append("COMMIT")
+        def execute(self, query, params=()):
+            normalized = " ".join(query.split())
+            queries.append(normalized)
+            if normalized.startswith("SELECT legacy_allowed_user_id"):
+                return Result({"legacy_allowed_user_id": 42, "supabase_user_id": "22222222-2222-2222-2222-222222222222",
+                               "primary_email": "person@example.com"})
+            if "to_regclass('public.payroll_salary_reports')" in normalized:
+                return Result({"present": "payroll_salary_reports"})
+            if normalized.startswith("DELETE FROM accounts"):
+                return Result({"id": "11111111-1111-1111-1111-111111111111"})
+            return Result()
+
+    monkeypatch.setattr(auth_service, "get_connection", lambda: Connection())
+    monkeypatch.setattr(auth_service, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", "sb_secret_example")
+    monkeypatch.setattr(auth_service.requests, "delete", lambda *_args, **_kwargs: SimpleNamespace(status_code=204))
+    token = set_current_user({"id": 42, "account_id": "11111111-1111-1111-1111-111111111111",
+                              "supabase_user_id": "22222222-2222-2222-2222-222222222222", "email": "person@example.com"})
+    try:
+        assert auth_service.delete_current_account()["status"] == "OK"
+    finally:
+        reset_current_user(token)
+
+    payroll = next(i for i, q in enumerate(queries) if q.startswith("DELETE FROM payroll_salary_reports"))
+    account = next(i for i, q in enumerate(queries) if q.startswith("DELETE FROM accounts"))
+    assert payroll < account
+    assert "owner_account_id=%s" in queries[payroll]
