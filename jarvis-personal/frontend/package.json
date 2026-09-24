@@ -14,6 +14,7 @@
     "test:navigation": "node scripts/test-finva-settings-navigation.mjs",
     "test:plans": "node scripts/test-plan-selection.mjs",
     "test:unified-movements": "node scripts/test-unified-movements.mjs",
+    "test:double-submit": "node scripts/test-double-submit.mjs",
     "test:native-navigation": "node scripts/test-native-navigation.mjs",
     "test:store-readiness": "node scripts/test-store-readiness.mjs",
     "test:legal-links": "node scripts/test-legal-links.mjs",

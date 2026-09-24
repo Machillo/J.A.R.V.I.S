@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSingleFlight } from "../../lib/useSingleFlight";
 import { Plus, Repeat2 } from "lucide-react";
 import { createRecurring, deleteRecurring, getRecurring, updateRecurring } from "../services/jarvisApi";
 import { ConfirmDialog } from "../components/FinvaDialog";
@@ -21,7 +22,8 @@ export default function Recurring({ plan = "basic" }) {
   const load = () => getRecurring().then(setData).catch((err) => setError(err.message));
   useEffect(() => { load(); }, []);
 
-  const submit = async (event) => {
+  const [once, saving] = useSingleFlight();
+  const submit = once(async (event) => {
     event.preventDefault();
     try {
       await createRecurring({...form,category:categoryValue(form.category),amount:Number(form.amount),due_day:form.due_day ? Number(form.due_day) : null});
@@ -29,7 +31,7 @@ export default function Recurring({ plan = "basic" }) {
       setCreating(false);
       load();
     } catch (err) { setError(err.message); }
-  };
+  });
   const toggle = async (item) => {
     try { await updateRecurring(item.id,{...item,is_active:!item.is_active}); load(); }
     catch (err) { setError(err.message); }
@@ -66,7 +68,7 @@ export default function Recurring({ plan = "basic" }) {
           <label><span>{copy("Frecuencia","Frequency")}</span><select value={form.frequency} onChange={(e) => setForm({...form,frequency:e.target.value})}><option value="weekly">{copy("Semanal","Weekly")}</option><option value="biweekly">{copy("Quincenal","Twice monthly")}</option><option value="monthly">{copy("Mensual","Monthly")}</option><option value="quarterly">{copy("Trimestral","Quarterly")}</option><option value="annual">{copy("Anual","Annual")}</option></select></label>
           <label><span>{copy("Día de cobro","Due day")}</span><input type="number" inputMode="numeric" min="1" max="31" placeholder="1–31" value={form.due_day} onChange={(e) => setForm({...form,due_day:e.target.value})}/></label>
         </div>
-        <button className="finva-button finva-button-primary">{copy("Guardar recurrente","Save recurring item")}</button>
+        <button className="finva-button finva-button-primary" disabled={saving}>{copy("Guardar recurrente","Save recurring item")}</button>
       </form>
     </FinvaFormSheet>
     <ConfirmDialog open={Boolean(deleting)} title={copy("Eliminar recurrente","Delete recurring item")} description={deleting ? copy(`Se eliminará ${deleting.name} de tus movimientos recurrentes.`, `${deleting.name} will be removed from your recurring items.`) : ""} onConfirm={remove} onClose={() => { if (!busy) setDeleting(null); }} busy={busy}/>
