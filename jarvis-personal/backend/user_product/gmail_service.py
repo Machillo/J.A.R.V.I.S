@@ -8,7 +8,7 @@ import os
 import re
 import secrets
 from datetime import date, datetime, timezone
-from email.utils import parsedate_to_datetime
+from email.utils import parseaddr, parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlencode
 
@@ -94,6 +94,17 @@ def _list_message_page(service, query: str, *, page_token: str | None, limit: in
     response = service.users().messages().list(**request).execute()
     items = [item for item in response.get("messages", []) if item.get("id")]
     return items, response.get("nextPageToken")
+
+
+def bank_sender_allowed(sender: str) -> bool:
+    """Exact bank address (or subdomain of an approved bank domain) from FINVA_QUERY."""
+    _name, address = parseaddr(sender or "")
+    address = address.strip().lower()
+    if not re.fullmatch(r"[a-z0-9_.+\-]+@[a-z0-9.\-]+", address):
+        return False
+    domain = address.rsplit("@", 1)[-1]
+    allowed = {item.lower() for item in re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)}
+    return any(address == item or domain == item or domain.endswith("." + item) for item in allowed)
 
 
 def _aguinaldo_gmail_query(as_of: date | None = None) -> str:
@@ -752,7 +763,9 @@ def _ingest_message(
     display_name = str(connection.get("display_name") or "")
     payroll_report = parse_ccss_order_patronal(subject, sender, attachment_text or body)
     financial_text = "\n".join(item for item in (body, attachment_text) if item)
-    parsed = {} if payroll_report else (
+    # Bank templates run only for an approved bank address. Gmail passes the raw
+    # From header, whose display name an attacker controls ("alerta@banco <x@evil>").
+    parsed = {} if payroll_report or not bank_sender_allowed(sender) else (
         parse_popular_email_document(
             subject=_adapt_identity(subject, display_name),
             sender=sender,
@@ -803,7 +816,9 @@ def _ingest_message(
                 """INSERT INTO finva_email_messages(
                        connection_id,account_id,workspace_id,provider_message_id,sender,subject,received_at,
                        bank,status,parse_reason
-                   ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                   ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT(connection_id,provider_message_id) DO NOTHING
+                   RETURNING id""",
                 (
                     int(connection["id"]), connection["account_id"], connection["workspace_id"], message_id,
                     sender[:500], subject[:500], received_at,
@@ -812,6 +827,9 @@ def _ingest_message(
                      if payroll_report else parsed.get("confidence_reason") or parsed.get("ignore_reason") or ""),
                 ),
             ).fetchone()
+            if email_row is None:
+                # A concurrent sync (push + manual) stored this message first.
+                return "duplicate"
 
         if payroll_report:
             conn.execute(
