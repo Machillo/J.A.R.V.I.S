@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getBudget, saveBudget } from "../services/jarvisApi";
 import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import { categoryLabel } from "../../lib/categories";
 const language=deviceLanguage();
 const copy=(es,en)=>tx(es,en,language);
 const money=(v)=>new Intl.NumberFormat(localeTag(language),{style:"currency",currency:"CRC",maximumFractionDigits:0}).format(Number(v)||0);
@@ -32,7 +33,7 @@ export default function Budget({ plan = "basic" }){
         const limit=Number(item.monthly_limit)||0, spent=Number(item.spent)||0;
         const pct=limit?Math.min(spent/limit*100,100):0;
         return <article className="basic-budget-category" key={item.category}>
-          <header><strong>{item.category}</strong><span>{money(Math.max(limit-spent,0))} {copy("libre","left")}</span></header>
+          <header><strong>{categoryLabel(item.category)}</strong><span>{money(Math.max(limit-spent,0))} {copy("libre","left")}</span></header>
           {editing
             ? <label><span>{copy("Límite mensual","Monthly limit")}</span><input type="number" min="0" step="0.01" value={item.monthly_limit} onChange={e=>change(index,e.target.value)}/></label>
             : <><p>{money(spent)} / {money(limit)}</p><progress max="100" value={pct}/></>}

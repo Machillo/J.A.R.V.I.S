@@ -53,7 +53,7 @@ const BANKS = [
   { id: "bcr", name: "Banco de Costa Rica", short: "BCR", tone: "navy", logo: bcrLogo },
   { id: "popular", name: "Banco Popular", short: "BP", tone: "orange", logo: popularLogo },
   { id: "davivienda", name: "Davivienda", short: "DAV", tone: "yellow", logo: daviviendaLogo },
-  { id: "scotiabank", name: "DAVIbank (antes Scotiabank)", short: "S", tone: "red", logo: davibankLogo },
+  { id: "scotiabank", name: tx("DAVIbank (antes Scotiabank)", "DAVIbank (formerly Scotiabank)"), short: "S", tone: "red", logo: davibankLogo },
   { id: "promerica", name: "Promerica", short: "PRO", tone: "green", logo: promericaLogo },
   { id: "multimoney", name: "MultiMoney", short: "MM", tone: "violet", logo: multimoneyLogo, supported: true },
 ];

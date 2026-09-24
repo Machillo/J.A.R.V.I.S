@@ -139,7 +139,7 @@ export default function Debts({ plan = "free" }) {
     <FinvaFormSheet open={Boolean(edit)} eyebrow={tx("Deuda", "Debt")} title={tx("Editar deuda", "Edit debt")} onClose={() => setEdit(null)}>
       {edit && <form className="form finva-sheet-form" onSubmit={save}><DebtFields value={edit} setValue={setEdit} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}
     </FinvaFormSheet>
-    <AmountDialog open={Boolean(payment)} title={tx("Registrar pago", "Record payment")} description={payment ? `Aplicar un pago a ${payment.name}.` : ""} value={paymentAmount} onValueChange={setPaymentAmount} confirmLabel={tx("Registrar pago", "Record payment")} onConfirm={registerPayment} onClose={() => { if (!busyDialog) setPayment(null); }} busy={busyDialog}/>
+    <AmountDialog open={Boolean(payment)} title={tx("Registrar pago", "Record payment")} description={payment ? tx(`Aplicar un pago a ${payment.name}.`, `Apply a payment to ${payment.name}.`) : ""} value={paymentAmount} onValueChange={setPaymentAmount} confirmLabel={tx("Registrar pago", "Record payment")} onConfirm={registerPayment} onClose={() => { if (!busyDialog) setPayment(null); }} busy={busyDialog}/>
     <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar deuda", "Delete debt")} description={deleting ? tx(`Se eliminará ${deleting.name}. Esta acción no se puede deshacer.`, `${deleting.name} will be deleted. This action cannot be undone.`) : ""} onConfirm={removeDebt} onClose={() => { if (!busyDialog) setDeleting(null); }} busy={busyDialog}/>
   </>;
 }

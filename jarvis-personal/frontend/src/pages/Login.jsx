@@ -35,7 +35,7 @@ export default function Login({ nativeError = "" }) {
     setLoading(provider);
     setError("");
     const { error: authError } = await startOAuthLogin(provider);
-    if (authError) setError(authError.message);
+    if (authError) setError(tx("No pudimos completar el acceso. Intentá nuevamente.", "We couldn’t sign you in. Please try again."));
     setLoading("");
   };
 
@@ -44,7 +44,7 @@ export default function Login({ nativeError = "" }) {
       <section className="login-card auth-card">
         <div className="finva-login-top">
           <strong>DINCR</strong>
-          <small>Finanzas personales · Costa Rica</small>
+          <small>{tx("Finanzas personales · Costa Rica", "Personal finance · Costa Rica")}</small>
         </div>
 
         <div className="finva-login-hero">

@@ -8,6 +8,7 @@ from typing import Any
 from backend.ai.preferences import get_preference, set_preference
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.i18n import tx
 
 PREFERENCE_KEY = "salvavidas"
 DEFAULT_TARGET_MONTHS = 6
@@ -268,9 +269,11 @@ def get_salvavidas_state() -> dict[str, Any]:
             "mode": "manual",
             "account_linked": bool(linked_account),
             "message": (
-                "Saldo vinculado con la cuenta financiera real Salvavidas."
+                tx("Saldo vinculado con la cuenta financiera real Salvavidas.",
+                   "Balance linked to your real emergency fund account.")
                 if linked_account else
-                "Guardá el saldo para crear y vincular la cuenta financiera Salvavidas."
+                tx("Guardá el saldo para crear y vincular la cuenta financiera Salvavidas.",
+                   "Save the balance to create and link your emergency fund account.")
             ),
         },
     }

@@ -6,6 +6,7 @@ from typing import Any
 
 from backend.advisor.core import build_advisor_strategy
 from backend.auth.current_user import get_current_workspace_id
+from backend.core.i18n import DEFAULT_LANGUAGE, use_language
 from backend.finance.deterioration import get_financial_deterioration
 from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.intelligence import get_real_availability, list_account_balances
@@ -39,7 +40,14 @@ def build_financial_state() -> dict[str, Any]:
 
     This function deliberately calls Advisor Core with persist=False. Phase 2A
     observes the strategy; it does not create strategy-history side effects.
+    The state is persisted and compared across snapshots, so any text in it is
+    kept in canonical Spanish; responses localize it when presenting.
     """
+    with use_language(DEFAULT_LANGUAGE):
+        return _build_financial_state()
+
+
+def _build_financial_state() -> dict[str, Any]:
     strategy = build_advisor_strategy(persist=False)
     accounts = list_account_balances().get("items") or []
     debts = [item for item in (get_debts() or []) if _n(item.get("remaining_amount")) > 0]

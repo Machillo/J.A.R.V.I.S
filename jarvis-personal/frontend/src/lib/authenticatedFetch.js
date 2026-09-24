@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
+import { deviceLanguage, tx } from "./locale";
 
-const SESSION_EXPIRED_MESSAGE = "Tu sesión venció. Iniciá sesión nuevamente.";
+const SESSION_EXPIRED_MESSAGE = tx("Tu sesión venció. Iniciá sesión nuevamente.", "Your session expired. Please sign in again.");
 const REQUEST_TIMEOUT_MS = 20_000;
 const RETRYABLE_STATUS = new Set([408, 425, 429, 502, 503, 504]);
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -42,13 +43,15 @@ async function withToken(url, options, token) {
       ...options,
       signal: controller.signal,
       headers: {
+        // The backend writes its narrative text in the same language as the UI.
+        "Accept-Language": deviceLanguage(),
         ...(options.headers || {}),
         Authorization: `Bearer ${token}`,
       },
     });
   } catch (error) {
     if (controller.signal.aborted && !upstreamSignal?.aborted) {
-      throw new Error("La solicitud tardó demasiado. Volvé a intentarlo.", { cause: error });
+      throw new Error(tx("La solicitud tardó demasiado. Volvé a intentarlo.", "The request took too long. Please try again."), { cause: error });
     }
     throw error;
   } finally {

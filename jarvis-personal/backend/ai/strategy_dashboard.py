@@ -8,6 +8,7 @@ from typing import Any
 
 from backend.auth.current_user import get_current_user, get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.i18n import tx
 from backend.finance.service import get_debts, get_financial_summary, calculate_monthly_salary_projection, get_financial_cycle_report
 from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.fixed_expenses import get_fixed_expense_status
@@ -290,13 +291,13 @@ def _build_dynamic_director_allocation(
 
     if base <= 0.01:
         mode = "cash_protection"
-        mode_label = "PROTECCIÓN DE CAJA"
-        mode_reason = "No hay excedente real disponible después de obligaciones."
+        mode_label = tx("PROTECCIÓN DE CAJA", "CASH PROTECTION")
+        mode_reason = tx("No hay excedente real disponible después de obligaciones.", "There is no real surplus available after obligations.")
         remaining_weights = {"debt": 0.0, "emergency": 0.0, "life": 0.0, "investment": 0.0}
     elif urgent_goals or goal_now > 0.01:
         mode = "goal_protection"
         mode_label = "GOAL PROTECTION"
-        mode_reason = "Hay una meta prioritaria con fecha cercana; se protege antes de acelerar deuda."
+        mode_reason = tx("Hay una meta prioritaria con fecha cercana; se protege antes de acelerar deuda.", "A priority goal has an upcoming date; it is protected before accelerating debt.")
         if debt_exists and safety_gap_mini > 0:
             remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "investment": 0.0}
         elif debt_exists:
@@ -306,22 +307,22 @@ def _build_dynamic_director_allocation(
     elif debt_exists and safety_gap_mini > 0:
         mode = "debt_safety"
         mode_label = "DEBT + SAFETY"
-        mode_reason = "La deuda importa, pero el fondo mínimo todavía es insuficiente para absorber un imprevisto."
+        mode_reason = tx("La deuda importa, pero el fondo mínimo todavía es insuficiente para absorber un imprevisto.", "Debt matters, but the minimum fund is still not enough to absorb an emergency.")
         remaining_weights = {"debt": 0.45, "emergency": 0.40, "life": 0.15, "investment": 0.0}
     elif debt_exists and safety_gap_month > 0:
         mode = "debt_attack"
         mode_label = "DEBT ATTACK"
-        mode_reason = "El mini-colchón ya existe; se acelera deuda sin dejar de construir un mes de seguridad."
+        mode_reason = tx("El mini-colchón ya existe; se acelera deuda sin dejar de construir un mes de seguridad.", "The mini cushion exists; debt is accelerated while still building one month of safety.")
         remaining_weights = {"debt": 0.65, "emergency": 0.20, "life": 0.15, "investment": 0.0}
     elif debt_exists:
         mode = "debt_attack"
         mode_label = "DEBT ATTACK"
-        mode_reason = "Hay al menos un mes de seguridad; la mayor parte del excedente puede atacar deuda."
+        mode_reason = tx("Hay al menos un mes de seguridad; la mayor parte del excedente puede atacar deuda.", "There is at least one month of safety; most of the surplus can go to debt.")
         remaining_weights = {"debt": 0.75, "emergency": 0.10, "life": 0.15, "investment": 0.0}
     else:
         mode = "wealth_building"
         mode_label = "WEALTH BUILDING"
-        mode_reason = "Sin deuda prioritaria, el excedente puede construir seguridad, metas e inversión."
+        mode_reason = tx("Sin deuda prioritaria, el excedente puede construir seguridad, metas e inversión.", "With no priority debt, the surplus can build safety, goals, and investments.")
         remaining_weights = {
             "debt": 0.0,
             "emergency": 0.30,
@@ -413,9 +414,9 @@ def _build_dynamic_director_allocation(
         "active_goal": active_goal,
         "investment_blockers": [
             reason for blocked, reason in (
-                (debt_exists, "Hay deudas activas."),
-                (highest_debt_apr >= 10.0, "Existe deuda con tasa anual de 10% o más."),
-                (safety_gap_month > 0.01, "El Salvavidas todavía no cubre un mes."),
+                (debt_exists, tx("Hay deudas activas.", "There are active debts.")),
+                (highest_debt_apr >= 10.0, tx("Existe deuda con tasa anual de 10% o más.", "There is debt with an annual rate of 10% or more.")),
+                (safety_gap_month > 0.01, tx("El Salvavidas todavía no cubre un mes.", "The emergency fund doesn’t cover one month yet.")),
             ) if blocked
         ],
     }
@@ -703,7 +704,7 @@ def _pending_mandatory_fixed_expenses(
             amount = max(_f(item.get("expected_amount")), 0.0)
             pending.append({
                 "id": fixed_id,
-                "name": fixed.get("name") or "Pago recurrente",
+                "name": fixed.get("name") or tx("Pago recurrente", "Recurring payment"),
                 "due_date": due.isoformat(),
                 "amount": round(amount, 2),
                 "status": item.get("status") or "pending",
@@ -742,39 +743,39 @@ def _build_current_priority(
     if no_free_cash:
         return {
             "kind": "cash",
-            "title": "Cubrir obligaciones del ciclo",
-            "detail": "No hay sobrante real para repartir todavía.",
+            "title": tx("Cubrir obligaciones del ciclo", "Cover this cycle’s obligations"),
+            "detail": tx("No hay sobrante real para repartir todavía.", "There is no real surplus to allocate yet."),
         }
     if urgent_goals and _f(amounts.get("meta_prioritaria")) > 0:
         goal = urgent_goals[0]
         return {
             "kind": "goal",
-            "title": f"Meta: {goal.get('name') or 'prioritaria'}",
-            "detail": "DINCR la protege primero porque tiene una fecha/prioridad activa.",
+            "title": tx(f"Meta: {goal.get('name') or 'prioritaria'}", f"Goal: {goal.get('name') or 'priority goal'}"),
+            "detail": tx("DINCR la protege primero porque tiene una fecha/prioridad activa.", "DINCR protects it first because it has an active date or priority."),
         }
     if timeline and _f(amounts.get("ataque_de_deuda")) > 0:
         target = timeline[0]
         return {
             "kind": "debt",
-            "title": f"Atacar deuda: {target.get('name') or 'deuda prioritaria'}",
-            "detail": "El sobrante destinado a deuda se concentra primero en esta obligación.",
+            "title": tx(f"Atacar deuda: {target.get('name') or 'deuda prioritaria'}", f"Pay down debt: {target.get('name') or 'priority debt'}"),
+            "detail": tx("El sobrante destinado a deuda se concentra primero en esta obligación.", "The surplus for debt goes to this obligation first."),
         }
     if _f(amounts.get("fondo_de_emergencia")) > 0 and _f(emergency.get("current")) < _f(emergency.get("six_month_target")):
         return {
             "kind": "salvavidas",
-            "title": "Construir Salvavidas",
-            "detail": "La prioridad es aumentar tus meses de cobertura antes de asumir más riesgo.",
+            "title": tx("Construir Salvavidas", "Build your emergency fund"),
+            "detail": tx("La prioridad es aumentar tus meses de cobertura antes de asumir más riesgo.", "The priority is to increase your months of coverage before taking on more risk."),
         }
     if _f(amounts.get("inversion")) > 0:
         return {
             "kind": "investment",
-            "title": "Construir patrimonio",
-            "detail": "Las obligaciones están cubiertas y existe margen para invertir.",
+            "title": tx("Construir patrimonio", "Build wealth"),
+            "detail": tx("Las obligaciones están cubiertas y existe margen para invertir.", "Obligations are covered and there is room to invest."),
         }
     return {
         "kind": "control",
-        "title": "Mantener control del flujo",
-        "detail": director.get("mode_reason") or "DINCR mantiene el sobrante bajo control.",
+        "title": tx("Mantener control del flujo", "Keep cash flow under control"),
+        "detail": director.get("mode_reason") or tx("DINCR mantiene el sobrante bajo control.", "DINCR keeps the surplus under control."),
     }
 
 def _rate_to_monthly(rate: float) -> float:
@@ -1086,12 +1087,13 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
 
     no_free_cash = current_before_allocation <= 0.0
     mode = director.get("mode") or "cash_protection"
-    mode_label = director.get("mode_label") or "PROTECCIÓN DE CAJA"
+    mode_label = director.get("mode_label") or tx("PROTECCIÓN DE CAJA", "CASH PROTECTION")
     status = "critical" if no_free_cash else ("controlled" if total_debt > 0 else "strong")
     objective = (
-        "Señor, este ciclo no tiene sobrante real. Primero cubra obligaciones y gastos registrados."
+        tx("Señor, este ciclo no tiene sobrante real. Primero cubra obligaciones y gastos registrados.",
+           "This cycle has no real surplus. Cover obligations and recorded expenses first.")
         if no_free_cash
-        else f"Señor, modo {mode_label}: {director.get('mode_reason')}"
+        else tx(f"Señor, modo {mode_label}: {director.get('mode_reason')}", f"{mode_label} mode: {director.get('mode_reason')}")
     )
 
     priority = _build_current_priority(
@@ -1105,18 +1107,23 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     first_month_one_time_boost = max(first_month_adjustment, 0.0)
 
     rules = [
-        "Solo se distribuye el sobrante que queda después de obligaciones y gastos ya registrados.",
-        "Un gasto nuevo reduce el sobrante del ciclo desde que aparece, aunque no sea una deuda.",
-        "Las deudas activas reservan al menos su cuota mensual completa antes de repartir dinero.",
-        "Casa y línea se tratan como pagos recurrentes obligatorios; las demás protecciones del Salvavidas son configurables.",
-        "OT, bonos, feriados y vacaciones aceleran únicamente el ciclo donde realmente ocurren.",
+        tx("Solo se distribuye el sobrante que queda después de obligaciones y gastos ya registrados.",
+           "Only the surplus left after obligations and recorded expenses is allocated."),
+        tx("Un gasto nuevo reduce el sobrante del ciclo desde que aparece, aunque no sea una deuda.",
+           "A new expense reduces the cycle’s surplus as soon as it appears, even if it isn’t a debt."),
+        tx("Las deudas activas reservan al menos su cuota mensual completa antes de repartir dinero.",
+           "Active debts reserve at least their full monthly payment before money is allocated."),
+        tx("Casa y línea se tratan como pagos recurrentes obligatorios; las demás protecciones del Salvavidas son configurables.",
+           "Housing and phone line are treated as required recurring payments; other emergency fund protections are configurable."),
+        tx("OT, bonos, feriados y vacaciones aceleran únicamente el ciclo donde realmente ocurren.",
+           "Overtime, bonuses, holidays, and vacation only accelerate the cycle where they actually happen."),
     ]
 
     return {
         "month": _month_key(),
         "status": status,
         "strategy_type": "director_financiero_dinamico_v3",
-        "title": "Estrategia de Protección de Flujo" if no_free_cash else f"Director Financiero · {mode_label}",
+        "title": tx("Estrategia de Protección de Flujo", "Cash Flow Protection Strategy") if no_free_cash else tx(f"Director Financiero · {mode_label}", f"Financial Director · {mode_label}"),
         "mode": mode,
         "mode_label": mode_label,
         "mode_reason": director.get("mode_reason"),
@@ -1216,7 +1223,7 @@ def get_premium_strategy_dashboard() -> dict[str, Any]:
     return {
         "status": "OK",
         "user_role": user.get("role"),
-        "title": strategy.get("title") or "Estrategia activa",
+        "title": strategy.get("title") or tx("Estrategia activa", "Active strategy"),
         "content": strategy.get("objective") or "",
         "strategy": strategy,
         "updated_at": datetime.now().isoformat(),

@@ -13,7 +13,7 @@ for (const code of ["free", "basic", "vip"]) {
   assert.equal(isConfirmedPlan({ ...active, subscription: { plan: code, status: "payment_pending" } }, code), false);
   await assert.rejects(
     confirmedPlanProfile({ profile: stale }, code, async () => ({ ...active, subscription: { plan: "free", status: "pending" } })),
-    /no pudimos confirmar el plan/,
+    /no pudimos confirmar el plan|couldn’t confirm the plan/,
   );
 }
 

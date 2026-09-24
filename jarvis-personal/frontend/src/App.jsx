@@ -20,7 +20,7 @@ import FinvaAppLock from "./components/FinvaAppLock";
 import { isDincrDistribution } from "./lib/appIdentity";
 
 
-function BootScreen({ message = "Preparando tu espacio..." }) {
+function BootScreen({ message = tx("Preparando tu espacio...", "Preparing your space...") }) {
   return (
     <main className="unified-router-boot">
       <strong>DINCR</strong>
@@ -118,7 +118,7 @@ export default function App() {
         if (!cancelled) setCurrentUser(profile);
       })
       .catch((error) => {
-        if (!cancelled) setIdentityError(error?.message || "No pudimos resolver tu cuenta.");
+        if (!cancelled) setIdentityError(error?.message || tx("No pudimos resolver tu cuenta.", "We couldn’t load your account."));
       });
 
     return () => { cancelled = true; };

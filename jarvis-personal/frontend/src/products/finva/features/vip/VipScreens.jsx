@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, ChevronRight, Mail, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
-import { deviceLanguage, localeTag } from "../../../../lib/locale";
+import { codeLabel, deviceLanguage, localeTag } from "../../../../lib/locale";
 import AccountActions from "../../components/AccountActions";
 import {
   captureVipLifecycleSnapshot,
@@ -22,24 +22,6 @@ const money = (value) => new Intl.NumberFormat(localeTag(language), {
   style: "currency", currency: "CRC", maximumFractionDigits: 0,
 }).format(Number(value) || 0);
 const percent = (value) => `${Math.round(Number(value) || 0)}%`;
-const strategyText = (value = "") => {
-  if (language === "es") return value;
-  const exact = {
-    "Eliminar déficit":"Eliminate deficit",
-    "Completar reserva":"Complete emergency fund",
-    "Invertir":"Invest",
-    "Esperar para invertir":"Wait before investing",
-    "Sin flujo positivo no hay dinero seguro para deuda, metas o inversión.":"Without positive cash flow, there is no safe money for debt, goals, or investing.",
-    "Protege tus obligaciones ante un imprevisto.":"It protects your obligations against the unexpected.",
-    "Es el uso de menor costo financiero según saldo y tasa conocidos.":"It is the lowest-cost use based on known balances and rates.",
-    "Alinea el aporte con fecha y prioridad.":"It aligns the contribution with its date and priority.",
-    "Primero deben estar protegidos el flujo, la reserva y la deuda cara.":"Cash flow, reserves, and expensive debt must be protected first.",
-  };
-  if (exact[value]) return exact[value];
-  if (value.startsWith("Abonar a ")) return `Pay extra toward ${value.slice(9)}`;
-  if (value.startsWith("Financiar ")) return `Fund ${value.slice(10)}`;
-  return value;
-};
 
 function VipHeader({ title, user, onNavigate }) {
   const initial = (user?.display_name || user?.email || "U").slice(0, 1).toUpperCase();
@@ -126,7 +108,7 @@ function VipDashboard({ data, profile, user, onNavigate }) {
     {!profile.income_type && <button className="vip-link-card vip-link-card--gold" type="button" onClick={() => onNavigate?.("situation")}><span><strong>{tx("Hacé tu estrategia más precisa", "Make your strategy more precise")}</strong><small>{tx("Agregá tus ingresos y gastos cuando quieras. Tu acceso VIP ya está activo.", "Add income and expenses when you're ready. Your VIP access is already active.")}</small></span><ChevronRight size={17}/></button>}
     <Focus eyebrow={tx("DISPONIBLE ESTRATÉGICO", "STRATEGIC AVAILABLE")} title={money(data.safe_to_spend?.amount)} caption={tx(`DINCR encontró ${Math.min(roadmap.length, 3)} acciones para este mes`, `DINCR found ${Math.min(roadmap.length, 3)} actions for this month`)}/>
     <Card title={tx("Prioridad recomendada", "Recommended priority")}>
-      {roadmap.slice(0, 3).map((item, index) => <DataRow key={`${item.order}-${item.title}`} label={strategyText(item.title)} value={item.amount ? `+ ${money(item.amount)}` : "—"} tone={["coral", "mint", "gold"][index]}/>) }
+      {roadmap.slice(0, 3).map((item, index) => <DataRow key={`${item.order}-${item.title}`} label={item.title} value={item.amount ? `+ ${money(item.amount)}` : "—"} tone={["coral", "mint", "gold"][index]}/>) }
       <p>{tx("Mantiene tus gastos esenciales y mínimo personal protegidos.", "Your essential expenses and personal minimum remain protected.")}</p>
     </Card>
     <Card title={tx("Si seguís este plan", "If you follow this plan")} tone="violet">
@@ -142,8 +124,8 @@ function VipDashboard({ data, profile, user, onNavigate }) {
 function VipStrategy({ data, user, onNavigate }) {
   return <section className="vip-screen">
     <VipHeader title={tx("Estrategia dinámica", "Dynamic strategy")} user={user} onNavigate={onNavigate}/>
-    <Focus eyebrow={`${tx("PRIORIDAD", "PRIORITY")} · ${(data.director?.priority || "balanced").toUpperCase()}`} title={tx("Tu dinero tiene un orden.", "Your money has an order.")} caption={tx("DINCR reajusta el plan según lo que realmente ocurre.", "DINCR readjusts the plan based on what actually happens.")}/>
-    {(data.roadmap || []).slice(0, 4).map((item, index) => <Card key={`${item.order}-${item.title}`} className="vip-priority-card"><DataRow label={`${index + 1} · ${strategyText(item.title)}`} value={item.amount ? money(item.amount) : "—"} tone={["mint", "violet", "gold", "blue"][index]}/><p>{strategyText(item.why)}</p></Card>)}
+    <Focus eyebrow={`${tx("PRIORIDAD", "PRIORITY")} · ${codeLabel("vipPriorities", data.director?.priority || "balanced").toUpperCase()}`} title={tx("Tu dinero tiene un orden.", "Your money has an order.")} caption={tx("DINCR reajusta el plan según lo que realmente ocurre.", "DINCR readjusts the plan based on what actually happens.")}/>
+    {(data.roadmap || []).slice(0, 4).map((item, index) => <Card key={`${item.order}-${item.title}`} className="vip-priority-card"><DataRow label={`${index + 1} · ${item.title}`} value={item.amount ? money(item.amount) : "—"} tone={["mint", "violet", "gold", "blue"][index]}/><p>{item.why}</p></Card>)}
     <PrimaryButton onClick={() => onNavigate?.("vip-recommendation")}>{tx("Ver recomendaciones", "View recommendations")}</PrimaryButton>
   </section>;
 }
@@ -152,9 +134,9 @@ function VipRecommendation({ data, user, onNavigate }) {
   const action = data.roadmap?.find((item) => Number(item.amount) > 0) || data.roadmap?.[0];
   const debt = data.debt_planner?.recommended;
   return <section className="vip-screen">
-    <VipHeader title={strategyText(action?.title) || tx("Recomendación", "Recommendation")} user={user} onNavigate={onNavigate}/>
+    <VipHeader title={action?.title || tx("Recomendación", "Recommendation")} user={user} onNavigate={onNavigate}/>
     <Focus eyebrow={tx("ACCIÓN RECOMENDADA", "RECOMMENDED ACTION")} title={action?.amount ? money(action.amount) : "—"} caption={tx("Además de tus compromisos mensuales habituales.", "In addition to your regular monthly commitments.")}/>
-    <Card title={tx("¿Por qué?", "Why?")} tone="gold"><p>{strategyText(action?.why) || tx("La recomendación usa únicamente tus datos financieros conocidos.", "The recommendation only uses your known financial data.")}</p></Card>
+    <Card title={tx("¿Por qué?", "Why?")} tone="gold"><p>{action?.why || tx("La recomendación usa únicamente tus datos financieros conocidos.", "The recommendation only uses your known financial data.")}</p></Card>
     <Card title={tx("Impacto estimado", "Estimated impact")} tone="violet">
       <DataRow label={tx("Deuda objetivo", "Target debt")} value={debt?.target || "—"}/>
       <DataRow label={tx("Tiempo restante", "Time remaining")} value={debt?.months == null ? "—" : `${debt.months} ${tx("meses", "months")}`} tone="mint"/>

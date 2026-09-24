@@ -2,7 +2,8 @@ import { ChevronRight, Crown, PiggyBank, Sparkles, TrendingDown, TrendingUp, Wal
 import { useEffect, useMemo, useState } from "react";
 import { getBasicDashboard, getBudget, getFinancialCalendar, getFreeDashboard } from "../../../../users/services/jarvisApi";
 import "./overview.css";
-import { deviceLanguage, localeTag } from "../../../../lib/locale";
+import { codeLabel, deviceLanguage, localeTag } from "../../../../lib/locale";
+import { categoryLabel } from "../../../../lib/categories";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -57,7 +58,7 @@ function BasicDashboard({ data, planning, onNavigate }) {
     <article className="finva-basic-upcoming">
       <header><strong>{tx("Próximos 7 días", "Next 7 days")}</strong><button type="button" onClick={() => onNavigate?.("calendar")}>{tx("Ver calendario", "View calendar")}</button></header>
       {upcoming.length ? upcoming.map((item) => <div key={`${item.date}-${item.name}`}>
-        <span><b>{item.name}</b><small>{item.date.slice(8,10)} · {item.kind}</small></span>
+        <span><b>{item.name}</b><small>{item.date.slice(8,10)} · {codeLabel("eventKinds", item.kind)}</small></span>
         <strong>{item.amount ? money(item.amount) : "—"}</strong>
       </div>) : <p>{tx("No hay compromisos configurados para los próximos 7 días.", "No commitments are configured for the next 7 days.")}</p>}
     </article>
@@ -152,7 +153,7 @@ export default function FinvaOverview({ user, plan = "free", onNavigate }) {
         <header><div><small>{tx("EN QUÉ SE VA", "WHERE IT GOES")}</small><h2>{tx("Gastos por categoría", "Expenses by category")}</h2></div></header>
         {computed.categories.length ? computed.categories.map((item) => (
           <div key={item.category}>
-            <span>{item.category}</span><strong>{money(item.amount)}</strong>
+            <span>{categoryLabel(item.category)}</span><strong>{money(item.amount)}</strong>
             <i><b style={{ width: `${Number(item.amount) / computed.maxCategory * 100}%` }} /></i>
           </div>
         )) : <p className="finva-overview-empty">{tx("Cuando registrés gastos, los agruparemos acá automáticamente.", "When you record expenses, we will group them here automatically.")}</p>}

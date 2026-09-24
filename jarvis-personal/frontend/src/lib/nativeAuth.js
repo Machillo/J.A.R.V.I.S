@@ -3,6 +3,9 @@ import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "./supabase";
 import { nativeAppId } from "./appIdentity";
+import { tx } from "./locale";
+
+const signInFailed = () => tx("No pudimos completar el acceso. Intentá nuevamente.", "We couldn’t sign you in. Please try again.");
 
 export const NATIVE_AUTH_REDIRECT = `${nativeAppId}://auth/callback`;
 export const isNativeApp = () => Capacitor.isNativePlatform();
@@ -23,7 +26,7 @@ export async function startOAuthLogin(provider) {
     options: { ...providerOptions, redirectTo: NATIVE_AUTH_REDIRECT, skipBrowserRedirect: true },
   });
 
-  if (error || !data?.url) return { data, error: error || new Error("El proveedor no devolvió una dirección de acceso.") };
+  if (error || !data?.url) return { data, error: new Error(signInFailed()) };
   await Browser.open({ url: data.url, presentationStyle: "popover" });
   return { data, error: null };
 }
@@ -38,7 +41,7 @@ export async function finishNativeLogin(url) {
   // Only accept the PKCE code: its verifier lives on this device, so a crafted
   // deep link cannot inject someone else's session tokens.
   const code = parsed.searchParams.get("code");
-  if (!code) throw new Error("El proveedor regresó sin una sesión válida.");
+  if (!code) throw new Error(signInFailed());
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) throw error;
 
@@ -50,7 +53,7 @@ export async function registerNativeAuthListener(onError) {
   if (!isNativeApp()) return () => {};
   const processUrl = async (url) => {
     try { await finishNativeLogin(url); }
-    catch (error) { onError?.(error?.message || "No pudimos completar el acceso."); }
+    catch { onError?.(signInFailed()); }
   };
   const listener = await CapacitorApp.addListener("appUrlOpen", ({ url }) => processUrl(url));
   const launch = await CapacitorApp.getLaunchUrl();

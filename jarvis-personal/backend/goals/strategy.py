@@ -8,6 +8,7 @@ mixing either reserve with the Salvavidas.
 from __future__ import annotations
 
 from typing import Any
+from backend.core.i18n import tx
 
 
 def _n(value: Any) -> float:
@@ -43,15 +44,15 @@ def build_goal_portfolio(
         dependency = str(goal.get("depends_on_group") or "")
         blocked_by = None
         if group and not goal.get("is_selected"):
-            blocked_by = "alternativa no seleccionada"
+            blocked_by = tx("alternativa no seleccionada", "alternative not selected")
         elif dependency and dependency not in completed_groups:
-            blocked_by = f"primero debe completarse {dependency}"
+            blocked_by = tx(f"primero debe completarse {dependency}", f"{dependency} must be completed first")
         elif immediate_risk:
-            blocked_by = "riesgo de liquidez en los próximos 45 días"
+            blocked_by = tx("riesgo de liquidez en los próximos 45 días", "liquidity risk in the next 45 days")
         elif not one_month_protected:
-            blocked_by = "Salvavidas menor a un mes"
+            blocked_by = tx("Salvavidas menor a un mes", "emergency fund below one month")
         elif highest_debt_apr >= 10:
-            blocked_by = "deuda prioritaria con tasa anual de 10% o más"
+            blocked_by = tx("deuda prioritaria con tasa anual de 10% o más", "priority debt with an annual rate of 10% or more")
 
         remaining = max(_n(goal.get("remaining_amount", _n(goal.get("target_amount")) - _n(goal.get("current_amount")))), 0)
         required = min(max(_n(goal.get("monthly_required")), 0), remaining)
@@ -65,5 +66,5 @@ def build_goal_portfolio(
         "goal_allocation": round(allocation, 2),
         "items": candidates,
         "selected_alternatives": selected_by_group,
-        "rule": "Una alternativa por grupo; metas solo después de liquidez, un mes de Salvavidas y deuda cara.",
+        "rule": tx("Una alternativa por grupo; metas solo después de liquidez, un mes de Salvavidas y deuda cara.", "One alternative per group; goals only after liquidity, one month of emergency fund, and expensive debt."),
     }
