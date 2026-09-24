@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.idempotency import mark_applied
 from backend.core.i18n import tx
 
 
@@ -191,6 +192,7 @@ def save_guided_budget(payload) -> dict:
             seen.add(category.lower())
             conn.execute("""INSERT INTO finva_budget_items(account_id,workspace_id,category,monthly_limit,updated_at)
                 VALUES(%s,%s,%s,%s,NOW())""",(account_id,workspace_id,category,item.monthly_limit))
+        mark_applied(conn)
         conn.commit()
     return get_guided_budget()
 
@@ -211,7 +213,9 @@ def create_recurring_item(payload) -> dict:
     with get_connection() as conn:
         _ensure_basic_schema(conn)
         row=conn.execute("""INSERT INTO finva_recurring_items(account_id,workspace_id,name,amount,category,item_type,frequency,due_day,is_active)
-          VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,name,amount,category,item_type,frequency,due_day,is_active""",(account_id,workspace_id,payload.name.strip(),payload.amount,payload.category.strip() or "general",payload.item_type,payload.frequency,payload.due_day,payload.is_active)).fetchone();conn.commit()
+          VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,name,amount,category,item_type,frequency,due_day,is_active""",(account_id,workspace_id,payload.name.strip(),payload.amount,payload.category.strip() or "general",payload.item_type,payload.frequency,payload.due_day,payload.is_active)).fetchone()
+        mark_applied(conn)
+        conn.commit()
     return row
 
 
@@ -222,6 +226,7 @@ def update_recurring_item(item_id:int,payload) -> dict:
         row=conn.execute("""UPDATE finva_recurring_items SET name=%s,amount=%s,category=%s,item_type=%s,frequency=%s,due_day=%s,is_active=%s,updated_at=NOW()
           WHERE id=%s AND workspace_id=%s RETURNING id,name,amount,category,item_type,frequency,due_day,is_active""",(payload.name.strip(),payload.amount,payload.category.strip() or "general",payload.item_type,payload.frequency,payload.due_day,payload.is_active,item_id,workspace_id)).fetchone()
         if not row: raise HTTPException(status_code=404,detail="Recurrente no encontrado.")
+        mark_applied(conn)
         conn.commit()
     return row
 
