@@ -17,11 +17,20 @@ assert.match(price, /₡4\.990/);
 const support = await readFile(new URL('soporte/index.html', out), 'utf8');
 assert.match(support, /mailto:soporte@dincr\.com/);
 assert.match(support, /mailto:privacidad@dincr\.com/);
-for (const legal of ['terminos', 'privacidad']) {
+for (const [legal, version] of [['terminos', '2026-09-23-v3'], ['privacidad', '2026-09-25-v4']]) {
   const html = await readFile(new URL(`${legal}/index.html`, out), 'utf8');
-  assert.match(html, /2026-09-23-v3/);
+  assert.ok(html.includes(version), `${legal} shows version ${version}`);
   assert.match(html, /soporte@dincr\.com/);
 }
+// Google OAuth verification: Workspace data disclosures (access, use, transfer, protection, retention).
+const privacy = await readFile(new URL('privacidad/index.html', out), 'utf8');
+for (const phrase of ['gmail.readonly', 'no se envían a servicios de inteligencia artificial', 'no se usan para evaluar crédito',
+  'data brokers', 'Supabase Vault', 'se revoca ante Google',
+  'including the Limited Use requirements', 'The use of raw or derived user data received from Workspace APIs',
+  'no utiliza proveedores de inteligencia artificial generativa', 'is not transferred to OpenAI or other generative-AI providers']) {
+  assert.ok(privacy.includes(phrase), `privacy policy states: ${phrase}`);
+}
+assert.ok(!privacy.includes('correo e inteligencia artificial'), 'no generative-AI provider is listed');
 assert.doesNotMatch(await readFile(new URL('terminos/index.html', out), 'utf8'), /SINPE/i);
 const listing = await readdir(out, {recursive: true});
 assert.ok(listing.includes('404.html'));
