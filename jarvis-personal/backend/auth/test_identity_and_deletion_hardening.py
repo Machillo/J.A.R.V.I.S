@@ -599,6 +599,14 @@ def test_unsafe_dependent_identifier_aborts_without_deleting(env):
     assert not any("drop table" in sql.lower() for sql, _ in env.db.log)
 
 
+def test_dependents_query_skips_set_null_foreign_keys(env):
+    # Rows behind ON DELETE SET NULL/SET DEFAULT (e.g. an actor column) must outlive the user.
+    identity = _login(env)
+    _delete_as(identity)
+    catalog = next(sql for sql, _ in env.db.log if "pg_constraint" in sql and "allowed_users" in sql)
+    assert "c.confdeltype IN ('a','r','c')" in catalog
+
+
 @pytest.mark.parametrize("failure", [500, TimeoutError("admin timeout")])
 def test_supabase_failure_leaves_no_data_and_retry_finishes(env, failure):
     identity = _login(env)

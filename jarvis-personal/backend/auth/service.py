@@ -608,6 +608,8 @@ def _delete_allowed_user_dependents(conn, allowed_user_id: int) -> int:
     """Delete rows whose single-column FK points at allowed_users(id), for this user only.
 
     Table and column names come from the catalog and are whitelisted before quoting.
+    SET NULL / SET DEFAULT FKs are skipped: their rows are meant to outlive the user and
+    Postgres applies the rule when the tombstone row itself is deleted.
     """
     references = conn.execute(
         """SELECT ns.nspname AS schema_name, child.relname AS table_name, att.attname AS column_name
@@ -618,6 +620,7 @@ def _delete_allowed_user_dependents(conn, allowed_user_id: int) -> int:
            JOIN pg_attribute ref ON ref.attrelid=c.confrelid AND ref.attnum=c.confkey[1] AND ref.attname='id'
            WHERE c.contype='f' AND c.confrelid='public.allowed_users'::regclass
              AND array_length(c.conkey,1)=1 AND c.conrelid<>c.confrelid
+             AND c.confdeltype IN ('a','r','c')
            ORDER BY ns.nspname, child.relname"""
     ).fetchall() or []
     for ref in references:
