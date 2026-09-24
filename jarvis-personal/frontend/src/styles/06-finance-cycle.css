@@ -40,6 +40,8 @@
 .finance-detail-list,
 .full-debt-list {
   display: grid;
+  /* One bounded column: an implicit auto column grows to the longest unwrapped text. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   max-height: 460px;
   overflow: auto;
@@ -59,6 +61,8 @@
 
 .finance-detail-row div {
   min-width: 0;
+  /* In the stacked mobile layout (align-items: flex-start) keep text inside the row. */
+  max-width: 100%;
 }
 
 .finance-detail-row strong,
