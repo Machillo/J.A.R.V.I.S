@@ -34,6 +34,7 @@ jobs:
       - run: npm run test:store-readiness
       - run: npm run test:legal-links
       - run: npm run test:ios-identity
+      - run: npm run test:release-identity
       - run: npm run test:android-identity
       - run: npm run test:mail-oauth
       - run: npm run test:phase0j

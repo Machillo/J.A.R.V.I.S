@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+// Release signing comes only from the build machine (never from the repository):
+// ~/.gradle/gradle.properties or environment variables DINCR_UPLOAD_STORE_FILE,
+// DINCR_UPLOAD_STORE_PASSWORD, DINCR_UPLOAD_KEY_ALIAS, DINCR_UPLOAD_KEY_PASSWORD.
+// Without them, bundleRelease produces an unsigned bundle and debug builds are unaffected.
+def releaseSetting = { String name -> System.getenv(name) ?: project.findProperty(name) }
+def uploadStoreFile = releaseSetting("DINCR_UPLOAD_STORE_FILE")
+
 android {
     namespace = "com.dincr.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +23,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (uploadStoreFile) {
+            release {
+                storeFile file(uploadStoreFile)
+                storePassword releaseSetting("DINCR_UPLOAD_STORE_PASSWORD")
+                keyAlias releaseSetting("DINCR_UPLOAD_KEY_ALIAS")
+                keyPassword releaseSetting("DINCR_UPLOAD_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            if (uploadStoreFile) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
