@@ -43,4 +43,10 @@ const login = read("src/pages/Login.jsx");
 assert.match(login, /const offersApple = detectNativePlatform\(\) !== "android"/);
 assert.match(login, /\{offersApple && <button[^\n]*login\("apple"\)/);
 
+// Local builds: google-services.json stays local, and cap sync output does not look modified on Windows.
+assert.match(read("android/.gitignore"), /^google-services.json$/m, "google-services.json is never committed");
+assert.match(read("android/.gitattributes"), /^capacitor.settings.gradle text eol=lf$/m);
+assert.equal(JSON.parse(read("package.json")).scripts["android:apk"], "node scripts/android-apk.mjs");
+assert.doesNotMatch(read("scripts/android-apk.mjs"), /assembleRelease|bundleRelease|signingConfig/, "the local APK script builds debug only");
+
 console.log("DINCR Android is com.dincr.app and receives login and mail OAuth returns.");

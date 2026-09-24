@@ -30,6 +30,7 @@
     "test:phase0j": "node scripts/test-phase-0j.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
+    "android:apk": "node scripts/android-apk.mjs",
     "ios:sync": "node scripts/ios-product.mjs sync",
     "ios:open": "node scripts/ios-product.mjs open",
     "build:landing": "node landing/build.mjs",
