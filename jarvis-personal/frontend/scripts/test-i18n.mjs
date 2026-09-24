@@ -19,9 +19,7 @@ const ALLOWLIST = [
   // Canonical Spanish category values stored by the backend; the UI shows them through categoryLabel().
   { file: "src/users/pages/Finance.jsx", pattern: /^(Boleta de pago|Bono|Reembolso|Otros ingresos|Vivienda|Servicios|Internet|Teléfono|Seguros|Comida|Restaurante|Transporte|Gasolina|Entretenimiento|Compras|Salud|Deporte|Servicios personales|Mascotas|Otros)$/, reason: "canonical category value" },
   // English presentation maps for Spanish backend copy.
-  { file: "src/lib/planCopy.js", pattern: /.*/, reason: "English translation of backend plan copy" },
   { file: "src/lib/categories.js", pattern: /.*/, reason: "English labels for canonical categories" },
-  { file: "src/products/finva/features/vip/VipScreens.jsx", pattern: /^(Without positive cash flow|It protects your|It is the lowest-cost|It aligns the contribution|Cash flow, reserves|Pay extra toward|Fund )/, reason: "English translation map for backend strategy copy" },
   // Stored note sent to a legacy endpoint (data, not UI).
   { file: "src/services/jarvisApi.js", pattern: /^Cuenta manual \(/, reason: "stored record note, not visible copy" },
   // Owner-only endpoints (legacy finance input and owner billing receipts).
@@ -109,6 +107,7 @@ assert.deepEqual(missingInSpanish, [], `keys missing in es: ${missingInSpanish.j
 const files = publicFiles();
 const issues = [];
 const usedKeys = new Set();
+const usedGroups = new Set();
 const allowed = (file, value) => ALLOWLIST.some((entry) => entry.file === file && entry.pattern.test(value));
 const report = (file, node, kind, value) => {
   const text = flatten(value);
@@ -150,6 +149,7 @@ for (const file of files) {
       if ((name === "t" || name === "tr") && p.node.arguments[0]?.type === "StringLiteral" && /^[a-z]+\.[A-Za-z]+$/.test(p.node.arguments[0].value)) {
         usedKeys.add(p.node.arguments[0].value);
       }
+      if (name === "codeLabel" && p.node.arguments[0]?.type === "StringLiteral") usedGroups.add(p.node.arguments[0].value);
       if (name !== "tx" && name !== "copy") return;
       const [spanish, english] = p.node.arguments.slice(0, 2).map(literalText);
       if (spanish == null || english == null) return;
@@ -176,7 +176,32 @@ for (const file of files) {
 const unknownKeys = [...usedKeys].filter((key) => !keys.es.has(key) || !keys.en.has(key));
 assert.deepEqual(unknownKeys, [], `t() keys missing from the catalogs: ${unknownKeys.join(", ")}`);
 
-// ---- 3. Critical first-run screens ---------------------------------------
+const groupKeys = (language, group) => [...keys[language]].filter((key) => key.startsWith(`${group}.`)).map((key) => key.slice(group.length + 1)).sort();
+for (const group of usedGroups) {
+  assert.ok(groupKeys("es", group).length, `codeLabel group ${group} is missing from the catalogs`);
+  assert.deepEqual(groupKeys("es", group), groupKeys("en", group), `codeLabel group ${group} differs between es and en`);
+}
+
+// ---- 3. Backend text follows the same language -------------------------------
+// The app sends its language with every authenticated request; the backend
+// localizes public DINCR routes (es|en, Spanish fallback) and tests every rule
+// in both languages (backend/tests/test_public_i18n.py).
+const authenticatedFetch = fs.readFileSync("src/lib/authenticatedFetch.js", "utf8");
+assert.match(authenticatedFetch, /"Accept-Language": deviceLanguage\(\)/, "authenticated requests carry the app language");
+const backendI18n = fs.readFileSync("../backend/core/i18n.py", "utf8");
+assert.match(backendI18n, /SUPPORTED_LANGUAGES = \("es", "en"\)/);
+assert.match(backendI18n, /DEFAULT_LANGUAGE = "es"/, "clients without a language keep the Spanish copy");
+assert.match(backendI18n, /LOCALIZED_PATH_PREFIXES = \("\/user-product\/", "\/auth\/", "\/product-ops\/"\)/, "only public DINCR routes are localized");
+assert.match(fs.readFileSync("../backend/main.py", "utf8"), /async def language_middleware[\s\S]*language_for_request\(request\.url\.path, request\.headers\.get\("accept-language"\)\)/);
+const backendContract = fs.readFileSync("../backend/tests/test_public_i18n.py", "utf8");
+for (const contract of ["test_basic_strategy_es_en_same_decision", "test_vip_strategy_and_alerts_es_en_same_decision", "test_debt_advisory_es_en_same_numbers",
+  "test_proactive_alerts_es_en_same_decision", "test_monthly_review_es_en_same_decision", "test_accept_language_resolution_and_fallback", "test_public_narrative_is_localized"]) {
+  assert.ok(backendContract.includes(`def ${contract}(`), `backend contract ${contract} exists`);
+}
+// Backend strategy copy is localized server-side; the app must not keep a second translation map.
+assert.doesNotMatch(fs.readFileSync("src/products/finva/features/vip/VipScreens.jsx", "utf8"), /strategyText/);
+
+// ---- 4. Critical first-run screens ---------------------------------------
 for (const critical of ["src/pages/Login.jsx", "src/pages/LegalConsent.jsx", "src/pages/ProfileSetup.jsx", "src/pages/FinvaOnboarding.jsx", "src/pages/FinvaWelcomeStory.jsx", "src/users/pages/Settings.jsx"]) {
   assert.ok(files.some((file) => toPosix(file) === critical), `${critical} must be part of the scanned public UI`);
 }
@@ -193,4 +218,4 @@ if (issues.length) {
   process.exit(1);
 }
 
-console.log(`i18n contract passed: ${keys.es.size} catalog keys in es/en, ${usedKeys.size} used keys, ${files.length} public files scanned.`);
+console.log(`i18n contract passed: ${keys.es.size} catalog keys in es/en, ${usedKeys.size} used keys, ${usedGroups.size} code groups, ${files.length} public files scanned, backend language contract present.`);
