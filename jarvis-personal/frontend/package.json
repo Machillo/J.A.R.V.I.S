@@ -44,8 +44,6 @@
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
-    "@capacitor-firebase/analytics": "^8.5.1",
-    "@capacitor-firebase/crashlytics": "^8.5.1",
     "@capacitor/android": "^8.5.1",
     "@capacitor/app": "^8.1.1",
     "@capacitor/browser": "^8.0.4",
@@ -55,7 +53,6 @@
     "@capacitor/share": "^8.0.2",
     "@capawesome/capacitor-file-picker": "^8.1.0",
     "@supabase/supabase-js": "^2.107.0",
-    "firebase": "^12.6.0",
     "lucide-react": "^1.17.0",
     "posthog-js": "^1.434.5",
     "react": "^19.2.6",

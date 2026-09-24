@@ -23,7 +23,7 @@ Nothing here signs, uploads or publishes anything. Every account, certificate, p
    - `npm run build`, then `npx cap sync android`;
    - `android/gradlew bundleRelease` (on Windows inside OneDrive, use the mirror from `npm run android:apk`);
    - the output is `android/app/build/outputs/bundle/release/app-release.aab`.
-4. Include `google-services.json` for Firebase (git-ignored), and set `VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST` only once the PostHog human gates are cleared (see `docs/analytics/posthog-event-taxonomy.md`).
+4. Set `VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST` only once the PostHog human gates are cleared (see `docs/analytics/posthog-event-taxonomy.md`). No `google-services.json` is needed: Firebase is used only to distribute test builds (see `docs/android-local-build.md`).
 
 ## 3. iOS: archive for App Store Connect (Mac + Xcode, HUMAN)
 
@@ -46,7 +46,7 @@ Nothing here signs, uploads or publishes anything. Every account, certificate, p
 
 - Developer account (organisation vs personal; the D-U-N-S number if organisation). A new personal account has closed-testing requirements: **verify the current rule** in the Play Console Help Center.
 - App: `com.dincr.app`. The package name is permanent after the first upload.
-- **Data safety.** Must match reality: email (auth), financial info, app activity (PostHog), crash logs (Crashlytics), identifiers (the Firebase `setUserId` finding in #210), and Gmail data processed server-side.
+- **Data safety.** Must match reality: email (auth), financial info, app activity and diagnostics (PostHog, anonymous), and Gmail data processed server-side. Firebase collects nothing from the app (distribution only).
 - **Financial features declaration.** Personal finance management, no lending. Verify the current form.
 - Account deletion: the in-app flow plus the public `/delete-account` URL.
 - **Gmail restricted scope (`gmail.readonly`):** Google OAuth verification plus a possible **CASA security assessment** before public use. Verify the status in Google Cloud Console.
