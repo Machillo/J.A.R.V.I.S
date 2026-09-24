@@ -1,135 +1,190 @@
 # DINCR — project instructions for Claude
 
-Persistent operating manual for the main Claude session in this repository. Reusable knowledge and processes live in skills; this file holds the permanent repo rules. Do not duplicate skill content here.
+Always-loaded operating rules for this repository. The invariants in §2–§5 apply to every task and must never depend on a Skill being invoked. Deeper, task-specific guidance lives in the project Skills (`.claude/skills/`, §7); reviewer roles live in `.claude/agents/` (§8); what CI enforces is in §9.
 
-## 1. Identity and source of truth
+## 1. Product and repository
 
-- The public product is **DINCR**. FINVA and JARVIS survive as historical/internal names in code, tables, routes and folders; do not rename them unless a task explicitly asks.
-- DINCR is a mobile product (Android/iOS via Capacitor). `dincr.com` is landing, legal and support only, not a public web app.
-- Plans: Free, Basic, VIP, and Owner. Owner is internal (DINCR Owner / JARVIS) and must never become a public plan.
-- The repository and the current code are the technical source of truth. Inspect the existing implementation before assuming architecture or behavior.
-- Layout: `jarvis-personal/backend` (FastAPI, Supabase/Postgres), `jarvis-personal/frontend` (React + Vite + Capacitor; public app in `src/users`, `src/products/finva`, `src/pages`; Owner in `src/personal`, `src/products/jarvis`), `jarvis-personal/frontend/landing` (dincr.com).
+- The public product is **DINCR**, a mobile product (Android/iOS via Capacitor). `dincr.com` is marketing, legal and support only: never build a second, web-based financial app there.
+- Plans: Free, Basic, VIP and Owner. Owner is internal (DINCR Owner / JARVIS) and never purchasable.
+- FINVA/JARVIS are historical internal names in code, tables, routes, folders and env vars. Do not rename them unless the task asks.
+- The current code is the source of truth. Inspect it before assuming architecture or behavior.
+- Layout:
+  - `jarvis-personal/backend`: FastAPI, Supabase/Postgres.
+  - `jarvis-personal/frontend`: React + Vite + Capacitor. Public app in `src/users`, `src/products/finva`, `src/pages`; Owner in `src/personal`, `src/products/jarvis`.
+  - `jarvis-personal/frontend/landing`: dincr.com.
+  - `jarvis-personal/database/migrations`: schema.
 
-## 2. Skills
+## 2. Git, branches and PRs (absolute defaults)
 
-Load only the skills that are materially relevant to the task; never all of them by default.
+1. `git fetch origin` before starting any task.
+2. Every new task starts from the **current** `origin/main`: `git checkout -b <new-branch> origin/main`.
+3. One **new** branch per task. Never reuse a previous task's or PR's branch, even if it looks related.
+4. Every PR has `base=main`.
+5. **No stacking.** Never base a branch or PR on another unmerged branch or PR unless Kenneth explicitly authorizes that specific case. If the work depends on an unmerged PR, stop and report the dependency.
+6. **`MERGED` is not proof.** A PR can be merged into a branch that was itself already merged, and its commits then never reach `main`. Whenever it matters whether a change is in `main`, check the content: `git merge-base --is-ancestor <sha> origin/main`, or the file or diff on `origin/main`.
+7. Before delivering, run and check:
+   ```
+   git fetch origin
+   git merge-base origin/main HEAD      # must be a commit of origin/main
+   git log --oneline origin/main..HEAD  # only this task's commits
+   git diff origin/main...HEAD          # only this task's changes
+   gh pr view --json baseRefName        # must be main
+   ```
+8. Never force-push or rewrite shared history without explicit authorization.
+9. Never commit unrelated local changes, secrets, `google-services.json` or the stray top-level `J.A.R.V.I.S/` folder. Stage files by name; never `git add -A`.
 
-| Skill | Slug | Use for |
-|---|---|---|
-| DINCR Core | `anthropic-skills:dincr-core` | any work on this repo or DINCR product decisions |
-| Efficient Coding | `anthropic-skills:efficient-coding` | development, debugging, audits, long tasks |
-| DINCR Finance | `anthropic-skills:dincr-finance` | financial logic, strategy, debts, goals, cash flow, recommendations |
-| Mobile & Security QA | `anthropic-skills:mobile-security-qa` | auth, OAuth, RLS, sensitive data, mobile lifecycle, deep links |
-| Release Review | `anthropic-skills:release-review` | final review before declaring work done or opening a PR |
-| Autonomous Workflows | `anthropic-skills:autonomous-workflows` | several delegated tasks or unattended work |
-| Skill Evolution | `anthropic-skills:skill-evolution` | turning durable lessons into skill improvements |
+## 3. Merge = possible deploy
 
-Skills = reusable knowledge and process. CLAUDE.md = permanent repo rules.
+A merge to `main` can deploy the backend automatically. Before calling a PR merge-ready, identify everything production must already have when the new code starts:
+- migrations;
+- environment variables and secrets;
+- external or OAuth configuration (consoles, redirect URIs, scopes);
+- incompatible API or data changes.
 
-## 3. Agents
+If any of it must exist first, write **PRE-MERGE GATE** in the PR and in the report. The PR is not merge-ready while a gate is open.
 
-Project agents in `.claude/agents/`. Delegate only when it adds value; never launch all of them mechanically. For trivial changes, work directly when delegating would cost more context or time than the change itself.
+Never run production migrations or destructive operations yourself, and never declare that production "has" something you have not verified.
 
-- **explorer** (read-only): investigate a flow, locate an implementation or find a root cause before editing.
-- **implementer**: concrete, bounded changes once the problem is understood.
-- **reviewer** (read-only): after significant changes, or before treating a task as ready for PR/human review.
-- **security-reviewer** (read-only): only when a change touches or may affect authentication, authorization, OAuth, sessions, roles, Owner/User isolation, Supabase/RLS, secrets, financial data, account/data deletion, analytics/privacy, deep links, bank email parsers or other sensitive operations.
+## 4. Product invariants
 
-explorer, reviewer and security-reviewer have no shell and cannot run `git diff`. Give them what they need: changed files, relevant paths, or a patch saved to a readable file.
+**A. Users ≠ Owner, in both directions.**
+- Users must not reach Owner features.
+- Nothing private to the Owner may shape a User's data or behavior: identity, names, accounts, contacts, aliases, IBANs, cards, heuristics, configuration or data.
+- Shared code (parsers, ingestion, finance engines, strategy) must:
+  - be **neutral by default**;
+  - receive the account/workspace context explicitly;
+  - fail safe when context is missing;
+  - never fall back to the Owner.
+- Owner-only behavior sits behind an explicit Owner-only boundary: role check, internal router or Owner-only module.
+- Never hardcode a person's name, account or contact in runtime code.
 
-## 4. Normal development flow
+**B. Tenancy.**
+- Every read or write of user data is scoped by `account_id` + `workspace_id` when the model has them.
+- A direct ID must never let a caller escape its workspace.
+- Background jobs, OAuth callbacks, parsers, webhooks and crons need the same isolation as interactive requests.
+- OAuth started by one account/workspace can only be completed by that same session.
 
-Understand → inspect the existing implementation → investigate if needed → implement the smallest correct change → focused tests → independent review when warranted → security review when warranted → fix findings → final relevant validation → commit → push → PR → checkpoint.
+**C. Reads do not mutate financial truth.**
+- GET, read, dashboard, report, strategy and preview paths are read-only by default.
+- They must not:
+  - reduce or change debts;
+  - create payments or transactions;
+  - change balances;
+  - advance goals;
+  - alter any other user financial data.
+  The only exception is an explicitly documented and authorized command or automation.
+- Do not hide financial writes inside helpers called from reads.
+- Schema DDL (`ensure_*`, `CREATE TABLE IF NOT EXISTS`) during reads is legacy: do not add more. Schema belongs in migrations.
 
-A task is not done because it compiles. Always report separately what was:
-- validated automatically,
-- requires physical/manual validation,
-- not validated.
+**D. Declared vs discovered data.**
+- **Unknown ≠ zero.**
+- Partial or imported evidence must not silently replace a valid declared value. Examples:
+  - a partial month of imported deposits is not the monthly income;
+  - a detected account with an unknown balance does not zero declared savings;
+  - missing movements do not prove there was no income or expense.
+- Reconciliation needs an explicit, deterministic, tested policy (DINCR Finance → `references/data-precedence.md`).
 
-Never claim a physical test happened if it did not.
+**E. Determinism, no generative AI at runtime.**
+- DINCR has no generative-AI runtime for user data. Gmail/Outlook content, bank documents and any data derived from them are never sent to OpenAI, Gemini or any other generative provider.
+- No plan may acquire an AI path by reusing historical code.
+- Parser Discovery is offline developer tooling, kept outside the application.
+- Do not reintroduce AI because a historical architecture had it. Comments and docs describing old AI behavior are history, not current behavior.
 
-Validation commands (from `jarvis-personal`): `python -m pytest backend -q`. From `jarvis-personal/frontend`: `npm run build`, `npx eslint .`, the relevant `npm run test:*` scripts (CI runs them all), and `npm run build:landing` before `npm run test:landing`. Report pre-existing failures separately from regressions.
+**F. Privacy.**
+- No names, emails, IDs, amounts, descriptions, email/PDF content, tokens or secrets in logs, analytics or fixtures.
+- Test data is synthetic. Real people's data never becomes a fixture, and raw user data never becomes reusable knowledge.
 
-## 5. Autonomous work / overnight queue
+## 5. How to work
 
-When the user delegates several tasks or authorizes unattended work, use Autonomous Workflows:
-- order tasks by dependency first, then continue from one task to the next without asking "should I continue?" between routine tasks;
-- if a task is blocked, record the blocker and continue with independent tasks;
-- keep every task auditable.
+- **Root cause before patch.**
+  - Reproduce the bug.
+  - Separate the symptom from the cause.
+  - Check whether other plans, workspaces, providers or the Owner are affected.
+  - Add a regression test that **fails without the fix**; show it failing (old code or a mutation), then passing.
+- **CI green is not proof of correctness.**
+- **Small and auditable.** Stay in scope, make no incidental refactors, and report out-of-scope findings instead of fixing them. Separate blockers from cleanup.
+- **File-size budgets are architecture, not a game.**
+  - Never meet one by squeezing lines, joining JSX/HTML, or hurting readability.
+  - Never raise one to get CI to pass.
+  - Extract a coherent module instead.
+  - A budget increase needs explicit human approval.
+- **Validation commands.**
+  - From `jarvis-personal`: `python -m pytest backend -q`, `python backend/scripts/check_file_size_budget.py`.
+  - From `jarvis-personal/frontend`: `npm run build`, `npx eslint .`, the `npm run test:*` scripts (CI runs them all), and `npm run build:landing` before `npm run test:landing`.
+  - Report pre-existing failures separately from regressions.
+- **Report three categories separately:** validated automatically, needs physical/manual validation, not validated. Never claim a device test that did not happen.
 
-Prefer separate branches/PRs for independent tasks when that reduces conflicts and allows independent review. For dependent tasks use an explicit, documented strategy (e.g. stacked branches/PRs). Never mix unrelated changes to reduce the number of PRs.
+## 6. Human gates
 
-## 6. Worktrees
+Autonomous work may inspect, branch, edit, run local tests, commit, push and open or update PRs.
 
-Do not use a worktree for every change. Use isolation/worktrees when there are parallel tasks, a significant change, a risk of contaminating another branch, implementer agents working in parallel, or a task that depends on keeping another branch intact. For small sequential changes, avoid the extra complexity.
-
-## 7. Context and compaction
-
-Durable state lives in Git, PRs, tests and checkpoints, not only in the conversation. Before a major compaction and after each autonomous task, keep a compact checkpoint: task, branch, status, relevant files/changes, commit (if any), tests and results, pending findings, pending physical validation, next action.
-
-After a compaction, rebuild state from the checkpoint plus Git before continuing. Do not rescan the whole repository without need.
-
-## 8. Efficiency
-
-Apply Efficient Coding: targeted search before broad reading, progressive disclosure, no full-tree reads without need, focused tests instead of repeated full suites (run broad validation when risk or release stage justifies it), no agents when they add nothing, little narration during autonomous work, evidence over speculation, reuse existing implementation and tests.
-
-Never trade correctness, security or privacy for saved tokens.
-
-## 9. Security and privacy
-
-Never:
-- commit secrets, or show full secrets in reports;
-- weaken auth, RLS or Owner isolation to make a test pass;
-- send sensitive financial data to logs or analytics;
-- turn raw user financial data into reusable knowledge automatically.
-
-Financial learning path: sanitized/aggregated data → general hypothesis → synthetic tests → deterministic proposal → human review → approved, versioned rule.
-
-## 10. Human gates
-
-Autonomous work may inspect, create branches, edit, run local tests, use agents, commit, push, and create/update PRs.
-
-Without explicit human approval, never:
+Never do the following without explicit human approval:
 - merge into `main`;
-- deploy to production;
+- deploy;
 - run production migrations;
 - change production secrets or configuration;
 - delete production data;
-- publish to Google Play or the App Store;
-- take destructive or irreversible external actions.
+- publish to the stores;
+- take other destructive or irreversible external actions.
 
-When a task reaches one of these gates, prepare it up to the gate, document it, and move on to another independent task if there is one.
+Prepare the work up to the gate, document it, and continue with independent work.
 
-## 11. Git / PR discipline
+## 7. Project Skills (`.claude/skills/`)
 
-Before editing: check the branch and working tree, understand the base and dependencies, and do not contaminate an existing branch. Do not commit the user's unrelated local changes.
+Load only the Skills relevant to the task:
 
-Every PR: clear scope, only related changes, relevant tests, stated risks and pending validation, and no claims beyond what was actually tested.
+| Skill | Use for |
+|---|---|
+| `dincr-core` | Any DINCR work: product, architecture, plans, Owner boundary, privacy |
+| `dincr-finance` | Financial logic, strategy, debts, goals, income, cash flow, data precedence |
+| `dincr-data-integrity` | **Any change that reads or writes financial data**: read/command, tenancy, idempotency, imports, dedupe |
+| `dincr-mobile-security-qa` | Auth, OAuth, mail providers, RLS, secrets, deep links, mobile lifecycle |
+| `dincr-release-review` | Before declaring work done or opening a PR, including the PR preflight |
+| `dincr-autonomous-workflows` | Several delegated tasks or unattended work |
+| `dincr-efficient-coding` | Long tasks, audits, debugging |
+| `dincr-skill-evolution` | Turning a real incident into a reviewed instruction or guard |
 
-Never force-push or rewrite shared history without explicit human authorization.
+Skills and agents change only through a reviewed PR, never silently.
 
-## 12. DINCR engineering principles
+## 8. Agents (`.claude/agents/`)
 
-- Deterministic, auditable behavior first. AI proposes; deterministic DINCR executes; humans approve high-impact rule changes.
-- No feature creep during fixes or audits.
-- Mobile lifecycle matters: cold/warm start, background/foreground, offline/retry, keyboard, safe areas, deep links.
-- Keep Users and Owner strictly separated.
-- i18n changes presentation, never financial meaning.
-- Analytics stays free of identifiable financial or sensitive information.
-- For financial rules use DINCR Finance and require human review for high-impact changes.
+- **The roles:**
+  - `explorer`: read-only investigation;
+  - `reviewer`: independent change review, including the PR preflight and data integrity;
+  - `security-reviewer`: adversarial review of security, privacy, tenancy, Owner↔Users and AI boundaries.
+- **The format** follows Claude Code's documented subagent format.
+- **Loading:** some hosts, such as the desktop app, do not expose project agents as subagent types. If a role does not appear, run a `general-purpose` agent with that file's instructions, or do the review in the main session using the same checklist. Never claim an independent review happened when it did not.
+- The roles have no shell. Give them the diff, for example a patch saved to a file.
 
-## 13. Skill Evolution
+## 9. Automatic guards (CI)
 
-After substantial work, briefly check whether a durable lesson appeared. If not, do nothing. If so, low-risk operational/efficiency improvements may be proposed or applied per Skill Evolution; financial, security, privacy, product, legal/regulatory or other high-impact changes require human approval. Prefer improving existing skills over creating a new one per problem.
+- **`PR guards` workflow** (`.github/workflows/pr-guards.yml` + `.github/scripts/pr_guards.py`):
+  - the PR base must be `main`;
+  - the PR must not contain another open PR's head (stacking);
+  - a merge into a non-`main` branch is flagged;
+  - a file-size budget may not be raised;
+  - a new migration requires the `migration-gate-acknowledged` label.
+  - Overrides are explicit labels, set by a human.
+- **Engineering tests** (`jarvis-personal/backend/tests/test_engineering_guards.py`, `test_read_surfaces_are_read_only.py`): Owner configuration stays out of shared Users code; Users read surfaces cannot write financial tables; agent and Skill files are valid and portable.
+- **Existing tests:**
+  - `test_no_generative_ai.py`: no AI provider reachable from the app;
+  - `check_file_size_budget.py`;
+  - `check_public_secrets.py`;
+  - the OAuth, tenancy and isolation tests.
 
-## 14. Handoff
+Guards catch the known classes of error. They do not replace §2–§5.
 
-At the end of an autonomous session, report compactly:
+## 10. Context, compaction and handoff
 
-- **Completed:** task → branch/PR → result
-- **Blocked:** task → reason
-- **Validation required:** pending physical/manual tests
-- **Important findings:** only those that change a decision or need attention
-- **Next human action:** the concrete action needed from the user
+- Durable state lives in Git, PRs and tests, not in the conversation or auto-memory. Auto-memory may hold checkpoints; any rule that must survive belongs in this file, a Skill or a guard.
+- **Checkpoint** (before compaction and after each autonomous task): task, branch, status, files, commits, tests, pending findings, pending physical validation, next action.
+- **Handoff:**
+  - **Completed:** task → branch/PR → result.
+  - **Blocked:** task → reason.
+  - **Validation required.**
+  - **Important findings.**
+  - **Next human action.**
 
-No long logs of everything that was done.
+## 11. What does not belong here
+
+No PR numbers, SHAs, people's names, balances, prices, one-off formulas, operational env-var names, exact budget numbers (CI owns them) or single-migration details. Rules capture the class of error, not the incident.

@@ -5,10 +5,16 @@ on:
     branches: [main]
     paths:
       - "jarvis-personal/**"
-      - ".github/workflows/jarvis-ci.yml"
+      - ".github/**"
+      - ".claude/**"
+      - "CLAUDE.md"
   pull_request:
     paths:
       - "jarvis-personal/**"
+      # Engineering guards (backend/tests) also validate these files.
+      - ".github/**"
+      - ".claude/**"
+      - "CLAUDE.md"
 
 jobs:
   frontend:
