@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
 import { deviceLanguage, localeTag } from "../../lib/locale";
 import { movementPreview } from "./movementPreview";
+import TransactionDebts from "../components/TransactionDebts";
 import { categoryLabel, categoryValue } from "../../lib/categories";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
@@ -96,8 +97,11 @@ export default function Finance({ plan = "basic", onNavigate }) {
     {error && <div className="free-error">{error}</div>}
     <label className="free-search"><Search size={18}/><input aria-label={tx("Buscar movimientos", "Search transactions")} placeholder={tx("Buscar movimientos", "Search transactions")} value={query} onChange={(event) => setQuery(event.target.value)}/></label>
     <div className="free-filter-tabs" role="tablist">
-      {[['all',tx('Todos','All')],['income',tx('Ingresos','Income')],['expense',tx('Gastos','Expenses')],['debt',tx('Deuda','Debt')]].map(([key,label]) => <button type="button" key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}</button>)}
+      {[['all',tx('Todos','All')],['income',tx('Ingresos','Income')],['expense',tx('Gastos','Expenses')],['debt',tx('Deudas','Debts')]].map(([key,label]) => <button type="button" key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}</button>)}
     </div>
+    {/* Debts: the same list as Plan → Debts (read-only here), then their payments. */}
+    {filter === "debt" && <TransactionDebts onManage={onNavigate ? () => onNavigate("debts") : undefined}/>}
+    {filter === "debt" && <h2 className="free-list-title">{tx("Pagos de deudas", "Debt payments")}</h2>}
     <div className="free-transaction-list">
       {movements.length ? movements.map((item) => {
         const Row = item.editable ? "button" : "div";

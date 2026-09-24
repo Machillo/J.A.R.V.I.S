@@ -298,6 +298,13 @@ def _send_support_discord(*, public_id: str, plan: str, payload, severity: str =
         f"Pantalla: {safe(getattr(payload, 'screen', None)) or 'no indicada'}",
         f"Referencia: {safe(getattr(payload, 'error_reference', None)) or 'ninguna'}",
     ]
+    # Automatic incidents: which request failed (method + path template, ids already
+    # replaced) and its HTTP status. A screen fires several requests; without this the
+    # alert cannot say which one broke. Never a query string, body or identity.
+    operation = getattr(payload, "operation", None)
+    if operation:
+        fields.append(f"Operación: {safe(operation)}")
+        fields.append(f"HTTP: {safe(getattr(payload, 'http_status', None)) or 'sin respuesta'}")
     role_id = os.getenv("SUPPORT_DISCORD_ALERT_ROLE_ID", "").strip()
     role_id = role_id if re.fullmatch(r"\d{5,30}", role_id) and severity == "critical" else ""
     mention = f"<@&{role_id}> " if role_id else ""
@@ -691,7 +698,7 @@ def create_automatic_incident(payload):
                     category="error", subject=row.get("subject") or "Incidente crítico",
                     message="Incidente correlacionado escalado a crítico.", app_version=payload.app_version,
                     screen=safe_screen or safe_path, error_reference=payload.error_reference or payload.request_id,
-                    platform=payload.platform,
+                    platform=payload.platform, operation=operation, http_status=payload.status or None,
                 )
                 discord_sent = _send_support_discord(
                     public_id=public_id, plan=identity.get("plan_code") or "",
@@ -729,7 +736,7 @@ def create_automatic_incident(payload):
     notification_payload = SimpleNamespace(
         category="error", subject=subject, message=message, app_version=payload.app_version,
         screen=safe_screen or safe_path, error_reference=payload.error_reference or payload.request_id,
-        platform=payload.platform,
+        platform=payload.platform, operation=operation, http_status=payload.status or None,
     )
     email_sent = alerts_allowed and _send_support_email(
         public_id=public_id, email=identity.get("primary_email") or "no disponible",

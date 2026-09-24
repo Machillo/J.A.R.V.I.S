@@ -1,9 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 
-import App from "./App";
-import PublicInfoPage from "./pages/PublicInfoPage";
 // Keep this order: each module is a later visual layer over the previous one.
+// The global stylesheets must be imported before App: importing App first loads
+// the DINCR Users styles (UsersApp) first, and then every legacy/native sheet below
+// overrides them at equal specificity (light mode and Movimientos broke that way).
 import "./styles/01-base.css";
 import "./styles/02-legacy-features.css";
 import "./styles/03-theme.css";
@@ -35,6 +36,8 @@ import "./products/jarvis/styles/navigation.css";
 import "./products/jarvis/styles/home.css";
 import "./products/jarvis/styles/secondary-screens.css";
 import "./products/jarvis/styles/operations.css";
+import App from "./App";
+import PublicInfoPage from "./pages/PublicInfoPage";
 import { registerJarvisServiceWorker } from "./pushNotifications";
 import { initializeTelemetry } from "./lib/telemetry";
 import { initializeColorMode } from "./lib/colorMode";

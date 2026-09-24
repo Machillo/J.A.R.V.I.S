@@ -1,5 +1,5 @@
 /* DINCR VIP — canonical implementation of Figma section 56:880. */
-.native-product--finva.native-plan--vip{--vip-bg:#060e1a;--vip-surface:#0b1726;--vip-surface-raised:#0f1f33;--vip-focus:#140f26;--vip-border:#1a2945;--vip-text:#f7fbff;--vip-muted:#9eb0c4;--vip-violet:#9c7aff;--vip-mint:#0ac7b2;--vip-gold:#e0b861;--vip-coral:#f5405e;--vip-blue:#1aa6f5;color-scheme:dark;min-height:100dvh;background:var(--vip-bg);color:var(--vip-text)}
+.native-product--finva.native-plan--vip{--vip-bg:var(--finva-bg);--vip-surface:var(--finva-surface);--vip-surface-raised:var(--finva-raised);--vip-focus:#140f26;--vip-border:#1a2945;--vip-text:var(--finva-text);--vip-muted:var(--finva-muted);--vip-violet:#9c7aff;--vip-mint:var(--finva-mint);--vip-gold:#e0b861;--vip-coral:var(--finva-coral);--vip-blue:var(--finva-blue);color-scheme:var(--finva-color-scheme);min-height:100dvh;background:var(--vip-bg);color:var(--vip-text)}
 body:has(.native-product--finva.native-plan--vip){background:var(--vip-bg)}
 .native-product--finva.native-plan--vip::before,.native-product--finva.native-plan--vip>.mobile-app-shell>.native-product-header{display:none}
 .native-product--finva.native-plan--vip .mobile-app-shell{width:min(100%,402px);min-height:100dvh;border:0;border-radius:0;background:var(--vip-bg);box-shadow:none}
@@ -10,7 +10,7 @@ body:has(.native-product--finva.native-plan--vip){background:var(--vip-bg)}
 .native-product--finva.native-plan--vip .vip-screen-header>div{width:calc(100% - 54px);height:58px;padding:0;display:flex;flex-direction:column;justify-content:center;gap:2px;background:var(--vip-surface);overflow:hidden}
 .native-product--finva.native-plan--vip .vip-screen-header small{color:var(--vip-violet);font-size:12px;font-weight:650}
 .native-product--finva.native-plan--vip .vip-screen-header h1{margin:0;color:var(--vip-text);font-size:28px;line-height:1.08;font-weight:650;letter-spacing:-.025em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.native-product--finva.native-plan--vip .vip-screen-header button{width:46px;height:46px;flex:0 0 46px;display:grid;place-items:center;border:1px solid var(--vip-violet);border-radius:50%;background:#1a132e;color:var(--vip-violet);font-size:14px;font-weight:650}
+.native-product--finva.native-plan--vip .vip-screen-header button{width:46px;height:46px;flex:0 0 46px;display:grid;place-items:center;border:1px solid var(--vip-violet);border-radius:50%;background:color-mix(in srgb,var(--vip-violet) 14%,var(--vip-bg));color:var(--vip-violet);font-size:14px;font-weight:650}
 
 .native-product--finva.native-plan--vip :is(.vip-focus,.vip-card,.vip-field,.vip-link-card){width:100%;padding:14px 16px;border:1px solid var(--vip-border);border-radius:18px;overflow:hidden}
 .native-product--finva.native-plan--vip .vip-focus{min-height:88px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;background:var(--vip-focus)}
@@ -28,7 +28,7 @@ body:has(.native-product--finva.native-plan--vip){background:var(--vip-bg)}
 .native-product--finva.native-plan--vip .vip-card p svg{margin-right:6px;vertical-align:-3px;color:var(--vip-gold)}
 .native-product--finva.native-plan--vip .vip-card--violet h2{color:var(--vip-violet)}
 .native-product--finva.native-plan--vip .vip-card--gold h2{color:var(--vip-gold)}
-.native-product--finva.native-plan--vip .vip-card--danger h2{color:#ff8195}
+.native-product--finva.native-plan--vip .vip-card--danger h2{color:var(--finva-coral-soft)}
 
 .native-product--finva.native-plan--vip .vip-data-row{min-height:38px;padding:0;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--vip-surface-raised);color:var(--vip-text);font-size:14px;font-weight:650}
 .native-product--finva.native-plan--vip .vip-data-row span{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -59,11 +59,11 @@ body:has(.native-product--finva.native-plan--vip){background:var(--vip-bg)}
 
 .native-product--finva.native-plan--vip .vip-form{display:flex;flex-direction:column;gap:9px}
 .native-product--finva.native-plan--vip .vip-field{min-height:74px;display:flex;flex-direction:column;justify-content:center;gap:6px;background:var(--vip-surface);color:var(--vip-muted);font-size:12px;font-weight:650}
-.native-product--finva.native-plan--vip .vip-field :is(input,select){width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--vip-border);border-radius:10px;outline:0;background:var(--vip-surface-raised)!important;color:var(--vip-text)!important;-webkit-text-fill-color:var(--vip-text);color-scheme:dark;font:650 16px/1.2 Inter,system-ui,sans-serif;box-shadow:none}
+.native-product--finva.native-plan--vip .vip-field :is(input,select){width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--vip-border);border-radius:10px;outline:0;background:var(--vip-surface-raised)!important;color:var(--vip-text)!important;-webkit-text-fill-color:var(--vip-text);color-scheme:var(--finva-color-scheme);font:650 16px/1.2 Inter,system-ui,sans-serif;box-shadow:none}
 .native-product--finva.native-plan--vip .vip-field :is(input,select):focus-visible{border-color:var(--vip-violet);box-shadow:0 0 0 2px rgba(156,122,255,.22)}
 .native-product--finva.native-plan--vip .vip-field select{color:var(--vip-violet)!important;-webkit-text-fill-color:var(--vip-violet)}
 .native-product--finva.native-plan--vip .vip-field select option{background:var(--vip-surface-raised);color:var(--vip-text)}
-.native-product--finva.native-plan--vip .vip-form-error{margin:0;color:#ff8195;font-size:13px}
+.native-product--finva.native-plan--vip .vip-form-error{margin:0;color:var(--finva-coral-soft);font-size:13px}
 .native-product--finva.native-plan--vip .vip-form-message{margin:0;display:flex;align-items:center;gap:6px;color:var(--vip-mint);font-size:13px}
 
 .native-product--finva.native-plan--vip .vip-loading>div{border-radius:16px;background:linear-gradient(90deg,var(--vip-surface) 20%,var(--vip-surface-raised) 45%,var(--vip-surface) 70%);background-size:300% 100%;animation:vip-shimmer 1.25s linear infinite}
@@ -76,11 +76,12 @@ body:has(.native-product--finva.native-plan--vip){background:var(--vip-bg)}
 .native-product--finva.native-plan--vip .native-bottom-nav>button::before{display:none}
 .native-product--finva.native-plan--vip .native-bottom-nav>button.active{background:var(--vip-surface);color:var(--vip-violet)}
 .native-product--finva.native-plan--vip .native-nav-icon{min-height:22px}.native-product--finva.native-plan--vip .native-nav-icon svg{width:20px;height:20px}.native-product--finva.native-plan--vip .native-nav-label{font-size:var(--finva-nav-label-size);font-weight:650;letter-spacing:-.01em}
-html[data-color-mode-resolved="light"] .native-product--finva.native-plan--vip,html[data-theme="light"] .native-product--finva.native-plan--vip{color-scheme:dark;background:var(--vip-bg)}
+/* VIP accents with enough contrast on light surfaces; the base colors come from palette.css. */
+html[data-color-mode-resolved="light"] .native-product--finva.native-plan--vip{--vip-focus:#f5f3ff;--vip-border:#e2e8f0;--vip-violet:#6d28d9;--vip-gold:#a16207;background:var(--vip-bg)}
 @media(max-width:390px){.native-product--finva.native-plan--vip .mobile-content{padding-inline:14px}.native-product--finva.native-plan--vip .native-bottom-nav{width:calc(100% - 20px)}}
 @media(prefers-reduced-motion:reduce){.native-product--finva.native-plan--vip .vip-loading>div{animation:none}}
 /* PremiumStrategy reuses the Owner disclosure component; give it the DINCR palette. */
-.native-product--finva .jarvis-disclosure{--jarvis-line:var(--vip-border,#1a2945);--jarvis-radius:18px;--jarvis-surface:var(--vip-surface,#0b1726);--jarvis-secondary:var(--vip-violet,#9c7aff);--jarvis-text:var(--vip-text,#f7fbff);--jarvis-text-3:var(--vip-muted,#9eb0c4)}
+.native-product--finva .jarvis-disclosure{--jarvis-line:var(--vip-border,#1a2945);--jarvis-radius:18px;--jarvis-surface:var(--vip-surface,var(--finva-surface));--jarvis-secondary:var(--vip-violet,#9c7aff);--jarvis-text:var(--vip-text,var(--finva-text));--jarvis-text-3:var(--vip-muted,var(--finva-muted))}
 /* Long goal/debt names and English labels wrap instead of being cut with "…". */
 .native-product--finva.native-plan--vip .vip-screen-header{height:auto;min-height:60px}
 .native-product--finva.native-plan--vip .vip-screen-header>div{height:auto;min-height:58px;padding-block:6px}

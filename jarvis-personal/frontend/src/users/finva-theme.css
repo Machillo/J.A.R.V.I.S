@@ -213,93 +213,93 @@
   .users-app .mobile-bottom-nav button { min-height: 62px; }
 }
 
-/* Follow the phone setting. DINCR remains dark when the OS uses dark mode. */
-@media (prefers-color-scheme: light) {
-  .users-app {
-    color-scheme: light;
-    --bg: #f8fafc;
-    --surface: #ffffff;
-    --surface-2: #f1f5f9;
-    --surface-3: #e2e8f0;
-    --border: rgba(15, 23, 42, .10);
-    --border-strong: rgba(13, 148, 136, .34);
-    --text: #0f172a;
-    --muted: #64748b;
-    --muted-2: #475569;
-    --accent: #0d9488;
-    --accent-soft: rgba(13, 148, 136, .10);
-    --success: #10b981;
-    --danger: #f43f5e;
-    background: #f8fafc;
-  }
-  .users-app .app,
-  .users-app .mobile-app-shell {
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 35%, #f1f5f9 100%);
-    border-inline-color: rgba(15,23,42,.06);
-    box-shadow: 0 0 56px rgba(15,23,42,.08);
-  }
-  .users-app .mobile-app-header,
-  .users-app .mobile-bottom-nav {
-    background: rgba(248,250,252,.94);
-    border-color: rgba(15,23,42,.10);
-  }
-  .users-app .profile-chip {
-    border-color: rgba(13,148,136,.24);
-    background: linear-gradient(145deg, #ffffff, #e2e8f0);
-    color: #0f172a;
-  }
-  .users-app .panel,
-  .users-app .card,
-  .users-app .mobile-panel,
-  .users-app .account-card,
-  .users-app .current-plan-card,
-  .users-app .settings-plan-row,
-  .users-app .profile-completeness-card,
-  .users-app .situation-card {
-    border-color: rgba(15,23,42,.10);
-    background: #ffffff;
-    box-shadow: 0 10px 24px rgba(15,23,42,.07);
-  }
-  .users-app .form input,
-  .users-app .form select,
-  .users-app .form textarea,
-  .users-app .onboarding-field input,
-  .users-app .onboarding-field select,
-  .users-app .situation-form-grid input,
-  .users-app .situation-form-grid select,
-  .users-app .situation-single-field input,
-  .users-app .vip-scenario-fields input,
-  .users-app .simulator-controls input,
-  .users-app .entry-segmented {
-    border-color: rgba(15,23,42,.13);
-    background: #f8fafc;
-    color: #0f172a;
-  }
-  .users-app .form input:focus,
-  .users-app .form select:focus,
-  .users-app .form textarea:focus {
-    background: #ffffff;
-  }
-  .users-app .mobile-bottom-nav button { color: #64748b; }
-  .users-app .mobile-bottom-nav button.active {
-    color: #0f766e;
-    background: rgba(13,148,136,.11);
-  }
-  .users-app .mobile-more-sheet,
-  .users-app .plan-dialog { background: #ffffff; }
-  .users-app .sheet-actions button,
-  .users-app .onboarding-logout,
-  .users-app .onboarding-actions .secondary,
-  .users-app .plan-dialog-cancel {
-    border-color: rgba(15,23,42,.10);
-    background: #f1f5f9;
-    color: #334155;
-  }
-  .users-app .entry-segmented button.active { background: #ffffff; }
-  .users-app .dashboard-plan-action {
-    background: linear-gradient(145deg, #ffffff, #f0fdfa);
-    color: #0f172a;
-  }
+/* Light theme. The app setting decides (html[data-color-mode-resolved], set by
+   lib/colorMode.js, which also resolves "Automatic" from the phone), never the OS
+   media query directly: :where() keeps the specificity the old media query had. */
+:where(html[data-color-mode-resolved="light"]) .users-app {
+  color-scheme: light;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --surface-3: #e2e8f0;
+  --border: rgba(15, 23, 42, .10);
+  --border-strong: rgba(13, 148, 136, .34);
+  --text: #0f172a;
+  --muted: #64748b;
+  --muted-2: #475569;
+  --accent: #0d9488;
+  --accent-soft: rgba(13, 148, 136, .10);
+  --success: #10b981;
+  --danger: #f43f5e;
+  background: #f8fafc;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .app,
+:where(html[data-color-mode-resolved="light"]) .users-app .mobile-app-shell {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 35%, #f1f5f9 100%);
+  border-inline-color: rgba(15,23,42,.06);
+  box-shadow: 0 0 56px rgba(15,23,42,.08);
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .mobile-app-header,
+:where(html[data-color-mode-resolved="light"]) .users-app .mobile-bottom-nav {
+  background: rgba(248,250,252,.94);
+  border-color: rgba(15,23,42,.10);
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .profile-chip {
+  border-color: rgba(13,148,136,.24);
+  background: linear-gradient(145deg, #ffffff, #e2e8f0);
+  color: #0f172a;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .panel,
+:where(html[data-color-mode-resolved="light"]) .users-app .card,
+:where(html[data-color-mode-resolved="light"]) .users-app .mobile-panel,
+:where(html[data-color-mode-resolved="light"]) .users-app .account-card,
+:where(html[data-color-mode-resolved="light"]) .users-app .current-plan-card,
+:where(html[data-color-mode-resolved="light"]) .users-app .settings-plan-row,
+:where(html[data-color-mode-resolved="light"]) .users-app .profile-completeness-card,
+:where(html[data-color-mode-resolved="light"]) .users-app .situation-card {
+  border-color: rgba(15,23,42,.10);
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15,23,42,.07);
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .form input,
+:where(html[data-color-mode-resolved="light"]) .users-app .form select,
+:where(html[data-color-mode-resolved="light"]) .users-app .form textarea,
+:where(html[data-color-mode-resolved="light"]) .users-app .onboarding-field input,
+:where(html[data-color-mode-resolved="light"]) .users-app .onboarding-field select,
+:where(html[data-color-mode-resolved="light"]) .users-app .situation-form-grid input,
+:where(html[data-color-mode-resolved="light"]) .users-app .situation-form-grid select,
+:where(html[data-color-mode-resolved="light"]) .users-app .situation-single-field input,
+:where(html[data-color-mode-resolved="light"]) .users-app .vip-scenario-fields input,
+:where(html[data-color-mode-resolved="light"]) .users-app .simulator-controls input,
+:where(html[data-color-mode-resolved="light"]) .users-app .entry-segmented {
+  border-color: rgba(15,23,42,.13);
+  background: #f8fafc;
+  color: #0f172a;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .form input:focus,
+:where(html[data-color-mode-resolved="light"]) .users-app .form select:focus,
+:where(html[data-color-mode-resolved="light"]) .users-app .form textarea:focus {
+  background: #ffffff;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .mobile-bottom-nav button { color: #64748b;}
+:where(html[data-color-mode-resolved="light"]) .users-app .mobile-bottom-nav button.active {
+  color: #0f766e;
+  background: rgba(13,148,136,.11);
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .mobile-more-sheet,
+:where(html[data-color-mode-resolved="light"]) .users-app .plan-dialog { background: #ffffff;}
+:where(html[data-color-mode-resolved="light"]) .users-app .sheet-actions button,
+:where(html[data-color-mode-resolved="light"]) .users-app .onboarding-logout,
+:where(html[data-color-mode-resolved="light"]) .users-app .onboarding-actions .secondary,
+:where(html[data-color-mode-resolved="light"]) .users-app .plan-dialog-cancel {
+  border-color: rgba(15,23,42,.10);
+  background: #f1f5f9;
+  color: #334155;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .entry-segmented button.active { background: #ffffff;}
+:where(html[data-color-mode-resolved="light"]) .users-app .dashboard-plan-action {
+  background: linear-gradient(145deg, #ffffff, #f0fdfa);
+  color: #0f172a;
 }
 
 
@@ -362,33 +362,31 @@ body:has(.users-app) { background: #0b132b; }
 .users-app .entry-segmented button.active.income::before { background: rgba(52, 211, 153, .16); }
 .users-app .entry-segmented button.active.expense::before { background: rgba(251, 113, 133, .14); }
 
-@media (prefers-color-scheme: light) {
-  .users-app {
-    --f-bg: #f8fafc;
-    --f-bg-2: #f1f5f9;
-    --f-surface: #ffffff;
-    --f-surface-2: #f1f5f9;
-    --f-soft: rgba(15, 23, 42, .04);
-    --f-border: rgba(15, 23, 42, .10);
-    --f-border-strong: rgba(13, 148, 136, .28);
-    --f-text: #0f172a;
-    --f-text-2: #475569;
-    --f-muted: #64748b;
-    --f-accent: #0d9488;
-    --f-accent-2: #0f766e;
-    --f-green: #10b981;
-    --f-red: #f43f5e;
-  }
-  body:has(.users-app) { background: #f8fafc; }
-  .users-app .entry-form { background: #ffffff; }
-  .users-app .entry-amount-field > div {
-    border-color: rgba(15, 23, 42, .13);
-    background: #f8fafc;
-  }
-  .users-app .entry-segmented button.active {
-    background: #ffffff;
-    color: #0f172a;
-  }
+:where(html[data-color-mode-resolved="light"]) .users-app {
+  --f-bg: #f8fafc;
+  --f-bg-2: #f1f5f9;
+  --f-surface: #ffffff;
+  --f-surface-2: #f1f5f9;
+  --f-soft: rgba(15, 23, 42, .04);
+  --f-border: rgba(15, 23, 42, .10);
+  --f-border-strong: rgba(13, 148, 136, .28);
+  --f-text: #0f172a;
+  --f-text-2: #475569;
+  --f-muted: #64748b;
+  --f-accent: #0d9488;
+  --f-accent-2: #0f766e;
+  --f-green: #10b981;
+  --f-red: #f43f5e;
+}
+:where(html[data-color-mode-resolved="light"]) body:has(.users-app) { background: #f8fafc;}
+:where(html[data-color-mode-resolved="light"]) .users-app .entry-form { background: #ffffff;}
+:where(html[data-color-mode-resolved="light"]) .users-app .entry-amount-field > div {
+  border-color: rgba(15, 23, 42, .13);
+  background: #f8fafc;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .entry-segmented button.active {
+  background: #ffffff;
+  color: #0f172a;
 }
 
 
@@ -655,55 +653,53 @@ body:has(.users-app) { background: #0b132b; }
   margin-top: 18px;
 }
 
-@media (prefers-color-scheme: light) {
-  .users-app .finva-button-secondary {
-    border-color: rgba(13,148,136,.24);
-    background: rgba(13,148,136,.09);
-    color: #0f766e;
-  }
-  .users-app .finva-button-ghost {
-    border-color: rgba(15,23,42,.10);
-    background: #f1f5f9;
-    color: #334155;
-  }
-  .users-app .finva-button-danger {
-    border-color: rgba(244,63,94,.18);
-    background: rgba(244,63,94,.08);
-    color: #be123c;
-  }
-  .users-app .movement-filters input,
-  .users-app .movement-filters select,
-  .users-app .budget-list input,
-  .users-app .month-picker,
-  .users-app .feedback-form input,
-  .users-app .feedback-form select,
-  .users-app .feedback-form textarea {
-    border-color: rgba(15,23,42,.12);
-    background: #ffffff;
-    color: #0f172a;
-  }
-  .users-app input[type="date"] { color-scheme: light; }
-  .users-app .finva-dialog-backdrop { background: rgba(15,23,42,.46); }
-  .users-app .finva-dialog {
-    border-color: rgba(13,148,136,.22);
-    background: #ffffff;
-    box-shadow: 0 28px 80px rgba(15,23,42,.22);
-  }
-  .users-app .finva-dialog-danger { border-color: rgba(244,63,94,.22); }
-  .users-app .finva-dialog h2 { color: #0f172a; }
-  .users-app .finva-dialog > p,
-  .users-app .finva-dialog-form label > span { color: #64748b; }
-  .users-app .finva-dialog-close {
-    background: #f1f5f9;
-    color: #475569;
-  }
-  .users-app .finva-money-input {
-    border-color: rgba(15,23,42,.13);
-    background: #f8fafc;
-  }
-  .users-app .finva-money-input b { color: #475569; }
-  .users-app .finva-money-input input { color: #0f172a; }
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-button-secondary {
+  border-color: rgba(13,148,136,.24);
+  background: rgba(13,148,136,.09);
+  color: #0f766e;
 }
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-button-ghost {
+  border-color: rgba(15,23,42,.10);
+  background: #f1f5f9;
+  color: #334155;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-button-danger {
+  border-color: rgba(244,63,94,.18);
+  background: rgba(244,63,94,.08);
+  color: #be123c;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .movement-filters input,
+:where(html[data-color-mode-resolved="light"]) .users-app .movement-filters select,
+:where(html[data-color-mode-resolved="light"]) .users-app .budget-list input,
+:where(html[data-color-mode-resolved="light"]) .users-app .month-picker,
+:where(html[data-color-mode-resolved="light"]) .users-app .feedback-form input,
+:where(html[data-color-mode-resolved="light"]) .users-app .feedback-form select,
+:where(html[data-color-mode-resolved="light"]) .users-app .feedback-form textarea {
+  border-color: rgba(15,23,42,.12);
+  background: #ffffff;
+  color: #0f172a;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app input[type="date"] { color-scheme: light;}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-dialog-backdrop { background: rgba(15,23,42,.46);}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-dialog {
+  border-color: rgba(13,148,136,.22);
+  background: #ffffff;
+  box-shadow: 0 28px 80px rgba(15,23,42,.22);
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-dialog-danger { border-color: rgba(244,63,94,.22);}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-dialog h2 { color: #0f172a;}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-dialog > p,
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-dialog-form label > span { color: #64748b;}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-dialog-close {
+  background: #f1f5f9;
+  color: #475569;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-money-input {
+  border-color: rgba(15,23,42,.13);
+  background: #f8fafc;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-money-input b { color: #475569;}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-money-input input { color: #0f172a;}
 
 @media (max-width: 390px) {
   .users-app .finva-dialog-actions { grid-template-columns: 1fr; }
@@ -1016,44 +1012,42 @@ body:has(.users-app) { background: #0b132b; }
   .users-app .entry-quick-actions .finva-quick-action small { display: none; }
 }
 
-@media (prefers-color-scheme: light) {
-  .users-app .finva-add-strip,
-  .users-app .finva-quick-action {
-    border-color: rgba(13,148,136,.18);
-    background: linear-gradient(145deg,#ffffff,#f0fdfa);
-    color: #0f172a;
-  }
-  .users-app .entry-quick-actions .expense {
-    border-color: rgba(244,63,94,.16);
-    background: linear-gradient(145deg,#ffffff,#fff1f2);
-  }
-  .users-app .finva-form-sheet {
-    border-color: rgba(13,148,136,.18);
-    background: #ffffff;
-  }
-  .users-app .finva-form-sheet-header {
-    border-bottom-color: rgba(15,23,42,.09);
-  }
-  .users-app .finva-form-sheet-header h2 { color: #0f172a; }
-  .users-app .finva-form-sheet-close {
-    background: #f1f5f9;
-    color: #475569;
-  }
-  .users-app .finva-compact-fields input,
-  .users-app .finva-compact-fields select,
-  .users-app .finva-sheet-form input,
-  .users-app .finva-sheet-form select {
-    border-color: rgba(15,23,42,.12);
-    background: #f8fafc;
-    color: #0f172a;
-  }
-  .users-app .record-meta,
-  .users-app .finva-empty-state { color: #64748b; }
-  .users-app .form .finva-button-ghost {
-    border-color: rgba(15,23,42,.10);
-    background: #f1f5f9;
-    color: #334155;
-  }
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-add-strip,
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-quick-action {
+  border-color: rgba(13,148,136,.18);
+  background: linear-gradient(145deg,#ffffff,#f0fdfa);
+  color: #0f172a;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .entry-quick-actions .expense {
+  border-color: rgba(244,63,94,.16);
+  background: linear-gradient(145deg,#ffffff,#fff1f2);
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-form-sheet {
+  border-color: rgba(13,148,136,.18);
+  background: #ffffff;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-form-sheet-header {
+  border-bottom-color: rgba(15,23,42,.09);
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-form-sheet-header h2 { color: #0f172a;}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-form-sheet-close {
+  background: #f1f5f9;
+  color: #475569;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-compact-fields input,
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-compact-fields select,
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-sheet-form input,
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-sheet-form select {
+  border-color: rgba(15,23,42,.12);
+  background: #f8fafc;
+  color: #0f172a;
+}
+:where(html[data-color-mode-resolved="light"]) .users-app .record-meta,
+:where(html[data-color-mode-resolved="light"]) .users-app .finva-empty-state { color: #64748b;}
+:where(html[data-color-mode-resolved="light"]) .users-app .form .finva-button-ghost {
+  border-color: rgba(15,23,42,.10);
+  background: #f1f5f9;
+  color: #334155;
 }
 
 /* Beta subscription payment flow */
@@ -1309,15 +1303,13 @@ body:has(.users-app),
   .users-app .situation-edit { grid-column: 1 / -1; justify-content: center; width: 100%; }
 }
 
-@media (prefers-color-scheme: light) {
-  .users-app .plan-payment-notice,
-  .users-app .pending-payment-card,
-  .users-app .sinpe-payment-data > div,
-  .users-app .receipt-upload-field { background:#f0fdfa; color:#334155; }
-  .users-app .pending-payment-card { background:linear-gradient(145deg,#fffbeb,#ffffff); }
-  .users-app .pending-payment-card button,
-  .users-app .sinpe-payment-data button { color:#0f172a; }
-}
+:where(html[data-color-mode-resolved="light"]) .users-app .plan-payment-notice,
+:where(html[data-color-mode-resolved="light"]) .users-app .pending-payment-card,
+:where(html[data-color-mode-resolved="light"]) .users-app .sinpe-payment-data > div,
+:where(html[data-color-mode-resolved="light"]) .users-app .receipt-upload-field { background:#f0fdfa; color:#334155;}
+:where(html[data-color-mode-resolved="light"]) .users-app .pending-payment-card { background:linear-gradient(145deg,#fffbeb,#ffffff);}
+:where(html[data-color-mode-resolved="light"]) .users-app .pending-payment-card button,
+:where(html[data-color-mode-resolved="light"]) .users-app .sinpe-payment-data button { color:#0f172a;}
 .users-app .gmail-privacy-note {
   display: flex;
   align-items: flex-start;

@@ -1,92 +1,101 @@
 /* DINCR Free — canonical implementation of Figma nodes 46:856–46:1490. */
 .native-product--finva.native-plan--free {
-  --native-bg:#060e1a;--native-bg-soft:#0f1f33;--native-surface:#0b1726;--native-surface-raised:#0f1f33;
-  --native-border:#142b40;--native-text:#f7fbff;--native-muted:#9eb0c4;--native-accent:#0ac7b2;
-  --native-success:#3dd9a4;--native-danger:#f5405e;color-scheme:dark;background:#060e1a;color:#f7fbff;
+  --native-bg:var(--finva-bg);--native-bg-soft:var(--finva-raised);--native-surface:var(--finva-surface);--native-surface-raised:var(--finva-raised);
+  --native-border:var(--finva-line);--native-text:var(--finva-text);--native-muted:var(--finva-muted);--native-accent:var(--finva-mint);
+  --native-success:var(--finva-success);--native-danger:var(--finva-coral);color-scheme:var(--finva-color-scheme);background:var(--finva-bg);color:var(--finva-text);
 }
 .native-product--finva.native-plan--free::before{display:none}
-body:has(.native-product--finva.native-plan--free){background:#060e1a}
-.native-product--finva.native-plan--free .mobile-app-shell{width:min(100%,402px);border:0;background:#060e1a;box-shadow:none}
-.native-product--finva.native-plan--free .mobile-content{padding:0 18px 88px;background:#060e1a}
-.native-product--finva.native-plan--free .native-product-header{width:min(100%,402px);min-height:110px;padding:max(48px,env(safe-area-inset-top)) 18px 10px;background:#060e1a;border:0;box-shadow:none}
+body:has(.native-product--finva.native-plan--free){background:var(--finva-bg)}
+.native-product--finva.native-plan--free .mobile-app-shell{width:min(100%,402px);border:0;background:var(--finva-bg);box-shadow:none}
+.native-product--finva.native-plan--free .mobile-content{padding:0 18px 88px;background:var(--finva-bg)}
+.native-product--finva.native-plan--free .native-product-header{width:min(100%,402px);min-height:110px;padding:max(48px,env(safe-area-inset-top)) 18px 10px;background:var(--finva-bg);border:0;box-shadow:none}
 .native-product--finva.native-plan--free .native-product-header--free .native-product-title{display:grid;gap:3px}
-.native-product--finva.native-plan--free .native-product-header--free .native-product-title small{order:0;margin:0;color:#0ac7b2;font-size:10px;font-weight:800;letter-spacing:.12em}
-.native-product--finva.native-plan--free .native-product-header--free .native-product-title strong{order:1;color:#f7fbff;font-size:24px;line-height:1.08;font-weight:800;letter-spacing:-.035em}
-.native-product--finva.native-plan--free .native-profile-button{width:46px;height:46px;border:1px solid #142b40;border-radius:15px;color:#f7fbff;background:#0f1f33;box-shadow:none}
+.native-product--finva.native-plan--free .native-product-header--free .native-product-title small{order:0;margin:0;color:var(--finva-mint);font-size:10px;font-weight:800;letter-spacing:.12em}
+.native-product--finva.native-plan--free .native-product-header--free .native-product-title strong{order:1;color:var(--finva-text);font-size:24px;line-height:1.08;font-weight:800;letter-spacing:-.035em}
+.native-product--finva.native-plan--free .native-profile-button{width:46px;height:46px;border:1px solid var(--finva-line);border-radius:15px;color:var(--finva-text);background:var(--finva-raised);box-shadow:none}
 
-.native-product--finva.native-plan--free :is(input,select,textarea){border:1px solid #142b40;border-radius:14px;background:#0b1726;color:#f7fbff;box-shadow:none}
-.native-product--finva.native-plan--free :is(input,select,textarea):focus{border-color:#0ac7b2;box-shadow:0 0 0 3px rgba(10,199,178,.12)}
-.native-product--finva.native-plan--free :is(.finva-form-sheet,.finva-dialog){border:1px solid #142b40;background:#0b1726;box-shadow:0 -24px 64px rgba(0,0,0,.5)}
-.native-product--finva.native-plan--free :is(.finva-button-primary,.entry-save-button){border:0;border-radius:14px;background:#0ac7b2;color:#061018;box-shadow:none}
-.native-product--finva.native-plan--free .finva-button-success{border:0;background:#3dd9a4;color:#061712;box-shadow:none}
-.native-product--finva.native-plan--free .finva-button-secondary{border:1px solid #244058;background:#0f1f33;color:#c6d2df;box-shadow:none}
-.native-product--finva.native-plan--free .finva-button-danger{border:1px solid rgba(245,64,94,.35);background:#1f1217;color:#ff8195;box-shadow:none}
+.native-product--finva.native-plan--free :is(input,select,textarea){border:1px solid var(--finva-line);border-radius:14px;background:var(--finva-surface);color:var(--finva-text);box-shadow:none}
+.native-product--finva.native-plan--free :is(input,select,textarea):focus{border-color:var(--finva-mint);box-shadow:0 0 0 3px rgba(10,199,178,.12)}
+.native-product--finva.native-plan--free :is(.finva-form-sheet,.finva-dialog){border:1px solid var(--finva-line);background:var(--finva-surface);box-shadow:0 -24px 64px rgba(0,0,0,.5)}
+.native-product--finva.native-plan--free :is(.finva-button-primary,.entry-save-button){border:0;border-radius:14px;background:var(--finva-mint);color:var(--finva-on-accent);box-shadow:none}
+.native-product--finva.native-plan--free .finva-button-success{border:0;background:var(--finva-success);color:var(--finva-on-accent);box-shadow:none}
+.native-product--finva.native-plan--free .finva-button-secondary{border:1px solid var(--finva-line-strong);background:var(--finva-raised);color:var(--finva-text-soft);box-shadow:none}
+.native-product--finva.native-plan--free .finva-button-danger{border:1px solid rgba(245,64,94,.35);background:var(--finva-tint-danger);color:var(--finva-coral-soft);box-shadow:none}
 
 .free-screen{display:grid;gap:12px;padding:0 0 20px;animation:free-enter .22s ease-out}
 @keyframes free-enter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-.free-plan-label,.finva-free-plan-label{color:#9eb0c4;font-size:10px;font-weight:700}
-.free-summary-card{min-height:108px;padding:13px;display:grid;align-content:start;gap:6px;border:1px solid #142b40;border-radius:16px;background:#0b1726}
-.free-summary-card--green{background:#08292b}.free-summary-card--red{background:#1f1217}
-.free-summary-card small{color:#0ac7b2;font-size:10px;font-weight:850;letter-spacing:.08em}.free-summary-card--red small{color:#f5405e}
-.free-summary-card strong{font-size:28px;line-height:1.1;letter-spacing:-.045em}.free-summary-card span{color:#9eb0c4;font-size:12px}
-.free-error{padding:11px 12px;border:1px solid rgba(245,64,94,.35);border-radius:14px;background:#1f1217;color:#ff9aab;font-size:12px}
-.free-empty{margin:0;padding:18px;color:#9eb0c4;text-align:center;font-size:12px}
+.free-plan-label,.finva-free-plan-label{color:var(--finva-muted);font-size:10px;font-weight:700}
+.free-summary-card{min-height:108px;padding:13px;display:grid;align-content:start;gap:6px;border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-surface)}
+.free-summary-card--green{background:var(--finva-tint-mint)}.free-summary-card--red{background:var(--finva-tint-danger)}
+.free-summary-card small{color:var(--finva-mint);font-size:10px;font-weight:850;letter-spacing:.08em}.free-summary-card--red small{color:var(--finva-coral)}
+.free-summary-card strong{font-size:28px;line-height:1.1;letter-spacing:-.045em}.free-summary-card span{color:var(--finva-muted);font-size:12px}
+.free-error{padding:11px 12px;border:1px solid rgba(245,64,94,.35);border-radius:14px;background:var(--finva-tint-danger);color:#ff9aab;font-size:12px}
+.free-empty{margin:0;padding:18px;color:var(--finva-muted);text-align:center;font-size:12px}
 .free-primary-button,.free-secondary-button{width:100%;height:48px;min-height:48px;max-height:48px;padding:0 14px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:14px;font-size:12px;font-weight:800}
-.free-primary-button{border:0;background:#0ac7b2;color:#061018}.free-secondary-button{border:1px solid #244058;background:#0f1f33;color:#c6d2df}
-.free-back-button,.free-text-action{width:max-content;display:flex;align-items:center;gap:7px;border:0;background:transparent;color:#0ac7b2;font-weight:750}
+.free-primary-button{border:0;background:var(--finva-mint);color:var(--finva-on-accent)}.free-secondary-button{border:1px solid var(--finva-line-strong);background:var(--finva-raised);color:var(--finva-text-soft)}
+.free-back-button,.free-text-action{width:max-content;display:flex;align-items:center;gap:7px;border:0;background:transparent;color:var(--finva-mint);font-weight:750}
 
 /* Home */
 .native-product--finva.native-plan--free .finva-overview.dashboard-free{display:grid;gap:12px;padding:0 0 20px}
-.native-product--finva.native-plan--free .finva-free-available{min-height:128px;padding:13px;display:grid;align-content:start;gap:6px;border:1px solid #142b40;border-radius:16px;background:#08292b}
-.native-product--finva.native-plan--free .finva-free-available small{color:#0ac7b2;font-size:10px;font-weight:850;letter-spacing:.08em}
+.native-product--finva.native-plan--free .finva-free-available{min-height:128px;padding:13px;display:grid;align-content:start;gap:6px;border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-tint-mint)}
+.native-product--finva.native-plan--free .finva-free-available small{color:var(--finva-mint);font-size:10px;font-weight:850;letter-spacing:.08em}
 .native-product--finva.native-plan--free .finva-free-available strong{font-size:30px;line-height:1.15;letter-spacing:-.045em}
-.native-product--finva.native-plan--free .finva-free-available span{color:#9eb0c4;font-size:11px}
-.native-product--finva.native-plan--free .finva-free-kpis{overflow:hidden;border:1px solid #142b40;border-radius:16px;background:#0b1726}
-.native-product--finva.native-plan--free .finva-free-kpis div{min-height:38px;padding:0 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #142b40}
-.native-product--finva.native-plan--free .finva-free-kpis div:last-child{border:0}.native-product--finva.native-plan--free .finva-free-kpis span{color:#9eb0c4;font-size:11px}.native-product--finva.native-plan--free .finva-free-kpis strong{font-size:12px}
-.native-product--finva.native-plan--free :is(.finva-overview-chart,.finva-overview-categories){padding:13px;border:1px solid #142b40;border-radius:16px;background:#0b1726;box-shadow:none}
-.native-product--finva.native-plan--free .finva-overview :is(.finva-overview-chart,.finva-overview-categories)>header small{color:#9eb0c4;font-size:10px;letter-spacing:.08em}
+.native-product--finva.native-plan--free .finva-free-available span{color:var(--finva-muted);font-size:11px}
+.native-product--finva.native-plan--free .finva-free-kpis{overflow:hidden;border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-surface)}
+.native-product--finva.native-plan--free .finva-free-kpis div{min-height:38px;padding:0 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--finva-line)}
+.native-product--finva.native-plan--free .finva-free-kpis div:last-child{border:0}.native-product--finva.native-plan--free .finva-free-kpis span{color:var(--finva-muted);font-size:11px}.native-product--finva.native-plan--free .finva-free-kpis strong{font-size:12px}
+.native-product--finva.native-plan--free :is(.finva-overview-chart,.finva-overview-categories){padding:13px;border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-surface);box-shadow:none}
+.native-product--finva.native-plan--free .finva-overview :is(.finva-overview-chart,.finva-overview-categories)>header small{color:var(--finva-muted);font-size:10px;letter-spacing:.08em}
 .native-product--finva.native-plan--free .finva-overview :is(.finva-overview-chart,.finva-overview-categories)>header h2{margin:3px 0 10px;font-size:14px}
-.native-product--finva.native-plan--free .finva-overview-chart-row>div{background:#0f1f33}.native-product--finva.native-plan--free .finva-overview-chart .income{background:#0ac7b2}.native-product--finva.native-plan--free .finva-overview-chart .expense{background:#f5405e}
-.native-product--finva.native-plan--free .finva-overview-categories>div b{background:#0ac7b2}
-.native-product--finva.native-plan--free .finva-overview-action{min-height:48px;padding:10px 13px;border:1px solid #142b40;border-radius:14px;background:#0b1726;color:#0ac7b2;box-shadow:none}
+.native-product--finva.native-plan--free .finva-overview-chart-row>div{background:var(--finva-raised)}.native-product--finva.native-plan--free .finva-overview-chart .income{background:var(--finva-mint)}.native-product--finva.native-plan--free .finva-overview-chart .expense{background:var(--finva-coral)}
+.native-product--finva.native-plan--free .finva-overview-categories>div b{background:var(--finva-mint)}
+.native-product--finva.native-plan--free .finva-overview-action{min-height:48px;padding:10px 13px;border:1px solid var(--finva-line);border-radius:14px;background:var(--finva-surface);color:var(--finva-mint);box-shadow:none}
 
 /* Movements */
-.free-search{height:48px;padding:0 13px;display:flex;align-items:center;gap:9px;border:1px solid #142b40;border-radius:14px;background:#0b1726;color:#9eb0c4}
-.native-product--finva.native-plan--free .free-search input{width:100%;height:auto;min-height:0;padding:0;border:0;border-radius:0;background:transparent;color:#f7fbff;box-shadow:none}
+.free-search{height:48px;padding:0 13px;display:flex;align-items:center;gap:9px;border:1px solid var(--finva-line);border-radius:14px;background:var(--finva-surface);color:var(--finva-muted)}
+.native-product--finva.native-plan--free .free-search input{width:100%;height:auto;min-height:0;padding:0;border:0;border-radius:0;background:transparent;color:var(--finva-text);box-shadow:none}
 .native-product--finva.native-plan--free .free-search input:focus{border:0;box-shadow:none;outline:0}
-.free-filter-tabs{height:34px;padding:0;display:flex;gap:6px;border:0;border-radius:0;background:transparent;overflow-x:auto;scrollbar-width:none}
+.free-filter-tabs{padding:0;display:flex;gap:6px;border:0;border-radius:0;background:transparent;overflow-x:auto;scrollbar-width:none}
 .free-filter-tabs::-webkit-scrollbar{display:none}
-.free-filter-tabs button{flex:1 0 0;min-width:0;height:40px;min-height:40px;padding:0 8px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#9eb0c4;font-size:9px;font-weight:700}.free-filter-tabs button.active{background:#082e2e;color:#0ac7b2}
+.free-filter-tabs button{flex:1 0 0;min-width:0;height:40px;min-height:40px;padding:0 8px;border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-surface);color:var(--finva-muted);font-size:9px;font-weight:700}.free-filter-tabs button.active{background:var(--finva-tint-mint);color:var(--finva-mint)}
 .free-transaction-list,.free-record-list{display:grid;gap:8px}
-.free-transaction-row{height:64px;min-height:64px;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid #142b40;border-radius:15px;background:#0b1726;color:#f7fbff;text-align:left}
-.free-row-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#08292b;color:#0ac7b2}.free-row-icon.expense{background:#1f1217;color:#f5405e}
-.free-transaction-row>span{min-width:0}.free-transaction-row strong,.free-transaction-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.free-transaction-row strong{font-size:12px}.free-transaction-row small{margin-top:3px;color:#9eb0c4;font-size:9px}.free-transaction-row>b{font-size:12px}.free-transaction-row>b.income{color:#3dd9a4}.free-transaction-row>b.expense,.free-transaction-row>b.debt{color:#ff8195}
-.free-entry-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}.free-entry-choices button{min-height:100px;display:grid;place-items:center;gap:6px;border:1px solid #142b40;border-radius:16px;background:#0f1f33;color:#f7fbff;font-weight:800}.free-entry-choices button:first-child{color:#3dd9a4}.free-entry-choices button:last-child{color:#ff8195}
+.free-transaction-row{height:64px;min-height:64px;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid var(--finva-line);border-radius:15px;background:var(--finva-surface);color:var(--finva-text);text-align:left}
+.free-row-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:var(--finva-tint-mint);color:var(--finva-mint)}.free-row-icon.expense{background:var(--finva-tint-danger);color:var(--finva-coral)}
+.free-transaction-row>span{min-width:0}.free-transaction-row strong,.free-transaction-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.free-transaction-row strong{font-size:12px}.free-transaction-row small{margin-top:3px;color:var(--finva-muted);font-size:9px}.free-transaction-row>b{font-size:12px}.free-transaction-row>b.income{color:var(--finva-success)}.free-transaction-row>b.expense,.free-transaction-row>b.debt{color:var(--finva-coral-soft)}
+.free-entry-choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}.free-entry-choices button{min-height:100px;display:grid;place-items:center;gap:6px;border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-raised);color:var(--finva-text);font-weight:800}.free-entry-choices button:first-child{color:var(--finva-success)}.free-entry-choices button:last-child{color:var(--finva-coral-soft)}
 
 /* Debts and goals */
-.free-record-card{min-height:92px;padding:12px 13px;display:grid;grid-template-columns:1fr auto;align-items:start;gap:10px;border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#f7fbff;text-align:left}
-.free-record-card>span{min-width:0;display:grid;gap:5px}.free-record-card strong{font-size:13px}.free-record-card small{color:#9eb0c4;font-size:11px}.free-record-card em{display:flex;align-items:center;gap:3px;color:#0ac7b2;font-size:10px;font-style:normal;font-weight:750}.free-record-card>b{font-size:13px}
-.free-detail-card{padding:18px 14px;display:grid;justify-items:center;gap:10px;border:1px solid #142b40;border-radius:18px;background:#0b1726;text-align:center}.free-detail-icon{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:#08292b;color:#0ac7b2}.free-detail-card h2{margin:0;font-size:18px}
-.free-progress-ring{width:174px;height:174px;padding:14px;display:grid;place-items:center;border-radius:50%;background:conic-gradient(#0ac7b2 var(--progress),#26364a 0)}.free-progress-ring:before{content:"";grid-area:1/1;width:100%;height:100%;border-radius:50%;background:#0b1726}.free-progress-ring>span{grid-area:1/1;z-index:1;display:grid}.free-progress-ring strong{font-size:28px}.free-progress-ring small{color:#9eb0c4}
-.free-detail-values{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:10px}.free-detail-values span{display:grid}.free-detail-values small{color:#9eb0c4}.free-detail-values strong{font-size:16px}.free-detail-meta{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:10px;border-top:1px solid #142b40}.free-detail-meta span{display:grid;color:#9eb0c4;font-size:10px}.free-detail-meta b{margin-top:3px;color:#f7fbff;font-size:12px}
+.free-record-card{min-height:92px;padding:12px 13px;display:grid;grid-template-columns:1fr auto;align-items:start;gap:10px;border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-surface);color:var(--finva-text);text-align:left}
+.free-record-card>span{min-width:0;display:grid;gap:5px}.free-record-card strong{font-size:13px}.free-record-card small{color:var(--finva-muted);font-size:11px}.free-record-card em{display:flex;align-items:center;gap:3px;color:var(--finva-mint);font-size:10px;font-style:normal;font-weight:750}.free-record-card>b{font-size:13px}
+.free-detail-card{padding:18px 14px;display:grid;justify-items:center;gap:10px;border:1px solid var(--finva-line);border-radius:18px;background:var(--finva-surface);text-align:center}.free-detail-icon{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:var(--finva-tint-mint);color:var(--finva-mint)}.free-detail-card h2{margin:0;font-size:18px}
+.free-progress-ring{width:174px;height:174px;padding:14px;display:grid;place-items:center;border-radius:50%;background:conic-gradient(var(--finva-mint) var(--progress),var(--finva-line-strong) 0)}.free-progress-ring:before{content:"";grid-area:1/1;width:100%;height:100%;border-radius:50%;background:var(--finva-surface)}.free-progress-ring>span{grid-area:1/1;z-index:1;display:grid}.free-progress-ring strong{font-size:28px}.free-progress-ring small{color:var(--finva-muted)}
+.free-detail-values{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:10px}.free-detail-values span{display:grid}.free-detail-values small{color:var(--finva-muted)}.free-detail-values strong{font-size:16px}.free-detail-meta{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:10px;border-top:1px solid var(--finva-line)}.free-detail-meta span{display:grid;color:var(--finva-muted);font-size:10px}.free-detail-meta b{margin-top:3px;color:var(--finva-text);font-size:12px}
 
 /* More and settings */
-.free-section-card,.free-menu-card,.free-profile-card{overflow:hidden;border:1px solid #142b40;border-radius:16px;background:#0b1726}
-.free-section-card>header{min-height:42px;padding:0 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #142b40}.free-section-card>header strong{font-size:12px}.free-section-card>header button{border:0;background:transparent;color:#0ac7b2;font-size:10px;font-weight:750}
-.free-saving-row{min-height:64px;padding:10px 12px;display:grid;grid-template-columns:36px 1fr auto;align-items:center;gap:10px}.free-saving-row strong,.free-saving-row small{display:block}.free-saving-row strong{font-size:12px}.free-saving-row small{margin-top:3px;color:#9eb0c4;font-size:10px}.free-saving-row b{font-size:12px}
-.free-menu-row{width:100%;min-height:62px;padding:9px 12px;display:grid;grid-template-columns:36px 1fr auto;align-items:center;gap:10px;border:0;border-bottom:1px solid #142b40;background:transparent;color:#f7fbff;text-align:left}.free-menu-row:last-child{border:0}.free-menu-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#0f1f33;color:#0ac7b2}.free-menu-row strong,.free-menu-row small{display:block}.free-menu-row strong{font-size:12px}.free-menu-row small{margin-top:3px;color:#9eb0c4;font-size:10px}.free-menu-row>svg{color:#698096}
-.free-profile-card{min-height:74px;padding:11px 12px;display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:11px}.free-profile-card>span{width:46px;height:46px;display:grid;place-items:center;border-radius:15px;background:#0f1f33;color:#0ac7b2;font-weight:850}.free-profile-card strong,.free-profile-card small{display:block}.free-profile-card small{margin-top:3px;color:#9eb0c4;font-size:10px}
-.free-settings-group{display:grid;gap:7px}.free-settings-group>small{color:#9eb0c4;font-size:10px;font-weight:800;letter-spacing:.08em}.free-settings-group .appearance-card{border:1px solid #142b40;border-radius:16px;background:#0b1726;box-shadow:none}
-.free-logout-button{min-height:48px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid rgba(245,64,94,.35);border-radius:14px;background:#1f1217;color:#ff8195;font-weight:800}
+.free-section-card,.free-menu-card,.free-profile-card{overflow:hidden;border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-surface)}
+.free-section-card>header{min-height:42px;padding:0 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--finva-line)}.free-section-card>header strong{font-size:12px}.free-section-card>header button{border:0;background:transparent;color:var(--finva-mint);font-size:10px;font-weight:750}
+.free-saving-row{min-height:64px;padding:10px 12px;display:grid;grid-template-columns:36px 1fr auto;align-items:center;gap:10px}.free-saving-row strong,.free-saving-row small{display:block}.free-saving-row strong{font-size:12px}.free-saving-row small{margin-top:3px;color:var(--finva-muted);font-size:10px}.free-saving-row b{font-size:12px}
+.free-menu-row{width:100%;min-height:62px;padding:9px 12px;display:grid;grid-template-columns:36px 1fr auto;align-items:center;gap:10px;border:0;border-bottom:1px solid var(--finva-line);background:transparent;color:var(--finva-text);text-align:left}.free-menu-row:last-child{border:0}.free-menu-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:var(--finva-raised);color:var(--finva-mint)}.free-menu-row strong,.free-menu-row small{display:block}.free-menu-row strong{font-size:12px}.free-menu-row small{margin-top:3px;color:var(--finva-muted);font-size:10px}.free-menu-row>svg{color:#698096}
+.free-profile-card{min-height:74px;padding:11px 12px;display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:11px}.free-profile-card>span{width:46px;height:46px;display:grid;place-items:center;border-radius:15px;background:var(--finva-raised);color:var(--finva-mint);font-weight:850}.free-profile-card strong,.free-profile-card small{display:block}.free-profile-card small{margin-top:3px;color:var(--finva-muted);font-size:10px}
+.free-settings-group{display:grid;gap:7px}.free-settings-group>small{color:var(--finva-muted);font-size:10px;font-weight:800;letter-spacing:.08em}.free-settings-group .appearance-card{border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-surface);box-shadow:none}
+.free-logout-button{min-height:48px;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid rgba(245,64,94,.35);border-radius:14px;background:var(--finva-tint-danger);color:var(--finva-coral-soft);font-weight:800}
 
 /* Existing secondary Free screens remain on the same design system. */
 .native-product--finva.native-plan--free :is(.hero,.mobile-page-heading){min-height:0;margin:0;padding:0 0 4px;background:transparent;border:0;box-shadow:none}
-.native-product--finva.native-plan--free :is(.hero,.mobile-page-heading) h1{margin:4px 0;color:#f7fbff;font-size:20px}.native-product--finva.native-plan--free :is(.hero,.mobile-page-heading) p,.native-product--finva.native-plan--free .mobile-page-heading>span{color:#9eb0c4;font-size:11px}
-.native-product--finva.native-plan--free :is(.panel,.card,.mobile-panel,.situation-card,.profile-completeness-card){border:1px solid #142b40;border-radius:16px;background:#0b1726;color:#f7fbff;box-shadow:none}
-.native-product--finva.native-plan--free .movement-table{padding:0;overflow:hidden}.native-product--finva.native-plan--free .movement-row{min-height:64px;padding:10px 12px;border-color:#142b40}.native-product--finva.native-plan--free .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.native-product--finva.native-plan--free :is(.hero,.mobile-page-heading) h1{margin:4px 0;color:var(--finva-text);font-size:20px}.native-product--finva.native-plan--free :is(.hero,.mobile-page-heading) p,.native-product--finva.native-plan--free .mobile-page-heading>span{color:var(--finva-muted);font-size:11px}
+.native-product--finva.native-plan--free :is(.panel,.card,.mobile-panel,.situation-card,.profile-completeness-card){border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-surface);color:var(--finva-text);box-shadow:none}
+.native-product--finva.native-plan--free .movement-table{padding:0;overflow:hidden}.native-product--finva.native-plan--free .movement-row{min-height:64px;padding:10px 12px;border-color:var(--finva-line)}.native-product--finva.native-plan--free .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 
 /* Figma bottom navigation: 366 × 58. */
-.native-product--finva.native-plan--free .native-bottom-nav{left:50%;right:auto;bottom:max(6px,env(safe-area-inset-bottom));width:min(calc(100% - 36px),366px);min-height:58px;padding:6px 4px;transform:translateX(-50%);gap:2px;border:1px solid #142b40;border-radius:20px;background:#0f1f33;box-shadow:0 12px 30px rgba(0,0,0,.34);backdrop-filter:blur(20px)}
-.native-product--finva.native-plan--free .native-bottom-nav>button{min-height:44px;padding:3px 2px;border-radius:12px;color:#9eb0c4;background:transparent}.native-product--finva.native-plan--free .native-bottom-nav>button::before{display:none}.native-product--finva.native-plan--free .native-bottom-nav>button.active{color:#f7fbff;background:#08292b}.native-product--finva.native-plan--free .native-bottom-nav>button.active .native-nav-icon{color:#0ac7b2}.native-product--finva.native-plan--free .native-nav-icon{min-height:21px}.native-product--finva.native-plan--free .native-nav-icon svg{width:20px;height:20px}.native-product--finva.native-plan--free .native-nav-label{font-size:var(--finva-nav-label-size);letter-spacing:-.01em}
-@media(min-width:500px){.native-product--finva.native-plan--free .mobile-app-shell{border-inline:1px solid #142b40}}
+.native-product--finva.native-plan--free .native-bottom-nav{left:50%;right:auto;bottom:max(6px,env(safe-area-inset-bottom));width:min(calc(100% - 36px),366px);min-height:58px;padding:6px 4px;transform:translateX(-50%);gap:2px;border:1px solid var(--finva-line);border-radius:20px;background:var(--finva-raised);box-shadow:0 12px 30px rgba(0,0,0,.34);backdrop-filter:blur(20px)}
+.native-product--finva.native-plan--free .native-bottom-nav>button{min-height:44px;padding:3px 2px;border-radius:12px;color:var(--finva-muted);background:transparent}.native-product--finva.native-plan--free .native-bottom-nav>button::before{display:none}.native-product--finva.native-plan--free .native-bottom-nav>button.active{color:var(--finva-text);background:var(--finva-tint-mint)}.native-product--finva.native-plan--free .native-bottom-nav>button.active .native-nav-icon{color:var(--finva-mint)}.native-product--finva.native-plan--free .native-nav-icon{min-height:21px}.native-product--finva.native-plan--free .native-nav-icon svg{width:20px;height:20px}.native-product--finva.native-plan--free .native-nav-label{font-size:var(--finva-nav-label-size);letter-spacing:-.01em}
+@media(min-width:500px){.native-product--finva.native-plan--free .mobile-app-shell{border-inline:1px solid var(--finva-line)}}
+/* Movimientos → Deudas: read-only summary of the Debts list (all plans). */
+.transaction-debts{display:grid;gap:8px}
+.transaction-debts>header{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:12px 13px;border:1px solid var(--finva-line);border-radius:16px;background:var(--finva-tint-danger)}
+.transaction-debts>header>span{display:grid;gap:2px;min-width:0}
+.transaction-debts>header small{color:var(--finva-coral);font-size:10px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+.transaction-debts>header strong{font-size:22px;line-height:1.15;letter-spacing:-.03em;overflow-wrap:anywhere}
+.transaction-debts>header em{color:var(--finva-muted);font-size:11px;font-style:normal}
+.transaction-debts>header button{flex:0 0 auto;min-height:44px;padding:0 12px;display:flex;align-items:center;gap:4px;border:1px solid var(--finva-line-strong);border-radius:12px;background:var(--finva-surface);color:var(--finva-text);font-size:12px;font-weight:750}
+.free-list-title{margin:6px 2px 0;color:var(--finva-muted);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
