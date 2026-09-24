@@ -30,6 +30,7 @@ from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import resolve_candidate, reevaluate_workspace_candidates
+from backend.user_product.legacy_owner_mail import legacy_transaction_for_message, mark_legacy_duplicate
 from backend.user_product import mail_oauth
 from backend.user_product.mail_copy import localized_parse_reason
 from backend.user_product.gmail_consent import gmail_consent_status, require_gmail_consent
@@ -693,6 +694,7 @@ def _adapt_identity(value: str, display_name: str) -> str:
 def _insert_finva_candidate(
     conn, *, email_message_id: int, connection: dict[str, Any],
     candidate: dict[str, Any], statement_document_id: int | None = None,
+    gmail_message_id: str | None = None,
 ) -> dict[str, Any]:
     row = conn.execute(
         """INSERT INTO finva_email_candidates(
@@ -739,7 +741,12 @@ def _insert_finva_candidate(
         conn, candidate_id=candidate_id, candidate=candidate,
         workspace_id=str(connection["workspace_id"]),
     )
-    return resolve_candidate(conn, candidate_id)
+    resolution = resolve_candidate(conn, candidate_id)
+    if gmail_message_id and legacy_transaction_for_message(
+        conn, workspace_id=str(connection["workspace_id"]), provider_message_id=gmail_message_id,
+    ):
+        resolution = mark_legacy_duplicate(conn, candidate_id=candidate_id, resolution=resolution)
+    return resolution
 
 
 def _process_message(service, connection: dict[str, Any], message_id: str) -> str:
@@ -917,6 +924,7 @@ def _ingest_message(
             resolution = _insert_finva_candidate(
                 conn, email_message_id=int(email_row["id"]), connection=connection,
                 candidate=candidate,
+                gmail_message_id=message_id if _mail_provider(connection) == "gmail" else None,
             )
             status = str(resolution.get("status") or "pending")
         conn.execute("UPDATE finva_email_messages SET status=%s WHERE id=%s", (status, int(email_row["id"])))
