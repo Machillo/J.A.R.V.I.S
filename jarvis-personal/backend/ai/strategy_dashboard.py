@@ -1240,8 +1240,8 @@ def get_additional_card_report() -> dict[str, Any]:
 
     Email-confirmed movements are joined back to email_transaction_candidates so
     the report can use card_last4/card_owner parsed from BAC notifications. This
-    avoids guessing from generic transaction notes and prevents Kenneth's primary
-    card 3131 from appearing in the additional-cards page.
+    avoids guessing from generic transaction notes and keeps the Owner's primary
+    card out of the additional-cards page.
     """
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()

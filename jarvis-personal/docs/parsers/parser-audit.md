@@ -26,10 +26,10 @@ Supported, with synthetic tests:
 
 | Severity | Issue | Fix |
 |---|---|---|
-| HIGH | Amounts without decimals lost three orders of magnitude: `₡15.000` → 15, `CRC 1,234` → 1.23, `CRC 25000` → not parsed | One `AMOUNT_PATTERN` (thousands groups, optional decimals, `(?!\d)`), and `_parse_number` treats a single separator followed by 3 digits as thousands |
+| HIGH | Amounts without decimals lost three orders of magnitude: `₡15.000` → 15, `CRC 1,234` → 1.23, `CRC 25000` → not parsed | One `AMOUNT_PATTERN` (thousands groups incl. space/NBSP, optional decimals, `(?!\d)`). `_parse_number` treats a single separator followed by 3 digits as thousands. Free-text searches try grouped/cents amounts first (`STRICT_AMOUNT_PATTERN`), so a count like "$ 3 por comisión" never beats "₡15.000,00" |
 | HIGH | Amounts written as "dólares" were stored as colones (`_currency_code` compared uppercase text with a lowercased string) | Compare against the normalized lowercase `dolar` |
 | MEDIUM | The fallback transaction date used the UTC day: a 19:30 purchase became "tomorrow" | `_local_date` converts to America/Costa_Rica. A date written in the email still wins |
-| MEDIUM | Gmail matched bank senders by substring on the raw `From` header, so a forged display name (`"alerta@baccredomatic.com" <attacker@…>`) reached bank templates, including auto-saved paths | `bank_sender_allowed` requires the exact address or approved domain from `FINVA_QUERY`, which is the rule Outlook already enforced |
+| MEDIUM | Gmail matched bank senders by substring on the raw `From` header, so a forged display name (`"alerta@baccredomatic.com" <attacker@…>`) reached bank templates, including auto-saved paths | `bank_sender_allowed` requires exactly one address: the one inside `<…>` when present. A display name containing `@`, or a second sender, is rejected. The address must match an approved address/domain from `FINVA_QUERY`, the rule Outlook already enforced. **Check the production `FINVA_GMAIL_QUERY`:** the allowlist is derived from its `from:` terms, and a quoted or grouped override would silently ignore that bank. |
 | MEDIUM | Two concurrent syncs of the same new message raised `IntegrityError` and aborted the whole sync | `ON CONFLICT DO NOTHING` plus `"duplicate"` |
 | PRIVACY | The repository is **public**, and fixtures contained the Owner's real payroll data (full name, identification, salary, employer number) and statement references | Replaced with synthetic values. **Purging git history is a HUMAN GATE**: it needs a force-push/rewrite, or accepting the exposure |
 
@@ -45,6 +45,8 @@ Battery: `backend/email_monitor/test_parser_battery.py` (44 cases). 16 of them f
   - Users' counterparties named like the Owner's family get normalized, and a user whose card last4 equals the Owner's gets "internal transfer" hints. Those hints only become reviewable transfers, never automatic decisions.
   - Moving them to per-workspace configuration is a refactor with Owner regression risk.
 - **LOW:**
+  - A message the sender gate rejects is stored as `ignored` and never retried, like every other ignored message.
+  - The Owner pipeline (`email_monitor/service.py`) still detects banks by substring. It shares the amount fixes but not the Gmail sender gate.
   - USD is converted at a fixed rate of 495, and `transactions` stores no currency.
   - An `ignored` message is never re-parsed after a parser upgrade.
   - The Outlook `since` filter and `canonical_candidate` still use UTC dates.

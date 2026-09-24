@@ -5,8 +5,8 @@ def test_statement_adapter_emits_canonical_source_and_safe_account_reference():
     text = """TARJETA DE CREDITO
 Fecha de corte: 21-AGO-26
 B) Detalle de compras del periodo
-************3131 PERSONA
-072799100801 25-JUL-26 COMERCIO CRC 5,340.00
+************9001 PERSONA
+100000000001 25-JUL-26 COMERCIO CRC 5,340.00
 Total de compras del periodo 5,340.00"""
     rows = parse_statement_movements("bac", text)
     candidate = statement_candidate(
@@ -15,9 +15,9 @@ Total de compras del periodo 5,340.00"""
     )
     assert candidate["source_type"] == "statement"
     assert candidate["source_provider"] == "pdf"
-    assert candidate["source_account_reference"] == "3131"
+    assert candidate["source_account_reference"] == "9001"
     assert candidate["movement_kind"] == "card_purchase"
-    assert candidate["external_reference"] == "072799100801"
+    assert candidate["external_reference"] == "100000000001"
     assert "PERSONA" not in str(candidate["raw_payload"])
 
 

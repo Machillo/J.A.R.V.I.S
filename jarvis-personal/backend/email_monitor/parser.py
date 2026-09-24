@@ -401,7 +401,10 @@ def _label_value(text: str, label: str, max_lookahead: int = 8) -> str | None:
 # Thousands-grouped amounts with optional decimals ("15.000", "1,234.56", "₡15.000,00")
 # or plain digits with optional decimals ("25000", "12.50"). (?!\d) stops "15.000"
 # from matching as "15.00".
-AMOUNT_PATTERN = r"\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d+(?:[.,]\d{1,2})?(?!\d)"
+AMOUNT_PATTERN = r"\d{1,3}(?:[.,  ]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d+(?:[.,]\d{1,2})?(?!\d)"
+# Amounts that cannot be a count or an index: thousands-grouped or with cents.
+# Free-text searches try these first so "$ 3 por comisión y ₡15.000,00" is 15.000.
+STRICT_AMOUNT_PATTERN = r"\d{1,3}(?:[.,  ]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d+[.,]\d{2}(?!\d)"
 
 
 def _parse_number(raw: str) -> float | None:
@@ -463,18 +466,20 @@ def _parse_labeled_amount_value(value: str | None) -> tuple[float | None, str]:
 
 
 def _parse_context_amount(text: str) -> tuple[float | None, str]:
-    patterns = [
-        rf"por\s+un\s+monto\s+de\s*(?P<amount>{AMOUNT_PATTERN})\s*(?P<currency>colones?|CRC|USD|₡|¢|\$)?",
-        rf"monto\s*[:\-]?\s*(?P<currency>CRC|USD|₡|¢|\$|colones?)?\s*(?P<amount>{AMOUNT_PATTERN})",
-        rf"(?P<currency>₡|¢|CRC|USD|\$)\s*(?P<amount>{AMOUNT_PATTERN})",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text or "", re.I)
-        if match:
-            amount = _parse_number(match.group("amount"))
-            currency = _currency_code(match.groupdict().get("currency") or match.group(0))
-            if amount is not None and 0 < amount < 20_000_000:
-                return amount, currency
+    currency = r"(?P<currency>colones?|CRC|USD|₡|¢|\$|d[oó]lares?)"
+    for amount in (STRICT_AMOUNT_PATTERN, AMOUNT_PATTERN):
+        patterns = [
+            rf"por\s+un\s+monto\s+de\s*(?P<amount>{amount})\s*{currency}?",
+            rf"monto\s*[:\-]?\s*{currency}?\s*(?P<amount>{amount})",
+            rf"(?P<currency>₡|¢|CRC|USD|\$)\s*(?P<amount>{amount})",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text or "", re.I)
+            if match:
+                value = _parse_number(match.group("amount"))
+                code = _currency_code(match.groupdict().get("currency") or match.group(0))
+                if value is not None and 0 < value < 20_000_000:
+                    return value, code
     return None, "CRC"
 
 

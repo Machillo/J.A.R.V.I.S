@@ -39,7 +39,16 @@ def test_labeled_amounts_keep_their_magnitude(raw, amount, currency):
     ("Monto: CRC 3.500", 3_500),
     ("Monto: ₡10,000.00", 10_000),
     ("Se debitaron ₡ 2.000 de su cuenta", 2_000),
+    ("se debita $ 3 por comisión y ₡15.000,00", 15_000),     # a small count never beats a real amount
+    ("Referencia 123 monto 1 de 2: ₡3.000,00", 3_000),
+    ("₡ 15 000,00", 15_000),                                 # space-grouped thousands
+    ("₡ 1 500,00", 1_500),
+    ("Monto: CRC 25000", 25_000),                            # plain integer only when nothing stricter exists
 ])
+
+
+def test_dolares_wording_in_free_text_is_usd():
+    assert p._parse_context_amount("por un monto de 12,50 dólares") == (12.5, "USD")
 def test_context_amounts_keep_their_magnitude(text, amount):
     assert p._parse_context_amount(text)[0] == amount
 
@@ -73,6 +82,10 @@ def test_fallback_dates_are_costa_rica_calendar_days():
     ("Banco Popular <avisos@bancopopular.fi.cr>", True),
     ("MultiMoney <multimoneycr@multimoney.com>", True),
     ('"alerta@baccredomatic.com" <attacker@example.com>', False),  # forged display name
+    ("alerta@baccredomatic.com <attacker@example.com>", False),    # unquoted forged display name
+    ("alerta@baccredomatic.com, attacker@example.com", False),     # two senders
+    ("BAC <notificacion@notificacionesbaccr.com>, attacker@example.com", False),
+    ("<attacker@example.com><notificacion@notificacionesbaccr.com>", False),
     ("Notificaciones <other@notificacionesbaccr.com>", False),      # unknown mailbox on a bank domain
     ("x@evilbancopopular.fi.cr", False),                              # look-alike domain
     ("", False),

@@ -2,21 +2,21 @@ from backend.email_monitor.personal_rules import apply_workspace_email_rules
 
 
 ACCOUNTS = [
-    {"account_key": "multimoney_6126", "account_last4": "6126", "ownership": "own", "display_name": "MultiMoney"},
-    {"account_key": "bac_2572", "account_last4": "2572", "ownership": "own", "display_name": "BAC"},
-    {"account_key": "sidey_7679", "account_last4": "7679", "ownership": "counterparty", "display_name": "Sidey"},
+    {"account_key": "multimoney_0001", "account_last4": "0001", "ownership": "own", "display_name": "MultiMoney"},
+    {"account_key": "bac_0003", "account_last4": "0003", "ownership": "own", "display_name": "BAC"},
+    {"account_key": "ana_0002", "account_last4": "0002", "ownership": "counterparty", "display_name": "Ana"},
 ]
 
 RULES = [
     {
         "id": 1,
-        "name": "lavanderia_sidey",
+        "name": "lavanderia_ana",
         "priority": 200,
         "concept_pattern": "ropa",
         "match_mode": "exact",
         "direction": "out",
-        "origin_account_key": "multimoney_6126",
-        "destination_account_key": "sidey_7679",
+        "origin_account_key": "multimoney_0001",
+        "destination_account_key": "ana_0002",
         "action": "classify",
         "output_description": "Lavado y doblado de ropa",
         "transaction_type": "expense",
@@ -55,8 +55,8 @@ def test_own_account_transfer_is_ignored():
         "email_kind": "movement",
         "description": "INVERSIÓN VISTA SMART COL",
         "movement_direction": "out",
-        "origin_account": "CRC CR42****2572",
-        "destination_account": "CRC CR74****6126",
+        "origin_account": "CRC CR00****0003",
+        "destination_account": "CRC CR00****0001",
     }
     result = apply_workspace_email_rules(_Conn(), "workspace", parsed)
     assert result["email_kind"] == "ignored"
@@ -69,8 +69,8 @@ def test_exact_counterparty_rule_can_enable_auto_commit():
         "email_kind": "movement",
         "description": "Ropa",
         "movement_direction": "out",
-        "origin_account": "KENNETH / CRC CR74****6126",
-        "destination_account": "SIDEY / CRC CR44****7679",
+        "origin_account": "MARIA / CRC CR00****0001",
+        "destination_account": "ANA / CRC CR00****0002",
         "confidence": 0.97,
     }
     result = apply_workspace_email_rules(_Conn(), "workspace", parsed)

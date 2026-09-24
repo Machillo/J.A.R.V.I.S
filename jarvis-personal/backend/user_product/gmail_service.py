@@ -8,7 +8,7 @@ import os
 import re
 import secrets
 from datetime import date, datetime, timezone
-from email.utils import parseaddr, parsedate_to_datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlencode
 
@@ -98,7 +98,19 @@ def _list_message_page(service, query: str, *, page_token: str | None, limit: in
 
 def bank_sender_allowed(sender: str) -> bool:
     """Exact bank address (or subdomain of an approved bank domain) from FINVA_QUERY."""
-    _name, address = parseaddr(sender or "")
+    header = (sender or "").strip()
+    brackets = re.findall(r"<([^<>]*)>", header)
+    if len(brackets) > 1:
+        return False
+    if brackets:
+        display, _, trailing = header.partition("<")
+        # A display name holding an address ("alerta@banco <x@evil>") or a second
+        # recipient after the brackets is never a genuine bank notification.
+        if "@" in display or trailing.split(">", 1)[-1].strip():
+            return False
+        address = brackets[0]
+    else:
+        address = header
     address = address.strip().lower()
     if not re.fullmatch(r"[a-z0-9_.+\-]+@[a-z0-9.\-]+", address):
         return False
