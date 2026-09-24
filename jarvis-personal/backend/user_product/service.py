@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from backend.auth.current_user import get_current_account_id, get_current_user_id, get_current_workspace_id
 from backend.auth.saas import require_feature
 from backend.core.database import get_connection
+from backend.core.idempotency import mark_applied
 from backend.finance.service import (
     get_expenses,
     get_payroll_events,
@@ -136,6 +137,7 @@ def create_income(payload):
             (user_id, workspace_id, payload.amount, (payload.description or payload.category or "Ingreso").strip(),
              (payload.category or "Otros ingresos").strip(), payload.entry_date),
         ).fetchone()
+        mark_applied(conn)
         conn.commit()
     return {**row, "description": row.get("source"), "entry_date": str(row.get("created_at"))[:10]}
 
@@ -154,6 +156,7 @@ def update_income(income_id: int, payload):
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Ingreso no encontrado.")
+        mark_applied(conn)
         conn.commit()
     return {**row, "description": row.get("source"), "entry_date": str(row.get("created_at"))[:10]}
 
@@ -187,6 +190,7 @@ def create_expense_entry(payload):
                RETURNING id,category,expense_type,description,amount,user_id,workspace_id,created_at""",
             (category, expense_type, payload.description or "", payload.amount, user_id, workspace_id, payload.entry_date),
         ).fetchone()
+        mark_applied(conn)
         conn.commit()
     return {**row, "entry_date": payload.entry_date or str(row.get("created_at") or "")[:10]}
 
@@ -205,6 +209,7 @@ def update_expense(expense_id: int, payload):
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Gasto no encontrado.")
+        mark_applied(conn)
         conn.commit()
     return {**row, "entry_date": str(row.get("created_at"))[:10]}
 
@@ -261,6 +266,7 @@ def create_user_debt(payload):
             (user_id, payload.name.strip(), payload.debt_type, max(total, remaining), remaining, monthly, interest,
              payload.term_months, payload.payment_day, monthly > 0, payload.next_payment_date, workspace_id),
         ).fetchone()
+        mark_applied(conn)
         conn.commit()
     return row
 
@@ -293,6 +299,7 @@ def pay_user_debt(debt_id: int, amount: float):
             (user_id, workspace_id, date.today().isoformat(), f"Pago {debt['name']}", applied,
              debt["name"], f"debt_id:{debt_id}"),
         )
+        mark_applied(conn)
         conn.commit()
     return {"status": "OK", "debt_id": debt_id, "payment_amount": applied, "new_remaining_amount": new_remaining}
 
@@ -329,6 +336,7 @@ def update_user_debt(debt_id: int, payload):
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Deuda no encontrada.")
+        mark_applied(conn)
         conn.commit()
     return row
 
@@ -368,6 +376,7 @@ def create_user_goal(payload):
             (payload.name.strip(), payload.target_amount, payload.current_amount, payload.target_date,
              payload.priority, user_id, workspace_id),
         ).fetchone()
+        mark_applied(conn)
         conn.commit()
     return row
 
@@ -385,6 +394,7 @@ def update_user_goal(goal_id: int, payload):
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Meta no encontrada.")
+        mark_applied(conn)
         conn.commit()
     return row
 
@@ -413,6 +423,7 @@ def contribute_user_goal(goal_id: int, payload):
                RETURNING id,name,target_amount,current_amount,target_date,priority,status""",
             (current, status, goal_id, workspace_id),
         ).fetchone()
+        mark_applied(conn)
         conn.commit()
     return row
 
@@ -489,6 +500,7 @@ def create_savings_plan(payload):
             (account_id, workspace_id, payload.name.strip(), payload.monthly_amount, payload.saved_amount,
              payload.start_date, payload.end_date),
         ).fetchone()
+        mark_applied(conn)
         conn.commit()
     return row
 
@@ -507,6 +519,7 @@ def update_savings_plan(plan_id: int, payload):
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Ahorro programado no encontrado.")
+        mark_applied(conn)
         conn.commit()
     return row
 
@@ -533,6 +546,7 @@ def contribute_savings_plan(plan_id: int, payload):
                RETURNING id,name,monthly_amount,saved_amount,start_date,end_date,status,created_at,updated_at""",
             (payload.amount, plan_id, workspace_id),
         ).fetchone()
+        mark_applied(conn)
         conn.commit()
     return row
 
@@ -575,6 +589,7 @@ def create_user_transaction(payload):
             (payload.transaction_date, payload.description.strip(), payload.amount, payload.transaction_type,
              category, payload.notes or "", user_id, workspace_id),
         ).fetchone()
+        mark_applied(conn)
         conn.commit()
     return row
 
@@ -675,6 +690,7 @@ def update_financial_situation(payload):
                 payload.strategy_preference, payload.discretionary_monthly_minimum,
             ),
         )
+        mark_applied(conn)
         conn.commit()
     return get_financial_situation()
 

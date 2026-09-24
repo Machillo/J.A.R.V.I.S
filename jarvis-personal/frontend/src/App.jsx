@@ -1,12 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
-import { flushPendingOperations, prepareLogout } from "./lib/operationRecovery";
+import { clearPendingOperations, flushPendingOperations, prepareLogout } from "./lib/operationRecovery";
 import Login from "./pages/Login";
 import FinvaOnboarding from "./pages/FinvaOnboarding";
 import ProfileSetup from "./pages/ProfileSetup";
 import LegalConsent from "./pages/LegalConsent";
 import UsersApp from "./users/UsersApp";
 import { getMe, getOwnerBridgeToken, setOwnerBridgeToken } from "./services/jarvisApi";
+import { deleteMyAccount } from "./users/services/jarvisApi";
 import { supabase } from "./lib/supabase";
 import { registerNativeAuthListener } from "./lib/nativeAuth";
 import { identifyTelemetryUser, trackEvent } from "./lib/telemetry";
@@ -37,6 +38,8 @@ export default function App() {
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [identityError, setIdentityError] = useState("");
+  const [deletionPending, setDeletionPending] = useState(false);
+  const [finishingDeletion, setFinishingDeletion] = useState(false);
   const [ownerBridgeMode, setOwnerBridgeMode] = useState(false);
   const [nativeAuthError, setNativeAuthError] = useState("");
   const [releasePolicy, setReleasePolicy] = useState(null);
@@ -121,7 +124,9 @@ export default function App() {
         if (!cancelled) setCurrentUser(profile);
       })
       .catch((error) => {
-        if (!cancelled) setIdentityError(error?.message || tx("No pudimos resolver tu cuenta.", "We couldn’t load your account."));
+        if (cancelled) return;
+        setDeletionPending(error?.code === "account_deletion_pending");
+        setIdentityError(error?.message || tx("No pudimos resolver tu cuenta.", "We couldn’t load your account."));
       });
 
     return () => { cancelled = true; };
@@ -196,6 +201,19 @@ export default function App() {
         <strong>{tx("No pudimos cargar tu cuenta.", "We couldn’t load your account.")}</strong>
         <span>{identityError || tx("Intentá nuevamente o escribinos desde soporte.", "Try again or contact support.")}</span>
         <div className="boot-actions">
+          {deletionPending && <button type="button" disabled={finishingDeletion} onClick={async () => {
+            // The account is already emptied; only the login removal is left.
+            setFinishingDeletion(true);
+            try {
+              await deleteMyAccount();
+              clearPendingOperations();
+              await supabase.auth.signOut({ scope: "local" });
+            } catch (error) {
+              setIdentityError(error?.message || tx("No pudimos terminar la eliminación. Intentá de nuevo.", "We couldn’t finish the deletion. Try again."));
+            } finally {
+              setFinishingDeletion(false);
+            }
+          }}>{finishingDeletion ? tx("Terminando…", "Finishing…") : tx("Terminar eliminación", "Finish deletion")}</button>}
           <button type="button" onClick={() => window.location.reload()}>{tx("Intentar de nuevo", "Try again")}</button>
           <button type="button" onClick={() => { openSupport({ kind: "problem", screen: "inicio", summary: tx("No se pudo cargar la cuenta.", "The account could not be loaded.") }); window.location.reload(); }}>{tx("Abrir soporte", "Open support")}</button>
           <button type="button" onClick={() => supabase.auth.signOut()}>{tx("Cerrar sesión", "Log out")}</button>

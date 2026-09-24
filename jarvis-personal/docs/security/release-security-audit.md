@@ -26,14 +26,19 @@ Scope: current `main` plus the open overnight PRs. Method: read-only review of e
 
 ## Open: need design or a human decision
 
-- **MEDIUM: an account deletion can be half-done.** The Supabase Auth user is deleted before the database commit (`backend/auth/service.py`, `delete_current_account`).
-  - If the commit fails after Auth accepted the deletion, the login is gone but the data remains.
-  - Signing in again with the same Google account re-attaches that data (identity re-binding by email).
-  - Proposed fix: commit a "pending deletion" tombstone first, then run an idempotent retry of the Auth deletion and cleanup, and refuse login for tombstoned accounts. Needs a fault-injection test.
-- **MEDIUM: offline retries can double-write in a narrow window.** The idempotency record (`backend/core/idempotency.py`) is committed separately from the business write.
-  - A crash between the write and `complete_operation` makes the key stale after 2 minutes, and the client retries the write.
-  - Proposed fix: write the idempotency row in the same transaction, or add a unique `(workspace_id, idempotency_key)` on financial rows. This needs a migration (**HUMAN GATE for production**).
-- **MEDIUM: identity is re-bound by email on every login** (known from #207 and #214). Bind `supabase_user_id` once and reject mismatches.
+- **RESOLVED in the security-hardening PR (was MEDIUM): account deletion could be half-done.**
+  - One transaction now marks `allowed_users.status='deletion_pending'` and deletes the data. The data includes Vault secrets, payroll, rows that hang from `allowed_users`, the account cascade and legacy users.
+  - The Supabase Auth user is deleted afterwards. If that fails, the response is 409 `account_deletion_pending`: the app offers "Finish deletion", and `DELETE /auth/me` is the only request a pending account can make.
+  - If the tombstone survives, a re-signup replaces it only when Supabase confirms the old Auth user is gone (admin GET 404).
+  - No migration is needed. The fault-injection tests are in `backend/auth/test_identity_and_deletion_hardening.py`.
+- **RESOLVED in the security-hardening PR (was MEDIUM): offline retries could double-write.**
+  - Every recoverable financial service marks its idempotency reservation `completed` inside its own transaction (`mark_applied`), guarded by a lease, right before its single commit.
+  - Crashes, completion failures and slow superseded attempts can no longer produce a second effect.
+  - No migration is needed. Tests are in `backend/core/test_idempotency_atomicity.py`.
+- **RESOLVED in the security-hardening PR (was MEDIUM): identity re-bound by email.**
+  - An account bound to a Supabase user id is never re-bound to another id.
+  - First binds are conditional, and mismatches fail closed with a generic 403.
+  - Recovery for a legitimately re-created Supabase user is manual (HUMAN GATE).
 - **LOW:**
   - No rate limiting anywhere (edge or middleware).
   - The owner-bridge key both authenticates and signs 12 h non-revocable tokens.

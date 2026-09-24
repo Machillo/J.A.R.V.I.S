@@ -37,14 +37,17 @@ from backend.product_ops.routes import router as product_ops_router
 from backend.financial_lifecycle.routes import router as financial_lifecycle_router
 from backend.core.idempotency import (
     IDEMPOTENCY_KEY_PATTERN,
+    OperationSuperseded,
+    activate_operation,
     complete_operation,
+    deactivate_operation,
     is_recoverable_operation,
     request_hash,
     reserve_operation,
     safe_abandon_operation,
 )
 from backend.core.feature_flags import disabled_feature_for_request
-from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language
+from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language, use_language
 
 app = FastAPI(title="Jarvis Core")
 logger = logging.getLogger("jarvis.api")
@@ -64,6 +67,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The offline queue reads these to tell "still processing" from a final failure.
+    expose_headers=["X-Idempotency-Status", "X-Idempotency-Replayed", "X-Request-ID", "Retry-After"],
 )
 
 
@@ -156,6 +161,20 @@ async def safe_http_error_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content=_internal_error_payload(error_id))
 
 
+def _superseded_response(headers: dict | None = None) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "Este cambio todavía se está procesando."},
+        headers={**(headers or {}), "X-Idempotency-Status": "processing", "Retry-After": "2"},
+    )
+
+
+@app.exception_handler(OperationSuperseded)
+async def superseded_operation_handler(request: Request, exc: OperationSuperseded):
+    # A newer attempt owns this X-Idempotency-Key; this attempt's write was rolled back.
+    return _superseded_response()
+
+
 @app.exception_handler(Exception)
 async def safe_unhandled_error_handler(request: Request, exc: Exception):
     error_id = _request_id(request)
@@ -221,7 +240,14 @@ async def auth_middleware(request: Request, call_next):
         if access_token.startswith("jarvis-owner:"):
             user = authenticate_owner_bridge_token(access_token.removeprefix("jarvis-owner:").strip())
         else:
-            user = authenticate_access_token(access_token)
+            # auth_middleware runs before language_middleware: resolve the language here so
+            # identity/deletion messages follow Accept-Language.
+            with use_language(language_for_request(request.url.path, request.headers.get("accept-language"))):
+                if request.method == "DELETE" and request.url.path == "/auth/me":
+                    # Only the account deletion itself may run on a deletion_pending account (retry).
+                    user = authenticate_access_token(access_token, allow_deletion_pending=True)
+                else:
+                    user = authenticate_access_token(access_token)
     except Exception as exc:
         status_code = getattr(exc, "status_code", 401)
         detail = getattr(exc, "detail", "No se pudo autenticar el usuario.")
@@ -247,6 +273,7 @@ async def auth_middleware(request: Request, call_next):
     idempotency_key = request.headers.get("X-Idempotency-Key", "").strip()
     idempotency_account = str(user.get("account_id") or "")
     idempotency_reserved = False
+    idempotency_lease = None
 
     if idempotency_key and is_recoverable_operation(request.method, request.url.path):
         if not IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key) or not idempotency_account:
@@ -304,9 +331,18 @@ async def auth_middleware(request: Request, call_next):
                 headers={**cors_headers, "X-Request-ID": request_id},
             )
         idempotency_reserved = True
+        idempotency_lease = reservation.lease
 
     try:
-        response = await call_next(request)
+        operation_token = (
+            activate_operation(account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
+            if idempotency_reserved else None
+        )
+        try:
+            response = await call_next(request)
+        finally:
+            if operation_token is not None:
+                deactivate_operation(operation_token)
         response.headers["X-Request-ID"] = request_id
         if idempotency_reserved:
             if 200 <= response.status_code < 300 and "application/json" in response.headers.get("content-type", ""):
@@ -315,12 +351,13 @@ async def auth_middleware(request: Request, call_next):
                     complete_operation(
                         account_id=idempotency_account,
                         key=idempotency_key,
+                        lease=idempotency_lease,
                         status_code=response.status_code,
                         body=response_body,
                     )
                 except Exception:
                     logger.exception("Idempotency completion failed id=%s path=%s", request_id, request.url.path)
-                    safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
+                    safe_abandon_operation(account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
                 response_headers = dict(response.headers)
                 response_headers.pop("content-length", None)
                 response = Response(
@@ -329,12 +366,14 @@ async def auth_middleware(request: Request, call_next):
                     headers=response_headers,
                 )
             else:
-                safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
+                safe_abandon_operation(account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
         return response
 
     except Exception as exc:
         if idempotency_reserved:
-            safe_abandon_operation(account_id=idempotency_account, key=idempotency_key)
+            safe_abandon_operation(account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
+        if isinstance(exc, OperationSuperseded):
+            return _superseded_response({**cors_headers, "X-Request-ID": request_id})
         error_id = request_id
         logger.error("Unhandled API error id=%s path=%s error=%s", error_id, request.url.path, _safe_exception_summary(exc))
         return JSONResponse(
