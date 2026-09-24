@@ -31,6 +31,8 @@ const priorityLabel = {
   stabilize: copy("Estabilizar flujo", "Stabilize cash flow"),
   debt: copy("Acelerar deuda", "Accelerate debt payoff"),
   emergency: copy("Construir seguridad", "Build financial security"),
+  goals: copy("Avanzar tus metas", "Advance your goals"),
+  wealth_building: copy("Construir patrimonio", "Build long-term wealth"),
 };
 
 export default function StrategyBasic({ plan = "basic" }) {
