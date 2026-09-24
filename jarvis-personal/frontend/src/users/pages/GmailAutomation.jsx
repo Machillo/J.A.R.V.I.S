@@ -36,6 +36,13 @@ const MAIL_ERRORS = {
   completion_pending: ["No pudimos terminar de conectar {provider} por la conexión. DINCR lo reintentará cuando vuelvas a estar en línea.", "We couldn’t finish connecting {provider} because of the connection. DINCR will retry when you’re back online."],
 };
 
+// Why a movement was not counted again (statement vs notification reconciliation).
+const DUPLICATE_NOTES = {
+  reconciled_with_existing_transaction: () => tx("Este movimiento ya estaba guardado desde otro aviso bancario. DINCR lo reconcilió y no lo contó dos veces.", "This transaction was already saved from another bank notice. DINCR reconciled it and didn’t count it twice."),
+  same_movement_other_source: () => tx("Es el mismo movimiento que otro aviso o estado de cuenta que está por revisar. Revisá ese registro; este no se contará dos veces.", "It’s the same transaction as another notice or statement awaiting review. Review that record; this one won’t be counted twice."),
+  same_statement_row: () => tx("Es una copia de un estado de cuenta que DINCR ya procesó.", "It’s a copy of a statement DINCR already processed."),
+};
+
 function mailErrorMessage(provider, code) {
   const name = provider === "microsoft" ? "Outlook" : "Gmail";
   const [es, en] = MAIL_ERRORS[code] || ["No pudimos conectar {provider}. Intentalo de nuevo en unos minutos.", "We couldn’t connect {provider}. Please try again in a few minutes."];
@@ -255,7 +262,7 @@ export default function GmailAutomation() {
           <strong>{item.subject || item.description || tx("Movimiento bancario", "Bank transaction")}</strong>
           <small>{item.sender}</small>
           {item.source_type === "statement" && <p className="gmail-resolution-note">{tx("Detectado en un estado de cuenta PDF. Revisalo igual que cualquier otro movimiento antes de guardarlo.", "Detected in a PDF statement. Review it like any other movement before saving it.")}</p>}
-          {item.resolution_reason === "possible_cross_source_match" && <p className="gmail-resolution-note">{tx("Posible coincidencia con una notificación bancaria anterior. DINCR la deja para tu revisión en vez de eliminarla automáticamente.", "Possible match with an earlier bank notification. DINCR leaves it for your review instead of deleting it automatically.")}</p>}
+          {item.resolution_reason === "possible_cross_source_match" && <p className="gmail-resolution-note">{tx("Posible coincidencia con otro aviso bancario o estado de cuenta. DINCR la deja para tu revisión en vez de eliminarla automáticamente.", "Possible match with another bank notice or statement. DINCR leaves it for your review instead of deleting it automatically.")}</p>}
           {item.candidate_id ? edit ? <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); review(item, "accept", { transaction_date: form.get("transaction_date"), description: form.get("description"), amount: Number(form.get("amount")), transaction_type: form.get("transaction_type"), category: categoryValue(form.get("category")) }); }} className="gmail-candidate-editor">
             <input name="description" defaultValue={item.description} required aria-label={tx("Descripción", "Description")}/>
             <div><input name="amount" type="number" step="0.01" min="0.01" defaultValue={item.amount} required aria-label={tx("Monto", "Amount")}/><input name="transaction_date" type="date" defaultValue={item.transaction_date} required aria-label={tx("Fecha", "Date")}/></div>
@@ -264,7 +271,7 @@ export default function GmailAutomation() {
           </form> : <>
             <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>₡{Number(item.amount || 0).toLocaleString()}</b></span></div>
             {item.is_internal_transfer && <p className="gmail-resolution-note">{item.resolution_reason === "paired_owned_transfer" ? tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, ambos quedan revisados sin sumarse a ingresos o gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming reviews both without adding income or expense.") : tx("DINCR encontró ambas cuentas entre las que confirmaste como propias. Al aceptar, no se registrará como gasto ni ingreso.", "DINCR matched both endpoints to accounts you confirmed as yours. Accepting won’t record income or expense.")}</p>}
-            {item.review_status === "duplicate" && <p className="gmail-resolution-note">{tx("DINCR detectó que este correo representa el mismo movimiento que otro registro y evitó contarlo dos veces.", "DINCR detected that this email represents the same movement as another record and avoided double counting it.")}</p>}
+            {item.review_status === "duplicate" && <p className="gmail-resolution-note">{DUPLICATE_NOTES[item.resolution_reason]?.() || tx("DINCR detectó que este correo representa el mismo movimiento que otro registro y evitó contarlo dos veces.", "DINCR detected that this email represents the same movement as another record and avoided double counting it.")}</p>}
             {possibleTransfers.length > 0 && <div className="gmail-transfer-review">
               <strong>{tx("¿Es un traslado entre tus cuentas?", "Is this a transfer between your accounts?")}</strong>
               <small>{tx("DINCR encontró avisos con el mismo monto y fecha. Cada banco puede usar una referencia distinta; verificá que el débito y el crédito sean del mismo traslado.", "DINCR found notices with the same amount and date. Banks may use different references; check that the debit and credit describe the same transfer.")}</small>
