@@ -129,7 +129,8 @@ def test_review_is_idempotent_after_candidate_was_confirmed(monkeypatch):
 def test_reject_candidate_does_not_create_transaction(monkeypatch):
     _identity(monkeypatch)
     candidate = {"id": 4, "email_message_id": 9, "status": "pending", "transaction_id": None}
-    connection = _Connection([_Result(one=candidate), _Result(), _Result()])
+    # select, reject candidate, reject message, release statement/notification copies (none)
+    connection = _Connection([_Result(one=candidate), _Result(), _Result(), _Result()])
     monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
 
     result = gmail_service.review_gmail_candidate(4, "reject")

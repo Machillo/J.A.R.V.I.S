@@ -117,6 +117,13 @@ class FakeConnection:
             row.update({"transaction_id": params[0], "status": "confirmed"})
         elif q.startswith("UPDATE finva_email_messages"):
             pass
+        elif q.startswith("SELECT id FROM finva_email_candidates WHERE account_id=%s AND workspace_id=%s AND related_candidate_id=%s"):
+            account, workspace, related, *reasons = params
+            return SimpleNamespace(fetchall=lambda: [
+                {"id": c["id"]} for c in self.work["candidates"].values()
+                if (c["account_id"], c["workspace_id"], c.get("related_candidate_id")) == (account, workspace, related)
+                and c["status"] == "duplicate" and c.get("resolution_reason") in reasons
+            ], fetchone=lambda: None)
         else:
             raise AssertionError(f"Unexpected query: {q[:80]}")
         return SimpleNamespace(fetchone=lambda: None, fetchall=lambda: [])
