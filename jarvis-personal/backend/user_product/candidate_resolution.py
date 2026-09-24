@@ -60,31 +60,206 @@ def _confirmed_account(conn, candidate: dict[str, Any], reference: Any) -> int |
     return int(row["id"]) if row else None
 
 
-def _possible_cross_source_match(conn, candidate: dict[str, Any]) -> int | None:
-    """Link, but never auto-discard, a weaker email-to-statement match."""
-    if candidate.get("source_type") != "statement":
+# Notification <-> statement reconciliation (deterministic, Phase 1E follow-up).
+CROSS_SOURCE_REASON = "same_movement_other_source"
+RECONCILED_REASON = "reconciled_with_existing_transaction"
+SAME_STATEMENT_ROW_REASON = "same_statement_row"
+POSSIBLE_MATCH_REASON = "possible_cross_source_match"
+CROSS_SOURCE_REASONS = (CROSS_SOURCE_REASON, RECONCILED_REASON)
+# Statement rows can post a few days after the notification; only a review hint.
+POSSIBLE_MATCH_DAYS = 3
+TRANSFER_TYPES = frozenset({"transfer", "internal_transfer"})
+# Words that differ between a notification and a statement for the same merchant.
+DESCRIPTION_NOISE = frozenset({
+    "sa", "srl", "ltda", "inc", "cia", "de", "del", "la", "el", "los", "las", "y", "en",
+    "compra", "pago", "cr", "costa", "rica", "sj", "www", "com",
+})
+
+
+def _merchant_tokens(value: Any) -> set[str]:
+    return {token for token in _plain(value).split()
+            if len(token) >= 2 and not token.isdigit() and token not in DESCRIPTION_NOISE}
+
+
+def _same_merchant(first: Any, second: Any) -> bool:
+    """One normalized description is contained in the other (accents, case, legal suffixes).
+
+    A single generic word ("UBER" vs "UBER EATS") is not enough: it needs two
+    shared words or the same words exactly.
+    """
+    left, right = _merchant_tokens(first), _merchant_tokens(second)
+    if not left or not right:
+        return False
+    small, large = sorted((left, right), key=len)
+    return small <= large and any(len(token) >= 3 for token in small) and (len(small) >= 2 or small == large)
+
+
+def _related_merchant(first: Any, second: Any) -> bool:
+    """Review hint only: shared word, or one name inside the other ignoring spaces
+    ("AUTO MERCADO" / "AUTOMERCADO", truncated "ZAPOT" / "ZAPOTE")."""
+    left, right = _merchant_tokens(first), _merchant_tokens(second)
+    if not left or not right or any(len(token) >= 3 for token in left & right):
+        return True
+    compact_short, compact_long = _plain(first).replace(" ", ""), _plain(second).replace(" ", "")
+    compact_short, compact_long = sorted((compact_short, compact_long), key=len)
+    return len(compact_short) >= 4 and compact_short in compact_long
+
+
+def _money_key(candidate: dict[str, Any]) -> tuple[str, Decimal] | None:
+    """Amount in the movement's original currency: a USD purchase converted to colones
+    by two sources at different rates is compared in USD, never against colones."""
+    original = str(candidate.get("original_currency") or "").upper()
+    currency = str(candidate.get("currency") or "CRC").upper()
+    if original and original != currency and candidate.get("original_amount") is not None:
+        return original, Decimal(str(candidate["original_amount"])).quantize(Decimal("0.01"))
+    if candidate.get("amount") is None:
         return None
+    return currency, Decimal(str(candidate["amount"])).quantize(Decimal("0.01"))
+
+
+def _movement_type(candidate: dict[str, Any]) -> str:
+    return str((candidate.get("raw_payload") or {}).get("transaction_type") or candidate.get("transaction_type") or "")
+
+
+def _transfer_like(candidate: dict[str, Any]) -> bool:
+    return candidate.get("movement_kind") == "transfer" or _movement_type(candidate) in TRANSFER_TYPES \
+        or str(candidate.get("transaction_type") or "") in TRANSFER_TYPES
+
+
+def _endpoint(candidate: dict[str, Any]) -> str:
+    return _last4(candidate.get("source_account_reference") or candidate.get("destination_account_reference"))
+
+
+def _root(conn, candidate: dict[str, Any], start_id: int) -> int | None:
+    """Follow duplicate links to the row that represents the movement.
+
+    Duplicates always point at a root, so re-resolving a released row can never
+    make two duplicates point at each other and hide the movement.
+    """
+    seen, current = {int(candidate["id"])}, int(start_id)
+    for _ in range(10):
+        if current in seen:
+            return None
+        seen.add(current)
+        row = conn.execute(
+            """SELECT id,status,related_candidate_id FROM finva_email_candidates
+               WHERE id=%s AND account_id=%s AND workspace_id=%s""",
+            (current, candidate["account_id"], candidate["workspace_id"]),
+        ).fetchone()
+        if not row:
+            return None
+        if row["status"] != "duplicate" or not row.get("related_candidate_id"):
+            return int(row["id"])
+        current = int(row["related_candidate_id"])
+    return None
+
+
+def _same_statement_row(conn, candidate: dict[str, Any]) -> int | None:
+    """The same row of the same statement document (resent or forwarded) is one movement;
+    the oldest copy is the root, also when rows are resolved again after a release."""
+    if candidate.get("source_type") != "statement" or not candidate.get("source_record_key"):
+        return None
+    row = conn.execute(
+        """SELECT id FROM finva_email_candidates
+           WHERE account_id=%s AND workspace_id=%s AND source_record_key=%s AND id<%s
+           ORDER BY id LIMIT 1""",
+        (candidate["account_id"], candidate["workspace_id"], candidate["source_record_key"], candidate["id"]),
+    ).fetchone()
+    return _root(conn, candidate, int(row["id"])) if row else None
+
+
+def cross_source_resolution(conn, candidate: dict[str, Any]) -> tuple[str | None, int | None, str | None]:
+    """Match a statement row against notifications (or the reverse) deterministically.
+
+    Always required: same account/workspace, the other source type, same bank,
+    same currency (CRC and USD are never mixed), same exact amount, same movement
+    type, a still-usable counterpart (pending or saved) not already claimed by
+    another row. A *strong* match additionally needs the same last 4 digits and
+    either the same bank reference, or the same date and an equivalent
+    normalized description, and must be the only one. It becomes a duplicate of
+    the counterpart, so the movement is saved at most once. Transfers are never
+    collapsed automatically. Anything weaker or ambiguous stays pending for the
+    user with the counterpart linked as a hint.
+    """
+    statement = candidate.get("source_type") == "statement"
+    rows = [dict(row) for row in conn.execute(
+        f"""SELECT c.id,c.status,c.transaction_id,c.transaction_date,c.description,c.transaction_type,
+                  c.movement_kind,c.external_reference,c.source_account_reference,c.destination_account_reference,
+                  c.amount,c.currency,c.original_amount,c.original_currency
+           FROM finva_email_candidates c
+           WHERE c.account_id=%s AND c.workspace_id=%s AND c.id<>%s
+             AND c.source_type{"<>" if statement else "="}'statement'
+             AND (c.amount=%s OR c.original_amount=%s) AND c.currency=%s AND c.bank=%s
+             AND c.transaction_date BETWEEN %s::date-{POSSIBLE_MATCH_DAYS} AND %s::date+{POSSIBLE_MATCH_DAYS}
+             AND c.status IN ('pending','confirmed','auto_saved')
+             AND NOT EXISTS (
+                 SELECT 1 FROM finva_email_candidates claimed
+                 WHERE claimed.related_candidate_id=c.id AND claimed.id<>%s AND claimed.status='duplicate'
+                   AND (claimed.resolution_reason IN (%s,%s)
+                        OR (claimed.resolution_reason='same_semantic_movement' AND claimed.source_type<>c.source_type)))
+           ORDER BY c.id""",
+        (candidate["account_id"], candidate["workspace_id"], candidate["id"],
+         candidate["amount"], candidate.get("original_amount"), candidate.get("currency") or "CRC",
+         candidate.get("bank") or "unknown", candidate["transaction_date"], candidate["transaction_date"],
+         candidate["id"], *CROSS_SOURCE_REASONS),
+    ).fetchall()]
+    kind, money = _movement_type(candidate), _money_key(candidate)
+    rows = [row for row in rows if _movement_type(row) == kind and money and _money_key(row) == money]
+    account, reference = _endpoint(candidate), _plain(candidate.get("external_reference"))
+    strong = [] if _transfer_like(candidate) else [
+        row for row in rows
+        if not _transfer_like(row) and account and _endpoint(row) == account and (
+            (reference and _plain(row.get("external_reference")) == reference)
+            or (str(row["transaction_date"])[:10] == str(candidate["transaction_date"])[:10]
+                and _same_merchant(row.get("description"), candidate.get("description")))
+        )
+    ]
+    if len(strong) == 1:
+        # Lock the counterpart: a concurrent reject waits for this transaction (or this
+        # one sees it rejected), so a row is never left pointing at a rejected movement.
+        match = conn.execute(
+            """SELECT id,status,transaction_id FROM finva_email_candidates
+               WHERE id=%s AND account_id=%s AND workspace_id=%s FOR UPDATE""",
+            (int(strong[0]["id"]), candidate["account_id"], candidate["workspace_id"]),
+        ).fetchone()
+        if not match or match["status"] not in ("pending", "confirmed", "auto_saved"):
+            return None, None, None
+        return "duplicate", int(match["id"]), RECONCILED_REASON if match.get("transaction_id") else CROSS_SOURCE_REASON
+    possible = strong or [
+        row for row in rows
+        if (not account or not _endpoint(row) or _endpoint(row) == account)
+        and _related_merchant(row.get("description"), candidate.get("description"))
+    ]
+    if possible:
+        return "pending", int(possible[0]["id"]) if len(possible) == 1 else None, POSSIBLE_MATCH_REASON
+    return None, None, None
+
+
+def release_cross_source_duplicates(conn, *, candidate_id: int, account_id: str, workspace_id: str) -> int:
+    """A rejected row no longer covers the copies from the *other* source (statement
+    vs notification) nor copies of those rows: all go back to review and are
+    resolved again, oldest first. Same-source copies of the rejected notification
+    stay rejected with it."""
     rows = conn.execute(
-        """SELECT id,description,source_account_reference,destination_account_reference
-           FROM finva_email_candidates
-           WHERE account_id=%s AND workspace_id=%s AND source_type<>'statement'
-             AND transaction_date=%s AND amount=%s AND currency=%s AND bank=%s
-             AND status<>'rejected'
+        """SELECT id FROM finva_email_candidates
+           WHERE account_id=%s AND workspace_id=%s AND related_candidate_id=%s AND status='duplicate'
+             AND (resolution_reason IN (%s,%s,%s)
+                  OR (resolution_reason='same_semantic_movement'
+                      AND source_type<>(SELECT source_type FROM finva_email_candidates WHERE id=%s)))
            ORDER BY id""",
-        (
-            candidate["account_id"], candidate["workspace_id"], candidate["transaction_date"],
-            candidate["amount"], candidate.get("currency") or "CRC", candidate.get("bank") or "unknown",
-        ),
+        (account_id, workspace_id, candidate_id, *CROSS_SOURCE_REASONS, SAME_STATEMENT_ROW_REASON, candidate_id),
     ).fetchall()
-    description = _plain(candidate.get("description"))
-    account = _last4(candidate.get("source_account_reference") or candidate.get("destination_account_reference"))
-    matches = []
-    for row in rows:
-        row = dict(row)
-        other_account = _last4(row.get("source_account_reference") or row.get("destination_account_reference"))
-        if _plain(row.get("description")) == description and (not account or not other_account or account == other_account):
-            matches.append(int(row["id"]))
-    return matches[0] if len(matches) == 1 else None
+    released = [int(row["id"]) for row in rows]
+    for released_id in released:
+        conn.execute(
+            """UPDATE finva_email_candidates
+               SET status='pending',related_candidate_id=NULL,resolution_reason=NULL,updated_at=NOW()
+               WHERE id=%s AND account_id=%s AND workspace_id=%s""",
+            (released_id, account_id, workspace_id),
+        )
+    for released_id in released:
+        resolve_candidate(conn, released_id)
+    return len(released)
 
 
 def _paired_owned_transfer(conn, candidate: dict[str, Any], own_account_id: int | None) -> int | None:
@@ -160,17 +335,27 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
         return {"status": "missing"}
     candidate = dict(row)
     fingerprint = semantic_fingerprint(candidate)
+    same_row_id = _same_statement_row(conn, candidate)
+    if same_row_id:
+        conn.execute(
+            """UPDATE finva_email_candidates
+               SET semantic_fingerprint=%s,status='duplicate',related_candidate_id=%s,
+                   resolution_reason=%s,updated_at=NOW()
+               WHERE id=%s""",
+            (fingerprint, same_row_id, SAME_STATEMENT_ROW_REASON, candidate_id),
+        )
+        return {"status": "duplicate", "related_candidate_id": same_row_id}
     duplicate = None
     if fingerprint:
         duplicate = conn.execute(
             """SELECT id FROM finva_email_candidates
                WHERE account_id=%s AND workspace_id=%s AND semantic_fingerprint=%s
-                 AND id<>%s AND status<>'rejected'
+                 AND id<%s AND status<>'rejected'
                ORDER BY id LIMIT 1""",
             (candidate["account_id"], candidate["workspace_id"], fingerprint, candidate_id),
         ).fetchone()
-    if duplicate:
-        duplicate_id = int(duplicate["id"])
+    duplicate_id = _root(conn, candidate, int(duplicate["id"])) if duplicate else None
+    if duplicate_id:
         conn.execute(
             """UPDATE finva_email_candidates
                SET semantic_fingerprint=%s,status='duplicate',related_candidate_id=%s,
@@ -180,7 +365,17 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
         )
         return {"status": "duplicate", "related_candidate_id": duplicate_id}
 
-    possible_match_id = _possible_cross_source_match(conn, candidate)
+    cross_status, cross_id, cross_reason = cross_source_resolution(conn, candidate)
+    if cross_status == "duplicate":
+        conn.execute(
+            """UPDATE finva_email_candidates
+               SET semantic_fingerprint=%s,status='duplicate',related_candidate_id=%s,
+                   resolution_reason=%s,updated_at=NOW()
+               WHERE id=%s""",
+            (fingerprint, cross_id, cross_reason, candidate_id),
+        )
+        return {"status": "duplicate", "related_candidate_id": cross_id}
+    possible_match_id = cross_id if cross_reason == POSSIBLE_MATCH_REASON else None
     source_id = _confirmed_account(conn, candidate, candidate.get("source_account_reference"))
     destination_id = _confirmed_account(conn, candidate, candidate.get("destination_account_reference"))
     is_internal = bool(source_id and destination_id and source_id != destination_id)
@@ -189,7 +384,7 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
         conn, candidate, source_id if original_direction == "out" else destination_id,
     )
     is_internal = is_internal or bool(pair_id)
-    reason = "paired_owned_transfer" if pair_id else "confirmed_owned_endpoints" if is_internal else "possible_cross_source_match" if possible_match_id else None
+    reason = "paired_owned_transfer" if pair_id else "confirmed_owned_endpoints" if is_internal else POSSIBLE_MATCH_REASON if cross_reason == POSSIBLE_MATCH_REASON else None
     raw = candidate.get("raw_payload") or {}
     base_type = str(raw.get("transaction_type") or candidate.get("transaction_type") or "transfer")
     base_direction = str(raw.get("movement_direction") or candidate.get("movement_direction") or "unknown")

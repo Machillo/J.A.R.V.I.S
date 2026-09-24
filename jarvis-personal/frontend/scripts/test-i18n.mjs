@@ -26,6 +26,7 @@ const ALLOWLIST = [
   { file: "src/services/jarvisApi.js", pattern: /^(No pude leer el PDF\.|No se pudo abrir el comprobante)/, reason: "DINCR Owner-only endpoint" },
   // Bank proper names.
   { file: "src/pages/ProfileSetup.jsx", pattern: /^(Banco de Costa Rica|Banco Nacional|Banco Popular)$/, reason: "bank name" },
+  { file: "src/lib/bankIdentity.js", pattern: /^(Banco de Costa Rica|Banco Nacional|Banco Popular)$/, reason: "bank name" },
   // Diagnostics never shown to users.
   { file: "src/lib/telemetry.js", pattern: /^(Unhandled JavaScript error|Unhandled promise rejection|Unknown error)$/, reason: "crash-report diagnostic" },
   { file: "src/lib/featureFlags.js", pattern: /request failed/, reason: "developer diagnostic" },

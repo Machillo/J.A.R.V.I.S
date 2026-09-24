@@ -3,6 +3,7 @@ from typing import Any
 
 from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
+from backend.finance.debt_automation import schedule_automation_enabled
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
 from backend.integrations.ibkr_readonly import ensure_ibkr_tables
 
@@ -396,6 +397,7 @@ def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None)
     La fecha de inicio, primera cuota, día de pago y fecha actual determinan cuántas
     cuotas debieron aplicarse. Cada cuota se registra una sola vez en debt_payments.
     """
+    if not schedule_automation_enabled(): return  # DINCR Users: reads never write (debt_automation.py)
     workspace_id = workspace_id or get_current_workspace_id()
     today = date.today()
     with get_connection() as conn:

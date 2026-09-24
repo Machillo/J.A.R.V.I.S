@@ -122,6 +122,8 @@
 .native-product--jarvis .bank-logo { display:grid; width:50px; height:50px; place-items:center; border-radius:16px; font-size:.72rem; font-weight:900; letter-spacing:-.02em; }
 .native-product--jarvis .bank-logo--bac { color:#fff; background:linear-gradient(145deg,#d51f2b,#8f1119); }
 .native-product--jarvis .bank-logo--multimoney { color:#07131b; background:linear-gradient(145deg,#74e1d1,#3ab8a9); }
+.native-product--jarvis .bank-logo--image { overflow:hidden; padding:6px; background:#fff; }
+.native-product--jarvis .bank-logo--image img { display:block; width:100%; height:100%; object-fit:contain; }
 .native-product--jarvis .bank-detected-copy { min-width:0; }
 .native-product--jarvis .bank-detected-copy strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.95rem; }
 .native-product--jarvis .bank-detected-copy small { display:block; margin-top:3px; overflow:hidden; color:var(--jarvis-text-3); font-size:.7rem; text-overflow:ellipsis; white-space:nowrap; }

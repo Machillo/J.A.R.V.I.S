@@ -19,6 +19,9 @@ from backend.user_product.basic_service import (
 )
 
 
+IMPORTED_SOURCES = ("finva_gmail", "finva_statement")
+
+
 def _money(value: Any) -> float:
     return round(float(value or 0), 2)
 
@@ -92,6 +95,17 @@ def get_vip_command_center() -> dict:
             start = _shift_month(current, offset)
             totals = _ledger_totals(conn, workspace_id, start, _next_month(start))
             months.append({"month": start.strftime("%Y-%m"), **totals, "balance": round(totals["income"] - totals["expenses"] - totals["debt_paid"], 2)})
+        imported_income = {
+            row["month"]: _money(row["total"]) for row in conn.execute(
+                f"""SELECT to_char(transaction_date::date,'YYYY-MM') AS month,SUM(amount) AS total
+                   FROM transactions
+                   WHERE workspace_id=%s AND transaction_type='income'
+                     AND source IN ({",".join(["%s"] * len(IMPORTED_SOURCES))})
+                     AND transaction_date::date >= %s
+                   GROUP BY 1""",
+                (workspace_id, *IMPORTED_SOURCES, _shift_month(current, -11)),
+            ).fetchall()
+        }
         recurring = [dict(row) for row in conn.execute(
             "SELECT id,name,amount,category,item_type,frequency,due_day,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE ORDER BY amount DESC",
             (workspace_id,),
@@ -133,7 +147,16 @@ def get_vip_command_center() -> dict:
             }
 
     estimated_income = _estimated_income(profile)
-    positive_incomes = [_money(row["income"]) for row in months if _money(row["income"]) > 0]
+    # Bank-email imports are individual movements, not a complete income ledger (not
+    # every deposit sends an email and the import window can start mid-period).
+    # They must not cap an income the user declared: that made one imported deposit
+    # wipe out the available amount and the debt priority. Without a declared income
+    # they remain the only evidence and still count. Reports still show all income.
+    observed_incomes = [
+        round(_money(row["income"]) - (imported_income.get(row["month"], 0) if estimated_income > 0 else 0), 2)
+        for row in months
+    ]
+    positive_incomes = [value for value in observed_incomes if value > 0]
     conservative_income = round(min(estimated_income or float("inf"), sum(positive_incomes[-3:]) / len(positive_incomes[-3:]) if positive_incomes else estimated_income or 0), 2)
     if conservative_income == float("inf"):
         conservative_income = 0
@@ -150,13 +173,17 @@ def get_vip_command_center() -> dict:
     margin = round(monthly_income - known_commitments, 2)
     emergency_gap = max(emergency_target - savings, 0)
     all_assets = round(sum(_money(row["current_balance"]) for row in accounts if row.get("include_in_net_worth") and row.get("currency") == "CRC"), 2)
-    liquid_assets = all_assets if accounts else savings
+    # Only balances the user entered or confirmed replace the declared liquid savings.
+    # Accounts discovered in bank emails start with an unknown balance (stored as 0 and
+    # excluded from net worth): unknown is not zero, so they must not zero the savings.
+    balance_accounts = [row for row in accounts if row.get("include_in_net_worth") and row.get("currency") == "CRC"]
+    liquid_assets = all_assets if balance_accounts else savings
     net_worth = round(all_assets - debt_balance, 2)
 
     coverage = savings / known_commitments if known_commitments else 0
     debt_ratio = debt_minimums / monthly_income if monthly_income else 1
     cashflow_ratio = max(min((margin / monthly_income) if monthly_income else -1, 1), -1)
-    completeness = sum([monthly_income > 0, essentials > 0 or recurring_expense > 0, all(row.get("monthly_payment") for row in debts) if debts else True, bool(accounts), emergency_target > 0]) / 5
+    completeness = sum([monthly_income > 0, essentials > 0 or recurring_expense > 0, all(row.get("monthly_payment") for row in debts) if debts else True, bool(balance_accounts), emergency_target > 0]) / 5
     score = round(max(0, min(100, 45 + cashflow_ratio * 25 + min(coverage / 3, 1) * 20 - min(debt_ratio, 1) * 25 + completeness * 15)))
     score_factors = [
         {"label": tx("Flujo mensual", "Monthly cash flow"), "impact": "positive" if margin >= 0 else "negative", "value": margin},

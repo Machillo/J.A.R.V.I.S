@@ -257,14 +257,19 @@ def test_same_movement_from_two_mailboxes_or_outlook_is_one_semantic_movement():
             self.calls = []
 
         def execute(self, query, params=()):
-            self.calls.append((" ".join(query.split()), params))
-            if len(self.calls) == 1:
-                return SimpleNamespace(fetchone=lambda: {**base, "id": 12})
-            return SimpleNamespace(fetchone=lambda: {"id": 11}, fetchall=lambda: [])
+            q = " ".join(query.split())
+            self.calls.append((q, params))
+            if q.startswith("SELECT * FROM finva_email_candidates"):
+                row = {**base, "id": 12}
+            elif q.startswith("SELECT id,status,related_candidate_id"):
+                row = {"id": 11, "status": "pending", "related_candidate_id": None}
+            else:
+                row = {"id": 11}
+            return SimpleNamespace(fetchone=lambda: row, fetchall=lambda: [])
 
     conn = Conn()
     assert resolve_candidate(conn, 12) == {"status": "duplicate", "related_candidate_id": 11}
-    duplicate_query, params = conn.calls[1]
+    duplicate_query, params = next(call for call in conn.calls if "semantic_fingerprint=%s" in call[0])
     # Scoped to the account/workspace, not to one mailbox connection.
     assert "account_id=%s AND workspace_id=%s AND semantic_fingerprint=%s" in duplicate_query and "connection_id" not in duplicate_query
     assert params[:2] == (OWNER["account_id"], OWNER["workspace_id"])

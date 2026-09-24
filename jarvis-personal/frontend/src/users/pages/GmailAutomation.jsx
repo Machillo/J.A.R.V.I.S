@@ -1,5 +1,5 @@
-import { Building2, Check, CheckCircle2, Mail, Pencil, RefreshCw, ShieldCheck, Unplug, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Building2, Check, CheckCircle2, ChevronRight, Mail, Pencil, RefreshCw, ShieldCheck, Unplug, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import {
   connectVipGmail,
@@ -16,7 +16,9 @@ import {
   rejectVipGmailCandidate,
   syncVipGmail,
 } from "../services/jarvisApi";
-import { tx } from "../../lib/locale";
+import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import { bankBranding, resolveBank } from "../../lib/bankBranding";
+import BankLogo from "../../components/BankLogo";
 import { categoryLabel, categoryValue } from "../../lib/categories";
 import { trackEvent } from "../../lib/telemetry";
 import { MAIL_OAUTH_RESULT_EVENT, takeMailOAuthOutcome } from "../../lib/mailOAuth";
@@ -36,17 +38,39 @@ const MAIL_ERRORS = {
   completion_pending: ["No pudimos terminar de conectar {provider} por la conexión. DINCR lo reintentará cuando vuelvas a estar en línea.", "We couldn’t finish connecting {provider} because of the connection. DINCR will retry when you’re back online."],
 };
 
+// Why a movement was not counted again (statement vs notification reconciliation).
+const DUPLICATE_NOTES = {
+  reconciled_with_existing_transaction: () => tx("Este movimiento ya estaba guardado desde otro aviso bancario. DINCR lo reconcilió y no lo contó dos veces.", "This transaction was already saved from another bank notice. DINCR reconciled it and didn’t count it twice."),
+  same_movement_other_source: () => tx("Es el mismo movimiento que otro aviso o estado de cuenta que está por revisar. Revisá ese registro; este no se contará dos veces.", "It’s the same transaction as another notice or statement awaiting review. Review that record; this one won’t be counted twice."),
+  same_statement_row: () => tx("Es una copia de un estado de cuenta que DINCR ya procesó.", "It’s a copy of a statement DINCR already processed."),
+};
+
 function mailErrorMessage(provider, code) {
   const name = provider === "microsoft" ? "Outlook" : "Gmail";
   const [es, en] = MAIL_ERRORS[code] || ["No pudimos conectar {provider}. Intentalo de nuevo en unos minutos.", "We couldn’t connect {provider}. Please try again in a few minutes."];
   return tx(es, en).replaceAll("{provider}", name);
 }
 
+// Each movement keeps its own currency: CRC and USD are never mixed.
+const money = (value, currency) => new Intl.NumberFormat(localeTag(deviceLanguage()), {
+  style: "currency", currency: String(currency || "").toUpperCase() === "USD" ? "USD" : "CRC",
+  currencyDisplay: "narrowSymbol", maximumFractionDigits: 2,
+}).format(Number(value) || 0);
+
+// One institution per resolved bank; unrecognised senders are grouped as "Other".
+const institutionFor = (code, name) => {
+  if (resolveBank(code) || resolveBank(name)) return bankBranding(code, name);
+  return { id: "other", name: tx("Otras instituciones", "Other institutions"), short: "?", logo: null };
+};
+
 function MailProviderLogo({ provider }) {
   return <img className="mail-provider-logo" src={provider === "microsoft" ? outlookLogo : gmailLogo} alt="" aria-hidden="true" />;
 }
 
-export default function GmailAutomation() {
+export default function GmailAutomation({ view = "mail", onNavigate }) {
+  // "accounts" shows the same review flow grouped by bank and account.
+  const accountsView = view === "accounts";
+  const [bankId, setBankId] = useState(null);
   const [gmail, setGmail] = useState(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -61,15 +85,18 @@ export default function GmailAutomation() {
 
   const load = useCallback(async () => {
     try {
-      const [status, inbox, accounts] = await Promise.all([
-        getVipGmailStatus(), getVipGmailEmails(filter), getVipFinancialIdentity(),
+      const [status, inbox, accounts, pendingInbox] = await Promise.all([
+        getVipGmailStatus(), getVipGmailEmails(accountsView ? "" : filter), getVipFinancialIdentity(),
+        accountsView ? getVipGmailEmails("pending") : null,
       ]);
-      setGmail(status); setEmails(inbox?.items || []); setIdentity(accounts || { items: [], summary: {} });
+      const rows = new Map();
+      for (const row of [...(pendingInbox?.items || []), ...(inbox?.items || [])]) rows.set(row.candidate_id || `email-${row.email_id}`, row);
+      setGmail(status); setEmails([...rows.values()]); setIdentity(accounts || { items: [], summary: {} });
       const proposed = await getVipOwnTransferSuggestions().catch(() => ({ items: [] }));
       setTransferSuggestions(proposed.items || []);
     }
     catch (err) { setError(err.message || tx("No se pudo consultar el correo.", "Couldn’t check mail.")); }
-  }, [filter]);
+  }, [filter, accountsView]);
 
   const review = async (item, action, corrections = null) => {
     setBusy(`${action}-${item.candidate_id}`); setError(""); setMessage("");
@@ -200,15 +227,63 @@ export default function GmailAutomation() {
   const inboxIds = new Set(emails.map((item) => item.candidate_id));
   const visibleEmails = emails.filter((item) => !(["paired_owned_transfer", "user_confirmed_own_transfer"].includes(item.resolution_reason) &&
     item.related_candidate_id && item.candidate_id > item.related_candidate_id &&
-    inboxIds.has(item.related_candidate_id)));
+    inboxIds.has(item.related_candidate_id)))
+    .filter((item) => !accountsView || (item.candidate_id
+      && (!bankId || institutionFor(item.bank, item.bank).id === bankId)
+      && (filter !== "pending" || item.review_status === "pending")));
+  const identityItems = accountsView && bankId
+    ? identity.items.filter((item) => institutionFor(item.institution_code, item.bank_name).id === bankId)
+    : identity.items;
 
-  return <section className="mobile-page gmail-automation-page">
-    <div className="mobile-page-heading">
+  const institutions = useMemo(() => {
+    if (!accountsView) return [];
+    const groups = new Map();
+    const group = (bank) => {
+      if (!groups.has(bank.id)) groups.set(bank.id, { bank, accounts: [], movements: 0, pending: 0 });
+      return groups.get(bank.id);
+    };
+    identity.items.forEach((item) => group(institutionFor(item.institution_code, item.bank_name)).accounts.push(item));
+    emails.filter((item) => item.candidate_id).forEach((item) => {
+      const entry = group(institutionFor(item.bank, item.bank));
+      entry.movements += 1;
+      if (item.review_status === "pending") entry.pending += 1;
+    });
+    return [...groups.values()].sort((a, b) => b.pending - a.pending || b.movements - a.movements || a.bank.name.localeCompare(b.bank.name));
+  }, [accountsView, identity.items, emails]);
+  useEffect(() => {
+    if (bankId && !institutions.some((entry) => entry.bank.id === bankId)) setBankId(null);
+  }, [bankId, institutions]);
+
+  return <section className={`mobile-page gmail-automation-page ${accountsView ? "bank-accounts-view" : ""}`.trim()}>
+    {accountsView ? <div className="mobile-page-heading">
+      <p className="eyebrow">{tx("Cuentas", "Accounts")}</p>
+      <h1>{tx("Tus bancos y cuentas", "Your banks and accounts")}</h1>
+      <span>{tx("Instituciones y cuentas que DINCR encontró en tus correos bancarios. Revisá cada movimiento antes de agregarlo.", "Institutions and accounts DINCR found in your bank emails. Review each transaction before adding it.")}</span>
+    </div> : <div className="mobile-page-heading">
       <p className="eyebrow">{tx("Automatización VIP", "VIP automation")}</p>
       <h1>{tx("Movimientos desde tu correo", "Transactions from your email")}</h1>
       <span>{tx("DINCR revisa los correos financieros de cada buzón compatible que autoricés.", "DINCR reviews financial messages in each supported mailbox you authorize.")}</span>
-    </div>
-    <article className={`gmail-connection-card ${gmail?.needs_reauthorization ? "needs-attention" : ""}`}>
+    </div>}
+    {accountsView && gmail && !gmail.connected && <article className="gmail-connection-card bank-accounts-empty">
+      <p>{tx("Conectá tu correo para que DINCR encuentre tus bancos, cuentas y movimientos.", "Connect your email so DINCR can find your banks, accounts and transactions.")}</p>
+      <button type="button" className="finva-button finva-button-primary" onClick={() => onNavigate?.("gmail")}><Mail size={18}/>{tx("Conectar correo", "Connect email")}</button>
+    </article>}
+    {accountsView && gmail?.needs_reauthorization && <p className="onboarding-error" role="alert">{tx("Un correo conectado necesita volver a autorizarse para seguir encontrando movimientos.", "A connected mailbox needs to be authorized again to keep finding transactions.")} <button type="button" className="bank-accounts-manage" onClick={() => onNavigate?.("gmail")}>{tx("Reconectar", "Reconnect")}</button></p>}
+    {accountsView && gmail?.connected && <section className="bank-institutions" aria-label={tx("Instituciones detectadas", "Detected institutions")}>
+      {!institutions.length && <div className="gmail-inbox-empty"><Building2 size={25}/><strong>{tx("Todavía no encontramos bancos", "No banks found yet")}</strong><small>{tx("Cuando DINCR detecte un correo bancario, su banco aparecerá acá.", "When DINCR detects a bank email, its bank will appear here.")}</small></div>}
+      {institutions.map(({ bank, accounts, movements, pending }) => <button type="button" key={bank.id} className={`bank-institution-card ${bankId === bank.id ? "active" : ""}`} aria-pressed={bankId === bank.id} onClick={() => setBankId(bankId === bank.id ? null : bank.id)}>
+        <BankLogo bank={bank}/>
+        <span className="bank-institution-copy">
+          <strong>{bank.name}</strong>
+          <small>{accounts.length ? accounts.map((item) => item.account_last4 ? `•••• ${item.account_last4}` : item.account_name).join(" · ") : tx("Detectado por correo", "Detected by email")}</small>
+          <small>{movements === 1 ? tx("1 movimiento", "1 transaction") : tx(`${movements} movimientos`, `${movements} transactions`)} · {tx(`${pending} por revisar`, `${pending} to review`)}</small>
+        </span>
+        {pending > 0 ? <span className="bank-institution-pending">{pending}</span> : <Check size={16} aria-hidden="true"/>}
+        <ChevronRight size={18} aria-hidden="true"/>
+      </button>)}
+      <button type="button" className="bank-accounts-manage" onClick={() => onNavigate?.("gmail")}><Mail size={16}/>{tx("Administrar correos conectados", "Manage connected mailboxes")}</button>
+    </section>}
+    {!accountsView && <article className={`gmail-connection-card ${gmail?.needs_reauthorization ? "needs-attention" : ""}`}>
       <div className="gmail-connection-heading"><span><Mail size={21}/></span><div><strong>{tx("Tus correos bancarios", "Your banking emails")}</strong><small>{tx("Permiso individual · solo lectura", "Individual permission · read only")}</small></div></div>
       <div className="gmail-privacy-note"><ShieldCheck size={19}/><p>{tx("Podés conectar varios Gmail y Outlook/Hotmail que controlés. DINCR solicita acceso de lectura, sin permiso para enviar, modificar ni borrar correos.", "You can connect multiple Gmail and Outlook/Hotmail accounts you control. DINCR requests read access, without permission to send, edit or delete emails.")}</p></div>
       {!gmail?.connected && <p>{tx("DINCR revisará los avisos financieros de los buzones que autoricés para detectar cuentas y movimientos. Cada hallazgo requiere tu revisión antes de guardarse.", "DINCR will review financial notices in the mailboxes you authorize to detect accounts and transactions. You review findings before saving them.")}</p>}
@@ -228,12 +303,12 @@ export default function GmailAutomation() {
         {gmail.pending > 0 && <p>{gmail.pending} {tx("movimiento(s) necesitan revisión.", "transaction(s) need review.")}</p>}
         <div className="gmail-connection-actions"><button type="button" disabled={Boolean(busy)} onClick={sync}><RefreshCw size={16}/>{busy === "sync" ? tx("Actualizando…", "Refreshing…") : tx("Actualizar todos", "Refresh all")}</button></div>
       </>}
-    </article>
-    {gmail?.connected && identity.items.length > 0 && <section className="gmail-identity" aria-label={tx("Cuentas detectadas", "Detected accounts")}>
-      <header><div><p className="eyebrow">{tx("Tu mapa financiero", "Your financial map")}</p><h2>{tx("Cuentas detectadas", "Detected accounts")}</h2></div><span>{identity.summary?.pending || 0} {tx("pendientes", "pending")}</span></header>
+    </article>}
+    {gmail?.connected && identityItems.length > 0 && <section className="gmail-identity" aria-label={tx("Cuentas detectadas", "Detected accounts")}>
+      <header><div><p className="eyebrow">{tx("Tu mapa financiero", "Your financial map")}</p><h2>{tx("Cuentas detectadas", "Detected accounts")}</h2></div><span>{accountsView ? identityItems.filter((item) => item.ownership_status === "pending").length : identity.summary?.pending || 0} {tx("pendientes", "pending")}</span></header>
       <p>{tx("Confirmá cuáles cuentas son tuyas. DINCR no incluirá una cuenta detectada en tu patrimonio sin tu confirmación.", "Confirm which accounts are yours. DINCR won’t include a detected account in your net worth without your confirmation.")}</p>
-      <div className="gmail-identity-list">{identity.items.map((item) => <article key={item.id}>
-        <span className="gmail-identity-icon"><Building2 size={19}/></span>
+      <div className="gmail-identity-list">{identityItems.map((item) => <article key={item.id}>
+        {accountsView ? <BankLogo bank={institutionFor(item.institution_code, item.bank_name)}/> : <span className="gmail-identity-icon"><Building2 size={19}/></span>}
         <div><strong>{item.account_name}</strong><small>{item.bank_name} · {item.institution_country} · {item.currency}</small></div>
         {item.ownership_status === "pending" ? <div className="gmail-account-actions"><button type="button" disabled={Boolean(busy)} onClick={() => confirmAccount(item, "not_mine")}>{tx("No es mía", "Not mine")}</button><button type="button" className="primary" disabled={Boolean(busy)} onClick={() => confirmAccount(item, "own")}>{tx("Es mía", "It’s mine")}</button></div> : <span className={`gmail-ownership-state ${item.ownership_status}`}>{item.ownership_status === "own" ? tx("Cuenta propia", "Owned account") : tx("Cuenta ajena", "Not owned")}</span>}
       </article>)}</div>
@@ -251,20 +326,20 @@ export default function GmailAutomation() {
         const possibleTransfers = transferSuggestions.filter(({ first, second }) =>
           first.candidate_id === item.candidate_id || second.candidate_id === item.candidate_id);
         return <article className="gmail-email-card" key={item.candidate_id || item.email_id}>
-          <div className="gmail-email-meta"><span>{item.bank || tx("Banco", "Bank")}</span><time>{item.received_at ? new Date(item.received_at).toLocaleDateString() : ""}</time></div>
+          <div className="gmail-email-meta"><span>{resolveBank(item.bank)?.name || (item.bank && item.bank !== "unknown" ? item.bank : tx("Banco", "Bank"))}</span><time>{item.received_at ? new Date(item.received_at).toLocaleDateString() : ""}</time></div>
           <strong>{item.subject || item.description || tx("Movimiento bancario", "Bank transaction")}</strong>
           <small>{item.sender}</small>
           {item.source_type === "statement" && <p className="gmail-resolution-note">{tx("Detectado en un estado de cuenta PDF. Revisalo igual que cualquier otro movimiento antes de guardarlo.", "Detected in a PDF statement. Review it like any other movement before saving it.")}</p>}
-          {item.resolution_reason === "possible_cross_source_match" && <p className="gmail-resolution-note">{tx("Posible coincidencia con una notificación bancaria anterior. DINCR la deja para tu revisión en vez de eliminarla automáticamente.", "Possible match with an earlier bank notification. DINCR leaves it for your review instead of deleting it automatically.")}</p>}
+          {item.resolution_reason === "possible_cross_source_match" && <p className="gmail-resolution-note">{tx("Posible coincidencia con otro aviso bancario o estado de cuenta. DINCR la deja para tu revisión en vez de eliminarla automáticamente.", "Possible match with another bank notice or statement. DINCR leaves it for your review instead of deleting it automatically.")}</p>}
           {item.candidate_id ? edit ? <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); review(item, "accept", { transaction_date: form.get("transaction_date"), description: form.get("description"), amount: Number(form.get("amount")), transaction_type: form.get("transaction_type"), category: categoryValue(form.get("category")) }); }} className="gmail-candidate-editor">
             <input name="description" defaultValue={item.description} required aria-label={tx("Descripción", "Description")}/>
             <div><input name="amount" type="number" step="0.01" min="0.01" defaultValue={item.amount} required aria-label={tx("Monto", "Amount")}/><input name="transaction_date" type="date" defaultValue={item.transaction_date} required aria-label={tx("Fecha", "Date")}/></div>
             <div><select name="transaction_type" defaultValue={item.transaction_type} aria-label={tx("Tipo de movimiento", "Movement type")}><option value="expense">{tx("Gasto", "Expense")}</option><option value="income">{tx("Ingreso", "Income")}</option><option value="debt_payment">{tx("Pago de deuda", "Debt payment")}</option></select><input name="category" defaultValue={categoryLabel(item.category || "general")} required aria-label={tx("Categoría", "Category")}/></div>
             <div className="gmail-review-actions"><button type="button" onClick={() => setEditing(null)}><X size={16}/>{tx("Cancelar", "Cancel")}</button><button className="primary" disabled={Boolean(busy)}><Check size={16}/>{tx("Guardar", "Save")}</button></div>
           </form> : <>
-            <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>₡{Number(item.amount || 0).toLocaleString()}</b></span></div>
+            <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>{money(item.amount, item.currency)}</b></span></div>
             {item.is_internal_transfer && <p className="gmail-resolution-note">{item.resolution_reason === "paired_owned_transfer" ? tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, ambos quedan revisados sin sumarse a ingresos o gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming reviews both without adding income or expense.") : tx("DINCR encontró ambas cuentas entre las que confirmaste como propias. Al aceptar, no se registrará como gasto ni ingreso.", "DINCR matched both endpoints to accounts you confirmed as yours. Accepting won’t record income or expense.")}</p>}
-            {item.review_status === "duplicate" && <p className="gmail-resolution-note">{tx("DINCR detectó que este correo representa el mismo movimiento que otro registro y evitó contarlo dos veces.", "DINCR detected that this email represents the same movement as another record and avoided double counting it.")}</p>}
+            {item.review_status === "duplicate" && <p className="gmail-resolution-note">{DUPLICATE_NOTES[item.resolution_reason]?.() || tx("DINCR detectó que este correo representa el mismo movimiento que otro registro y evitó contarlo dos veces.", "DINCR detected that this email represents the same movement as another record and avoided double counting it.")}</p>}
             {possibleTransfers.length > 0 && <div className="gmail-transfer-review">
               <strong>{tx("¿Es un traslado entre tus cuentas?", "Is this a transfer between your accounts?")}</strong>
               <small>{tx("DINCR encontró avisos con el mismo monto y fecha. Cada banco puede usar una referencia distinta; verificá que el débito y el crédito sean del mismo traslado.", "DINCR found notices with the same amount and date. Banks may use different references; check that the debit and credit describe the same transfer.")}</small>

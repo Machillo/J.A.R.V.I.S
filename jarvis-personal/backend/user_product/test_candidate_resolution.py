@@ -50,7 +50,11 @@ def test_fingerprint_without_reference_requires_time_account_and_description():
 
 
 def test_marks_duplicate_and_links_original_candidate():
-    connection = _Connection([_Result(one=_candidate()), _Result(one={"id": 4}), _Result()])
+    connection = _Connection([
+        _Result(one=_candidate()), _Result(one={"id": 4}),
+        _Result(one={"id": 4, "status": "pending", "related_candidate_id": None}),  # root of the match
+        _Result(),
+    ])
     result = resolve_candidate(connection, 9)
     assert result == {"status": "duplicate", "related_candidate_id": 4}
     query, params = connection.calls[-1]
@@ -60,7 +64,7 @@ def test_marks_duplicate_and_links_original_candidate():
 
 def test_marks_internal_only_when_two_distinct_confirmed_accounts_match():
     connection = _Connection([
-        _Result(one=_candidate(external_reference=None)), _Result(one=None),
+        _Result(one=_candidate(external_reference=None)), _Result(one=None), _Result(rows=[]),
         _Result(one={"id": 11}), _Result(one={"id": 22}), _Result(),
     ])
     result = resolve_candidate(connection, 9)
@@ -75,7 +79,9 @@ def test_links_one_possible_cross_source_match_without_auto_rejecting():
     statement = _candidate(source_type="statement", external_reference=None)
     connection = _Connection([
         _Result(one=statement), _Result(one=None),
-        _Result(rows=[{"id": 4, "description": "SINPE A AHORRO", "source_account_reference": "1111", "destination_account_reference": None}]),
+        _Result(rows=[{"id": 4, "description": "SINPE A AHORRO", "source_account_reference": "1111", "destination_account_reference": None,
+                       "transaction_date": date(2026, 9, 21), "transaction_type": "transfer", "status": "pending", "transaction_id": None,
+                       "amount": 25000, "currency": "CRC", "original_amount": None, "original_currency": None}]),
         _Result(one=None), _Result(one=None), _Result(),
     ])
     result = resolve_candidate(connection, 9)
@@ -125,7 +131,7 @@ def test_resolving_second_bank_notice_links_both_without_financial_transaction()
              "source_account_reference": None, "destination_account_reference": "2222",
              "external_reference": None}
     connection = _Connection([
-        _Result(one=candidate), _Result(one=None), _Result(one={"id": 11}),
+        _Result(one=candidate), _Result(one=None), _Result(rows=[]), _Result(one={"id": 11}),
         _Result(rows=[other]), _Result(), _Result(),
     ])
     assert resolve_candidate(connection, 9) == {"status": "internal_transfer"}

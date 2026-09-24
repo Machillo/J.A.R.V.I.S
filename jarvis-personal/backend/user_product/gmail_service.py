@@ -29,7 +29,7 @@ from backend.email_monitor.gmail_content import collect_attachments, extract_pdf
 from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
-from backend.user_product.candidate_resolution import resolve_candidate, reevaluate_workspace_candidates
+from backend.user_product.candidate_resolution import release_cross_source_duplicates, resolve_candidate, reevaluate_workspace_candidates
 from backend.user_product.legacy_owner_mail import legacy_transaction_for_message, mark_legacy_duplicate
 from backend.user_product import mail_oauth
 from backend.user_product.mail_copy import localized_parse_reason
@@ -450,6 +450,7 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             conn.execute("UPDATE finva_email_messages SET status='rejected' WHERE id=%s", (candidate["email_message_id"],))
             if candidate.get("resolution_reason") == "paired_owned_transfer" and candidate.get("related_candidate_id"):
                 resolve_candidate(conn, int(candidate["related_candidate_id"]))
+            release_cross_source_duplicates(conn, candidate_id=candidate_id, account_id=account_id, workspace_id=workspace_id)
             conn.commit()
             return {"status": "rejected", "candidate_id": candidate_id, "transaction_id": None}
 
