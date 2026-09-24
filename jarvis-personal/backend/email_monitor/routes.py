@@ -26,6 +26,7 @@ router = APIRouter(prefix="/email-monitor", tags=["Email Monitor"])
 
 @router.post("/statements/reconcile")
 def email_monitor_statement_reconcile(request: EmailStatementReconcileRequest):
+    require_roles("owner", "admin")
     user_id = get_current_user_id()
     with get_connection() as conn:
         workspace_id = _workspace_id_for_user(conn, user_id)

@@ -18,4 +18,8 @@ assert.match(app, /appStateChange[\s\S]*flushPendingOperations/);
 assert.match(shell, /Cambio protegido/);
 assert.match(shell, /Cambio recuperado/);
 
+// Explicit logout and account deletion (which logs out) leave no queued financial bodies behind.
+assert.match(recovery, /export const clearPendingOperations[\s\S]*startsWith\(QUEUE_PREFIX\)[\s\S]*removeItem/);
+assert.match(shell, /const logout = \(\) => \{ clearPendingOperations\(\); return supabase\.auth\.signOut/);
+
 console.log("Phase 0D operation recovery contract passed.");

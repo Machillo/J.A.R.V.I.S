@@ -78,3 +78,32 @@ def test_public_dincr_app_routes_are_not_role_gated(as_role):
     # DINCR customers keep their product APIs (they fail later on the missing test DB, not with 403).
     for path in ("/user-product/free/movements", "/auth/me", "/product-ops/feature-flags"):
         assert as_role("user").get(path, headers=AUTH).status_code != 403
+
+def test_account_existence_cannot_be_probed_without_login():
+    # /auth/check-access returned the full allowed_users row (role, supabase id) for any email.
+    response = TestClient(main.app, raise_server_exceptions=False).post("/auth/check-access", json={"email": "victim@example.com"})
+    assert response.status_code in {401, 404}
+    assert "victim@example.com" not in response.text and "role" not in response.text
+    assert all(getattr(route, "path", "") != "/auth/check-access" for route in main.app.routes)
+
+
+@pytest.mark.parametrize(("method", "path"), [
+    ("get", "/notifications/status"), ("get", "/notifications/vapid-public-key"),
+    ("post", "/notifications/subscribe"), ("post", "/notifications/test"),
+    ("post", "/email-monitor/statements/reconcile"),
+])
+def test_owner_push_and_reconciliation_are_not_user_apis(as_role, method, path):
+    kwargs = {"json": {"endpoint": "http://169.254.169.254/latest", "statement_id": 1}} if method == "post" else {}
+    assert getattr(as_role("user"), method)(path, headers=AUTH, **kwargs).status_code == 403
+
+
+def test_push_subscriptions_only_accept_real_push_services(as_role, monkeypatch):
+    from backend.notifications import service as notifications
+
+    monkeypatch.setattr(notifications, "get_current_user_id", lambda: 1)
+    monkeypatch.setattr(notifications, "get_current_workspace_id", lambda: "workspace-o")
+    monkeypatch.setattr(notifications, "get_connection", lambda: (_ for _ in ()).throw(AssertionError("must not store")))
+    for endpoint in ("http://169.254.169.254/latest", "https://internal.example.com/push", "https://fcm.googleapis.com.evil.io/x"):
+        assert notifications.save_push_subscription({"endpoint": endpoint})["status"] == "ERROR"
+    assert notifications._is_push_service_endpoint("https://fcm.googleapis.com/fcm/send/abc")
+    assert notifications._is_push_service_endpoint("https://web.push.apple.com/abc")

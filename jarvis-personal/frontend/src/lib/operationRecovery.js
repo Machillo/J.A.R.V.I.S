@@ -36,6 +36,16 @@ const purgeExpiredQueues = () => {
     }
   }
 };
+// Explicit logout or account deletion: pending request bodies (financial data)
+// must not stay on the device.
+export const clearPendingOperations = () => {
+  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith(QUEUE_PREFIX)) window.localStorage.removeItem(key);
+  }
+  emitQueue([]);
+};
+
 const readQueue = (userId) => {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(queueKey(userId)) || "[]");

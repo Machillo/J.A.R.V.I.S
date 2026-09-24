@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hmac
 import os
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+
+from backend.auth.current_user import require_roles
 
 from backend.notifications.service import (
     get_vapid_public_key,
@@ -13,24 +15,26 @@ from backend.notifications.service import (
 )
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
+# Browser push is an Owner (JARVIS) feature; only /cron is public (secret-protected).
+OWNER_ONLY = [Depends(lambda: require_roles("owner", "admin"))]
 
 
-@router.get("/status")
+@router.get("/status", dependencies=OWNER_ONLY)
 def notifications_status():
     return notification_health()
 
 
-@router.get("/vapid-public-key")
+@router.get("/vapid-public-key", dependencies=OWNER_ONLY)
 def notifications_vapid_public_key():
     return get_vapid_public_key()
 
 
-@router.post("/subscribe")
+@router.post("/subscribe", dependencies=OWNER_ONLY)
 def notifications_subscribe(payload: dict):
     return save_push_subscription(payload)
 
 
-@router.post("/test")
+@router.post("/test", dependencies=OWNER_ONLY)
 def notifications_test():
     return send_test_notification()
 

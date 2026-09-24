@@ -5,6 +5,7 @@ import os
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
+from urllib.parse import urlsplit
 
 try:
     from pywebpush import WebPushException, webpush
@@ -53,6 +54,17 @@ def _display_name(user: dict[str, Any] | None = None) -> str:
     if email:
         return email.split("@", 1)[0].split(".", 1)[0].title()
     return "Kenneth"
+
+
+# Web Push services the browsers actually use; any other endpoint would make the
+# server POST to an attacker-chosen URL.
+PUSH_SERVICE_HOSTS = ("fcm.googleapis.com", "updates.push.services.mozilla.com", "push.apple.com", "notify.windows.com")
+
+
+def _is_push_service_endpoint(endpoint: Any) -> bool:
+    parsed = urlsplit(str(endpoint or ""))
+    host = (parsed.hostname or "").lower()
+    return parsed.scheme == "https" and any(host == item or host.endswith("." + item) for item in PUSH_SERVICE_HOSTS)
 
 
 def _normalize_subscription_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -169,6 +181,8 @@ def save_push_subscription(payload: dict[str, Any]) -> dict[str, Any]:
 
     if not endpoint:
         return {"status": "ERROR", "message": "No recibí endpoint PushSubscription del navegador."}
+    if not _is_push_service_endpoint(endpoint):
+        return {"status": "ERROR", "message": "El endpoint no pertenece a un servicio de notificaciones reconocido."}
 
     with get_connection() as conn:
         ensure_notification_tables(conn)
@@ -300,7 +314,8 @@ def send_test_notification() -> dict[str, Any]:
             ok, error = _send_to_subscription(conn, subscription, title, body, "test")
             sent += 1 if ok else 0
             if error:
-                errors.append(error[:160])
+                # Never echo provider/network error text to the client.
+                errors.append("delivery_failed")
         conn.commit()
 
     return {
