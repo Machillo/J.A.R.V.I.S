@@ -46,39 +46,57 @@ Also tested:
    - Goals got the same tie-break.
 2. **VIP could target a paid-off debt.** `build_vip_strategy` did not filter `remaining_amount > 0`, unlike Basic. The production snapshot already filters these debts, so no user was affected, but the engine is now consistent on its own.
 
-## Proposals: HUMAN GATE (financial rules, not changed)
+## Proposals (financial rules)
 
-They are encoded as `xfail(strict=True)` tests. They start failing ("XPASS") if someone changes the rule, which forces a conscious update.
+P1 and P2 were approved and are implemented, covered by normal tests in `backend/tests/test_strategy_profiles.py`. P3–P5 remain documented proposals that need human approval.
 
-- **P1: nothing beyond the emergency fund.**
-  - With no debt and savings already at or above the target, Basic still says "use the margin to strengthen your emergency fund" and allocates the whole margin to it.
-  - Proposal: once the target is met, move the priority to goals, then to long-term saving/investment ("wealth building"), and keep the emergency line at 0.
-  - Impact: medium. The copy and priority change for stable users.
-- **P2: savings far above the target never pay expensive debt.**
-  - Example: savings of 3 M against a 1.8 M target, with a 52 % APR debt of 1 M. The plan only uses the monthly margin.
-  - Proposal: when liquid savings exceed the emergency target by X and a debt's APR is above Y, suggest a one-time payment from the excess, as an optional action that is never automatic.
-  - Impact: high. X and Y need a human decision.
-- **P3: the engine has no input for illiquid assets or income volatility.**
-  - For "high net worth, illiquid" and "variable income", the engine only sees liquid savings and an average income.
-  - Proposal: a variability buffer for hourly/variable income (a larger emergency target, in months), plus an asset/liquidity input.
-  - Impact: medium. This needs product design, so it is post-launch.
-- **P4: Basic can emit two `emergency` lines** when there is no debt: "Reserva de emergencia" plus "Ahorro / fondo de emergencia". This is cosmetic, but a UI that keys by bucket would merge or duplicate them. It could be merged into one line.
-- **P5: in a critical month, the paycheck plan lists essentials plus minimums above the paycheck.** It just reflects the deficit, and `unassigned` stays at 0. The copy could say "deficit this period" explicitly.
+- **P1: nothing beyond the emergency fund. IMPLEMENTED.**
+  - Rule, applied only when there is no active debt and the emergency target is known (> 0):
+    1. the monthly margin fills the emergency fund only up to its real gap (`target − liquid_savings`, net of the starter reserve);
+    2. the remainder goes to active goals, ordered by priority, then nearest date, then oldest record, each capped at its remaining gap;
+    3. whatever is left becomes a `wealth_building` line.
+  - Priority:
+    - `emergency` while `liquid_savings < target`;
+    - `goals` once the fund is complete and an active goal remains;
+    - `wealth_building` otherwise.
+  - The wealth-building text names no product, instrument or return.
+  - An unknown target (None/0) keeps the previous behavior: DINCR cannot know the fund is complete, and unknown is not zero.
+  - Unknown essential expenses never produce a `wealth_building` line. The remainder stays as "margin to confirm" (`flex`), and with no goals the priority is `complete_profile`.
+  - Debt logic is untouched: with any active debt the priority stays `debt`.
+  - VIP inherits the priority from Basic, and its emergency line was already capped at the gap.
+  - Pinned profiles that changed on purpose: `healthy_emergency_fund` and `wealth_building_ready` (→ `wealth_building`), `good_saver` and `stable` (→ `goals`). No other profile changed.
+- **P2: excess savings vs. very expensive debt. IMPLEMENTED AND ACTIVE (threshold approved).**
+  - `excess_savings_opportunity` computes `excess_savings = max(liquid_savings − emergency_fund_target − Σ goals.current_amount, 0)`. It needs a **known** emergency target, and money already set aside for goals is never excess.
+  - Eligible debts: active, with a **known** nominal APR ≥ `HIGH_COST_DEBT_APR_THRESHOLD`. A debt with unknown APR is never eligible; the snapshot also turns a stored 0 into unknown.
+  - The debt is picked with the existing deterministic debt score (known rate, highest rate, earliest due day, smaller balance, oldest record). The suggested amount is `min(excess_savings, remaining_amount)`.
+  - It is offered only when the month's margin is positive (not `tight`, `critical` or `needs_income`).
+  - It lives in a separate `optional_actions` list: `source="excess_savings"`, `optional=True`, `executes=False`. The monthly `allocations` and `strategic_margin` are identical with or without it, and a test covers every profile.
+  - DINCR never moves money, records payments or edits debts, accounts, savings or movements from this rule. The only consumer is an informative card in Basic and VIP, with no action button.
+  - The copy tells the user to confirm the excess isn't needed for upcoming expenses DINCR doesn't know about, to check early-payment fees, and that a prepayment cannot be undone.
 
-## Sanitized aggregate metrics (concept, not implemented)
+### P2 threshold decision (approved for v1 by Kenneth)
 
-Goal: improve these rules with evidence, never with raw personal data. The flow follows `CLAUDE.md`: sanitized/aggregated data → hypothesis → synthetic test → deterministic proposal → human review → versioned rule.
+`HIGH_COST_DEBT_APR_THRESHOLD = 20.0`, **inclusive** (`APR >= 20.0`). Boundaries are tested: 19.99 % not eligible; 20.00 % and 20.01 % eligible.
 
-1. **Emission.** When a strategy is computed, record only an **anonymous tuple**: `engine_version`, `plan` (basic/vip), `status`, `priority`, and banded ratios. The bands are commitment ratio (0–40/40–60/60–80/80–100/>100 %), emergency coverage (0/<1/1–3/3–6/>6 months), APR band of the target debt, number of active debts (0/1/2–3/4+) and income type (fixed/hourly).
-   - Never record amounts, names, account/workspace ids or free text.
-2. **Storage.** A server-only table `strategy_metrics_daily(date, engine_version, plan, status, priority, bands…, count)`. It is incremented with `ON CONFLICT DO UPDATE` and has no per-user rows.
-   - Keep k-anonymity: only publish cells with count ≥ 20.
-   - RLS enabled, and grants revoked from `anon`/`authenticated`.
-3. **Review.** An Owner-only report shows transitions, such as the share of "tight" users who reach "healthy" within 3 months (from `financial_health_snapshots` aggregates).
-   - Hypotheses become new synthetic profiles in this battery before any rule changes.
-4. **Guardrails.**
-   - AI may read only the aggregate report to propose hypotheses.
-   - It never writes rules, never sees rows, and never activates anything.
-   - Rule changes ship as a versioned engine (`engine_version`) after human approval.
+For v1:
+- the same nominal threshold applies to CRC and USD debts;
+- it is not relative to inflation, deposit rates or any external variable;
+- a positive monthly margin and a known emergency target are required;
+- the emergency fund and goal savings are never touched.
 
-Implementing (1)–(2) needs a migration and a privacy-policy check, so it is a human gate and post-launch.
+For reference, other values in the code keep their own meaning:
+
+| Value | Where | What it decides |
+|---|---|---|
+| 10 % ("deuda cara") | advisor/core (Owner), ai/strategy_dashboard (VIP dashboard), goals/strategy | blocks investing and goal funding |
+| 25 % | ai/strategy_dashboard | payoff ordering |
+
+**Known limitation.** DINCR does not model planned short-term expenses (marchamo, school costs, holidays…). P2 can only protect the reserves DINCR knows about: the emergency target and goal savings. It does **not** claim the whole excess is disposable, so the UI asks the user to confirm they don't need it for upcoming expenses before paying.
+
+**Where it shows.** The Basic strategy screen shows it in both its Basic and VIP branches. VIP users normally see the VIP strategy dashboard, which is a different engine. There, `VipStrategy` fetches `/user-product/finance/strategy-vip` only to render the same optional card above the dashboard, without touching that engine.
+
+### P1/P2 follow-ups (human decisions, not implemented)
+- **Goal funding policy.** Goals are funded fully one after another. Alternative: pay each dated goal its required monthly amount first (`_goal_monthly_need` exists), then split the rest.
+- **VIP allocations.** VIP inherits the Basic priority, but its weights still send the no-debt share to `flex` and have no `wealth_building` line.
+- **Hysteresis and reason codes** for the switch at `savings >= target`.
+- **Planned short-term expenses** (marchamo, school, holidays) are not modeled, so they can land in `wealth_building`, and P2 cannot exclude them from the excess. This is documented, and the P2 UI asks the user to confirm. No new reserve is invented.

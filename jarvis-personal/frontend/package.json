@@ -13,6 +13,7 @@
     "test:a11y": "node scripts/test-a11y.mjs",
     "test:navigation": "node scripts/test-finva-settings-navigation.mjs",
     "test:plans": "node scripts/test-plan-selection.mjs",
+    "test:strategy-optional-actions": "node scripts/test-strategy-optional-actions.mjs",
     "test:unified-movements": "node scripts/test-unified-movements.mjs",
     "test:double-submit": "node scripts/test-double-submit.mjs",
     "test:native-navigation": "node scripts/test-native-navigation.mjs",

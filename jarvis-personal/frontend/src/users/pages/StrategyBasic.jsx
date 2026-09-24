@@ -15,6 +15,7 @@ import {
   simulateStrategyVip,
 } from "../services/jarvisApi";
 import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import StrategyOptionalActions from "../components/StrategyOptionalActions";
 
 const language = deviceLanguage();
 const copy = (es, en) => tx(es, en, language);
@@ -31,6 +32,9 @@ const priorityLabel = {
   stabilize: copy("Estabilizar flujo", "Stabilize cash flow"),
   debt: copy("Acelerar deuda", "Accelerate debt payoff"),
   emergency: copy("Construir seguridad", "Build financial security"),
+  goals: copy("Avanzar tus metas", "Advance your goals"),
+  wealth_building: copy("Construir patrimonio", "Build long-term wealth"),
+  complete_profile: copy("Completar tus datos", "Complete your details"),
 };
 
 export default function StrategyBasic({ plan = "basic" }) {
@@ -67,8 +71,9 @@ export default function StrategyBasic({ plan = "basic" }) {
       <div className="basic-strategy-order">
         <article><header><strong>1 · {copy("Gastos esenciales","Essential expenses")}</strong><b>{money(data.essential_expenses)}</b></header><span>{covered?copy("Cubierto","Covered"):copy("Prioridad","Priority")}</span></article>
         <article><header><strong>2 · {copy("Deudas","Debts")}</strong><b>{money(data.minimum_debt_payments)}</b></header><span>{copy("Planificado","Planned")}</span></article>
-        {basicAllocations.slice(0,2).map((allocation,index)=><article key={`${allocation.bucket}-${index}`}><header><strong>{index+3} · {allocation.label}</strong><b>{money(allocation.amount)}</b></header><span>{copy("Sugerido","Suggested")}</span></article>)}
+        {basicAllocations.map((allocation,index)=><article key={`${allocation.bucket}-${index}`}><header><strong>{index+3} · {allocation.label}</strong><b>{money(allocation.amount)}</b></header><span>{copy("Sugerido","Suggested")}</span></article>)}
       </div>
+      <StrategyOptionalActions actions={data.optional_actions}/>
       <article className="basic-strategy-note">{copy("Basic guía la organización del mes. Las proyecciones y escenarios dinámicos pertenecen a VIP.","Basic guides monthly organization. Dynamic projections and scenarios belong to VIP.")}</article>
     </section>;
   }
@@ -170,6 +175,8 @@ export default function StrategyBasic({ plan = "basic" }) {
           </article>
         </div>
       )}
+
+      <StrategyOptionalActions actions={data.optional_actions} />
 
       {allocations.length > 0 && (
         <div className="panel">
