@@ -45,12 +45,12 @@ def test_labeled_amounts_keep_their_magnitude(raw, amount, currency):
     ("₡ 1 500,00", 1_500),
     ("Monto: CRC 25000", 25_000),                            # plain integer only when nothing stricter exists
 ])
+def test_context_amounts_keep_their_magnitude(text, amount):
+    assert p._parse_context_amount(text)[0] == amount
 
 
 def test_dolares_wording_in_free_text_is_usd():
     assert p._parse_context_amount("por un monto de 12,50 dólares") == (12.5, "USD")
-def test_context_amounts_keep_their_magnitude(text, amount):
-    assert p._parse_context_amount(text)[0] == amount
 
 
 @pytest.mark.parametrize("raw, value", [
