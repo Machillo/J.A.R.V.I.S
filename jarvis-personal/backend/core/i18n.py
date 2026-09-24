@@ -17,10 +17,18 @@ from typing import Iterator
 
 SUPPORTED_LANGUAGES = ("es", "en")
 DEFAULT_LANGUAGE = "es"
+# Two separate questions:
+# 1. Which routes follow Accept-Language? The routes the DINCR app calls.
 LOCALIZED_PATH_PREFIXES = ("/user-product/", "/auth/", "/product-ops/")
+# ...except Owner/admin operations mounted under those prefixes: always Spanish.
+OWNER_PATH_PREFIXES = ("/product-ops/owner/", "/auth/allowed-users")
+# 2. Which routes serve DINCR Users (neutral voice via voice())? Only the
+#    Users product. /product-ops/ and /auth/ are shared operations/account
+#    routes and never switch the Owner assistant voice off by themselves.
+DINCR_USERS_PATH_PREFIXES = ("/user-product/",)
 
 _language: ContextVar[str] = ContextVar("dincr_response_language", default=DEFAULT_LANGUAGE)
-_public: ContextVar[bool] = ContextVar("dincr_public_request", default=False)
+_dincr_users: ContextVar[bool] = ContextVar("dincr_users_request", default=False)
 
 
 def resolve_language(accept_language: str | None) -> str:
@@ -30,22 +38,27 @@ def resolve_language(accept_language: str | None) -> str:
     return primary if primary in SUPPORTED_LANGUAGES else DEFAULT_LANGUAGE
 
 
+def _is_owner_path(path: str) -> bool:
+    return str(path or "").startswith(OWNER_PATH_PREFIXES)
+
+
 def language_for_request(path: str, accept_language: str | None) -> str:
-    if not str(path or "").startswith(LOCALIZED_PATH_PREFIXES):
+    if _is_owner_path(path) or not str(path or "").startswith(LOCALIZED_PATH_PREFIXES):
         return DEFAULT_LANGUAGE
     return resolve_language(accept_language)
 
 
-def is_public_path(path: str) -> bool:
-    return str(path or "").startswith(LOCALIZED_PATH_PREFIXES)
+def is_dincr_users_path(path: str) -> bool:
+    """True for DINCR Users routes, which must never carry the Owner voice."""
+    return str(path or "").startswith(DINCR_USERS_PATH_PREFIXES) and not _is_owner_path(path)
 
 
-def set_public(public: bool) -> Token:
-    return _public.set(bool(public))
+def set_dincr_users(value: bool) -> Token:
+    return _dincr_users.set(bool(value))
 
 
-def reset_public(token: Token) -> None:
-    _public.reset(token)
+def reset_dincr_users(token: Token) -> None:
+    _dincr_users.reset(token)
 
 
 def set_language(language: str) -> Token:
@@ -78,10 +91,10 @@ def tx(spanish: str, english: str) -> str:
 def voice(owner: str, spanish: str, english: str) -> str:
     """Owner/JARVIS keeps its personal assistant voice; DINCR users get neutral copy.
 
-    Shared engines serve both products. Outside the public DINCR routes the
-    Owner text is returned unchanged.
+    Shared engines serve both products. Outside the DINCR Users routes
+    (DINCR_USERS_PATH_PREFIXES) the Owner text is returned unchanged.
     """
-    return tx(spanish, english) if _public.get() else owner
+    return tx(spanish, english) if _dincr_users.get() else owner
 
 
 def plural(count: float | int, singular: tuple[str, str], many: tuple[str, str]) -> str:

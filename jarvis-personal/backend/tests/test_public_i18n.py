@@ -16,7 +16,10 @@ from fastapi.testclient import TestClient
 from backend import main
 from backend.ai import strategy_dashboard
 from backend.auth import saas
-from backend.core.i18n import current_language, language_for_request, reset_public, resolve_language, set_public, use_language
+from backend.core.i18n import (
+    current_language, is_dincr_users_path, language_for_request, reset_dincr_users, resolve_language,
+    set_dincr_users, use_language,
+)
 from backend.finance import intelligence
 from backend.financial_lifecycle import state as lifecycle_state
 from backend.financial_lifecycle.monthly_review import build_monthly_review, localized_action
@@ -33,15 +36,15 @@ TEXT_KEYS = {
 
 
 def in_both(fn, *args, **kwargs):
-    """Run a rule as a public DINCR request in Spanish and in English."""
-    token = set_public(True)
+    """Run a rule as a DINCR Users request in Spanish and in English."""
+    token = set_dincr_users(True)
     try:
         with use_language("es"):
             spanish = fn(*args, **kwargs)
         with use_language("en"):
             english = fn(*args, **kwargs)
     finally:
-        reset_public(token)
+        reset_dincr_users(token)
     return spanish, english
 
 
@@ -407,3 +410,97 @@ def test_owner_voice_never_reaches_public_users(monkeypatch):
     public_es, public_en = in_both(localized_action, action)
     assert not OWNER_PERSONA.search(public_es[1]) and not OWNER_PERSONA.search(public_en[1])
     assert public_es == ("Abonar a Tarjeta BAC", "Es la deuda prioritaria de tu estrategia actual.")
+
+
+# --- Route classification: localization vs DINCR Users voice -----------------
+
+def test_owner_operations_are_neither_localized_nor_users():
+    for path in ("/product-ops/owner/dashboard", "/product-ops/owner/feature-flags/x", "/auth/allowed-users"):
+        assert language_for_request(path, "en") == "es"
+        assert is_dincr_users_path(path) is False
+    # Shared account/operations routes the app calls follow the language...
+    for path in ("/product-ops/feedback", "/product-ops/billing/catalog", "/auth/me", "/auth/plans"):
+        assert language_for_request(path, "en") == "en"
+        # ...but are not DINCR Users product routes: they never switch the voice.
+        assert is_dincr_users_path(path) is False
+    for path in ("/user-product/vip/debt-advisory", "/user-product/vip/lifecycle/monthly-review"):
+        assert is_dincr_users_path(path) is True
+    for path in ("/finance/debt-advisory", "/jarvis/premium/strategy-dashboard", "/"):
+        assert is_dincr_users_path(path) is False
+
+
+# --- Integration: real app, middleware and routes ------------------------------
+
+OWNER_USER = {"id": 1, "role": "owner", "account_id": "00000000-0000-0000-0000-00000000000a",
+              "workspace_id": "00000000-0000-0000-0000-0000000000aa", "email": "owner@example.com"}
+DINCR_USER = {**OWNER_USER, "id": 2, "role": "user", "email": "user@example.com"}
+
+
+@pytest.fixture
+def app_client(monkeypatch):
+    """main.app with auth, feature flags and the database replaced by fakes."""
+    state = {"user": DINCR_USER}
+    rows = [dict(DEBTS[0], debt_type="credit_card")]
+
+    class Conn:
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def execute(self, *_a, **_k): return SimpleNamespace(fetchall=lambda: [dict(r) for r in rows])
+
+    monkeypatch.setattr(main, "authenticate_access_token", lambda _token: dict(state["user"]))
+    monkeypatch.setattr(main, "disabled_feature_for_request", lambda *_a, **_k: None)
+    monkeypatch.setattr(intelligence, "get_current_workspace_id", lambda: "w")
+    monkeypatch.setattr(intelligence, "get_real_availability", lambda: {})
+    monkeypatch.setattr(intelligence, "get_connection", lambda: Conn())
+    from backend.user_product import routes as user_routes
+    monkeypatch.setattr(user_routes, "require_feature", lambda *_a, **_k: True)
+    client = TestClient(main.app)
+    return client, state
+
+
+def _advisory(client, path, language=None):
+    headers = {"Authorization": "Bearer test-token"}
+    if language:
+        headers["Accept-Language"] = language
+    response = client.get(f"{path}?extra_cash=150000", headers=headers)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_dincr_users_route_never_gets_the_owner_voice(app_client):
+    client, state = app_client
+    state["user"] = DINCR_USER
+    for language in ("es", "en", None, "fr"):
+        body = _advisory(client, "/user-product/vip/debt-advisory", language)
+        for text in texts(body):
+            assert not OWNER_PERSONA.search(text), (language, text)
+    assert _advisory(client, "/user-product/vip/debt-advisory", "en")["message"].startswith("It’s best")
+    assert _advisory(client, "/user-product/vip/debt-advisory", "es")["message"].startswith("Conviene")
+
+
+def test_owner_route_keeps_its_voice_and_spanish(app_client):
+    client, state = app_client
+    state["user"] = OWNER_USER
+    for language in ("es", "en", None):
+        body = _advisory(client, "/finance/debt-advisory", language)
+        assert body["message"].startswith("Señor, "), (language, body["message"])
+
+
+def test_owner_operations_and_shared_routes_through_the_middleware():
+    app = FastAPI()
+    app.middleware("http")(main.language_middleware)
+    from backend.core.i18n import voice
+
+    def probe():
+        return {"language": current_language(), "voice": voice("owner", "es-neutral", "en-neutral")}
+
+    for path in ("/product-ops/owner/probe", "/product-ops/feedback-probe", "/auth/probe", "/user-product/probe", "/jarvis/probe"):
+        app.add_api_route(path, probe)
+    client = TestClient(app)
+    get = lambda path: client.get(path, headers={"Accept-Language": "en"}).json()
+    assert get("/product-ops/owner/probe") == {"language": "es", "voice": "owner"}
+    assert get("/product-ops/feedback-probe") == {"language": "en", "voice": "owner"}
+    assert get("/auth/probe") == {"language": "en", "voice": "owner"}
+    assert get("/user-product/probe") == {"language": "en", "voice": "en-neutral"}
+    assert get("/jarvis/probe") == {"language": "es", "voice": "owner"}
+    assert voice("owner", "es", "en") == "owner"  # nothing leaks outside a request
