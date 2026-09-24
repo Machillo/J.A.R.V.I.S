@@ -359,3 +359,22 @@ def test_accept_paired_own_transfer_confirms_both_notices_without_transactions(m
     queries = [query for query, _ in connection.calls]
     assert not any("INSERT INTO transactions" in query for query in queries)
     assert any("id=%s AND account_id=%s AND workspace_id=%s" in query and "status='confirmed'" in query for query in queries[3:])
+
+
+def test_concurrent_sync_of_the_same_message_is_a_duplicate_not_a_crash(monkeypatch):
+    # Push and manual sync can both reach a new message; the second INSERT hits
+    # UNIQUE(connection_id, provider_message_id) and must not abort the sync.
+    connection = _Connection([_Result(one=None), _Result(one=None)])
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: connection)
+    body = (
+        "Comercio:\nSUPERMERCADO EJEMPLO\nFecha:\nSep 22, 2026, 10:15\nVISA\n************1234\n"
+        "Autorización:\n123456\nReferencia:\n000011112222\nTipo de Transacción:\nCOMPRA\nMonto:\nCRC 15.000"
+    )
+    result = gmail_service._ingest_message(
+        {"id": 3, "account_id": "account-a", "workspace_id": "workspace-a", "legacy_user_id": LEGACY_USER_ID, "display_name": ""},
+        "gmail-9", subject="Notificación de transacción", sender="BAC <notificacion@notificacionesbaccr.com>",
+        body=body, received_at="2026-09-22T16:15:00Z",
+    )
+    assert result == "duplicate"
+    assert "ON CONFLICT(connection_id,provider_message_id) DO NOTHING" in connection.calls[1][0]
+    assert connection.committed is False

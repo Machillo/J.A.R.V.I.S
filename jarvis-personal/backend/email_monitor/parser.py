@@ -8,6 +8,7 @@ import re
 import unicodedata
 from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 # ---------------------------------------------------------------------------
 # JARVIS Email Parser Real
@@ -397,6 +398,15 @@ def _label_value(text: str, label: str, max_lookahead: int = 8) -> str | None:
     return None
 
 
+# Thousands-grouped amounts with optional decimals ("15.000", "1,234.56", "₡15.000,00")
+# or plain digits with optional decimals ("25000", "12.50"). (?!\d) stops "15.000"
+# from matching as "15.00".
+AMOUNT_PATTERN = r"\d{1,3}(?:[.,  ]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d+(?:[.,]\d{1,2})?(?!\d)"
+# Amounts that cannot be a count or an index: thousands-grouped or with cents.
+# Free-text searches try these first so "$ 3 por comisión y ₡15.000,00" is 15.000.
+STRICT_AMOUNT_PATTERN = r"\d{1,3}(?:[.,  ]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d+[.,]\d{2}(?!\d)"
+
+
 def _parse_number(raw: str) -> float | None:
     value = (raw or "").strip()
     if not value:
@@ -411,12 +421,16 @@ def _parse_number(raw: str) -> float | None:
         else:
             value = value.replace(".", "").replace(",", ".")
     elif "," in value:
+        # A single separator followed by exactly 3 digits groups thousands ("1,234");
+        # 1-2 trailing digits are decimals ("1,5" / "1,50").
         parts = value.split(",")
-        value = value.replace(".", "").replace(",", ".") if len(parts[-1]) == 2 else value.replace(",", "")
+        value = value.replace(",", ".") if len(parts) == 2 and len(parts[-1]) in (1, 2) else value.replace(",", "")
     elif "." in value:
         parts = value.split(".")
         if len(parts) > 2:
             value = "".join(parts[:-1]) + "." + parts[-1] if len(parts[-1]) == 2 else "".join(parts)
+        elif len(parts[-1]) == 3:
+            value = "".join(parts)  # "15.000" is fifteen thousand colones, never 15.0
     try:
         return float(value)
     except ValueError:
@@ -426,7 +440,8 @@ def _parse_number(raw: str) -> float | None:
 def _currency_code(value: str | None) -> str:
     raw = (value or "").upper()
     norm = normalize(raw)
-    if "USD" in raw or "$" in raw or "DOLAR" in norm or "DOLARES" in norm:
+    # normalize() lowercases and strips accents: "DÓLARES" -> "dolares".
+    if "USD" in raw or "$" in raw or "dolar" in norm:
         return "USD"
     return "CRC"
 
@@ -436,7 +451,7 @@ def _parse_labeled_amount_value(value: str | None) -> tuple[float | None, str]:
         return None, "CRC"
     match = re.search(
         r"(?P<currency>CRC|USD|₡|¢|\$|colones?|d[oó]lares?)?\s*"
-        r"(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\s*"
+        rf"(?P<amount>{AMOUNT_PATTERN})\s*"
         r"(?P<currency2>CRC|USD|₡|¢|\$|colones?|d[oó]lares?)?",
         value,
         re.I,
@@ -451,18 +466,20 @@ def _parse_labeled_amount_value(value: str | None) -> tuple[float | None, str]:
 
 
 def _parse_context_amount(text: str) -> tuple[float | None, str]:
-    patterns = [
-        r"por\s+un\s+monto\s+de\s*(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\s*(?P<currency>colones?|CRC|USD|₡|¢|\$)?",
-        r"monto\s*[:\-]?\s*(?P<currency>CRC|USD|₡|¢|\$|colones?)?\s*(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))",
-        r"(?P<currency>₡|¢|CRC|USD|\$)\s*(?P<amount>\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text or "", re.I)
-        if match:
-            amount = _parse_number(match.group("amount"))
-            currency = _currency_code(match.groupdict().get("currency") or match.group(0))
-            if amount is not None and 0 < amount < 20_000_000:
-                return amount, currency
+    currency = r"(?P<currency>colones?|CRC|USD|₡|¢|\$|d[oó]lares?)"
+    for amount in (STRICT_AMOUNT_PATTERN, AMOUNT_PATTERN):
+        patterns = [
+            rf"por\s+un\s+monto\s+de\s*(?P<amount>{amount})\s*{currency}?",
+            rf"monto\s*[:\-]?\s*{currency}?\s*(?P<amount>{amount})",
+            rf"(?P<currency>₡|¢|CRC|USD|\$)\s*(?P<amount>{amount})",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text or "", re.I)
+            if match:
+                value = _parse_number(match.group("amount"))
+                code = _currency_code(match.groupdict().get("currency") or match.group(0))
+                if value is not None and 0 < value < 20_000_000:
+                    return value, code
     return None, "CRC"
 
 
@@ -479,6 +496,22 @@ def _normalize_time(hour_min: str | None, ampm: str | None = None) -> str | None
     if marker.startswith("a") and hour == 12:
         hour = 0
     return f"{hour:02d}:{minute:02d}:{second:02d}"
+
+
+CR_TZ = ZoneInfo("America/Costa_Rica")
+
+
+def _local_date(value: str | None) -> str | None:
+    """Calendar date in Costa Rica for an ISO timestamp (a 19:30 purchase is not tomorrow in UTC)."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(CR_TZ)
+    return parsed.date().isoformat()
 
 
 def parse_date(text: str, fallback: str | None = None) -> str:
@@ -505,12 +538,10 @@ def parse_date(text: str, fallback: str | None = None) -> str:
                 return date(int(month_match.group("year")), month, int(month_match.group("day"))).isoformat()
             except ValueError:
                 pass
-    if fallback:
-        try:
-            return datetime.fromisoformat(fallback.replace("Z", "+00:00")).date().isoformat()
-        except Exception:
-            pass
-    return date.today().isoformat()
+    local = _local_date(fallback)
+    if local:
+        return local
+    return datetime.now(CR_TZ).date().isoformat()
 
 
 def _parse_datetime_text(text: str, fallback: str | None = None) -> tuple[str, str | None]:
@@ -684,7 +715,7 @@ def _base_result(bank: str, kind: str, received_at: str | None) -> dict[str, Any
         "email_kind": kind,
         "statement_month": None,
         "ignore_reason": None,
-        "transaction_date": parse_date(received_at or "", received_at),
+        "transaction_date": _local_date(received_at) or parse_date(received_at or "", received_at),
         "transaction_time": None,
         "description": "",
         "amount": 0.0,
