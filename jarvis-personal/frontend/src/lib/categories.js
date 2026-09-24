@@ -16,6 +16,7 @@ const ENGLISH_CATEGORY_LABELS = {
   general: "General",
   Ignorado: "Ignored",
   Mascotas: "Pets",
+  "Movimiento interno": "Internal transfer",
   Otros: "Other",
   "Otros ingresos": "Other income",
   Personal: "Personal",

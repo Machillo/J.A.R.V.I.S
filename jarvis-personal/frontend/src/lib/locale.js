@@ -16,6 +16,10 @@ const dictionaries = {
     common: { close: "Cerrar", retry: "Reintentar", month: "mes", months: "meses", currentYear: "Año actual" },
     finance: { loading: "Cargando núcleo financiero...", syncing: "Estoy sincronizando los datos reales de Supabase.", loadError: "No pude cargar el panel financiero", retryHelp: "Revisá los registros de Render o volvé a intentar.", noMovements: "Sin movimientos", chartWhenTransactions: "Cuando haya transacciones, el gráfico se activará.", income: "Ingresos", expensesDebt: "Gastos/deuda", addFinance: "AÑADIR FINANZAS", preview: "VISTA PREVIA", write: "Escribir", speak: "Hablar", baseMonth: "Mes base", dollar: "Dólar", analyze: "Analizar", save: "Guardar", expenses: "Gastos", debts: "Deudas", loans: "Préstamos", noCategories: "Sin categorías todavía", chartWhenExpenses: "Cuando haya gastos registrados, el gráfico se activará.", totalYtd: "TOTAL AÑO", showTotal: "Mostrar total", voiceUnsupported: "Este navegador no soporta reconocimiento de voz.", voiceError: "No pude escucharte bien." },
     strategy: { loading: "Cargando estrategia...", loadError: "No pude cargar la estrategia.", noDate: "Sin fecha estimada", reviewPayment: "Revisar cuota", lifebuoy: "Salvavidas", investments: "Inversiones", debtAdvice: "Asesoría de deudas", distribution: "Distribución de dinero", bonus: "Aguinaldo" },
+    plans: { free: "Gratis", basic: "Basic", vip: "VIP" },
+    eventKinds: { income: "Ingreso", expense: "Gasto", debt: "Deuda", goal: "Meta" },
+    priorities: { low: "Baja", medium: "Media", high: "Alta", critical: "Crítica" },
+    vipPriorities: { stabilize: "Estabilizar", emergency: "Fondo de emergencia", debt: "Deuda", goals: "Metas", invest: "Inversión", balanced: "Balanceada" },
     wealth: { eyebrow: "CENTRO PATRIMONIAL", title: "Patrimonio", intro: "Una vista ordenada de lo que tenés, lo que debés y lo que está construyendo valor.", control: "Control", netWorthHelp: "Activos, inversiones y deudas consolidados", investmentsHelp: "Aportes, rendimiento, dividendos y costos", businessesHelp: "Proyectos, sociedades e ingresos extra", timelineHelp: "Ingresos, cuotas y compromisos próximos", reconciliationHelp: "Diferencias, gastos olvidados y duplicados", deteriorationHelp: "Alertas tempranas y cambios negativos" },
   },
   en: {
@@ -35,6 +39,10 @@ const dictionaries = {
     common: { close: "Close", retry: "Retry", month: "month", months: "months", currentYear: "Current year" },
     finance: { loading: "Loading financial core...", syncing: "I’m syncing your real Supabase data.", loadError: "I couldn’t load the financial dashboard", retryHelp: "Check Render logs or try again.", noMovements: "No transactions", chartWhenTransactions: "The chart will activate when transactions are recorded.", income: "Income", expensesDebt: "Expenses/debt", addFinance: "ADD FINANCE", preview: "PREVIEW", write: "Write", speak: "Speak", baseMonth: "Base month", dollar: "Dollar", analyze: "Analyze", save: "Save", expenses: "Expenses", debts: "Debts", loans: "Loans", noCategories: "No categories yet", chartWhenExpenses: "The chart will activate when expenses are recorded.", totalYtd: "TOTAL YTD", showTotal: "Show total", voiceUnsupported: "This browser doesn’t support speech recognition.", voiceError: "I couldn’t hear you clearly." },
     strategy: { loading: "Loading strategy...", loadError: "I couldn’t load the strategy.", noDate: "No estimated date", reviewPayment: "Review payment", lifebuoy: "Emergency fund", investments: "Investments", debtAdvice: "Debt advisory", distribution: "Money distribution", bonus: "Annual bonus" },
+    plans: { free: "Free", basic: "Basic", vip: "VIP" },
+    eventKinds: { income: "Income", expense: "Expense", debt: "Debt", goal: "Goal" },
+    priorities: { low: "Low", medium: "Medium", high: "High", critical: "Critical" },
+    vipPriorities: { stabilize: "Stabilize", emergency: "Emergency fund", debt: "Debt", goals: "Goals", invest: "Invest", balanced: "Balanced" },
     wealth: { eyebrow: "WEALTH CENTER", title: "Wealth", intro: "An organized view of what you own, what you owe, and what is building value.", control: "Control", netWorthHelp: "Consolidated assets, investments, and debts", investmentsHelp: "Contributions, performance, dividends, and costs", businessesHelp: "Projects, companies, and extra income", timelineHelp: "Upcoming income, payments, and commitments", reconciliationHelp: "Differences, forgotten expenses, and duplicates", deteriorationHelp: "Early warnings and negative changes" },
   },
 };
@@ -55,6 +63,10 @@ export const t = (key, language = deviceLanguage()) => {
   const value = key.split(".").reduce((node, part) => node?.[part], dictionaries[language]);
   return value ?? key;
 };
+
+// Label for an API code (e.g. codeLabel("priorities", "high")); unknown codes pass through.
+export const codeLabel = (group, code, language = deviceLanguage()) =>
+  dictionaries[language]?.[group]?.[code] ?? code;
 
 export const applyDocumentLanguage = (language = deviceLanguage()) => {
   if (typeof document !== "undefined") document.documentElement.lang = language;

@@ -1,5 +1,5 @@
 import { useEffect,useState } from "react";
-import { deviceLanguage, localeTag } from "../../lib/locale";
+import { codeLabel, deviceLanguage, localeTag } from "../../lib/locale";
 import { getFinancialCalendar } from "../services/jarvisApi";
 const language=deviceLanguage();
 const tx=(es,en)=>language==="es"?es:en;
@@ -20,7 +20,7 @@ export default function FinancialCalendar({ plan = "basic" }){
         {Object.keys(grouped).length ? Object.entries(grouped).map(([date,events])=><article className="basic-calendar-day" key={date}>
           <header><strong>{new Date(`${date}T12:00:00`).toLocaleDateString(localeTag(language),{day:"2-digit",month:"long"})}</strong><span>{events.length} {events.length===1?tx("evento","event"):tx("eventos","events")}</span></header>
           {events.map((event,index)=><div className={`basic-calendar-event ${event.kind}`} key={`${date}-${event.name}-${index}`}>
-            <span><b>{event.name}</b><small>{event.kind}</small></span><strong>{event.amount?money(event.amount):"—"}</strong>
+            <span><b>{event.name}</b><small>{codeLabel("eventKinds", event.kind)}</small></span><strong>{event.amount?money(event.amount):"—"}</strong>
           </div>)}
         </article>):<div className="panel finva-empty-state">{tx("No hay eventos configurados para este mes.","No events configured for this month.")}</div>}
       </div>

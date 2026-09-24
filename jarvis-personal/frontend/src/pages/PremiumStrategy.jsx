@@ -22,6 +22,7 @@ import {
 import { trackEvent } from "../lib/telemetry";
 import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
 import { deviceLanguage, localeTag, t } from "../lib/locale";
+import { categoryLabel } from "../lib/categories";
 
 const language = deviceLanguage();
 const tr = (key) => t(key, language);
@@ -154,7 +155,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
       setAguinaldoState({ loading: false, data, error: "" });
       return data;
     } catch (error) {
-      setAguinaldoState({ loading: false, data: null, error: error.message || tx("No pude calcular el aguinaldo.", "I couldn’t calculate the year-end bonus.") });
+      setAguinaldoState({ loading: false, data: null, error: error.message || tx("No pude calcular el aguinaldo.", "I couldn’t calculate the annual bonus.") });
       return null;
     }
   };
@@ -415,7 +416,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
                       <label key={expense.id} className={`salvavidas-expense-option ${checked ? "selected" : ""}`}>
                         <input type="checkbox" checked={checked} onChange={() => toggleProtectedExpense(expense.id)} />
                         <span className="salvavidas-check">{checked ? <CheckCircle2 size={18} /> : null}</span>
-                        <span className="salvavidas-expense-copy"><strong>{expense.name}</strong><small>{expense.category}</small></span>
+                        <span className="salvavidas-expense-copy"><strong>{expense.name}</strong><small>{categoryLabel(expense.category)}</small></span>
                         <strong>{money(expense.monthly_amount)}{tx("/mes", "/mo")}</strong>
                       </label>
                     );
@@ -592,8 +593,8 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
       <div className="strategy-detail-heading">
         <div className="strategy-title-row"><Gift size={22}/><div><h3>{tr("strategy.bonus")}</h3><p>{tx("Estimación basada en salarios reportados oficialmente, divididos entre 12.", "Estimate based on officially reported salaries, divided by 12.")}</p></div></div>
       </div>
-      {aguinaldoState.loading ? <p className="muted-text">{tx("Calculando tu aguinaldo…", "Calculating your year-end bonus…")}</p> : aguinaldoState.error ? <div className="alert-card"><AlertTriangle size={18}/>{aguinaldoState.error}</div> : <>
-        <div className="strategy-surplus-card"><span>{tx("AGUINALDO ACUMULADO", "ACCRUED YEAR-END BONUS")}</span><strong>{money(aguinaldo.accrued_aguinaldo)}</strong><small>{tx("Salarios contabilizados:", "Salaries counted:")} {money(aguinaldo.earned_salary_total)}</small></div>
+      {aguinaldoState.loading ? <p className="muted-text">{tx("Calculando tu aguinaldo…", "Calculating your annual bonus…")}</p> : aguinaldoState.error ? <div className="alert-card"><AlertTriangle size={18}/>{aguinaldoState.error}</div> : <>
+        <div className="strategy-surplus-card"><span>{tx("AGUINALDO ACUMULADO", "ACCRUED ANNUAL BONUS")}</span><strong>{money(aguinaldo.accrued_aguinaldo)}</strong><small>{tx("Salarios contabilizados:", "Salaries counted:")} {money(aguinaldo.earned_salary_total)}</small></div>
         <div className="strategy-v3-note"><Shield size={17}/><span>{tx(`Período ${aguinaldo.period?.start || "—"} al ${aguinaldo.period?.end || "—"}. No incluye meses que todavía no tienen información salarial.`, `Period ${aguinaldo.period?.start || "—"} to ${aguinaldo.period?.end || "—"}. It doesn’t include months without salary information yet.`)}</span></div>
         {months.filter((item) => Number(item.total_earned || 0) > 0).length ? <div className="strategy-allocation-v3">{months.filter((item) => Number(item.total_earned || 0) > 0).map((item) => <div className="strategy-allocation-row-v3" key={item.month}><div><span>{item.month}</span><small>{Number(item.entries) === 1 ? tx("1 registro", "1 record") : tx(`${item.entries} registros`, `${item.entries} records`)}</small></div><strong>{money(item.total_earned)}</strong></div>)}</div> : <p className="muted-text">{tx("Todavía no hay salarios oficiales importados para este período.", "No official salaries have been imported for this period yet.")}</p>}
       </>}
