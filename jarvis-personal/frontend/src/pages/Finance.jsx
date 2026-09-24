@@ -520,7 +520,8 @@ function MonthlyFinanceTrendChart({ monthly = [] }) {
 
   return (
     <div className="finance-trend-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Monthly income and expenses">
+      <div className="finance-trend-plot">
+      <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label="Monthly income and expenses">
         {[0, 1, 2, 3, 4].map((line) => {
           const ratio = line / 4;
           const lineY = padTop + ratio * plotHeight;
@@ -546,6 +547,8 @@ function MonthlyFinanceTrendChart({ monthly = [] }) {
           </g>
         ))}
       </svg>
+      </div>
+      <div className="legend trend-legend"><span className="cyan"></span> Income <span className="red"></span> Expenses</div>
 
       <div className="trend-summary-grid trend-summary-grid-four">
         <div className={accumulated < 0 ? "trend-negative" : accumulated > 0 ? "trend-positive" : ""}>
@@ -569,7 +572,6 @@ function MonthlyFinanceTrendChart({ monthly = [] }) {
           <small>{formatMonthLabel(latest?.month)} · income − expenses</small>
         </div>
       </div>
-      <div className="legend trend-legend"><span className="cyan"></span> Income <span className="red"></span> Expenses</div>
       <small className="trend-history-note">Each point is that month's actual recorded total. Accumulated balance only carries forward the surplus or deficit left by each month; total debt is kept separately in Overview.</small>
     </div>
   );

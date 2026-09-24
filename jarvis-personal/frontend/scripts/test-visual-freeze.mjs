@@ -68,4 +68,28 @@ assert.match(read("src/products/jarvis/styles/operations.css"), /\.product-ops-p
 const registry = read("src/products/finva/features/registry.jsx");
 assert.doesNotMatch(registry, /personal\/PersonalApp|products\/jarvis\/(?!components\/JarvisDisclosure)/, "the Users registry does not import Owner screens");
 
+// Owner Finance on phones: grid tracks are bounded so a long category name or a
+// large CRC/USD amount cannot widen the column past the viewport (Gastos), and the
+// monthly trend chart scrolls inside its own box with an intrinsic height, so the
+// legend, cards and note after it are normal vertical flow (Análisis).
+const financeModules = read("src/styles/08-finance-modules.css");
+assert.match(financeModules, /\.spending-donut-workspace\{display:grid;grid-template-columns:minmax\(0,1fr\)/);
+assert.match(financeModules, /\.spending-donut-main\{display:grid;grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,290px\),1fr\)\)/);
+assert.match(financeModules, /\.spending-donut-legend\{display:grid;grid-template-columns:minmax\(0,1fr\)/);
+assert.match(financeModules, /@media \(max-width:900px\)\{\.spending-donut-main\{grid-template-columns:minmax\(0,1fr\)\}\.spending-donut-legend span strong\{white-space:normal;overflow-wrap:anywhere\}/);
+assert.match(financeModules, /\.trend-summary-grid-four\{grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,190px\),1fr\)\)\}/);
+assert.match(financeModules, /\.finance-trend-plot\{min-width:0;overflow-x:auto;overflow-y:hidden;/);
+assert.match(financeModules, /\.finance-trend-plot svg\{display:block;width:100%;height:auto;aspect-ratio:820\/330;overflow:hidden\}/);
+assert.doesNotMatch(financeModules, /\.finance-trend-chart\{overflow-x:auto\}|\.finance-trend-chart svg\{/, "only the plot box scrolls");
+const financeCycle = read("src/styles/06-finance-cycle.css");
+assert.match(financeCycle, /\.finance-detail-list,\s*\.full-debt-list \{\s*display: grid;[^}]*grid-template-columns: minmax\(0, 1fr\);/);
+assert.match(financeCycle, /\.finance-detail-row div \{\s*min-width: 0;[^}]*max-width: 100%;/);
+const ownerFinance = read("src/pages/Finance.jsx");
+const trendChart = ownerFinance.slice(ownerFinance.indexOf("function MonthlyFinanceTrendChart"), ownerFinance.indexOf("export function ReceivablesPanel"));
+const plotStart = trendChart.indexOf('<div className="finance-trend-plot">');
+const plotEnd = trendChart.indexOf("</svg>", plotStart);
+assert.ok(plotStart > 0 && plotEnd > plotStart, "the trend SVG lives in its own plot box");
+assert.ok(trendChart.indexOf('className="trend-summary-grid') > plotEnd, "summary cards follow the plot box");
+assert.match(trendChart, /<svg viewBox=\{`0 0 \$\{width\} \$\{height\}`\} width=\{width\} height=\{height\}/, "the SVG has an intrinsic size");
+
 console.log("DINCR v1.0 visual freeze guards passed.");
