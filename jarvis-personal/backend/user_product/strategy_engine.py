@@ -38,11 +38,11 @@ def _record_order(value: Any) -> float:
         return float("-inf")
 
 
-# P2 (excess savings vs. very expensive debt) activates only for debts whose known
-# annual rate is at or above this value. HUMAN GATE: no threshold has been approved
-# for this decision yet, so it stays None (disabled). See
-# docs/finance/strategy-profile-audit.md, "P2 threshold decision".
-HIGH_COST_DEBT_APR_THRESHOLD: float | None = None
+# P2 (excess savings vs. very expensive debt) applies only to debts whose KNOWN nominal
+# annual rate is >= this value (inclusive). Approved for v1 by the product owner: 20.0 %,
+# same nominal value for CRC and USD debts, not yet relative to inflation or deposit rates.
+# See docs/finance/strategy-profile-audit.md, "P2 threshold decision".
+HIGH_COST_DEBT_APR_THRESHOLD: float | None = 20.0
 
 GOAL_PRIORITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
@@ -81,8 +81,8 @@ def excess_savings_opportunity(snapshot: dict, apr_threshold: float | None = Non
         "savings_after": round(savings - amount, 2), "reserved_for_goals": reserved_for_goals, "apr_threshold": threshold,
         "label": tx(f"Opcional: abono único a {target['name']} con ahorro excedente", f"Optional: one-time payment to {target['name']} from excess savings"),
         "explanation": tx(
-            f"Tu ahorro supera tu fondo de emergencia objetivo por {excess:.2f}. Podrías usar hasta {amount:.2f} de ese excedente para abonar a {target['name']} ({rate:g}% anual). Tu fondo de emergencia y el ahorro de tus metas quedarían intactos. Antes de abonar, consultá con tu entidad posibles comisiones por pago anticipado; un abono a un préstamo no se puede revertir. Es una sugerencia: DINCR no mueve dinero.",
-            f"Your savings exceed your emergency fund target by {excess:.2f}. You could use up to {amount:.2f} of that excess toward {target['name']} ({rate:g}% annual). Your emergency fund and your goal savings would stay intact. Before paying, check with your lender for early-payment fees; a loan prepayment cannot be undone. This is a suggestion: DINCR does not move money.",
+            f"Tu ahorro supera tu fondo de emergencia objetivo por {excess:.2f}. Podrías usar hasta {amount:.2f} de ese excedente para abonar a {target['name']} ({rate:g}% anual). Tu fondo de emergencia y el ahorro de tus metas quedarían intactos. DINCR no conoce tus gastos próximos que no registraste (por ejemplo marchamo o colegio): confirmá que no necesitás ese excedente antes de abonar. Consultá con tu entidad posibles comisiones por pago anticipado; un abono no se puede revertir. Es una sugerencia: DINCR no mueve dinero ni registra el pago.",
+            f"Your savings exceed your emergency fund target by {excess:.2f}. You could use up to {amount:.2f} of that excess toward {target['name']} ({rate:g}% annual). Your emergency fund and your goal savings would stay intact. DINCR doesn't know upcoming expenses you haven't recorded (for example vehicle tax or school costs): confirm you don't need that excess before paying. Check with your lender for early-payment fees; a prepayment cannot be undone. This is a suggestion: DINCR does not move money or record the payment.",
         ),
     }
 

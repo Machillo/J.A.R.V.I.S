@@ -3,9 +3,10 @@
 Every profile is fictitious and reproducible. The battery checks priorities,
 invariants (no negative or impossible amounts, allocations never exceed the
 margin, cents rounding), threshold crossings, input-order independence and
-that ES/EN only change wording. Rules that look improvable are documented as
-strict xfail proposals: changing them is a financial decision that needs
-human approval (see docs/finance/strategy-profile-audit.md).
+that ES/EN only change wording. It also covers the approved P1 (beyond a
+complete emergency fund) and P2 (optional excess-savings suggestion, APR >= 20 %)
+rules. Any further rule change is a financial decision that needs human
+approval (see docs/finance/strategy-profile-audit.md).
 """
 from __future__ import annotations
 
@@ -314,7 +315,8 @@ def test_language_changes_wording_never_numbers(name):
     snapshot = PROFILES[name]
 
     def numbers(result):
-        return {k: v for k, v in result.items() if k not in {"recommendation", "warnings", "director_note"}} | {
+        return {k: v for k, v in result.items() if k not in {"recommendation", "warnings", "director_note", "optional_actions"}} | {
+            "optional_actions": [{k: v for k, v in act.items() if k not in {"label", "explanation"}} for act in result.get("optional_actions", [])],
             "allocations": [(a["bucket"], a["amount"]) for a in result.get("allocations", [])],
             "vip_allocations": [(a["bucket"], a["amount"]) for a in result.get("vip_allocations", [])],
         }
@@ -462,9 +464,8 @@ def test_every_status_returns_optional_actions():
 
 
 # --- P2: excess savings vs. very expensive debt (optional recommendation) ---
-# The approved threshold does not exist yet (HUMAN GATE). These tests exercise the
-# rule with an explicit test-only threshold; production keeps it disabled.
-TEST_THRESHOLD = 30.0
+# Approved v1 threshold: known nominal APR >= 20.0 % (inclusive), CRC and USD alike.
+TEST_THRESHOLD = se.HIGH_COST_DEBT_APR_THRESHOLD
 EXPENSIVE = debt(1, 1_000_000, 70_000, 52)
 
 
@@ -472,10 +473,8 @@ def _p2(savings, debts, target=1_800_000):
     return profile(1_400_000, 600_000, savings, target, list(debts))
 
 
-def test_p2_is_disabled_until_a_threshold_is_approved():
-    assert se.HIGH_COST_DEBT_APR_THRESHOLD is None
-    result = se.build_basic_strategy(PROFILES["expensive_debt_with_savings"])
-    assert result["optional_actions"] == []
+def test_p2_uses_the_approved_20_percent_threshold():
+    assert se.HIGH_COST_DEBT_APR_THRESHOLD == 20.0
 
 
 @pytest.mark.parametrize("savings", [0, 1_000_000, 1_800_000])
@@ -502,10 +501,19 @@ def test_p2_ignores_debts_with_unknown_or_lower_rates():
     assert se.excess_savings_opportunity(_p2(3_000_000, debts), TEST_THRESHOLD) is None
 
 
-def test_p2_threshold_boundary_is_inclusive():
-    at = se.excess_savings_opportunity(_p2(3_000_000, [debt(1, 500_000, 40_000, 30)]), TEST_THRESHOLD)
-    below = se.excess_savings_opportunity(_p2(3_000_000, [debt(1, 500_000, 40_000, 29.99)]), TEST_THRESHOLD)
-    assert at is not None and below is None
+@pytest.mark.parametrize("rate, eligible", [(19.99, False), (20.0, True), (20.01, True)])
+def test_p2_threshold_boundary_is_inclusive_at_20_percent(rate, eligible):
+    snapshot = _p2(3_000_000, [debt(1, 500_000, 40_000, rate)])
+    assert (se.excess_savings_opportunity(snapshot) is not None) is eligible
+    assert bool(se.build_basic_strategy(snapshot)["optional_actions"]) is eligible, "production default, no override"
+
+
+@pytest.mark.parametrize("rate", [None, 0])
+def test_p2_debt_with_unknown_rate_is_never_eligible(rate):
+    # The snapshot query turns a stored 0 into NULL (unknown); both must stay ineligible.
+    snapshot = _p2(3_000_000, [debt(1, 500_000, 40_000, None if rate == 0 else rate, name="Tarjeta")])
+    assert se.excess_savings_opportunity(snapshot) is None
+    assert se.build_basic_strategy(snapshot)["optional_actions"] == []
 
 
 def test_p2_picks_the_eligible_debt_deterministically_in_any_order():
@@ -553,6 +561,7 @@ def test_p2_is_not_offered_when_the_month_is_tight_or_critical(monkeypatch):
 def test_p2_copy_warns_about_irreversibility_and_fees():
     text = se.excess_savings_opportunity(_p2(2_300_000, [EXPENSIVE]), TEST_THRESHOLD)["explanation"]
     assert "no se puede revertir" in text and "comisiones" in text and "DINCR no mueve dinero" in text
+    assert "gastos próximos" in text and "confirmá que no necesitás ese excedente" in text
 
 
 def test_p2_unknown_target_never_creates_an_excess():
@@ -570,7 +579,21 @@ def test_p2_language_never_changes_the_amounts(monkeypatch):
     assert strip(es) == strip(en)
 
 
-@pytest.mark.xfail(strict=True, reason="P2 HUMAN GATE: HIGH_COST_DEBT_APR_THRESHOLD not approved; see strategy-profile-audit.md")
 def test_p2_is_active_for_expensive_debt_with_excess_savings_in_production():
     result = se.build_basic_strategy(PROFILES["expensive_debt_with_savings"])
-    assert any(a["source"] == "excess_savings" for a in result["optional_actions"])
+    [action] = result["optional_actions"]
+    assert (action["source"], action["debt_id"], action["amount"]) == ("excess_savings", 1, 1_000_000)
+    assert action["savings_after"] == 2_000_000 >= 1_800_000
+    vip = se.build_vip_strategy(PROFILES["expensive_debt_with_savings"])
+    assert vip["optional_actions"] == result["optional_actions"]
+    assert all(a["bucket"] != "excess_savings" and "source" not in a for a in vip["vip_allocations"])
+
+
+@pytest.mark.parametrize("name", PROFILES)
+def test_p2_never_changes_monthly_allocations_or_margin(name, monkeypatch):
+    snapshot = PROFILES[name]
+    active = se.build_basic_strategy(snapshot), se.build_vip_strategy(snapshot)
+    monkeypatch.setattr(se, "HIGH_COST_DEBT_APR_THRESHOLD", None)
+    disabled = se.build_basic_strategy(snapshot), se.build_vip_strategy(snapshot)
+    strip = lambda r: {k: v for k, v in r.items() if k != "optional_actions"}
+    assert strip(active[0]) == strip(disabled[0]) and strip(active[1]) == strip(disabled[1])

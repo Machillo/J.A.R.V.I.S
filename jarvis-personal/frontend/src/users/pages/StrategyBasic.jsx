@@ -15,6 +15,7 @@ import {
   simulateStrategyVip,
 } from "../services/jarvisApi";
 import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import StrategyOptionalActions from "../components/StrategyOptionalActions";
 
 const language = deviceLanguage();
 const copy = (es, en) => tx(es, en, language);
@@ -72,6 +73,7 @@ export default function StrategyBasic({ plan = "basic" }) {
         <article><header><strong>2 · {copy("Deudas","Debts")}</strong><b>{money(data.minimum_debt_payments)}</b></header><span>{copy("Planificado","Planned")}</span></article>
         {basicAllocations.map((allocation,index)=><article key={`${allocation.bucket}-${index}`}><header><strong>{index+3} · {allocation.label}</strong><b>{money(allocation.amount)}</b></header><span>{copy("Sugerido","Suggested")}</span></article>)}
       </div>
+      <StrategyOptionalActions actions={data.optional_actions}/>
       <article className="basic-strategy-note">{copy("Basic guía la organización del mes. Las proyecciones y escenarios dinámicos pertenecen a VIP.","Basic guides monthly organization. Dynamic projections and scenarios belong to VIP.")}</article>
     </section>;
   }
@@ -173,6 +175,8 @@ export default function StrategyBasic({ plan = "basic" }) {
           </article>
         </div>
       )}
+
+      <StrategyOptionalActions actions={data.optional_actions} />
 
       {allocations.length > 0 && (
         <div className="panel">

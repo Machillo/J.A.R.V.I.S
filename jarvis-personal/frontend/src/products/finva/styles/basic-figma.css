@@ -268,3 +268,5 @@ html[data-theme="light"] .native-product--finva:is(.native-plan--basic,.native-p
 /* A category over its limit says so instead of showing "0 left". */
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-budget-category.is-over header span{color:#f5405e}
 .native-product--finva:is(.native-plan--basic,.native-plan--vip) .basic-budget-category.is-over progress{accent-color:#f5405e}
+/* P2 optional suggestion: visually apart from the monthly plan (dashed border, no amount column). */
+.strategy-optional-actions{display:grid;gap:10px;margin:12px 0;padding:13px;border:1px dashed #3d5a78;border-radius:16px;background:transparent;color:#d6e2ee}.strategy-optional-actions>header{display:flex;gap:9px;align-items:flex-start;color:#9eb0c4}.strategy-optional-actions small{display:block;color:#9eb0c4;font-size:.62rem;letter-spacing:.04em}.strategy-optional-actions h3{margin:2px 0 0;font-size:.95rem;color:#f7fbff}.strategy-optional-actions p{margin:0;font-size:.8rem;line-height:1.45}.strategy-optional-actions ul{margin:8px 0;padding-left:18px;display:grid;gap:4px;font-size:.74rem;line-height:1.4;color:#c4d2df}
