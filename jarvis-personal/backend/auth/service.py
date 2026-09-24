@@ -392,6 +392,15 @@ def delete_current_account() -> dict[str, str]:
             _log_deletion(deletion_id, stage, "COMPLETED", secrets_deleted=len(secret_ids))
 
             stage = "ACCOUNT_DELETE"
+            # payroll_salary_reports (CCSS salary orders from the Gmail flow) has no
+            # FK to workspaces, so the cascade below would leave it behind.
+            payroll_table = conn.execute("SELECT to_regclass('public.payroll_salary_reports') AS present").fetchone()
+            if payroll_table and payroll_table.get("present"):
+                conn.execute(
+                    """DELETE FROM payroll_salary_reports
+                       WHERE workspace_id IN (SELECT id FROM workspaces WHERE owner_account_id=%s)""",
+                    (account_id,),
+                )
             deleted = conn.execute(
                 "DELETE FROM accounts WHERE id=%s RETURNING id",
                 (account_id,),

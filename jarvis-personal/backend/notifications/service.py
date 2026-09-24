@@ -370,7 +370,7 @@ def create_notification_job(
                 reference_type, reference_id, dedupe_key, payload
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            ON CONFLICT (workspace_id, dedupe_key)
+            ON CONFLICT (workspace_id, dedupe_key) WHERE dedupe_key IS NOT NULL
             DO NOTHING
             """,
             (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key or f"manual:{workspace_id}:{scheduled_at.isoformat()}:{title}", _json(payload or {})),
@@ -428,7 +428,7 @@ def enqueue_calendar_reminders(days: int = 45) -> int:
                     """
                     INSERT INTO notification_jobs (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
                     VALUES (%s, %s, %s, %s, 'calendar', %s, 'event', %s, %s, %s::jsonb)
-                    ON CONFLICT (workspace_id, dedupe_key) DO NOTHING
+                    ON CONFLICT (workspace_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
                     RETURNING id
                     """,
                     (
@@ -482,7 +482,7 @@ def enqueue_fixed_expense_reminders() -> int:
                         """
                         INSERT INTO notification_jobs (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
                         VALUES (%s, %s, %s, %s, 'fixed_expense', %s, 'fixed_expense', %s, %s, %s::jsonb)
-                        ON CONFLICT (workspace_id, dedupe_key) DO NOTHING
+                        ON CONFLICT (workspace_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
                         RETURNING id
                         """,
                         (
