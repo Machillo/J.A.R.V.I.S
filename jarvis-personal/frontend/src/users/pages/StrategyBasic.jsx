@@ -279,6 +279,8 @@ export default function StrategyBasic({ plan = "basic" }) {
               type="number"
               min="0"
               step="0.01"
+              inputMode="decimal"
+              aria-label={copy("Monto mensual adicional", "Additional monthly amount")}
               value={extra}
               onChange={(event) => setExtra(event.target.value)}
             />

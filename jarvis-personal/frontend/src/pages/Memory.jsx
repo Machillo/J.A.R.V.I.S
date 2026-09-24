@@ -99,6 +99,7 @@ export default function Memory() {
       <JarvisGlassCard className="memory-compose-card">
           <h3>{tx("Guardar un recuerdo", "Save a memory")}</h3>
           <textarea
+            aria-label={tx("Recuerdo", "Memory")}
             value={form.content}
             onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
             placeholder="Ej: Prefiero respuestas cortas. Me interesa F1, UFC y fútbol. Mi tarjeta BAC corta el 21..."
