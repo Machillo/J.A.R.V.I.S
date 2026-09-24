@@ -113,8 +113,11 @@ def _oauth_identity_allowed(access_token: str, user: dict[str, Any]) -> bool:
     # The first factor must be OAuth; a second factor (e.g. totp) may accompany it.
     if methods and ("oauth" not in methods or methods & NON_OAUTH_FIRST_FACTORS):
         return False
-    provider = str((user.get("app_metadata") or {}).get("provider") or "").lower()
-    return provider in ALLOWED_AUTH_PROVIDERS
+    # `provider` is only the user's first identity (e.g. "email" for a dashboard-created
+    # user who later signs in with Google), so any linked allowed provider is enough.
+    metadata = user.get("app_metadata") or {}
+    linked = {str(item).lower() for item in metadata.get("providers") or [metadata.get("provider")] if item}
+    return bool(linked & ALLOWED_AUTH_PROVIDERS)
 
 
 def verify_supabase_token(access_token: str) -> dict[str, Any]:

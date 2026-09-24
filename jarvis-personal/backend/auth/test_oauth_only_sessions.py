@@ -12,9 +12,9 @@ def _token(amr):
     return f"header.{claims}.signature"
 
 
-def _user(provider="google", **extra):
+def _user(provider="google", providers=None, **extra):
     return {"id": "11111111-1111-1111-1111-111111111111", "email": "persona@example.com",
-            "app_metadata": {"provider": provider, "providers": [provider]}, **extra}
+            "app_metadata": {"provider": provider, "providers": providers or [provider]}, **extra}
 
 
 class _Response:
@@ -57,6 +57,14 @@ def test_non_oauth_or_unknown_provider_sessions_never_become_identities(supabase
     with pytest.raises(HTTPException) as error:
         service.verify_supabase_token(_token(amr))
     assert error.value.status_code == 403
+
+
+def test_user_first_created_by_email_can_still_sign_in_with_google(supabase):
+    supabase(_user("email", providers=["email", "google"]))
+    assert service.verify_supabase_token(_token([{"method": "oauth"}]))["email"] == "persona@example.com"
+    # ...but never with the password identity itself.
+    with pytest.raises(HTTPException):
+        service.verify_supabase_token(_token([{"method": "password"}]))
 
 
 def test_oauth_with_a_second_factor_is_accepted(supabase):
