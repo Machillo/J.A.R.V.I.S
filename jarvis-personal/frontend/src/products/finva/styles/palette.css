@@ -1,0 +1,65 @@
+/*
+ * DINCR plan palette (Free, Basic, VIP) for both themes.
+ *
+ * The plan stylesheets use only these tokens for their base colors, so the same
+ * rules render dark or light depending on html[data-color-mode-resolved] (set by
+ * lib/colorMode.js). Never write a palette hex in a plan stylesheet and never force
+ * a theme there: that is how light mode ended up showing dark surfaces.
+ * scripts/test-theme.mjs enforces both rules.
+ */
+:root {
+  --finva-color-scheme: dark;
+  --finva-bg: #060e1a;
+  --finva-surface: #0b1726;
+  --finva-raised: #0f1f33;
+  --finva-line: #142b40;
+  --finva-line-strong: #244058;
+  --finva-text: #f7fbff;
+  --finva-text-soft: #c6d2df;
+  --finva-muted: #9eb0c4;
+  --finva-blue: #1aa6f5;
+  --finva-mint: #0ac7b2;
+  --finva-coral: #f5405e;
+  --finva-coral-soft: #ff8195;
+  --finva-success: #3dd9a4;
+  --finva-tint-blue: #092938;
+  --finva-tint-blue-soft: #092130;
+  --finva-tint-mint: #08292b;
+  --finva-tint-danger: #1f1217;
+  --finva-on-accent: #060e1a;
+}
+
+html[data-color-mode-resolved="light"] {
+  --finva-color-scheme: light;
+  --finva-bg: #f8fafc;
+  --finva-surface: #ffffff;
+  --finva-raised: #f1f5f9;
+  --finva-line: #e2e8f0;
+  --finva-line-strong: #cbd5e1;
+  --finva-text: #0f172a;
+  --finva-text-soft: #334155;
+  --finva-muted: #64748b;
+  --finva-blue: #0369a1;
+  --finva-mint: #0f766e;
+  --finva-coral: #e11d48;
+  --finva-coral-soft: #be123c;
+  --finva-success: #047857;
+  --finva-tint-blue: #e0f2fe;
+  --finva-tint-blue-soft: #f0f9ff;
+  --finva-tint-mint: #ccfbf1;
+  --finva-tint-danger: #ffe4e6;
+  --finva-on-accent: #ffffff;
+}
+
+/* The generic light tokens of ui/native (tokens.css) would otherwise replace the plan
+   tokens in light mode; DINCR keeps a single palette per theme. */
+html[data-color-mode-resolved="light"] .native-product.native-product--finva {
+  --native-bg: var(--finva-bg);
+  --native-bg-soft: var(--finva-raised);
+  --native-surface: var(--finva-surface);
+  --native-surface-raised: var(--finva-raised);
+  --native-border: var(--finva-line);
+  --native-text: var(--finva-text);
+  --native-muted: var(--finva-muted);
+  color-scheme: var(--finva-color-scheme);
+}

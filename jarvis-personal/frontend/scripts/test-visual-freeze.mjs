@@ -14,6 +14,13 @@ for (const file of ["free.css", "basic-figma.css", "vip-figma.css"]) {
   assert.match(css, /\.native-nav-label\{font-size:var\(--finva-nav-label-size\)/, `${file} uses the shared nav label size`);
 }
 
+// Movimientos filter bar: no fixed height under its 40px tap targets (a 34px bar
+// clipped the tabs and scrolled them vertically on phones).
+for (const file of ["free.css", "basic-figma.css"]) {
+  const bar = read(`src/products/finva/styles/${file}`).match(/\.free-filter-tabs\{([^}]*)\}/)[1];
+  assert.doesNotMatch(bar, /(^|;)height:/, `${file}: the filter bar sizes to its tabs`);
+}
+
 // History: the three-column table becomes stacked rows on phones instead of
 // hiding the amount and actions off screen.
 const usersCss = read("src/users/users.css");

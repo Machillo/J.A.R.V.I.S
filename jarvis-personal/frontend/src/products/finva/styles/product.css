@@ -65,20 +65,5 @@
   box-shadow: 0 10px 24px rgba(194, 158, 68, .2);
 }
 
-html[data-color-mode-resolved="light"] .native-product--finva {
-  --native-accent: #4f46e5;
-  --native-accent-2: #0d9488;
-  --native-bg: #f2f7f7;
-  --native-bg-soft: #e8f0f2;
-  --native-surface: rgba(255,255,255,.96);
-  --native-surface-raised: rgba(255,255,255,.99);
-}
-
-html[data-color-mode-resolved="light"] .native-product--finva.native-plan--vip {
-  --native-accent: #846518;
-  --native-accent-2: #9b7417;
-  --native-bg: #faf8f1;
-  --native-bg-soft: #f3eee1;
-}
-
+/* Light-mode plan colors live in palette.css (one palette per theme). */
 html[data-color-mode-resolved="light"] .native-product--finva :is(.form input,.form select,.form textarea,input,select,textarea) { color: #10232f; background: #f8fbfc; }

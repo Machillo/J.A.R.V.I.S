@@ -1,0 +1,75 @@
+/*
+ * DINCR light mode for shared components that were drawn for dark only.
+ *
+ * VIP Strategy reuses the Owner PremiumStrategy screen (styles/11-strategy-v3.css),
+ * whose texts and borders are white with transparency; some Users components
+ * (users.css, finva-theme.css) also have fixed dark colors. In light mode they
+ * take the plan palette (palette.css) instead, scoped to DINCR so the Owner
+ * workspace is unchanged. Found with an automated light-mode audit of every
+ * DINCR screen (no dark surface, no text under 3:1).
+ */
+html[data-color-mode-resolved="light"] .native-product--finva :is(
+  .strategy-v3-hero p, .strategy-v3-label, .strategy-title-row p,
+  .strategy-debt-progress-stats span, .strategy-debt-mini-grid span, .strategy-surplus-card span,
+  .strategy-option-card-v3 small, .strategy-option-card-v3 > svg,
+  .strategy-investment-decision-card p, .strategy-debt-advice-summary small, .strategy-surplus-card small,
+  .strategy-v3-note, .strategy-debt-analysis-card header small, .strategy-advice-line,
+  .doctor-strange-grid small, .strategy-debt-options-v3 span, .strategy-debt-options-v3 small,
+  .strategy-route-item p, .strategy-distribution-formula span, .strategy-allocation-row-v3 small
+) {
+  color: var(--finva-muted);
+}
+
+html[data-color-mode-resolved="light"] .native-product--finva :is(
+  .strategy-priority-v3, .strategy-debt-progress-v3, .strategy-options-v3, .strategy-detail-panel.strategy-v3-detail,
+  .strategy-debt-progress-stats > div, .strategy-option-card-v3,
+  .strategy-investment-decision-card, .strategy-debt-advice-summary, .strategy-surplus-card,
+  .strategy-debt-analysis-card, .doctor-strange-grid article, .strategy-debt-options-v3 > div,
+  .strategy-route-v3 .strategy-route-item, .strategy-allocation-row-v3
+) {
+  border-color: var(--finva-line);
+}
+
+html[data-color-mode-resolved="light"] .native-product--finva :is(.progress-track, .strategy-debt-progress-v3 .progress-track, .strategy-v3-detail .progress-track) {
+  background: var(--finva-line);
+}
+
+/* Plan and Advisor hubs, plan tier explanation. */
+html[data-color-mode-resolved="light"] .native-product--finva .finva-hub-group > div { background: var(--finva-surface); }
+html[data-color-mode-resolved="light"] .native-product--finva .tier-explanation-card { color: var(--finva-text-soft); background: var(--finva-raised); }
+html[data-color-mode-resolved="light"] .native-product--finva .tier-explanation-card strong { color: var(--finva-text); }
+
+/* Small icon tiles and the app-lock switch (off state). */
+html[data-color-mode-resolved="light"] .native-product--finva :is(.situation-card-icon, .current-plan-icon, .plan-mini-icon) {
+  color: var(--finva-blue);
+  background: var(--finva-tint-blue);
+}
+html[data-color-mode-resolved="light"] .native-product--finva .app-lock-toggle:not([aria-checked="true"]) { background: var(--finva-line-strong); }
+
+/* Destructive account action. */
+html[data-color-mode-resolved="light"] .native-product--finva :is(.finva-account-actions__row--danger, .finva-account-actions__row--danger small) {
+  color: var(--finva-coral);
+}
+
+/* Status notices (degraded mode, offline, recovered changes). */
+html[data-color-mode-resolved="light"] .native-product--finva .finva-health-mode { background: #fef9c3; }
+html[data-color-mode-resolved="light"] .native-product--finva .finva-health-mode button { color: #854d0e; }
+html[data-color-mode-resolved="light"] .native-product--finva :is(.finva-health-mode--offline, .finva-health-mode--major_outage, .finva-api-help) { background: var(--finva-tint-danger); }
+html[data-color-mode-resolved="light"] .native-product--finva :is(.finva-health-mode--offline, .finva-health-mode--major_outage) button { color: var(--finva-coral-soft); }
+html[data-color-mode-resolved="light"] .native-product--finva .finva-operation-recovery { background: var(--finva-tint-mint); }
+html[data-color-mode-resolved="light"] .native-product--finva .finva-operation-recovery strong { color: var(--finva-success); }
+
+/* VIP plan icon keeps its gold identity on light surfaces. */
+html[data-color-mode-resolved="light"] .native-product--finva :is(.current-plan-card.plan-vip .current-plan-icon, .plan-mini-icon.plan-vip) {
+  color: #a16207;
+  background: #fef3c7;
+}
+
+/* Strategy progress label (legacy green was drawn for a dark background). */
+html[data-color-mode-resolved="light"] .native-product--finva .progress-label-row strong { color: var(--finva-success); }
+
+/* Free section eyebrows ("DINCR · FREE", "Security"): the dark-theme teal is unreadable on white
+   (Basic and VIP already color them from their plan stylesheets). */
+html[data-color-mode-resolved="light"] .native-product--finva.native-plan--free :is(.eyebrow, .hero > span, .hero > p:first-child, .onboarding-heading p, .login-kicker, .mobile-app-header small) {
+  color: var(--finva-mint);
+}

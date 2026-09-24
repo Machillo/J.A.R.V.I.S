@@ -16,10 +16,12 @@ import { flushPendingOperations, getPendingOperationCount, prepareLogout } from 
 import "./users.css";
 import "./finva-theme.css";
 import "./finva-progressive.css";
+import "../products/finva/styles/palette.css";
 import "../products/finva/styles/free.css";
 import "../products/finva/styles/basic-figma.css";
 import "../products/finva/styles/vip-figma.css";
 import "../products/finva/styles/account-actions.css";
+import "../products/finva/styles/light-surfaces.css";
 import ReleaseUpdateNotice from "../components/ReleaseUpdateNotice";
 import { dismissRelease, isReleaseDismissed } from "../lib/releasePolicy";
 import { cachedFeatureFlags, featureDisabledMessage, featureEnabled, getOperationalFeatureFlags } from "../lib/featureFlags";
