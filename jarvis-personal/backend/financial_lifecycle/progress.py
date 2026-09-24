@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from typing import Any
+from backend.core.i18n import tx
 
 
 WINDOW_DAYS = (30, 90, 180, 365)
@@ -121,19 +122,20 @@ def _plan_vs_reality(planned_action: dict[str, Any], metrics: dict[str, Any]) ->
 def _transition_reason(metrics: dict[str, Any]) -> str:
     changed = [(name, item) for name, item in metrics.items() if item["delta"]]
     if not changed:
-        return "La prioridad cambió por nueva información cualitativa o reglas de estrategia."
+        return tx("La prioridad cambió por nueva información cualitativa o reglas de estrategia.", "The priority changed due to new qualitative information or strategy rules.")
     name, item = max(changed, key=lambda pair: abs(pair[1]["delta"]))
     labels = {
-        "net_worth": "patrimonio neto",
-        "debt_total": "deuda total",
-        "liquid_assets": "activos líquidos",
-        "safe_available": "dinero seguro disponible",
-        "net_operational": "flujo operativo",
-        "emergency_fund_current": "fondo de emergencia",
-        "emergency_coverage_months": "cobertura de emergencia",
-        "health_score": "salud financiera",
+        "net_worth": ("patrimonio neto", "net worth"),
+        "debt_total": ("deuda total", "total debt"),
+        "liquid_assets": ("activos líquidos", "liquid assets"),
+        "safe_available": ("dinero seguro disponible", "safe available money"),
+        "net_operational": ("flujo operativo", "operating cash flow"),
+        "emergency_fund_current": ("fondo de emergencia", "emergency fund"),
+        "emergency_coverage_months": ("cobertura de emergencia", "emergency coverage"),
+        "health_score": ("salud financiera", "financial health"),
     }
-    return f"El cambio principal observado fue en {labels[name]} ({item['delta']:+.2f})."
+    label = tx(*labels[name])
+    return tx(f"El cambio principal observado fue en {label} ({item['delta']:+.2f}).", f"The main change observed was in {label} ({item['delta']:+.2f}).")
 
 
 def _as_date(value: Any) -> date:

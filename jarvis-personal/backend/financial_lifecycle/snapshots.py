@@ -8,6 +8,7 @@ from typing import Any
 
 from backend.auth.current_user import get_current_account_id, get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.i18n import tx
 from backend.financial_lifecycle.progress import build_longitudinal_progress, compare_states
 from backend.financial_lifecycle.monthly_review import build_monthly_review
 from backend.financial_lifecycle.proactive import build_proactive_advisor
@@ -100,7 +101,7 @@ def get_financial_progress() -> dict[str, Any]:
             "current": current,
             "previous": None,
             "delta": None,
-            "message": "DINCR necesita una observación anterior para medir progreso.",
+            "message": tx("DINCR necesita una observación anterior para medir progreso.", "DINCR needs a previous observation to measure progress."),
             "longitudinal": build_longitudinal_progress(current, []),
         }
 
