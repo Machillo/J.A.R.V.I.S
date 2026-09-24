@@ -10,3 +10,6 @@ database/*.db
 *.db
 backend/.env
 frontend/.env
+# Local PENDING parser proposals (backend.scripts.propose_parser); never committed.
+parser_proposals/
+

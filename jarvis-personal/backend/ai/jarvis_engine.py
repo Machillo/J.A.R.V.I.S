@@ -6,8 +6,7 @@ import re
 
 from backend.ai.action_flow import continue_pending_action, start_action, _missing_required, _save_action
 from backend.ai.chat_memory import finish_pending_action, get_pending_action
-from backend.ai.gemini_client import ask_gemini
-from backend.ai.openai_client import ask_openai, get_active_premium_guides
+from backend.ai.openai_client import ask_openai, ask_openai_optional, get_active_premium_guides
 from backend.ai.intent_router import ACTION_TYPES, detect_intent, is_pending_interrupt
 from backend.ai.memory_service import get_relevant_memory_context, remember_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
@@ -83,7 +82,7 @@ Resultados:
 
 Formato recomendado: 1 a 3 frases y, si aplica, una fuente corta.
 """
-        ai = ask_gemini(prompt, route="internet_answer")
+        ai = ask_openai_optional(prompt, route="internet_answer")
         if ai.get("status") == "OK" and (ai.get("text") or "").strip():
             message = ai["text"].strip()
         else:
@@ -139,23 +138,6 @@ Responde máximo en 5 líneas. Si hay un riesgo claro, dilo primero. Si falta un
 
     ai_response = ask_openai(prompt, route="jarvis_premium_finance_answer", system=system, max_tokens=650)
     source = "openai_premium_with_jarvis_context"
-
-    if ai_response.get("status") != "OK":
-        fallback_prompt = f"""
-Eres el asistente financiero privado DINCR Owner.
-Responde en español, breve, claro y útil.
-Usa SOLO los datos reales si la pregunta es financiera.
-No inventes montos, fechas, deudas ni categorías.
-
-Pregunta: {user_message}
-Intento detectado: {json.dumps(intent_result, ensure_ascii=False)}
-Memoria del usuario:
-{json.dumps(memory_context, ensure_ascii=False, indent=2)}
-Datos reales:
-{json.dumps(context, ensure_ascii=False, indent=2)}
-"""
-        ai_response = ask_gemini(fallback_prompt, route="jarvis_context_answer")
-        source = "gemini_fallback_with_jarvis_context"
 
     if ai_response.get("status") != "OK":
         return {

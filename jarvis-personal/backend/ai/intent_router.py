@@ -6,7 +6,6 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
-from backend.ai.gemini_client import ask_gemini
 from backend.ai.openai_client import ask_openai
 
 
@@ -329,7 +328,7 @@ def _valid_intent_result(parsed: dict[str, Any]) -> dict[str, Any]:
         "action_type": action_type,
         "entity": parsed.get("entity"),
         "confidence": float(parsed.get("confidence") or 0),
-        "source": parsed.get("source") or "gemini",
+        "source": parsed.get("source") or "openai",
     }
 
 
@@ -364,8 +363,6 @@ Mensaje:
 """
 
     ai_response = ask_openai(prompt, route="intent_classifier_premium", max_tokens=180, temperature=0.05)
-    if ai_response.get("status") != "OK":
-        ai_response = ask_gemini(prompt, route="intent_classifier")
     if ai_response.get("status") != "OK":
         return fallback
 

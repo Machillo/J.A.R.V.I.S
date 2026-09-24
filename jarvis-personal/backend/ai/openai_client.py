@@ -409,6 +409,14 @@ def ask_openai(
     }
 
 
+def ask_openai_optional(prompt: str, *, route: str, max_tokens: int = 500) -> dict[str, Any]:
+    """Best-effort wording helper: any failure (no key, budget, no Owner context) is an ERROR result."""
+    try:
+        return ask_openai(prompt, route=route, max_tokens=max_tokens)
+    except Exception as exc:  # e.g. background jobs without an authenticated Owner
+        return {"status": "ERROR", "message": str(exc)}
+
+
 def ask_openai_json(
     prompt: str,
     *,

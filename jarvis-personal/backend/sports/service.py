@@ -5,7 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any
 
-from backend.ai.gemini_client import ask_gemini
+from backend.ai.openai_client import ask_openai_optional
 from backend.ai.preferences import get_sports_preferences, update_sports_preferences
 from backend.integrations.internet_search import internet_search
 
@@ -111,7 +111,7 @@ Respuesta máxima:
 - Si pidió calendario/radar: máximo 5 eventos.
 - Tono: "Señor,".
 """
-    ai = ask_gemini(prompt, route="sports_answer")
+    ai = ask_openai_optional(prompt, route="sports_answer")
     if ai.get("status") == "OK" and (ai.get("text") or "").strip():
         return ai["text"].strip()
 
@@ -173,7 +173,7 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
 
         created = 0
         skipped = 0
-        # Fast dedupe before spending a Serper/Gemini request.
+        # Fast dedupe before spending a Serper/OpenAI request.
         pending_by_user = {}
         for owner in owners:
             workspace_id = str(owner['workspace_id'])
