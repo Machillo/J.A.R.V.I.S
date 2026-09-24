@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSingleFlight } from "../../lib/useSingleFlight";
 import { ArrowLeft, ChevronRight, CreditCard, Plus } from "lucide-react";
 import { createDebt, deleteDebt, getDebts, payDebt, updateDebt } from "../services/jarvisApi";
 import { AmountDialog, ConfirmDialog } from "../components/FinvaDialog";
@@ -57,14 +58,15 @@ export default function Debts({ plan = "free" }) {
   const load = () => run(async () => setRows(await getDebts()));
   useEffect(() => { load(); }, []);
   const payload = (value) => ({...value,name:value.name.trim(),remaining_amount:Number(value.remaining_amount),total_amount:opt(value.total_amount),monthly_payment:opt(value.monthly_payment),interest_rate:opt(value.interest_rate),term_months:opt(value.term_months),payment_day:opt(value.payment_day),next_payment_date:value.next_payment_date || null});
-  const submit = async (event) => {
+  const [once, saving] = useSingleFlight();
+  const submit = once(async (event) => {
     event.preventDefault();
     if (await run(() => createDebt(payload(form)))) { setForm(empty); setCreating(false); load(); }
-  };
-  const save = async (event) => {
+  });
+  const save = once(async (event) => {
     event.preventDefault();
     if (await run(() => updateDebt(edit.id,payload(edit)))) { setEdit(null); load(); }
-  };
+  });
   const registerPayment = async () => {
     setBusyDialog(true);
     const saved = await run(() => payDebt(payment.id,{amount:Number(paymentAmount)}));
@@ -134,10 +136,10 @@ export default function Debts({ plan = "free" }) {
   </section>;
 
   return <>{content}<FinvaFormSheet open={creating} eyebrow={tx("Nueva deuda", "New debt")} title={tx("Agregar deuda", "Add debt")} onClose={() => setCreating(false)}>
-      <form className="form finva-sheet-form" onSubmit={submit}><DebtFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar deuda", "Save debt")}</button></form>
+      <form className="form finva-sheet-form" onSubmit={submit}><DebtFields value={form} setValue={setForm} advanced={advanced}/><button className="finva-button finva-button-primary" disabled={saving}>{tx("Guardar deuda", "Save debt")}</button></form>
     </FinvaFormSheet>
     <FinvaFormSheet open={Boolean(edit)} eyebrow={tx("Deuda", "Debt")} title={tx("Editar deuda", "Edit debt")} onClose={() => setEdit(null)}>
-      {edit && <form className="form finva-sheet-form" onSubmit={save}><DebtFields value={edit} setValue={setEdit} advanced={advanced}/><button className="finva-button finva-button-primary">{tx("Guardar cambios", "Save changes")}</button></form>}
+      {edit && <form className="form finva-sheet-form" onSubmit={save}><DebtFields value={edit} setValue={setEdit} advanced={advanced}/><button className="finva-button finva-button-primary" disabled={saving}>{tx("Guardar cambios", "Save changes")}</button></form>}
     </FinvaFormSheet>
     <AmountDialog open={Boolean(payment)} title={tx("Registrar pago", "Record payment")} description={payment ? tx(`Aplicar un pago a ${payment.name}.`, `Apply a payment to ${payment.name}.`) : ""} value={paymentAmount} onValueChange={setPaymentAmount} confirmLabel={tx("Registrar pago", "Record payment")} onConfirm={registerPayment} onClose={() => { if (!busyDialog) setPayment(null); }} busy={busyDialog}/>
     <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar deuda", "Delete debt")} description={deleting ? tx(`Se eliminará ${deleting.name}. Esta acción no se puede deshacer.`, `${deleting.name} will be deleted. This action cannot be undone.`) : ""} onConfirm={removeDebt} onClose={() => { if (!busyDialog) setDeleting(null); }} busy={busyDialog}/>
