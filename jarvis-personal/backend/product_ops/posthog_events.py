@@ -27,8 +27,15 @@ def capture_backend_event(event_name: str) -> None:
                 "api_key": key,
                 "event": event_name,
                 # Fresh per event: no account identifier or durable person profile.
+                # $process_person_profile=False stops PostHog from creating a person
+                # for each random id; the request IP is Render's, not the user's.
                 "distinct_id": f"dincr_server_{uuid.uuid4().hex}",
-                "properties": {"success": True, "source_type": "server"},
+                "properties": {
+                    "success": True,
+                    "source_type": "server",
+                    "$process_person_profile": False,
+                    "$geoip_disable": True,
+                },
             },
             timeout=(0.5, 1.5),
         )

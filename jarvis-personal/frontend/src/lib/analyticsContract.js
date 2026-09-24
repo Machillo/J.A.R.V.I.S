@@ -13,7 +13,8 @@ export const analyticsEvents = new Set([
 const categories = {
   plan: new Set(["free", "basic", "vip"]),
   platform: new Set(["android", "ios"]),
-  screen: new Set(["overview", "finance", "debts", "goals", "transactions", "strategy", "gmail", "budget", "calendar", "recurring", "reports", "settings", "feedback"]),
+  // Every page id registered in products/finva/features/registry.jsx.
+  screen: new Set(["overview", "finance", "debts", "goals", "transactions", "strategy", "gmail", "budget", "calendar", "recurring", "reports", "settings", "feedback", "advisor", "monthly", "more", "plan", "profile", "savings", "situation"]),
   access_type: new Set(["free", "promotion"]),
   source_type: new Set(["email", "manual"]),
   decision: new Set(["accepted", "corrected", "rejected"]),

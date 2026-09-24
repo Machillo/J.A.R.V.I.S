@@ -20,7 +20,14 @@
   envían ID de cuenta/workspace, correo ni etiquetas libres.
 - Desactivados: autocapture, pageviews automáticas, Replay, excepciones,
   encuestas, flags, parámetros de campañas, referente y geolocalización por IP.
-  `before_send` reconstruye el evento con una lista cerrada de propiedades.
+  `before_send` reconstruye el evento con una lista cerrada de propiedades más
+  tres técnicas: `token` (la Project API key pública, **obligatoria**: sin ella
+  posthog-js descarta el evento antes de enviarlo), `$process_person_profile:
+  false` y `$geoip_disable: true`.
+- PostHog recibe la IP de la conexión aunque no la guarde como propiedad: la
+  opción `ip: false` de posthog-js no tiene efecto. `$geoip_disable` evita la
+  geolocalización; para no conservar la IP hay que activar **Discard client IP
+  data** en la configuración del proyecto PostHog (acción manual en el panel).
 - El servidor solo emite eventos agregados `gmail_connected` y
   `account_deletion_completed`, usando un ID aleatorio **nuevo por evento**;
   no envía IDs, IP del usuario, Gmail ni datos financieros. Se envían después
@@ -97,3 +104,45 @@ modificó el texto legal en esta implementación.
 
 No hay retroactividad: los usuarios con APK anterior o sin `VITE_POSTHOG_KEY`
 seguirán sin emitir nuevos eventos hasta instalar una versión recompilada.
+
+## Corrección de envío (auditoría pre-release)
+
+Hasta esta corrección **ningún evento móvil llegaba a PostHog**. `before_send`
+eliminaba la propiedad `token` y posthog-js 1.434 descarta en el cliente
+cualquier evento sin ella; el test usaba un stub que no reproducía esa regla.
+Ahora `test:product-analytics` también ejecuta el pipeline real de posthog-js.
+Los dos eventos del servidor sí se enviaban, pero creaban un perfil de persona
+por evento; ahora envían `$process_person_profile: false`.
+
+## Antes de distribuir un build con `VITE_POSTHOG_KEY` (HUMAN GATE)
+
+Ahora que los eventos sí llegan, esto va **antes** de enviar cualquier build con
+la clave a usuarios reales (no después de la prueba):
+1. PostHog → Project settings → activar **Discard client IP data**.
+2. Revisión legal: la Política de Privacidad debe nombrar PostHog (proveedor,
+   región, propósito, retención del ID anónimo) — ver sección anterior.
+3. Firebase Analytics/Crashlytics (fuera de este contrato): reciben el ID
+   interno de cuenta (`setUserId`), pantallas Owner y texto de errores, sin
+   gating por rol ni aceptación legal (`src/lib/telemetry.js`). Requiere
+   decisión de producto/legal antes del release.
+
+## Prueba física mínima (teléfono → PostHog)
+
+1. Compilar con `VITE_POSTHOG_KEY` y `VITE_POSTHOG_HOST` definidos; `npm run
+   android:apk` avisa si falta la clave. Instalar en Android (y la IPA en iOS).
+2. Iniciar sesión con una cuenta **User** Free/Basic/VIP que ya aceptó los
+   documentos legales vigentes.
+3. PostHog → Activity/Live events, en menos de 1 minuto:
+   `app_opened` → navegar a Movimientos (`screen_viewed`, `screen=transactions`)
+   → enviar la app a segundo plano y volver (`app_resumed`).
+4. Abrir un evento: solo `plan`, `platform`, `app_version`, `screen`, `token`,
+   `distinct_id`, `$process_person_profile=false`, `$geoip_disable=true`. Sin
+   `$current_url`, correo, banco, montos, IDs de cuenta ni propiedades `$set`.
+5. Persons: no debe aparecer ningún perfil nuevo.
+6. Cerrar sesión → iniciar con **otra** cuenta: `app_opened` con otro
+   `distinct_id`.
+7. Iniciar sesión como **Owner** y como cuenta sin aceptación legal: no debe
+   llegar ningún evento.
+8. Conectar Gmail: debe llegar **un solo** `gmail_connected` (servidor) y ningún
+   `mail_connected`; conectar Outlook: un `mail_connected`.
+9. Red: solo `/e/` y `/array/<key>/config`; nada de `/flags` ni scripts externos.

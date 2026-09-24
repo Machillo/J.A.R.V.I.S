@@ -29,17 +29,22 @@ const initialize = () => {
       disable_external_dependency_loading: true,
       save_campaign_params: false,
       save_referrer: false,
-      ip: false,
       persistence: "localStorage",
       persistence_name: "dincr_anonymous_analytics_v1",
       opt_out_capturing_by_default: true,
       person_profiles: "never",
       // Retention uses PostHog's anonymous device ID. No account/workspace ID,
       // email, URL, user property or session content leaves the device.
+      // posthog-js drops any event whose `token` (the public project key) was
+      // removed here, so it is kept. PostHog records the request IP server-side
+      // (`ip: false` has no effect): `$geoip_disable` skips IP geolocation.
       before_send: (event) => {
         if (!analyticsEvents.has(event?.event)) return null;
         return { event: event.event, uuid: event.uuid, properties: {
+          token: event.properties?.token,
           distinct_id: event.properties?.distinct_id,
+          $process_person_profile: false,
+          $geoip_disable: true,
           ...safeAnalyticsProperties(event.properties),
         } };
       },

@@ -33,7 +33,12 @@ def test_only_aggregate_fields_leave_render(monkeypatch):
     assert sent[0][0] == "https://us.i.posthog.com/capture/"
     payload = sent[0][1]
     assert set(payload) == {"api_key", "distinct_id", "event", "properties"}
-    assert payload["properties"] == {"success": True, "source_type": "server"}
+    assert payload["properties"] == {
+        "success": True,
+        "source_type": "server",
+        "$process_person_profile": False,
+        "$geoip_disable": True,
+    }
     assert payload["distinct_id"].startswith("dincr_server_")
     assert "account_id" not in payload["properties"]
     assert "workspace_id" not in payload["properties"]
