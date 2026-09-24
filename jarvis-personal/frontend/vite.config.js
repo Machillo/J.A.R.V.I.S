@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs'
 const androidBuild = readFileSync(new URL('./android/app/build.gradle', import.meta.url), 'utf8')
 const nativeVersion = androidBuild.match(/versionName\s+["']([^"']+)["']/)?.[1] || 'dev'
 
+const OWNER_CHART_DEPS = /node_modules[/\\](?:recharts|victory-vendor|d3-[a-z-]+|internmap|reselect|react-redux|immer|eventemitter3|es-toolkit|decimal\.js-light|@reduxjs|redux-thunk|redux|@standard-schema|tiny-invariant|use-sync-external-store|clsx)[/\\]/
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL || ''
@@ -28,7 +30,9 @@ export default defineConfig(({ mode }) => {
             if (!id.includes('node_modules')) return undefined
             if (id.includes('firebase') || id.includes('@capacitor-firebase')) return 'firebase'
             if (id.includes('@supabase')) return 'supabase'
-            if (id.includes('recharts')) return 'charts'
+            // recharts and its dependency tree are only used by Owner screens: leave them to the
+            // lazily loaded Owner chunk (shared modules are split out automatically).
+            if (OWNER_CHART_DEPS.test(id)) return undefined
             if (id.includes('react')) return 'react'
             return 'vendor'
           },
