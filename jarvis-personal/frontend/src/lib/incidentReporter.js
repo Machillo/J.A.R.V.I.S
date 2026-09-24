@@ -1,6 +1,8 @@
 import { Capacitor } from "@capacitor/core";
 import { API_URL } from "./apiUrl";
 import { authenticatedFetch } from "./authenticatedFetch";
+import { endpointModule } from "./analyticsContract";
+import { captureProductEvent } from "./productAnalytics";
 
 const QUEUE_KEY = "finva:incident-queue:v1";
 const DEDUPE_MS = 15 * 60 * 1000;
@@ -68,6 +70,11 @@ export function captureIncident(rawIncident) {
   if (!queue.some((item) => item.fingerprint === key)) {
     queue.push({ ...incident, fingerprint: key, queued_at: now });
     writeQueue(queue);
+    // Same de-duplication window as the incident itself: one event per failure, not per retry.
+    captureProductEvent("api_error", {
+      endpoint: endpointModule(incident.path), method: incident.method, status_code: incident.status || undefined,
+      error_category: incident.status >= 500 ? "server" : incident.status >= 400 ? "client" : "network",
+    });
   }
   return flushIncidentQueue();
 }

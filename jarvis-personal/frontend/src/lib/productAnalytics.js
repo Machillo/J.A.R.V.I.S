@@ -13,6 +13,14 @@ let eligible = false;
 let context = {};
 let opened = false;
 let lastUserId = null;
+let loginPending = false;
+
+// production / staging / development: explicit build setting, else inferred from the build mode.
+export const analyticsEnvironment = () => {
+  const configured = String(import.meta.env.VITE_ANALYTICS_ENVIRONMENT || "").trim().toLowerCase();
+  if (["production", "staging", "development"].includes(configured)) return configured;
+  return import.meta.env.PROD ? "production" : "development";
+};
 
 const initialize = () => {
   if (initialized || !isDincrBuild || !Capacitor.isNativePlatform() || !key || !validHost || typeof window === "undefined") return initialized;
@@ -73,14 +81,22 @@ export const setProductAnalyticsUser = (user) => {
     opened = false;
   }
   lastUserId = user.id;
-  context = { plan, platform: Capacitor.getPlatform(), app_version: import.meta.env.VITE_APP_VERSION || "" };
+  context = { plan, platform: Capacitor.getPlatform(), app_version: import.meta.env.VITE_APP_VERSION || "", environment: analyticsEnvironment() };
   eligible = true;
   try { posthog.opt_in_capturing(); } catch { eligible = false; return; }
   if (!opened) {
     opened = true;
     captureProductEvent("app_opened");
   }
+  if (loginPending) {
+    loginPending = false;
+    captureProductEvent("login_completed");
+  }
 };
+
+// A new sign-in happened; it is reported once the account is eligible (legal
+// acceptance, Users plan), so nothing is sent for accounts that never are.
+export const noteLoginCompleted = () => { loginPending = true; };
 
 export const captureProductEvent = (name, properties = {}) => {
   if (!eligible || !initialized || !analyticsEvents.has(name)) return;

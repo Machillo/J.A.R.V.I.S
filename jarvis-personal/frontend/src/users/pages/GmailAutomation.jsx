@@ -22,6 +22,7 @@ import BankLogo from "../../components/BankLogo";
 import { categoryLabel, categoryValue } from "../../lib/categories";
 import { trackEvent } from "../../lib/telemetry";
 import { MAIL_OAUTH_RESULT_EVENT, takeMailOAuthOutcome } from "../../lib/mailOAuth";
+import { mailOAuthErrorCodes } from "../../lib/analyticsContract";
 import LegalLink from "../../components/LegalLink";
 import FinvaFormSheet from "../components/FinvaFormSheet";
 import gmailLogo from "../../assets/institutions/gmail.png";
@@ -170,10 +171,13 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
       if (!outcome) return;
       if (outcome.ok) {
         // Gmail is counted server-side as gmail_connected; only other providers report here.
-        if (outcome.provider !== "gmail") trackEvent("mail_connected", { source_type: "email" });
+        if (outcome.provider !== "gmail") trackEvent("mail_connected", { source_type: "email", provider: outcome.provider });
         setError("");
         setMessage(tx("Correo conectado. DINCR está revisando tus avisos financieros.", "Mailbox connected. DINCR is reviewing your financial notices."));
       } else {
+        trackEvent("mailbox_connection_failed", {
+          provider: outcome.provider, error_code: mailOAuthErrorCodes.has(outcome.code) ? outcome.code : "other",
+        });
         setMessage("");
         setError(outcome.code === "completion_failed" && outcome.message ? outcome.message : mailErrorMessage(outcome.provider, outcome.code));
       }
@@ -208,7 +212,7 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
       }
       const response = await (provider === "microsoft" ? connectVipMicrosoftMail(scope) : connectVipGmail(scope));
       setHistoryChoice(null);
-      trackEvent("gmail_connection_started", { source_type: "email" });
+      trackEvent("gmail_connection_started", { source_type: "email", provider });
       if (!response?.authorization_url) throw new Error(tx("El proveedor no devolvió una dirección de autorización.", "The provider did not return an authorization URL."));
       await Browser.open({ url: response.authorization_url, presentationStyle: "popover" });
     } catch (err) { setHistoryChoice(null); setError(err.message || tx("No se pudo abrir Google.", "Couldn’t open Google.")); }
@@ -224,6 +228,8 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
         scan_scope: result.scan_scope || "unknown",
         initial_scan_complete: Boolean(result.initial_scan_complete),
         success: result.status === "ok",
+        // Counts only: how many messages and candidates, never which or what.
+        messages_scanned: result.found, candidates_pending: result.pending, duplicates: result.duplicates,
       });
       await load();
       const progress = result.scan_scope !== "recent" && !result.initial_scan_complete

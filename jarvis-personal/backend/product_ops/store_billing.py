@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.product_ops.posthog_events import capture_backend_event_later
 from backend.product_ops.service import record_event
 
 # Store product identifiers stay configurable until the App Store / Play Console
@@ -311,6 +312,10 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
                       (account_id, free_plan["id"]))
         row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
         conn.commit()
+    # Anonymous plan-lifecycle signal (no account, price or receipt), after the commit.
+    capture_backend_event_later("subscription_changed", {
+        "plan": plan_code, "billing_period": billing_period, "subscription_event": event_type, "store": provider,
+    })
     return {"event": event_type, "target_account_id": account_id, "subscription": _public_state(row)}
 
 

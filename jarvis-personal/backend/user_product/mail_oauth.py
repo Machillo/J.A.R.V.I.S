@@ -272,7 +272,7 @@ def complete_mail_connection(flow_id: str, completion: str) -> dict[str, Any]:
         if result["provider"] == "gmail":
             gmail_service._after_gmail_connected(result["connection_id"])
         else:
-            microsoft_mail.sync_connection(result["connection_id"])
+            microsoft_mail.sync_connection(result["connection_id"], trigger="connect")
     except Exception as exc:
         # The mailbox is connected; the first sync can be retried with "Actualizar".
         logger.warning("First mail sync after connection failed provider=%s error=%s", result["provider"], type(exc).__name__)
