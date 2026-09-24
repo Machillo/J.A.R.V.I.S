@@ -80,7 +80,8 @@ jobs:
           cache: pip
           cache-dependency-path: jarvis-personal/requirements.txt
       - run: pip install -r requirements.txt
-      - run: pip install pytest
+      # httpx is required by starlette.testclient (tests only; it used to arrive via google-genai).
+      - run: pip install pytest httpx
       - run: python -m compileall -q backend
       - run: python -c "import backend.main"
       - run: python -m pytest -q backend

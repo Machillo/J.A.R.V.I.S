@@ -40,3 +40,6 @@ desktop.ini
 **/*.tmp
 **/*.temp
 **/*.bak
+# Internal parser discovery output (sanitized samples, PENDING proposals); never committed.
+**/parser_proposals/
+**/*.sanitized.txt

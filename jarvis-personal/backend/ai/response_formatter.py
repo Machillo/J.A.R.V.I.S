@@ -1,6 +1,6 @@
 import json
 
-from backend.ai.gemini_client import ask_gemini
+from backend.ai.openai_client import ask_openai_optional
 
 
 def format_jarvis_response(
@@ -35,7 +35,7 @@ Datos reales del sistema:
 Responde solamente el texto final que verá el usuario.
 """
 
-    ai_response = ask_gemini(prompt)
+    ai_response = ask_openai_optional(prompt, route="jarvis_formatter")
 
     if ai_response["status"] != "OK":
         return fallback_response(intent, data)
