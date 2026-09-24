@@ -1,30 +1,25 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
 
-from backend.ai.action_flow import continue_pending_action, start_action, _missing_required, _save_action
+from backend.ai.action_flow import continue_pending_action, start_action, _save_action
 from backend.ai.chat_memory import finish_pending_action, get_pending_action
-from backend.ai.openai_client import ask_openai, ask_openai_optional, get_active_premium_guides
 from backend.ai.intent_router import ACTION_TYPES, detect_intent, is_pending_interrupt
-from backend.ai.memory_service import get_relevant_memory_context, remember_from_message, search_memory_items
+from backend.ai.memory_service import remember_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
-from backend.ai.premium_orchestrator import premium_route_command, get_current_strategy_summary
 from backend.integrations.internet_search import internet_search
 from backend.tasks.calendar_service import calendar_summary, create_calendar_event_from_text
 from backend.sports.service import get_sports_calendar_summary
 
 from backend.finance.service import (
     get_debts,
-    get_financial_summary,
     get_net_worth_report,
     get_user_status,
 )
 
 from backend.goals.service import get_financial_goal_by_name
 from backend.advisor.service import analyze_spending_habits, get_financial_advice
-from backend.transactions.analyzer import get_transaction_analysis
 from backend.finance.strategic_engine import get_financial_engine_report, simulate_what_if
 from backend.finance.intelligence import plan_long_term_goal, get_debt_advisory
 from backend.finance.fixed_expenses import handle_fixed_expense_message
@@ -34,26 +29,7 @@ logger = logging.getLogger(__name__)
 from backend.ai.decision_engine import handle_decision_pending_action, handle_personal_decision_request
 
 
-def _safe_call(fn, fallback):
-    try:
-        return fn()
-    except Exception:
-        logger.exception("JARVIS context source failed: %s", getattr(fn, "__name__", "callable"))
-        return {"unavailable": True, "fallback": fallback}
-
-
-def build_financial_context() -> dict:
-    return {
-        "financial_summary": _safe_call(get_financial_summary, {}),
-        "net_worth": _safe_call(get_net_worth_report, {}),
-        "debts": _safe_call(get_debts, []),
-        "transactions": _safe_call(get_transaction_analysis, {}),
-        "strategic_engine": _safe_call(get_financial_engine_report, {}),
-    }
-
-
 def _internet_answer(user_message: str, query: str) -> dict:
-    memory_context = get_relevant_memory_context(user_message, limit=5)
     search_result = internet_search(query)
     if search_result.get("status") != "OK":
         return {
@@ -68,29 +44,11 @@ def _internet_answer(user_message: str, query: str) -> dict:
     if not results:
         message = "Señor, busqué en internet pero no encontré resultados claros."
     else:
-        prompt = f"""
-Eres el asistente interno DINCR Owner. Responde SOLO lo que el usuario pidió, breve y útil.
-No hagas resumen gigante. Usa los resultados de internet, sin inventar.
-Si no hay certeza, dilo.
-
-Pregunta del usuario: {user_message}
-Consulta usada: {query}
-Memoria relevante del usuario:
-{json.dumps(memory_context, ensure_ascii=False, indent=2)}
-Resultados:
-{json.dumps(results, ensure_ascii=False, indent=2)}
-
-Formato recomendado: 1 a 3 frases y, si aplica, una fuente corta.
-"""
-        ai = ask_openai_optional(prompt, route="internet_answer")
-        if ai.get("status") == "OK" and (ai.get("text") or "").strip():
-            message = ai["text"].strip()
-        else:
-            first = results[0]
-            title = first.get("title") or "Resultado"
-            snippet = first.get("snippet") or ""
-            link = first.get("link") or ""
-            message = f"Señor, encontré esto: {title}. {snippet}\n{link}".strip()
+        first = results[0]
+        title = first.get("title") or "Resultado"
+        snippet = first.get("snippet") or ""
+        link = first.get("link") or ""
+        message = f"Señor, encontré esto: {title}. {snippet}\n{link}".strip()
 
     return {
         "message": message,
@@ -102,64 +60,17 @@ Formato recomendado: 1 a 3 frases y, si aplica, una fuente corta.
 
 
 def answer_with_context(user_message: str, intent_result: dict):
-    context = build_financial_context()
-    memory_context = get_relevant_memory_context(user_message, limit=8)
-    premium_guides = get_active_premium_guides(limit=3)
+    """Fallback for messages without a deterministic handler.
 
-    system = """
-Eres el asistente interno DINCR Owner, un asesor financiero personal.
-Responde en español con tono de asesor: directo, corto y accionable.
-No uses nombre ni correo en saludos. Si saludas, usa solo: "Señor, ...".
-No conviertas preguntas de capacidad de compra en registro de gastos.
-Si el usuario dice "¿puedo comprar...?", evalúa capacidad, deudas, gastos fijos y estrategia.
-Usa SOLO los datos reales recibidos. No inventes montos, fechas, deudas ni categorías.
-No muestres todo el historial: da conclusión, razón y siguiente acción.
-""".strip()
-
-    prompt = f"""
-Pregunta/comando del usuario:
-{user_message}
-
-Intento detectado:
-{json.dumps(intent_result, ensure_ascii=False)}
-
-Memoria relevante:
-{json.dumps(memory_context, ensure_ascii=False, indent=2)}
-
-Guías financieras activas creadas anteriormente:
-{json.dumps(premium_guides, ensure_ascii=False, indent=2)}
-
-Resumen real del backend financiero:
-{json.dumps(context, ensure_ascii=False, indent=2)}
-
-Instrucción final:
-Responde máximo en 5 líneas. Si hay un riesgo claro, dilo primero. Si falta un dato, pide solo ese dato.
-"""
-
-    ai_response = ask_openai(prompt, route="jarvis_premium_finance_answer", system=system, max_tokens=650)
-    source = "openai_premium_with_jarvis_context"
-
-    if ai_response.get("status") != "OK":
-        return {
-            "message": "Señor, tengo el contexto cargado, pero la IA no pudo generar respuesta en este momento.",
-            "intent": intent_result.get("intent", "context_answer"),
-            "status": "AI_ERROR",
-            "pending": False,
-            "data": context,
-            "ai_error": ai_response,
-        }
-
+    DINCR Owner no longer has a generative-AI assistant: no financial context
+    is built and nothing is sent to an AI provider.
+    """
     return {
-        "message": ai_response["text"].strip(),
+        "message": "Señor, no tengo una respuesta calculada para eso. Consultá Finanzas o Estrategia.",
         "intent": intent_result.get("intent", "context_answer"),
-        "entity": intent_result.get("entity"),
-        "confidence": intent_result.get("confidence", 0),
-        "source": source,
+        "status": "UNSUPPORTED",
         "pending": False,
-        "status": "OK",
-        "usage": ai_response.get("usage"),
-        "budget": ai_response.get("budget"),
-        "data": context,
+        "source": "deterministic",
     }
 
 
@@ -462,105 +373,6 @@ def process_message(user_message: str):
             "source": "local_direct_payroll_guard",
             "data": {"action": saved_action, "strategy": blueprint},
         }
-
-    premium_route = premium_route_command(user_message, intent_result)
-    if premium_route.get("status") == "OK":
-        route = premium_route.get("route") or {}
-        premium_intent = route.get("intent")
-        premium_action = route.get("action_type") if route.get("action_type") not in {None, "", "null"} else None
-        premium_payload = route.get("payload") if isinstance(route.get("payload"), dict) else {}
-
-        if premium_action in ACTION_TYPES:
-            # Eventos diarios seguros: registrar directo y recalcular contexto. El Director no pregunta por OT/bonos si el monto/horas ya vino claro.
-            if premium_action in {"create_payroll_event", "create_bonus"} and not _missing_required(premium_action, premium_payload):
-                saved_action = _save_action(premium_action, premium_payload)
-                followup = answer_with_context(
-                    f"Registré este evento: {json.dumps(premium_payload, ensure_ascii=False)}. Recalcula impacto y dime adónde debe ir el extra según la estrategia.",
-                    {"intent": "salary_distribution", "premium_route": route},
-                )
-                return {
-                    "message": followup.get("message") or "Señor, registrado. El extra debe ir según la estrategia activa.",
-                    "intent": premium_intent or premium_action,
-                    "action_type": premium_action,
-                    "status": "OK",
-                    "pending": False,
-                    "confidence": route.get("confidence", 0),
-                    "source": "openai_premium_director_autosave",
-                    "usage": premium_route.get("usage"),
-                    "budget": premium_route.get("budget"),
-                    "data": {"router": route, "action": saved_action, "followup": followup.get("data")},
-                }
-
-            action_result = start_action(premium_action, user_message, prefill_payload=premium_payload)
-            return {
-                "message": action_result["message"],
-                "intent": premium_intent or premium_action,
-                "action_type": premium_action,
-                "status": action_result.get("status", "PENDING"),
-                "pending": action_result.get("pending", True),
-                "confidence": route.get("confidence", 0),
-                "source": "openai_premium_router",
-                "usage": premium_route.get("usage"),
-                "budget": premium_route.get("budget"),
-                "data": {"router": route, "action": action_result.get("data")},
-            }
-
-        if premium_intent == "financial_strategy":
-            result = create_initial_financial_strategy()
-            return {
-                "message": result.get("message"),
-                "intent": "financial_strategy",
-                "status": result.get("status", "OK"),
-                "pending": False,
-                "source": "live_database",
-                "data": result,
-            }
-
-        if premium_intent == "internet_search":
-            query = route.get("query") or user_message
-            return _internet_answer(user_message, query)
-
-        if premium_intent == "calendar":
-            calendar_result = create_calendar_event_from_text(route.get("query") or user_message)
-            return {
-                "message": calendar_result.get("message"),
-                "intent": "create_calendar_event",
-                "status": calendar_result.get("status", "OK"),
-                "pending": calendar_result.get("pending", False),
-                "source": "openai_premium_router",
-                "data": calendar_result,
-            }
-
-        if premium_intent == "sports_schedule":
-            result = get_sports_calendar_summary({"scope": "all", "query_type": "next", "query": route.get("query") or user_message})
-            return {
-                "message": result.get("message"),
-                "intent": "sports_schedule",
-                "status": result.get("status", "OK"),
-                "pending": False,
-                "source": "openai_premium_router",
-                "data": result,
-            }
-
-        if premium_intent == "fixed_expense":
-            result = handle_fixed_expense_message(user_message)
-            if result.get("status") == "OK":
-                return {
-                    "message": result.get("message"),
-                    "intent": "fixed_expense",
-                    "status": result.get("status", "OK"),
-                    "pending": False,
-                    "source": "openai_premium_router",
-                    "data": result.get("data"),
-                }
-
-        if premium_intent in {
-            "capacity_check", "financial_strategy", "salary_distribution",
-            "direct_finance_answer", "general"
-        } or float(route.get("confidence") or 0) >= 0.72:
-            enhanced_intent = dict(intent_result)
-            enhanced_intent.update({"premium_route": route, "intent": premium_intent or intent_result.get("intent")})
-            return answer_with_context(user_message, enhanced_intent)
 
     intent = intent_result.get("intent", "unknown")
     action_type = intent_result.get("action_type")

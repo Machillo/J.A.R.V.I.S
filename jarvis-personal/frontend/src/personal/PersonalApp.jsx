@@ -42,14 +42,14 @@ import ProductOperations from "../pages/ProductOperations";
 import MoneyControl from "../products/jarvis/pages/MoneyControl";
 import { JarvisGlassCard, JarvisScreen } from "../products/jarvis/components/JarvisScreen";
 
-import { askJarvis, getFinanceDashboard, getJarvisUsageToday, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "../services/jarvisApi";
+import { askJarvis, getFinanceDashboard, getMe, getOwnerBridgeToken, getProfilePreferences, getStatus, setOwnerBridgeToken, updateProfilePreferences } from "../services/jarvisApi";
 import { supabase } from "../lib/supabase";
 import { recordError, trackScreen } from "../lib/telemetry";
 import AppearanceSelector from "../components/AppearanceSelector";
 import NativeProductShell from "../ui/native/NativeProductShell";
 import { detectNativePlatform } from "../ui/native/platform";
 import JarvisNavigation from "../products/jarvis/navigation/JarvisNavigation";
-import { applyDocumentLanguage, deviceLanguage, localeTag, t, tx } from "../lib/locale";
+import { applyDocumentLanguage, deviceLanguage, t, tx } from "../lib/locale";
 
 const sanitizeCourtesy = (text = "") =>
   String(text || "")
@@ -115,7 +115,7 @@ function ChatsHub({ navigatePage }) {
   );
 }
 
-function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, profilePreferences, onProfilePhotoChange }) {
+function ProfileHub({ navigatePage, userName, currentUser, onLogout, profilePreferences, onProfilePhotoChange }) {
   const language = deviceLanguage();
   const avatarUrl = profilePreferences?.avatar_data_url || currentUser?.avatar_url || currentUser?.user_metadata?.avatar_url || "";
 
@@ -150,10 +150,6 @@ function ProfileHub({ navigatePage, userName, currentUser, aiUsage, onLogout, pr
       </div>
 
       <div className="profile-footer-actions">
-        <JarvisGlassCard as="div" className="app-info-row">
-          <span>{tx("Uso de IA hoy", "AI usage today", language)}</span>
-          <strong>{aiUsage ? `${Math.round(aiUsage.total_tokens || 0).toLocaleString(localeTag(language))} tokens` : "--"}</strong>
-        </JarvisGlassCard>
         <button className="jarvis-danger-button" type="button" onClick={onLogout}>{t("nav.logout", language)}</button>
       </div>
     </JarvisScreen>
@@ -177,7 +173,6 @@ export default function App() {
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [ownerBridgeMode, setOwnerBridgeMode] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [aiUsage, setAiUsage] = useState(null);
   const [profilePreferences, setProfilePreferences] = useState(null);
   const recognitionRef = useRef(null);
 
@@ -250,7 +245,6 @@ export default function App() {
         setJarvisResponse(null);
         setChatHistory([]);
         setCurrentUser(null);
-        setAiUsage(null);
         setProfilePreferences(null);
       }
     });
@@ -274,7 +268,6 @@ export default function App() {
       // request must never hold Finance or the shell hostage.
       getStatus().then(setStatus).catch((error) => recordError(error, "jarvis_status"));
       getFinanceDashboard().then(setFinanceDashboard).catch((error) => recordError(error, "jarvis_finance_dashboard"));
-      getJarvisUsageToday().then(setAiUsage).catch((error) => recordError(error, "jarvis_usage"));
       getProfilePreferences()
         .then((profileData) => setProfilePreferences(profileData?.value || profileData || null))
         .catch(() => setProfilePreferences(null));
@@ -318,7 +311,6 @@ export default function App() {
     setJarvisResponse(null);
     setChatHistory([]);
     setCurrentUser(null);
-    setAiUsage(null);
     setProfilePreferences(null);
   };
 
@@ -410,9 +402,6 @@ export default function App() {
         await refreshAppData();
       }
 
-      if (response?.usage || response?.response?.usage) {
-        setAiUsage(response?.usage || response?.response?.usage);
-      }
       speakText(responseText);
     } catch (error) {
       console.error(error);
@@ -444,9 +433,6 @@ export default function App() {
       ].slice(-8));
       if (response?.status === "OK" && (response?.action_type?.startsWith("create_") || response?.action_type === "import_monthly_statement")) {
         await refreshAppData();
-      }
-      if (response?.usage || response?.response?.usage) {
-        setAiUsage(response?.usage || response?.response?.usage);
       }
       speakText(responseText);
     } catch (error) {
@@ -603,7 +589,7 @@ export default function App() {
         return <ProductOperations />;
 
       case "profile":
-        return <ProfileHub navigatePage={navigatePage} userName={userName} currentUser={currentUser} aiUsage={aiUsage} onLogout={handleLogout} profilePreferences={profilePreferences} onProfilePhotoChange={handleProfilePhotoChange} />;
+        return <ProfileHub navigatePage={navigatePage} userName={userName} currentUser={currentUser} onLogout={handleLogout} profilePreferences={profilePreferences} onProfilePhotoChange={handleProfilePhotoChange} />;
 
       default:
         return <Dashboard jarvisResponse={jarvisResponse} chatHistory={chatHistory} userName={userName} profilePreferences={profilePreferences} currentUser={currentUser} onOpenProfile={() => navigatePage("profile")} />;
