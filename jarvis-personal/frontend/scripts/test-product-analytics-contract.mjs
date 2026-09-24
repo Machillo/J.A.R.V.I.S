@@ -30,6 +30,7 @@ assert.match(sdk, /before_send:/);
 assert.match(sdk, /user\?\.legal\?\.required === false/);
 assert.doesNotMatch(sdk, /posthog\.identify\(/);
 assert.doesNotMatch(gmail, /bank: item\.|institution_country: item\.|auto_saved: result\./);
+assert.match(gmail, /if \(outcome\.provider !== "gmail"\) trackEvent\("mail_connected"/, "Gmail connections are counted once, by the backend");
 
 function runSdk({ key = "", mobile = true, legal = false, appId = "com.dincr.app" } = {}) {
   const calls = [];

@@ -114,6 +114,18 @@ Ahora `test:product-analytics` también ejecuta el pipeline real de posthog-js.
 Los dos eventos del servidor sí se enviaban, pero creaban un perfil de persona
 por evento; ahora envían `$process_person_profile: false`.
 
+## Antes de distribuir un build con `VITE_POSTHOG_KEY` (HUMAN GATE)
+
+Ahora que los eventos sí llegan, esto va **antes** de enviar cualquier build con
+la clave a usuarios reales (no después de la prueba):
+1. PostHog → Project settings → activar **Discard client IP data**.
+2. Revisión legal: la Política de Privacidad debe nombrar PostHog (proveedor,
+   región, propósito, retención del ID anónimo) — ver sección anterior.
+3. Firebase Analytics/Crashlytics (fuera de este contrato): reciben el ID
+   interno de cuenta (`setUserId`), pantallas Owner y texto de errores, sin
+   gating por rol ni aceptación legal (`src/lib/telemetry.js`). Requiere
+   decisión de producto/legal antes del release.
+
 ## Prueba física mínima (teléfono → PostHog)
 
 1. Compilar con `VITE_POSTHOG_KEY` y `VITE_POSTHOG_HOST` definidos; `npm run
@@ -131,4 +143,6 @@ por evento; ahora envían `$process_person_profile: false`.
    `distinct_id`.
 7. Iniciar sesión como **Owner** y como cuenta sin aceptación legal: no debe
    llegar ningún evento.
-8. Tras aprobarlo en PostHog: activar *Discard client IP data*.
+8. Conectar Gmail: debe llegar **un solo** `gmail_connected` (servidor) y ningún
+   `mail_connected`; conectar Outlook: un `mail_connected`.
+9. Red: solo `/e/` y `/array/<key>/config`; nada de `/flags` ni scripts externos.

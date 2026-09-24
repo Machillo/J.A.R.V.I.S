@@ -128,7 +128,8 @@ export default function GmailAutomation() {
       const outcome = takeMailOAuthOutcome();
       if (!outcome) return;
       if (outcome.ok) {
-        trackEvent("mail_connected", { source_type: "email" });
+        // Gmail is counted server-side as gmail_connected; only other providers report here.
+        if (outcome.provider !== "gmail") trackEvent("mail_connected", { source_type: "email" });
         setError("");
         setMessage(tx("Correo conectado. DINCR está revisando tus avisos financieros.", "Mailbox connected. DINCR is reviewing your financial notices."));
       } else {
