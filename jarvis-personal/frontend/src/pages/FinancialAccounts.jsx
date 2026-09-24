@@ -9,6 +9,8 @@ import {
   saveAccountBalance,
 } from "../services/jarvisApi";
 import { deviceLanguage, localeTag, t } from "../lib/locale";
+import { BANKS, findBankInText, resolveBank } from "../lib/bankBranding";
+import BankLogo from "../components/BankLogo";
 
 const money = (value, currency = "CRC") => currency === "USD"
   ? `$${Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -19,24 +21,9 @@ const TYPES = [
   ["cash", "Efectivo"], ["emergency_fund", "Salvavidas"], ["other", "Otra"],
 ];
 
-const BANKS = [
-  {
-    id: "bac",
-    name: "BAC Credomatic",
-    short: "BAC",
-    match: /\bbac\b|bac\s*credomatic|credomatic/i,
-  },
-  {
-    id: "multimoney",
-    name: "MultiMoney",
-    short: "MM",
-    match: /multi\s*money|multimoney/i,
-  },
-];
-
 const iconFor = (type) => type === "credit_card" ? CreditCard : type === "cash" ? Banknote : type === "emergency_fund" ? ShieldCheck : Landmark;
 const candidateText = (item) => [item.email_sender, item.email_subject, item.description, item.raw_description, item.notes].filter(Boolean).join(" ");
-const bankForCandidate = (item) => BANKS.find((bank) => bank.match.test(candidateText(item))) || null;
+const bankForCandidate = (item) => resolveBank(item.bank || item.institution_code) || findBankInText(candidateText(item));
 const candidateCurrency = (item) => String(item.currency || "").toUpperCase() === "USD" ? "USD" : "CRC";
 const candidateDate = (item, language) => {
   const value = item.transaction_date || item.email_received_at || item.created_at;
@@ -132,7 +119,7 @@ export default function FinancialAccounts({ onFinanceChanged }) {
             const open = selectedBank === bank.id;
             return <div className={`bank-detected-card ${open ? "open" : ""}`} key={bank.id}>
               <button className="bank-detected-summary" type="button" onClick={() => setSelectedBank(open ? null : bank.id)}>
-                <span className={`bank-logo bank-logo--${bank.id}`}>{bank.short}</span>
+                <BankLogo bank={bank}/>
                 <span className="bank-detected-copy">
                   <strong>{bank.name}</strong>
                   <small>{bank.last4.length ? bank.last4.map((last4) => `•••• ${last4}`).join(" · ") : tr("detectedByEmail")}</small>
