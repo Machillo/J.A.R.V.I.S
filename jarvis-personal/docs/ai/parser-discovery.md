@@ -22,20 +22,26 @@ This is not per-transaction analysis. It is not called by the app or by the inge
 
 1. **Collect.** The Owner saves a few examples of the unknown format as plain text.
    - Only use them with the account holder's consent: an Owner email, or a user's email volunteered for support.
-2. **Sanitize locally.**
+2. **Sanitize locally.** Keep raw samples **outside the repository**.
    ```bash
-   python -m backend.scripts.propose_parser sample1.txt sample2.txt
+   python -m backend.scripts.propose_parser C:/samples/bn1.txt C:/samples/bn2.txt
    ```
-   - Emails, URLs and names after greeting/holder labels are replaced, and every digit becomes `9`. The layout survives ("₡99.999,99", "99/99/9999") but no real value does.
-   - The dry run prints the sanitized text. **Read it.** Uppercase full names without a label are flagged but can slip through.
+   - This writes `parser_proposals/*.sanitized.txt` and sends nothing.
+   - The sanitizer uses an **allow-list**: only generic banking vocabulary (labels, months, currencies, bank names) survives. Every other word (names, merchants, free-text details, addresses, domains) becomes `<w>`, emails and URLs become placeholders, and every digit becomes `9`.
+   - The layout survives ("Monto: CRC 99.999,99", "Fecha: 99/99/9999"), but no real value does. **Read every file.**
 3. **Propose.**
    ```bash
-   PARSER_DISCOVERY_ENABLED=true OPENAI_API_KEY=… python -m backend.scripts.propose_parser sample*.txt --send
+   PARSER_DISCOVERY_ENABLED=true OPENAI_API_KEY=… python -m backend.scripts.propose_parser --send parser_proposals/bn1.sanitized.txt …
    ```
-   - The request is refused while any sample still looks personal.
+   - `--send` accepts only `*.sanitized.txt` files that sanitizing again leaves unchanged. A raw or edited file is refused before any network call.
    - The model returns a **declarative** proposal: sender domains, a subject regex, field regexes and direction keywords. It never returns code.
-   - The proposal is validated: regexes compile, each field needs a single `value` group, patterns are length-limited, and the status is **forced to `PENDING_HUMAN_REVIEW`** whatever the model says.
-   - It is evaluated deterministically against the samples and written to `parser_proposals/`, which git ignores.
+   - The proposal is validated:
+     - regexes compile, and patterns are length-limited;
+     - nested quantifiers are refused (ReDoS);
+     - each field needs a single `value` group;
+     - the bank name is reduced to `[a-z0-9_-]`;
+     - the status is **forced to `PENDING_HUMAN_REVIEW`**.
+   - It is evaluated deterministically against the samples and written to `parser_proposals/`, which git ignores at every level.
    - The request uses `store: false`.
 4. **Human review.** The Owner or a developer reads the proposal and corrects it.
 5. **Implement.** A developer writes a deterministic parser in `email_monitor/` with **synthetic** tests, following `test_parser_battery.py`, through a normal reviewed PR.

@@ -31,10 +31,20 @@ def build_prompt(samples: list[str]) -> str:
     return f"Propose one parser that fits all samples of this unknown format.\n\n{blocks}"
 
 
+# A quantified group that itself contains a quantifier ("(\w+\s?)+") can backtrack
+# exponentially; proposals are data, so such patterns are simply refused.
+NESTED_QUANTIFIER = re.compile(r"\((?:[^()\\]|\\.)*[+*}](?:[^()\\]|\\.)*\)\s*[+*{]|[+*}?]\)\s*[+*{]")
+
+
 def _pattern(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value or len(value) > MAX_PATTERN:
         raise ValueError(f"{name}: missing or longer than {MAX_PATTERN} characters")
-    compiled = re.compile(value)
+    if NESTED_QUANTIFIER.search(value):
+        raise ValueError(f"{name}: nested quantifiers are not allowed")
+    try:
+        compiled = re.compile(value)
+    except re.error as exc:
+        raise ValueError(f"{name}: invalid regex ({exc})") from exc
     if name.startswith("fields.") and list(compiled.groupindex) != ["value"]:
         raise ValueError(f"{name}: needs exactly one named group 'value'")
     return value
@@ -48,6 +58,8 @@ def validate_proposal(raw: dict[str, Any], *, source_model: str) -> dict[str, An
     if not isinstance(fields, dict) or "amount" not in fields:
         raise ValueError("fields.amount is required")
     direction = raw.get("direction") or {}
+    if not isinstance(direction, dict):
+        raise ValueError("direction must be an object")
     return {
         "status": PENDING,
         # Used in the output file name: letters, digits, "_" and "-" only.
@@ -97,13 +109,17 @@ def openai_sender(prompt: str) -> tuple[dict[str, Any], str]:
               "text": {"format": {"type": "json_object"}}, "store": False},
         timeout=60,
     )
-    response.raise_for_status()
+    if response.status_code >= 400:
+        raise RuntimeError(f"provider error HTTP {response.status_code}")
     payload = response.json()
     text = payload.get("output_text") or "".join(
         part.get("text", "") for item in payload.get("output") or [] if item.get("type") == "message"
         for part in item.get("content") or []
     )
-    return json.loads(text), model
+    try:
+        return json.loads(text), model
+    except json.JSONDecodeError as exc:
+        raise ValueError("provider did not return JSON") from exc
 
 
 def propose(samples: list[str], sender: Callable[[str], tuple[dict[str, Any], str]] = openai_sender) -> dict[str, Any]:
