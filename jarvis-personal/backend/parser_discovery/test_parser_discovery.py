@@ -47,6 +47,11 @@ def test_a_proposal_is_always_pending_and_evaluated_deterministically():
     assert result["evaluation"] == [{"fields": {"amount": "99.999,99", "date": "99/99/9999"}, "direction": "out", "complete": True}]
 
 
+def test_bank_name_cannot_escape_the_output_folder():
+    proposal = discovery.validate_proposal({**VALID, "bank": "../../etc/Banco X"}, source_model="test-model")
+    assert proposal["bank"] == "etc_banco_x"
+
+
 @pytest.mark.parametrize("broken", [
     {**VALID, "fields": {}},
     {**VALID, "fields": {"amount": "Monto (unclosed"}},

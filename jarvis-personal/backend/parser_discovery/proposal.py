@@ -50,7 +50,8 @@ def validate_proposal(raw: dict[str, Any], *, source_model: str) -> dict[str, An
     direction = raw.get("direction") or {}
     return {
         "status": PENDING,
-        "bank": str(raw.get("bank") or "unknown")[:60],
+        # Used in the output file name: letters, digits, "_" and "-" only.
+        "bank": re.sub(r"[^a-z0-9_-]+", "_", str(raw.get("bank") or "unknown").lower()).strip("_")[:60] or "unknown",
         "sender_domains": [str(item).lower()[:120] for item in raw.get("sender_domains") or [] if isinstance(item, str)][:10],
         "subject_pattern": _pattern(raw.get("subject_pattern"), "subject_pattern"),
         "fields": {name: _pattern(fields[name], f"fields.{name}") for name in FIELDS if fields.get(name)},
