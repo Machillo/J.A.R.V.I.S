@@ -1,6 +1,7 @@
 import { API_URL } from "./apiUrl";
 import { authenticatedFetch } from "./authenticatedFetch";
 import { supabase } from "./supabase";
+import { tx } from "./locale";
 
 const QUEUE_PREFIX = "finva:operation-queue:v1:";
 const MAX_OPERATIONS = 20;
@@ -39,10 +40,12 @@ const purgeExpiredQueues = () => {
 // Explicit logout or account deletion: pending request bodies (financial data)
 // must not stay on the device.
 export const clearPendingOperations = () => {
-  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-    const key = window.localStorage.key(index);
-    if (key?.startsWith(QUEUE_PREFIX)) window.localStorage.removeItem(key);
-  }
+  try {
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith(QUEUE_PREFIX)) window.localStorage.removeItem(key);
+    }
+  } catch { /* storage unavailable: nothing to clear, logout must still proceed */ }
   emitQueue([]);
 };
 
@@ -128,6 +131,21 @@ export async function recoverableFetch(url, options = {}) {
     error.finvaOperationQueued = true;
     throw error;
   }
+}
+
+// Before an explicit logout: try to sync queued changes, and only discard them
+// (with the user's consent) when they still cannot be delivered.
+export async function prepareLogout(confirmDiscard = (count) => window.confirm(tx(
+  `Tenés ${count} ${count === 1 ? "cambio" : "cambios"} sin sincronizar. Si cerrás sesión se perderán. ¿Cerrar sesión igual?`,
+  `You have ${count} unsynced ${count === 1 ? "change" : "changes"}. Logging out will discard them. Log out anyway?`,
+))) {
+  try {
+    if (await getPendingOperationCount() > 0 && navigator.onLine) await flushPendingOperations();
+    const pending = await getPendingOperationCount();
+    if (pending > 0 && !confirmDiscard(pending)) return false;
+  } catch { /* never block logout on the recovery queue */ }
+  clearPendingOperations();
+  return true;
 }
 
 export async function flushPendingOperations() {

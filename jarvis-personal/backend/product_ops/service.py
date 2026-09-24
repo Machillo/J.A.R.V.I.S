@@ -655,9 +655,12 @@ def create_automatic_incident(payload):
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
             (f"{user['account_id']}:{fingerprint}",),
         )
+        # Serialize the budget per account and count only incidents that actually
+        # alerted, so a burst cannot race past it and noise cannot mute a real outage.
+        conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"incident-alerts:{user['account_id']}",))
         recent_reports = conn.execute(
             """SELECT COUNT(*) AS total FROM feedback_reports
-               WHERE account_id=%s AND source='automatic' AND created_at >= NOW()-INTERVAL '1 hour'""",
+               WHERE account_id=%s AND source='automatic' AND discord_alerted_at >= NOW()-INTERVAL '1 hour'""",
             (user["account_id"],),
         ).fetchone() or {}
         alerts_allowed = int(recent_reports.get("total") or 0) < AUTOMATIC_ALERTS_PER_ACCOUNT_HOUR

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
-import { flushPendingOperations } from "./lib/operationRecovery";
+import { flushPendingOperations, prepareLogout } from "./lib/operationRecovery";
 import Login from "./pages/Login";
 import FinvaOnboarding from "./pages/FinvaOnboarding";
 import ProfileSetup from "./pages/ProfileSetup";
@@ -221,7 +221,7 @@ export default function App() {
     const personalApp = <PersonalApp />;
     if (!isDincrDistribution) return personalApp;
     return (
-      <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
+      <FinvaAppLock userId={currentUser.id} onLogout={async () => { if (await prepareLogout()) await supabase.auth.signOut({ scope: "local" }); }}>
         {personalApp}
       </FinvaAppLock>
     );
@@ -237,7 +237,7 @@ export default function App() {
   }
 
   return (
-    <FinvaAppLock userId={currentUser.id} onLogout={() => supabase.auth.signOut({ scope: "local" })}>
+    <FinvaAppLock userId={currentUser.id} onLogout={async () => { if (await prepareLogout()) await supabase.auth.signOut({ scope: "local" }); }}>
       <UsersApp user={currentUser} onUserChange={setCurrentUser} releasePolicy={releasePolicy} />
     </FinvaAppLock>
   );

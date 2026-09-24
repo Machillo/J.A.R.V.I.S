@@ -224,6 +224,9 @@ def _send_to_subscription(conn, subscription: dict[str, Any], title: str, body: 
 
     if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
         return False, "Suscripción incompleta: faltan endpoint/p256dh/auth."
+    if not _is_push_service_endpoint(endpoint):
+        # Rows stored before the endpoint allowlist existed are never contacted.
+        return False, "Endpoint fuera de los servicios push reconocidos."
 
     try:
         webpush(
@@ -281,7 +284,9 @@ def send_system_push(title: str, body: str, category: str = "system", url: str =
     with get_connection() as conn:
         ensure_notification_tables(conn)
         subscriptions = conn.execute(
-            "SELECT * FROM notification_subscriptions WHERE enabled = TRUE"
+            """SELECT ns.* FROM notification_subscriptions ns
+               JOIN allowed_users au ON au.id = ns.user_id
+               WHERE ns.enabled = TRUE AND au.role IN ('owner', 'admin') AND au.status = 'active'"""
         ).fetchall()
         for subscription in subscriptions:
             ok, _ = _send_to_subscription(conn, subscription, title, body, category)

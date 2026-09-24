@@ -107,3 +107,14 @@ def test_push_subscriptions_only_accept_real_push_services(as_role, monkeypatch)
         assert notifications.save_push_subscription({"endpoint": endpoint})["status"] == "ERROR"
     assert notifications._is_push_service_endpoint("https://fcm.googleapis.com/fcm/send/abc")
     assert notifications._is_push_service_endpoint("https://web.push.apple.com/abc")
+
+
+def test_old_push_rows_outside_the_allowlist_are_never_contacted(monkeypatch):
+    from backend.notifications import service as notifications
+
+    monkeypatch.setattr(notifications, "webpush", lambda **_k: (_ for _ in ()).throw(AssertionError("must not send")))
+    monkeypatch.setattr(notifications, "VAPID_PUBLIC_KEY", "public")
+    monkeypatch.setattr(notifications, "VAPID_PRIVATE_KEY", "private")
+    row = {"id": 9, "endpoint": "http://169.254.169.254/latest", "payload": {"keys": {"p256dh": "k", "auth": "a"}}}
+    ok, error = notifications._send_to_subscription(None, row, "t", "b")
+    assert ok is False and "reconocidos" in error

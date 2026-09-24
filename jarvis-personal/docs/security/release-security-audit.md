@@ -7,11 +7,11 @@ Scope: current `main` plus the open overnight PRs. Method: read-only review of e
 | Sev | Finding | Fix |
 |---|---|---|
 | HIGH | `POST /auth/check-access` was public and returned the full `allowed_users` row (role, status, Supabase id, dates) for any email. That enables account enumeration and reveals Owner/admin accounts. Nothing used it | The route and its public-path entry are removed. A test asserts it is gone |
-| MEDIUM | `/notifications/*` (Owner browser push) had no role check. Any user could store any URL as a push endpoint, and `/notifications/test` made the server POST to it and echo the error text (SSRF probe) | Status, VAPID key, subscribe and test are Owner/admin-only (`/cron` stays secret-protected). Endpoints must be HTTPS on a real push service (FCM, Mozilla, Apple, WNS). Errors are no longer echoed |
-| MEDIUM | Client-reported incidents could spam support (email + Discord critical pings) without limit | At most 5 support alerts per account per hour. The incident is always recorded |
+| MEDIUM | `/notifications/*` (Owner browser push) had no role check. Any user could store any URL as a push endpoint, and `/notifications/test` made the server POST to it and echo the error text (SSRF probe) | Status, VAPID key, subscribe and test are Owner/admin-only (`/cron` stays secret-protected). Endpoints must be HTTPS on a real push service (FCM, Mozilla, Apple, WNS), checked **when saving and again before every send**, so rows stored earlier are never contacted. System pushes (deploy alerts) go only to active Owner/admin subscriptions. Errors are no longer echoed. **HUMAN:** run a read-only query for `notification_subscriptions` rows that belong to non-Owner accounts or fall outside the allowlist, then decide on cleanup |
+| MEDIUM | Client-reported incidents could spam support (email + Discord critical pings) without limit | At most 5 support alerts per account per hour. The budget is serialized per account and counts only incidents that actually alerted, so noise cannot mute a real outage. The incident is always recorded |
 | LOW | `/email-monitor/statements/reconcile` (Owner tooling) was callable by users. It was scoped to their workspace, but it could trigger runtime DDL | Owner/admin only |
 | LOW | Data export included internal `mail_oauth_flows` / `operation_idempotency` rows | Both tables are excluded |
-| LOW | Queued offline writes (raw financial request bodies) stayed in `localStorage` for up to 24 h after logout or account deletion | Cleared on explicit logout. Account deletion ends with logout |
+| LOW | Queued offline writes (raw financial request bodies) stayed in `localStorage` for up to 24 h after logout or account deletion | Every explicit logout (menu and app-lock screen) first tries to sync the queue, then asks before discarding anything still unsynced. Account deletion clears the queue silently. A forced sign-out on 401 keeps the queue |
 
 ## Fixed in other overnight PRs
 

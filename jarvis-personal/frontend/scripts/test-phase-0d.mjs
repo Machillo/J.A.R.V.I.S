@@ -20,6 +20,10 @@ assert.match(shell, /Cambio recuperado/);
 
 // Explicit logout and account deletion (which logs out) leave no queued financial bodies behind.
 assert.match(recovery, /export const clearPendingOperations[\s\S]*startsWith\(QUEUE_PREFIX\)[\s\S]*removeItem/);
-assert.match(shell, /const logout = \(\) => \{ clearPendingOperations\(\); return supabase\.auth\.signOut/);
+assert.match(recovery, /export async function prepareLogout[\s\S]*flushPendingOperations\(\)[\s\S]*confirmDiscard\(pending\)[\s\S]*clearPendingOperations\(\)/);
+assert.match(shell, /const logout = async \(\) => \{ if \(await prepareLogout\(\)\) await supabase\.auth\.signOut/);
+assert.equal((app.match(/onLogout=\{async \(\) => \{ if \(await prepareLogout\(\)\)/g) || []).length, 2, "app-lock logouts use the same guard");
+const actions = readFileSync(new URL("../src/products/finva/components/AccountActions.jsx", import.meta.url), "utf8");
+assert.match(actions, /await deleteMyAccount\(\);[\s\S]*clearPendingOperations\(\);[\s\S]*onLogout/);
 
 console.log("Phase 0D operation recovery contract passed.");
