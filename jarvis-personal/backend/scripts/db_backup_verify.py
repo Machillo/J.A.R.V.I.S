@@ -3,18 +3,27 @@
 
     backup   pg_dump the source in one exported snapshot, count every table in
              that same snapshot, restore the dump into an EMPTY scratch database
-             and compare the counts. Writes <out>/<stamp>/ with the dump,
-             manifest.json and SHA-256; status VERIFIED only if every table
-             matches.
+             and compare the counts. Writes <out>/<stamp>/ with the dump and
+             manifest.json. Status VERIFIED only if every table matches and the
+             restore raised no unexpected error.
     gate     exit 0 and print BACKUP_VERIFIED only when the newest manifest in
-             <out> is VERIFIED, younger than --max-age-hours and its dump still
-             has the recorded SHA-256. Anything else exits 2.
+             <out> is VERIFIED, younger than --max-age-hours (at most 24) and its
+             dump still has the recorded SHA-256. Anything else exits 2.
 
-Connection strings are read from environment variables named by --source-env /
---scratch-env and are never printed. The source must be a direct (session)
-connection: exported snapshots do not survive a transaction pooler. The output
-directory must be outside any Git repository (dumps hold personal data); it is
-created 0700 and files 0600.
+The manifest records the source's fingerprint (database, server address/port
+and, when readable, the cluster's system identifier) and its table inventory.
+apply_migration.py refuses a target whose fingerprint or tables differ, so a
+backup of another database never opens the gate for production.
+
+The dump keeps owners and privileges (GRANT/REVOKE must be recoverable); only
+the scratch restore skips them.
+
+Connection strings come from environment variables named by --source-env /
+--scratch-env. They reach pg_dump/pg_restore as PG* environment variables,
+never on a command line, and are never printed. The source must be a direct
+(session) connection: exported snapshots do not survive a transaction pooler.
+The output directory must be outside any Git repository (dumps hold personal
+data); it is created 0700 and files 0600.
 
 Read-only on the source: one REPEATABLE READ READ ONLY transaction plus
 pg_dump. The only database written is the scratch one, which must be empty.
@@ -34,12 +43,17 @@ import sys
 from pathlib import Path
 
 import psycopg2
+from psycopg2.extensions import parse_dsn
 
 DEFAULT_SCHEMAS = ("public",)
 EXIT_GATE_CLOSED = 2
+MAX_GATE_AGE_HOURS = 24
 # An empty database already has a public schema; that is the only restore error
 # that does not affect what was restored.
 BENIGN_RESTORE_ERRORS = ('schema "public" already exists',)
+LIBPQ_ENV = {"host": "PGHOST", "hostaddr": "PGHOSTADDR", "port": "PGPORT", "dbname": "PGDATABASE",
+             "user": "PGUSER", "password": "PGPASSWORD", "sslmode": "PGSSLMODE", "sslrootcert": "PGSSLROOTCERT",
+             "connect_timeout": "PGCONNECT_TIMEOUT", "options": "PGOPTIONS"}
 
 
 def _dsn(env_name: str) -> str:
@@ -47,6 +61,29 @@ def _dsn(env_name: str) -> str:
     if not value:
         raise SystemExit(f"environment variable {env_name} is empty")
     return value
+
+
+def libpq_env(dsn: str) -> dict[str, str]:
+    """Connection parameters as PG* variables, so no secret reaches argv."""
+    try:
+        parts = parse_dsn(dsn)
+    except psycopg2.ProgrammingError:
+        raise SystemExit("the connection string cannot be parsed") from None
+    unknown = sorted(set(parts) - set(LIBPQ_ENV) - {"application_name"})
+    if unknown:
+        raise SystemExit(f"unsupported connection parameters: {', '.join(unknown)}")
+    if not parts.get("dbname"):
+        raise SystemExit("the connection string must name a database")
+    env = {key: value for key, value in os.environ.items() if not key.startswith("PG")}
+    env.update({LIBPQ_ENV[key]: value for key, value in parts.items() if key in LIBPQ_ENV})
+    return env
+
+
+def connect(dsn: str, application_name: str):
+    try:
+        return psycopg2.connect(dsn, application_name=application_name)
+    except psycopg2.OperationalError:
+        raise SystemExit("could not connect (details withheld: they may contain credentials)") from None
 
 
 def _binary(name: str, bin_dir: str | None) -> str:
@@ -75,39 +112,91 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _tables(cur, schemas: list[str]) -> list[str]:
+def fingerprint(cur) -> dict[str, str | None]:
+    """Identifies the database a backup came from (no credentials)."""
+    cur.execute("SELECT current_database(), host(inet_server_addr()), inet_server_port()::text")
+    database, address, port = cur.fetchone()
+    system_identifier = None
+    cur.execute("SAVEPOINT dincr_fingerprint")
+    try:
+        cur.execute("SELECT system_identifier::text FROM pg_control_system()")
+        system_identifier = cur.fetchone()[0]
+    except psycopg2.Error:  # not granted on managed platforms
+        cur.execute("ROLLBACK TO SAVEPOINT dincr_fingerprint")
+    cur.execute("RELEASE SAVEPOINT dincr_fingerprint")  # pg_export_snapshot refuses subtransactions
+    return {"database": database, "server_address": address, "server_port": port,
+            "system_identifier": system_identifier}
+
+
+def tables(cur, schemas: list[str]) -> list[str]:
     cur.execute(
         """SELECT format('%%I.%%I', n.nspname, c.relname)
            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
            WHERE c.relkind IN ('r', 'p') AND n.nspname = ANY(%s)
            ORDER BY 1""",
-        (schemas,),
+        (list(schemas),),
     )
     return [row[0] for row in cur.fetchall()]
 
 
-def _counts(cur, tables: list[str]) -> dict[str, int]:
+def _counts(cur, names: list[str]) -> dict[str, int]:
+    # With row security off, a policy raises instead of silently hiding rows.
+    cur.execute("SET LOCAL row_security = off")
     counts = {}
-    for table in tables:
+    for table in names:
         cur.execute(f"SELECT count(*) FROM {table}")  # identifiers come from format('%I.%I')
         counts[table] = cur.fetchone()[0]
     return counts
 
 
+def restore_problems(returncode: int, stderr: str) -> list[str]:
+    """Why a restore cannot be trusted; empty means it can.
+
+    Every "pg_restore: error:" must be a tolerated one, pg_restore's own count
+    of ignored errors must match them, and no connection loss may appear.
+    Only first lines are kept: COPY context lines can carry row values.
+    """
+    lines = stderr.splitlines()
+    errors = [line for line in lines if line.startswith("pg_restore: error:")]
+    tolerated = [line for line in errors if any(text in line for text in BENIGN_RESTORE_ERRORS)]
+    problems = [line[:200] for line in errors if line not in tolerated]
+    problems += [line[:200] for line in lines if re.search(r"FATAL|server closed the connection|no connection to the server", line)]
+    ignored = re.search(r"errors ignored on restore: (\d+)", stderr)
+    if returncode != 0 and (not tolerated or not ignored or int(ignored.group(1)) != len(tolerated)):
+        problems.append(f"pg_restore exited {returncode} beyond the tolerated errors")
+    return problems
+
+
 def backup(args) -> int:
+    os.umask(0o077)
     out = Path(args.out).expanduser().resolve()
     if _inside_git_repo(out):
         raise SystemExit("refusing to write a backup inside a Git repository")
     source_dsn, scratch_dsn = _dsn(args.source_env), _dsn(args.scratch_env)
+    source_env, scratch_env = libpq_env(source_dsn), libpq_env(scratch_dsn)
     pg_dump, pg_restore = _binary("pg_dump", args.pg_bin), _binary("pg_restore", args.pg_bin)
 
+    # Refuse before copying any production data.
+    scratch = connect(scratch_dsn, "dincr-backup-restore")
+    scratch.autocommit = True
+    try:
+        with scratch.cursor() as cur:
+            if tables(cur, args.schema):
+                raise SystemExit("the scratch database is not empty; restore needs an empty database")
+    finally:
+        scratch.close()
+
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    target = out / stamp
-    target.mkdir(parents=True, mode=0o700)
+    out.mkdir(parents=True, exist_ok=True, mode=0o700)
+    target, suffix = out / stamp, 1
+    while target.exists():  # two backups within one second
+        suffix += 1
+        target = out / f"{stamp}-{suffix}"
+    target.mkdir(mode=0o700)
     os.chmod(out, 0o700)
     dump = target / "dump.pgc"
 
-    source = psycopg2.connect(source_dsn, application_name="dincr-backup")
+    source = connect(source_dsn, "dincr-backup")
     source.set_session(isolation_level="REPEATABLE READ", readonly=True)
     try:
         with source.cursor() as cur:
@@ -116,45 +205,47 @@ def backup(args) -> int:
             tool_major = _major(subprocess.run([pg_dump, "--version"], check=True, capture_output=True, text=True).stdout)
             if tool_major < server_major:
                 raise SystemExit(f"pg_dump {tool_major} cannot dump server {server_major}")
+            source_fingerprint = fingerprint(cur)
             cur.execute("SELECT pg_export_snapshot()")
             snapshot = cur.fetchone()[0]
-            tables = _tables(cur, args.schema)
-            source_counts = _counts(cur, tables)
-            command = [pg_dump, "--format=custom", "--no-owner", "--no-privileges", f"--snapshot={snapshot}",
-                       f"--file={dump}", *[f"--schema={schema}" for schema in args.schema], source_dsn]
-            result = subprocess.run(command, capture_output=True, text=True)
+            names = tables(cur, args.schema)
+            if not names:
+                raise SystemExit("the selected schemas contain no tables; nothing would be protected")
+            source_counts = _counts(cur, names)
+            result = subprocess.run(
+                [pg_dump, "--format=custom", "--strict-names", f"--snapshot={snapshot}", f"--file={dump}",
+                 *[f"--schema={schema}" for schema in args.schema]],
+                capture_output=True, text=True, env=source_env,
+            )
             if result.returncode != 0:
-                raise SystemExit("pg_dump failed:\n" + result.stderr.replace(source_dsn, "<source>"))
+                last = (result.stderr.strip().splitlines() or ["no output"])[-1]
+                raise SystemExit("pg_dump failed: " + last[:200])
     finally:
         source.rollback()
         source.close()
     os.chmod(dump, 0o600)
 
-    scratch = psycopg2.connect(scratch_dsn, application_name="dincr-backup-restore")
-    scratch.autocommit = True
+    result = subprocess.run([pg_restore, "--no-owner", "--no-privileges", f"--dbname={scratch_env['PGDATABASE']}", str(dump)],
+                            capture_output=True, text=True, env=scratch_env)
+    problems = restore_problems(result.returncode, result.stderr)
+    scratch = connect(scratch_dsn, "dincr-backup-restore")
     try:
         with scratch.cursor() as cur:
-            if _tables(cur, args.schema):
-                raise SystemExit("the scratch database is not empty; restore needs an empty database")
-        result = subprocess.run([pg_restore, "--no-owner", "--no-privileges", f"--dbname={scratch_dsn}", str(dump)],
-                                capture_output=True, text=True)
-        restore_errors = result.stderr.replace(scratch_dsn, "<scratch>").strip()
-        with scratch.cursor() as cur:
-            restored_counts = _counts(cur, _tables(cur, args.schema))
+            restored_counts = _counts(cur, tables(cur, args.schema))
+        scratch.rollback()
     finally:
         scratch.close()
 
     mismatches = {table: {"source": count, "restored": restored_counts.get(table)}
                   for table, count in source_counts.items() if restored_counts.get(table) != count}
-    errors = [line for line in restore_errors.splitlines() if "ERROR:" in line]
-    unexpected_errors = [line for line in errors if not any(benign in line for benign in BENIGN_RESTORE_ERRORS)]
-    status = "VERIFIED" if not mismatches and not unexpected_errors and (result.returncode == 0 or errors) else "FAILED"
+    status = "VERIFIED" if not mismatches and not problems else "FAILED"
     manifest = {
         "status": status,
         "created_at": stamp,
+        "source": source_fingerprint,
         "server_major": server_major,
         "pg_dump_major": tool_major,
-        "schemas": args.schema,
+        "schemas": list(args.schema),
         "dump_file": dump.name,
         "dump_sha256": _sha256(dump),
         "dump_bytes": dump.stat().st_size,
@@ -163,8 +254,7 @@ def backup(args) -> int:
         "row_counts": source_counts,
         "mismatches": mismatches,
         "restore_exit_code": result.returncode,
-        "restore_unexpected_errors": unexpected_errors,
-        "restore_errors": restore_errors[-4000:],
+        "restore_problems": problems,
     }
     manifest_path = target / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
@@ -173,12 +263,14 @@ def backup(args) -> int:
     return 0 if status == "VERIFIED" else 1
 
 
-def gate(args) -> int:
-    out = Path(args.out).expanduser().resolve()
-    manifests = sorted(out.glob("*/manifest.json")) if out.is_dir() else []
+def verified_manifest(out, max_age_hours: float) -> dict:
+    """The newest backup if it opens the gate; SystemExit(reason) otherwise."""
+    if not 0 <= max_age_hours <= MAX_GATE_AGE_HOURS:
+        raise SystemExit(f"--max-age-hours must be between 0 and {MAX_GATE_AGE_HOURS}")
+    folder = Path(out).expanduser().resolve()
+    manifests = sorted(folder.glob("*/manifest.json")) if folder.is_dir() else []
     if not manifests:
-        print("GATE CLOSED: no backup manifest")
-        return EXIT_GATE_CLOSED
+        raise SystemExit("no backup manifest")
     manifest_path = manifests[-1]
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     created = dt.datetime.strptime(manifest["created_at"], "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.timezone.utc)
@@ -187,14 +279,23 @@ def gate(args) -> int:
     problems = []
     if manifest.get("status") != "VERIFIED":
         problems.append(f"newest backup status is {manifest.get('status')}")
-    if age_hours > args.max_age_hours:
-        problems.append(f"newest backup is {age_hours:.1f} h old (limit {args.max_age_hours} h)")
+    if not 0 <= age_hours <= max_age_hours:
+        problems.append(f"newest backup is {age_hours:.1f} h old (limit {max_age_hours} h)")
     if not dump.is_file() or _sha256(dump) != manifest.get("dump_sha256"):
         problems.append("dump file missing or its SHA-256 changed")
     if problems:
-        print("GATE CLOSED: " + "; ".join(problems))
+        raise SystemExit("; ".join(problems))
+    return manifest
+
+
+def gate(args) -> int:
+    try:
+        manifest = verified_manifest(args.out, args.max_age_hours)
+    except SystemExit as closed:
+        print(f"GATE CLOSED: {closed}")
         return EXIT_GATE_CLOSED
-    print(f"BACKUP_VERIFIED {manifest['created_at']} tables={manifest['tables']} rows={manifest['rows']} sha256={manifest['dump_sha256']}")
+    print(f"BACKUP_VERIFIED {manifest['created_at']} database={manifest['source']['database']} "
+          f"tables={manifest['tables']} rows={manifest['rows']} sha256={manifest['dump_sha256']}")
     return 0
 
 

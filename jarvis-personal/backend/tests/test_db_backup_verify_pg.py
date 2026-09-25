@@ -129,3 +129,66 @@ def test_including_the_dependency_schema_makes_the_same_backup_verifiable(databa
     assert tool.main(["backup", "--out", str(out), "--source-env", "SRC_DSN", "--scratch-env", "SCR_DSN",
                       "--pg-bin", PG_BIN, "--schema", "public", "--schema", "extensions"]) == 0
     assert tool.main(["gate", "--out", str(out)]) == 0
+
+
+def test_the_dump_keeps_grants_and_revokes(databases, tmp_path):
+    server, names = databases
+    source = psycopg2.connect(server.get_uri(names["source"]))
+    source.autocommit = True
+    with source.cursor() as cur:
+        cur.execute("DO $$ BEGIN CREATE ROLE dincr_reader NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$")
+        cur.execute("GRANT SELECT ON notes TO dincr_reader; REVOKE ALL ON ledger FROM PUBLIC")
+    source.close()
+    out = tmp_path / "backups"
+    assert _backup(out) == 0
+
+    listing = tool.subprocess.run([str(Path(PG_BIN) / "pg_restore"), "--list", str(next(out.glob("*/dump.pgc")))],
+                                  capture_output=True, text=True, check=True).stdout
+    assert "ACL public TABLE notes" in listing
+
+
+def test_a_schema_without_tables_never_verifies(databases, tmp_path):
+    with pytest.raises(SystemExit, match="no tables"):
+        tool.main(["backup", "--out", str(tmp_path / "b"), "--source-env", "SRC_DSN", "--scratch-env", "SCR_DSN",
+                   "--pg-bin", PG_BIN, "--schema", "publc"])
+
+
+def test_the_manifest_identifies_the_source_database(databases, tmp_path):
+    _, names = databases
+    out = tmp_path / "backups"
+    assert _backup(out) == 0
+
+    manifest = json.loads(next(out.glob("*/manifest.json")).read_text())
+    assert manifest["source"]["database"] == names["source"]
+
+
+def test_no_connection_secret_reaches_a_command_line(databases, tmp_path, monkeypatch):
+    seen = []
+    real_run = tool.subprocess.run
+
+    def spy(command, *args, **kwargs):
+        seen.append(" ".join(map(str, command)))
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(tool.subprocess, "run", spy)
+    monkeypatch.setenv("SRC_DSN", os.environ["SRC_DSN"] + "&password=never-on-argv" if "?" in os.environ["SRC_DSN"]
+                       else os.environ["SRC_DSN"] + "?password=never-on-argv")
+    _backup(tmp_path / "backups")
+
+    assert seen and not any("never-on-argv" in command or "postgresql://" in command for command in seen)
+
+
+@pytest.mark.parametrize("returncode, stderr, trusted", [
+    (0, "", True),
+    (1, 'pg_restore: error: could not execute query: ERROR:  schema "public" already exists\n'
+        "pg_restore: warning: errors ignored on restore: 1", True),
+    (1, 'pg_restore: error: could not execute query: ERROR:  schema "public" already exists\n'
+        "pg_restore: error: could not execute query: ERROR:  type \"x\" does not exist\n"
+        "pg_restore: warning: errors ignored on restore: 2", False),
+    (1, 'pg_restore: error: could not execute query: ERROR:  schema "public" already exists\n'
+        "pg_restore: error: connection to server lost: server closed the connection unexpectedly", False),
+    (1, "pg_restore: error: could not connect", False),
+    (1, 'pg_restore: error: could not execute query: ERROR:  schema "public" already exists', False),
+])
+def test_restore_verdict(returncode, stderr, trusted):
+    assert (tool.restore_problems(returncode, stderr) == []) is trusted

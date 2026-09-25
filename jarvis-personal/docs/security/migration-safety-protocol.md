@@ -2,7 +2,13 @@
 
 Rules for every change to the production database: migrations, manual SQL, restores. It complements `CLAUDE.md` §3 (merge = possible deploy) and §6 (human gates).
 
-**Why this exists.** A class of incident this document prevents is a *legacy identity namespace collision during administrative maintenance*. A hand-written cleanup selected rows by a legacy integer identifier. The same integer meant different people in different tables, so rows of unrelated users were deleted. No backup existed, so the rows could not be recovered. Every rule below addresses one of those links: ad-hoc destructive SQL, selection by legacy ids, and the missing backup.
+**Why this exists.** One class of error this document prevents is a *legacy identity namespace collision during administrative maintenance*:
+- a hand-written cleanup selects rows by a legacy integer identifier;
+- that integer denotes different people in different tables;
+- rows of unrelated users are deleted;
+- without a verified backup, they cannot be recovered.
+
+Every rule below breaks one link of that chain: ad-hoc destructive SQL, selection by legacy ids, and a missing backup.
 
 ## 1. The BACKUP_VERIFIED gate
 
@@ -12,23 +18,43 @@ A backup counts as verified only when it has been **restored** and the restored 
 
 ```bash
 # 1. Take the backup and prove it restores.
-#    - Source: a direct (session) connection. Exported snapshots do not survive a transaction pooler.
-#    - Scratch: an EMPTY database that has the same extensions and schemas the dumped
-#      schemas depend on (for Supabase, a local `supabase start` stack or a
-#      throwaway project, and include --schema auth if public tables reference it).
-export DINCR_BACKUP_SOURCE_DSN=...   # never commit, never paste into tickets or chats
-export DINCR_BACKUP_SCRATCH_DSN=...
-python backend/scripts/db_backup_verify.py backup --out ~/DINCR-backups --schema public --schema auth
+export DINCR_BACKUP_SOURCE_DSN=...   # direct (session) connection; never commit or paste it
+export DINCR_BACKUP_SCRATCH_DSN=...  # an EMPTY scratch database (see below)
+python backend/scripts/db_backup_verify.py backup --out ~/DINCR-backups
 
 # 2. Check the gate (exit 0 only when open).
 python backend/scripts/db_backup_verify.py gate --out ~/DINCR-backups --max-age-hours 6
 ```
 
+**The scratch database** must be empty, and it must already have what the dumped schemas depend on:
+- **Roles:** the Supabase roles referenced by policies and grants: `anon`, `authenticated`, `service_role`.
+- **Schemas and extensions:** the `extensions` schema and the extensions used by column defaults.
+
+A plain local PostgreSQL works once they exist:
+```sql
+CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;
+CREATE SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
+```
+
+**Dependencies and failure:**
+- Public tables that reference `auth.users` also need a stub `auth.users (id uuid primary key)`.
+- If anything is missing, the restore reports FAILED and the gate stays closed. **Never widen the tolerated restore errors to make a backup pass.**
+
+**The `auth` schema:**
+- By default only `public` is backed up.
+- Backing up `auth` (`--schema auth`) copies sessions, refresh tokens and MFA secrets. Do it only onto encrypted storage you control.
+- `auth` cannot be restored into a Supabase stack whose `auth` tables already exist.
+
+**The first real drill** against production data is a human action. Record its result, including any preparation the scratch database needed.
+
 **What the tool does:**
-- It dumps inside one exported snapshot and counts every table in that same snapshot.
+- It dumps inside one exported snapshot, with owners, GRANT/REVOKE and default privileges, and counts every table in that same snapshot.
+- It records the source's fingerprint (database, server address and port) and its table list.
 - It restores into the empty scratch database and compares the counts table by table.
 - It writes `manifest.json` with the dump's SHA-256.
-- The gate prints `BACKUP_VERIFIED <stamp> tables=… rows=… sha256=…` only when the newest backup is VERIFIED, young enough and unmodified.
+- The gate prints `BACKUP_VERIFIED <stamp> database=… tables=… rows=… sha256=…` only when the newest backup is VERIFIED, young enough (at most 24 h) and unmodified. A backup of zero tables never verifies.
+- Connection strings reach `pg_dump`/`pg_restore` through environment variables, never through a command line.
 
 **Where backups live:**
 - The output directory must be outside any Git repository; the tool refuses otherwise.
@@ -51,12 +77,19 @@ python backend/scripts/db_backup_verify.py gate --out ~/DINCR-backups --max-age-
        --confirm <name>.sql
    ```
    The tool refuses to run when:
-   - the file is not byte-identical to `origin/main`;
-   - it has no explicit `BEGIN; … COMMIT;`;
+   - the file is not byte-identical to `origin/main` (fetched at run time);
+   - it is not exactly one transaction (`BEGIN` first, `COMMIT` last, no other transaction control, nothing after `COMMIT`);
    - the backup gate is closed;
+   - the target is a different database than the backup's source, or its tables differ from the backup's;
+   - the same file was already applied to that database (ledger `applied.jsonl` in the backup directory);
    - `--confirm` does not repeat the file name.
 
-   The session is named `dincr-migration`. A failure rolls the whole file back.
+   **How it runs:**
+   - The session is named `dincr-migration` and has a default 5 s `lock_timeout`.
+   - An error rolls back the whole transaction and prints only its SQLSTATE.
+   - A transaction left open is rolled back and reported as FAILED.
+   - **Verification queries** belong in the postflight, not after `COMMIT`.
+
 5. **Postflight.** Run the migration's postflight. Any failing row means stop, investigate, and use the migration's rollback file if it has one.
 6. **Quiet window.** Migrations set their own `lock_timeout`. If it fires, nothing was applied; retry later.
 
@@ -92,7 +125,10 @@ COMMIT;
 
 ## 4. Backup and disaster-recovery architecture
 
-**Current state:** the production project's plan includes no platform backups and no point-in-time recovery. Without §1, a deleted row is gone, so the recovery point objective (RPO) is unbounded.
+**Know your plan's coverage:**
+- Check whether the production project includes platform backups and point-in-time recovery.
+- Without either, and without §1, a deleted row cannot be recovered, so the recovery point objective (RPO) is unbounded.
+- Record the current coverage in the private operations record, not here.
 
 **Options for a human decision.** No plan change has been made.
 

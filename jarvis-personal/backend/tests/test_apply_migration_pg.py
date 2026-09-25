@@ -26,6 +26,11 @@ def env(tmp_path, monkeypatch):
     with admin.cursor() as cur:
         cur.execute(f"CREATE DATABASE {target}")
         cur.execute(f"CREATE DATABASE {scratch}")
+    seed = psycopg2.connect(server.get_uri(target))
+    seed.autocommit = True
+    with seed.cursor() as cur:
+        cur.execute("CREATE TABLE existing_ledger (id INT PRIMARY KEY); INSERT INTO existing_ledger VALUES (1)")
+    seed.close()
     monkeypatch.setenv("DINCR_MIGRATION_DSN", server.get_uri(target))
     monkeypatch.setenv("SRC_DSN", server.get_uri(target))
     monkeypatch.setenv("SCR_DSN", server.get_uri(scratch))
@@ -33,8 +38,19 @@ def env(tmp_path, monkeypatch):
     migrations.mkdir()
     reviewed: dict[str, bytes] = {}
     monkeypatch.setattr(apply_migration, "MIGRATIONS", migrations)
-    monkeypatch.setattr(apply_migration, "reviewed_content", lambda path: reviewed.get(path.name, b"<not merged>"))
-    yield {"server": server, "target": target, "migrations": migrations, "reviewed": reviewed, "backups": tmp_path / "backups"}
+    def reviewed_content(path):
+        if path.name not in reviewed:
+            raise SystemExit("not on origin/main")
+        return reviewed[path.name], "0" * 40
+
+    monkeypatch.setattr(apply_migration, "reviewed_content", reviewed_content)
+    monkeypatch.setenv("OTHER_DSN", server.get_uri(scratch))
+    def reset_scratch():
+        with admin.cursor() as cur:
+            cur.execute(f"DROP DATABASE {scratch} WITH (FORCE)")
+            cur.execute(f"CREATE DATABASE {scratch}")
+
+    yield {"server": server, "target": target, "scratch": scratch, "reset_scratch": reset_scratch, "migrations": migrations, "reviewed": reviewed, "backups": tmp_path / "backups"}
     with admin.cursor() as cur:
         cur.execute(f"DROP DATABASE IF EXISTS {target} WITH (FORCE)")
         cur.execute(f"DROP DATABASE IF EXISTS {scratch} WITH (FORCE)")
@@ -135,3 +151,55 @@ def test_a_stale_backup_keeps_the_gate_closed(env):
 
     with pytest.raises(SystemExit, match="gate is closed"):
         _apply(env, path)
+
+
+def test_refuses_a_backup_of_another_database(env, monkeypatch):
+    path = _write(env, "001_marker.sql", MIGRATION)
+    _backup(env)
+    monkeypatch.setenv("DINCR_MIGRATION_DSN", os.environ["OTHER_DSN"])
+
+    with pytest.raises(SystemExit, match="different database"):
+        _apply(env, path)
+
+
+def test_refuses_when_tables_changed_since_the_backup(env):
+    path = _write(env, "001_marker.sql", MIGRATION)
+    _backup(env)
+    conn = psycopg2.connect(env["server"].get_uri(env["target"]))
+    conn.autocommit = True
+    with conn.cursor() as cur:
+        cur.execute("CREATE TABLE created_after_backup (id INT)")
+    conn.close()
+
+    with pytest.raises(SystemExit, match="take a new backup"):
+        _apply(env, path)
+
+
+def test_never_applies_the_same_migration_twice(env):
+    path = _write(env, "001_marker.sql", "BEGIN;\nCREATE TABLE IF NOT EXISTS applied_marker (id INT);\nCOMMIT;\n")
+    _backup(env)
+    assert _apply(env, path) == 0
+    env["reset_scratch"]()
+    _backup(env)  # the table set changed; a fresh backup is required anyway
+
+    with pytest.raises(SystemExit, match="already applied"):
+        _apply(env, path)
+
+
+@pytest.mark.parametrize("sql, reason", [
+    ("BEGIN;\nCREATE TABLE a (id INT);\nCOMMIT;\nSELECT 1;\n", "nothing after COMMIT"),
+    ("BEGIN;\nCREATE TABLE a (id INT);\n/*\nCOMMIT;\n*/\n", "nothing after COMMIT"),
+    ("BEGIN;\nCREATE TABLE a (id INT);\nCOMMIT;\nBEGIN;\nDROP TABLE a;\nCOMMIT;\n", "not allowed"),
+    ("BEGIN;\nSAVEPOINT s;\nCOMMIT;\n", "not allowed"),
+    ("-- BEGIN;\nCREATE TABLE a (id INT);\nCOMMIT;\n", "nothing after COMMIT"),
+])
+def test_only_a_single_transaction_is_accepted(sql, reason):
+    with pytest.raises(SystemExit, match=reason):
+        apply_migration.check_single_transaction(sql)
+
+
+def test_the_splitter_ignores_semicolons_and_keywords_in_quotes_and_bodies():
+    sql = ("BEGIN;\nCREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $fn$ BEGIN COMMIT; END $fn$;\n"
+           "INSERT INTO t VALUES ('a;COMMIT;''b');\n-- COMMIT;\nCOMMIT;\n")
+    apply_migration.check_single_transaction(sql)
+    assert len(apply_migration.statements(sql)) == 4
