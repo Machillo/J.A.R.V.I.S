@@ -4,6 +4,7 @@ import os
 import re
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -717,6 +718,32 @@ def _replace_stale_deletion_tombstone(app_user: dict[str, Any], supabase_user: d
     logger.info("Replaced a stale deletion tombstone allowed_user_id=%s", app_user["id"])
 
 
+LOGIN_REFRESH = timedelta(minutes=5)
+
+
+def _recent(value) -> bool:
+    if not value:
+        return False
+    try:
+        seen = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - seen < LOGIN_REFRESH
+
+
+def _identity_fresh(app_user: dict, account_rows: list, token_auth_id: str, effective_role: str) -> bool:
+    """True when every identity row is already bound to this Auth user, with this role, seen recently."""
+    rows = [app_user, *account_rows]
+    return bool(account_rows) and all(
+        _auth_id(row.get("supabase_user_id")) == token_auth_id
+        and row.get("role") == effective_role
+        and _recent(row.get("last_login_at"))
+        for row in rows
+    )
+
+
 def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool = False) -> dict[str, Any]:
     supabase_user = verify_supabase_token(access_token)
     token_auth_id = _auth_id(supabase_user["supabase_user_id"])
@@ -746,7 +773,7 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
         # provider account) must never inherit it. Checked before status so the
         # account state is not revealed, and before any write.
         account_rows = conn.execute(
-            "SELECT supabase_user_id FROM accounts WHERE legacy_allowed_user_id=%s",
+            "SELECT supabase_user_id, role, last_login_at FROM accounts WHERE legacy_allowed_user_id=%s",
             (app_user["id"],),
         ).fetchall() or []
         stored_ids = [app_user.get("supabase_user_id")] + [row.get("supabase_user_id") for row in account_rows]
@@ -780,9 +807,15 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
 
         effective_role = "owner" if app_user["email"] in OWNER_EMAILS else app_user["role"]
 
+        # Already bound to this Auth user with the same role and seen recently: the
+        # binding cannot change (only the same id may bind), so skip the two writes
+        # every request would otherwise make just to refresh last_login_at. They
+        # took row locks that serialized the app's parallel requests of one user.
+        fresh = _identity_fresh(app_user, account_rows, token_auth_id, effective_role)
+
         # Conditional binds: a concurrent login that bound another id wins and
         # this one fails closed (the connection rolls back on the exception).
-        bound = conn.execute(
+        bound = fresh or conn.execute(
             """
             UPDATE allowed_users
             SET supabase_user_id = %s,
@@ -796,7 +829,7 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
         ).fetchone()
         if not bound:
             raise _identity_rejected(app_user["id"], "concurrent_bind")
-        synced = sync_account_auth_identity(
+        synced = len(account_rows) if fresh else sync_account_auth_identity(
             conn,
             legacy_allowed_user_id=int(app_user["id"]),
             supabase_user_id=supabase_user["supabase_user_id"],

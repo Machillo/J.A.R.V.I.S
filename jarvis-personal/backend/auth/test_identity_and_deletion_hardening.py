@@ -128,8 +128,9 @@ class FakeConnection:
         accounts = w["accounts"]
         if sql.startswith("SELECT id, email, role, status, supabase_user_id"):
             return [dict(row) for row in w["allowed_users"].values() if row["email"] == params[0]]
-        if sql.startswith("SELECT supabase_user_id FROM accounts WHERE legacy_allowed_user_id"):
-            return [{"supabase_user_id": a["supabase_user_id"]} for a in accounts.values() if a["legacy_allowed_user_id"] == params[0]]
+        if sql.startswith("SELECT supabase_user_id, role, last_login_at FROM accounts WHERE legacy_allowed_user_id"):
+            return [{"supabase_user_id": a["supabase_user_id"], "role": a.get("role"), "last_login_at": a.get("last_login_at")}
+                    for a in accounts.values() if a["legacy_allowed_user_id"] == params[0]]
         if sql.startswith("UPDATE allowed_users SET supabase_user_id"):
             sid, role, uid, expected = params
             row = w["allowed_users"].get(uid)
