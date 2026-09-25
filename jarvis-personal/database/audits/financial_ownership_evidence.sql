@@ -348,7 +348,9 @@ FROM pg_stat_user_tables t WHERE t.schemaname = 'public' AND t.relname = 'debts'
 --      least-used entries once it holds pg_stat_statements.max statements; the
 --      scripts found by E24 ran once). Run once in the SQL editor, download the
 --      result as CSV and store it privately: it contains the full statement
---      text, including emails and UUIDs. Never paste it into tickets or Git.
+--      text, including emails and UUIDs. Never paste it into tickets or Git,
+--      never give it to an AI agent, and delete the file when the incident is
+--      closed. (stats_since needs pg_stat_statements 1.11 / PostgreSQL 17.)
 --      Replace <QUERYIDS> with the queryids from E24 (comma separated).
 SELECT s.queryid, s.stats_since, s.calls, s.rows, s.query
 FROM pg_stat_statements s

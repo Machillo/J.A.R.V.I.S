@@ -620,7 +620,7 @@ def test_rollback_removes_guards_keeps_evidence_and_can_revert_a_run(seeded):
         cur.execute("SELECT COUNT(*) FROM financial_ownership_repair_log")
         assert cur.fetchone()[0] == 1  # evidence kept
         _debt(cur, IDENTITIES["A"]["allowed"], IDENTITIES["B"]["workspace"])  # guards gone
-        cur.execute("SELECT COUNT(*) FROM pg_trigger WHERE tgname LIKE 'trg\\_%%\\_ownership_guard' OR tgname LIKE 'trg\\_%%\\_delete_guard'")
+        cur.execute("SELECT COUNT(*) FROM pg_trigger WHERE tgname LIKE 'trg\\_%%\\_ownership_guard' OR tgname LIKE 'trg\\_%%\\_delete_guard' OR tgname LIKE 'trg\\_%%\\_truncate_guard'")
         assert cur.fetchone()[0] == 0
     _apply_migration(conn)  # re-applying after a rollback works
 
@@ -751,6 +751,17 @@ def layout_fk(layout_unmigrated):
     return layout_unmigrated
 
 
+def _legacy_row(conn, fn, *args):
+    """Insert a row the way old writers could, bypassing the guard (legacy data)."""
+    with conn.cursor() as cur:
+        cur.execute("BEGIN")
+        cur.execute("ALTER TABLE transactions DISABLE TRIGGER trg_transactions_ownership_guard")
+        row = fn(cur, *args)
+        cur.execute("ALTER TABLE transactions ENABLE TRIGGER trg_transactions_ownership_guard")
+        cur.execute("COMMIT")
+    return row
+
+
 def _transaction(cur, user_id, workspace_id) -> int:
     cur.execute("INSERT INTO transactions(user_id,transaction_date,description,amount,transaction_type,workspace_id) "
                 "VALUES(%s,CURRENT_DATE,'Synthetic',1,'expense',%s) RETURNING id", (user_id, workspace_id))
@@ -771,9 +782,9 @@ def test_wrong_space_row_is_deleted_by_an_unrelated_persons_cascade(layout_fk):
 def test_existing_wrong_space_rows_are_flagged_and_left_untouched(layout_fk):
     conn, a2, a3 = layout_fk["conn"], _ids("a2"), _ids("a3")
     with conn.cursor() as cur:
-        wrong = _transaction(cur, a2["allowed"], a2["workspace"])  # a2's allowed id in a users-FK table
         right = _debt(cur, a3["users"], a3["workspace"])            # users-space, collides with a1's allowed id
     _apply_migration(conn)
+    wrong = _legacy_row(conn, _transaction, a2["allowed"], a2["workspace"])  # a2's allowed id in a users-FK table
     audit = _audit(conn)
     assert audit[("transactions", wrong)] == ("USER_ID_WRONG_SPACE", "NEEDS_REVIEW")
     assert audit[("debts", right)] == ("OK", "OK")  # the FK removes the ambiguity: no collision here
@@ -835,8 +846,8 @@ def test_migration_aborts_when_overtime_table_references_users(layout_unmigrated
         cur.execute("ROLLBACK")
 
 
-# --- Deletions (production incident: a manual cleanup script deleted rows by
-# legacy user_id across workspaces) ------------------------------------------------
+# --- Deletions: a cleanup that selects rows by a legacy user_id from the wrong
+# id space deletes other people's rows --------------------------------------------
 
 INCIDENT_SCRIPT = """
 DO $$
@@ -879,8 +890,8 @@ def test_delete_guard_rejects_the_incident_script(layout_fk):
         assert cur.fetchone()[0] == 1
         # Deleting only the target's rows, by workspace, is allowed and logged.
         cur.execute("DELETE FROM debts WHERE workspace_id=%s", (a1["workspace"],))
-        cur.execute("SELECT table_name, row_count, workspace_ids::text[], trigger_depth FROM financial_ownership_delete_log")
-        assert cur.fetchall() == [("debts", 1, [a1["workspace"]], 1)]
+        cur.execute("SELECT table_name, row_count, workspace_ids::text[] FROM financial_ownership_delete_log")
+        assert cur.fetchall() == [("debts", 1, [a1["workspace"]])]
 
 
 def test_app_deletes_and_cascades_still_work_and_are_logged(layout_fk):
@@ -909,11 +920,66 @@ def test_account_deletion_cascade_is_not_blocked(layout_fk):
 
 def test_identity_delete_cannot_cascade_into_another_workspace(layout_fk):
     conn, a2, a6 = layout_fk["conn"], _ids("a2"), _ids("a6")
-    with conn.cursor() as cur:
-        wrong = _transaction(cur, a2["allowed"], a2["workspace"])  # 24 is a6's users.id
     _apply_migration(conn)
+    wrong = _legacy_row(conn, _transaction, a2["allowed"], a2["workspace"])  # 24 is a6's users.id
     with conn.cursor() as cur:
         with pytest.raises(psycopg2.errors.ForeignKeyViolation, match="another workspace"):
             cur.execute("DELETE FROM users WHERE id=%s", (a6["users"],))
         cur.execute("SELECT COUNT(*) FROM transactions WHERE id=%s", (wrong,))
         assert cur.fetchone()[0] == 1
+
+
+def test_truncate_of_a_financial_table_is_rejected(layout_fk):
+    conn = layout_fk["conn"]
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        _debt(cur, _ids("a3")["users"], _ids("a3")["workspace"])
+        with pytest.raises(psycopg2.errors.CheckViolation, match="TRUNCATE of financial table"):
+            cur.execute("TRUNCATE debts CASCADE")
+        cur.execute("SELECT COUNT(*) FROM debts")
+        assert cur.fetchone()[0] == 1
+
+
+def test_manual_session_must_declare_the_workspace_it_deletes_from(layout_fk):
+    """The single-owner shape: only the victim has matching rows."""
+    conn, a1, a3 = layout_fk["conn"], _ids("a1"), _ids("a3")
+    with conn.cursor() as cur:
+        victim = _debt(cur, a3["users"], a3["workspace"])
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        cur.execute("BEGIN")
+        cur.execute("SET LOCAL application_name = 'supabase/dashboard-query-editor'")
+        with pytest.raises(psycopg2.errors.CheckViolation, match="outside the declared workspace"):
+            _incident(cur, a1)            # target a1 has no debts: every match is the victim's
+        cur.execute("ROLLBACK")
+        cur.execute("BEGIN")
+        cur.execute("SET LOCAL application_name = 'supabase/dashboard-query-editor'")
+        cur.execute("SELECT set_config('dincr.delete_workspace', %s, true)", (a1["workspace"],))
+        with pytest.raises(psycopg2.errors.CheckViolation, match="outside the declared workspace"):
+            _incident(cur, a1)            # declared a1, but the rows belong to a3
+        cur.execute("ROLLBACK")
+        cur.execute("BEGIN")
+        cur.execute("SET LOCAL application_name = 'supabase/dashboard-query-editor'")
+        cur.execute("SELECT set_config('dincr.delete_workspace', %s, true)", (a3["workspace"],))
+        cur.execute("DELETE FROM debts WHERE id=%s AND workspace_id=%s", (victim, a3["workspace"]))
+        cur.execute("COMMIT")             # an explicit, declared cleanup of one workspace works
+
+
+def test_account_deletion_logs_only_a_count(layout_fk):
+    conn, a3 = layout_fk["conn"], _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        _debt(cur, a3["users"], a3["workspace"])
+        cur.execute("DELETE FROM accounts WHERE id=%s", (a3["account"],))
+        cur.execute("SELECT row_count, row_ids, workspace_ids::text[] FROM financial_ownership_delete_log WHERE table_name='debts'")
+        assert cur.fetchall() == [(1, [], [])]
+
+
+def test_migration_aborts_on_wrong_space_rows(layout_fk):
+    conn, a2 = layout_fk["conn"], _ids("a2")
+    with conn.cursor() as cur:
+        _transaction(cur, a2["allowed"], a2["workspace"])
+    with pytest.raises(psycopg2.Error, match="legacy id from the wrong space"):
+        _apply_migration(conn)
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK")

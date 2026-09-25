@@ -42,19 +42,20 @@ that space cascades to the row.
 - Phase A therefore checks each table in the space its FK references, and flags existing wrong-space rows as `USER_ID_WRONG_SPACE`.
 - With every row in its FK's space, a cascade only removes the deleted person's own rows.
 
-## Production incident behind this plan (2026-09-17)
+## Deletions by legacy id (class of error)
 
-Read-only evidence from `pg_stat_statements` (never reset, no evicted entries) and table counters:
-- A manual cleanup script (a DO block run in the SQL editor) deleted test accounts.
-- For every public table with `user_id` it ran `DELETE … WHERE workspace_id = ANY(targets) OR user_id = ANY(<the targets' allowed_users.id>)`.
-- In tables whose `user_id` references `users(id)`, those integers were **other people's** `users.id`. Their rows were deleted in every workspace.
-- Its final `DELETE FROM users WHERE id = … AND email = …` matched nothing, which proves the id-space mix-up.
-- No application DELETE was involved, and nothing recorded what was deleted.
+A cleanup that selects financial rows by a legacy integer, for example `WHERE workspace_id = ANY(targets) OR user_id = ANY(<the targets' allowed_users.id>)`, also matches **other people's** rows in tables whose `user_id` references `users(id)`, in every workspace.
 
-Phase A now:
-- rejects any financial DELETE that spans live workspaces of more than one owner;
+Phase A:
+- rejects any financial DELETE touching live workspaces of more than one owner;
+- requires manual sessions (SQL editor, psql, desktop clients) to declare the one workspace they delete from (`SET LOCAL dincr.delete_workspace = '<uuid>'`);
+- rejects TRUNCATE of financial tables;
 - blocks deleting a legacy identity whose FK would cascade into another workspace;
-- logs every financial deletion (identifiers only).
+- logs every committed financial deletion (identifiers of live workspaces only; deletions from removed workspaces keep a count).
+
+Limits:
+- A privileged role can disable triggers or change `application_name`. The rule below and the delete log are the safeguards there.
+- If workspace sharing ships, account deletion must first remove the member's rows in other owners' workspaces. Otherwise the identity guard fails that deletion closed.
 
 Rule for humans and agents: **never delete or select financial rows by legacy `user_id`.** Remove an account through the account deletion flow; it deletes the account and its workspaces cascade.
 
@@ -83,7 +84,7 @@ Rule for humans and agents: **never delete or select financial rows by legacy `u
 - Existing rows are never moved between workspaces by application writes.
 - A changed legacy `user_id` must be an identity of the workspace in the space its table's FK references (either space when the table has no such FK). NULL is accepted.
 - A colliding id is never used to repair a row.
-- Deletions: one owner per statement, no cross-workspace cascades from `users`/`allowed_users`, and a delete log.
+- Deletions: one owner per statement, declared workspace for manual sessions, no TRUNCATE, no cross-workspace cascades from `users`/`allowed_users`, and a delete log.
 - Tested rollback.
 - Exit: preflight reviewed, every NEEDS_REVIEW/ORPHAN row resolved by a human, migration applied, check script PASS.
 

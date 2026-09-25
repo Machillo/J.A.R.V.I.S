@@ -51,13 +51,15 @@
 --   * A stored mail-connection id outside its workspace aborts the migration,
 --     including disconnected connections: fix or remove those rows first.
 --
---   6. Guards deletions (production incident, 2026-09-17: a manual cleanup script
---      deleted "WHERE workspace_id = ANY(targets) OR user_id = ANY(<allowed_users
---      ids>)" from every table, removing other tenants' rows whose users.id equals
---      those integers). Any financial DELETE may only touch live workspaces of ONE
---      owner; a users/allowed_users row cannot be deleted while its FK would
---      cascade into another workspace; every financial deletion is logged in
---      financial_ownership_delete_log (identifiers only).
+--   6. Guards deletions against the id-space class of error: a cleanup that
+--      selects financial rows "WHERE ... OR user_id = ANY(<allowed_users ids>)"
+--      also matches other people's rows in users-FK tables. A financial DELETE
+--      touching live workspaces of more than one owner is rejected; a manual
+--      session (SQL editor, psql, desktop clients) must declare the single
+--      workspace it deletes from; TRUNCATE of a financial table is rejected; a
+--      users/allowed_users row cannot be deleted while its FK would cascade into
+--      another workspace; committed financial deletions are logged in
+--      financial_ownership_delete_log (identifiers of live workspaces only).
 --
 -- What it deliberately does NOT do: it never changes user_id, never assigns a
 -- workspace from user_id alone (the Phase 2A mapping is ambiguous across id
@@ -636,6 +638,16 @@ BEGIN
         RAISE EXCEPTION 'financial ownership integrity: payroll_events.user_id references users but overtime writes allowed_users.id, aborting';
     END IF;
 
+    -- Rows whose legacy id is in the other space than their FK would make an
+    -- unrelated person's account deletion fail (identity delete guard) or be
+    -- deleted by it: a human resolves them before the guards are installed.
+    SELECT COUNT(*) INTO v_blocking
+    FROM public.dincr_ownership_audit_rows(FALSE)
+    WHERE issue = 'USER_ID_WRONG_SPACE';
+    IF v_blocking > 0 THEN
+        RAISE EXCEPTION 'financial ownership integrity: % rows carry a legacy id from the wrong space, aborting (run the preflight)', v_blocking;
+    END IF;
+
     -- A stored mail-connection id outside its workspace would make every synced
     -- write fail after the guard is installed: fix it first.
     SELECT COUNT(*) INTO v_blocking
@@ -823,12 +835,12 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
--- 3b. Deletions. Production evidence (pg_stat_statements): a manual cleanup
---     script ran "DELETE ... WHERE workspace_id = ANY(targets) OR user_id =
---     ANY(<allowed_users ids>)" on every table and removed rows of OTHER tenants
---     whose users.id equals those integers. No app DELETE was involved and
---     nothing recorded what was deleted. These guards reject that shape and log
---     every financial deletion (identifiers only).
+-- 3b. Deletions. Class of error: selecting financial rows by a legacy user_id
+--     from the wrong space deletes other people's rows. These guards reject
+--     multi-owner deletes, undeclared manual deletes and TRUNCATE, and log every
+--     committed financial deletion (a rejected delete rolls its log row back;
+--     Postgres logs the error). Deletions from workspaces that no longer exist
+--     keep only a count. Purge log rows older than 180 days as a reviewed task.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.financial_ownership_delete_log (
     id BIGSERIAL PRIMARY KEY,
@@ -836,7 +848,6 @@ CREATE TABLE IF NOT EXISTS public.financial_ownership_delete_log (
     row_count BIGINT NOT NULL,
     row_ids BIGINT[] NOT NULL,
     workspace_ids UUID[] NOT NULL,
-    trigger_depth INTEGER NOT NULL,
     db_role TEXT NOT NULL,
     application_name TEXT,
     transaction_id BIGINT NOT NULL,
@@ -861,16 +872,21 @@ SET search_path = pg_catalog, pg_temp
 AS $fn$
 DECLARE
     v_owners BIGINT;
+    v_declared TEXT := NULLIF(current_setting('dincr.delete_workspace', true), '');
+    v_outside BIGINT;
 BEGIN
+    -- Identifiers of live workspaces only: rows of a workspace that no longer
+    -- exists (account deletion) are logged as a count.
     INSERT INTO public.financial_ownership_delete_log(
-        table_name, row_count, row_ids, workspace_ids, trigger_depth, db_role,
+        table_name, row_count, row_ids, workspace_ids, db_role,
         application_name, transaction_id)
     SELECT TG_TABLE_NAME, COUNT(*),
-           COALESCE(array_agg(o.id ORDER BY o.id), ARRAY[]::BIGINT[]),
-           COALESCE(array_agg(DISTINCT o.workspace_id) FILTER (WHERE o.workspace_id IS NOT NULL), ARRAY[]::UUID[]),
-           pg_trigger_depth(), session_user::TEXT,
+           COALESCE(array_agg(o.id ORDER BY o.id) FILTER (WHERE w.id IS NOT NULL), ARRAY[]::BIGINT[]),
+           COALESCE(array_agg(DISTINCT o.workspace_id) FILTER (WHERE w.id IS NOT NULL), ARRAY[]::UUID[]),
+           session_user::TEXT,
            NULLIF(current_setting('application_name', true), ''), txid_current()
     FROM old_rows o
+    LEFT JOIN public.workspaces w ON w.id = o.workspace_id
     HAVING COUNT(*) > 0;
 
     SELECT COUNT(DISTINCT w.owner_account_id) INTO v_owners
@@ -882,10 +898,39 @@ BEGIN
             USING ERRCODE = '23514',
                   HINT = 'delete one account''s rows per statement; never select financial rows by legacy user_id';
     END IF;
+
+    -- Manual sessions (SQL editor, psql, desktop clients) must declare the one
+    -- workspace they delete from: SET LOCAL dincr.delete_workspace = '<uuid>'.
+    -- The application connects through the pooler and is not affected.
+    IF v_owners > 0 AND current_setting('application_name', true) ~* '^(supabase/dashboard|psql|pgadmin|dbeaver|tableplus|datagrip|postico)' THEN
+        SELECT COUNT(*) INTO v_outside
+        FROM old_rows o
+        JOIN public.workspaces w ON w.id = o.workspace_id
+        WHERE v_declared IS NULL OR o.workspace_id::TEXT <> v_declared;
+        IF v_outside > 0 THEN
+            RAISE EXCEPTION 'manual financial delete on % touches % rows outside the declared workspace', TG_TABLE_NAME, v_outside
+                USING ERRCODE = '23514',
+                      HINT = 'SET LOCAL dincr.delete_workspace to the one workspace being cleaned up';
+        END IF;
+    END IF;
     RETURN NULL;
 END
 $fn$;
 REVOKE ALL ON FUNCTION public.dincr_guard_financial_delete() FROM PUBLIC, anon, authenticated;
+
+-- TRUNCATE bypasses row and statement DELETE triggers: financial tables are
+-- never truncated.
+CREATE OR REPLACE FUNCTION public.dincr_guard_financial_truncate()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+BEGIN
+    RAISE EXCEPTION 'TRUNCATE of financial table % is not allowed', TG_TABLE_NAME
+        USING ERRCODE = '23514', HINT = 'delete one account''s rows per statement';
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_financial_truncate() FROM PUBLIC, anon, authenticated;
 
 -- Row level, before delete on the legacy identity tables: refuse to delete an
 -- identity whose FK would cascade into rows of a live workspace that the
@@ -940,6 +985,11 @@ BEGIN
             'CREATE OR REPLACE TRIGGER %I AFTER DELETE ON public.%I REFERENCING OLD TABLE AS old_rows '
             'FOR EACH STATEMENT EXECUTE FUNCTION public.dincr_guard_financial_delete()',
             'trg_' || cfg.table_name || '_delete_guard', cfg.table_name
+        );
+        EXECUTE format(
+            'CREATE OR REPLACE TRIGGER %I BEFORE TRUNCATE ON public.%I '
+            'FOR EACH STATEMENT EXECUTE FUNCTION public.dincr_guard_financial_truncate()',
+            'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name
         );
     END LOOP;
     EXECUTE 'CREATE OR REPLACE TRIGGER trg_users_legacy_delete_guard BEFORE DELETE ON public.users '

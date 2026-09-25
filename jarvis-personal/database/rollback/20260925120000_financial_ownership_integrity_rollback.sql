@@ -23,6 +23,8 @@ BEGIN
                        'trg_' || cfg.table_name || '_ownership_guard', cfg.table_name);
         EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
                        'trg_' || cfg.table_name || '_delete_guard', cfg.table_name);
+        EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
+                       'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name);
         EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',
                        cfg.table_name, 'ck_' || cfg.table_name || '_workspace_required');
         EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',
@@ -43,6 +45,7 @@ DROP TRIGGER IF EXISTS trg_users_legacy_delete_guard ON public.users;
 DROP TRIGGER IF EXISTS trg_allowed_users_legacy_delete_guard ON public.allowed_users;
 DROP FUNCTION IF EXISTS public.dincr_guard_financial_ownership();
 DROP FUNCTION IF EXISTS public.dincr_guard_financial_delete();
+DROP FUNCTION IF EXISTS public.dincr_guard_financial_truncate();
 DROP FUNCTION IF EXISTS public.dincr_guard_legacy_identity_delete();
 
 -- Step 2 (optional):

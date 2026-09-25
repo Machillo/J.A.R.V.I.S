@@ -42,7 +42,8 @@ def test_ownership_table_list_matches_phase_2a():
 
 def test_migration_is_transactional_and_non_destructive():
     sql = _strip_comments(MIGRATION.read_text(encoding="utf-8"))
-    upper = sql.upper()
+    # Quoted literals (dynamic DDL templates, messages) are not executed as-is.
+    upper = re.sub(r"'(?:[^']|'')*'", "''", sql).upper()
     assert upper.strip().startswith("BEGIN;") and upper.rstrip().endswith("COMMIT;")
     for forbidden in (
         r"\bDELETE\s+FROM\b", r"\bTRUNCATE\b", r"\bDROP\s+TABLE\b", r"\bDROP\s+COLUMN\b",
