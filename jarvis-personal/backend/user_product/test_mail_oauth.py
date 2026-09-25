@@ -150,7 +150,8 @@ class FakeProvider:
     """Issues codes bound to a PKCE challenge and a mailbox; redeems each code once."""
 
     def __init__(self):
-        self.codes, self.token_requests = {}, []
+        self.codes, self.token_requests, self.revoked = {}, [], []
+        self.google_scope = "https://www.googleapis.com/auth/gmail.readonly"
 
     def authorize(self, url: str, mailbox: str) -> tuple[str, str]:
         params = parse_qs(urlparse(url).query)
@@ -159,15 +160,19 @@ class FakeProvider:
         return code, params["state"][0]
 
     def token(self, url, data=None, **_kwargs):
+        if url.endswith("/revoke"):
+            self.revoked.append(data["token"])
+            return SimpleNamespace(status_code=200, json=lambda: {})
         self.token_requests.append(dict(data))
         challenge, mailbox = self.codes.pop(data.get("code"), (None, None))
         verifier = data.get("code_verifier") or ""
         computed = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
         if not challenge or computed != challenge:
             return SimpleNamespace(status_code=400, json=lambda: {"error": "invalid_grant"})
+        scope = ("https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read" if "microsoft" in url
+                 else self.google_scope)
         return SimpleNamespace(status_code=200, json=lambda: {
-            "access_token": f"access-for-{mailbox}", "refresh_token": f"refresh-for-{mailbox}",
-            "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read"})
+            "access_token": f"access-for-{mailbox}", "refresh_token": f"refresh-for-{mailbox}", "scope": scope})
 
 
 @pytest.fixture
@@ -480,3 +485,21 @@ def test_replay_on_another_provider_is_not_reported_as_processed(env, started, u
     code, state = env.provider.authorize(start(started, A), "a@example.com")
     assert callback(started, code, state)[0] == "authorized"
     assert callback(used, code, state)[0] == "invalid_state"
+
+
+def test_gmail_asks_for_exactly_the_read_only_scope(env):
+    query = parse_qs(urlparse(start("gmail", A)).query)
+    assert query["scope"] == [gmail_service.GMAIL_SCOPE]
+    assert "include_granted_scopes" not in query  # no earlier grant (e.g. sign-in) is merged into the Gmail token
+
+
+@pytest.mark.parametrize("granted", ["", "openid https://www.googleapis.com/auth/userinfo.email",
+                                     "https://www.googleapis.com/auth/gmail.metadata"])
+def test_gmail_consent_without_the_read_permission_attaches_nothing(env, granted):
+    """Google's granular consent lets the user untick Gmail and still return an authorization code."""
+    env.provider.google_scope = granted
+    status, params = callback("gmail", *env.provider.authorize(start("gmail", A), "a@example.com"))
+    assert status == "permission_missing" and "completion" not in params
+    assert env.provider.revoked == ["refresh-for-a@example.com"]  # the unusable grant is not kept
+    assert connections_of(env, A) == []
+    assert next(iter(env.db.state["flows"].values()))["status"] == "failed"

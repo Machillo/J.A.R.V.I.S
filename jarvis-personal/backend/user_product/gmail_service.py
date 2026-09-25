@@ -547,6 +547,14 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
     return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": transaction_id}
 
 
+def _revoke_google_token(token: str) -> None:
+    """Best-effort revocation of a grant DINCR will not keep; never logs the token."""
+    try:
+        requests.post("https://oauth2.googleapis.com/revoke", data={"token": token}, timeout=10)
+    except Exception:
+        logger.warning("Gmail token revocation failed for an unused grant")
+
+
 def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
     require_gmail_consent()
     client_id, _, redirect_uri = _google_config()
@@ -558,7 +566,8 @@ def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
         "response_type": "code",
         "scope": GMAIL_SCOPE,
         "access_type": "offline",
-        "include_granted_scopes": "true",
+        # No include_granted_scopes: the Gmail token carries exactly gmail.readonly,
+        # never scopes granted earlier to this client (for example Google sign-in).
         "prompt": "consent select_account",
         "state": state,
         "code_challenge": code_challenge,
@@ -608,6 +617,10 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:
         return failed("missing_refresh_token")
+    # Granular consent: the user can untick the Gmail permission and still return a code.
+    if GMAIL_SCOPE not in str(tokens.get("scope") or "").split():
+        _revoke_google_token(refresh_token)
+        return failed("permission_missing")
 
     try:
         profile = _credentials(refresh_token).users().getProfile(userId="me").execute()
