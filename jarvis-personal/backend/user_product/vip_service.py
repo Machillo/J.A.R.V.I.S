@@ -9,7 +9,7 @@ from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.user_product.income_policy import imported_income_by_month, income_baseline
 from backend.user_product.basic_service import (
-    _ensure_basic_schema,
+    _basic_tables_ready,
     _ledger_totals,
     _monthly_equivalent,
     _next_month,
@@ -67,7 +67,7 @@ def get_vip_command_center() -> dict:
     today = date.today()
     current = today.replace(day=1)
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
+        basic_ready = _basic_tables_ready(conn)
         profile = _profile(conn, account_id, workspace_id)
         debts = [dict(row) for row in conn.execute(
             """SELECT id,name,remaining_amount,total_amount,monthly_payment,NULLIF(interest_rate,0) interest_rate,
@@ -95,7 +95,7 @@ def get_vip_command_center() -> dict:
         recurring = [dict(row) for row in conn.execute(
             "SELECT id,name,amount,category,item_type,frequency,due_day,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE ORDER BY amount DESC",
             (workspace_id,),
-        ).fetchall()]
+        ).fetchall()] if basic_ready else []
         detected_recurring = [dict(row) for row in conn.execute(
             """SELECT LEFT(regexp_replace(lower(description),'[^a-z0-9]+',' ','g'),60) AS merchant,
                       ROUND(AVG(amount),2) AS average_amount,MIN(amount) AS minimum_amount,MAX(amount) AS maximum_amount,

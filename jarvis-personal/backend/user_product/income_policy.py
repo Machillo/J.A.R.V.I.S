@@ -104,17 +104,18 @@ def income_baseline(
 
 def load_income_baseline(conn, *, account_id: str, workspace_id: str, today: date | None = None) -> dict[str, Any]:
     """Load the inputs for one account/workspace and apply the policy (same window as Home)."""
-    from backend.user_product.basic_service import _ledger_totals, _next_month, _profile, _shift_month
+    from backend.user_product.basic_service import _basic_tables_ready, _ledger_totals, _next_month, _profile, _shift_month
 
     current = (today or date.today()).replace(day=1)
     months = []
     for offset in range(-11, 1):
         start = _shift_month(current, offset)
         months.append({"month": start.strftime("%Y-%m"), **_ledger_totals(conn, workspace_id, start, _next_month(start))})
+    # No recurring items exist until the Basic migration creates their table.
     recurring = [dict(row) for row in conn.execute(
         "SELECT amount,frequency,item_type,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE",
         (workspace_id,),
-    ).fetchall()]
+    ).fetchall()] if _basic_tables_ready(conn) else []
     return income_baseline(
         _profile(conn, account_id, workspace_id), months,
         imported_income_by_month(conn, workspace_id, _shift_month(current, -11)), recurring,

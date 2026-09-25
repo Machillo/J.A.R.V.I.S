@@ -3,28 +3,7 @@ from backend.auth.current_user import get_current_user_id, get_current_workspace
 from backend.finance.category_catalog import normalize_category
 
 
-def _ensure_exchange_rates_table(conn):
-    """Keep currency-rate persistence available even before schema migrations run."""
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS exchange_rates (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL DEFAULT 1,
-            workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
-            rate_date DATE NOT NULL,
-            currency TEXT NOT NULL,
-            exchange_rate NUMERIC(14, 6) NOT NULL,
-            source TEXT NOT NULL DEFAULT 'manual',
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE (workspace_id, rate_date, currency)
-        )
-        """
-    )
-
-
 def _saved_exchange_rate(conn, workspace_id: str, transaction_date: str, currency: str = "USD"):
-    _ensure_exchange_rates_table(conn)
     row = conn.execute(
         """
         SELECT exchange_rate
@@ -40,7 +19,6 @@ def _saved_exchange_rate(conn, workspace_id: str, transaction_date: str, currenc
 
 
 def _save_exchange_rate(conn, user_id: int, workspace_id: str, transaction_date: str, rate: float, currency: str = "USD", source: str = "manual"):
-    _ensure_exchange_rates_table(conn)
     conn.execute(
         """
         INSERT INTO exchange_rates (user_id, workspace_id, rate_date, currency, exchange_rate, source)
@@ -57,7 +35,6 @@ def _save_exchange_rate(conn, user_id: int, workspace_id: str, transaction_date:
 
 def _reuse_saved_rates(conn, workspace_id: str):
     """Apply already-known daily USD rates to old or newly inserted pending rows."""
-    _ensure_exchange_rates_table(conn)
     conn.execute(
         """
         UPDATE transactions t

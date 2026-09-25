@@ -667,19 +667,6 @@ def calculate_aguinaldo(as_of: date | None = None):
     cutoff = completed_through + timedelta(days=1)
 
     with get_connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS payroll_salary_reports (
-                id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, workspace_id UUID NOT NULL,
-                email_message_id BIGINT, provider_message_id TEXT, period_month TEXT NOT NULL,
-                reported_salary NUMERIC NOT NULL, trans_previous_salary NUMERIC,
-                previous_salary NUMERIC, daily_subsidy NUMERIC, employer_number TEXT,
-                verification_code TEXT, source TEXT NOT NULL DEFAULT 'ccss_order_patronal',
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                UNIQUE(workspace_id, period_month), UNIQUE(workspace_id, provider_message_id)
-            )
-            """
-        )
         rows = [dict(row) for row in conn.execute(
             """
             SELECT 'ccss_salary' AS kind, reported_salary AS amount,
@@ -2612,21 +2599,6 @@ def _save_net_worth_snapshot(workspace_id: str, *, liquid_assets: float, investm
     """Keep one auditable closing snapshot per day for the live wealth chart."""
     user_id = get_current_user_id()
     with get_connection() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS net_worth_snapshots (
-                id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
-                workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-                snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
-                liquid_assets NUMERIC(18,2) NOT NULL DEFAULT 0,
-                investments NUMERIC(18,2) NOT NULL DEFAULT 0,
-                assets_total NUMERIC(18,2) NOT NULL DEFAULT 0,
-                liabilities_total NUMERIC(18,2) NOT NULL DEFAULT 0,
-                net_worth NUMERIC(18,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                UNIQUE(workspace_id, snapshot_date)
-            )
-        """)
         conn.execute("""
             INSERT INTO net_worth_snapshots(
                 user_id,workspace_id,snapshot_date,liquid_assets,investments,
