@@ -6,6 +6,9 @@ from uuid import UUID
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_user_id, get_current_workspace_id
+from backend.auth.plan_lifecycle import (
+    PLAN_RANK, clear_pending, lock_billing_then_subscription, pending_change, plan_after_entitlement_end, request_plan_change,
+)
 from backend.core.database import get_connection
 from backend.core.i18n import tx
 
@@ -21,7 +24,6 @@ PLAN_COPY_EN = {
     "basic": {"name": "Basic", "tagline": "DINCR organizes and guides your month.", "features": ["Everything in Free", "Full dashboard", "Guided budget", "Full debts and goals", "Calendar", "Recurring items", "Reports"]},
     "vip": {"name": "VIP", "tagline": "A more complete strategy with information you authorize.", "features": ["Everything in Basic", "Dynamic strategy, projections, and scenarios", "With your permission, it detects financial notices in supported emails so you can review transactions and keep your accounts and debts up to date", "Annual bonus (aguinaldo) estimate if DINCR detects CCSS employer statements in a connected email"]},
 }
-PLAN_RANK = {"free": 1, "basic": 2, "vip": 3}
 BUILTIN_FEATURE_MIN_PLAN = {
     # Core DINCR capabilities must follow the product plan even if a deployment
     # has not yet synchronized plan_features rows.
@@ -41,20 +43,21 @@ BUILTIN_FEATURE_MIN_PLAN = {
 }
 
 
-def _restore_expired_launch_promotion(conn, account_id: str):
-    """Return an expired launch promotion to a paid plan, or to Free.
+def _end_expired_courtesy(conn, account_id: str):
+    """Move an expired courtesy (the launch promotion included) to the next plan.
 
-    A previous paid SINPE subscription is kept in ``billing_subscriptions``
-    while the temporary courtesy is active, so promotional access never
+    The next plan is a still-paid plan or Free, capped by a pending change the
+    customer scheduled. A previous paid SINPE subscription is kept in
+    ``billing_subscriptions`` while the courtesy is active, so a courtesy never
     destroys access the customer already purchased.
     """
     from backend.product_ops.service import LAUNCH_PROMOTION_CODE
 
     expired = conn.execute(
-        """SELECT 1 FROM account_subscriptions
-           WHERE account_id=%s AND access_source='courtesy' AND courtesy_note=%s
+        """SELECT courtesy_note FROM account_subscriptions
+           WHERE account_id=%s AND access_source='courtesy'
              AND expires_at IS NOT NULL AND expires_at<=NOW()""",
-        (account_id, LAUNCH_PROMOTION_CODE),
+        (account_id,),
     ).fetchone()
     if not expired:
         return None
@@ -65,7 +68,7 @@ def _restore_expired_launch_promotion(conn, account_id: str):
            ORDER BY updated_at DESC LIMIT 1""",
         (account_id,),
     ).fetchone()
-    fallback_code = (paid or {}).get("plan_code") or "free"
+    fallback_code = plan_after_entitlement_end(conn, account_id, (paid or {}).get("plan_code") or "free")
     plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (fallback_code,)).fetchone()
     if not plan:
         return None
@@ -75,9 +78,10 @@ def _restore_expired_launch_promotion(conn, account_id: str):
            WHERE account_id=%s""",
         (plan["id"], account_id),
     )
+    promotion = expired.get("courtesy_note") == LAUNCH_PROMOTION_CODE
     return {
-        "code": "promotion_ended",
-        "title": "Tu acceso gratuito terminó",
+        "code": "promotion_ended" if promotion else "courtesy_ended",
+        "title": "Tu acceso gratuito terminó" if promotion else "Tu acceso de cortesía terminó",
         "message": (
             f"Continuás con tu plan {fallback_code.upper()}."
             if fallback_code != "free"
@@ -87,7 +91,7 @@ def _restore_expired_launch_promotion(conn, account_id: str):
 
 
 def _expire_unpaid_subscription(conn, account_id: str):
-    """Expire a finished paid period and return the account to Free."""
+    """Expire a finished off-store paid period and move its plan to the next one."""
     expired = conn.execute(
         """UPDATE billing_subscriptions
            SET status='expired',updated_at=NOW()
@@ -98,29 +102,51 @@ def _expire_unpaid_subscription(conn, account_id: str):
     ).fetchone()
     if not expired:
         return None
-    free = conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
-    if not free:
+    current = conn.execute("SELECT access_source FROM account_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
+    if (current or {}).get("access_source") != "self_service":
+        # A courtesy or owner grant is independent of the paid period: it keeps
+        # its plan, and its own end decides what comes next.
+        return None
+    next_code = plan_after_entitlement_end(conn, account_id, "free")
+    plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (next_code,)).fetchone()
+    if not plan:
         return None
     conn.execute(
         """UPDATE account_subscriptions
            SET plan_id=%s,status='active',access_source='self_service',started_at=NOW(),
                expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()
-           WHERE account_id=%s""",
-        (free["id"], account_id),
+           WHERE account_id=%s AND access_source='self_service'""",
+        (plan["id"], account_id),
     )
     return {
         "code": "subscription_expired",
         "title": "Tu suscripción terminó",
-        "message": "Ahora estás en el plan Gratis. Las compras de Basic y VIP estarán disponibles más adelante en las tiendas oficiales.",
+        "message": (
+            f"Continuás con tu plan {next_code.upper()}."
+            if next_code != "free"
+            else "Ahora estás en el plan Gratis. Las compras de Basic y VIP estarán disponibles más adelante en las tiendas oficiales."
+        ),
         "previous_plan": expired.get("plan_code"),
         "expired_at": expired.get("current_period_end"),
     }
 
 
 def _subscription(conn, account_id: str):
-    notice = _expire_unpaid_subscription(conn, account_id)
-    if notice is None:
-        notice = _restore_expired_launch_promotion(conn, account_id)
+    notice = None
+    due = conn.execute(
+        """SELECT EXISTS (SELECT 1 FROM billing_subscriptions WHERE account_id=%s AND status='active'
+                            AND current_period_end IS NOT NULL AND current_period_end<=NOW())
+               OR EXISTS (SELECT 1 FROM account_subscriptions WHERE account_id=%s AND access_source='courtesy'
+                            AND expires_at IS NOT NULL AND expires_at<=NOW()) AS due""",
+        (account_id, account_id),
+    ).fetchone()
+    if (due or {}).get("due"):
+        # A period ended: lock in the order every plan change uses (billing, then
+        # subscription) and move on; the steps re-check their conditions under the lock.
+        lock_billing_then_subscription(conn, account_id)
+        notice = _expire_unpaid_subscription(conn, account_id)
+        if notice is None:
+            notice = _end_expired_courtesy(conn, account_id)
     row = conn.execute(
         """SELECT s.id, p.code AS plan, p.name AS plan_name,
                   CASE WHEN s.access_source='courtesy' AND s.expires_at IS NOT NULL AND s.expires_at<=NOW() THEN 'expired' ELSE s.status END AS status,
@@ -130,6 +156,10 @@ def _subscription(conn, account_id: str):
            WHERE s.account_id=%s""",
         (account_id,),
     ).fetchone()
+    if row:
+        change = pending_change(conn, account_id) or {}
+        row = {**row, "pending_plan": change.get("pending_plan"), "pending_effective_at": change.get("pending_effective_at"),
+               "pending_requires_payment": bool(change.get("pending_requires_payment"))}
     return {**row, "access_notice": notice} if row and notice else row
 
 
@@ -262,34 +292,43 @@ def select_plan(plan_code: str, accept_beta_terms: bool = False, consent_version
     user = get_current_user()
     if user.get("role") == "owner":
         return {"status": "ok", "profile": enrich_identity(user)}
-    if plan_code in {"basic", "vip"}:
-        from backend.product_ops.service import create_checkout
-        result = create_checkout(plan_code, accept_beta_terms, consent_version)
-        return {**result, "profile": enrich_identity(user)}
     account_id = get_current_account_id()
     with get_connection() as conn:
-        if plan_code == "free":
+        _subscription(conn, account_id)  # apply an ended period first, so the decision sees the real plan
+        # Downgrades and cancellations keep the current plan until its stored end.
+        change = request_plan_change(conn, account_id, plan_code)
+        if change or plan_code != "free":
+            conn.commit()
+        else:
+            # Nothing left of a paid period: Free applies now, under the same row locks.
             from backend.product_ops.service import ensure_schema
             ensure_schema(conn)
             conn.execute("""UPDATE billing_subscriptions SET status='canceled',cancel_at_period_end=FALSE,updated_at=NOW()
                WHERE account_id=%s AND status IN ('active','payment_pending','past_due')""", (account_id,))
             conn.execute("""UPDATE billing_orders SET status='canceled',updated_at=NOW()
                WHERE account_id=%s AND status='payment_pending'""", (account_id,))
-        plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
-        if not plan:
-            raise HTTPException(status_code=404, detail="Plan no disponible.")
-        conn.execute(
-            """INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,expires_at,courtesy_note,granted_by,granted_at,created_at,updated_at)
-               VALUES(%s,%s,%s,'self_service',NOW(),NULL,NULL,NULL,NULL,NOW(),NOW())
-               ON CONFLICT(account_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status=EXCLUDED.status,
-                   access_source='self_service',started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()""",
-            (account_id, plan["id"], "active"),
-        )
-        conn.execute(
-            "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level=%s,updated_at=NOW() WHERE id=%s",
-            (plan_code, account_id),
-        )
-        conn.commit()
+            plan = conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
+            if not plan:
+                raise HTTPException(status_code=404, detail="Plan no disponible.")
+            conn.execute(
+                """INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,expires_at,courtesy_note,granted_by,granted_at,created_at,updated_at)
+                   VALUES(%s,%s,'active','self_service',NOW(),NULL,NULL,NULL,NULL,NOW(),NOW())
+                   ON CONFLICT(account_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status=EXCLUDED.status,
+                       access_source='self_service',started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()""",
+                (account_id, plan["id"]),
+            )
+            clear_pending(conn, account_id)
+            conn.execute(
+                "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level='free',updated_at=NOW() WHERE id=%s",
+                (account_id,),
+            )
+            conn.commit()
+    if change:
+        return {**change, "profile": enrich_identity(user)}
+    if plan_code in {"basic", "vip"}:
+        from backend.product_ops.service import create_checkout
+        result = create_checkout(plan_code, accept_beta_terms, consent_version)
+        return {**result, "profile": enrich_identity(user)}
     return {"status": "ok", "profile": enrich_identity(get_current_user())}
 
 
@@ -438,6 +477,7 @@ def grant_courtesy(account_id: str, plan_code: str, days: int, note: str | None 
                ON CONFLICT(account_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status='active',access_source='courtesy',started_at=NOW(),
                  expires_at=NOW()+(%s*INTERVAL '1 day'),courtesy_note=EXCLUDED.courtesy_note,granted_by=EXCLUDED.granted_by,granted_at=NOW(),updated_at=NOW()""",
             (account_id,plan["id"],days,(note or '').strip()[:500] or None,owner_id,days),)
+        clear_pending(conn, account_id)
         conn.execute("UPDATE accounts SET plan_selected=TRUE,updated_at=NOW() WHERE id=%s",(account_id,)); conn.commit()
     return get_managed_user(account_id)
 
@@ -447,5 +487,6 @@ def revoke_courtesy(account_id: str):
         current=conn.execute("SELECT access_source FROM account_subscriptions WHERE account_id=%s FOR UPDATE",(account_id,)).fetchone()
         if not current or current["access_source"]!='courtesy': raise HTTPException(status_code=409, detail="La cuenta no tiene una cortesía activa.")
         free=conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
-        conn.execute("""UPDATE account_subscriptions SET plan_id=%s,status='active',access_source='self_service',started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW() WHERE account_id=%s""",(free["id"],account_id)); conn.commit()
+        conn.execute("""UPDATE account_subscriptions SET plan_id=%s,status='active',access_source='self_service',started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW() WHERE account_id=%s""",(free["id"],account_id))
+        clear_pending(conn, account_id); conn.commit()
     return get_managed_user(account_id)

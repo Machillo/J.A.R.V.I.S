@@ -35,7 +35,7 @@ class _Connection:
     def execute(self, query, params=()):
         sql = " ".join(query.lower().split())
         if sql.startswith("select id from plans"):
-            return _Result({"id": params[0]})
+            return _Result({"id": params[0] if params else "free"})
         if sql.startswith("insert into account_subscriptions"):
             self.plan = params[1]
         if sql.startswith("update accounts set plan_selected=true"):
@@ -77,6 +77,12 @@ def test_selected_plan_is_active_after_save_and_fresh_status(monkeypatch, code):
 
 
 def test_payment_pending_keeps_plan_unselected(monkeypatch):
+    @contextmanager
+    def database():
+        yield _Connection()
+
+    monkeypatch.setattr(saas, "get_connection", database)
+    monkeypatch.setattr(saas, "get_current_account_id", lambda: "account")
     monkeypatch.setattr(saas, "get_current_user", lambda: {"role": "user", "account_id": "account"})
     monkeypatch.setattr(saas, "enrich_identity", lambda user: {**user, "plan_selected": False,
                                                            "subscription": {"plan": "free", "status": "active"}})

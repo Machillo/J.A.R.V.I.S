@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
+from backend.auth.plan_lifecycle import clear_pending
 from backend.core.database import get_connection
 from backend.core.feature_flags import FEATURE_DEFINITIONS, clear_feature_flag_cache
 from backend.product_ops.email_monitor_dashboard import build_email_monitor_dashboard
@@ -440,6 +441,7 @@ def activate_launch_promotion(plan_code: str):
                    granted_by=NULL,granted_at=NOW(),updated_at=NOW()""",
             (account_id, plan["id"], LAUNCH_PROMOTION_END, LAUNCH_PROMOTION_CODE),
         )
+        clear_pending(conn, account_id)  # an upgrade replaces a scheduled downgrade
         conn.execute(
             "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level=%s,updated_at=NOW() WHERE id=%s",
             (plan_code, account_id),
@@ -998,6 +1000,7 @@ def _activate_order(conn, order, verification_source: str, bank_reference: str |
       VALUES(%s,%s,'active','self_service',NOW(),NOW(),NOW(),NOW()) ON CONFLICT(account_id) DO UPDATE SET
       plan_id=EXCLUDED.plan_id,status='active',access_source='self_service',started_at=NOW(),last_payment_at=NOW(),updated_at=NOW()""",
       (order["account_id"], plan["id"]))
+    clear_pending(conn, order["account_id"])
     conn.execute(
       "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level=%s,updated_at=NOW() WHERE id=%s",
       (order["plan_code"], order["account_id"]),
