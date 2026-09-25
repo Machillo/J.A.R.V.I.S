@@ -899,12 +899,14 @@ BEGIN
                   HINT = 'delete one account''s rows per statement; never select financial rows by legacy user_id';
     END IF;
 
-    -- Every session other than the application (which reaches Postgres through
-    -- the Supavisor pooler, application_name 'Supavisor') must declare the one
+    -- Every session other than the application (application_name 'dincr-backend',
+    -- or 'Supavisor' when the pooler reports its own name) must declare the one
     -- workspace it deletes from: SET LOCAL dincr.delete_workspace = '<uuid>'
     -- (SET LOCAL only, so it cannot leak into a reused session). This covers the
     -- SQL editor, psql, scripts, the CLI and agents.
-    IF v_owners > 0 AND current_setting('application_name', true) IS DISTINCT FROM 'Supavisor' THEN
+    -- PRE-APPLY GATE: every backend process must connect through the pooler,
+    -- otherwise its deletes of live rows are rejected here (fail closed).
+    IF v_owners > 0 AND COALESCE(current_setting('application_name', true), '') NOT IN ('Supavisor', 'dincr-backend') THEN
         SELECT COUNT(*) INTO v_outside
         FROM old_rows o
         JOIN public.workspaces w ON w.id = o.workspace_id

@@ -60,6 +60,15 @@ def admin_uri(tmp_path_factory):
     return _admin_uri(tmp_path_factory.mktemp("pgserver"))
 
 
+def _as_app(uri: str) -> str:
+    """The backend's connection name, added as a query parameter."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(uri)
+    query = "&".join(filter(None, [parts.query, "application_name=dincr-backend"]))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+
+
 def _with_database(uri: str, name: str) -> str:
     from urllib.parse import urlsplit, urlunsplit
 
@@ -404,8 +413,8 @@ def service_db(db, monkeypatch):
     from backend.core import database
 
     _apply_migration(db["conn"])
-    # The backend reaches production through the pooler (application_name 'Supavisor').
-    monkeypatch.setattr(database, "DATABASE_URL", db["uri"] + "&application_name=Supavisor")
+    # The backend identifies itself as 'dincr-backend' (core/database.py).
+    monkeypatch.setattr(database, "DATABASE_URL", _as_app(db["uri"]))
     return db
 
 
@@ -554,7 +563,7 @@ def test_account_without_users_row_writes_through_both_paths(layout, monkeypatch
     a5 = _ids("a5")
     with layout["conn"].cursor() as cur:
         _debt(cur, a5["allowed"], a5["workspace"])  # allowed_users-space writer (e.g. overtime)
-    monkeypatch.setattr(database, "DATABASE_URL", layout["uri"] + "&application_name=Supavisor")
+    monkeypatch.setattr(database, "DATABASE_URL", _as_app(layout["uri"]))
     row = _as(a5, service.create_user_debt, UserDebtCreateRequest(name="Synthetic", remaining_amount=10))
     with layout["conn"].cursor() as cur:
         cur.execute("SELECT id FROM users WHERE email=%s", (a5["email"],))
@@ -820,7 +829,7 @@ def test_dincr_writers_pass_the_fk_space_guard(layout_fk, monkeypatch):
     from backend.user_product.models import UserDebtCreateRequest
 
     _apply_migration(layout_fk["conn"])
-    monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"] + "&application_name=Supavisor")
+    monkeypatch.setattr(database, "DATABASE_URL", _as_app(layout_fk["uri"]))
     a3 = _ids("a3")
     row = _as(a3, service.create_user_debt, UserDebtCreateRequest(name="Synthetic", remaining_amount=100))
     result = _as(a3, service.pay_user_debt, row["id"], 10)  # writes a transaction (users-FK) too
@@ -998,3 +1007,13 @@ def test_unknown_client_must_declare_too(layout_fk):
         with pytest.raises(psycopg2.errors.CheckViolation, match="outside the declared workspace"):
             cur.execute("DELETE FROM debts WHERE id=%s", (debt,))
         cur.execute("ROLLBACK")
+
+
+def test_backend_connections_identify_themselves(monkeypatch):
+    from backend.core import database
+
+    seen = {}
+    monkeypatch.setattr(database, "DATABASE_URL", "postgresql://example.invalid/db")
+    monkeypatch.setattr(database.psycopg2, "connect", lambda *a, **k: seen.update(k) or object())
+    database.PostgresConnection()
+    assert seen["application_name"] == "dincr-backend"

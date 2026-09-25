@@ -8,6 +8,7 @@ from psycopg2.extras import RealDictCursor
 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+APPLICATION_NAME = "dincr-backend"
 
 
 class DatabaseConfigError(RuntimeError):
@@ -85,6 +86,8 @@ class PostgresConnection:
         self.conn = psycopg2.connect(
             DATABASE_URL,
             cursor_factory=RealDictCursor,
+            # Identifies the backend to database guards (the pooler may report its own name).
+            application_name=APPLICATION_NAME,
         )
 
     def __enter__(self):

@@ -48,7 +48,7 @@ A cleanup that selects financial rows by a legacy integer, for example `WHERE wo
 
 Phase A:
 - rejects any financial DELETE touching live workspaces of more than one owner;
-- requires every session other than the application's pooler connection (`application_name = 'Supavisor'`; the SQL editor, psql, scripts, the CLI and agents) to declare the one workspace it deletes from (`SET LOCAL dincr.delete_workspace = '<uuid>'`, never a session-level `SET`);
+- requires every session other than the application (`application_name` `dincr-backend`, or `Supavisor` when the pooler reports its own name; so the SQL editor, psql, scripts, the CLI and agents) to declare the one workspace it deletes from (`SET LOCAL dincr.delete_workspace = '<uuid>'`, never a session-level `SET`);
 - rejects TRUNCATE of financial tables;
 - blocks deleting a legacy identity whose FK would cascade into another workspace;
 - logs every committed financial deletion (identifiers of live workspaces only; deletions from removed workspaces keep a count).
@@ -56,6 +56,10 @@ Phase A:
 Limits:
 - A privileged role can disable triggers or change `application_name`.
 - A human or script connecting through the same pooler also reports `Supavisor` and is treated as the app. Only the one-owner check and the delete log apply there.
+- The app's exemption relies on the backend's `dincr-backend` name or the pooler's `Supavisor` name.
+  - The pooler currently reports `Supavisor`.
+  - Before applying the migration, confirm that every backend service, cron and staging `DATABASE_URL` uses the pooler, and that live app sessions show `Supavisor` in `pg_stat_activity`.
+  - A backend connected directly would have its deletes of live rows rejected (fail closed).
 - The rule below and the delete log are the safeguards in both cases.
 - If workspace sharing ships, account deletion must first remove the member's rows in other owners' workspaces. Otherwise the identity guard fails that deletion closed.
 
