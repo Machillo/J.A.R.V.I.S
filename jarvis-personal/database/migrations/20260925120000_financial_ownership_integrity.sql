@@ -32,7 +32,17 @@
 --        unchanged, so rows under review that HAVE a workspace stay editable.
 --        Rows with a NULL workspace are invisible to the app (every query is
 --        workspace-scoped) and the NOT VALID CHECK rejects any update of them:
---        they are resolved by a human, with the guards disabled in that session.
+--        they are resolved by a human in one short transaction:
+--          BEGIN; ALTER TABLE public.<t> DISABLE TRIGGER trg_<t>_ownership_guard;
+--          UPDATE ... (reviewed rows only); ALTER TABLE public.<t> ENABLE TRIGGER
+--          trg_<t>_ownership_guard; COMMIT;
+--        (the ALTER locks the table until COMMIT; the NOT VALID CHECK still needs a
+--        non-NULL workspace in the new row version).
+--   * The guard also rejects filling a NULL workspace from an application write.
+--   * A FK with ON DELETE CASCADE from a dual-space user_id to users/allowed_users
+--     is NEEDS_REVIEW (deleting one person deletes colliding rows of another).
+--   * A stored mail-connection id outside its workspace aborts the migration,
+--     including disconnected connections: fix or remove those rows first.
 --
 -- What it deliberately does NOT do: it never changes user_id, never assigns a
 -- workspace from user_id alone (the Phase 2A mapping is ambiguous across id
@@ -357,7 +367,10 @@ BEGIN
            ('USER_ID_FK_TO_' || upper(parent.relname) || '_ON_DELETE_' ||
             CASE c.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET_NULL' WHEN 'r' THEN 'RESTRICT'
                                WHEN 'd' THEN 'SET_DEFAULT' ELSE 'NO_ACTION' END)::TEXT,
-           'INFO'::TEXT, NULL::UUID, NULL::UUID, NULL::BIGINT, ARRAY[]::UUID[]
+           -- CASCADE deletes rows of another tenant; the other rules fail closed
+           -- (RESTRICT/NO ACTION/SET NULL error, SET DEFAULT is rejected by the guard).
+           CASE WHEN c.confdeltype = 'c' THEN 'NEEDS_REVIEW' ELSE 'INFO' END::TEXT,
+           NULL::UUID, NULL::UUID, NULL::BIGINT, ARRAY[]::UUID[]
     FROM pg_catalog.pg_constraint c
     JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
     JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
@@ -563,6 +576,14 @@ BEGIN
             CONTINUE;
         END IF;
 
+        -- On a re-run the guard already exists and rejects any workspace change;
+        -- the logged repair is the one reviewed exception, for this statement only.
+        IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = format('public.%I', cfg.table_name)::regclass
+                   AND tgname = 'trg_' || cfg.table_name || '_ownership_guard') THEN
+            EXECUTE format('ALTER TABLE public.%I DISABLE TRIGGER %I', cfg.table_name,
+                           'trg_' || cfg.table_name || '_ownership_guard');
+        END IF;
+
         -- Re-derives the SAFE_AUTO_FIX predicate on the live rows (not on a
         -- snapshot) and logs old/new values before they change.
         EXECUTE format($sql$
@@ -586,6 +607,12 @@ BEGIN
         $sql$, cfg.table_name, cfg.table_name, v_run, cfg.table_name);
         GET DIAGNOSTICS v_count = ROW_COUNT;
         v_repaired := v_repaired + v_count;
+
+        IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = format('public.%I', cfg.table_name)::regclass
+                   AND tgname = 'trg_' || cfg.table_name || '_ownership_guard') THEN
+            EXECUTE format('ALTER TABLE public.%I ENABLE TRIGGER %I', cfg.table_name,
+                           'trg_' || cfg.table_name || '_ownership_guard');
+        END IF;
     END LOOP;
 
     INSERT INTO public.financial_ownership_audit_snapshots(run_id, phase, table_name, classification, issue, row_count)
@@ -621,7 +648,8 @@ BEGIN
     IF TG_OP = 'UPDATE' THEN
         -- Moving a row to another workspace is a reviewed data operation, never a
         -- side effect of an application write (run it with this trigger disabled).
-        IF OLD.workspace_id IS NOT NULL AND NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+        -- Includes filling a NULL workspace: assigning an owner is a review decision.
+        IF NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
             RAISE EXCEPTION 'financial ownership change on %', TG_TABLE_NAME
                 USING ERRCODE = '23514',
                       HINT = 'rows are not moved between workspaces by application writes';

@@ -40,6 +40,14 @@ def collect_summary(conn) -> tuple[list[tuple[str, str, str, int]], list[str]]:
     """Audit counts plus the audited tables present, from a rolled-back, read-only run."""
     cursor = conn.cursor()
     try:
+        # The audit runs with the caller's rights: a role subject to RLS would see
+        # no rows and report a false PASS.
+        cursor.execute(
+            "SELECT rolsuper OR rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = current_user"
+        )
+        row = cursor.fetchone()
+        if not row or not row[0]:
+            raise PermissionError("The database role must bypass RLS to audit every row.")
         cursor.execute(audit_functions_sql("pg_temp"))
         cursor.execute("SET LOCAL transaction_read_only = on")
         cursor.execute(
@@ -114,6 +122,9 @@ def main() -> int:
         return 2
     try:
         results = evaluate(*collect_summary(conn))
+    except PermissionError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     finally:
         conn.close()
     for line in render(results):

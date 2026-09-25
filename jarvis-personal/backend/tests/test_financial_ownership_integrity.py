@@ -51,7 +51,7 @@ def test_migration_is_transactional_and_non_destructive():
     ):
         assert not re.search(forbidden, upper), forbidden
     # The single data change: workspace_id of rows whose workspace_id is NULL.
-    statements = re.findall(r"\bUPDATE\s+(?!OF\b)(?:ONLY\s+)?(\S+)(?:\s+\w+)?\s+SET\s+(\w+)", sql, re.I)
+    statements = re.findall(r"\bUPDATE\s+(?!OF\b)(?:ONLY\s+)?(\S+)(?:\s+(?:AS\s+)?\w+)?\s+SET\s+(\w+)", sql, re.I)
     assert statements == [("public.%I", "workspace_id")]
     assert "AND t.workspace_id IS NULL" in sql
     assert "a.classification = 'SAFE_AUTO_FIX'" in sql
@@ -176,3 +176,25 @@ def test_check_fails_closed_without_database_url(monkeypatch, capsys):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert check.main() == 2
     assert "DATABASE_URL" in capsys.readouterr().err
+
+
+class _RoleCursor:
+    def __init__(self, bypass): self.bypass, self.sql = bypass, []
+    def execute(self, sql): self.sql.append(sql)
+    def fetchone(self): return (self.bypass,)
+
+
+class _RoleConnection:
+    def __init__(self, bypass): self.cur, self.rolled_back = _RoleCursor(bypass), False
+    def cursor(self): return self.cur
+    def rollback(self): self.rolled_back = True
+
+
+def test_check_refuses_a_role_subject_to_rls():
+    conn = _RoleConnection(bypass=False)
+    try:
+        check.collect_summary(conn)
+        raise AssertionError("expected PermissionError")
+    except PermissionError:
+        pass
+    assert len(conn.cur.sql) == 1 and conn.rolled_back  # nothing else ran

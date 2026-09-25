@@ -319,7 +319,10 @@ BEGIN
            ('USER_ID_FK_TO_' || upper(parent.relname) || '_ON_DELETE_' ||
             CASE c.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET_NULL' WHEN 'r' THEN 'RESTRICT'
                                WHEN 'd' THEN 'SET_DEFAULT' ELSE 'NO_ACTION' END)::TEXT,
-           'INFO'::TEXT, NULL::UUID, NULL::UUID, NULL::BIGINT, ARRAY[]::UUID[]
+           -- CASCADE deletes rows of another tenant; the other rules fail closed
+           -- (RESTRICT/NO ACTION/SET NULL error, SET DEFAULT is rejected by the guard).
+           CASE WHEN c.confdeltype = 'c' THEN 'NEEDS_REVIEW' ELSE 'INFO' END::TEXT,
+           NULL::UUID, NULL::UUID, NULL::BIGINT, ARRAY[]::UUID[]
     FROM pg_catalog.pg_constraint c
     JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
     JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
