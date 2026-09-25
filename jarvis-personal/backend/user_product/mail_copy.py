@@ -33,6 +33,7 @@ ENGLISH_REASONS = {
     "Movimiento interno entre cuentas propias detectado; no se genera candidato financiero.": "Internal transfer between your own accounts detected; no financial candidate is created.",
     "MultiMoney: concepto, monto, fecha, dirección y cuentas extraídos por plantilla exacta.": "MultiMoney: description, amount, date, direction, and accounts extracted with an exact template.",
     "No es un correo de BAC, Banco Popular o MultiMoney.": "Not an email from BAC, Banco Popular, or MultiMoney.",
+    "No se pudo procesar este aviso. Quedó registrado y se reintenta si vuelve a aparecer en una sincronización.": "We couldn’t process this notice. It was recorded and is retried if it shows up again in a sync.",
     "Pago de tarjeta BAC detectado; se ignora para evitar doble conteo porque las compras individuales ya son los gastos.": "BAC card payment detected; ignored to avoid double counting because the individual purchases are already the expenses.",
     "Pago/depósito BAC rechazado/no aplicado; no afecta finanzas.": "BAC payment or deposit rejected or not applied; it doesn’t affect your finances.",
     "Salario bruto oficial guardado desde Orden Patronal CCSS.": "Official gross salary saved from a CCSS payroll order.",
