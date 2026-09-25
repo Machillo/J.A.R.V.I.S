@@ -126,7 +126,8 @@ def test_mail_ingestion_parses_each_connection_as_its_own_holder(display_name, o
     connection = {"id": 1, "account_id": "account", "workspace_id": "workspace", "display_name": display_name, "granted_scopes": []}
 
     with pytest.raises(StopIteration):
-        gmail_service._ingest_message(connection, "msg-1", subject="Transferencia SINPE Móvil", sender=BAC, body=body)
+        # The pipeline itself (_ingest_message would record the interruption as a failed message).
+        gmail_service._ingest_message_once(connection, "msg-1", subject="Transferencia SINPE Móvil", sender=BAC, body=body)
 
     assert seen["body"] == body  # parsed as received, never rewritten
     assert seen["identity"].holder_names[0] == display_name

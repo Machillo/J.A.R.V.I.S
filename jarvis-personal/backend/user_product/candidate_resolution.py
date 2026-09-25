@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from backend.user_product.movement_direction import canonical_direction
+
 
 def _plain(value: Any) -> str:
     text = unicodedata.normalize("NFKD", str(value or ""))
@@ -269,7 +271,7 @@ def _paired_owned_transfer(conn, candidate: dict[str, Any], own_account_id: int 
     made that day. Require an explicit endpoint, shared bank reference or close
     transaction times; ambiguous matches stay pending for review.
     """
-    direction = (candidate.get("raw_payload") or {}).get("movement_direction") or candidate.get("movement_direction")
+    direction = canonical_direction((candidate.get("raw_payload") or {}).get("movement_direction") or candidate.get("movement_direction"))
     if candidate.get("movement_kind") != "transfer" or direction not in {"in", "out"} or not own_account_id:
         return None
     own_reference = _last4(candidate.get("source_account_reference") if direction == "out" else candidate.get("destination_account_reference"))
@@ -379,7 +381,7 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
     source_id = _confirmed_account(conn, candidate, candidate.get("source_account_reference"))
     destination_id = _confirmed_account(conn, candidate, candidate.get("destination_account_reference"))
     is_internal = bool(source_id and destination_id and source_id != destination_id)
-    original_direction = (candidate.get("raw_payload") or {}).get("movement_direction") or candidate.get("movement_direction")
+    original_direction = canonical_direction((candidate.get("raw_payload") or {}).get("movement_direction") or candidate.get("movement_direction"))
     pair_id = _paired_owned_transfer(
         conn, candidate, source_id if original_direction == "out" else destination_id,
     )
@@ -387,7 +389,8 @@ def resolve_candidate(conn, candidate_id: int) -> dict[str, Any]:
     reason = "paired_owned_transfer" if pair_id else "confirmed_owned_endpoints" if is_internal else POSSIBLE_MATCH_REASON if cross_reason == POSSIBLE_MATCH_REASON else None
     raw = candidate.get("raw_payload") or {}
     base_type = str(raw.get("transaction_type") or candidate.get("transaction_type") or "transfer")
-    base_direction = str(raw.get("movement_direction") or candidate.get("movement_direction") or "unknown")
+    # raw_payload may predate the canonical contract: never write a value the CHECK rejects.
+    base_direction = canonical_direction(raw.get("movement_direction") or candidate.get("movement_direction"), base_type)
     base_category = str(raw.get("category") or candidate.get("category") or "Transferencia")
     conn.execute(
         """UPDATE finva_email_candidates
