@@ -24,53 +24,6 @@ TRIAL_DAYS = int(os.getenv("FINVA_STORE_TRIAL_DAYS", "7"))
 ACTIVE_STATES = {"trialing", "active", "grace_period"}
 
 
-def ensure_store_schema(conn):
-    conn.execute("""CREATE TABLE IF NOT EXISTS store_subscriptions (
-      account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
-      workspace_id UUID,
-      provider TEXT NOT NULL CHECK(provider IN ('apple','google','sandbox')),
-      plan_code TEXT NOT NULL CHECK(plan_code IN ('basic','vip')),
-      billing_period TEXT NOT NULL CHECK(billing_period IN ('monthly','annual')),
-      product_id TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('trialing','active','grace_period','canceled','expired','revoked')),
-      provider_subscription_id TEXT,
-      original_transaction_id TEXT,
-      trial_ends_at TIMESTAMPTZ,
-      current_period_start TIMESTAMPTZ,
-      current_period_end TIMESTAMPTZ,
-      cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
-      auto_renew BOOLEAN NOT NULL DEFAULT TRUE,
-      pending_plan_code TEXT CHECK(pending_plan_code IS NULL OR pending_plan_code IN ('basic','vip')),
-      pending_billing_period TEXT CHECK(pending_billing_period IS NULL OR pending_billing_period IN ('monthly','annual')),
-      pending_product_id TEXT,
-      pending_effective_at TIMESTAMPTZ,
-      last_verified_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
-    conn.execute("ALTER TABLE store_subscriptions ADD COLUMN IF NOT EXISTS pending_plan_code TEXT")
-    conn.execute("ALTER TABLE store_subscriptions ADD COLUMN IF NOT EXISTS pending_billing_period TEXT")
-    conn.execute("ALTER TABLE store_subscriptions ADD COLUMN IF NOT EXISTS pending_product_id TEXT")
-    conn.execute("ALTER TABLE store_subscriptions ADD COLUMN IF NOT EXISTS pending_effective_at TIMESTAMPTZ")
-    conn.execute("""CREATE TABLE IF NOT EXISTS store_subscription_events (
-      id BIGSERIAL PRIMARY KEY,
-      account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
-      provider TEXT NOT NULL,
-      event_type TEXT NOT NULL,
-      provider_event_id TEXT,
-      plan_code TEXT,
-      billing_period TEXT,
-      effective_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      payload_hash TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""")
-    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS uq_store_event_provider_id
-      ON store_subscription_events(provider,provider_event_id) WHERE provider_event_id IS NOT NULL""")
-    conn.execute("""CREATE INDEX IF NOT EXISTS idx_store_subscription_status
-      ON store_subscriptions(status,current_period_end)""")
-    for table in ("store_subscriptions", "store_subscription_events"):
-        conn.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
-        conn.execute(f"REVOKE ALL PRIVILEGES ON TABLE {table} FROM anon, authenticated")
-
-
 def store_catalog():
     return {
         "currency": "CRC",
@@ -165,7 +118,6 @@ def restore_owner_access():
 def entitlement_state():
     account_id = get_current_account_id()
     with get_connection() as conn:
-        ensure_store_schema(conn)
         row = conn.execute("SELECT * FROM store_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
         conn.commit()
     return _public_state(row)
@@ -215,7 +167,6 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
     period = "1 month" if billing_period == "monthly" else "1 year"
     trial_sql = f"NOW()+INTERVAL '{TRIAL_DAYS} days'" if event_type == "trial_started" else "NULL"
     with get_connection() as conn:
-        ensure_store_schema(conn)
         target = conn.execute("SELECT id FROM accounts WHERE id=%s", (account_id,)).fetchone()
         if not target:
             raise HTTPException(404, "Cuenta objetivo no encontrada.")

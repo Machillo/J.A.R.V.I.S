@@ -10,31 +10,7 @@ TERMS_VERSION = "2026-09-23-v3"
 PRIVACY_VERSION = "2026-09-25-v4"
 
 
-def ensure_legal_schema(conn) -> None:
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS legal_acceptances (
-          id BIGSERIAL PRIMARY KEY,
-          account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-          terms_version TEXT NOT NULL,
-          privacy_version TEXT NOT NULL,
-          terms_accepted_at TIMESTAMPTZ NOT NULL,
-          privacy_accepted_at TIMESTAMPTZ NOT NULL,
-          ip_address TEXT,
-          user_agent TEXT,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          UNIQUE(account_id,terms_version,privacy_version)
-        )"""
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_legal_acceptances_account ON legal_acceptances(account_id,created_at DESC)"
-    )
-    # Legal evidence is written and read only by the authenticated backend.
-    conn.execute("ALTER TABLE legal_acceptances ENABLE ROW LEVEL SECURITY")
-    conn.execute("REVOKE ALL PRIVILEGES ON TABLE legal_acceptances FROM anon, authenticated")
-
-
 def legal_status(conn, account_id: str) -> dict:
-    ensure_legal_schema(conn)
     row = conn.execute(
         """SELECT terms_accepted_at,privacy_accepted_at
            FROM legal_acceptances
@@ -61,7 +37,6 @@ def accept_legal_documents(payload, request: Request) -> dict:
     user_agent = request.headers.get("user-agent", "")[:500] or None
     account_id = get_current_account_id()
     with get_connection() as conn:
-        ensure_legal_schema(conn)
         conn.execute(
             """INSERT INTO legal_acceptances(
                  account_id,terms_version,privacy_version,terms_accepted_at,privacy_accepted_at,ip_address,user_agent

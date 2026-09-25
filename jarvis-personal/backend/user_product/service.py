@@ -14,6 +14,7 @@ from backend.finance.service import (
     get_payroll_events,
 )
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
+from backend.user_product.basic_service import _require_basic_tables
 from backend.user_product.strategy_engine import (
     build_basic_strategy,
     build_paycheck_plan,
@@ -66,11 +67,6 @@ def _money(value: Any) -> float:
     return round(float(value or 0), 2)
 
 
-def _ensure_income_schema(conn) -> None:
-    """Keep manual income compatible when a deployment precedes its migration."""
-    conn.execute("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'Salario'")
-
-
 def _monthly_income_estimate(profile: dict | None) -> float:
     if not profile:
         return 0.0
@@ -116,7 +112,6 @@ def get_user_finance_summary():
 def list_income():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_income_schema(conn)
         rows = conn.execute(
             """SELECT id,amount,source,COALESCE(category,'Salario') category,user_id,workspace_id,created_at
                FROM salaries WHERE workspace_id=%s ORDER BY created_at DESC,id DESC""",
@@ -129,7 +124,6 @@ def create_income(payload):
     user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_income_schema(conn)
         row = conn.execute(
             """INSERT INTO salaries(user_id,workspace_id,amount,source,category,created_at)
                VALUES(%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
@@ -145,7 +139,6 @@ def create_income(payload):
 def update_income(income_id: int, payload):
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_income_schema(conn)
         row = conn.execute(
             """UPDATE salaries SET amount=%s,source=%s,category=%s,
                       created_at=COALESCE(%s::date,created_at::date)+TIME '12:00'
@@ -414,6 +407,8 @@ def contribute_user_goal(goal_id: int, payload):
             raise HTTPException(status_code=409, detail="La meta ya está completa.")
         current = float(goal["current_amount"]) + amount
         status = "completed" if current >= float(goal["target_amount"]) else "active"
+        # The contribution ledger comes from a migration; never move a goal without it.
+        _require_basic_tables(conn, "finva_goal_contributions")
         conn.execute(
             "INSERT INTO finva_goal_contributions(workspace_id,goal_id,amount,contribution_date) VALUES(%s,%s,%s,%s)",
             (workspace_id, goal_id, amount, contribution_date),
@@ -441,44 +436,9 @@ def delete_user_goal(goal_id: int):
     return {"status": "ok", "id": goal_id}
 
 
-def _ensure_savings_plan_schema(conn) -> None:
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS finva_savings_plans (
-               id BIGSERIAL PRIMARY KEY,
-               account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-               workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-               name TEXT NOT NULL,
-               monthly_amount NUMERIC(14,2) NOT NULL CHECK (monthly_amount > 0),
-               saved_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (saved_amount >= 0),
-               start_date DATE NOT NULL,
-               end_date DATE NOT NULL CHECK (end_date >= start_date),
-               status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused','completed')),
-               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-           )"""
-    )
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS finva_savings_plan_contributions (
-               id BIGSERIAL PRIMARY KEY,
-               workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-               savings_plan_id BIGINT NOT NULL REFERENCES finva_savings_plans(id) ON DELETE CASCADE,
-               amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
-               contribution_date DATE NOT NULL DEFAULT CURRENT_DATE,
-               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-           )"""
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_finva_savings_plans_workspace ON finva_savings_plans(workspace_id, status)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_finva_savings_contributions_plan ON finva_savings_plan_contributions(savings_plan_id, contribution_date)")
-    conn.execute("ALTER TABLE finva_savings_plans ENABLE ROW LEVEL SECURITY")
-    conn.execute("ALTER TABLE finva_savings_plan_contributions ENABLE ROW LEVEL SECURITY")
-    conn.execute("REVOKE ALL ON TABLE finva_savings_plans, finva_savings_plan_contributions FROM anon, authenticated")
-    conn.execute("REVOKE ALL ON SEQUENCE finva_savings_plans_id_seq, finva_savings_plan_contributions_id_seq FROM anon, authenticated")
-
-
 def list_savings_plans():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_savings_plan_schema(conn)
         rows = conn.execute(
             """SELECT id,name,monthly_amount,saved_amount,start_date,end_date,status,created_at,updated_at
                FROM finva_savings_plans WHERE workspace_id=%s ORDER BY status='active' DESC,id DESC""",
@@ -492,7 +452,6 @@ def create_savings_plan(payload):
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_savings_plan_schema(conn)
         row = conn.execute(
             """INSERT INTO finva_savings_plans(account_id,workspace_id,name,monthly_amount,saved_amount,start_date,end_date)
                VALUES(%s,%s,%s,%s,%s,%s,%s)
@@ -508,7 +467,6 @@ def create_savings_plan(payload):
 def update_savings_plan(plan_id: int, payload):
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_savings_plan_schema(conn)
         row = conn.execute(
             """UPDATE finva_savings_plans SET name=%s,monthly_amount=%s,saved_amount=%s,
                       start_date=%s,end_date=%s,status=%s,updated_at=NOW()
@@ -528,7 +486,6 @@ def contribute_savings_plan(plan_id: int, payload):
     workspace_id = get_current_workspace_id()
     contribution_date = payload.contribution_date or date.today()
     with get_connection() as conn:
-        _ensure_savings_plan_schema(conn)
         plan = conn.execute(
             "SELECT id,saved_amount FROM finva_savings_plans WHERE id=%s AND workspace_id=%s FOR UPDATE",
             (plan_id, workspace_id),
@@ -554,7 +511,6 @@ def contribute_savings_plan(plan_id: int, payload):
 def delete_savings_plan(plan_id: int):
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_savings_plan_schema(conn)
         row = conn.execute(
             "DELETE FROM finva_savings_plans WHERE id=%s AND workspace_id=%s RETURNING id",
             (plan_id, workspace_id),

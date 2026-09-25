@@ -6,7 +6,7 @@ from typing import Any
 
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
-from backend.finance.intelligence import _ensure_account_tables, list_account_balances
+from backend.finance.intelligence import list_account_balances
 
 
 def _num(value: Any) -> float:
@@ -66,7 +66,6 @@ def confirm_account_reconciliation(account_id: int, real_balance: float, note: s
     workspace_id = get_current_workspace_id()
     user_id = get_current_user_id()
     with get_connection() as conn:
-        _ensure_account_tables(conn)
         row = conn.execute("SELECT * FROM account_balances WHERE id=%s AND workspace_id=%s AND COALESCE(is_active,TRUE)=TRUE", (account_id, workspace_id)).fetchone()
         if not row:
             raise ValueError("Cuenta financiera no encontrada.")

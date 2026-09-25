@@ -1,3 +1,8 @@
+-- SUPERSEDED by migrations/20260925130000_request_path_schema.sql. DO NOT APPLY.
+-- Kept outside database/migrations so apply_migration.py refuses it. Never
+-- applied in production. It creates the Basic tables without row level security
+-- and forces plan features to enabled=TRUE; the newer migration creates the same
+-- tables closed to the Data API and never changes existing grants.
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS finva_budget_items (
