@@ -164,7 +164,9 @@ LEFT JOIN public.workspaces w ON w.owner_account_id = a.id AND w.workspace_type 
 WHERE a.id = '<ACCOUNT_ID>'::uuid;
 
 -- E13. Server-side screen trail of one account (product_events, kept since
---      2026-09-10, never purged). Shows the plan over time, whether the Debts
+--      2026-09-10; since the account-deletion analytics fix, deleting an
+--      account also deletes its events, so only accounts deleted earlier leave
+--      a trail for E14). Shows the plan over time, whether the Debts
 --      screen was opened and on which days, and whether every event carries the
 --      same workspace_id (a second workspace_id = the workspace was replaced).
 SELECT date_trunc('day', created_at)::date AS day, workspace_id, plan_code,
