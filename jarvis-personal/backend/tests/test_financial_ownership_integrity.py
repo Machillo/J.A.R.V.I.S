@@ -81,8 +81,13 @@ def test_audit_sql_files_are_read_only():
             r"\bALTER\s+\w+", r"\bDROP\s+\w+", r"\bTRUNCATE\b", r"\bGRANT\b", r"\bCOMMIT\b",
             r"\bCREATE\s+(TABLE|INDEX|UNIQUE|VIEW|SCHEMA|TRIGGER|ROLE|EXTENSION)\b", r"\bINTO\s+(TEMP|TEMPORARY|UNLOGGED|TABLE)\b",
             r"\bCOPY\b", r"\bSETVAL\b", r"\bNEXTVAL\b", r"\bVACUUM\b", r"\bREINDEX\b", r"\bCALL\b",
+            r"\bDO\s+(\$|LANGUAGE)",
         ):
             assert not re.search(forbidden, sql), (path.name, forbidden)
+        if path == EVIDENCE:
+            # Dynamic SQL hides statements from these checks; only the preflight's
+            # temp functions use it, inside a READ ONLY transaction.
+            assert not re.search(r"\bEXECUTE\b", sql)
         # Only session-local functions may be created.
         assert re.findall(r"CREATE\s+OR\s+REPLACE\s+FUNCTION\s+([\w]+)\.", sql) in ([], ["PG_TEMP"] * 8)
 
@@ -199,3 +204,8 @@ def test_check_refuses_a_role_subject_to_rls():
     except PermissionError:
         pass
     assert len(conn.cur.sql) == 1 and conn.rolled_back  # nothing else ran
+
+
+def test_admin_promoted_in_allowed_users_is_checked_too():
+    sql = MIGRATION.read_text(encoding="utf-8")
+    assert "au.role IN ('owner', 'admin') AND au.status = 'active'" in sql

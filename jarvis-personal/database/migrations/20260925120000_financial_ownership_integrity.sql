@@ -605,7 +605,14 @@ BEGIN
     -- finance write after this migration.
     SELECT COUNT(*) INTO v_blocking
     FROM public.accounts a
-    WHERE a.role IN ('owner', 'admin') AND a.status = 'active'
+    WHERE (
+            (a.role IN ('owner', 'admin') AND a.status = 'active')
+            -- Internal routes authorize by allowed_users.role (accounts.role only
+            -- syncs at login), so a pending promotion counts too.
+            OR EXISTS (SELECT 1 FROM public.allowed_users au
+                       WHERE au.id = a.legacy_allowed_user_id
+                         AND au.role IN ('owner', 'admin') AND au.status = 'active')
+          )
       AND EXISTS (SELECT 1 FROM public.dincr_ownership_tables() o
                   WHERE public.dincr_user_id_space(o.table_name) = 'users')
       AND NOT EXISTS (SELECT 1 FROM public.users u
