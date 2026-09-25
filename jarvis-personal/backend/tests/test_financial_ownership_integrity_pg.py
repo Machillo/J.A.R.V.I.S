@@ -1287,6 +1287,112 @@ def test_the_real_account_deletion_runs_under_every_guard(layout_fk, monkeypatch
             assert cur.fetchone()[0] == 0  # the person's own orphan went with their identity
 
 
+def _run_account_deletion(layout_fk, monkeypatch, label):
+    from types import SimpleNamespace
+
+    from backend.auth import service as auth_service
+    from backend.auth.current_user import reset_current_user, set_current_user
+    from backend.core import database
+
+    conn, ident = layout_fk["conn"], _ids(label)
+    auth_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"auth:{label}"))
+    with conn.cursor() as cur:
+        cur.execute("CREATE SCHEMA IF NOT EXISTS vault")
+        cur.execute("CREATE TABLE IF NOT EXISTS vault.secrets (id UUID PRIMARY KEY, secret TEXT)")
+        cur.execute("CREATE OR REPLACE VIEW vault.decrypted_secrets AS SELECT id, secret AS decrypted_secret FROM vault.secrets")
+        cur.execute("ALTER TABLE finva_gmail_connections ADD COLUMN IF NOT EXISTS refresh_token_secret_id UUID, "
+                    "ADD COLUMN IF NOT EXISTS granted_scopes TEXT[]")
+        cur.execute("UPDATE accounts SET supabase_user_id=%s WHERE id=%s", (auth_id, ident["account"]))
+        cur.execute("UPDATE allowed_users SET supabase_user_id=%s WHERE id=%s", (auth_id, ident["allowed"]))
+    monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"])
+    monkeypatch.setattr(database, "APPLICATION_NAME", "dincr-backend")
+    monkeypatch.setattr(auth_service, "SUPABASE_URL", "https://auth.example.invalid")
+    monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", "synthetic-admin-key")
+    ok = SimpleNamespace(status_code=200, ok=True, json=lambda: {}, text="")
+    monkeypatch.setattr(auth_service.requests, "delete", lambda *a, **k: ok)
+    monkeypatch.setattr(auth_service.requests, "get", lambda *a, **k: SimpleNamespace(status_code=404, ok=False, json=lambda: {}, text=""))
+    monkeypatch.setattr(auth_service.requests, "post", lambda *a, **k: ok)
+    token = set_current_user({"id": ident["allowed"], "email": ident["email"], "role": "user", "status": "active",
+                              "account_id": ident["account"], "supabase_user_id": auth_id, "workspace_id": ident["workspace"]})
+    try:
+        auth_service.delete_current_account()
+    finally:
+        reset_current_user(token)
+
+
+PRODUCT_EVENTS = """CREATE TABLE IF NOT EXISTS product_events (
+    id BIGSERIAL PRIMARY KEY, account_id UUID REFERENCES accounts(id) ON DELETE SET NULL, workspace_id UUID,
+    event_name TEXT NOT NULL, plan_code TEXT, surface TEXT NOT NULL, success BOOLEAN NOT NULL DEFAULT TRUE,
+    duration_bucket TEXT, app_version TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""
+
+
+def test_account_deletion_leaves_no_identifier_of_the_person(layout_fk, monkeypatch):
+    """Everything that points at the deleted account or its workspaces goes; nobody else's rows do."""
+    from backend.auth.deletion_residue import residue_report
+
+    conn, a3, a1 = layout_fk["conn"], _ids("a3"), _ids("a1")
+    with conn.cursor() as cur:
+        cur.execute(PRODUCT_EVENTS)
+        for ident in (a3, a1):
+            for surface in ("dashboard", "debts", "settings"):
+                cur.execute("INSERT INTO product_events(account_id, workspace_id, event_name, surface) VALUES (%s, %s, 'opened', %s)",
+                            (ident["account"], ident["workspace"], surface))
+        _debt(cur, a3["users"], a3["workspace"])
+        _debt(cur, a1["users"], a1["workspace"])
+    _apply_migration(conn)
+    _run_account_deletion(layout_fk, monkeypatch, "a3")
+
+    from backend.core.database import get_connection
+    with get_connection() as check:
+        assert residue_report(check, a3["account"], [a3["workspace"]], email=a3["email"]) == []
+        survivors = residue_report(check, a1["account"], [a1["workspace"]])
+    assert {"table": "product_events", "column": "account_id", "rows": 3} in survivors  # others keep theirs
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM product_events WHERE account_id IS NULL")
+        assert cur.fetchone()[0] == 0  # no anonymous-looking row that still carries the workspace
+
+
+def test_the_residue_report_finds_what_a_foreign_key_leaves_behind(layout_fk):
+    """product_events.account_id is ON DELETE SET NULL: without the explicit delete the workspace id stays."""
+    from backend.auth.deletion_residue import residue_report
+    from backend.core.database import PostgresConnection
+    from backend.core import database
+
+    conn, a3 = layout_fk["conn"], _ids("a3")
+    with conn.cursor() as cur:
+        cur.execute(PRODUCT_EVENTS)
+        cur.execute("INSERT INTO product_events(account_id, workspace_id, event_name, surface) VALUES (NULL, %s, 'opened', 'x')",
+                    (a3["workspace"],))
+    database.DATABASE_URL, previous = layout_fk["uri"], database.DATABASE_URL
+    try:
+        with PostgresConnection() as check:
+            report = residue_report(check, a3["account"], [a3["workspace"]])
+    finally:
+        database.DATABASE_URL = previous
+    assert {"table": "product_events", "column": "workspace_id", "rows": 1} in report
+
+
+def test_the_residue_report_sees_text_copies_and_the_email_but_never_guesses_by_legacy_id(layout_fk):
+    from backend.auth.deletion_residue import residue_report
+    from backend.core.database import PostgresConnection
+    from backend.core import database
+
+    conn, a3 = layout_fk["conn"], _ids("a3")
+    with conn.cursor() as cur:
+        cur.execute("CREATE TABLE IF NOT EXISTS residue_probe (note TEXT, user_id BIGINT)")
+        cur.execute("INSERT INTO residue_probe VALUES (%s, NULL), (NULL, %s), (%s, NULL)",
+                    (a3["workspace"], a3["allowed"], a3["email"].upper()))
+    database.DATABASE_URL, previous = layout_fk["uri"], database.DATABASE_URL
+    try:
+        with PostgresConnection() as check:
+            report = residue_report(check, a3["account"], [a3["workspace"]], email=a3["email"])
+    finally:
+        database.DATABASE_URL = previous
+    probe = sorted(item["column"] for item in report if item["table"] == "residue_probe")
+    # The id as text and the email (normalized); a bare legacy integer is ambiguous and never matched.
+    assert probe == ["note", "note"]
+
+
 def test_a_live_accounts_allowed_users_row_cannot_be_deleted(layout_fk, monkeypatch):
     from backend.auth import service as auth_service
     from backend.core import database

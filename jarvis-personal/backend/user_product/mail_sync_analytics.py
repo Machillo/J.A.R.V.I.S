@@ -44,5 +44,6 @@ def observe_mail_sync(provider: str, trigger: str, run: Callable[[], dict[str, A
         "candidates_pending": result.get("pending"),
         "duplicates": result.get("duplicates"),
         "payroll_reports": result.get("payroll_reports"),
+        "messages_failed": result.get("failed"),
     })
     return result

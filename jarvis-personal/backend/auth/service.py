@@ -479,6 +479,20 @@ def delete_current_account() -> dict[str, str]:
                            WHERE workspace_id IN (SELECT id FROM workspaces WHERE owner_account_id=%s)""",
                         (account_id,),
                     )
+                # Product analytics rows carry the account and workspace ids; the
+                # accounts FK only nulls account_id, which would leave the workspace
+                # id linking this person's activity. Deleted with the account; the
+                # anonymous aggregates live in PostHog, which holds no identifiers.
+                events_table = conn.execute("SELECT to_regclass('public.product_events') AS present").fetchone()
+                if events_table and events_table.get("present"):
+                    events = conn.execute(
+                        """DELETE FROM product_events
+                           WHERE account_id=%s
+                              OR workspace_id IN (SELECT id FROM workspaces WHERE owner_account_id=%s)
+                           RETURNING id""",
+                        (account_id, account_id),
+                    ).fetchall()
+                    _log_deletion(deletion_id, stage, "PROGRESS", product_events_deleted=len(events))
                 deleted = conn.execute(
                     "DELETE FROM accounts WHERE id=%s RETURNING id",
                     (account_id,),

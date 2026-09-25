@@ -62,6 +62,8 @@ def _state(*, allowed_sid=AUTH_ID, account_sid=AUTH_ID, status="active", role="u
             {"account_id": OTHER_ACCOUNT_ID, "refresh_token_secret_id": SECRET_OTHER, "granted_scopes": [auth_service.GMAIL_SCOPE]},
         ],
         "payroll": [{"account_id": ACCOUNT_ID}, {"account_id": OTHER_ACCOUNT_ID}],
+        # product_events: account FK is ON DELETE SET NULL, so the flow deletes them explicitly.
+        "events": [{"account_id": ACCOUNT_ID}, {"account_id": ACCOUNT_ID}, {"account_id": OTHER_ACCOUNT_ID}],
         "finance": [{"account_id": ACCOUNT_ID}, {"account_id": OTHER_ACCOUNT_ID}],
         # A table whose FK points at allowed_users(id): it does not cascade from accounts.
         "memory_items": [{"user_id": 42, "text": "synthetic note"}, {"user_id": 7, "text": "other note"}],
@@ -218,6 +220,12 @@ class FakeConnection:
             return [{"present": None}]
         if "to_regclass('public.payroll_salary_reports')" in sql:
             return [{"present": "payroll_salary_reports"}]
+        if "to_regclass('public.product_events')" in sql:
+            return [{"present": "product_events"}]
+        if sql.startswith("DELETE FROM product_events"):
+            deleted = [e for e in w["events"] if e["account_id"] == params[0]]
+            w["events"] = [e for e in w["events"] if e["account_id"] != params[0]]
+            return [{"id": index} for index, _ in enumerate(deleted)]
         if sql.startswith("DELETE FROM vault.secrets"):
             for secret_id in params[0]:
                 w["vault"].pop(secret_id, None)
@@ -332,6 +340,7 @@ def _assert_all_data_gone(state):
     assert ACCOUNT_ID not in state["accounts"]
     assert SECRET_GOOGLE not in state["vault"]
     assert {"account_id": ACCOUNT_ID} not in state["payroll"]
+    assert state["events"] == [{"account_id": OTHER_ACCOUNT_ID}]  # analytics of the person go, nobody else's
     assert {"account_id": ACCOUNT_ID} not in state["finance"]
     assert all(g["account_id"] != ACCOUNT_ID for g in state["gmail"])
     assert {"email": EMAIL} not in state["users"]
@@ -560,7 +569,7 @@ def test_missing_admin_key_fails_closed_before_marking(env, monkeypatch):
 
 
 @pytest.mark.parametrize("fault", [
-    "UPDATE allowed_users SET status", "DELETE FROM vault.secrets", "DELETE FROM payroll_salary_reports",
+    "UPDATE allowed_users SET status", "DELETE FROM vault.secrets", "DELETE FROM payroll_salary_reports", "DELETE FROM product_events",
     "DELETE FROM accounts", 'DELETE FROM "public"."memory_items"', "DELETE FROM users", "data_commit",
 ])
 def test_failure_before_the_data_commit_leaves_a_normal_active_account(env, fault):
