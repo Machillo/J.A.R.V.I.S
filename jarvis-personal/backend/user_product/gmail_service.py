@@ -12,6 +12,7 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlencode
 
+import psycopg2
 import requests
 from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
@@ -809,7 +810,63 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
     )
 
 
+INGEST_FAILED_REASON = "No se pudo procesar este aviso. Quedó registrado y se reintenta si vuelve a aparecer en una sincronización."
+# SQLSTATE classes of conditions that pass on their own: connection (08), transaction
+# rollback such as deadlock or serialization (40), resources (53), cancel or
+# shutdown (57), lock not available (55).
+_TRANSIENT_SQLSTATE_CLASSES = frozenset({"08", "40", "53", "55", "57"})
+
+
+def _is_transient_failure(exc: BaseException) -> bool:
+    """A failure the same message would not hit again: the sync must stop and keep its cursor."""
+    from backend.core.database import DatabaseConfigError
+
+    if isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError, DatabaseConfigError)):
+        return True
+    return str(getattr(exc, "pgcode", "") or "")[:2] in _TRANSIENT_SQLSTATE_CLASSES
+
+
 def _ingest_message(
+    connection: dict[str, Any], message_id: str, *, subject: str, sender: str,
+    body: str, attachment_text: str = "", attachment_names: list[str] | None = None,
+    received_at: str | None = None,
+) -> str:
+    """Ingest one message; a message the pipeline cannot store never stops the batch.
+
+    Its transaction is rolled back (nothing half-written), the message is recorded
+    as 'failed' so the loss is visible, and the sync moves on: one message can
+    neither block every later message nor make each sync retry the same batch
+    forever. A 'failed' message seen again (the recent window) is processed again,
+    so a parser fix recovers it; its provider id keeps it from being duplicated.
+    """
+    try:
+        return _ingest_message_once(
+            connection, message_id, subject=subject, sender=sender, body=body,
+            attachment_text=attachment_text, attachment_names=attachment_names, received_at=received_at,
+        )
+    except Exception as exc:
+        if _is_transient_failure(exc):
+            raise  # the batch stops and its cursor stays, so this message is read again
+        # Type and SQLSTATE only: never the message, its sender or amounts.
+        logger.warning("Mail message ingestion failed error=%s sqlstate=%s", type(exc).__name__, getattr(exc, "pgcode", None))
+        with get_connection() as conn:
+            conn.execute(
+                """INSERT INTO finva_email_messages(
+                       connection_id,account_id,workspace_id,provider_message_id,sender,subject,received_at,
+                       bank,status,parse_reason
+                   ) VALUES(%s,%s,%s,%s,%s,%s,%s,'unknown','failed',%s)
+                   ON CONFLICT(connection_id,provider_message_id) DO UPDATE
+                     SET status='failed',parse_reason=EXCLUDED.parse_reason
+                     WHERE finva_email_messages.status='failed'
+                   RETURNING id""",
+                (int(connection["id"]), connection["account_id"], connection["workspace_id"], message_id,
+                 sender[:500], subject[:500], received_at, INGEST_FAILED_REASON),
+            )
+            conn.commit()
+        return "failed"
+
+
+def _ingest_message_once(
     connection: dict[str, Any], message_id: str, *, subject: str, sender: str,
     body: str, attachment_text: str = "", attachment_names: list[str] | None = None,
     received_at: str | None = None,
@@ -850,7 +907,20 @@ def _ingest_message(
             "SELECT id,status FROM finva_email_messages WHERE connection_id=%s AND provider_message_id=%s",
             (int(connection["id"]), message_id),
         ).fetchone()
-        if existing:
+        retry_failed = bool(existing) and existing.get("status") == "failed"
+        if retry_failed:
+            # A message that failed before is processed again under its own row.
+            email_row = existing
+            conn.execute(
+                "UPDATE finva_email_messages SET bank=%s,status=%s,parse_reason=%s WHERE id=%s",
+                (
+                    "ccss" if payroll_report else parsed.get("bank") or "unknown", kind,
+                    (f"Orden patronal CCSS {payroll_report['period_month']} procesada."
+                     if payroll_report else parsed.get("confidence_reason") or parsed.get("ignore_reason") or ""),
+                    int(existing["id"]),
+                ),
+            )
+        elif existing:
             statement_exists = kind == "statement" and conn.execute(
                 "SELECT 1 FROM finva_statement_documents WHERE email_message_id=%s",
                 (int(existing["id"]),),
@@ -1050,6 +1120,7 @@ def _run_sync_connection(connection_id: int, service=None, max_results: int = 10
         "pending": results.count("pending"),
         "payroll_reports": results.count("payroll_statement"),
         "duplicates": results.count("duplicate"),
+        "failed": results.count("failed"),
     }
 
 

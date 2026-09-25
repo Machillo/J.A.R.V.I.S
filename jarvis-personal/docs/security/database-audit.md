@@ -34,7 +34,7 @@ Method: read-only review of `database/` (schema, baseline, migrations) and the b
 - **MEDIUM: `schema.sql` cannot build a fresh database** (UNIQUE constraints are declared before their columns exist). Regenerate it from production (`pg_dump --schema-only`) or mark it as non-authoritative, which matters for disaster recovery.
 - **LOW:**
   - Basic, VIP and Free month views run one ledger query per month, up to ~60 queries per screen. A single `GROUP BY date_trunc('month', …)` would replace them.
-  - `product_events` keeps `workspace_id` after deletion (it is pseudonymous).
+  - RESOLVED for new deletions: `product_events` kept `workspace_id` after account deletion (its account FK only nulls `account_id`). The deletion flow now deletes the person's events. `backend/scripts/verify_account_deletion.py` checks every `public` uuid/text column (and, when given, the email) for a deleted account; it does not see legacy integer ids (ambiguous across id spaces), the `auth` schema, Vault, backups or third parties. The ~470 rows left by earlier deletions are evidence for E13/E14 of the incident investigation: deleting them is a human decision after that investigation closes (query in the PR).
   - The `ai_*` runtime usage tables have no workspace FK.
   - Some Owner-only tables have `workspace_id` without an FK.
 

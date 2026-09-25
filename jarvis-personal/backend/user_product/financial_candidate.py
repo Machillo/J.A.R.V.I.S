@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from backend.finance.category_catalog import normalize_category
+from backend.user_product.movement_direction import canonical_direction
 
 
 PARSER_NAME = "jarvis_financial_email"
@@ -39,14 +40,7 @@ def canonical_candidate(
     # Parser amounts are normalized to CRC today; preserve the source currency
     # separately so consumers never interpret a converted amount as USD.
     currency = str(parsed.get("currency") or "CRC").upper()
-    direction = str(parsed.get("movement_direction") or "unknown").lower()
-    if direction not in {"in", "out", "internal", "unknown"}:
-        direction = "unknown"
-    if direction == "unknown":
-        direction = {"expense": "out", "income": "in", "debt_payment": "out"}.get(
-            transaction_type,
-            "unknown",
-        )
+    direction = canonical_direction(parsed.get("movement_direction"), transaction_type)
 
     return {
         "movement_index": movement_index,
@@ -82,5 +76,6 @@ def canonical_candidate(
         # Parser hints are not proof of ownership. Phase 1D only marks an
         # internal transfer after both endpoints match user-confirmed accounts.
         "is_internal_transfer": False,
-        "raw_payload": parsed,
+        # The resolution re-applies raw_payload's direction: store the canonical one.
+        "raw_payload": {**parsed, "movement_direction": direction},
     }
