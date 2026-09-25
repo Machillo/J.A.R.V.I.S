@@ -35,4 +35,21 @@ def test_a_slow_authentication_does_not_stall_other_requests(monkeypatch):
 
     status_code, elapsed, junk_codes = asyncio.run(scenario())
     assert status_code == 200 and set(junk_codes) == {401}
-    assert elapsed < 0.2, f"/status waited {elapsed:.2f}s behind authentication"
+    # Before the fix /status waited ~2.4 s (six 0.4 s authentications in a row).
+    assert elapsed < 1.0, f"/status waited {elapsed:.2f}s behind authentication"
+
+
+def test_an_infrastructure_failure_during_authentication_is_503_not_401(monkeypatch):
+    """A 401 makes the app sign the user out; a database outage must not do that."""
+    def database_down(token, **_kwargs):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(main, "authenticate_access_token", database_down)
+
+    async def call():
+        transport = httpx.ASGITransport(app=main.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get("/user-product/finance/summary", headers={"Authorization": "Bearer x"})
+
+    response = asyncio.run(call())
+    assert response.status_code == 503

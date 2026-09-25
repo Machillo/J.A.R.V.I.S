@@ -269,8 +269,12 @@ async def auth_middleware(request: Request, call_next):
                 else:
                     user = await run_in_threadpool(authenticate_access_token, access_token)
     except Exception as exc:
-        status_code = getattr(exc, "status_code", 401)
-        detail = getattr(exc, "detail", "No se pudo autenticar el usuario.")
+        # An infrastructure failure (database, network) is not an invalid session:
+        # answer 503 so the app retries instead of signing the user out on a 401.
+        if not hasattr(exc, "status_code"):
+            logger.error("Authentication failed without a verdict id=%s error=%s", request_id, _safe_exception_summary(exc))
+        status_code = getattr(exc, "status_code", 503)
+        detail = getattr(exc, "detail", "No pudimos verificar tu sesión en este momento. Intentá de nuevo.")
         return JSONResponse(
             status_code=status_code,
             content={"detail": detail},

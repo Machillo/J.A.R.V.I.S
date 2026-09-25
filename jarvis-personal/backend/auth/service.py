@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import psycopg2
 import requests
 from fastapi import HTTPException, status
 
@@ -762,10 +763,18 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
     # Unified JARVIS: a valid Google/Supabase identity gets its own account + Personal workspace.
     # allowed_users remains only as the temporary legacy bridge required by older Personal tables.
     if not app_user:
-        with get_connection() as conn:
-            _create_personal_account(conn, supabase_user)
-            conn.commit()
+        # Two first requests of a new user can race here (authentication runs in
+        # parallel): the unique email / account keys let one win, and the other
+        # reads the winner's rows instead of failing the sign-in.
+        try:
+            with get_connection() as conn:
+                _create_personal_account(conn, supabase_user)
+                conn.commit()
+        except psycopg2.errors.UniqueViolation:
+            logger.info("First sign-in raced with a concurrent one; using the account it created")
         app_user = get_allowed_user_by_email(supabase_user["email"])
+        if not app_user:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No pudimos preparar tu cuenta. Intentá de nuevo.")
 
     with get_connection() as conn:
         # Stable identity: an existing account is bound to one Supabase user. A
