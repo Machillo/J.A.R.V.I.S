@@ -331,7 +331,9 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
                     received_at=full.get("receivedDateTime"),
                 ))
             except Exception:
-                raise  # Preserve the scan cursor so a failed message is retried.
+                # A fetch failure keeps the scan cursor so the message is retried;
+                # an ingestion failure never reaches here (it is recorded as 'failed').
+                raise
         page = response.get("@odata.nextLink")
         if not page or initial or len(results) >= max_results:
             break
@@ -351,4 +353,5 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
     return {"status": "ok", "scan_scope": _initial_scan_scope(connection) if initial else "recent",
             "initial_scan_complete": not initial or not page, "found": len(results),
             "auto_saved": results.count("auto_saved"), "pending": results.count("pending"),
-            "payroll_reports": results.count("payroll_statement"), "duplicates": results.count("duplicate")}
+            "payroll_reports": results.count("payroll_statement"), "duplicates": results.count("duplicate"),
+            "failed": results.count("failed")}
