@@ -91,6 +91,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
    - **Verification queries** belong in the postflight, not after `COMMIT`.
 
 5. **Postflight.** Run the migration's postflight. Any failing row means stop, investigate, and use the migration's rollback file if it has one.
+   - **Rollback files** live in `database/rollback/`, so `apply_migration.py` refuses them by design. They are the one allowed exception to §3:
+     - the BACKUP_VERIFIED gate is open for the same database;
+     - a second person has read the file and agreed with the reason;
+     - it runs with `psql -v ON_ERROR_STOP=1` over a direct session connection, as the owner role, in the file's single transaction.
 6. **Quiet window.** Migrations set their own `lock_timeout`. If it fires, nothing was applied; retry later.
 
 ## 3. Destructive SQL policy

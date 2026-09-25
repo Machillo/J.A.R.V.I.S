@@ -1,5 +1,12 @@
--- MANUAL rollback of 20260925120000_financial_ownership_integrity.sql.
+-- MANUAL rollback of 20260925140000_financial_ownership_integrity.sql.
 -- Human decision only; never run automatically. No financial row is deleted.
+--
+-- How to run it (apply_migration.py refuses files outside database/migrations,
+-- and docs/security/migration-safety-protocol.md §2 allows this exception):
+--   1. BACKUP_VERIFIED gate open for this database (db_backup_verify.py gate);
+--   2. a second person reads this file and the reason for rolling back;
+--   3. psql -v ON_ERROR_STOP=1 over a direct session connection as postgres,
+--      one transaction (this file's BEGIN/COMMIT); run step 2 only if decided.
 --
 -- Step 1 (always): remove the write and delete guards (triggers, CHECK, parent
 -- FK and its unique index). The read-only audit functions, the snapshots, the

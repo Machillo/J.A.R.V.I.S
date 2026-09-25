@@ -1,7 +1,7 @@
 # Canonical identity migration (legacy user_id retirement)
 
 Status: plan. Phase A is prepared by the financial ownership integrity migration
-(`database/migrations/20260925120000_financial_ownership_integrity.sql`), which
+(`database/migrations/20260925140000_financial_ownership_integrity.sql`), which
 has not been applied. Every later phase needs its own reviewed PR, and a human
 gate for any migration.
 

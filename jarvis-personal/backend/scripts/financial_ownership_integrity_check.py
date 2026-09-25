@@ -22,7 +22,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION = ROOT / "database/migrations/20260925120000_financial_ownership_integrity.sql"
+MIGRATION = ROOT / "database/migrations/20260925140000_financial_ownership_integrity.sql"
 BLOCK_START = "-- BEGIN DINCR OWNERSHIP AUDIT FUNCTIONS"
 BLOCK_END = "-- END DINCR OWNERSHIP AUDIT FUNCTIONS"
 FAILING = ("SAFE_AUTO_FIX", "NEEDS_REVIEW", "ORPHAN")

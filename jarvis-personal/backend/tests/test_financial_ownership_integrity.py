@@ -13,10 +13,10 @@ from backend.scripts import financial_ownership_integrity_check as check
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION = ROOT / "database/migrations/20260925120000_financial_ownership_integrity.sql"
+MIGRATION = ROOT / "database/migrations/20260925140000_financial_ownership_integrity.sql"
 PREFLIGHT = ROOT / "database/audits/financial_ownership_preflight.sql"
 EVIDENCE = ROOT / "database/audits/financial_ownership_evidence.sql"
-ROLLBACK = ROOT / "database/rollback/20260925120000_financial_ownership_integrity_rollback.sql"
+ROLLBACK = ROOT / "database/rollback/20260925140000_financial_ownership_integrity_rollback.sql"
 # Financial tables created after Phase 2A that carry the same dual legacy user_id.
 POST_PHASE_2A = ["account_balances", "account_balance_history", "net_worth_snapshots", "payroll_salary_reports"]
 # Workspace-owned financial tables without a legacy user_id: deletion guards only.

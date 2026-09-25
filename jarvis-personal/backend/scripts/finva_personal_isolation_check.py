@@ -365,12 +365,12 @@ def main():
                         (ctx["debt"]["id"], ctx["debt"]["workspace_id"]),
                     )
                     conn.execute(
-                        "DELETE FROM debts WHERE id=%s AND workspace_id=%s AND name LIKE %s",
-                        (ctx["debt"]["id"], ctx["debt"]["workspace_id"], f"ISOLATION_DEBT_%_{marker}"),
+                        "DELETE FROM debts WHERE id=%s AND workspace_id=%s AND name=%s",
+                        (ctx["debt"]["id"], ctx["debt"]["workspace_id"], f"ISOLATION_DEBT_{marker}"),
                     )
                     conn.execute(
-                        "DELETE FROM financial_goals WHERE id=%s AND workspace_id=%s AND name LIKE %s",
-                        (ctx["goal"]["id"], ctx["goal"]["workspace_id"], f"ISOLATION_GOAL_%_{marker}"),
+                        "DELETE FROM financial_goals WHERE id=%s AND workspace_id=%s AND name=%s",
+                        (ctx["goal"]["id"], ctx["goal"]["workspace_id"], f"ISOLATION_GOAL_{marker}"),
                     )
                 conn.commit()
         except Exception as cleanup_exc:

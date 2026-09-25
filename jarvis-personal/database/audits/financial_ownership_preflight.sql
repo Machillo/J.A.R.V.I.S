@@ -1,7 +1,7 @@
 -- DINCR financial ownership PREFLIGHT / POSTFLIGHT (read-only).
 --
 -- Run the whole file in the Supabase SQL editor (or psql) before AND after the
--- migration 20260925120000_financial_ownership_integrity.sql. It creates the
+-- migration 20260925140000_financial_ownership_integrity.sql. It creates the
 -- audit functions only in pg_temp (session-local, never persisted), switches the
 -- transaction to READ ONLY and returns ONE result set with identifiers only:
 -- no names, emails, amounts or descriptions. Nothing is committed; temp

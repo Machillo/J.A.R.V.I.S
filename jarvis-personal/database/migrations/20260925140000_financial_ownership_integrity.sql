@@ -889,7 +889,9 @@ BEGIN
         table_name, row_count, row_ids, workspace_ids, db_role,
         application_name, transaction_id)
     SELECT TG_TABLE_NAME, COUNT(*),
-           COALESCE(array_agg(o.id ORDER BY o.id) FILTER (WHERE w.id IS NOT NULL), ARRAY[]::BIGINT[]),
+           -- Ids of live-workspace rows and of rows without a workspace (the ones
+           -- whose owner is unclear); a deleted workspace's cascade is a count.
+           COALESCE(array_agg(o.id ORDER BY o.id) FILTER (WHERE w.id IS NOT NULL OR o.workspace_id IS NULL), ARRAY[]::BIGINT[]),
            COALESCE(array_agg(DISTINCT o.workspace_id) FILTER (WHERE w.id IS NOT NULL), ARRAY[]::UUID[]),
            session_user::TEXT,
            NULLIF(current_setting('application_name', true), ''), txid_current()
@@ -917,11 +919,14 @@ BEGIN
     -- pooler ('Supavisor'); any other process must declare its workspace or
     -- its deletes of live rows are rejected here (fail closed). Scripts using
     -- backend.core.database identify as 'dincr-script' and must declare.
-    IF v_owners > 0 AND COALESCE(current_setting('application_name', true), '') NOT IN ('Supavisor', 'dincr-backend') THEN
+    -- Rows without a workspace belong to no declared workspace: deleting them
+    -- takes the explicit declaration 'none'. Rows of a workspace deleted in the
+    -- same statement (a manual account deletion) need that workspace declared.
+    IF COALESCE(current_setting('application_name', true), '') NOT IN ('Supavisor', 'dincr-backend') THEN
         SELECT COUNT(*) INTO v_outside
         FROM old_rows o
-        JOIN public.workspaces w ON w.id = o.workspace_id
-        WHERE v_declared IS NULL OR o.workspace_id::TEXT <> v_declared;
+        WHERE (o.workspace_id IS NULL AND v_declared IS DISTINCT FROM 'none')
+           OR (o.workspace_id IS NOT NULL AND (v_declared IS NULL OR o.workspace_id::TEXT <> v_declared));
         IF v_outside > 0 THEN
             RAISE EXCEPTION 'manual financial delete on % touches % rows outside the declared workspace', TG_TABLE_NAME, v_outside
                 USING ERRCODE = '23514',
@@ -1021,10 +1026,12 @@ DECLARE
     v_missing BIGINT;
     v_absent TEXT;
 BEGIN
-    -- The Basic tables must already exist (20260925130000_request_path_schema.sql
+    -- The workspace-only financial tables must already exist
+    -- (20260916_finva_scheduled_savings.sql and 20260925130000_request_path_schema.sql
     -- applied first); otherwise their deletion guards would be skipped silently.
     SELECT string_agg(t, ', ') INTO v_absent
-    FROM unnest(ARRAY['finva_budget_items', 'finva_recurring_items', 'finva_goal_contributions']) t
+    FROM unnest(ARRAY['finva_budget_items', 'finva_recurring_items', 'finva_goal_contributions',
+                      'finva_savings_plans', 'finva_savings_plan_contributions']) t
     WHERE to_regclass(format('public.%I', t)) IS NULL;
     IF v_absent IS NOT NULL THEN
         RAISE EXCEPTION 'financial ownership integrity: apply 20260925130000_request_path_schema.sql first (missing: %)', v_absent;
@@ -1066,6 +1073,6 @@ END $$;
 COMMIT;
 
 -- Recovery (manual, human decision): database/rollback/
--- 20260925120000_financial_ownership_integrity_rollback.sql removes the guards and,
+-- 20260925140000_financial_ownership_integrity_rollback.sql removes the guards and,
 -- optionally, reverts the logged repairs of one run (tested in
 -- backend/tests/test_financial_ownership_integrity_pg.py).

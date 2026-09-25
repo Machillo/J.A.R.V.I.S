@@ -24,7 +24,7 @@ psycopg2 = pytest.importorskip("psycopg2")
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE = ROOT / "database/baseline/v1_identity_ownership.sql"
 FIXTURE = Path(__file__).resolve().parent / "fixtures/ownership_financial_tables.sql"
-MIGRATION = ROOT / "database/migrations/20260925120000_financial_ownership_integrity.sql"
+MIGRATION = ROOT / "database/migrations/20260925140000_financial_ownership_integrity.sql"
 
 WS_A = "00000000-0000-4000-8000-00000000000a"
 WS_B = "00000000-0000-4000-8000-00000000000b"
@@ -605,7 +605,7 @@ def test_account_deletion_still_cascades_with_the_guards(layout):
         assert cur.fetchone()[0] == 2  # nobody else's rows were touched
 
 
-ROLLBACK = ROOT / "database/rollback/20260925120000_financial_ownership_integrity_rollback.sql"
+ROLLBACK = ROOT / "database/rollback/20260925140000_financial_ownership_integrity_rollback.sql"
 
 
 def test_rollback_removes_guards_keeps_evidence_and_can_revert_a_run(seeded):
@@ -1074,3 +1074,51 @@ def test_migration_refuses_to_run_before_the_request_path_schema(layout_fk):
         cur.execute("ROLLBACK")
         cur.execute("SELECT to_regprocedure('public.dincr_guard_financial_delete()') IS NULL")
         assert cur.fetchone()[0] is True  # nothing was applied
+
+
+def _manual(cur, declared=None):
+    cur.execute("BEGIN")
+    cur.execute("SET LOCAL application_name = 'supabase/dashboard-query-editor'")
+    if declared is not None:
+        cur.execute("SELECT set_config('dincr.delete_workspace', %s, true)", (declared,))
+
+
+def test_rows_without_a_workspace_need_an_explicit_declaration(layout_fk):
+    """Orphans (owner unclear) cannot ride along with a declared workspace's cleanup."""
+    conn, a1 = layout_fk["conn"], _ids("a1")
+    with conn.cursor() as cur:
+        orphan = _debt(cur, a1["users"], None, name="Orphan debt")
+        own = _debt(cur, a1["users"], a1["workspace"])
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        _manual(cur, a1["workspace"])
+        with pytest.raises(psycopg2.errors.CheckViolation, match="outside the declared workspace"):
+            cur.execute("DELETE FROM debts WHERE workspace_id = %s OR workspace_id IS NULL", (a1["workspace"],))
+        cur.execute("ROLLBACK")
+        _manual(cur)
+        with pytest.raises(psycopg2.errors.CheckViolation, match="outside the declared workspace"):
+            cur.execute("DELETE FROM debts WHERE id = %s", (orphan,))
+        cur.execute("ROLLBACK")
+        _manual(cur, "none")
+        cur.execute("DELETE FROM debts WHERE id = %s AND workspace_id IS NULL", (orphan,))
+        cur.execute("COMMIT")
+        cur.execute("SELECT row_ids FROM financial_ownership_delete_log WHERE table_name = 'debts' ORDER BY id DESC LIMIT 1")
+        assert cur.fetchone()[0] == [orphan]  # an orphan's id is kept as evidence
+        cur.execute("SELECT COUNT(*) FROM debts WHERE id = %s", (own,))
+        assert cur.fetchone()[0] == 1
+
+
+def test_a_manual_account_deletion_must_declare_that_workspace(layout_fk):
+    conn, a3 = layout_fk["conn"], _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        _debt(cur, a3["users"], a3["workspace"])
+        _manual(cur)
+        with pytest.raises(psycopg2.errors.CheckViolation, match="outside the declared workspace"):
+            cur.execute("DELETE FROM accounts WHERE id = %s", (a3["account"],))
+        cur.execute("ROLLBACK")
+        _manual(cur, a3["workspace"])
+        cur.execute("DELETE FROM accounts WHERE id = %s", (a3["account"],))
+        cur.execute("COMMIT")
+        cur.execute("SELECT COUNT(*) FROM debts WHERE workspace_id = %s", (a3["workspace"],))
+        assert cur.fetchone()[0] == 0
