@@ -10,6 +10,13 @@ Rules for every change to the production database: migrations, manual SQL, resto
 
 Every rule below breaks one link of that chain: ad-hoc destructive SQL, selection by legacy ids, and a missing backup.
 
+## 0. Running the tooling
+
+- **Runtime:** Python 3.11 (`runtime.txt`) with `jarvis-personal/requirements.txt` installed (for example a dedicated venv).
+- **Canonical form, from `jarvis-personal/`:** `python3.11 -m backend.scripts.<apply_migration|db_backup_verify> …`. Running the file directly (`python3.11 backend/scripts/apply_migration.py …`) also works.
+- **Older Python:** anything older stops with a clear message instead of an import error. The pinned dependencies, e.g. `python-dotenv` 1.2, do not install on Python 3.9.
+- **Missing dependency:** the scripts name the missing module and the install step.
+
 ## 1. The BACKUP_VERIFIED gate
 
 **No production migration, manual `UPDATE`/`DELETE`, bulk import or restore runs without a verified backup taken less than 6 hours earlier.**
@@ -20,10 +27,10 @@ A backup counts as verified only when it has been **restored** and the restored 
 # 1. Take the backup and prove it restores.
 export DINCR_BACKUP_SOURCE_DSN=...   # direct (session) connection; never commit or paste it
 export DINCR_BACKUP_SCRATCH_DSN=...  # an EMPTY scratch database (see below)
-python backend/scripts/db_backup_verify.py backup --out ~/DINCR-backups
+python3.11 -m backend.scripts.db_backup_verify backup --out ~/DINCR-backups
 
 # 2. Check the gate (exit 0 only when open).
-python backend/scripts/db_backup_verify.py gate --out ~/DINCR-backups --max-age-hours 6
+python3.11 -m backend.scripts.db_backup_verify gate --out ~/DINCR-backups --max-age-hours 6
 ```
 
 **The scratch database** must be empty, and it must already have what the dumped schemas depend on:
@@ -72,7 +79,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
    ```bash
    git fetch origin
    export DINCR_MIGRATION_DSN=...    # direct session connection
-   python backend/scripts/apply_migration.py \
+   python3.11 -m backend.scripts.apply_migration \
        --file database/migrations/<name>.sql --backup-dir ~/DINCR-backups \
        --confirm <name>.sql
    ```

@@ -31,6 +31,20 @@ See docs/security/migration-safety-protocol.md.
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Supported runtime: Python 3.11 (runtime.txt) with requirements.txt installed.
+# Canonical invocation, from jarvis-personal/:  python3.11 -m backend.scripts.db_backup_verify ...
+# Running the file directly also works: the project root is put on sys.path.
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        f"db_backup_verify needs Python 3.11 (found {sys.version.split()[0]}). From jarvis-personal/ run: "
+        "python3.11 -m backend.scripts.db_backup_verify ..."
+    )
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 import argparse
 import datetime as dt
 import hashlib
@@ -39,11 +53,13 @@ import os
 import re
 import shutil
 import subprocess
-import sys
-from pathlib import Path
 
-import psycopg2
-from psycopg2.extensions import parse_dsn
+try:
+    import psycopg2
+    from psycopg2.extensions import parse_dsn
+except ModuleNotFoundError as missing:  # e.g. psycopg2 or python-dotenv not installed for this interpreter
+    raise SystemExit(f"db_backup_verify: missing dependency '{missing.name}'. Install jarvis-personal/requirements.txt "
+                     "for Python 3.11 and run from jarvis-personal/ with python3.11 -m backend.scripts.db_backup_verify") from None
 
 DEFAULT_SCHEMAS = ("public",)
 EXIT_GATE_CLOSED = 2
