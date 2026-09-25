@@ -4,7 +4,7 @@ DINCR Owner (JARVIS) is internal and never purchasable. The role is **explicit**
 
 | Key | Where | Who changes it |
 |---|---|---|
-| Stored role `owner` | `allowed_users.role` and `accounts.role` (always equal) | Only `backend/scripts/set_owner_role.py`, a reviewed command run behind BACKUP_VERIFIED |
+| Stored role `owner` | `allowed_users.role` and `accounts.role` (always equal) | Only `backend/scripts/set_owner_role.py`, a reviewed command run after the BACKUP_VERIFIED step (not enforced by the script); it also moves the Owner subscription (VIP `owner` on grant, Free on revoke) |
 | `OWNER_EMAILS` | Render environment | A human, per deployment |
 
 A session is Owner only when **both** keys agree (`backend/auth/owner_role.py`). The same rule applies to the Owner bridge.

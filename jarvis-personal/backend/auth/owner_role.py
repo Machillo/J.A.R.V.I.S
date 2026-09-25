@@ -33,6 +33,26 @@ def owner_enabled(email: str | None) -> bool:
     return bool(email) and str(email).strip().lower() in owner_allowlist()
 
 
+def enabled_owner_email(conn) -> str:
+    """The single stored Owner that this deployment also lists; fail closed otherwise.
+
+    For Owner-only background integrations that must pick "the Owner" without a
+    session: being listed alone never qualifies (a listed User is not an Owner).
+    """
+    rows = conn.execute(
+        "SELECT email FROM allowed_users WHERE role=%s AND status='active'", (OWNER_ROLE,)
+    ).fetchall() or []
+    enabled = sorted({str(row["email"]).strip().lower() for row in rows if owner_enabled(row.get("email"))})
+    if len(enabled) != 1:
+        raise RuntimeError("No hay exactamente un Owner habilitado en este entorno.")
+    return enabled[0]
+
+
+def session_role(stored_role: str | None, email: str | None) -> str:
+    """Role for a path that must not fail (finishing a deletion): an ungated Owner is a User there."""
+    return stored_role if stored_role != OWNER_ROLE or owner_enabled(email) else "user"
+
+
 def effective_role(stored_role: str | None, email: str | None, *, account_ref: object = None) -> str:
     """The role a session gets: the stored one, with the Owner role gated by the allowlist."""
     if stored_role != OWNER_ROLE:
@@ -40,5 +60,5 @@ def effective_role(stored_role: str | None, email: str | None, *, account_ref: o
     if owner_enabled(email):
         return OWNER_ROLE
     # Fail closed without demoting: no Owner session, no User session, no write.
-    logger.warning("Owner login refused: the account is not in this deployment's Owner allowlist ref=%s", account_ref)
+    logger.warning("Owner login refused: the account is not in this deployment's Owner allowlist")
     raise HTTPException(status_code=403, detail=OWNER_NOT_ENABLED)

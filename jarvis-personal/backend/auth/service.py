@@ -781,7 +781,7 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
             return {
                 "id": app_user["id"],
                 "email": app_user["email"],
-                "role": app_user["role"],
+                "role": owner_role.session_role(app_user["role"], app_user["email"]),
                 "status": app_user["status"],
                 "supabase_user_id": supabase_user["supabase_user_id"],
             }
