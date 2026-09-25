@@ -500,6 +500,7 @@ def test_gmail_consent_without_the_read_permission_attaches_nothing(env, granted
     env.provider.google_scope = granted
     status, params = callback("gmail", *env.provider.authorize(start("gmail", A), "a@example.com"))
     assert status == "permission_missing" and "completion" not in params
-    assert env.provider.revoked == ["refresh-for-a@example.com"]  # the unusable grant is not kept
+    assert env.provider.revoked == []  # never revoked: it would revoke the user's other grants to DINCR's client
+    assert env.db.state["vault"] == {}  # and never stored
     assert connections_of(env, A) == []
     assert next(iter(env.db.state["flows"].values()))["status"] == "failed"

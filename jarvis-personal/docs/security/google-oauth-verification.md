@@ -166,12 +166,12 @@ If Supabase sign-in uses an OAuth client of **another** Google Cloud project, ro
 | 0:00 | The app icon and name "DINCR" | "DINCR is a personal finance app for Costa Rica. This video shows how it uses the Gmail read-only scope." |
 | 0:15 | Sign in with Google | "Users sign in with Google (openid, email, profile)." |
 | 0:35 | Perfil → Correos financieros (VIP) | "Connecting Gmail is optional, VIP-only and started by the user." |
-| 0:50 | The in-app explanation sheet: what is read (only notices from a fixed list of bank and payroll senders), what is stored, how to disconnect; the user accepts | "Before Google's screen, DINCR explains exactly what it reads and stores." |
+| 0:50 | The in-app explanation sheet: what is read (only notices from allowlisted bank senders and CCSS payroll orders), what is stored, how to disconnect; the user accepts | "Before Google's screen, DINCR explains exactly what it reads and stores." |
 | 1:10 | Tap "Conectar Gmail" → Google account chooser → **consent screen**. Pause on it and **zoom into the app name "DINCR" and the permission "View your email messages and settings"** | "The consent screen shows DINCR and the single Gmail permission: read-only." |
 | 1:40 | Tick the permission and continue; back in the app, "Conectado" | "The token is stored encrypted on our server and never on the phone." |
-| 1:55 | The list of detected movements; open one; show amount, date, bank, last four digits; tap **Aceptar**, then **Corregir** on another, **Rechazar** on a third | "Each notice becomes a proposed transaction; the user accepts, corrects or rejects it. Nothing is written without review." |
-| 2:40 | Show a statement (PDF attachment) result and the aguinaldo estimate, if the test mailbox has them | "PDF statements from the same senders are read to reconcile balances. Bodies and PDFs are not stored." |
-| 3:00 | Perfil → Correos financieros → **Desconectar** | "Disconnecting deletes the token and revokes it with Google." |
+| 1:55 | The list of detected movements; open one; show amount, date, description, bank, last four digits; tap **Aceptar**, then **Corregir** on another, **Rechazar** on a third | "Each bank notice becomes a proposed transaction; the user accepts, corrects or rejects it. No transaction is recorded without that review." |
+| 2:40 | Show a statement (PDF attachment) result and the aguinaldo estimate, if the test mailbox has them | "Statements from the same banks propose their movements and are matched with notices already detected. Payroll orders from the social-security institution (CCSS) feed the year-end bonus estimate. Bodies and PDFs are not stored." |
+| 3:00 | Perfil → Correos financieros → **Desconectar** | "Disconnecting deletes the token and asks Google to revoke it." |
 | 3:15 | End card: the privacy policy URL and the Limited Use sentence | "DINCR complies with the Google API Services User Data Policy, including Limited Use. No Gmail data reaches any AI provider." |
 
 Before uploading, check:
@@ -189,7 +189,7 @@ Before uploading, check:
 - **Mailbox content:** forward to it a few synthetic notices from the supported senders, or use `backend/scripts/seed_review_demo.py` so the review list is not empty. **MANUAL:** confirm the reviewer will see at least one notice.
 - **Access:**
   - the app through Google Play internal testing (add the reviewer address to the testers list) or TestFlight;
-  - VIP comes from the launch promotion (no payment), or an Owner courtesy on that account;
+  - VIP comes from the launch promotion (no payment), or an Owner courtesy with a future end date on that account;
   - `gmail_automation` enabled in production.
 - **Steps for the reviewer:** install → Sign in with Google (test account) → accept Terms and Privacy → choose VIP → Perfil → Correos financieros → read the explanation → Conectar Gmail → allow → review the detected movements → optionally Desconectar.
 
@@ -201,15 +201,28 @@ Before uploading, check:
 | `gmail.addons.current.message.readonly` / `.metadata` | Only valid inside a Gmail add-on for the message the user opens; DINCR is a mobile app that processes notices in the background. |
 | `gmail.labels`, `gmail.send`, `gmail.compose`, `gmail.insert` | Do not allow reading. |
 | `gmail.modify` / full `mail.google.com` | Broader; DINCR never changes, sends or deletes mail. |
-| No Gmail scope (the user forwards notices to a DINCR address) | Considered. It avoids the restricted scope but moves every bank notice through a third inbox DINCR controls, loses PDF statements and history, and depends on bank-specific forwarding rules. Kept as a possible future alternative; the in-app Gmail connection stays optional and users can always enter data manually. |
+| No Gmail scope (the user forwards notices to a DINCR address) | Considered. It avoids the restricted scope but moves every bank notice through a third inbox DINCR controls, loses the mailbox history, and depends on bank-specific forwarding rules the user must set up. Kept as a possible future alternative; the in-app Gmail connection stays optional and users can always enter data manually. |
 
 **Minimization inside the scope** (these are what the justification must stress):
-- one search restricted to a fixed allowlist of bank and CCSS payroll sender addresses (`FINVA_QUERY`), excluding spam and trash, with a bounded window;
-- the From header is re-verified per message (`bank_sender_allowed`);
-- bodies and PDFs are processed in memory and not stored; only the extracted fields, sender/subject for 90 days and review evidence for 30 days;
-- deterministic parsers, no AI, no human reading of mail;
-- the token is used only by the backend and revoked on disconnect or account deletion;
-- a consent without the Gmail permission is refused and its grant revoked (`permission_missing`).
+- two searches restricted to allowlisted senders, excluding spam and trash, with a bounded date window:
+  - bank notices (`FINVA_QUERY`; **MANUAL:** `FINVA_GMAIL_QUERY` must not be overridden in Render);
+  - CCSS payroll orders (`_aguinaldo_gmail_query`);
+- the From header is re-verified per message: `bank_sender_allowed` for bank notices, and the CCSS sender for payroll orders.
+  **The CCSS part is true only once #253 is deployed.** Before it, the payroll search also matched a subject from any sender. See the pre-send gates below.
+- bodies and PDFs are processed in memory and not stored. What is kept:
+  - the extracted fields;
+  - sender and subject, cleared 90 days after receipt once no review is pending;
+  - review evidence (`raw_payload`), cleared 30 days after review.
+  **MANUAL:** the maintenance cron runs, and the retention env vars are not overridden;
+- deterministic parsers, no AI;
+- the token is used only by the backend; disconnecting or deleting the account deletes it and requests revocation;
+- a consent without the Gmail permission is refused and never stored (`permission_missing`). It is not revoked: revoking any token revokes the user's whole grant to DINCR's client.
+
+**Pre-send gates** (the reply and the Console text below are true only when all of these hold):
+1. This PR is deployed.
+2. #253 is merged and deployed: CCSS payroll orders are read only from the CCSS sender, and the aguinaldo search no longer matches a subject alone.
+3. The legacy Owner bodies are cleared from `email_ingested_messages` (section 5). This is a human-approved destructive update; first check `SELECT count(*) FROM email_ingested_messages WHERE raw_body IS NOT NULL OR body_text IS NOT NULL`, read-only.
+4. **Human access.** The Owner operations dashboard (`product_ops/email_monitor_dashboard.py`) lists Gmail-derived counts per user email. Limited Use allows human access for operations only on aggregated, anonymized data. Remove the per-user email from that view first; it is tracked as a follow-up.
 
 ## 9. CASA
 
@@ -226,7 +239,7 @@ Project `jarvis-auth-498317`. Record evidence (a screenshot without secrets) of 
 | 3 | Data Access → **demo video link** | Current video | The new video (section 8), unlisted YouTube | Video | The URL |
 | 4 | **Branding** | Read | App name `DINCR`; support email; logo; homepage `https://dincr.com/`; privacy `https://dincr.com/privacidad/`; terms `https://dincr.com/terminos/`; authorized domains `dincr.com` (+ the Supabase domain only if sign-in uses this project) | Branding | Screenshot |
 | 5 | **Clients** → the web client whose ID equals `FINVA_GMAIL_CLIENT_ID` in Render | Read the redirect URIs | Only `https://api.dincr.com/user-product/vip/gmail/callback` (+ the Supabase callback only if sign-in uses this client). Remove legacy Render and OAuth Playground URIs (section 6). | Redirect URIs | Screenshot |
-| 6 | Clients → other clients | Read | Delete clients that no code uses (after confirming none is the Supabase or Firebase one) | Clients | List before/after |
+| 6 | Clients → other clients | Read | **HUMAN GATE, irreversible:** deleting a client invalidates every token it issued. Delete only a client that is none of: `FINVA_GMAIL_CLIENT_ID`, the `GMAIL_CLIENT_ID` fallback, the Supabase Google provider or Firebase. | Clients | List before/after |
 | 7 | **Audience** | In production | Unchanged | Publishing status | — |
 | 8 | **Verification Center** | "Action needed" | Resubmit only after 1–5 are done and the new video is uploaded | Submission | Screenshot of the submitted state |
 
@@ -241,13 +254,24 @@ Render and Supabase checks that must agree:
 >
 > Thank you for the feedback on DINCR (project jarvis-auth-498317). We have aligned the requested scopes, the Cloud Console configuration, the consent screen and the demo video, and we are providing a more detailed justification for gmail.readonly.
 >
-> **Scopes.** The app requests exactly: openid, email and profile (Google Sign-In) and https://www.googleapis.com/auth/gmail.readonly (optional "Financial emails" feature). No other scope is requested in code or configured in Console. The Gmail authorization request asks for gmail.readonly alone (it does not merge previously granted scopes), and a consent in which the user does not grant it is rejected and revoked.
+> **Scopes.** The app requests exactly: openid, email and profile (Google Sign-In) and https://www.googleapis.com/auth/gmail.readonly (optional "Financial emails" feature). No other scope is requested in code or configured in Console. The Gmail authorization request asks for gmail.readonly alone (it does not merge previously granted scopes), and a consent in which the user does not grant it is rejected and nothing is stored.
 >
-> **Why gmail.readonly is needed.** DINCR is a personal finance app for Costa Rica. With the user's explicit, optional consent (VIP plan, Profile → Financial emails), DINCR searches the user's mailbox only for messages from a fixed list of bank and social-security payroll sender addresses, excluding spam and trash. From each notice it extracts the amount, date, currency, bank and card's last four digits, and from PDF statements attached to those messages it reconciles account balances. Each result is shown to the user as a proposed transaction that they accept, correct or reject; nothing is recorded without that review. This requires reading message bodies and PDF attachments, and using Gmail search to restrict access to the allowed senders.
+> **Why gmail.readonly is needed.** DINCR is a personal finance app for Costa Rica. With the user's explicit, optional consent (VIP plan, Profile → Financial emails), DINCR searches the user's mailbox only for messages from an allowlist of bank sender addresses and from the national social-security institution (CCSS), excluding spam and trash, within a bounded date range. Every message's sender is verified again before it is processed.
+- **Bank notices:** DINCR extracts the amount, date, currency, description or merchant, counterparty, reference, bank and the card's last four digits.
+- **PDF account statements** attached to those messages: it extracts their movements and matches them with notices already detected.
+- **Review:** each result is shown to the user as a proposed transaction that they accept, correct or reject. No transaction is recorded without that review.
+- **CCSS payroll orders:** it extracts the reported salary and period to estimate the legally mandated year-end bonus (aguinaldo).
+
+This requires reading message bodies and PDF attachments, and using Gmail search to restrict access to the allowed senders.
 >
 > **Why narrower scopes are insufficient.** gmail.metadata provides no message bodies or attachments and does not allow the search query we use to limit access to bank senders. The Gmail add-on scopes only work inside a Gmail add-on for the message being viewed, while DINCR is a mobile app that processes notices in the background. DINCR never modifies, sends or deletes email, so no broader scope is requested.
 >
-> **Data handling.** Refresh tokens are stored encrypted on our server (Supabase Vault) and never reach the device. Message bodies and attachments are processed in memory and not stored; only the extracted transaction fields are kept, review evidence is deleted after 30 days and sender/subject metadata after 90 days. Processing is deterministic (templates); no person reads the emails. Disconnecting Gmail or deleting the account deletes the token and revokes it with Google.
+> **Data handling.** Refresh tokens are stored encrypted on our server (Supabase Vault) and never reach the device. Message bodies and attachments are processed in memory and not stored. What is kept, and for how long:
+- the extracted fields;
+- review evidence, deleted 30 days after the user reviews it;
+- sender and subject, deleted after 90 days once nothing is pending review.
+
+Processing is deterministic (templates, no AI); staff never read message content. Disconnecting Gmail or deleting the account deletes the token and requests its revocation from Google.
 >
 > **Limited Use.** DINCR's use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements. Google Workspace API data is not transferred to any AI provider and is not used to develop, improve or train AI/ML models; it is not sold, not used for advertising and not used for credit decisions. See https://dincr.com/privacidad/.
 >
@@ -262,4 +286,9 @@ Render and Supabase checks that must agree:
 
 ### 11b. Console justification text for `gmail.readonly` (paste into Data Access)
 
-> DINCR (personal finance, Costa Rica) offers an optional, user-initiated feature that reads bank transaction notices and PDF account statements sent by a fixed list of bank and payroll sender addresses. It searches only those senders (Gmail search query), extracts amount, date, currency, bank and card last four digits, and shows each as a proposed transaction the user must accept, correct or reject. It needs message bodies and attachments, so gmail.metadata is insufficient; add-on scopes do not apply to a mobile app. DINCR never modifies, sends or deletes mail. Tokens are encrypted server-side; bodies and attachments are not stored; processing is deterministic, with no AI and no human access. Users can disconnect at any time, which revokes the token.
+> DINCR (personal finance, Costa Rica) offers an optional, user-initiated feature for bank notices and PDF account statements from an allowlist of bank senders, and payroll orders from the national social-security institution.
+> - **Search:** it searches only those senders (Gmail search query) and verifies every message's sender.
+> - **Bank notices and statements:** it extracts amount, date, currency, description, bank and card last four digits, and shows each as a proposed transaction the user must accept, correct or reject.
+> - **Payroll orders:** they give the reported salary used to estimate the legally mandated year-end bonus.
+> - **Why this scope:** the feature needs message bodies and attachments, so gmail.metadata is insufficient; add-on scopes do not apply to a mobile app. DINCR never modifies, sends or deletes mail.
+> - **Data handling:** tokens are encrypted server-side, bodies and attachments are not stored, and processing is deterministic with no AI. Users can disconnect at any time; this deletes the token and requests its revocation.
