@@ -30,7 +30,8 @@ CREATE TABLE accounts (id UUID PRIMARY KEY);
 CREATE TABLE mail_oauth_flows (id UUID PRIMARY KEY, mailbox_address TEXT);
 CREATE TABLE finva_gmail_connections (
     id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL, workspace_id UUID NOT NULL,
-    google_email TEXT NOT NULL, refresh_token_secret_id UUID,
+    google_email TEXT NOT NULL, refresh_token_secret_id UUID NOT NULL DEFAULT gen_random_uuid(),
+    granted_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'reauthorization_required', 'disabled')),
     history_id TEXT, watch_expiration TIMESTAMPTZ, initial_scan_page_token TEXT, last_error TEXT,
     updated_at TIMESTAMPTZ,
@@ -61,20 +62,23 @@ def db(tmp_path, monkeypatch):
     admin.close()
 
 
-def _legacy_insert(cur, email, status="active"):
+SCOPES = {"gmail": ["https://www.googleapis.com/auth/gmail.readonly"], "microsoft": ["Mail.Read"]}
+
+
+def _legacy_insert(cur, email, status="active", provider="gmail"):
     """A row as written by the code before this migration (no identity columns)."""
-    cur.execute("INSERT INTO finva_gmail_connections(account_id, workspace_id, google_email, status) VALUES (%s, %s, %s, %s)",
-                (str(uuid.uuid4()), str(uuid.uuid4()), email, status))
+    cur.execute("""INSERT INTO finva_gmail_connections(account_id, workspace_id, google_email, status, granted_scopes)
+                   VALUES (%s, %s, %s, %s, %s)""", (str(uuid.uuid4()), str(uuid.uuid4()), email, status, SCOPES[provider]))
 
 
-def _insert(cur, email, status="active", key=None, secret=None):
+def _insert(cur, email, status="active", key=None, secret=None, provider="gmail"):
     """A row as written by the new code."""
     account = str(uuid.uuid4())
     cur.execute("INSERT INTO accounts VALUES (%s)", (account,))
     cur.execute("""INSERT INTO finva_gmail_connections(account_id, workspace_id, google_email, mailbox_email, mailbox_key,
-                   refresh_token_secret_id, status) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-                (account, str(uuid.uuid4()), email, mail_oauth.canonical_mailbox(email),
-                 key or mail_oauth.mailbox_key("gmail", email), secret, status))
+                   refresh_token_secret_id, status, granted_scopes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (account, str(uuid.uuid4()), email, mail_oauth.mailbox_email(provider, email),
+                 key or mail_oauth.mailbox_key(provider, email), secret or str(uuid.uuid4()), status, SCOPES[provider]))
     return account, cur.fetchone()[0]
 
 
@@ -86,12 +90,15 @@ def _postflight():
 def test_the_backfill_matches_the_application_rule(db):
     cur = db["cur"]
     for sample in SAMPLES:
-        _legacy_insert(cur, sample, status="disabled")
+        for provider in SCOPES:
+            _legacy_insert(cur, sample, status="disabled", provider=provider)
     cur.execute(MIGRATION.read_text(encoding="utf-8"))
-    cur.execute("SELECT google_email, mailbox_email, mailbox_key FROM finva_gmail_connections ORDER BY id")
-    for google_email, mailbox_email, key in cur.fetchall():
-        assert mailbox_email == mail_oauth.canonical_mailbox(google_email)
-        assert key == mail_oauth.mailbox_key("gmail", google_email) == f"email:{mailbox_email}"
+    cur.execute("""SELECT google_email, mailbox_email, mailbox_key, 'Mail.Read' = ANY(granted_scopes)
+                   FROM finva_gmail_connections ORDER BY id""")
+    for google_email, mailbox_email, key, microsoft in cur.fetchall():
+        provider = "microsoft" if microsoft else "gmail"
+        assert mailbox_email == mail_oauth.mailbox_email(provider, google_email)
+        assert key == mail_oauth.mailbox_key(provider, google_email) == f"email:{mailbox_email}"
     cur.execute(_postflight())
     assert cur.fetchall() == []
 
@@ -125,6 +132,7 @@ def test_one_live_connection_per_mailbox_and_identity(db):
         with pytest.raises(psycopg2.errors.UniqueViolation):
             _insert(cur, "renamed@example.com", status, key="google:1")  # same provider account
     _insert(cur, "old@example.com", "disabled", key="google:1")
+    _insert(cur, "old@example.com", provider="microsoft")  # the same text at another provider is another mailbox
 
 
 def test_concurrent_completions_for_one_mailbox_leave_exactly_one(db):
@@ -170,11 +178,11 @@ def test_a_stale_mailbox_is_taken_over_once_even_by_concurrent_claims(db):
         try:
             with database.get_connection() as conn:
                 mail_oauth.claim_mailbox(conn, provider="gmail", account_id=claimant, workspace_id=workspace,
-                                         key="email:shared@example.com", email="shared@example.com",
-                                         is_entitled=lambda _conn, _account: True)
+                                         key="email:gmail:shared@example.com", email="gmail:shared@example.com",
+                                         display="shared@example.com", is_entitled=lambda _conn, _account: True)
                 conn.execute("""INSERT INTO finva_gmail_connections(account_id, workspace_id, google_email, mailbox_email,
-                                mailbox_key, status) VALUES (%s, %s, 'shared@example.com', 'shared@example.com',
-                                'email:shared@example.com', 'active') RETURNING id""", (claimant, workspace))
+                                mailbox_key, status) VALUES (%s, %s, 'shared@example.com', 'gmail:shared@example.com',
+                                'email:gmail:shared@example.com', 'active') RETURNING id""", (claimant, workspace))
                 conn.commit()
             outcomes.append("connected")
         except (HTTPException, psycopg2.errors.UniqueViolation):

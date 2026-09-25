@@ -193,17 +193,17 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
     if not _has_active_vip_access(conn, account_id):
         raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
     address = str(flow["mailbox_address"]).strip().lower()  # display only
-    email = mail_oauth.canonical_mailbox(address)
+    email = mail_oauth.mailbox_email("microsoft", address)
     key = mail_oauth.mailbox_key("microsoft", address, flow.get("provider_subject"), flow.get("provider_tenant"))
     secret_id = str(flow["pending_secret_id"])
     mail_oauth.claim_mailbox(conn, provider="microsoft", account_id=account_id, workspace_id=workspace_id,
-                             key=key, email=email, is_entitled=_has_active_vip_access)
+                             key=key, email=email, display=address, is_entitled=_has_active_vip_access)
     existing = conn.execute(
         """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
            WHERE account_id=%s AND workspace_id=%s
              AND (mailbox_key=%s OR mailbox_email=%s OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s))
            ORDER BY (status<>'disabled') DESC, id LIMIT 1 FOR UPDATE""",
-        (account_id, workspace_id, key, email, email),
+        (account_id, workspace_id, key, email, address),
     ).fetchone()
     if existing and "Mail.Read" not in (existing.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
@@ -262,10 +262,12 @@ def _refresh(connection: dict, refresh_token: str) -> str:
         with get_connection() as conn:
             # Another sync could rotate a token concurrently: only replace the one we used.
             current = conn.execute(
-                "SELECT refresh_token_secret_id FROM finva_gmail_connections WHERE id=%s FOR UPDATE",
+                "SELECT refresh_token_secret_id,status FROM finva_gmail_connections WHERE id=%s FOR UPDATE",
                 (connection["id"],),
             ).fetchone()
-            if current and str(current["refresh_token_secret_id"]) == str(connection["refresh_token_secret_id"]):
+            # A connection disconnected or taken over meanwhile never gets a live token back.
+            if (current and current["status"] != "disabled"
+                    and str(current["refresh_token_secret_id"]) == str(connection["refresh_token_secret_id"])):
                 replacement = _vault_create(conn, tokens["refresh_token"], str(connection["account_id"]), "Microsoft")
                 conn.execute("UPDATE finva_gmail_connections SET refresh_token_secret_id=%s::uuid WHERE id=%s",
                              (replacement, connection["id"]))
@@ -383,7 +385,7 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
                  initial_scan_page_token=CASE WHEN import_since IS NOT DISTINCT FROM %s::date THEN %s ELSE initial_scan_page_token END,
                  initial_scan_started_at=COALESCE(initial_scan_started_at,NOW()),
                  initial_scan_completed_at=CASE WHEN %s AND import_since IS NOT DISTINCT FROM %s::date THEN NOW() ELSE initial_scan_completed_at END,
-                 updated_at=NOW() WHERE id=%s""",
+                 updated_at=NOW() WHERE id=%s AND status<>'disabled'""",
             # A reconnection that widened the history while this sync ran keeps its reset.
             (connection.get("import_since"), page if initial else None, initial and not page,
              connection.get("import_since"), connection_id),

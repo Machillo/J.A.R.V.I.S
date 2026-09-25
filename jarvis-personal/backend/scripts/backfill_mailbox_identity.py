@@ -15,8 +15,12 @@ Nothing else changes: no connection, message, token scope or account moves.
 It aborts, writing nothing, when the result is ambiguous: two connections would
 get the same identity, or an identity already belongs to another live connection.
 A connection whose provider does not answer keeps its address identity (reported
-as a count); an Outlook connection whose token Microsoft rejects is marked
-'reauthorization_required', exactly as a sync would. Output is counts only; no address, account or token is printed.
+as a count). The dry run writes nothing: it resolves Gmail connections only
+(Google token refreshes do not rotate or store anything) and counts Outlook ones
+as pending, because a Microsoft refresh may rotate the stored token. With --apply,
+an Outlook connection whose token Microsoft rejects is marked
+'reauthorization_required', exactly as a sync would. A connection with neither
+provider scope is skipped: no token is ever sent to the other provider. Output is counts only; no address, account or token is printed.
 """
 from __future__ import annotations
 
@@ -28,6 +32,16 @@ from typing import Callable, Iterable
 
 class Ambiguous(Exception):
     pass
+
+
+def provider_of(row: dict) -> str | None:
+    """The provider a connection's token belongs to, from its stored scope; never guessed."""
+    scopes = row.get("granted_scopes") or []
+    if "https://www.googleapis.com/auth/gmail.readonly" in scopes:
+        return "gmail"
+    if "Mail.Read" in scopes:
+        return "microsoft"
+    return None
 
 
 def plan(rows: Iterable[dict], existing_keys: set[str], resolve: Callable[[dict], str | None]) -> tuple[dict[int, str], Counter]:
@@ -47,14 +61,17 @@ def plan(rows: Iterable[dict], existing_keys: set[str], resolve: Callable[[dict]
     return updates, counts
 
 
-def _resolver(conn) -> Callable[[dict], str | None]:
+def _resolver(conn, *, apply: bool) -> Callable[[dict], str | None]:
     from backend.user_product import gmail_service, mail_oauth
     from backend.user_product import microsoft_mail as ms
 
     def resolve(row: dict) -> str | None:
+        provider = provider_of(row)
+        if provider is None or (provider == "microsoft" and not apply):
+            return None
         try:
             refresh_token = gmail_service._vault_read(conn, str(row["refresh_token_secret_id"]))
-            if gmail_service.GMAIL_SCOPE in (row.get("granted_scopes") or []):
+            if provider == "gmail":
                 client_id, client_secret, _ = gmail_service._google_config()
                 response = gmail_service.requests.post("https://oauth2.googleapis.com/token", data={
                     "client_id": client_id, "client_secret": client_secret,
@@ -84,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         conn.commit()
     with get_connection() as conn:
         try:
-            updates, counts = plan(rows, existing, _resolver(conn))
+            updates, counts = plan(rows, existing, _resolver(conn, apply=args.apply))
         except Ambiguous as ambiguous:
             print(f"ABORTED, nothing written: {ambiguous}")
             return 1
@@ -93,11 +110,16 @@ def main(argv: list[str] | None = None) -> int:
             print("DRY RUN: nothing written (use --apply)")
             return 0
         written = 0
-        for connection_id, key in updates.items():
-            written += len(conn.execute(
-                """UPDATE finva_gmail_connections SET mailbox_key=%s,updated_at=NOW()
-                   WHERE id=%s AND status<>'disabled' AND mailbox_key LIKE 'email:%%' RETURNING id""",
-                (key, connection_id)).fetchall())
+        try:
+            for connection_id, key in updates.items():
+                written += len(conn.execute(
+                    """UPDATE finva_gmail_connections SET mailbox_key=%s,updated_at=NOW()
+                       WHERE id=%s AND status<>'disabled' AND mailbox_key LIKE 'email:%%' RETURNING id""",
+                    (key, connection_id)).fetchall())
+        except Exception as exc:  # e.g. a unique violation: its message would name the identity
+            conn.rollback()
+            print(f"ABORTED, rolled back: {type(exc).__name__}")
+            return 1
         if written != len(updates):
             conn.rollback()
             print(f"ABORTED, rolled back: {written} of {len(updates)} rows still matched")

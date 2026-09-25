@@ -50,6 +50,9 @@ CR_TZ = ZoneInfo("America/Costa_Rica")
 MAILBOX_UNAVAILABLE = "No pudimos conectar este correo a tu cuenta. Si ya está conectado en otra cuenta DINCR, desconectalo ahí primero."
 # Shown to the previous account after a verified takeover; its imported data stays.
 MAILBOX_TAKEN_OVER = "Este correo se volvió a autorizar en otra cuenta DINCR y se desconectó de esta. Lo que ya importaste se conserva."
+# The stored scope that marks a connection's provider (rows written before the
+# identity columns existed carry only this).
+PROVIDER_SCOPES = {"gmail": "https://www.googleapis.com/auth/gmail.readonly", "microsoft": "Mail.Read"}
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
@@ -62,7 +65,7 @@ def pkce_challenge(verifier: str) -> str:
 
 
 def canonical_mailbox(address: str | None) -> str:
-    """The address DINCR compares mailboxes by; the stored google_email stays for display.
+    """The canonical form of an address; the stored google_email stays for display.
 
     Gmail ignores dots and "+tag" in gmail.com addresses, and googlemail.com is the
     same mailbox. Other providers are compared case-insensitively only. The SQL
@@ -77,8 +80,18 @@ def canonical_mailbox(address: str | None) -> str:
     return value
 
 
+def mailbox_email(provider: str, address: str | None) -> str:
+    """The provider-scoped address DINCR compares mailboxes by.
+
+    A Gmail mailbox and a Microsoft mailbox are never the same mailbox, even when a
+    Microsoft account reports a gmail.com address as its mail or sign-in name: the
+    comparison never crosses providers.
+    """
+    return f"{provider}:{canonical_mailbox(address)}"
+
+
 def mailbox_key(provider: str, address: str | None, subject: str | None = None, tenant: str | None = None) -> str:
-    """Stable mailbox identity: the provider's account id when known, else the canonical address.
+    """Stable mailbox identity: the provider's account id when known, else the scoped address.
 
     Google: the account's ``sub``. Microsoft: the Graph user ``id`` within its tenant.
     """
@@ -86,10 +99,10 @@ def mailbox_key(provider: str, address: str | None, subject: str | None = None, 
         return f"google:{subject}"
     if provider == "microsoft" and subject and tenant:
         return f"microsoft:{tenant}:{subject}"
-    return f"email:{canonical_mailbox(address)}"
+    return f"email:{mailbox_email(provider, address)}"
 
 
-def claim_mailbox(conn, *, provider: str, account_id: str, workspace_id: str, key: str, email: str,
+def claim_mailbox(conn, *, provider: str, account_id: str, workspace_id: str, key: str, email: str, display: str,
                   is_entitled: Callable[[Any, str], bool]) -> None:
     """Make a mailbox this account/workspace just proved control of available to it, or refuse.
 
@@ -109,9 +122,9 @@ def claim_mailbox(conn, *, provider: str, account_id: str, workspace_id: str, ke
         """SELECT id,account_id,status,refresh_token_secret_id FROM finva_gmail_connections
            WHERE status<>'disabled' AND NOT (account_id=%s AND workspace_id=%s)
              AND (mailbox_key=%s OR mailbox_email=%s
-                  OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s))
+                  OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s AND %s = ANY(granted_scopes)))
            ORDER BY id FOR UPDATE""",
-        (account_id, workspace_id, key, email, email),
+        (account_id, workspace_id, key, email, display, PROVIDER_SCOPES[provider]),
     ).fetchall()
     reasons = []
     for row in rows:
@@ -308,7 +321,7 @@ def complete_flow(
             return {"connection_id": None, "provider": flow["provider"], "already_completed": True}
         try:
             connection_id = attach(conn, flow)
-        except (HTTPException, psycopg2.errors.UniqueViolation) as refused:
+        except (HTTPException, psycopg2.errors.UniqueViolation, psycopg2.errors.DeadlockDetected) as refused:
             # A refused mailbox is never left behind: the flow fails and its
             # pending refresh token is deleted now, not at some later cleanup.
             # The rollback released the flow's lock, so re-lock it and act only

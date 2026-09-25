@@ -9,6 +9,7 @@
 BEGIN;
 
 SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '1min';
 
 CREATE UNIQUE INDEX IF NOT EXISTS finva_gmail_connections_account_email_key
     ON public.finva_gmail_connections(account_id, lower(google_email));

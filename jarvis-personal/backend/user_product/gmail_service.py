@@ -564,7 +564,10 @@ def _google_subject(access_token: str | None, client_id: str) -> str | None:
     if client_id not in (info.get("aud"), info.get("azp")):
         return None
     subject = str(info.get("sub") or "").strip()
-    return subject if subject.isdigit() else None
+    if not subject.isdigit():
+        logger.info("Gmail identity fallback: Google returned no account id; the address identifies the mailbox")
+        return None
+    return subject
 
 
 def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
@@ -655,17 +658,17 @@ def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) ->
     if not _has_active_vip_access(conn, account_id):
         raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
     google_email = str(flow["mailbox_address"]).strip().lower()  # display only
-    email = mail_oauth.canonical_mailbox(google_email)
+    email = mail_oauth.mailbox_email("gmail", google_email)
     key = mail_oauth.mailbox_key("gmail", google_email, flow.get("provider_subject"))
     secret_id = str(flow["pending_secret_id"])
     mail_oauth.claim_mailbox(conn, provider="gmail", account_id=account_id, workspace_id=workspace_id,
-                             key=key, email=email, is_entitled=_has_active_vip_access)
+                             key=key, email=email, display=google_email, is_entitled=_has_active_vip_access)
     current = conn.execute(
         """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
            WHERE account_id=%s AND workspace_id=%s
              AND (mailbox_key=%s OR mailbox_email=%s OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s))
            ORDER BY (status<>'disabled') DESC, id LIMIT 1 FOR UPDATE""",
-        (account_id, workspace_id, key, email, email),
+        (account_id, workspace_id, key, email, google_email),
     ).fetchone()
     if current and "Mail.Read" in (current.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
@@ -1118,7 +1121,7 @@ def _run_sync_connection(connection_id: int, service=None, max_results: int = 10
             raise HTTPException(status_code=409, detail="La conexión de Gmail venció. Volvé a autorizarla desde DINCR.") from exc
         with get_connection() as conn:
             conn.execute(
-                "UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_error=%s,updated_at=NOW() WHERE id=%s",
+                "UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_error=%s,updated_at=NOW() WHERE id=%s AND status<>'disabled'",
                 ("No se pudo completar la sincronización.", connection_id),
             )
             conn.commit()
@@ -1203,7 +1206,7 @@ def _start_watch(connection_id: int, service, suppress_errors: bool = False) -> 
         with get_connection() as conn:
             conn.execute(
                 """UPDATE finva_gmail_connections SET history_id=%s,watch_expiration=%s,
-                          last_error=NULL,updated_at=NOW() WHERE id=%s""",
+                          last_error=NULL,updated_at=NOW() WHERE id=%s AND status<>'disabled'""",
                 (str(response.get("historyId") or ""), expiration, connection_id),
             )
             conn.commit()

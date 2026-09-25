@@ -123,7 +123,7 @@ def test_refresh_rotates_the_vault_secret_and_returns_only_the_access_token(monk
     monkeypatch.setattr(mail.requests, "post", lambda *_a, **_k: SimpleNamespace(
         status_code=200, raise_for_status=lambda: None,
         json=lambda: {"access_token": "access-secret", "refresh_token": "rotated-secret"}))
-    db = Db(Rows(one={"refresh_token_secret_id": "old-vault"}))
+    db = Db(Rows(one={"refresh_token_secret_id": "old-vault", "status": "active"}))
     monkeypatch.setattr(mail, "get_connection", lambda: db)
     created, deleted = [], []
     monkeypatch.setattr(mail, "_vault_create", lambda _conn, token, *_a: created.append(token) or "new-vault")

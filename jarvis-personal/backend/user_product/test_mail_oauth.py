@@ -133,7 +133,7 @@ class FakeConnection:
         if q.startswith("SELECT 1 FROM account_subscriptions"):
             return self._rows([{"allowed": 1}] if params[0] in self.db.vip else [])
         if q.startswith("SELECT id,account_id,status,refresh_token_secret_id FROM finva_gmail_connections WHERE status<>'disabled'"):
-            account, workspace, key, email, _email = params
+            account, workspace, key, email, _display, _scope = params
             return self._rows(c for c in sorted(connections.values(), key=lambda c: c["id"])
                               if c["status"] != "disabled" and (c["account_id"], c["workspace_id"]) != (account, workspace)
                               and (c["mailbox_key"] == key or c["mailbox_email"] == email))
@@ -371,7 +371,7 @@ def _connect(env, provider, user, mailbox):
     return complete(user, params), params
 
 
-@pytest.mark.parametrize(("first", "second"), [("gmail", "gmail"), ("microsoft", "microsoft"), ("gmail", "microsoft"), ("microsoft", "gmail")])
+@pytest.mark.parametrize(("first", "second"), [("gmail", "gmail"), ("microsoft", "microsoft")])
 def test_another_account_cannot_connect_a_live_mailbox(env, first, second):
     _connect(env, first, A, "shared@example.com")
     _, params = callback(second, *env.provider.authorize(start(second, B), "Shared@Example.com "))
@@ -471,8 +471,21 @@ def test_a_google_account_id_is_trusted_only_for_dincrs_client(env, monkeypatch)
 def test_canonical_mailbox():
     assert mail_oauth.canonical_mailbox(" First.Last+x@GoogleMail.com ") == "firstlast@gmail.com"
     assert mail_oauth.canonical_mailbox("first.last+x@outlook.com") == "first.last+x@outlook.com"
-    assert mail_oauth.mailbox_key("gmail", "a@gmail.com") == "email:a@gmail.com"
-    assert mail_oauth.mailbox_key("microsoft", "a@x.com", "id") == "email:a@x.com"  # no tenant: address identity
+    assert mail_oauth.mailbox_key("gmail", "a@gmail.com") == "email:gmail:a@gmail.com"
+    assert mail_oauth.mailbox_key("microsoft", "a@x.com", "id") == "email:microsoft:a@x.com"  # no tenant: address identity
+    assert mail_oauth.mailbox_email("gmail", "a@x.com") != mail_oauth.mailbox_email("microsoft", "a@x.com")
+
+
+@pytest.mark.parametrize("stale", [False, True])
+def test_a_microsoft_account_reporting_a_gmail_address_never_touches_that_gmail_mailbox(env, stale):
+    """A Microsoft sign-in name or mail attribute can be a gmail.com address: it is not that Gmail mailbox."""
+    _connect(env, "gmail", A, "victim@gmail.com")
+    if stale:
+        _row_of(env, A)["status"] = "reauthorization_required"
+    assert _connect(env, "microsoft", B, "victim@gmail.com")[0] == {"status": "connected", "provider": "microsoft"}
+    assert _row_of(env, A)["status"] == ("reauthorization_required" if stale else "active")
+    assert env.db.state["takeovers"] == []
+    assert len(env.db.state["vault"]) == 2  # the Gmail token is untouched
 
 
 def test_a_disconnected_mailbox_can_be_connected_by_whoever_controls_it(env):
@@ -697,3 +710,32 @@ def test_replay_on_another_provider_is_not_reported_as_processed(env, started, u
     code, state = env.provider.authorize(start(started, A), "a@example.com")
     assert callback(started, code, state)[0] == "authorized"
     assert callback(used, code, state)[0] == "invalid_state"
+
+
+@pytest.mark.parametrize(("status", "stored"), [("disabled", False), ("active", True)])
+def test_a_rotated_outlook_token_is_never_stored_on_a_disconnected_or_taken_over_row(monkeypatch, status, stored):
+    """A sync that started before a takeover must not give the old row a live token back."""
+    created = []
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def execute(self, query, params=()):
+            row = {"refresh_token_secret_id": "old-secret", "status": status} if query.lstrip().startswith("SELECT") else None
+            return SimpleNamespace(fetchone=lambda: row)
+
+        def commit(self):
+            pass
+
+    monkeypatch.setattr(ms, "_config", lambda: MS_CLIENT)
+    monkeypatch.setattr(ms, "get_connection", _Conn)
+    monkeypatch.setattr(ms, "_vault_create", lambda *a: created.append(a) or "new-secret")
+    monkeypatch.setattr(ms, "_vault_delete", lambda *a: None)
+    monkeypatch.setattr(ms.requests, "post", lambda *a, **k: SimpleNamespace(
+        status_code=200, raise_for_status=lambda: None, json=lambda: {"access_token": "a", "refresh_token": "rotated"}))
+    ms._refresh({"id": 1, "account_id": A["account_id"], "refresh_token_secret_id": "old-secret"}, "old-token")
+    assert bool(created) is stored

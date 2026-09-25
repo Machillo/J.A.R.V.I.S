@@ -4,12 +4,13 @@
 -- finva_gmail_connections holds Gmail and Outlook mailboxes. Until now it was
 -- unique only per account and per workspace, so two accounts could connect the
 -- same mailbox and import its messages into both. This migration adds:
--- - mailbox_email: the canonical address (lower, trimmed; for gmail.com and
---   googlemail.com without dots and "+tag", as gmail.com). google_email stays
---   the display address;
+-- - mailbox_email: the provider-scoped canonical address, '<provider>:<address>'
+--   (lower, trimmed; for gmail.com and googlemail.com without dots and "+tag", as
+--   gmail.com). A Gmail and a Microsoft mailbox never match each other, even when
+--   a Microsoft account reports a gmail.com address. google_email stays for display;
 -- - mailbox_key: the stable identity. New connections store 'google:<sub>' or
 --   'microsoft:<tenant>:<id>' when the provider returns them; existing rows are
---   backfilled from their canonical address only ('email:<mailbox_email>'),
+--   backfilled from their scoped canonical address only ('email:<mailbox_email>'),
 --   never from a legacy user id;
 -- - provider_subject / provider_tenant on connections and OAuth flows;
 -- - a unique index on each of mailbox_key and mailbox_email among live rows
@@ -23,12 +24,14 @@
 -- gate) as the table owner (postgres), BEFORE the code of this PR is deployed
 -- (the code writes the new columns). The table is small; the lock lasts milliseconds.
 -- Rows written by the previous code between this migration and the deploy have a
--- NULL mailbox_email: the application still compares them by address, and
--- re-running this migration after the deploy backfills them (it is idempotent).
+-- NULL mailbox_email: the application still compares them by display address and
+-- provider scope. RE-RUN this migration right after the deploy (a listed step; it
+-- is idempotent) so those rows get their identity.
 --
 -- Preflight (read-only, prints no address): must return 0.
 --   SELECT count(*) FROM (SELECT 1 FROM public.finva_gmail_connections WHERE status <> 'disabled'
---    GROUP BY CASE WHEN split_part(lower(btrim(google_email)), '@', 2) IN ('gmail.com', 'googlemail.com')
+--    GROUP BY 'Mail.Read' = ANY(granted_scopes),
+--             CASE WHEN split_part(lower(btrim(google_email)), '@', 2) IN ('gmail.com', 'googlemail.com')
 --                  THEN replace(split_part(split_part(lower(btrim(google_email)), '@', 1), '+', 1), '.', '') || '@gmail.com'
 --                  ELSE lower(btrim(google_email)) END
 --    HAVING count(*) > 1) duplicated_mailboxes;
@@ -52,8 +55,10 @@ ALTER TABLE public.mail_oauth_flows
     ADD COLUMN IF NOT EXISTS provider_subject TEXT,
     ADD COLUMN IF NOT EXISTS provider_tenant TEXT;
 
--- Backfill from the canonical address only (same rule as mail_oauth.canonical_mailbox).
+-- Backfill from the canonical address only (same rule as mail_oauth.mailbox_email):
+-- the provider comes from the stored scope, as everywhere else in the application.
 UPDATE public.finva_gmail_connections SET mailbox_email =
+    CASE WHEN 'Mail.Read' = ANY(granted_scopes) THEN 'microsoft:' ELSE 'gmail:' END ||
     CASE WHEN split_part(lower(btrim(google_email)), '@', 2) IN ('gmail.com', 'googlemail.com')
          THEN replace(split_part(split_part(lower(btrim(google_email)), '@', 1), '+', 1), '.', '') || '@gmail.com'
          ELSE lower(btrim(google_email)) END
