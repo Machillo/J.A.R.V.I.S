@@ -106,7 +106,7 @@ export default function App() {
       setSession(nextSession);
       // Returning from Android's file picker can refresh the Supabase token.
       // Keep the mounted screen during TOKEN_REFRESHED so transient state
-      // such as the selected receipt is not lost.
+      // such as a selected file is not lost.
       if (identityChanged) setCurrentUser(null);
       setIdentityError("");
       setSessionLoaded(true);

@@ -47,10 +47,6 @@ class FeedbackResolutionUpdate(BaseModel):
     resolution: Literal["resolved", "still_happening"]
 
 
-class TestPaymentUpdate(BaseModel):
-    action: Literal["confirm", "reject"] = "confirm"
-
-
 class StoreLifecycleSimulation(BaseModel):
     plan_code: Literal["basic", "vip"]
     provider_event_id: str | None = Field(default=None, min_length=1, max_length=255)
