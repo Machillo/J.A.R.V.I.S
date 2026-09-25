@@ -126,7 +126,7 @@ def test_audit_sql_files_are_read_only():
             # temp functions use it, inside a READ ONLY transaction.
             assert not re.search(r"\bEXECUTE\b", sql)
         # Only session-local functions may be created.
-        assert re.findall(r"CREATE\s+OR\s+REPLACE\s+FUNCTION\s+([\w]+)\.", sql) in ([], ["PG_TEMP"] * 9)
+        assert re.findall(r"CREATE\s+OR\s+REPLACE\s+FUNCTION\s+([\w]+)\.", sql) in ([], ["PG_TEMP"] * 10)
 
 
 def test_every_guarded_insert_sets_its_workspace():

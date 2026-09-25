@@ -23,6 +23,8 @@
 --   would_abort  every condition on which the migration aborts: resolve them first
 --   rows_without_workspace  guarded tables with rows that have no workspace: they
 --              can only be deleted with the 'none' declaration; resolve them
+--   workspace_null_collision  rows without a workspace whose legacy id denotes
+--              different people in the two id spaces: PRE-APPLY GATE, must be empty
 --   unguarded_workspace_table  workspace-owned tables left without deletion guards;
 --              compare with the reviewed allowlist in the ownership tests
 
@@ -491,6 +493,25 @@ BEGIN
 END
 $fn$;
 
+-- Rows without a workspace whose legacy id means different people in the two id
+-- spaces: the FK alone would attribute them (read-only helper, pg_temp only).
+CREATE OR REPLACE FUNCTION pg_temp.dincr_count_null_workspace_collisions(p_table TEXT)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $fn$
+DECLARE
+    v_count BIGINT;
+BEGIN
+    EXECUTE pg_catalog.format(
+        'SELECT count(*) FROM public.%I x
+           JOIN public.users u ON u.id = x.user_id
+           JOIN public.allowed_users au ON au.id = x.user_id
+          WHERE x.workspace_id IS NULL
+            AND lower(trim(u.email)) IS DISTINCT FROM lower(trim(au.email))', p_table) INTO v_count;
+    RETURN v_count;
+END
+$fn$;
+
 SET LOCAL transaction_read_only = on;
 
 SELECT 'summary' AS section, s.table_name AS subject, NULL::BIGINT AS row_id,
@@ -603,6 +624,15 @@ SELECT 'would_abort', 'financial_profiles', NULL, 'NEEDS_REVIEW', 'PROFILE_OUTSI
 FROM public.financial_profiles fp
 LEFT JOIN public.workspaces w ON w.id = fp.workspace_id
 WHERE w.id IS NULL OR w.owner_account_id <> fp.account_id OR w.workspace_type <> 'personal'
+UNION ALL
+-- PRE-APPLY GATE: must be empty. Such rows would be deleted with whoever owns that
+-- integer in the FK's id space when that person deletes their account.
+SELECT 'workspace_null_collision', o.table_name, NULL, 'NEEDS_REVIEW', 'ROWS_WITHOUT_WORKSPACE_WITH_COLLIDING_ID',
+       pg_temp.dincr_count_null_workspace_collisions(o.table_name)::TEXT
+FROM pg_temp.dincr_ownership_tables() o
+WHERE to_regclass('public.' || o.table_name) IS NOT NULL
+  AND pg_temp.dincr_user_id_space(o.table_name) IS NOT NULL
+  AND pg_temp.dincr_count_null_workspace_collisions(o.table_name) > 0
 UNION ALL
 -- Workspace-owned tables the migration leaves without deletion guards: compare
 -- with the reviewed allowlist in backend/tests/test_financial_ownership_integrity.py.

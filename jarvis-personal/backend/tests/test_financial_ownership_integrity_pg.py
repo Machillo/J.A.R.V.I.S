@@ -1371,3 +1371,11 @@ def test_new_rows_of_workspace_only_tables_need_a_workspace(layout_fk):
     with conn.cursor() as cur:
         with pytest.raises(psycopg2.errors.CheckViolation, match="workspace_required"):
             cur.execute("INSERT INTO finva_goal_contributions(workspace_id, goal_id, amount) VALUES (NULL, 1, 5)")
+
+
+def test_the_preflight_flags_rows_without_a_workspace_that_a_colliding_id_would_misattribute(layout_fk):
+    conn, a1 = layout_fk["conn"], _ids("a1")
+    with conn.cursor() as cur:  # a1's allowed_users id is another person's users.id in this layout
+        _debt(cur, a1["allowed"], None, name="Orphan with a colliding id")
+    rows = _preflight(conn)
+    assert ("debts", "ROWS_WITHOUT_WORKSPACE_WITH_COLLIDING_ID") in {(r[1], r[4]) for r in rows if r[0] == "workspace_null_collision"}
