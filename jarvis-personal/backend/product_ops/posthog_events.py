@@ -44,7 +44,7 @@ ENUMS: dict[str, frozenset[str]] = {
     }),
     "store": frozenset({"sandbox", "apple", "google"}),
 }
-COUNTS = frozenset({"messages_scanned", "candidates_pending", "duplicates", "payroll_reports", "ignored", "count"})
+COUNTS = frozenset({"messages_scanned", "candidates_pending", "duplicates", "payroll_reports", "messages_failed", "ignored", "count"})
 BOOLEANS = frozenset({"success", "initial_scan_complete"})
 # Route templates come from code (`/user-product/vip/gmail/{connection_id}`), never
 # from the request URL, so they carry no identifiers or query strings.

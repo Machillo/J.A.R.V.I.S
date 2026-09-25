@@ -1,0 +1,443 @@
+{
+ "stages": [
+  {
+   "concurrency": 10,
+   "seconds": 61.5,
+   "requests": 160,
+   "rps": 2.6,
+   "p50_ms": 3573.1,
+   "p95_ms": 4534.3,
+   "p99_ms": 6851.2,
+   "error_rate": 0.0,
+   "errors_5xx": 0,
+   "status_4xx": 0,
+   "timeouts": 0,
+   "endpoints": {
+    "GET /user-product/finance/strategy-vip": {
+     "n": 6,
+     "p50_ms": 6563.2,
+     "p95_ms": 6852.1,
+     "p99_ms": 6852.1,
+     "errors": 0
+    },
+    "PUT /user-product/basic/budget": {
+     "n": 1,
+     "p50_ms": 4535.8,
+     "p95_ms": 4535.8,
+     "p99_ms": 4535.8,
+     "errors": 0
+    },
+    "GET /user-product/vip/strategy-dashboard": {
+     "n": 2,
+     "p50_ms": 5406.8,
+     "p95_ms": 5406.8,
+     "p99_ms": 5406.8,
+     "errors": 0
+    },
+    "POST /user-product/finance/expenses": {
+     "n": 4,
+     "p50_ms": 4534.3,
+     "p95_ms": 4534.8,
+     "p99_ms": 4534.8,
+     "errors": 0
+    },
+    "GET /user-product/basic/dashboard": {
+     "n": 8,
+     "p50_ms": 3738.2,
+     "p95_ms": 4241.6,
+     "p99_ms": 4241.6,
+     "errors": 0
+    },
+    "GET /user-product/finance/summary": {
+     "n": 12,
+     "p50_ms": 3582.7,
+     "p95_ms": 4244.8,
+     "p99_ms": 4244.8,
+     "errors": 0
+    },
+    "GET /user-product/basic/budget": {
+     "n": 14,
+     "p50_ms": 3582.7,
+     "p95_ms": 3738.3,
+     "p99_ms": 3738.3,
+     "errors": 0
+    },
+    "GET /user-product/free/dashboard": {
+     "n": 5,
+     "p50_ms": 3574.4,
+     "p95_ms": 3962.5,
+     "p99_ms": 3962.5,
+     "errors": 0
+    },
+    "GET /user-product/free/movements": {
+     "n": 17,
+     "p50_ms": 3573.5,
+     "p95_ms": 3948.4,
+     "p99_ms": 3948.4,
+     "errors": 0
+    },
+    "GET /user-product/finance/debts": {
+     "n": 23,
+     "p50_ms": 3566.7,
+     "p95_ms": 4241.7,
+     "p99_ms": 4241.9,
+     "errors": 0
+    },
+    "GET /auth/me": {
+     "n": 40,
+     "p50_ms": 3584.5,
+     "p95_ms": 4462.6,
+     "p99_ms": 4639.6,
+     "errors": 0
+    },
+    "GET /user-product/goals": {
+     "n": 21,
+     "p50_ms": 3292.3,
+     "p95_ms": 3738.1,
+     "p99_ms": 3738.6,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-basic": {
+     "n": 3,
+     "p50_ms": 3201.1,
+     "p95_ms": 3405.0,
+     "p99_ms": 3405.0,
+     "errors": 0
+    },
+    "GET /user-product/vip/command-center": {
+     "n": 4,
+     "p50_ms": 3166.3,
+     "p95_ms": 3644.9,
+     "p99_ms": 3644.9,
+     "errors": 0
+    }
+   },
+   "pg_connections_max": 11,
+   "pg_active_max": 2,
+   "pg_idle_in_tx_max": 10,
+   "backend_cpu_pct_max": 9.3,
+   "backend_rss_mb_max": 43.6
+  },
+  {
+   "concurrency": 25,
+   "seconds": 63.6,
+   "requests": 170,
+   "rps": 2.7,
+   "p50_ms": 9002.2,
+   "p95_ms": 9870.5,
+   "p99_ms": 15619.7,
+   "error_rate": 0.0,
+   "errors_5xx": 0,
+   "status_4xx": 0,
+   "timeouts": 0,
+   "endpoints": {
+    "GET /user-product/vip/strategy-dashboard": {
+     "n": 2,
+     "p50_ms": 18096.4,
+     "p95_ms": 18096.4,
+     "p99_ms": 18096.4,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-basic": {
+     "n": 6,
+     "p50_ms": 15618.8,
+     "p95_ms": 15619.7,
+     "p99_ms": 15619.7,
+     "errors": 0
+    },
+    "GET /user-product/basic/dashboard": {
+     "n": 6,
+     "p50_ms": 9291.5,
+     "p95_ms": 15617.2,
+     "p99_ms": 15617.2,
+     "errors": 0
+    },
+    "GET /user-product/vip/command-center": {
+     "n": 2,
+     "p50_ms": 9291.0,
+     "p95_ms": 9291.0,
+     "p99_ms": 9291.0,
+     "errors": 0
+    },
+    "GET /auth/me": {
+     "n": 50,
+     "p50_ms": 9141.8,
+     "p95_ms": 9799.9,
+     "p99_ms": 9808.1,
+     "errors": 0
+    },
+    "GET /user-product/free/movements": {
+     "n": 20,
+     "p50_ms": 9290.6,
+     "p95_ms": 9870.5,
+     "p99_ms": 9870.5,
+     "errors": 0
+    },
+    "GET /user-product/finance/summary": {
+     "n": 15,
+     "p50_ms": 9002.2,
+     "p95_ms": 9869.0,
+     "p99_ms": 9869.0,
+     "errors": 0
+    },
+    "GET /user-product/basic/budget": {
+     "n": 11,
+     "p50_ms": 8832.3,
+     "p95_ms": 9870.6,
+     "p99_ms": 9870.6,
+     "errors": 0
+    },
+    "GET /user-product/goals": {
+     "n": 22,
+     "p50_ms": 8831.4,
+     "p95_ms": 9870.2,
+     "p99_ms": 9870.5,
+     "errors": 0
+    },
+    "GET /user-product/finance/debts": {
+     "n": 20,
+     "p50_ms": 8831.1,
+     "p95_ms": 9870.1,
+     "p99_ms": 9870.1,
+     "errors": 0
+    },
+    "GET /user-product/free/dashboard": {
+     "n": 9,
+     "p50_ms": 8830.2,
+     "p95_ms": 9869.9,
+     "p99_ms": 9869.9,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-vip": {
+     "n": 7,
+     "p50_ms": 7202.5,
+     "p95_ms": 9869.7,
+     "p99_ms": 9869.7,
+     "errors": 0
+    }
+   },
+   "pg_connections_max": 24,
+   "pg_active_max": 1,
+   "pg_idle_in_tx_max": 16,
+   "backend_cpu_pct_max": 15.3,
+   "backend_rss_mb_max": 72.8
+  },
+  {
+   "concurrency": 50,
+   "seconds": 74.1,
+   "requests": 200,
+   "rps": 2.7,
+   "p50_ms": 18648.5,
+   "p95_ms": 21509.0,
+   "p99_ms": 30006.3,
+   "error_rate": 0.035,
+   "errors_5xx": 7,
+   "status_4xx": 0,
+   "timeouts": 7,
+   "endpoints": {
+    "GET /user-product/vip/command-center": {
+     "n": 7,
+     "p50_ms": 21469.8,
+     "p95_ms": 21508.7,
+     "p99_ms": 21508.7,
+     "errors": 0
+    },
+    "GET /auth/me": {
+     "n": 50,
+     "p50_ms": 19543.2,
+     "p95_ms": 30005.8,
+     "p99_ms": 30006.6,
+     "errors": 7
+    },
+    "GET /user-product/basic/dashboard": {
+     "n": 9,
+     "p50_ms": 18649.1,
+     "p95_ms": 21509.6,
+     "p99_ms": 21509.6,
+     "errors": 0
+    },
+    "GET /user-product/vip/strategy-dashboard": {
+     "n": 4,
+     "p50_ms": 18648.9,
+     "p95_ms": 18649.3,
+     "p99_ms": 18649.3,
+     "errors": 0
+    },
+    "GET /user-product/basic/budget": {
+     "n": 17,
+     "p50_ms": 18647.9,
+     "p95_ms": 21507.5,
+     "p99_ms": 21507.5,
+     "errors": 0
+    },
+    "GET /user-product/free/movements": {
+     "n": 22,
+     "p50_ms": 18648.0,
+     "p95_ms": 21508.9,
+     "p99_ms": 21509.2,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-vip": {
+     "n": 8,
+     "p50_ms": 18648.4,
+     "p95_ms": 21508.8,
+     "p99_ms": 21508.8,
+     "errors": 0
+    },
+    "GET /user-product/free/dashboard": {
+     "n": 12,
+     "p50_ms": 18647.2,
+     "p95_ms": 21509.0,
+     "p99_ms": 21509.0,
+     "errors": 0
+    },
+    "GET /user-product/finance/summary": {
+     "n": 15,
+     "p50_ms": 18270.8,
+     "p95_ms": 21507.6,
+     "p99_ms": 21507.6,
+     "errors": 0
+    },
+    "GET /user-product/finance/debts": {
+     "n": 27,
+     "p50_ms": 18269.8,
+     "p95_ms": 21508.3,
+     "p99_ms": 21508.6,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-basic": {
+     "n": 4,
+     "p50_ms": 18645.9,
+     "p95_ms": 18647.8,
+     "p99_ms": 18647.8,
+     "errors": 0
+    },
+    "GET /user-product/goals": {
+     "n": 25,
+     "p50_ms": 17401.1,
+     "p95_ms": 21507.7,
+     "p99_ms": 21508.2,
+     "errors": 0
+    }
+   },
+   "pg_connections_max": 42,
+   "pg_active_max": 2,
+   "pg_idle_in_tx_max": 33,
+   "backend_cpu_pct_max": 17.8,
+   "backend_rss_mb_max": 48.5
+  },
+  {
+   "concurrency": 100,
+   "seconds": 90.0,
+   "requests": 259,
+   "rps": 2.9,
+   "p50_ms": 30003.2,
+   "p95_ms": 30007.6,
+   "p99_ms": 30011.2,
+   "error_rate": 1.0,
+   "errors_5xx": 259,
+   "status_4xx": 0,
+   "timeouts": 259,
+   "endpoints": {
+    "GET /user-product/finance/strategy-basic": {
+     "n": 4,
+     "p50_ms": 30006.5,
+     "p95_ms": 30007.1,
+     "p99_ms": 30007.1,
+     "errors": 4
+    },
+    "GET /user-product/free/dashboard": {
+     "n": 13,
+     "p50_ms": 30005.2,
+     "p95_ms": 30009.4,
+     "p99_ms": 30009.4,
+     "errors": 13
+    },
+    "GET /user-product/free/movements": {
+     "n": 27,
+     "p50_ms": 30004.4,
+     "p95_ms": 30007.6,
+     "p99_ms": 30009.7,
+     "errors": 27
+    },
+    "GET /user-product/finance/summary": {
+     "n": 14,
+     "p50_ms": 30004.7,
+     "p95_ms": 30007.1,
+     "p99_ms": 30007.1,
+     "errors": 14
+    },
+    "GET /user-product/finance/debts": {
+     "n": 28,
+     "p50_ms": 30004.2,
+     "p95_ms": 30008.3,
+     "p99_ms": 30012.8,
+     "errors": 28
+    },
+    "GET /user-product/vip/strategy-dashboard": {
+     "n": 7,
+     "p50_ms": 30003.9,
+     "p95_ms": 30013.8,
+     "p99_ms": 30013.8,
+     "errors": 7
+    },
+    "GET /user-product/vip/command-center": {
+     "n": 11,
+     "p50_ms": 30003.8,
+     "p95_ms": 30009.0,
+     "p99_ms": 30009.0,
+     "errors": 11
+    },
+    "GET /user-product/finance/strategy-vip": {
+     "n": 6,
+     "p50_ms": 30004.1,
+     "p95_ms": 30010.5,
+     "p99_ms": 30010.5,
+     "errors": 6
+    },
+    "GET /user-product/basic/dashboard": {
+     "n": 11,
+     "p50_ms": 30003.6,
+     "p95_ms": 30007.4,
+     "p99_ms": 30007.4,
+     "errors": 11
+    },
+    "GET /user-product/basic/budget": {
+     "n": 15,
+     "p50_ms": 30003.4,
+     "p95_ms": 30007.8,
+     "p99_ms": 30007.8,
+     "errors": 15
+    },
+    "GET /user-product/goals": {
+     "n": 23,
+     "p50_ms": 30003.2,
+     "p95_ms": 30006.6,
+     "p99_ms": 30008.4,
+     "errors": 23
+    },
+    "GET /auth/me": {
+     "n": 100,
+     "p50_ms": 30002.2,
+     "p95_ms": 30005.4,
+     "p99_ms": 30006.6,
+     "errors": 100
+    }
+   },
+   "pg_connections_max": 3,
+   "pg_active_max": 2,
+   "pg_idle_in_tx_max": 1,
+   "backend_cpu_pct_max": 12.9,
+   "backend_rss_mb_max": 80.7
+  }
+ ],
+ "config": {
+  "base": "http://127.0.0.1:8790",
+  "users": 120,
+  "stages": "10,25,50,100",
+  "stage_seconds": 60,
+  "think": "1,3",
+  "db": "dincr_load",
+  "skip_setup": false
+ }
+}

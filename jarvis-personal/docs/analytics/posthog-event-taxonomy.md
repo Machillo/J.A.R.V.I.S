@@ -77,7 +77,7 @@ PostHog es la telemetría permanente de DINCR. Sirve para saber cómo funciona e
 |---|---|---|
 | `gmail_connected` | La sesión que inició el flujo completa la vinculación de Gmail | — |
 | `account_deletion_completed` | Después de una eliminación exitosa | — |
-| `mail_sync_completed` | Cada sync de Gmail/Outlook con cualquier disparador | `provider`, `trigger` (manual/connect/maintenance/push), `scan_scope`, `initial_scan_complete`, `duration_ms`, `messages_scanned`, `candidates_pending`, `duplicates`, `payroll_reports` |
+| `mail_sync_completed` | Cada sync de Gmail/Outlook con cualquier disparador | `provider`, `trigger` (manual/connect/maintenance/push), `scan_scope`, `initial_scan_complete`, `duration_ms`, `messages_scanned`, `candidates_pending`, `duplicates`, `payroll_reports`, `messages_failed` (avisos que no se pudieron procesar) |
 | `mail_sync_failed` | Una sync falló | `provider`, `trigger`, `error_code` (reauth_required/access_denied/provider_error), `duration_ms` |
 | `server_error` | Una respuesta 5xx | `route` (plantilla de código, sin IDs), `method`, `status_code`, `exception_type` (clase, sin mensaje) |
 | `subscription_changed` | Motor de suscripciones (sandbox, Apple o Google) | `plan`, `billing_period`, `subscription_event`, `store` |
