@@ -19,6 +19,9 @@ EVIDENCE = ROOT / "database/audits/financial_ownership_evidence.sql"
 ROLLBACK = ROOT / "database/rollback/20260925120000_financial_ownership_integrity_rollback.sql"
 # Financial tables created after Phase 2A that carry the same dual legacy user_id.
 POST_PHASE_2A = ["account_balances", "account_balance_history", "net_worth_snapshots", "payroll_salary_reports"]
+# Workspace-owned financial tables without a legacy user_id: deletion guards only.
+WORKSPACE_ONLY = ["finva_budget_items", "finva_recurring_items", "finva_goal_contributions",
+                  "finva_savings_plans", "finva_savings_plan_contributions"]
 SCHEMA = ROOT / "database/schema.sql"
 BACKEND = ROOT / "backend"
 
@@ -37,7 +40,7 @@ def test_ownership_table_list_matches_phase_2a():
     schema = SCHEMA.read_text(encoding="utf-8")
     phase_2a = schema[schema.index("Unified JARVIS workspace ownership - Phase 2A"):]
     array = phase_2a[phase_2a.index("ARRAY["):phase_2a.index("];")]
-    assert _ownership_tables() == re.findall(r"'([a-z_]+)'", array) + POST_PHASE_2A
+    assert _ownership_tables() == re.findall(r"'([a-z_]+)'", array) + POST_PHASE_2A + WORKSPACE_ONLY
 
 
 def test_migration_is_transactional_and_non_destructive():
@@ -106,7 +109,8 @@ def test_every_financial_insert_sets_workspace_and_user():
         for match in pattern.finditer(text):
             seen += 1
             columns = {c.strip().lower() for c in match.group(2).split(",")}
-            if not {"workspace_id", "user_id"} <= columns:
+            required = {"workspace_id"} if match.group(1).lower() in WORKSPACE_ONLY else {"workspace_id", "user_id"}
+            if not required <= columns:
                 line = text[: match.start()].count("\n") + 1
                 offenders.append(f"{path.relative_to(ROOT)}:{line} {match.group(1)}")
     assert seen > 40  # the scan really finds the writers
@@ -211,3 +215,20 @@ def test_check_refuses_a_role_subject_to_rls():
 def test_admin_promoted_in_allowed_users_is_checked_too():
     sql = MIGRATION.read_text(encoding="utf-8")
     assert "au.role IN ('owner', 'admin') AND au.status = 'active'" in sql
+
+
+def test_the_migration_is_one_transaction_the_reviewed_runner_accepts():
+    from backend.scripts import apply_migration
+
+    sql = MIGRATION.read_text(encoding="utf-8")
+    apply_migration.check_single_transaction(sql)
+    assert MIGRATION.parent.name == "migrations"
+    statements = apply_migration.statements(sql)
+    assert "SET LOCAL lock_timeout = '5s'" in statements[1:4]
+
+
+def test_the_migration_requires_the_request_path_schema_first():
+    """Its deletion guards cover the Basic tables; they must exist when it runs."""
+    sql = MIGRATION.read_text(encoding="utf-8")
+    assert "apply 20260925130000_request_path_schema.sql first" in sql
+    assert (MIGRATION.parent / "20260925130000_request_path_schema.sql").exists()

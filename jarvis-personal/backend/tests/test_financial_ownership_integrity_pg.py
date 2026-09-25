@@ -1023,3 +1023,54 @@ def test_connection_names_web_app_vs_scripts():
     )
     result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, result.stderr[-2000:]
+
+
+WORKSPACE_ONLY = ("finva_budget_items", "finva_recurring_items", "finva_goal_contributions",
+                  "finva_savings_plans", "finva_savings_plan_contributions")
+
+
+def _contribution(cur, ids) -> int:
+    cur.execute("INSERT INTO finva_goal_contributions(workspace_id, goal_id, amount) VALUES (%s, 1, 10) RETURNING id",
+                (ids["workspace"],))
+    return cur.fetchone()[0]
+
+
+def test_workspace_only_financial_tables_get_delete_and_truncate_guards(layout_fk):
+    conn = layout_fk["conn"]
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        for table in WORKSPACE_ONLY:
+            cur.execute("SELECT tgname FROM pg_trigger WHERE tgrelid = %s::regclass AND NOT tgisinternal ORDER BY 1",
+                        (f"public.{table}",))
+            assert [row[0] for row in cur.fetchall()] == [f"trg_{table}_delete_guard", f"trg_{table}_truncate_guard"]
+
+
+def test_a_cross_owner_delete_of_goal_contributions_is_rejected(layout_fk):
+    conn, a1, a3 = layout_fk["conn"], _ids("a1"), _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        _contribution(cur, a1)
+        _contribution(cur, a3)
+        with pytest.raises(psycopg2.errors.CheckViolation, match="spans 2 live owners"):
+            cur.execute("DELETE FROM finva_goal_contributions WHERE workspace_id = ANY(%s::uuid[])",
+                        ([a1["workspace"], a3["workspace"]],))
+        with pytest.raises(psycopg2.errors.CheckViolation, match="TRUNCATE of financial table"):
+            cur.execute("TRUNCATE finva_goal_contributions")
+        cur.execute("SELECT COUNT(*) FROM finva_goal_contributions")
+        assert cur.fetchone()[0] == 2
+        # The app deleting one workspace's rows still works.
+        cur.execute("DELETE FROM finva_goal_contributions WHERE workspace_id = %s", (a1["workspace"],))
+        cur.execute("SELECT COUNT(*) FROM finva_goal_contributions")
+        assert cur.fetchone()[0] == 1
+
+
+def test_migration_refuses_to_run_before_the_request_path_schema(layout_fk):
+    conn = layout_fk["conn"]
+    with conn.cursor() as cur:
+        cur.execute("DROP TABLE finva_goal_contributions")
+    with pytest.raises(psycopg2.Error, match="apply 20260925130000_request_path_schema.sql first"):
+        _apply_migration(conn)
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK")
+        cur.execute("SELECT to_regprocedure('public.dincr_guard_financial_delete()') IS NULL")
+        assert cur.fetchone()[0] is True  # nothing was applied

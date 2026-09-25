@@ -131,7 +131,15 @@ AS $fn$
         ('account_balances', NULL, NULL),
         ('account_balance_history', 'account_balances', 'financial_account_id'),
         ('net_worth_snapshots', NULL, NULL),
-        ('payroll_salary_reports', NULL, NULL)
+        ('payroll_salary_reports', NULL, NULL),
+        -- Workspace-owned financial tables without a legacy user_id (created by
+        -- 20260925130000_request_path_schema.sql and 20260916_finva_scheduled_savings):
+        -- no ownership trigger applies, but deletes and TRUNCATE are guarded.
+        ('finva_budget_items', NULL, NULL),
+        ('finva_recurring_items', NULL, NULL),
+        ('finva_goal_contributions', NULL, NULL),
+        ('finva_savings_plans', NULL, NULL),
+        ('finva_savings_plan_contributions', NULL, NULL)
     ) AS t(table_name, parent_table, parent_column)
 $fn$;
 
@@ -1011,20 +1019,35 @@ END $$;
 DO $$
 DECLARE
     v_missing BIGINT;
+    v_absent TEXT;
 BEGIN
+    -- The Basic tables must already exist (20260925130000_request_path_schema.sql
+    -- applied first); otherwise their deletion guards would be skipped silently.
+    SELECT string_agg(t, ', ') INTO v_absent
+    FROM unnest(ARRAY['finva_budget_items', 'finva_recurring_items', 'finva_goal_contributions']) t
+    WHERE to_regclass(format('public.%I', t)) IS NULL;
+    IF v_absent IS NOT NULL THEN
+        RAISE EXCEPTION 'financial ownership integrity: apply 20260925130000_request_path_schema.sql first (missing: %)', v_absent;
+    END IF;
+
     SELECT COUNT(*) INTO v_missing
     FROM public.dincr_ownership_tables() t
     WHERE to_regclass(format('public.%I', t.table_name)) IS NOT NULL
-      AND (SELECT COUNT(*) FROM information_schema.columns isc
-           WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
-             AND isc.column_name IN ('user_id', 'workspace_id')) = 2
+      AND EXISTS (SELECT 1 FROM information_schema.columns isc
+                  WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
+                    AND isc.column_name = 'workspace_id')
       AND (
-        NOT EXISTS (SELECT 1 FROM pg_trigger tr
-                    WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
-                      AND tr.tgname = 'trg_' || t.table_name || '_ownership_guard')
-        OR NOT EXISTS (SELECT 1 FROM pg_constraint c
-                       WHERE c.conrelid = format('public.%I', t.table_name)::regclass
-                         AND c.conname = 'ck_' || t.table_name || '_workspace_required')
+        -- Tables with a legacy user_id: ownership trigger and workspace CHECK.
+        ((SELECT COUNT(*) FROM information_schema.columns isc
+          WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
+            AND isc.column_name IN ('user_id', 'workspace_id')) = 2
+         AND (NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                          WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                            AND tr.tgname = 'trg_' || t.table_name || '_ownership_guard')
+              OR NOT EXISTS (SELECT 1 FROM pg_constraint c
+                             WHERE c.conrelid = format('public.%I', t.table_name)::regclass
+                               AND c.conname = 'ck_' || t.table_name || '_workspace_required')))
+        -- Every workspace-owned table with an integer id: delete and TRUNCATE guards.
         OR (EXISTS (SELECT 1 FROM information_schema.columns isc
                     WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
                       AND isc.column_name = 'id' AND isc.data_type IN ('bigint', 'integer'))

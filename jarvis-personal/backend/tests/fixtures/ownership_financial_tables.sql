@@ -102,3 +102,39 @@ CREATE TABLE IF NOT EXISTS finva_gmail_connections (
     legacy_user_id BIGINT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active'
 );
+
+-- Workspace-owned financial tables without a legacy user_id (request-path schema
+-- and scheduled savings migrations). goal_id/savings_plan_id carry no FK here:
+-- the fixture has no financial_goals table.
+CREATE TABLE IF NOT EXISTS finva_budget_items (
+    id BIGSERIAL PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    category TEXT NOT NULL,
+    monthly_limit NUMERIC(14, 2) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS finva_recurring_items (
+    id BIGSERIAL PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    amount NUMERIC(14, 2) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS finva_goal_contributions (
+    id BIGSERIAL PRIMARY KEY,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    goal_id BIGINT NOT NULL,
+    amount NUMERIC(14, 2) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS finva_savings_plans (
+    id BIGSERIAL PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS finva_savings_plan_contributions (
+    id BIGSERIAL PRIMARY KEY,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    savings_plan_id BIGINT NOT NULL,
+    amount NUMERIC(14, 2) NOT NULL
+);
