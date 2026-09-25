@@ -48,6 +48,8 @@ CR_TZ = ZoneInfo("America/Costa_Rica")
 # message is the same whatever the reason, so it never tells the person who is
 # connecting whether (or where) the mailbox is already used.
 MAILBOX_UNAVAILABLE = "No pudimos conectar este correo a tu cuenta. Si ya está conectado en otra cuenta DINCR, desconectalo ahí primero."
+# Shown to the previous account after a verified takeover; its imported data stays.
+MAILBOX_TAKEN_OVER = "Este correo se volvió a autorizar en otra cuenta DINCR y se desconectó de esta. Lo que ya importaste se conserva."
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
@@ -60,27 +62,80 @@ def pkce_challenge(verifier: str) -> str:
 
 
 def canonical_mailbox(address: str | None) -> str:
-    """The identity DINCR compares mailboxes by (same expression as the unique index)."""
-    return str(address or "").strip().lower()
+    """The address DINCR compares mailboxes by; the stored google_email stays for display.
 
-
-def ensure_mailbox_available(conn, account_id: str, workspace_id: str, mailbox: str) -> None:
-    """Refuse a mailbox that is connected, and not disconnected, to another account or workspace.
-
-    A disconnected mailbox ('disabled', its token deleted) is free again: whoever
-    proves control of it through the provider's consent may connect it. The unique
-    index uq_finva_mail_connections_live_mailbox enforces the same rule in the
-    database for concurrent completions.
+    Gmail ignores dots and "+tag" in gmail.com addresses, and googlemail.com is the
+    same mailbox. Other providers are compared case-insensitively only. The SQL
+    backfill in 20260926110000_mailbox_single_owner.sql computes the same value.
     """
-    taken = conn.execute(
-        """SELECT 1 FROM finva_gmail_connections
-           WHERE lower(btrim(google_email))=%s AND status<>'disabled'
-             AND NOT (account_id=%s AND workspace_id=%s)
-           LIMIT 1""",
-        (canonical_mailbox(mailbox), account_id, workspace_id),
-    ).fetchone()
-    if taken:
-        raise HTTPException(status_code=409, detail=MAILBOX_UNAVAILABLE)
+    value = str(address or "").strip().lower()
+    local, at, domain = value.rpartition("@")
+    if not at:
+        return value
+    if domain in ("gmail.com", "googlemail.com"):
+        return f"{local.split('+', 1)[0].replace('.', '')}@gmail.com"
+    return value
+
+
+def mailbox_key(provider: str, address: str | None, subject: str | None = None, tenant: str | None = None) -> str:
+    """Stable mailbox identity: the provider's account id when known, else the canonical address.
+
+    Google: the account's ``sub``. Microsoft: the Graph user ``id`` within its tenant.
+    """
+    if provider == "gmail" and subject:
+        return f"google:{subject}"
+    if provider == "microsoft" and subject and tenant:
+        return f"microsoft:{tenant}:{subject}"
+    return f"email:{canonical_mailbox(address)}"
+
+
+def claim_mailbox(conn, *, provider: str, account_id: str, workspace_id: str, key: str, email: str,
+                  is_entitled: Callable[[Any, str], bool]) -> None:
+    """Make a mailbox this account/workspace just proved control of available to it, or refuse.
+
+    One live connection per mailbox across every DINCR account and workspace. A
+    live connection elsewhere is refused with a message that reveals nothing about
+    it, unless it is stale: its provider access was lost ('reauthorization_required')
+    or its account no longer has the plan that includes mail. A stale connection is
+    taken over in this transaction:
+    - it is disconnected and its token deleted (never reused, never revoked: with
+      the same OAuth client, revoking it would revoke the new grant too);
+    - its account keeps every message and transaction it imported (nothing moves);
+    - the takeover is audited in mail_connection_takeovers (account ids only).
+    Rows are locked, and the unique live-mailbox indexes close races between
+    concurrent completions. The caller then attaches the mailbox.
+    """
+    rows = conn.execute(
+        """SELECT id,account_id,status,refresh_token_secret_id FROM finva_gmail_connections
+           WHERE status<>'disabled' AND NOT (account_id=%s AND workspace_id=%s)
+             AND (mailbox_key=%s OR mailbox_email=%s
+                  OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s))
+           ORDER BY id FOR UPDATE""",
+        (account_id, workspace_id, key, email, email),
+    ).fetchall()
+    reasons = []
+    for row in rows:
+        if row["status"] == "reauthorization_required":
+            reasons.append("access_lost")
+        elif not is_entitled(conn, str(row["account_id"])):
+            reasons.append("plan_inactive")
+        else:
+            raise HTTPException(status_code=409, detail=MAILBOX_UNAVAILABLE)
+    for row, reason in zip(rows, reasons):
+        conn.execute(
+            """UPDATE finva_gmail_connections
+               SET status='disabled',history_id=NULL,watch_expiration=NULL,initial_scan_page_token=NULL,
+                   last_error=%s,updated_at=NOW()
+               WHERE id=%s""",
+            (MAILBOX_TAKEN_OVER, int(row["id"])),
+        )
+        _delete_secret(conn, row["refresh_token_secret_id"])
+        conn.execute(
+            """INSERT INTO mail_connection_takeovers(provider,previous_connection_id,previous_account_id,new_account_id,reason)
+               VALUES(%s,%s,%s,%s,%s)""",
+            (provider, int(row["id"]), str(row["account_id"]), account_id, reason),
+        )
+        logger.info("Mail connection taken over provider=%s reason=%s", provider, reason)
 
 
 def _delete_secret(conn, secret_id: Any) -> None:
@@ -183,15 +238,21 @@ def fail_flow(flow_id: Any) -> None:
         conn.commit()
 
 
-def authorize_flow(conn, flow_id: Any, *, secret_id: str, mailbox: str, scopes: list[str]) -> str:
-    """Park the Vault secret on the flow (same transaction) and issue the completion code."""
+def authorize_flow(conn, flow_id: Any, *, secret_id: str, mailbox: str, scopes: list[str],
+                   subject: str | None = None, tenant: str | None = None) -> str:
+    """Park the Vault secret and the provider's mailbox identity on the flow; issue the completion code.
+
+    ``mailbox``, ``subject`` and ``tenant`` come from the provider's own API with the
+    new token, never from anything the user typed.
+    """
     completion = secrets.token_urlsafe(32)
     row = conn.execute(
         """UPDATE mail_oauth_flows SET status='authorized',code_verifier=NULL,completion_hash=%s,
                   pending_secret_id=%s::uuid,mailbox_address=%s,granted_scopes=%s,
+                  provider_subject=%s,provider_tenant=%s,
                   expires_at=NOW()+(%s*INTERVAL '1 minute'),updated_at=NOW()
            WHERE id=%s::uuid AND status='callback' RETURNING id""",
-        (_digest(completion), secret_id, mailbox, scopes, FLOW_TTL_MINUTES, str(flow_id)),
+        (_digest(completion), secret_id, mailbox, scopes, subject, tenant, FLOW_TTL_MINUTES, str(flow_id)),
     ).fetchone()
     if not row:
         raise RuntimeError("OAuth flow is no longer awaiting its callback")
@@ -221,7 +282,8 @@ def complete_flow(
     with get_connection() as conn:
         flow = conn.execute(
             """SELECT id,provider,account_id,workspace_id,status,completion_hash,pending_secret_id,
-                      mailbox_address,granted_scopes,import_scope,expires_at>NOW() AS active
+                      mailbox_address,granted_scopes,import_scope,provider_subject,provider_tenant,
+                      expires_at>NOW() AS active
                FROM mail_oauth_flows WHERE id=%s::uuid FOR UPDATE""",
             (flow_id,),
         ).fetchone()
