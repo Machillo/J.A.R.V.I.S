@@ -928,6 +928,7 @@ def test_identity_delete_cannot_cascade_into_another_workspace(layout_fk):
     _apply_migration(conn)
     wrong = _legacy_row(conn, _transaction, a2["allowed"], a2["workspace"])  # 24 is a6's users.id
     with conn.cursor() as cur:
+        cur.execute("DELETE FROM accounts WHERE id=%s", (a6["account"],))  # the app's order: account first
         with pytest.raises(psycopg2.errors.ForeignKeyViolation, match="another workspace"):
             cur.execute("DELETE FROM users WHERE id=%s", (a6["users"],))
         cur.execute("SELECT COUNT(*) FROM transactions WHERE id=%s", (wrong,))
@@ -1043,6 +1044,9 @@ def test_workspace_only_financial_tables_get_delete_and_truncate_guards(layout_f
             cur.execute("SELECT tgname FROM pg_trigger WHERE tgrelid = %s::regclass AND NOT tgisinternal ORDER BY 1",
                         (f"public.{table}",))
             assert [row[0] for row in cur.fetchall()] == [f"trg_{table}_delete_guard", f"trg_{table}_truncate_guard"]
+        # No ownership trigger: these tables have no legacy user_id.
+        cur.execute("SELECT COUNT(*) FROM pg_trigger WHERE tgname LIKE 'trg_finva_%_ownership_guard'")
+        assert cur.fetchone()[0] == 0
 
 
 def test_a_cross_owner_delete_of_goal_contributions_is_rejected(layout_fk):
@@ -1122,3 +1126,65 @@ def test_a_manual_account_deletion_must_declare_that_workspace(layout_fk):
         cur.execute("COMMIT")
         cur.execute("SELECT COUNT(*) FROM debts WHERE workspace_id = %s", (a3["workspace"],))
         assert cur.fetchone()[0] == 0
+
+
+
+def test_deleting_several_accounts_in_one_statement_is_rejected_for_every_session(layout_fk):
+    conn, a1, a3 = layout_fk["conn"], _ids("a1"), _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:  # the fixture connection is the app ('Supavisor')
+        with pytest.raises(psycopg2.errors.CheckViolation, match="spans 2 accounts"):
+            cur.execute("DELETE FROM accounts WHERE id = ANY(%s::uuid[])", ([a1["account"], a3["account"]],))
+        cur.execute("DELETE FROM accounts WHERE id = %s", (a1["account"],))  # one account works
+        cur.execute("SELECT COUNT(*) FROM accounts WHERE id = %s", (a3["account"],))
+        assert cur.fetchone()[0] == 1
+
+
+def test_a_users_row_cannot_go_while_its_account_lives(layout_fk):
+    conn, a1 = layout_fk["conn"], _ids("a1")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        with pytest.raises(psycopg2.errors.ForeignKeyViolation, match="live account"):
+            cur.execute("DELETE FROM users WHERE id = %s", (a1["users"],))
+        cur.execute("DELETE FROM accounts WHERE id = %s", (a1["account"],))
+        cur.execute("DELETE FROM users WHERE id = %s", (a1["users"],))  # the app's order works
+
+
+def test_a_table_without_an_integer_id_is_guarded_and_logged_as_a_count(layout_fk):
+    conn, a1, a3 = layout_fk["conn"], _ids("a1"), _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        for ids in (a1, a3):
+            cur.execute("INSERT INTO financial_profiles(account_id, workspace_id, declared_income) VALUES (%s, %s, 1)",
+                        (ids["account"], ids["workspace"]))
+        with pytest.raises(psycopg2.errors.CheckViolation, match="spans 2 live owners"):
+            cur.execute("DELETE FROM financial_profiles")
+        cur.execute("DELETE FROM financial_profiles WHERE workspace_id = %s", (a1["workspace"],))
+        cur.execute("SELECT row_count, row_ids FROM financial_ownership_delete_log WHERE table_name = 'financial_profiles'")
+        assert cur.fetchall() == [(1, [])]
+
+
+def test_migration_aborts_on_rows_pointing_at_another_accounts_identity(layout_fk):
+    conn, a1, a4 = layout_fk["conn"], _ids("a1"), _ids("a4")
+    with conn.cursor() as cur:
+        _debt(cur, a4["users"], a1["workspace"])  # debts -> users: a4's identity in a1's workspace
+    with pytest.raises(psycopg2.Error, match="reference another account's identity"):
+        _apply_migration(conn)
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK")
+
+
+def test_new_guard_objects_are_closed_to_the_data_api(layout_fk):
+    conn = layout_fk["conn"]
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        for role in ("anon", "authenticated"):
+            cur.execute("""SELECT c.relname FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace
+                           AND c.relname LIKE 'financial_ownership_%%'
+                           AND (has_table_privilege(%s, c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+                                OR (c.relkind = 'S' AND has_sequence_privilege(%s, c.oid, 'USAGE,SELECT,UPDATE')))""",
+                        (role, role))
+            assert cur.fetchall() == [], role
+            cur.execute("""SELECT p.proname FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+                           AND p.proname LIKE 'dincr\\_%%' AND has_function_privilege(%s, p.oid, 'EXECUTE')""", (role,))
+            assert cur.fetchall() == [], role

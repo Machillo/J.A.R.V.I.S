@@ -18,10 +18,23 @@
 
 BEGIN;
 
+-- Its ALTERs lock each guarded table: never queue behind traffic for long.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '5min';
+
 DO $$
 DECLARE
     cfg RECORD;
 BEGIN
+    FOR cfg IN SELECT * FROM public.dincr_delete_guard_tables() LOOP
+        IF to_regclass(format('public.%I', cfg.table_name)) IS NULL THEN
+            CONTINUE;
+        END IF;
+        EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
+                       'trg_' || cfg.table_name || '_delete_guard', cfg.table_name);
+        EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
+                       'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name);
+    END LOOP;
     FOR cfg IN SELECT * FROM public.dincr_ownership_tables() LOOP
         IF to_regclass(format('public.%I', cfg.table_name)) IS NULL THEN
             CONTINUE;
@@ -50,10 +63,14 @@ END $$;
 
 DROP TRIGGER IF EXISTS trg_users_legacy_delete_guard ON public.users;
 DROP TRIGGER IF EXISTS trg_allowed_users_legacy_delete_guard ON public.allowed_users;
+DROP TRIGGER IF EXISTS trg_accounts_bulk_delete_guard ON public.accounts;
+DROP TRIGGER IF EXISTS trg_workspaces_bulk_delete_guard ON public.workspaces;
 DROP FUNCTION IF EXISTS public.dincr_guard_financial_ownership();
 DROP FUNCTION IF EXISTS public.dincr_guard_financial_delete();
 DROP FUNCTION IF EXISTS public.dincr_guard_financial_truncate();
 DROP FUNCTION IF EXISTS public.dincr_guard_legacy_identity_delete();
+DROP FUNCTION IF EXISTS public.dincr_guard_identity_bulk_delete();
+DROP FUNCTION IF EXISTS public.dincr_delete_guard_tables();
 
 -- Step 2 (optional):
 -- DO $$

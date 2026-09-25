@@ -62,15 +62,7 @@ AS $fn$
         ('account_balances', NULL, NULL),
         ('account_balance_history', 'account_balances', 'financial_account_id'),
         ('net_worth_snapshots', NULL, NULL),
-        ('payroll_salary_reports', NULL, NULL),
-        -- Workspace-owned financial tables without a legacy user_id (created by
-        -- 20260925130000_request_path_schema.sql and 20260916_finva_scheduled_savings):
-        -- no ownership trigger applies, but deletes and TRUNCATE are guarded.
-        ('finva_budget_items', NULL, NULL),
-        ('finva_recurring_items', NULL, NULL),
-        ('finva_goal_contributions', NULL, NULL),
-        ('finva_savings_plans', NULL, NULL),
-        ('finva_savings_plan_contributions', NULL, NULL)
+        ('payroll_salary_reports', NULL, NULL)
     ) AS t(table_name, parent_table, parent_column)
 $fn$;
 

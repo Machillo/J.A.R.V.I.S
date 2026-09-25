@@ -19,9 +19,44 @@ EVIDENCE = ROOT / "database/audits/financial_ownership_evidence.sql"
 ROLLBACK = ROOT / "database/rollback/20260925140000_financial_ownership_integrity_rollback.sql"
 # Financial tables created after Phase 2A that carry the same dual legacy user_id.
 POST_PHASE_2A = ["account_balances", "account_balance_history", "net_worth_snapshots", "payroll_salary_reports"]
-# Workspace-owned financial tables without a legacy user_id: deletion guards only.
-WORKSPACE_ONLY = ["finva_budget_items", "finva_recurring_items", "finva_goal_contributions",
-                  "finva_savings_plans", "finva_savings_plan_contributions"]
+# Workspace-owned tables whose deletes are NOT guarded, each with the reason.
+# Every other table with a workspace_id must be in dincr_delete_guard_tables().
+UNGUARDED_WORKSPACE_TABLES = {
+    "advisor_current_strategy": "derived strategy snapshot (Owner), recomputed",
+    **{f"audit_backup_{name}_20260908": "static copy from a past manual cleanup; never written by the app"
+       for name in ("goal_schedules", "goals", "receivable_entries", "receivable_payments", "receivables")},
+    "advisor_strategy_history": "derived strategy history (Owner)",
+    "finva_parser_fallback_events": "parser diagnostic log",
+    "ai_premium_guides": "AI usage bookkeeping (Owner), no financial truth",
+    "ai_premium_settings": "AI settings (Owner)",
+    "ai_premium_usage_events": "usage counter",
+    "ai_usage_daily": "usage counter",
+    "ai_usage_events": "usage counter",
+    "billing_orders": "billing operations, owner-reviewed",
+    "billing_subscriptions": "billing state, rebuilt from the store",
+    "chat_pending_actions": "Owner assistant state",
+    "chat_sessions": "Owner assistant state",
+    "email_classification_rules": "Owner mail configuration",
+    "email_ingested_messages": "mail message index, re-derivable from the mailbox",
+    "email_monitor_settings": "Owner mail configuration",
+    "email_parser_logs": "diagnostic log",
+    "feedback_reports": "support reports",
+    "financial_health_snapshots": "derived snapshot, recomputed",
+    "financial_state_snapshots": "derived snapshot, recomputed",
+    "finva_email_messages": "mail message index, re-derivable from the mailbox",
+    "finva_gmail_connections": "mailbox connection (a token reference, not financial data)",
+    "finva_gmail_consents": "consent ledger, append-only by design",
+    "finva_gmail_oauth_states": "short-lived OAuth state",
+    "logs": "diagnostic log",
+    "mail_oauth_flows": "short-lived OAuth flow",
+    "memory_items": "Owner assistant memory",
+    "notification_jobs": "notification queue",
+    "notification_subscriptions": "push endpoints",
+    "product_events": "analytics events",
+    "store_subscriptions": "store entitlement, rebuilt from the store",
+    "user_preferences": "preferences",
+    "workspace_members": "membership, not financial data",
+}
 SCHEMA = ROOT / "database/schema.sql"
 BACKEND = ROOT / "backend"
 
@@ -40,7 +75,7 @@ def test_ownership_table_list_matches_phase_2a():
     schema = SCHEMA.read_text(encoding="utf-8")
     phase_2a = schema[schema.index("Unified JARVIS workspace ownership - Phase 2A"):]
     array = phase_2a[phase_2a.index("ARRAY["):phase_2a.index("];")]
-    assert _ownership_tables() == re.findall(r"'([a-z_]+)'", array) + POST_PHASE_2A + WORKSPACE_ONLY
+    assert _ownership_tables() == re.findall(r"'([a-z_]+)'", array) + POST_PHASE_2A
 
 
 def test_migration_is_transactional_and_non_destructive():
@@ -109,8 +144,7 @@ def test_every_financial_insert_sets_workspace_and_user():
         for match in pattern.finditer(text):
             seen += 1
             columns = {c.strip().lower() for c in match.group(2).split(",")}
-            required = {"workspace_id"} if match.group(1).lower() in WORKSPACE_ONLY else {"workspace_id", "user_id"}
-            if not required <= columns:
+            if not {"workspace_id", "user_id"} <= columns:
                 line = text[: match.start()].count("\n") + 1
                 offenders.append(f"{path.relative_to(ROOT)}:{line} {match.group(1)}")
     assert seen > 40  # the scan really finds the writers
@@ -232,3 +266,33 @@ def test_the_migration_requires_the_request_path_schema_first():
     sql = MIGRATION.read_text(encoding="utf-8")
     assert "apply 20260925130000_request_path_schema.sql first" in sql
     assert (MIGRATION.parent / "20260925130000_request_path_schema.sql").exists()
+
+
+
+def _delete_guard_tables() -> set[str]:
+    sql = MIGRATION.read_text(encoding="utf-8")
+    body = sql[sql.index("FUNCTION public.dincr_delete_guard_tables()"):]
+    body = body[:body.index("AS t(table_name)")]
+    return set(_ownership_tables()) | set(re.findall(r"\('([a-z_]+)'\)", body))
+
+
+def _repo_workspace_tables() -> set[str]:
+    """Tables the repository's SQL creates with a workspace_id column."""
+    found = set()
+    sources = [SCHEMA, *sorted((ROOT / "database" / "migrations").glob("*.sql")),
+               *sorted((ROOT / "database" / "baseline").glob("*.sql"))]
+    for path in sources:
+        sql = _strip_comments(path.read_text(encoding="utf-8"))
+        for match in re.finditer(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?\"?([a-z_]+)\"?\s*\((.*?)\n\);", sql, re.I | re.S):
+            if re.search(r"\bworkspace_id\b", match.group(2)):
+                found.add(match.group(1).lower())
+        for match in re.finditer(r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?\"?([a-z_]+)\"?\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?workspace_id\b", sql, re.I):
+            found.add(match.group(1).lower())
+    return found - {"workspaces"}
+
+
+def test_every_workspace_table_is_guarded_or_explicitly_exempt():
+    guarded, exempt = _delete_guard_tables(), set(UNGUARDED_WORKSPACE_TABLES)
+    assert not guarded & exempt, guarded & exempt
+    unclassified = _repo_workspace_tables() - guarded - exempt
+    assert unclassified == set(), "Add each table to dincr_delete_guard_tables() or UNGUARDED_WORKSPACE_TABLES with a reason"

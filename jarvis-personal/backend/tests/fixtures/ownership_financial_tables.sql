@@ -138,3 +138,9 @@ CREATE TABLE IF NOT EXISTS finva_savings_plan_contributions (
     savings_plan_id BIGINT NOT NULL,
     amount NUMERIC(14, 2) NOT NULL
 );
+-- Keyed by account, no integer id: deletes are logged as counts.
+CREATE TABLE IF NOT EXISTS financial_profiles (
+    account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    declared_income NUMERIC(14, 2)
+);
