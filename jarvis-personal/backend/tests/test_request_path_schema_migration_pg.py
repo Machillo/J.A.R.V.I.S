@@ -22,6 +22,7 @@ CREATE TABLE workspaces (id UUID PRIMARY KEY);
 CREATE TABLE financial_goals (id BIGSERIAL PRIMARY KEY);
 CREATE TABLE allowed_users (id BIGSERIAL PRIMARY KEY);
 CREATE TABLE notification_jobs (id BIGSERIAL PRIMARY KEY, user_id BIGINT, scheduled_at TIMESTAMPTZ);
+CREATE TABLE salaries (id BIGSERIAL PRIMARY KEY, amount NUMERIC);
 CREATE TABLE plans (id SERIAL PRIMARY KEY, code TEXT UNIQUE);
 CREATE TABLE features (id SERIAL PRIMARY KEY, code TEXT UNIQUE, description TEXT);
 CREATE TABLE plan_features (plan_id INT, feature_id INT, enabled BOOLEAN, PRIMARY KEY (plan_id, feature_id));
@@ -126,3 +127,24 @@ def test_free_never_gains_a_basic_feature(cur):
                    JOIN features f ON f.id = pf.feature_id
                    WHERE p.code = 'free' AND f.code IN ('basic_dashboard','guided_budget','financial_calendar','recurring_items','basic_reports')""")
     assert cur.fetchone() == (0,)
+
+
+def test_a_fresh_database_gets_the_income_category(cur):
+    _apply(cur)
+    cur.execute("""SELECT is_nullable, column_default FROM information_schema.columns
+                   WHERE table_name = 'salaries' AND column_name = 'category'""")
+    assert cur.fetchone() == ("NO", "'Salario'::text")
+
+
+def test_an_existing_income_category_is_left_alone_without_locking_salaries(cur):
+    cur.execute("ALTER TABLE salaries ADD COLUMN category TEXT NOT NULL DEFAULT 'Kept'")
+    blocker = psycopg2.connect(cur.connection.dsn)
+    try:
+        with blocker.cursor() as held:
+            held.execute("BEGIN; LOCK TABLE salaries IN ACCESS SHARE MODE")
+            _apply(cur)  # an ALTER TABLE on salaries would wait here and hit lock_timeout
+    finally:
+        blocker.rollback()
+        blocker.close()
+    cur.execute("SELECT column_default FROM information_schema.columns WHERE table_name = 'salaries' AND column_name = 'category'")
+    assert cur.fetchone() == ("'Kept'::text",)

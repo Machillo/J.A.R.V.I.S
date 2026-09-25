@@ -17,7 +17,7 @@
 --
 -- Preflight (read-only): every listed object must be present.
 --   SELECT t FROM unnest(ARRAY['accounts','workspaces','financial_goals','features',
---     'plans','plan_features','notification_jobs']) t
+--     'plans','plan_features','notification_jobs','salaries']) t
 --   WHERE to_regclass('public.' || t) IS NULL;
 -- Postflight: the query at the end of this file returns zero rows.
 
@@ -25,6 +25,19 @@ BEGIN;
 
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '2min';
+
+-- 0. Manual income category (from superseded/20260909_finva_free_01_07.sql).
+--    Added only where missing: a plain ADD COLUMN IF NOT EXISTS would take an
+--    ACCESS EXCLUSIVE lock on salaries even when the column already exists.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'salaries' AND column_name = 'category'
+    ) THEN
+        ALTER TABLE public.salaries ADD COLUMN category TEXT NOT NULL DEFAULT 'Salario';
+    END IF;
+END $$;
 
 -- 1. Basic plan tables (same shape as superseded/20260909_finva_basic_01_07.sql, which was
 --    never applied in production: do NOT apply that older file, it re-enables

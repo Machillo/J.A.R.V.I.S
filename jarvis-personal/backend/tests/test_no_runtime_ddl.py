@@ -21,8 +21,8 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[1]
 
 DDL = re.compile(
-    r"(?:^|;|\bTHEN\b|\bBEGIN\b|\bELSE\b|\$\$|EXECUTE\s+')\s*"
-    r"(?:(?:CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\s+"
+    r"(?:^|;|\bTHEN\b|\bBEGIN\b|\bELSE\b|\$\$|EXECUTE\s+'|format\(\s*')\s*"
+    r"(?:LOCK\s+(?:TABLE\s+)?[a-z_.\"{}]+|(?:CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\s+"
     r"(?:OR\s+REPLACE\s+|UNIQUE\s+|TEMP(?:ORARY)?\s+|MATERIALIZED\s+)?"
     r"(?:TABLE|INDEX|SCHEMA|SEQUENCE|FUNCTION|PROCEDURE|TRIGGER|VIEW|EXTENSION|POLICY|TYPE|DOMAIN|ROLE|DEFAULT|ALL|SELECT|INSERT|UPDATE|DELETE|USAGE|EXECUTE)\b"
     r"|COMMENT\s+ON\b)",
@@ -99,10 +99,12 @@ def test_the_scanner_sees_ddl_and_ignores_prose(tmp_path):
         '    conn.execute("-- keep compatible\\nALTER TABLE t ADD COLUMN IF NOT EXISTS c INT")\n'
         '    conn.execute("DO $$ BEGIN IF true THEN CREATE TRIGGER g AFTER INSERT ON t EXECUTE FUNCTION f(); END IF; END $$")\n'
         '    conn.execute("ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon")\n'
-        '    conn.execute("SELECT 1 -- CREATE TABLE in a comment is not DDL")\n',
+        '    conn.execute("SELECT 1 -- CREATE TABLE in a comment is not DDL")\n'
+        '    conn.execute("LOCK TABLE ledger IN ACCESS EXCLUSIVE MODE")\n'
+        '    conn.execute("DO $$ BEGIN EXECUTE format(\'CREATE INDEX i ON %I (x)\', t); END $$")\n',
         encoding="utf-8",
     )
-    assert _ddl_count(module) == 6
+    assert _ddl_count(module) == 8
 
 
 def test_users_request_modules_have_no_ddl():
@@ -118,6 +120,15 @@ def test_users_request_modules_have_no_ddl():
 # reachable function contains DDL.
 USERS_ROUTE_MODULES = ("user_product/routes.py", "financial_lifecycle/routes.py", "auth/routes.py",
                        "product_ops/routes.py", "notifications/routes.py")
+# Routers main.py mounts without INTERNAL_ONLY that are not Users entries, and why.
+OWNER_GATED_ROUTER_MODULES = {
+    "ai/routes.py": "router dependency require_roles('owner', 'admin')",
+    "email_monitor/routes.py": "require_roles in routes and _require_owner_user in the service",
+    "users_admin/routes.py": "require_roles('owner')",
+    "auth/owner_bridge_routes.py": "router dependency require_owner_bridge_key",
+    "deployment_monitor/routes.py": "HMAC secret and require_roles('owner', 'admin')",
+    "integrations/ibkr_readonly.py": "HMAC secret headers (Owner cron and sync)",
+}
 
 
 def _module_name(relative: str) -> str:
@@ -240,3 +251,18 @@ def test_the_call_graph_guard_follows_calls_across_modules():
     _, calls = _call_graph()
     assert "backend.finance.emergency_fund.update_salvavidas" in calls["backend.user_product.routes.vip_salvavidas_update"]
     assert "backend.advisor.core.build_advisor_strategy" in calls["backend.financial_lifecycle.state._build_financial_state"]
+
+
+def test_every_mounted_router_is_classified():
+    """A new router must be declared a Users entry (and so guarded) or Owner-gated."""
+    main = ast.parse((BACKEND / "main.py").read_text(encoding="utf-8"))
+    sources = {alias.asname: node.module for node in main.body if isinstance(node, ast.ImportFrom)
+               for alias in node.names if alias.name == "router" and alias.asname}
+    unclassified = []
+    for node in ast.walk(main):
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", None) == "include_router":
+            internal = any(kw.arg == "dependencies" and getattr(kw.value, "id", "") == "INTERNAL_ONLY" for kw in node.keywords)
+            module = sources[node.args[0].id].removeprefix("backend.").replace(".", "/") + ".py"
+            if not internal and module not in USERS_ROUTE_MODULES and module not in OWNER_GATED_ROUTER_MODULES:
+                unclassified.append(module)
+    assert unclassified == []

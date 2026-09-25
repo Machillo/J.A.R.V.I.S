@@ -1,3 +1,9 @@
+-- SUPERSEDED by migrations/20260925130000_request_path_schema.sql. DO NOT APPLY.
+-- Kept outside database/migrations so apply_migration.py refuses it. It creates
+-- finva_goal_contributions without row level security, outside the replay
+-- precondition of that migration, and takes an ACCESS EXCLUSIVE lock on
+-- salaries. The newer migration creates the table closed to the Data API and
+-- adds salaries.category only where it is missing (production already has it).
 BEGIN;
 
 ALTER TABLE salaries ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'Salario';
