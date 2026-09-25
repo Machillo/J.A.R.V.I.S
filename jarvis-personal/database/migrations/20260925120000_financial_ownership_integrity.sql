@@ -88,7 +88,12 @@ AS $fn$
         ('investment_cashflows', NULL, NULL),
         ('investment_portfolio_snapshots', NULL, NULL),
         ('business_projects', NULL, NULL),
-        ('business_movements', 'business_projects', 'business_id')
+        ('business_movements', 'business_projects', 'business_id'),
+        -- Financial tables created after Phase 2A with the same dual legacy user_id.
+        ('account_balances', NULL, NULL),
+        ('account_balance_history', 'account_balances', 'financial_account_id'),
+        ('net_worth_snapshots', NULL, NULL),
+        ('payroll_salary_reports', NULL, NULL)
     ) AS t(table_name, parent_table, parent_column)
 $fn$;
 
@@ -153,7 +158,7 @@ IMMUTABLE
 SET search_path = pg_catalog, public
 AS $fn$
     SELECT CASE
-        WHEN p_issue IN ('OK', 'OK_ID_SPACE_COLLISION') THEN 'OK'
+        WHEN p_issue IN ('OK', 'OK_ID_SPACE_COLLISION', 'OK_NO_LEGACY_ID') THEN 'OK'
         WHEN p_issue = 'WORKSPACE_NULL_PARENT_RESOLVABLE' THEN 'SAFE_AUTO_FIX'
         WHEN p_issue IN ('WORKSPACE_MISSING', 'WORKSPACE_OWNER_MISSING') THEN 'ORPHAN'
         ELSE 'NEEDS_REVIEW'
@@ -222,7 +227,8 @@ BEGIN
                      AND EXISTS (SELECT 1 FROM public.workspaces pw
                                  JOIN public.accounts pa ON pa.id = pw.owner_account_id
                                  WHERE pw.id = p.workspace_id)
-                     AND public.dincr_legacy_id_belongs_to_workspace(p.user_id, p.workspace_id)
+                     AND (p.user_id IS NULL OR public.dincr_legacy_id_belongs_to_workspace(p.user_id, p.workspace_id))
+                     AND t.user_id IS NOT NULL
                      AND public.dincr_legacy_id_belongs_to_workspace(t.user_id, p.workspace_id)
                 THEN 'WORKSPACE_NULL_PARENT_RESOLVABLE'
             $sql$;
@@ -256,7 +262,8 @@ BEGIN
                         WHEN w.id IS NULL THEN 'WORKSPACE_MISSING'
                         WHEN o.id IS NULL THEN 'WORKSPACE_OWNER_MISSING'
                         %s
-                        WHEN t.user_id IS NULL THEN 'USER_ID_NULL'
+                        -- Canonical rows carry no legacy id: the workspace owns them.
+                        WHEN t.user_id IS NULL THEN 'OK_NO_LEGACY_ID'
                         WHEN public.dincr_legacy_id_belongs_to_workspace(t.user_id::BIGINT, t.workspace_id)
                             THEN CASE
                                 WHEN cardinality(public.dincr_legacy_id_accounts(t.user_id::BIGINT)) > 1
@@ -549,8 +556,11 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $fn$
 BEGIN
-    -- NULL workspace is rejected by the table's CHECK constraint.
-    IF NEW.workspace_id IS NULL THEN
+    -- Transitional guard. Ownership is workspace_id; the legacy user_id only has
+    -- to agree with it. NULL workspace is rejected by the table's CHECK. A NULL
+    -- user_id is the canonical future (no legacy attribution) and is accepted;
+    -- the column's NOT NULL keeps rejecting it until legacy writers are retired.
+    IF NEW.workspace_id IS NULL OR NEW.user_id IS NULL THEN
         RETURN NEW;
     END IF;
     IF NOT public.dincr_legacy_id_belongs_to_workspace(NEW.user_id::BIGINT, NEW.workspace_id) THEN
@@ -609,7 +619,9 @@ BEGIN
             ) THEN
                 EXECUTE format(
                     'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (%I, workspace_id) '
-                    'REFERENCES public.%I(id, workspace_id) ON DELETE CASCADE NOT VALID',
+                    -- NO ACTION (checked at statement end) never changes how the
+                    -- existing single-column FK already deletes or nulls children.
+                    'REFERENCES public.%I(id, workspace_id) NOT VALID',
                     cfg.table_name, v_name, cfg.parent_column, cfg.parent_table
                 );
             END IF;
@@ -645,11 +657,7 @@ END $$;
 
 COMMIT;
 
--- Recovery (manual, human decision): every automatic change is in
--- financial_ownership_repair_log. To revert one run:
---   UPDATE public.<table_name> t SET workspace_id = NULL
---   FROM public.financial_ownership_repair_log l
---   WHERE l.run_id = '<run_id>' AND l.table_name = '<table_name>'
---     AND l.column_name = 'workspace_id' AND t.id = l.row_id
---     AND t.workspace_id::TEXT = l.new_value;
--- (The CHECK constraint must be dropped first, since it rejects NULL on update.)
+-- Recovery (manual, human decision): database/rollback/
+-- 20260925120000_financial_ownership_integrity_rollback.sql removes the guards and,
+-- optionally, reverts the logged repairs of one run (tested in
+-- backend/tests/test_financial_ownership_integrity_pg.py).

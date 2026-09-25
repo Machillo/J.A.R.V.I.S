@@ -15,6 +15,9 @@ ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "database/migrations/20260925120000_financial_ownership_integrity.sql"
 PREFLIGHT = ROOT / "database/audits/financial_ownership_preflight.sql"
 EVIDENCE = ROOT / "database/audits/financial_ownership_evidence.sql"
+ROLLBACK = ROOT / "database/rollback/20260925120000_financial_ownership_integrity_rollback.sql"
+# Financial tables created after Phase 2A that carry the same dual legacy user_id.
+POST_PHASE_2A = ["account_balances", "account_balance_history", "net_worth_snapshots", "payroll_salary_reports"]
 SCHEMA = ROOT / "database/schema.sql"
 BACKEND = ROOT / "backend"
 
@@ -33,7 +36,7 @@ def test_ownership_table_list_matches_phase_2a():
     schema = SCHEMA.read_text(encoding="utf-8")
     phase_2a = schema[schema.index("Unified JARVIS workspace ownership - Phase 2A"):]
     array = phase_2a[phase_2a.index("ARRAY["):phase_2a.index("];")]
-    assert _ownership_tables() == re.findall(r"'([a-z_]+)'", array)
+    assert _ownership_tables() == re.findall(r"'([a-z_]+)'", array) + POST_PHASE_2A
 
 
 def test_migration_is_transactional_and_non_destructive():
@@ -97,6 +100,27 @@ def test_every_financial_insert_sets_workspace_and_user():
                 offenders.append(f"{path.relative_to(ROOT)}:{line} {match.group(1)}")
     assert seen > 40  # the scan really finds the writers
     assert offenders == []
+
+
+def test_no_backend_query_decides_by_legacy_user_id():
+    """Ownership is workspace_id. A SQL predicate on user_id would let the two
+    legacy id spaces (allowed_users.id vs users.id) be confused again."""
+    predicate = re.compile(r"\b(WHERE|AND|OR|ON)\s+(?:\w+\.)?user_id\s*(=|IN\b|<>|IS\b)", re.I)
+    offenders = []
+    for path in BACKEND.rglob("*.py"):
+        if "tests" in path.parts or path.name.startswith("test_"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in predicate.finditer(text):
+            offenders.append(f"{path.relative_to(ROOT)}:{text[: match.start()].count(chr(10)) + 1}")
+    assert offenders == []
+
+
+def test_rollback_only_removes_guards():
+    sql = _strip_comments(ROLLBACK.read_text(encoding="utf-8")).upper()
+    assert sql.strip().startswith("BEGIN;") and sql.rstrip().endswith("COMMIT;")
+    for forbidden in (r"\bDELETE\s+FROM\b", r"\bTRUNCATE\b", r"\bDROP\s+TABLE\b", r"\bDROP\s+COLUMN\b", r"\bUPDATE\s+"):
+        assert not re.search(forbidden, sql), forbidden
 
 
 def test_report_prints_counts_only_and_fails_on_findings():

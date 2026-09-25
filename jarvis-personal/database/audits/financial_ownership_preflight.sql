@@ -56,7 +56,12 @@ AS $fn$
         ('investment_cashflows', NULL, NULL),
         ('investment_portfolio_snapshots', NULL, NULL),
         ('business_projects', NULL, NULL),
-        ('business_movements', 'business_projects', 'business_id')
+        ('business_movements', 'business_projects', 'business_id'),
+        -- Financial tables created after Phase 2A with the same dual legacy user_id.
+        ('account_balances', NULL, NULL),
+        ('account_balance_history', 'account_balances', 'financial_account_id'),
+        ('net_worth_snapshots', NULL, NULL),
+        ('payroll_salary_reports', NULL, NULL)
     ) AS t(table_name, parent_table, parent_column)
 $fn$;
 
@@ -121,7 +126,7 @@ IMMUTABLE
 SET search_path = pg_catalog, public
 AS $fn$
     SELECT CASE
-        WHEN p_issue IN ('OK', 'OK_ID_SPACE_COLLISION') THEN 'OK'
+        WHEN p_issue IN ('OK', 'OK_ID_SPACE_COLLISION', 'OK_NO_LEGACY_ID') THEN 'OK'
         WHEN p_issue = 'WORKSPACE_NULL_PARENT_RESOLVABLE' THEN 'SAFE_AUTO_FIX'
         WHEN p_issue IN ('WORKSPACE_MISSING', 'WORKSPACE_OWNER_MISSING') THEN 'ORPHAN'
         ELSE 'NEEDS_REVIEW'
@@ -190,7 +195,8 @@ BEGIN
                      AND EXISTS (SELECT 1 FROM public.workspaces pw
                                  JOIN public.accounts pa ON pa.id = pw.owner_account_id
                                  WHERE pw.id = p.workspace_id)
-                     AND pg_temp.dincr_legacy_id_belongs_to_workspace(p.user_id, p.workspace_id)
+                     AND (p.user_id IS NULL OR pg_temp.dincr_legacy_id_belongs_to_workspace(p.user_id, p.workspace_id))
+                     AND t.user_id IS NOT NULL
                      AND pg_temp.dincr_legacy_id_belongs_to_workspace(t.user_id, p.workspace_id)
                 THEN 'WORKSPACE_NULL_PARENT_RESOLVABLE'
             $sql$;
@@ -224,7 +230,8 @@ BEGIN
                         WHEN w.id IS NULL THEN 'WORKSPACE_MISSING'
                         WHEN o.id IS NULL THEN 'WORKSPACE_OWNER_MISSING'
                         %s
-                        WHEN t.user_id IS NULL THEN 'USER_ID_NULL'
+                        -- Canonical rows carry no legacy id: the workspace owns them.
+                        WHEN t.user_id IS NULL THEN 'OK_NO_LEGACY_ID'
                         WHEN pg_temp.dincr_legacy_id_belongs_to_workspace(t.user_id::BIGINT, t.workspace_id)
                             THEN CASE
                                 WHEN cardinality(pg_temp.dincr_legacy_id_accounts(t.user_id::BIGINT)) > 1

@@ -111,3 +111,122 @@ SELECT 'users', g.id
 FROM generate_series(1, (SELECT MAX(id) FROM public.users)) AS g(id)
 WHERE NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = g.id)
 ORDER BY 1, 2;
+
+-- ===========================================================================
+-- Round 2 (forensics of a workspace whose debts disappeared). Same rules: run
+-- one query at a time; <ALLOWED_ID> / <USERS_ID> are that person's
+-- allowed_users.id and users.id from E2.
+-- ===========================================================================
+
+-- E10. Every FK that can delete financial rows, with its ON DELETE rule.
+--      Confirms/refutes: (a) debts.user_id -> users/allowed_users cascades;
+--      (b) the cross-id-space risk: a user_id written in one space whose FK
+--      points at the other space is deleted when an UNRELATED person is deleted.
+SELECT child.relname AS child_table, att.attname AS child_column,
+       parent.relname AS parent_table, c.conname,
+       CASE c.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'r' THEN 'RESTRICT'
+                          WHEN 'd' THEN 'SET DEFAULT' ELSE 'NO ACTION' END AS on_delete,
+       c.convalidated
+FROM pg_constraint c
+JOIN pg_class child ON child.oid = c.conrelid
+JOIN pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
+JOIN pg_class parent ON parent.oid = c.confrelid
+JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
+WHERE c.contype = 'f'
+  AND (parent.relname IN ('users', 'allowed_users', 'accounts', 'workspaces', 'debts')
+       OR child.relname IN ('debts', 'debt_payments', 'transactions'))
+ORDER BY parent.relname, child.relname, att.attname;
+
+-- E11. Cumulative row counters since the last statistics reset: how many debt
+--      rows were ever inserted/deleted. Confirms deletions happened and bounds
+--      how many (includes the Owner's test deletions and isolation sentinels).
+SELECT s.relname, s.n_tup_ins, s.n_tup_upd, s.n_tup_del, s.n_live_tup,
+       (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS stats_since
+FROM pg_stat_user_tables s
+WHERE s.relname IN ('debts', 'debt_payments', 'transactions', 'accounts', 'workspaces', 'allowed_users', 'users')
+ORDER BY s.relname;
+
+-- E12. Identity timeline of one account (no emails). If the account or the
+--      workspace was created AFTER the debts were entered, the old workspace
+--      (and its debts) was removed by the workspace cascade; if both predate
+--      them, the rows were deleted individually or never stored here.
+SELECT a.created_at AS account_created_at, a.updated_at AS account_updated_at,
+       a.last_login_at AS account_last_login_at, a.status AS account_status,
+       au.created_at AS allowed_user_created_at, au.last_login_at AS allowed_user_last_login_at,
+       au.status AS allowed_user_status,
+       w.created_at AS workspace_created_at, w.updated_at AS workspace_updated_at,
+       (SELECT u.created_at FROM public.users u WHERE lower(u.email) = lower(a.primary_email)) AS users_row_created_at
+FROM public.accounts a
+LEFT JOIN public.allowed_users au ON au.id = a.legacy_allowed_user_id
+LEFT JOIN public.workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
+WHERE a.id = '<ACCOUNT_ID>'::uuid;
+
+-- E13. Server-side screen trail of one account (product_events, kept since
+--      2026-09-10, never purged). Shows the plan over time, whether the Debts
+--      screen was opened and on which days, and whether every event carries the
+--      same workspace_id (a second workspace_id = the workspace was replaced).
+SELECT date_trunc('day', created_at)::date AS day, workspace_id, plan_code,
+       COUNT(*) AS events,
+       COUNT(*) FILTER (WHERE event_name = 'debts_opened') AS debts_opened,
+       MIN(created_at) AS first_event, MAX(created_at) AS last_event
+FROM public.product_events
+WHERE account_id = '<ACCOUNT_ID>'::uuid OR workspace_id = '<WORKSPACE_ID>'::uuid
+GROUP BY 1, 2, 3
+ORDER BY 1;
+
+-- E14. Screen trails of accounts that no longer exist (account_id was set to
+--      NULL by the account deletion) or of workspaces that no longer exist.
+--      Confirms/refutes: the debts were entered under ANOTHER login that was
+--      later deleted (compare the dates with E13).
+SELECT workspace_id, plan_code, MIN(created_at) AS first_event, MAX(created_at) AS last_event,
+       COUNT(*) AS events, COUNT(*) FILTER (WHERE event_name = 'debts_opened') AS debts_opened
+FROM public.product_events pe
+WHERE pe.account_id IS NULL
+   OR NOT EXISTS (SELECT 1 FROM public.workspaces w WHERE w.id = pe.workspace_id)
+GROUP BY workspace_id, plan_code
+ORDER BY first_event;
+
+-- E15. Automatic incident reports of one account (screen, time, reference; no
+--      message text). Confirms/refutes: creating the debts failed and they were
+--      never stored.
+SELECT created_at, last_seen_at, source, severity, category, screen, platform,
+       app_version, occurrence_count, error_reference, status
+FROM public.feedback_reports
+WHERE account_id = '<ACCOUNT_ID>'::uuid
+ORDER BY created_at;
+
+-- E16. Rows carrying this person's legacy ids OUTSIDE their workspace.
+--      Confirms/refutes: their rows were written into another workspace.
+--      Check E2 first: a value that is also another account's id in the other
+--      space is ambiguous by itself.
+SELECT 'debts' AS table_name, workspace_id, user_id, COUNT(*) FROM public.debts
+ WHERE user_id IN (<ALLOWED_ID>, <USERS_ID>) AND workspace_id IS DISTINCT FROM '<WORKSPACE_ID>'::uuid GROUP BY 1, 2, 3
+UNION ALL
+SELECT 'transactions', workspace_id, user_id, COUNT(*) FROM public.transactions
+ WHERE user_id IN (<ALLOWED_ID>, <USERS_ID>) AND workspace_id IS DISTINCT FROM '<WORKSPACE_ID>'::uuid GROUP BY 1, 2, 3
+UNION ALL
+SELECT 'expenses', workspace_id, user_id, COUNT(*) FROM public.expenses
+ WHERE user_id IN (<ALLOWED_ID>, <USERS_ID>) AND workspace_id IS DISTINCT FROM '<WORKSPACE_ID>'::uuid GROUP BY 1, 2, 3
+UNION ALL
+SELECT 'financial_goals', workspace_id, user_id, COUNT(*) FROM public.financial_goals
+ WHERE user_id IN (<ALLOWED_ID>, <USERS_ID>) AND workspace_id IS DISTINCT FROM '<WORKSPACE_ID>'::uuid GROUP BY 1, 2, 3
+UNION ALL
+SELECT 'payroll_events', workspace_id, user_id, COUNT(*) FROM public.payroll_events
+ WHERE user_id IN (<ALLOWED_ID>, <USERS_ID>) AND workspace_id IS DISTINCT FROM '<WORKSPACE_ID>'::uuid GROUP BY 1, 2, 3;
+
+-- E17. Where a Home figure comes from when the ledger is empty. Every plan's
+--      hero is computed from the DECLARED profile plus recurring items and
+--      account balances, not from transactions (see the PR description).
+--      Returns the inputs of one workspace; keep the output private.
+SELECT
+    (SELECT p.code FROM public.account_subscriptions s JOIN public.plans p ON p.id = s.plan_id
+      WHERE s.account_id = '<ACCOUNT_ID>'::uuid) AS plan,
+    fp.income_type, fp.fixed_monthly_salary, fp.hourly_rate, fp.hours_per_day, fp.work_days_per_week,
+    fp.essential_monthly_expenses, fp.liquid_savings, fp.emergency_fund_target,
+    fp.created_at AS profile_created_at, fp.updated_at AS profile_updated_at,
+    (SELECT COUNT(*) FROM public.finva_recurring_items r WHERE r.workspace_id = '<WORKSPACE_ID>'::uuid AND r.is_active) AS active_recurring_items,
+    (SELECT COUNT(*) FROM public.account_balances b WHERE b.workspace_id = '<WORKSPACE_ID>'::uuid) AS account_balance_rows,
+    (SELECT COUNT(*) FROM public.payroll_events pe WHERE pe.workspace_id = '<WORKSPACE_ID>'::uuid) AS payroll_events_rows,
+    (SELECT COUNT(*) FROM public.finva_savings_plans sp WHERE sp.workspace_id = '<WORKSPACE_ID>'::uuid) AS savings_plans_rows
+FROM public.financial_profiles fp
+WHERE fp.account_id = '<ACCOUNT_ID>'::uuid;

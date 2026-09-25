@@ -65,9 +65,7 @@ def _with_database(uri: str, name: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, f"/{name}", parts.query, parts.fragment))
 
 
-@pytest.fixture
-def db(admin_uri):
-    """A fresh database with the identity baseline, the fixture tables and seed rows."""
+def _create_database(admin_uri: str, seed) -> tuple[str, "psycopg2.extensions.connection", callable]:
     name = f"ownership_{uuid.uuid4().hex[:12]}"
     admin = psycopg2.connect(admin_uri)
     admin.autocommit = True
@@ -83,14 +81,25 @@ def db(admin_uri):
     with conn.cursor() as cur:
         cur.execute(BASELINE.read_text(encoding="utf-8"))
         cur.execute(FIXTURE.read_text(encoding="utf-8"))
-        _seed_identities(cur)
-    try:
-        yield {"uri": uri, "conn": conn}
-    finally:
+        seed(cur)
+
+    def drop():
         conn.close()
         with admin.cursor() as cur:
             cur.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
         admin.close()
+
+    return uri, conn, drop
+
+
+@pytest.fixture
+def db(admin_uri):
+    """A fresh database with the identity baseline, the fixture tables and seed rows."""
+    uri, conn, drop = _create_database(admin_uri, _seed_identities)
+    try:
+        yield {"uri": uri, "conn": conn}
+    finally:
+        drop()
 
 
 def _seed_identities(cur) -> None:
@@ -446,3 +455,161 @@ def test_an_ownership_table_without_id_is_reported_not_skipped(db):
     _apply_migration(db["conn"])
     audit = _audit(db["conn"])
     assert audit[("savings", None)] == ("TABLE_NOT_AUDITABLE", "NEEDS_REVIEW")
+
+
+# --- Production-shaped id layout ---------------------------------------------
+# Same numeric layout as production (labels only, synthetic emails): allowed_users.id
+# and users.id per account. "k" writes users.id 6, which is also "p"'s
+# allowed_users.id; "m" writes users.id 7, also "t"'s allowed_users.id; "s" has
+# no users row yet; the owner has the same id in both spaces.
+LAYOUT = {"owner": (1, 1), "p": (6, 4), "t": (7, 3), "k": (8, 6), "e": (9, 5), "s": (14, None), "m": (17, 7)}
+
+
+def _ids(label: str) -> dict:
+    allowed, users = LAYOUT[label]
+    account = str(uuid.uuid5(uuid.NAMESPACE_URL, f"account:{label}"))
+    return {"label": label, "allowed": allowed, "users": users, "account": account,
+            "workspace": str(uuid.uuid5(uuid.NAMESPACE_URL, f"workspace:{label}")),
+            "email": f"{label}@example.test", "role": "owner" if label == "owner" else "user"}
+
+
+def _seed_layout(cur) -> None:
+    for label in LAYOUT:
+        ident = _ids(label)
+        cur.execute("INSERT INTO allowed_users(id,email,role,status) VALUES(%s,%s,%s,'active')",
+                    (ident["allowed"], ident["email"], ident["role"]))
+        if ident["users"] is not None:
+            cur.execute("INSERT INTO users(id,email,name,country,timezone) VALUES(%s,%s,'Synthetic','Nowhere','UTC')",
+                        (ident["users"], ident["email"]))
+        cur.execute("INSERT INTO accounts(id,legacy_allowed_user_id,primary_email,role) VALUES(%s,%s,%s,%s)",
+                    (ident["account"], ident["allowed"], ident["email"], ident["role"]))
+        cur.execute("INSERT INTO workspaces(id,workspace_key,owner_account_id,name,workspace_type) VALUES(%s,%s,%s,'Personal','personal')",
+                    (ident["workspace"], f"personal:{ident['account']}", ident["account"]))
+        cur.execute("INSERT INTO workspace_members(workspace_id,account_id,member_role,status) VALUES(%s,%s,'owner','active')",
+                    (ident["workspace"], ident["account"]))
+    cur.execute("SELECT setval('allowed_users_id_seq', (SELECT MAX(id) FROM allowed_users))")
+    cur.execute("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users))")
+
+
+@pytest.fixture
+def layout(admin_uri):
+    uri, conn, drop = _create_database(admin_uri, _seed_layout)
+    try:
+        with conn.cursor() as cur:
+            # Historical rows exactly as production stores them today.
+            ids = {
+                "k_debt": _debt(cur, 6, _ids("k")["workspace"]),         # users.id of k == allowed id of p
+                "t_debt": _debt(cur, 3, _ids("t")["workspace"]),         # users.id of t, no collision
+                "owner_debt": _debt(cur, 1, _ids("owner")["workspace"]),
+            }
+            _add_phase_2a_fks(cur)
+        _apply_migration(conn)
+        yield {"uri": uri, "conn": conn, "rows": ids}
+    finally:
+        drop()
+
+
+def test_production_collisions_stay_valid_and_are_never_rewritten(layout):
+    audit = _audit(layout["conn"])
+    assert audit[("debts", layout["rows"]["k_debt"])] == ("OK_ID_SPACE_COLLISION", "OK")
+    assert audit[("debts", layout["rows"]["t_debt"])] == ("OK", "OK")
+    assert audit[("debts", layout["rows"]["owner_debt"])] == ("OK", "OK")
+    with layout["conn"].cursor() as cur:
+        cur.execute("SELECT id, user_id FROM debts ORDER BY id")
+        assert cur.fetchall() == [(layout["rows"]["k_debt"], 6), (layout["rows"]["t_debt"], 3), (layout["rows"]["owner_debt"], 1)]
+        cur.execute("SELECT COUNT(*) FROM financial_ownership_repair_log")
+        assert cur.fetchone()[0] == 0
+
+
+def test_cross_workspace_writes_are_rejected_in_the_real_layout(layout):
+    with layout["conn"].cursor() as cur:
+        for user_id, label in ((6, "m"), (7, "k"), (5, "k"), (9, "t"), (1, "e"), (14, "owner")):
+            with pytest.raises(psycopg2.errors.CheckViolation):
+                _debt(cur, user_id, _ids(label)["workspace"])
+        # The DINCR bridge id of each person is accepted in their own workspace.
+        for label in ("p", "t", "k", "e", "m"):
+            _debt(cur, _ids(label)["users"], _ids(label)["workspace"])
+        # A bare integer cannot say which space it came from: 6 IS an identity of p.
+        # This is why no reader may ever decide ownership by user_id (static guard).
+        _debt(cur, 6, _ids("p")["workspace"])
+
+
+def test_account_without_users_row_writes_through_both_paths(layout, monkeypatch):
+    from backend.core import database
+    from backend.user_product import service
+    from backend.user_product.models import UserDebtCreateRequest
+
+    s = _ids("s")
+    with layout["conn"].cursor() as cur:
+        _debt(cur, s["allowed"], s["workspace"])  # allowed_users-space writer (e.g. overtime)
+    monkeypatch.setattr(database, "DATABASE_URL", layout["uri"])
+    row = _as(s, service.create_user_debt, UserDebtCreateRequest(name="Synthetic", remaining_amount=10))
+    with layout["conn"].cursor() as cur:
+        cur.execute("SELECT id FROM users WHERE email=%s", (s["email"],))
+        created_users_id = cur.fetchone()[0]
+        cur.execute("SELECT user_id FROM debts WHERE id=%s", (row["id"],))
+        assert cur.fetchone()[0] == created_users_id  # lazily created bridge row, never another person's id
+    assert created_users_id not in {users for _, users in LAYOUT.values() if users}
+
+
+def test_owner_and_active_member_can_write_disabled_member_cannot(layout):
+    e, s = _ids("e"), _ids("s")
+    with layout["conn"].cursor() as cur:
+        _debt(cur, 1, _ids("owner")["workspace"])
+        cur.execute("INSERT INTO workspace_members(workspace_id,account_id,member_role,status) VALUES(%s,%s,'member','active')",
+                    (e["workspace"], s["account"]))
+        _debt(cur, s["allowed"], e["workspace"])
+        cur.execute("UPDATE workspace_members SET status='disabled' WHERE workspace_id=%s AND account_id=%s",
+                    (e["workspace"], s["account"]))
+        with pytest.raises(psycopg2.errors.CheckViolation):
+            _debt(cur, s["allowed"], e["workspace"])
+
+
+def test_canonical_writer_without_legacy_id_and_owner_default_fallback(layout):
+    k = _ids("k")
+    with layout["conn"].cursor() as cur:
+        # DEFAULT 1 (the Owner) must never land in a user's workspace silently.
+        with pytest.raises(psycopg2.errors.CheckViolation):
+            cur.execute("INSERT INTO debts(name,debt_type,total_amount,remaining_amount,monthly_payment,workspace_id) "
+                        "VALUES('x','other',1,1,0,%s)", (k["workspace"],))
+        # Future phase: the legacy column becomes optional; ownership stays workspace_id.
+        cur.execute("ALTER TABLE debts ALTER COLUMN user_id DROP NOT NULL, ALTER COLUMN user_id DROP DEFAULT")
+        canonical = _debt(cur, None, k["workspace"])
+    assert _audit(layout["conn"])[("debts", canonical)] == ("OK_NO_LEGACY_ID", "OK")
+
+
+def test_account_deletion_still_cascades_with_the_guards(layout):
+    k = _ids("k")
+    with layout["conn"].cursor() as cur:
+        _payment(cur, 6, layout["rows"]["k_debt"], k["workspace"])
+        cur.execute("DELETE FROM accounts WHERE id=%s", (k["account"],))
+        cur.execute("SELECT COUNT(*) FROM debts WHERE workspace_id=%s", (k["workspace"],))
+        assert cur.fetchone()[0] == 0
+        cur.execute("SELECT COUNT(*) FROM debt_payments WHERE workspace_id=%s", (k["workspace"],))
+        assert cur.fetchone()[0] == 0
+        cur.execute("SELECT COUNT(*) FROM debts")
+        assert cur.fetchone()[0] == 2  # nobody else's rows were touched
+
+
+ROLLBACK = ROOT / "database/rollback/20260925120000_financial_ownership_integrity_rollback.sql"
+
+
+def test_rollback_removes_guards_keeps_evidence_and_can_revert_a_run(seeded):
+    conn, rows = seeded["conn"], seeded["rows"]
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        cur.execute("SELECT run_id FROM financial_ownership_repair_log")
+        run_id = cur.fetchone()[0]
+    rollback = ROLLBACK.read_text(encoding="utf-8")
+    step2 = rollback[rollback.index("-- DO $$"):rollback.index("COMMIT;")]
+    enabled = "\n".join(line[3:] for line in step2.splitlines()).replace("<RUN_ID>", str(run_id))
+    with conn.cursor() as cur:
+        cur.execute(rollback.replace("COMMIT;", enabled + "\nCOMMIT;"))
+        cur.execute("SELECT workspace_id FROM debt_payments WHERE id=%s", (rows["safe_child"],))
+        assert cur.fetchone()[0] is None  # repair reverted
+        cur.execute("SELECT COUNT(*) FROM financial_ownership_repair_log")
+        assert cur.fetchone()[0] == 1  # evidence kept
+        _debt(cur, IDENTITIES["A"]["allowed"], IDENTITIES["B"]["workspace"])  # guards gone
+        cur.execute("SELECT COUNT(*) FROM pg_trigger WHERE tgname LIKE 'trg\\_%%\\_ownership_guard'")
+        assert cur.fetchone()[0] == 0
+    _apply_migration(conn)  # re-applying after a rollback works

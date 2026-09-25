@@ -1,0 +1,51 @@
+-- MANUAL rollback of 20260925120000_financial_ownership_integrity.sql.
+-- Human decision only; never run automatically. No financial row is deleted.
+--
+-- Step 1 (always): remove the write guards (trigger, CHECK, parent FK and its
+-- unique index). The read-only audit functions, the snapshots and the repair
+-- log are kept as evidence.
+--
+-- Step 2 (optional): undo the automatic repairs of ONE run. Replace
+-- <RUN_ID> with financial_ownership_repair_log.run_id and uncomment the block.
+-- Only rows whose workspace_id still equals the logged new value are reverted.
+
+BEGIN;
+
+DO $$
+DECLARE
+    cfg RECORD;
+BEGIN
+    FOR cfg IN SELECT * FROM public.dincr_ownership_tables() LOOP
+        IF to_regclass(format('public.%I', cfg.table_name)) IS NULL THEN
+            CONTINUE;
+        END IF;
+        EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
+                       'trg_' || cfg.table_name || '_ownership_guard', cfg.table_name);
+        EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',
+                       cfg.table_name, 'ck_' || cfg.table_name || '_workspace_required');
+        EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',
+                       cfg.table_name, 'fk_' || cfg.table_name || '_parent_workspace');
+    END LOOP;
+    FOR cfg IN SELECT DISTINCT parent_table FROM public.dincr_ownership_tables() WHERE parent_table IS NOT NULL LOOP
+        EXECUTE format('DROP INDEX IF EXISTS public.%I', 'uq_' || cfg.parent_table || '_id_workspace');
+    END LOOP;
+END $$;
+
+DROP FUNCTION IF EXISTS public.dincr_guard_financial_ownership();
+
+-- Step 2 (optional):
+-- DO $$
+-- DECLARE
+--     l RECORD;
+-- BEGIN
+--     FOR l IN
+--         SELECT table_name, row_id, new_value
+--         FROM public.financial_ownership_repair_log
+--         WHERE run_id = '<RUN_ID>'::uuid AND column_name = 'workspace_id'
+--     LOOP
+--         EXECUTE format('UPDATE public.%I SET workspace_id = NULL WHERE id = $1 AND workspace_id::TEXT = $2', l.table_name)
+--         USING l.row_id, l.new_value;
+--     END LOOP;
+-- END $$;
+
+COMMIT;
