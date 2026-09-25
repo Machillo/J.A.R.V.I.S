@@ -31,9 +31,9 @@ SET LOCAL statement_timeout = '2min';
 --    ACCESS EXCLUSIVE lock on salaries even when the column already exists.
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'salaries' AND column_name = 'category'
+    IF NOT EXISTS (  -- pg_attribute: visible whatever the applying role's column privileges
+        SELECT 1 FROM pg_attribute
+        WHERE attrelid = 'public.salaries'::regclass AND attname = 'category' AND NOT attisdropped
     ) THEN
         ALTER TABLE public.salaries ADD COLUMN category TEXT NOT NULL DEFAULT 'Salario';
     END IF;
@@ -167,8 +167,8 @@ REVOKE ALL ON SEQUENCE store_subscription_events_id_seq FROM anon, authenticated
 COMMIT;
 
 -- Operator note: apply after the code that stops running runtime DDL is live on
--- every instance (see the PR's rollout order). If the 5 s lock_timeout aborts
--- this migration, nothing was applied and it can be re-run.
+-- every instance (see the PR's rollout order). If a lock wait times out (1 s for
+-- store billing, 5 s elsewhere), nothing was applied and it can be re-run.
 --
 -- Postflight (read-only): every row returned is a failure.
 -- WITH t(name) AS (VALUES ('store_subscriptions'),('store_subscription_events'),
@@ -201,4 +201,7 @@ COMMIT;
 -- UNION ALL
 -- SELECT 'missing index: ' || name FROM (VALUES ('idx_finva_recurring_workspace'),('idx_finva_goal_contributions_workspace'),
 --        ('idx_notification_jobs_user'),('uq_store_event_provider_id'),('idx_store_subscription_status')) i(name)
---  WHERE to_regclass('public.' || name) IS NULL;
+--  WHERE to_regclass('public.' || name) IS NULL
+-- UNION ALL
+-- SELECT 'missing column: salaries.category' WHERE NOT EXISTS (
+--   SELECT 1 FROM pg_attribute WHERE attrelid = 'public.salaries'::regclass AND attname = 'category' AND NOT attisdropped);
