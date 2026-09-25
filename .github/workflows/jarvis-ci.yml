@@ -95,8 +95,12 @@ jobs:
       - run: pip install -r requirements.txt
       # httpx is required by starlette.testclient (tests only; it used to arrive via google-genai).
       - run: pip install pytest httpx
+      # Embedded PostgreSQL for the financial ownership migration tests.
+      - run: pip install pgserver
       - run: python -m compileall -q backend
       - run: python -c "import backend.main"
       - run: python -m pytest -q backend
+        env:
+          DINCR_REQUIRE_PG_TESTS: "1"
       - run: python backend/scripts/check_file_size_budget.py
       - run: python backend/scripts/check_public_secrets.py
