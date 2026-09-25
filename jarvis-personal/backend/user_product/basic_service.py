@@ -31,8 +31,11 @@ def _basic_tables_ready(conn, *tables: str) -> bool:
 
 
 def _require_basic_tables(conn, *tables: str) -> None:
+    # 409, not 5xx: the app queues writes that fail with 5xx and replays every
+    # queued attempt later, which would apply repeated retries once the table
+    # exists. A 4xx is dropped from the queue and shown to the user.
     if not _basic_tables_ready(conn, *tables):
-        raise HTTPException(status_code=503, detail=tx(
+        raise HTTPException(status_code=409, detail=tx(
             "Esta función se está habilitando. Intentá de nuevo más tarde.",
             "This feature is being enabled. Please try again later.",
         ))

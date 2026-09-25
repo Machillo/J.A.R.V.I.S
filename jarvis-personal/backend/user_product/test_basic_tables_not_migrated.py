@@ -100,7 +100,7 @@ def test_basic_writes_refuse_until_the_migration_exists(conn, call):
     with pytest.raises(HTTPException) as error:
         call()
 
-    assert error.value.status_code == 503
+    assert error.value.status_code == 409  # never 5xx: the app would replay it
     assert not any(table in q for q in conn.queries for table in BASIC if "to_regclass" not in q)
 
 
@@ -185,5 +185,5 @@ def test_goal_contribution_never_moves_a_goal_without_its_ledger(monkeypatch):
     with pytest.raises(HTTPException) as error:
         service.contribute_user_goal(7, SimpleNamespace(amount=50, contribution_date=None))
 
-    assert error.value.status_code == 503
+    assert error.value.status_code == 409  # never 5xx: the app would replay it
     assert conn.writes == []
