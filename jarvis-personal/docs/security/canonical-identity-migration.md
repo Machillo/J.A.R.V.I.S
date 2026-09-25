@@ -55,11 +55,10 @@ Phase A:
 
 Limits:
 - A privileged role can disable triggers or change `application_name`.
-- A human or script connecting through the same pooler also reports `Supavisor` and is treated as the app. Only the one-owner check and the delete log apply there.
-- The app's exemption relies on the backend's `dincr-backend` name or the pooler's `Supavisor` name.
-  - The pooler currently reports `Supavisor`.
-  - Before applying the migration, confirm that every backend service, cron and staging `DATABASE_URL` uses the pooler, and that live app sessions show `Supavisor` in `pg_stat_activity`.
-  - A backend connected directly would have its deletes of live rows rejected (fail closed).
+- A human or script connecting through the same pooler also reports `Supavisor`. So does any client that sets `application_name` to `dincr-backend`. Both are treated as the app; only the one-owner check and the delete log apply there.
+- The app's exemption relies on the web app's `dincr-backend` name (set in `backend/main.py`) or the pooler's `Supavisor` name.
+  - Scripts that use `backend.core.database` identify as `dincr-script` and must declare their workspace.
+  - Before applying the migration, confirm that any other process deleting on behalf of the app (a cron or worker that does not import `backend/main.py`) either declares its workspace or goes through the pooler. Otherwise its deletes of live rows are rejected (fail closed).
 - The rule below and the delete log are the safeguards in both cases.
 - If workspace sharing ships, account deletion must first remove the member's rows in other owners' workspaces. Otherwise the identity guard fails that deletion closed.
 

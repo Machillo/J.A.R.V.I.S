@@ -904,8 +904,11 @@ BEGIN
     -- workspace it deletes from: SET LOCAL dincr.delete_workspace = '<uuid>'
     -- (SET LOCAL only, so it cannot leak into a reused session). This covers the
     -- SQL editor, psql, scripts, the CLI and agents.
-    -- PRE-APPLY GATE: every backend process must connect through the pooler,
-    -- otherwise its deletes of live rows are rejected here (fail closed).
+    -- PRE-APPLY GATE: every process that deletes on behalf of the app must be
+    -- the web app (backend/main.py sets 'dincr-backend') or connect through the
+    -- pooler ('Supavisor'); any other process must declare its workspace or
+    -- its deletes of live rows are rejected here (fail closed). Scripts using
+    -- backend.core.database identify as 'dincr-script' and must declare.
     IF v_owners > 0 AND COALESCE(current_setting('application_name', true), '') NOT IN ('Supavisor', 'dincr-backend') THEN
         SELECT COUNT(*) INTO v_outside
         FROM old_rows o

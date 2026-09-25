@@ -1009,11 +1009,20 @@ def test_unknown_client_must_declare_too(layout_fk):
         cur.execute("ROLLBACK")
 
 
-def test_backend_connections_identify_themselves(monkeypatch):
+def test_connection_names_web_app_vs_scripts(monkeypatch):
+    import importlib
+
     from backend.core import database
 
     seen = {}
     monkeypatch.setattr(database, "DATABASE_URL", "postgresql://example.invalid/db")
     monkeypatch.setattr(database.psycopg2, "connect", lambda *a, **k: seen.update(k) or object())
+    monkeypatch.delenv("DINCR_DB_APPLICATION_NAME", raising=False)
+    monkeypatch.setattr(database, "APPLICATION_NAME", importlib.reload(database).APPLICATION_NAME)
+    assert database.APPLICATION_NAME == "dincr-script"      # not exempt from the delete guard
+    import backend.main
+    importlib.reload(backend.main)  # the web entrypoint labels the process
+    monkeypatch.setattr(database.psycopg2, "connect", lambda *a, **k: seen.update(k) or object())
+    monkeypatch.setattr(database, "DATABASE_URL", "postgresql://example.invalid/db")
     database.PostgresConnection()
     assert seen["application_name"] == "dincr-backend"
