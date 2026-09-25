@@ -108,9 +108,10 @@ def pending_change(conn, account_id: str) -> dict | None:
 
 
 def _as_datetime(value):
-    if value is None or isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if value is None:
+        return None
+    parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)  # stored instants are UTC
 
 
 def request_plan_change(conn, account_id: str, target: str) -> dict | None:

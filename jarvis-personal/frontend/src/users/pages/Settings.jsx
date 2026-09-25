@@ -19,9 +19,10 @@ const roleLabel = (role) => ROLE_LABELS[role] ? tx(...ROLE_LABELS[role]) : role;
 const PLAN_RANK = { free: 1, basic: 2, vip: 3 };
 // Access ends at a stored instant; show the last day it still includes, in Costa Rica time
 // (the launch promotion ends 2027-01-01 06:00 UTC, which is "until December 31, 2026").
-const planDate = (value) => value
-  ? new Date(Date.parse(value) - 1).toLocaleDateString(language === "es" ? "es-CR" : "en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" })
-  : "";
+const formatDay = (ms) => new Date(ms).toLocaleDateString(language === "es" ? "es-CR" : "en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" });
+const planDate = (value) => value ? formatDay(Date.parse(value) - 1) : "";
+// The first day of the new plan (the instant itself, not the last day of the current one).
+const planStartDate = (value) => value ? formatDay(Date.parse(value)) : "";
 
 function PlanChangeNotice({ confirming, currentPlan, pendingPlan, accessEndDate, planName, isDowngrade }) {
   const current = planName(currentPlan);
@@ -32,11 +33,11 @@ function PlanChangeNotice({ confirming, currentPlan, pendingPlan, accessEndDate,
   if (!isDowngrade(confirming)) return null;
   const until = accessEndDate
     ? tx(`Seguís con ${current} y todos sus beneficios hasta el ${accessEndDate}.`, `You keep ${current} and all its benefits until ${accessEndDate}.`)
-    : tx(`Si tu plan ${current} tiene un período vigente, lo conservás hasta que termine.`, `If your ${current} plan has a current period, you keep it until it ends.`);
+    : tx(`El cambio a ${next} es inmediato.`, `The change to ${next} is immediate.`);
   const then = confirming === "free"
     ? tx("Después pasás a Gratis.", "Then you move to Free.")
     : tx(`Después pasás a ${next} si tenés una suscripción de ${next} en App Store o Google Play; si no, a Gratis.`, `Then you move to ${next} if you have a ${next} subscription in the App Store or Google Play; otherwise to Free.`);
-  return <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{until} {then}</span></div>;
+  return <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{accessEndDate ? `${until} ${then}` : until}</span></div>;
 }
 const pricesUnavailable = () => tx("No pudimos confirmar los precios. Reintentá antes de elegir Basic o VIP.", "We couldn’t confirm prices. Retry before choosing Basic or VIP.");
 
@@ -55,6 +56,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
   // A downgrade keeps the current plan until its end; the backend owns the dates.
   const pendingPlan = user?.subscription?.pending_plan || "";
   const pendingDate = planDate(user?.subscription?.pending_effective_at);
+  const pendingStartDate = planStartDate(user?.subscription?.pending_effective_at);
   const accessEndDate = planDate(user?.subscription?.expires_at);
   const isDowngrade = (code) => (PLAN_RANK[code] || 0) < (PLAN_RANK[currentPlan] || 0);
   const planName = (code) => plans.find((plan) => plan.code === code)?.name || codeLabel("plans", code);
@@ -215,7 +217,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
                 {isCurrent ? (
                   <span className="selected-plan-label"><Check size={16} /> {tx("Seleccionado","Selected")}</span>
                 ) : isPending ? (
-                  <span className="selected-plan-label">{tx(`Desde el ${pendingDate}`, `From ${pendingDate}`)}</span>
+                  <span className="selected-plan-label">{tx(`Desde el ${pendingStartDate}`, `From ${pendingStartDate}`)}</span>
                 ) : (
                   <button
                     type="button"

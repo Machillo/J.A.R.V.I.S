@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_user_id, get_current_workspace_id
 from backend.auth.plan_lifecycle import (
-    PLAN_RANK, clear_pending, pending_change, plan_after_entitlement_end, request_plan_change,
+    PLAN_RANK, clear_pending, pending_change, plan_after_entitlement_end, request_plan_change, store_plan,
 )
 from backend.core.database import get_connection
 from backend.core.i18n import tx
@@ -268,6 +268,10 @@ def select_plan(plan_code: str, accept_beta_terms: bool = False, consent_version
         _subscription(conn, account_id)  # apply an ended period first, so the decision sees the real plan
         # Downgrades and cancellations keep the current plan until its stored end.
         change = request_plan_change(conn, account_id, plan_code)
+        if change:
+            # A scheduled or kept plan is still the user's choice (onboarding included).
+            conn.execute("UPDATE accounts SET plan_selected=TRUE,updated_at=NOW() WHERE id=%s AND plan_selected IS DISTINCT FROM TRUE",
+                         (account_id,))
         if change or plan_code != "free":
             conn.commit()
         else:
@@ -324,7 +328,7 @@ def complete_onboarding(payload):
             raise HTTPException(status_code=409, detail="Seleccioná un plan primero.")
         if subscription_plan in {"basic", "vip"} and (sub or {}).get("access_source") == "self_service":
             from backend.product_ops.service import has_active_payment
-            if not has_active_payment(conn, account_id, subscription_plan):
+            if not (has_active_payment(conn, account_id, subscription_plan) or store_plan(conn, account_id) == subscription_plan):
                 raise HTTPException(status_code=402, detail="El plan se activa únicamente después de confirmar el pago.")
         if payload.income_type == "fixed" and payload.fixed_monthly_salary is None:
             raise HTTPException(status_code=422, detail="Indicá el salario que realmente te llega al mes.")
@@ -377,7 +381,8 @@ def require_feature(feature_code: str):
         subscription = _subscription(conn, account_id)
         if subscription and subscription.get("access_source") == "self_service" and subscription.get("plan") in {"basic", "vip"}:
             from backend.product_ops.service import has_active_payment
-            if not has_active_payment(conn, account_id, subscription.get("plan")):
+            if not (has_active_payment(conn, account_id, subscription.get("plan"))
+                    or store_plan(conn, account_id) == subscription.get("plan")):
                 conn.commit()
                 raise HTTPException(status_code=402, detail="Esta función requiere un pago confirmado.")
         conn.commit()
@@ -457,7 +462,8 @@ def revoke_courtesy(account_id: str):
     with get_connection() as conn:
         current=conn.execute("SELECT access_source FROM account_subscriptions WHERE account_id=%s FOR UPDATE",(account_id,)).fetchone()
         if not current or current["access_source"]!='courtesy': raise HTTPException(status_code=409, detail="La cuenta no tiene una cortesía activa.")
-        free=conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
-        conn.execute("""UPDATE account_subscriptions SET plan_id=%s,status='active',access_source='self_service',started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW() WHERE account_id=%s""",(free["id"],account_id))
-        clear_pending(conn, account_id); conn.commit()
+        # A courtesy never destroys access bought in a store: move to the store plan, or Free.
+        next_plan=conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE",(plan_after_entitlement_end(conn, account_id),)).fetchone()
+        conn.execute("""UPDATE account_subscriptions SET plan_id=%s,status='active',access_source='self_service',started_at=NOW(),expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW() WHERE account_id=%s""",(next_plan["id"],account_id))
+        conn.commit()
     return get_managed_user(account_id)

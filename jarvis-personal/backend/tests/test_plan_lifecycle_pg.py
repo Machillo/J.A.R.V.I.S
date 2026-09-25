@@ -185,6 +185,7 @@ def test_the_store_subscription_decides_the_plan_after_the_courtesy(migrated):
 
     assert subscription["plan"] == "vip" and subscription["access_source"] == "self_service"
     assert subscription["pending_plan"] is None
+    assert saas.require_feature("strategy_vip") is True  # the store plan is usable, not only displayed
 
 
 def test_a_pending_paid_plan_says_it_needs_a_store_subscription(migrated):
@@ -198,8 +199,9 @@ def test_a_pending_paid_plan_says_it_needs_a_store_subscription(migrated):
     assert _subscription(covered)["pending_requires_payment"] is False
 
 
-def test_an_ended_period_is_applied_before_the_decision(migrated):
+def test_an_ended_period_is_applied_before_the_decision(migrated, monkeypatch):
     """A courtesy that already ended is not 'kept': the request sees the real plan."""
+    monkeypatch.setattr(billing, "launch_promotion_status", lambda: {"active": True})  # independent of today's date
     account = _account(migrated)
     saas.select_plan("free")
     _expire(migrated, account)
@@ -320,6 +322,7 @@ def test_a_trial_or_grace_period_is_a_live_store_subscription(migrated, status, 
     _store(migrated, account, "basic", status=status, trial=trial)
     _expire(migrated, account)
     assert _subscription(account)["plan"] == "basic"
+    assert saas.require_feature("debts") is True
 
 
 def test_a_free_account_still_selects_free_during_onboarding(migrated):
@@ -366,3 +369,21 @@ def test_a_simulated_sandbox_subscription_is_not_a_store_plan(migrated):
     assert saas.select_plan("free")["status"] == "downgrade_scheduled"
     _expire(migrated, account)
     assert _subscription(account)["plan"] == "free"
+
+
+@pytest.mark.parametrize(("store", "plan_after"), [("basic", "basic"), (None, "free")])
+def test_revoking_a_courtesy_keeps_a_store_purchase(migrated, monkeypatch, store, plan_after):
+    account = _account(migrated)
+    if store:
+        _store(migrated, account, store)
+    monkeypatch.setattr(saas, "get_managed_user", lambda account_id: {"account_id": account_id})
+    saas.revoke_courtesy(account)
+    assert _row(migrated, account)[:2] == (plan_after, "self_service")
+
+
+def test_scheduling_during_onboarding_marks_the_plan_as_chosen(migrated):
+    account = _account(migrated)
+    migrated["cur"].execute("UPDATE accounts SET plan_selected = FALSE WHERE id = %s", (account,))
+    assert saas.select_plan("free")["status"] == "downgrade_scheduled"
+    migrated["cur"].execute("SELECT plan_selected FROM accounts WHERE id = %s", (account,))
+    assert migrated["cur"].fetchone() == (True,)
