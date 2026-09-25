@@ -7,6 +7,7 @@ from typing import Any
 from backend.email_monitor.statement_reconciliation import parse_bac_statement, parse_multimoney_statement
 from backend.email_monitor.popular_pdf import parse_popular_statement
 from backend.finance.category_catalog import normalize_category
+from backend.user_product.movement_direction import canonical_direction
 
 
 PARSER_NAME = "finva_statement"
@@ -45,7 +46,9 @@ def statement_candidate(
     movement_index: int, statement_text: str,
 ) -> dict[str, Any]:
     """Adapt a signed statement row to DINCR's canonical candidate contract."""
-    direction = str(movement.get("direction") or "unknown").lower()
+    direction = canonical_direction(movement.get("direction"))
+    if direction == "internal":
+        direction = "unknown"  # a statement row never decides ownership (Phase 1D does)
     parser_type = str(movement.get("transaction_type") or "")
     # A parser may recognize an own-transfer phrase, but ownership remains a
     # Phase 1D decision based on accounts explicitly confirmed by the user.
@@ -73,7 +76,7 @@ def statement_candidate(
         "original_amount": movement.get("original_amount"),
         "original_currency": original_currency,
         "transaction_type": transaction_type,
-        "movement_direction": direction if direction in {"in", "out"} else "unknown",
+        "movement_direction": direction,
         "movement_kind": movement_kind,
         "category": normalize_category(movement.get("category"), transaction_type),
         "bank": str(bank or "unknown").lower(),
