@@ -42,8 +42,9 @@ def test_ownership_table_list_matches_phase_2a():
 
 def test_migration_is_transactional_and_non_destructive():
     sql = _strip_comments(MIGRATION.read_text(encoding="utf-8"))
-    # Quoted literals (dynamic DDL templates, messages) are not executed as-is.
-    upper = re.sub(r"'(?:[^']|'')*'", "''", sql).upper()
+    # Dynamic DDL templates are checked too; only the two TRUNCATE-guard strings
+    # (its trigger definition and its error message) are allowed.
+    upper = sql.upper().replace("BEFORE TRUNCATE ON", "").replace("'TRUNCATE OF FINANCIAL TABLE", "'")
     assert upper.strip().startswith("BEGIN;") and upper.rstrip().endswith("COMMIT;")
     for forbidden in (
         r"\bDELETE\s+FROM\b", r"\bTRUNCATE\b", r"\bDROP\s+TABLE\b", r"\bDROP\s+COLUMN\b",
@@ -82,7 +83,7 @@ def test_audit_sql_files_are_read_only():
             r"\bALTER\s+\w+", r"\bDROP\s+\w+", r"\bTRUNCATE\b", r"\bGRANT\b", r"\bCOMMIT\b",
             r"\bCREATE\s+(TABLE|INDEX|UNIQUE|VIEW|SCHEMA|TRIGGER|ROLE|EXTENSION)\b", r"\bINTO\s+(TEMP|TEMPORARY|UNLOGGED|TABLE)\b",
             r"\bCOPY\b", r"\bSETVAL\b", r"\bNEXTVAL\b", r"\bVACUUM\b", r"\bREINDEX\b", r"\bCALL\b",
-            r"\bDO\s+(\$|LANGUAGE)",
+            r"\bDO\s+(\$|LANGUAGE|')",
         ):
             assert not re.search(forbidden, sql), (path.name, forbidden)
         if path == EVIDENCE:

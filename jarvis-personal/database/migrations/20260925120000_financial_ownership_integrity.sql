@@ -54,9 +54,9 @@
 --   6. Guards deletions against the id-space class of error: a cleanup that
 --      selects financial rows "WHERE ... OR user_id = ANY(<allowed_users ids>)"
 --      also matches other people's rows in users-FK tables. A financial DELETE
---      touching live workspaces of more than one owner is rejected; a manual
---      session (SQL editor, psql, desktop clients) must declare the single
---      workspace it deletes from; TRUNCATE of a financial table is rejected; a
+--      touching live workspaces of more than one owner is rejected; every
+--      session other than the application's pooler connection must declare the
+--      single workspace it deletes from; TRUNCATE of a financial table is rejected; a
 --      users/allowed_users row cannot be deleted while its FK would cascade into
 --      another workspace; committed financial deletions are logged in
 --      financial_ownership_delete_log (identifiers of live workspaces only).
@@ -899,10 +899,12 @@ BEGIN
                   HINT = 'delete one account''s rows per statement; never select financial rows by legacy user_id';
     END IF;
 
-    -- Manual sessions (SQL editor, psql, desktop clients) must declare the one
-    -- workspace they delete from: SET LOCAL dincr.delete_workspace = '<uuid>'.
-    -- The application connects through the pooler and is not affected.
-    IF v_owners > 0 AND current_setting('application_name', true) ~* '^(supabase/dashboard|psql|pgadmin|dbeaver|tableplus|datagrip|postico)' THEN
+    -- Every session other than the application (which reaches Postgres through
+    -- the Supavisor pooler, application_name 'Supavisor') must declare the one
+    -- workspace it deletes from: SET LOCAL dincr.delete_workspace = '<uuid>'
+    -- (SET LOCAL only, so it cannot leak into a reused session). This covers the
+    -- SQL editor, psql, scripts, the CLI and agents.
+    IF v_owners > 0 AND current_setting('application_name', true) IS DISTINCT FROM 'Supavisor' THEN
         SELECT COUNT(*) INTO v_outside
         FROM old_rows o
         JOIN public.workspaces w ON w.id = o.workspace_id
@@ -1021,9 +1023,12 @@ BEGIN
         OR (EXISTS (SELECT 1 FROM information_schema.columns isc
                     WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
                       AND isc.column_name = 'id' AND isc.data_type IN ('bigint', 'integer'))
-            AND NOT EXISTS (SELECT 1 FROM pg_trigger tr
-                            WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
-                              AND tr.tgname = 'trg_' || t.table_name || '_delete_guard'))
+            AND (NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                             WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                               AND tr.tgname = 'trg_' || t.table_name || '_delete_guard')
+                 OR NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                                WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                                  AND tr.tgname = 'trg_' || t.table_name || '_truncate_guard')))
       );
     IF v_missing > 0 THEN
         RAISE EXCEPTION 'financial ownership integrity: prevention missing on % tables, aborting', v_missing;

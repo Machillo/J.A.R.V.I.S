@@ -358,6 +358,8 @@ def main():
                 # One statement per workspace: a single financial DELETE may not
                 # span two owners (financial ownership delete guard).
                 for ctx in (p, f):
+                    # Scripts must declare the workspace they delete from.
+                    conn.execute("SELECT set_config('dincr.delete_workspace', %s, true)", (str(ctx["debt"]["workspace_id"]),))
                     conn.execute(
                         "DELETE FROM debt_payments WHERE debt_id=%s AND workspace_id=%s",
                         (ctx["debt"]["id"], ctx["debt"]["workspace_id"]),

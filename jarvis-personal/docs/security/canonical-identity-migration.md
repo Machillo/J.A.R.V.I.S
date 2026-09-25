@@ -48,13 +48,15 @@ A cleanup that selects financial rows by a legacy integer, for example `WHERE wo
 
 Phase A:
 - rejects any financial DELETE touching live workspaces of more than one owner;
-- requires manual sessions (SQL editor, psql, desktop clients) to declare the one workspace they delete from (`SET LOCAL dincr.delete_workspace = '<uuid>'`);
+- requires every session other than the application's pooler connection (`application_name = 'Supavisor'`; the SQL editor, psql, scripts, the CLI and agents) to declare the one workspace it deletes from (`SET LOCAL dincr.delete_workspace = '<uuid>'`, never a session-level `SET`);
 - rejects TRUNCATE of financial tables;
 - blocks deleting a legacy identity whose FK would cascade into another workspace;
 - logs every committed financial deletion (identifiers of live workspaces only; deletions from removed workspaces keep a count).
 
 Limits:
-- A privileged role can disable triggers or change `application_name`. The rule below and the delete log are the safeguards there.
+- A privileged role can disable triggers or change `application_name`.
+- A human or script connecting through the same pooler also reports `Supavisor` and is treated as the app. Only the one-owner check and the delete log apply there.
+- The rule below and the delete log are the safeguards in both cases.
 - If workspace sharing ships, account deletion must first remove the member's rows in other owners' workspaces. Otherwise the identity guard fails that deletion closed.
 
 Rule for humans and agents: **never delete or select financial rows by legacy `user_id`.** Remove an account through the account deletion flow; it deletes the account and its workspaces cascade.

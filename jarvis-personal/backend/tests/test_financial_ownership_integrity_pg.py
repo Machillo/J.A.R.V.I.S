@@ -78,7 +78,8 @@ def _create_database(admin_uri: str, seed) -> tuple[str, "psycopg2.extensions.co
                 cur.execute(f'CREATE ROLE "{role}" NOLOGIN')
         cur.execute(f'CREATE DATABASE "{name}"')
     uri = _with_database(admin_uri, name)
-    conn = psycopg2.connect(uri)
+    # Fixture connections act as the application (pooler connection name).
+    conn = psycopg2.connect(uri, application_name="Supavisor")
     conn.autocommit = True
     with conn.cursor() as cur:
         cur.execute(BASELINE.read_text(encoding="utf-8"))
@@ -403,7 +404,8 @@ def service_db(db, monkeypatch):
     from backend.core import database
 
     _apply_migration(db["conn"])
-    monkeypatch.setattr(database, "DATABASE_URL", db["uri"])
+    # The backend reaches production through the pooler (application_name 'Supavisor').
+    monkeypatch.setattr(database, "DATABASE_URL", db["uri"] + "&application_name=Supavisor")
     return db
 
 
@@ -552,7 +554,7 @@ def test_account_without_users_row_writes_through_both_paths(layout, monkeypatch
     a5 = _ids("a5")
     with layout["conn"].cursor() as cur:
         _debt(cur, a5["allowed"], a5["workspace"])  # allowed_users-space writer (e.g. overtime)
-    monkeypatch.setattr(database, "DATABASE_URL", layout["uri"])
+    monkeypatch.setattr(database, "DATABASE_URL", layout["uri"] + "&application_name=Supavisor")
     row = _as(a5, service.create_user_debt, UserDebtCreateRequest(name="Synthetic", remaining_amount=10))
     with layout["conn"].cursor() as cur:
         cur.execute("SELECT id FROM users WHERE email=%s", (a5["email"],))
@@ -818,7 +820,7 @@ def test_dincr_writers_pass_the_fk_space_guard(layout_fk, monkeypatch):
     from backend.user_product.models import UserDebtCreateRequest
 
     _apply_migration(layout_fk["conn"])
-    monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"])
+    monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"] + "&application_name=Supavisor")
     a3 = _ids("a3")
     row = _as(a3, service.create_user_debt, UserDebtCreateRequest(name="Synthetic", remaining_amount=100))
     result = _as(a3, service.pay_user_debt, row["id"], 10)  # writes a transaction (users-FK) too
@@ -982,4 +984,17 @@ def test_migration_aborts_on_wrong_space_rows(layout_fk):
     with pytest.raises(psycopg2.Error, match="legacy id from the wrong space"):
         _apply_migration(conn)
     with conn.cursor() as cur:
+        cur.execute("ROLLBACK")
+
+
+def test_unknown_client_must_declare_too(layout_fk):
+    """Scripts, the CLI or agents (any name but the app's) are not exempt."""
+    conn, a3 = layout_fk["conn"], _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        debt = _debt(cur, a3["users"], a3["workspace"])
+        cur.execute("BEGIN")
+        cur.execute("SET LOCAL application_name = ''")
+        with pytest.raises(psycopg2.errors.CheckViolation, match="outside the declared workspace"):
+            cur.execute("DELETE FROM debts WHERE id=%s", (debt,))
         cur.execute("ROLLBACK")

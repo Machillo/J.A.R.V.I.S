@@ -322,6 +322,7 @@ ORDER BY s.calls DESC;
 --      dynamic DELETE templates. Literal values (emails, UUIDs) are never
 --      returned; the numeric legacy ids a script targeted are returned because
 --      the id-space question needs them.
+--      (stats_since needs pg_stat_statements 1.11 / PostgreSQL 17.)
 SELECT s.queryid, s.calls, s.stats_since AS first_seen,
        (SELECT array_agg(DISTINCT lower(m[1])) FROM regexp_matches(s.query, 'delete\s+from\s+(?:"?public"?\.)?"?([a-zA-Z_]+)', 'gi') AS m) AS delete_targets,
        (SELECT array_agg(m[1]) FROM regexp_matches(s.query, 'format\(\s*''(DELETE[^'']*)''', 'gi') AS m) AS dynamic_delete_templates,

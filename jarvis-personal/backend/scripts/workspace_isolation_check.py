@@ -199,10 +199,13 @@ def main():
         try:
             with get_connection() as conn:
                 if created_ids:
-                    conn.execute(
-                        "DELETE FROM transactions WHERE id = ANY(%s) AND source='isolation_test'",
-                        (created_ids,),
-                    )
+                    # One declared workspace per statement (financial delete guard).
+                    for workspace_id in (a["workspace_id"], b["workspace_id"]):
+                        conn.execute("SELECT set_config('dincr.delete_workspace', %s, true)", (workspace_id,))
+                        conn.execute(
+                            "DELETE FROM transactions WHERE id = ANY(%s) AND workspace_id=%s AND source='isolation_test'",
+                            (created_ids, workspace_id),
+                        )
                 conn.execute(
                     "DELETE FROM workspaces WHERE id=%s AND name='4E Isolation Temporary'",
                     (b["workspace_id"],),
