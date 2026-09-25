@@ -22,7 +22,8 @@
 --          (SELECT count(*) FROM public.finva_beta_programs) AS beta_programs;
 -- Postflight: the query at the end of this file returns zero rows.
 -- Rollback: database/rollback/20260926120000_retire_offstore_billing_rollback.sql
---   (recreates the three tables empty; the configuration row is re-inserted).
+--   (recreates the three tables empty, plus a default configuration row). Apply it
+--   BEFORE reverting the code: older code reads billing_subscriptions on every request.
 
 BEGIN;
 

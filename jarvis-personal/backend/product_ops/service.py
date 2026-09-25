@@ -6,7 +6,6 @@ import secrets
 import smtplib
 import requests
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
 from types import SimpleNamespace
 from urllib.parse import urlsplit
@@ -28,6 +27,9 @@ PRICES = {
 # Public payments are App Store / Google Play only (store_billing.py). DINCR never
 # takes an off-store payment (no SINPE, transfers, receipts or manual orders).
 STORE_ENTITLED_STATES = ("trialing", "active", "grace_period")
+# Only real stores grant access. 'sandbox' rows come from the Owner-only QA simulator
+# and never make a paid plan usable.
+ENTITLING_STORES = ("apple", "google")
 logger = logging.getLogger(__name__)
 RELEASE_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[+-][A-Za-z0-9.-]+)?$")
 def _discord_webhook_host(webhook: str) -> str | None:
@@ -481,14 +483,20 @@ def catalog():
 
 
 def has_store_entitlement(conn, account_id: str, plan_code: str | None = None) -> bool:
-    """A paid plan is active only through a verified App Store / Google Play subscription."""
+    """A paid plan is active only through a verified App Store / Google Play subscription.
+
+    Live means trialing until ``trial_ends_at``, or active / in grace until
+    ``current_period_end``. A grace period that extends past the period end needs
+    its own stored end from the store (tracked with the store verification work).
+    """
     if not tables_exist(conn, ["store_subscriptions"]):
         return False
     return bool(conn.execute(
         """SELECT 1 FROM store_subscriptions
-           WHERE account_id=%s AND status = ANY(%s::text[]) AND (%s::text IS NULL OR plan_code=%s)
+           WHERE account_id=%s AND provider = ANY(%s::text[]) AND status = ANY(%s::text[])
+             AND (%s::text IS NULL OR plan_code=%s)
              AND COALESCE(CASE WHEN status='trialing' THEN trial_ends_at END, current_period_end, 'infinity'::timestamptz) > NOW()""",
-        (account_id, list(STORE_ENTITLED_STATES), plan_code, plan_code),
+        (account_id, list(ENTITLING_STORES), list(STORE_ENTITLED_STATES), plan_code, plan_code),
     ).fetchone())
 
 

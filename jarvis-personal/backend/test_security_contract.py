@@ -289,6 +289,16 @@ def test_dincr_takes_no_off_store_payment():
     from backend.product_ops import routes
     paths = {route.path for route in routes.router.routes}
     assert not [path for path in paths if "/orders" in path or "receipt" in path]
+    frontend = backend.parent / "frontend" / "src"
+    client_calls = ("uploadPaymentReceipt", "resolveTestPayment", "openTestPaymentReceipt", "/billing/orders", "/owner/orders")
+    client_offenders = [f"{path.relative_to(frontend)}: {word}" for path in frontend.rglob("*.js*")
+                        for word in client_calls if word in path.read_text(encoding="utf-8")]
+    assert client_offenders == []
+
+
+def test_the_store_states_that_grant_access_agree():
+    from backend.product_ops import service, store_billing
+    assert set(service.STORE_ENTITLED_STATES) == set(store_billing.ACTIVE_STATES)
 
 
 def test_legal_schema_is_closed_to_data_api_roles():
