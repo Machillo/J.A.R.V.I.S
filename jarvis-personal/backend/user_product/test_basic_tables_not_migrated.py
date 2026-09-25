@@ -187,3 +187,21 @@ def test_goal_contribution_never_moves_a_goal_without_its_ledger(monkeypatch):
 
     assert error.value.status_code == 409  # never 5xx: the app would replay it
     assert conn.writes == []
+
+
+def test_the_app_drops_these_refusals_instead_of_replaying_them():
+    """Contract with the app's recovery queue: 5xx is replayed later, 4xx is dropped.
+
+    The refusal above is 409 only because of this rule; if the app ever replays a
+    4xx, a refused contribution would be applied once the tables exist.
+    """
+    from pathlib import Path
+    import re
+
+    recovery = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "operationRecovery.js").read_text(encoding="utf-8")
+    literal = re.search(r"RECOVERABLE_PATH = /(.*)/;", recovery).group(1)
+    path_rule = re.compile(literal.replace("\\/", "/"))
+    for path in ("/user-product/goals/7/contributions", "/user-product/basic/budget", "/user-product/basic/recurring/3"):
+        assert path_rule.search(path), f"the app no longer queues {path}; revisit this contract"
+    # Both the first attempt and every replay drop a response below 500.
+    assert recovery.count("response.status < 500 && !processing") == 2
