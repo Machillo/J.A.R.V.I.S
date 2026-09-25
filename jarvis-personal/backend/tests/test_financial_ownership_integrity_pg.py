@@ -60,15 +60,6 @@ def admin_uri(tmp_path_factory):
     return _admin_uri(tmp_path_factory.mktemp("pgserver"))
 
 
-def _as_app(uri: str) -> str:
-    """The backend's connection name, added as a query parameter."""
-    from urllib.parse import urlsplit, urlunsplit
-
-    parts = urlsplit(uri)
-    query = "&".join(filter(None, [parts.query, "application_name=dincr-backend"]))
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
-
-
 def _with_database(uri: str, name: str) -> str:
     from urllib.parse import urlsplit, urlunsplit
 
@@ -413,8 +404,9 @@ def service_db(db, monkeypatch):
     from backend.core import database
 
     _apply_migration(db["conn"])
-    # The backend identifies itself as 'dincr-backend' (core/database.py).
-    monkeypatch.setattr(database, "DATABASE_URL", _as_app(db["uri"]))
+    # The web app identifies itself as 'dincr-backend' (backend/main.py).
+    monkeypatch.setattr(database, "DATABASE_URL", db["uri"])
+    monkeypatch.setattr(database, "APPLICATION_NAME", "dincr-backend")
     return db
 
 
@@ -563,7 +555,8 @@ def test_account_without_users_row_writes_through_both_paths(layout, monkeypatch
     a5 = _ids("a5")
     with layout["conn"].cursor() as cur:
         _debt(cur, a5["allowed"], a5["workspace"])  # allowed_users-space writer (e.g. overtime)
-    monkeypatch.setattr(database, "DATABASE_URL", _as_app(layout["uri"]))
+    monkeypatch.setattr(database, "DATABASE_URL", layout["uri"])
+    monkeypatch.setattr(database, "APPLICATION_NAME", "dincr-backend")
     row = _as(a5, service.create_user_debt, UserDebtCreateRequest(name="Synthetic", remaining_amount=10))
     with layout["conn"].cursor() as cur:
         cur.execute("SELECT id FROM users WHERE email=%s", (a5["email"],))
@@ -829,7 +822,8 @@ def test_dincr_writers_pass_the_fk_space_guard(layout_fk, monkeypatch):
     from backend.user_product.models import UserDebtCreateRequest
 
     _apply_migration(layout_fk["conn"])
-    monkeypatch.setattr(database, "DATABASE_URL", _as_app(layout_fk["uri"]))
+    monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"])
+    monkeypatch.setattr(database, "APPLICATION_NAME", "dincr-backend")
     a3 = _ids("a3")
     row = _as(a3, service.create_user_debt, UserDebtCreateRequest(name="Synthetic", remaining_amount=100))
     result = _as(a3, service.pay_user_debt, row["id"], 10)  # writes a transaction (users-FK) too
@@ -1009,20 +1003,23 @@ def test_unknown_client_must_declare_too(layout_fk):
         cur.execute("ROLLBACK")
 
 
-def test_connection_names_web_app_vs_scripts(monkeypatch):
-    import importlib
+def test_connection_names_web_app_vs_scripts():
+    """Run in a fresh interpreter: scripts default to a non-exempt name, the web
+    entrypoint labels its connections as the app."""
+    import subprocess
+    import sys
 
-    from backend.core import database
-
-    seen = {}
-    monkeypatch.setattr(database, "DATABASE_URL", "postgresql://example.invalid/db")
-    monkeypatch.setattr(database.psycopg2, "connect", lambda *a, **k: seen.update(k) or object())
-    monkeypatch.delenv("DINCR_DB_APPLICATION_NAME", raising=False)
-    monkeypatch.setattr(database, "APPLICATION_NAME", importlib.reload(database).APPLICATION_NAME)
-    assert database.APPLICATION_NAME == "dincr-script"      # not exempt from the delete guard
-    import backend.main
-    importlib.reload(backend.main)  # the web entrypoint labels the process
-    monkeypatch.setattr(database.psycopg2, "connect", lambda *a, **k: seen.update(k) or object())
-    monkeypatch.setattr(database, "DATABASE_URL", "postgresql://example.invalid/db")
-    database.PostgresConnection()
-    assert seen["application_name"] == "dincr-backend"
+    code = (
+        "import os; os.environ.pop('DINCR_DB_APPLICATION_NAME', None)\n"
+        "from backend.core import database\n"
+        "assert database.APPLICATION_NAME == 'dincr-script', database.APPLICATION_NAME\n"
+        "import backend.main\n"
+        "assert database.APPLICATION_NAME == 'dincr-backend', database.APPLICATION_NAME\n"
+        "seen = {}\n"
+        "database.DATABASE_URL = 'postgresql://example.invalid/db'\n"
+        "database.psycopg2.connect = lambda *a, **k: seen.update(k) or object()\n"
+        "database.PostgresConnection()\n"
+        "assert seen['application_name'] == 'dincr-backend'\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr[-2000:]
