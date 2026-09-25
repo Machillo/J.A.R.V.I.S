@@ -735,7 +735,8 @@ def test_user_id_fk_rules_are_reported(db):
 
 @pytest.fixture
 def layout_fk(layout_unmigrated):
-    """Colliding ids plus the real FK shapes: debts/transactions -> users, expenses -> allowed_users."""
+    """Colliding ids plus both FK shapes: debts/transactions -> users (as in production)
+    and a synthetic allowed_users FK on expenses (production: fixed_expenses-style tables)."""
     conn = layout_unmigrated["conn"]
     with conn.cursor() as cur:
         cur.execute("ALTER TABLE debts ADD CONSTRAINT debts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE")
@@ -805,3 +806,24 @@ def test_dincr_writers_pass_the_fk_space_guard(layout_fk, monkeypatch):
     row = _as(a3, service.create_user_debt, UserDebtCreateRequest(name="Synthetic", remaining_amount=100))
     result = _as(a3, service.pay_user_debt, row["id"], 10)  # writes a transaction (users-FK) too
     assert result["new_remaining_amount"] == 90
+
+
+def test_migration_aborts_when_an_owner_ids_differ_across_spaces(layout_fk):
+    conn, owner = layout_fk["conn"], _ids("owner")
+    with conn.cursor() as cur:
+        cur.execute("UPDATE users SET email='someone-else@example.test' WHERE id=%s", (owner["users"],))
+    with pytest.raises(psycopg2.Error, match="owner/admin accounts"):
+        _apply_migration(conn)
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK")
+
+
+def test_migration_aborts_when_overtime_table_references_users(layout_unmigrated):
+    conn = layout_unmigrated["conn"]
+    with conn.cursor() as cur:
+        cur.execute("CREATE TABLE payroll_events (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL "
+                    "REFERENCES users(id) ON DELETE CASCADE, workspace_id UUID)")
+    with pytest.raises(psycopg2.Error, match="payroll_events.user_id references users"):
+        _apply_migration(conn)
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK")

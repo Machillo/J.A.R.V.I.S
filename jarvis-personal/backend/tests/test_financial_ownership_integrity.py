@@ -74,7 +74,8 @@ def test_preflight_uses_the_migration_audit_functions_verbatim():
 
 def test_audit_sql_files_are_read_only():
     for path in (PREFLIGHT, EVIDENCE):
-        sql = _strip_comments(path.read_text(encoding="utf-8")).upper()
+        # Quoted literals (e.g. a regex listing statement kinds) are data, not SQL.
+        sql = re.sub(r"'(?:[^']|'')*'", "''", _strip_comments(path.read_text(encoding="utf-8"))).upper()
         for forbidden in (
             r"\bINSERT\s+INTO\b", r"\bUPDATE\s+(ONLY\s+)?[\w.\"]+\s+(\w+\s+)?SET\b", r"\bDELETE\s+FROM\b",
             r"\bALTER\s+\w+", r"\bDROP\s+\w+", r"\bTRUNCATE\b", r"\bGRANT\b", r"\bCOMMIT\b",

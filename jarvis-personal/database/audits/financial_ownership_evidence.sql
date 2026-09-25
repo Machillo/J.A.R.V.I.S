@@ -5,9 +5,10 @@
 --   <WORKSPACE_ID>  a workspaces.id under review
 --   <ACCOUNT_ID>    the accounts.id that owns it
 -- Queries return identifiers, timestamps and counts, never names, emails or
--- descriptions. Two return amounts of ONE workspace because the question needs
--- them: E7 (aggregated debt totals) and E17 (declared profile figures behind a
--- Home number). Keep every output out of tickets, logs and the repository.
+-- descriptions. Three return amounts of ONE workspace because the question needs
+-- them: E7 (aggregated debt totals), E17 (declared profile figures behind a
+-- Home number) and E19 (balances that count toward it). E23 prints normalized
+-- statement text. Keep every output out of tickets, logs and the repository.
 
 -- E1. Which identity does each debt's legacy user_id denote, per id space?
 --     account_by_users_space = owner_account_id means the row was written by the
@@ -17,8 +18,8 @@ SELECT d.id,
        w.owner_account_id,
        d.user_id,
        (SELECT a.id FROM public.accounts a WHERE a.legacy_allowed_user_id = d.user_id) AS account_by_allowed_users_space,
-       (SELECT a.id FROM public.users u
-          JOIN public.accounts a ON lower(a.primary_email) = lower(u.email)
+       (SELECT array_agg(a.id) FROM public.users u
+          JOIN public.accounts a ON lower(trim(a.primary_email)) = lower(trim(u.email))
          WHERE u.id = d.user_id) AS account_by_users_space,
        d.created_at,
        d.updated_at
@@ -29,10 +30,10 @@ ORDER BY d.id;
 -- E2. The users.id bridge of every account (the id DINCR writes into user_id).
 SELECT a.id AS account_id,
        a.legacy_allowed_user_id,
-       (SELECT u.id FROM public.users u WHERE lower(u.email) = lower(a.primary_email)) AS users_id,
+       (SELECT array_agg(u.id) FROM public.users u WHERE lower(trim(u.email)) = lower(trim(a.primary_email))) AS users_id,
        a.created_at AS account_created_at,
        (SELECT au.created_at FROM public.allowed_users au WHERE au.id = a.legacy_allowed_user_id) AS allowed_user_created_at,
-       (SELECT u.created_at FROM public.users u WHERE lower(u.email) = lower(a.primary_email)) AS users_created_at,
+       (SELECT min(u.created_at) FROM public.users u WHERE lower(trim(u.email)) = lower(trim(a.primary_email))) AS users_created_at,
        (SELECT w.id FROM public.workspaces w WHERE w.owner_account_id = a.id AND w.workspace_type = 'personal') AS personal_workspace_id,
        (SELECT w.created_at FROM public.workspaces w WHERE w.owner_account_id = a.id AND w.workspace_type = 'personal') AS workspace_created_at
 FROM public.accounts a
@@ -245,7 +246,7 @@ WHERE fp.account_id = '<ACCOUNT_ID>'::uuid;
 --      (first Income/Expense/Debt/Goal/Transaction write); 'Costa Rica' /
 --      'America/Costa_Rica' = the mail connection bridge. No emails or names.
 SELECT u.id, u.created_at, u.country, u.timezone,
-       (SELECT a.id FROM public.accounts a WHERE lower(trim(a.primary_email)) = lower(trim(u.email))) AS account_id
+       (SELECT array_agg(a.id) FROM public.accounts a WHERE lower(trim(a.primary_email)) = lower(trim(u.email))) AS account_ids
 FROM public.users u
 ORDER BY u.id;
 
@@ -294,8 +295,18 @@ ORDER BY created_at;
 --      "DELETE FROM debts WHERE id=$1 AND workspace_id=$2 RETURNING id"; any
 --      other DELETE/UPDATE/INSERT shape on debts is a manual or script write
 --      (e.g. the single-statement insert behind rows sharing one created_at).
-SELECT s.calls, s.rows, left(regexp_replace(s.query, '\s+', ' ', 'g'), 300) AS normalized_query,
+--      Utility statements (DO blocks, EXPLAIN, PREPARE, CALL, COPY) are stored
+--      verbatim with their literals, and with the default track=top the DML run
+--      inside a DO block is not recorded separately: such statements are listed
+--      with their text hidden, so their existence and call count stay visible.
+SELECT s.calls, s.rows,
+       CASE WHEN s.query ~* '^\s*(delete|update|insert|with)\M'
+            THEN left(regexp_replace(s.query, '\s+', ' ', 'g'), 300)
+            ELSE 'utility statement touching debts (text hidden: may contain literal values)'
+       END AS normalized_query,
        (SELECT stats_reset FROM pg_stat_statements_info) AS stats_since
 FROM pg_stat_statements s
-WHERE s.query ~* '\m(delete|update|insert)\M' AND s.query ~* '\mdebts\M'
+WHERE s.dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+  AND s.query ~* '\mdebts\M'
+  AND s.query ~* '\m(delete|update|insert|truncate|do|call|copy)\M'
 ORDER BY s.calls DESC;

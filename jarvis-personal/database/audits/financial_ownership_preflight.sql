@@ -80,6 +80,7 @@ AS $fn$
     JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
     JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
     JOIN pg_catalog.pg_class parent ON parent.oid = c.confrelid
+    JOIN pg_catalog.pg_namespace pns ON pns.oid = parent.relnamespace AND pns.nspname = 'public'
     JOIN pg_catalog.pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
     WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND att.attname = 'user_id'
       AND child.relname = p_table
@@ -358,6 +359,7 @@ BEGIN
     JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
     JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
     JOIN pg_catalog.pg_class parent ON parent.oid = c.confrelid
+    JOIN pg_catalog.pg_namespace pns ON pns.oid = parent.relnamespace AND pns.nspname = 'public'
     JOIN pg_catalog.pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
     WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND att.attname = 'user_id'
       AND parent.relname IN ('users', 'allowed_users')

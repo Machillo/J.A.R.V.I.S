@@ -78,6 +78,10 @@ BEGIN
     END IF;
 END $$;
 
+-- Earlier drafts had two-argument versions; they would make calls ambiguous.
+DROP FUNCTION IF EXISTS public.dincr_legacy_id_belongs_to_workspace(BIGINT, UUID);
+DROP FUNCTION IF EXISTS public.dincr_legacy_id_accounts(BIGINT);
+
 -- BEGIN DINCR OWNERSHIP AUDIT FUNCTIONS
 CREATE OR REPLACE FUNCTION public.dincr_ownership_tables()
 RETURNS TABLE (table_name TEXT, parent_table TEXT, parent_column TEXT)
@@ -135,6 +139,7 @@ AS $fn$
     JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
     JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
     JOIN pg_catalog.pg_class parent ON parent.oid = c.confrelid
+    JOIN pg_catalog.pg_namespace pns ON pns.oid = parent.relnamespace AND pns.nspname = 'public'
     JOIN pg_catalog.pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
     WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND att.attname = 'user_id'
       AND child.relname = p_table
@@ -413,6 +418,7 @@ BEGIN
     JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
     JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
     JOIN pg_catalog.pg_class parent ON parent.oid = c.confrelid
+    JOIN pg_catalog.pg_namespace pns ON pns.oid = parent.relnamespace AND pns.nspname = 'public'
     JOIN pg_catalog.pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
     WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND att.attname = 'user_id'
       AND parent.relname IN ('users', 'allowed_users')
@@ -591,6 +597,28 @@ BEGIN
     );
     IF v_blocking > 0 THEN
         RAISE EXCEPTION 'financial ownership integrity: % identity-core inconsistencies, aborting (run the preflight)', v_blocking;
+    END IF;
+
+    -- Internal (owner/admin) writers store allowed_users.id, also in tables whose
+    -- FK references users(id). That only stays valid when the account's users row
+    -- has the same id and email; otherwise the guard would reject every internal
+    -- finance write after this migration.
+    SELECT COUNT(*) INTO v_blocking
+    FROM public.accounts a
+    WHERE a.role IN ('owner', 'admin') AND a.status = 'active'
+      AND EXISTS (SELECT 1 FROM public.dincr_ownership_tables() o
+                  WHERE public.dincr_user_id_space(o.table_name) = 'users')
+      AND NOT EXISTS (SELECT 1 FROM public.users u
+                      WHERE u.id = a.legacy_allowed_user_id
+                        AND lower(trim(u.email)) = lower(trim(a.primary_email)));
+    IF v_blocking > 0 THEN
+        RAISE EXCEPTION 'financial ownership integrity: % owner/admin accounts whose allowed_users.id is not their users.id, aborting', v_blocking;
+    END IF;
+
+    -- Users overtime writes allowed_users.id into payroll_events: if that table's
+    -- FK references users(id), the writer must be fixed before the guard exists.
+    IF public.dincr_user_id_space('payroll_events') = 'users' THEN
+        RAISE EXCEPTION 'financial ownership integrity: payroll_events.user_id references users but overtime writes allowed_users.id, aborting';
     END IF;
 
     -- A stored mail-connection id outside its workspace would make every synced
