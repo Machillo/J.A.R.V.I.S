@@ -7,7 +7,8 @@ ALTER TABLE ... IF NOT EXISTS still locks the whole table. Schema belongs in
 database/migrations; a path whose table may be missing checks
 backend.core.schema_state and degrades explicitly.
 
-LEGACY_OWNER_DDL lists Owner-only modules that still carry DDL. Each count must
+LEGACY_OWNER_DDL lists modules that still carry DDL outside Users request paths
+(test_users_routes_never_reach_ddl proves no Users route reaches it). Each count must
 match exactly: removing DDL lowers the number in the same change, and no new
 module may be added.
 """
@@ -34,7 +35,6 @@ SQL_COMMENT = re.compile(r"--[^\n]*")
 LEGACY_OWNER_DDL = {
     "advisor/core.py": 2,
     "ai/memory_service.py": 8,
-    "ai/preferences.py": 6,
     "ai/strategy_dashboard.py": 1,
     "deployment_monitor/service.py": 2,
     "email_monitor/service.py": 45,
@@ -107,3 +107,120 @@ def test_users_request_modules_have_no_ddl():
     users_modules = ("auth/", "user_product/", "notifications/", "product_ops/", "financial_lifecycle/", "core/")
     found = {path: count for path, count in _runtime_ddl().items() if path.startswith(users_modules)}
     assert found == {}
+
+
+# ---- Call-graph guard: what a Users request can reach ----------------------
+# Scanning Users directories is not enough: a Users route can call into a
+# shared module (finance, advisor, integrations) that runs DDL. This follows
+# calls from every Users route through module imports and fails if any
+# reachable function contains DDL.
+USERS_ROUTE_MODULES = ("user_product/routes.py", "financial_lifecycle/routes.py", "auth/routes.py",
+                       "product_ops/routes.py", "notifications/routes.py")
+
+
+def _module_name(relative: str) -> str:
+    return "backend." + relative[:-3].replace("/", ".")
+
+
+def _call_graph():
+    functions, calls = {}, {}
+    for path in sorted(BACKEND.rglob("*.py")):
+        relative = path.relative_to(BACKEND).as_posix()
+        if not _is_runtime_module(relative):
+            continue
+        module = _module_name(relative)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        imported = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("backend"):
+                for alias in node.names:
+                    imported[alias.asname or alias.name] = (node.module, alias.name)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("backend"):
+                        imported[alias.asname or alias.name] = (alias.name, None)
+        for node in tree.body:
+            for fn in ([node] if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else
+                       [m for m in node.body if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))] if isinstance(node, ast.ClassDef) else []):
+                key = f"{module}.{fn.name}"
+                functions[key] = fn
+                targets = set()
+                for call in ast.walk(fn):
+                    if not isinstance(call, ast.Call):
+                        continue
+                    func = call.func
+                    if isinstance(func, ast.Name):
+                        if func.id in imported:
+                            source, name = imported[func.id]
+                            targets.add(f"{source}.{name or func.id}")
+                        else:
+                            targets.add(f"{module}.{func.id}")
+                    elif isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id in imported:
+                        source, name = imported[func.value.id]
+                        targets.add(f"{source}.{name}.{func.attr}" if name else f"{source}.{func.attr}")
+                calls[key] = targets
+    return functions, calls
+
+
+def _function_has_ddl(fn) -> bool:
+    parts = {id(part) for node in ast.walk(fn) if isinstance(node, ast.JoinedStr) for part in node.values}
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in parts:
+            if DDL.search(SQL_COMMENT.sub("", node.value)):
+                return True
+        elif isinstance(node, ast.JoinedStr):
+            text = "".join(p.value if isinstance(p, ast.Constant) else "{}" for p in node.values)
+            if DDL.search(SQL_COMMENT.sub("", text)):
+                return True
+    return False
+
+
+def _reachable_ddl(entry_modules=USERS_ROUTE_MODULES):
+    functions, calls = _call_graph()
+    entries = [key for key in functions if any(key.startswith(_module_name(m) + ".") for m in entry_modules)]
+    seen, stack, parent = set(entries), list(entries), {}
+    while stack:
+        current = stack.pop()
+        for target in calls.get(current, ()):
+            if target in functions and target not in seen:
+                seen.add(target)
+                parent[target] = current
+                stack.append(target)
+    found = {}
+    for key in sorted(seen):
+        if _function_has_ddl(functions[key]):
+            chain, node = [key], key
+            while node in parent:
+                node = parent[node]
+                chain.append(node)
+            found[key] = " <- ".join(reversed(chain[-6:]))
+    return found
+
+
+# Reachable only through a branch Users never take; each entry names the proof.
+REACHABLE_BUT_GUARDED = {
+    # _persist_strategy runs only when build_advisor_strategy(persist=True);
+    # the only Users caller passes persist=False (pinned below).
+    "backend.advisor.core._ensure_strategy_tables",
+}
+
+
+def test_users_routes_never_reach_ddl():
+    reachable = {key: chain for key, chain in _reachable_ddl().items() if key not in REACHABLE_BUT_GUARDED}
+    assert reachable == {}, "A Users request path reaches runtime DDL; move it to a migration"
+
+
+def test_users_build_the_advisor_strategy_without_persisting_it():
+    state = (BACKEND / "financial_lifecycle" / "state.py").read_text(encoding="utf-8")
+    calls = re.findall(r"build_advisor_strategy\(([^)]*)\)", state)
+    assert calls and all(args.strip() == "persist=False" for args in calls)
+    core = (BACKEND / "advisor" / "core.py").read_text(encoding="utf-8")
+    assert "_persist_strategy(strategy) if persist else" in core
+
+
+def test_the_call_graph_guard_follows_calls_across_modules():
+    # The guard found DDL reached from a VIP route through finance.service and
+    # ai.preferences; keep it able to see a chain like that.
+    _, calls = _call_graph()
+    assert "backend.finance.emergency_fund.update_salvavidas" in calls["backend.user_product.routes.vip_salvavidas_update"]
+    assert "backend.advisor.core.build_advisor_strategy" in calls["backend.financial_lifecycle.state._build_financial_state"]

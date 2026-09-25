@@ -5,7 +5,6 @@ from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.finance.debt_automation import schedule_automation_enabled
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
-from backend.integrations.ibkr_readonly import ensure_ibkr_tables
 
 
 def _as_float(value, default: float = 0.0) -> float:
@@ -1158,7 +1157,6 @@ def get_financial_summary():
         )
 
     with get_connection() as conn:
-        ensure_ibkr_tables(conn)
         bonus_total = conn.execute(
             """
             SELECT COALESCE(SUM(amount), 0) AS total
@@ -2627,7 +2625,6 @@ def get_net_worth_report():
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
-        ensure_ibkr_tables(conn)
         savings = conn.execute(
             """
             SELECT id, name, amount, created_at, user_id, workspace_id

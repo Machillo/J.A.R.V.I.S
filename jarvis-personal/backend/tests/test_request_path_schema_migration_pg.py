@@ -104,3 +104,25 @@ def test_migration_keeps_existing_store_rows(cur):
 
     cur.execute("SELECT plan_code, pending_plan_code FROM store_subscriptions")
     assert cur.fetchall() == [("basic", None)]
+
+
+def _postflight_sql() -> str:
+    text = MIGRATION.read_text(encoding="utf-8")
+    block = text[text.index("-- Postflight (read-only)"):].splitlines()[1:]
+    return "\n".join(line[3:] for line in block if line.startswith("-- "))
+
+
+def test_the_postflight_passes_after_the_migration_and_fails_before(cur):
+    cur.execute(_postflight_sql())
+    assert cur.fetchall(), "before the migration the postflight must report the missing tables"
+    _apply(cur)
+    cur.execute(_postflight_sql())
+    assert cur.fetchall() == []
+
+
+def test_free_never_gains_a_basic_feature(cur):
+    _apply(cur)
+    cur.execute("""SELECT count(*) FROM plan_features pf JOIN plans p ON p.id = pf.plan_id
+                   JOIN features f ON f.id = pf.feature_id
+                   WHERE p.code = 'free' AND f.code IN ('basic_dashboard','guided_budget','financial_calendar','recurring_items','basic_reports')""")
+    assert cur.fetchone() == (0,)
