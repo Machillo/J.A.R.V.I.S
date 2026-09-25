@@ -36,6 +36,8 @@ BEGIN
                            'trg_' || cfg.table_name || '_delete_guard', cfg.table_name);
             EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
                            'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name);
+            EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
+                           'trg_' || cfg.table_name || '_workspace_move_guard', cfg.table_name);
         END LOOP;
     END IF;
     FOR cfg IN SELECT * FROM public.dincr_ownership_tables() LOOP
@@ -73,6 +75,7 @@ DROP FUNCTION IF EXISTS public.dincr_guard_financial_delete();
 DROP FUNCTION IF EXISTS public.dincr_guard_financial_truncate();
 DROP FUNCTION IF EXISTS public.dincr_guard_legacy_identity_delete();
 DROP FUNCTION IF EXISTS public.dincr_guard_identity_bulk_delete();
+DROP FUNCTION IF EXISTS public.dincr_guard_workspace_move();
 DROP FUNCTION IF EXISTS public.dincr_delete_guard_tables();
 
 -- Step 2 (optional):

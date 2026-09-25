@@ -304,6 +304,14 @@ def delete_allowed_user(user_id: int):
                 "message": "La cuenta está terminando su eliminación.",
             }
 
+        # Deleting the row of a live account would cascade into that account's
+        # financial rows and orphan it: accounts leave through account deletion.
+        if conn.execute("SELECT 1 FROM accounts WHERE legacy_allowed_user_id = %s", (user_id,)).fetchone():
+            return {
+                "status": "ERROR",
+                "message": "El usuario tiene una cuenta activa: se elimina desde la eliminación de cuenta.",
+            }
+
         conn.execute(
             """
             DELETE FROM allowed_users

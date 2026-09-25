@@ -1044,7 +1044,8 @@ def test_workspace_only_financial_tables_get_delete_and_truncate_guards(layout_f
         for table in WORKSPACE_ONLY:
             cur.execute("SELECT tgname FROM pg_trigger WHERE tgrelid = %s::regclass AND NOT tgisinternal ORDER BY 1",
                         (f"public.{table}",))
-            assert [row[0] for row in cur.fetchall()] == [f"trg_{table}_delete_guard", f"trg_{table}_truncate_guard"]
+            assert [row[0] for row in cur.fetchall()] == [f"trg_{table}_delete_guard", f"trg_{table}_truncate_guard",
+                                                          f"trg_{table}_workspace_move_guard"]
         # No ownership trigger: these tables have no legacy user_id.
         cur.execute("SELECT COUNT(*) FROM pg_trigger WHERE tgname LIKE 'trg_finva_%_ownership_guard'")
         assert cur.fetchone()[0] == 0
@@ -1097,11 +1098,11 @@ def test_rows_without_a_workspace_need_an_explicit_declaration(layout_fk):
     _apply_migration(conn)
     with conn.cursor() as cur:
         _manual(cur, a1["workspace"])
-        with pytest.raises(psycopg2.errors.CheckViolation, match="outside the declared workspace"):
+        with pytest.raises(psycopg2.errors.CheckViolation, match="without a workspace"):
             cur.execute("DELETE FROM debts WHERE workspace_id = %s OR workspace_id IS NULL", (a1["workspace"],))
         cur.execute("ROLLBACK")
         _manual(cur)
-        with pytest.raises(psycopg2.errors.CheckViolation, match="outside the declared workspace"):
+        with pytest.raises(psycopg2.errors.CheckViolation, match="without a workspace"):
             cur.execute("DELETE FROM debts WHERE id = %s", (orphan,))
         cur.execute("ROLLBACK")
         _manual(cur, "none")
@@ -1212,7 +1213,7 @@ def test_the_preflight_reports_what_the_migration_would_abort_on(layout_fk):
     assert ("debts", "USER_ID_FOREIGN_IN_FK_TABLE") in aborts
     assert ("finva_savings_plan_contributions", "PREREQUISITE_TABLE_MISSING") in aborts
     unguarded = {r[1] for r in rows if r[0] == "unguarded_workspace_table"}
-    assert "finva_gmail_connections" in unguarded and "debts" not in unguarded and "financial_profiles" not in unguarded
+    assert "workspace_members" in unguarded and "debts" not in unguarded and "financial_profiles" not in unguarded
     with conn.cursor() as cur:  # the preflight changed nothing
         cur.execute("SELECT to_regprocedure('public.dincr_guard_financial_delete()') IS NULL")
         assert cur.fetchone()[0] is True
@@ -1265,3 +1266,68 @@ def test_the_real_account_deletion_runs_under_every_guard(layout_fk, monkeypatch
         assert cur.fetchone()[0] == 1
         cur.execute("SELECT COUNT(*) FROM users WHERE id=%s", (a3["users"],))
         assert cur.fetchone()[0] == 0
+
+
+def test_a_live_accounts_allowed_users_row_cannot_be_deleted(layout_fk, monkeypatch):
+    from backend.auth import service as auth_service
+    from backend.core import database
+
+    conn, a3 = layout_fk["conn"], _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        with pytest.raises(psycopg2.errors.ForeignKeyViolation, match="live account"):
+            cur.execute("DELETE FROM allowed_users WHERE id = %s", (a3["allowed"],))
+    monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"])
+    monkeypatch.setattr(database, "APPLICATION_NAME", "dincr-backend")
+    assert auth_service.delete_allowed_user(a3["allowed"])["status"] == "ERROR"  # admin path refuses cleanly
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM allowed_users WHERE id = %s", (a3["allowed"],))
+        assert cur.fetchone()[0] == 1
+
+
+def test_a_parent_delete_spanning_owners_is_rejected_before_its_row_by_row_cascade(layout_fk):
+    conn, a1, a3 = layout_fk["conn"], _ids("a1"), _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:  # the app's own session
+        for ids in (a1, a3):
+            cur.execute("INSERT INTO finva_gmail_connections(account_id, workspace_id, legacy_user_id) VALUES (%s, %s, %s)",
+                        (ids["account"], ids["workspace"], ids["allowed"]))
+        with pytest.raises(psycopg2.errors.CheckViolation, match="spans 2 live owners"):
+            cur.execute("DELETE FROM finva_gmail_connections")
+        cur.execute("DELETE FROM finva_gmail_connections WHERE workspace_id = %s", (a1["workspace"],))
+
+
+def test_rows_without_a_workspace_are_protected_in_the_apps_session_too(layout_fk):
+    conn, a1 = layout_fk["conn"], _ids("a1")
+    with conn.cursor() as cur:
+        orphan = _debt(cur, a1["users"], None, name="Orphan debt")
+    _apply_migration(conn)
+    with conn.cursor() as cur:  # 'Supavisor', exempt from declaring workspaces
+        with pytest.raises(psycopg2.errors.CheckViolation, match="without a workspace"):
+            cur.execute("DELETE FROM debts WHERE id = %s", (orphan,))
+        cur.execute("BEGIN")
+        cur.execute("SELECT set_config('dincr.delete_workspace', 'none', true)")
+        cur.execute("DELETE FROM debts WHERE id = %s", (orphan,))
+        cur.execute("COMMIT")
+
+
+def test_rows_of_workspace_only_tables_cannot_move_between_workspaces(layout_fk):
+    conn, a1, a3 = layout_fk["conn"], _ids("a1"), _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        row = _contribution(cur, a1)
+        with pytest.raises(psycopg2.errors.CheckViolation, match="cannot move to another workspace"):
+            cur.execute("UPDATE finva_goal_contributions SET workspace_id = %s WHERE id = %s", (a3["workspace"], row))
+        cur.execute("UPDATE finva_goal_contributions SET workspace_id = %s, amount = 20 WHERE id = %s",
+                    (a1["workspace"], row))  # same workspace (an upsert): allowed
+
+
+def test_each_abort_has_its_own_sqlstate(layout_fk):
+    conn = layout_fk["conn"]
+    with conn.cursor() as cur:
+        cur.execute("DROP TABLE finva_goal_contributions")
+    with pytest.raises(psycopg2.Error) as error:
+        _apply_migration(conn)
+    assert error.value.pgcode == "DI007"
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK")

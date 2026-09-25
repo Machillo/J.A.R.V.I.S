@@ -608,7 +608,8 @@ BEGIN
         'ACCOUNT_PERSONAL_WORKSPACE_COUNT'
     );
     IF v_blocking > 0 THEN
-        RAISE EXCEPTION 'financial ownership integrity: % identity-core inconsistencies, aborting (run the preflight)', v_blocking;
+        RAISE EXCEPTION 'financial ownership integrity: % identity-core inconsistencies, aborting (run the preflight)', v_blocking
+            USING ERRCODE = 'DI001';
     END IF;
 
     -- Internal (owner/admin) writers store allowed_users.id, also in tables whose
@@ -631,13 +632,15 @@ BEGIN
                       WHERE u.id = a.legacy_allowed_user_id
                         AND lower(trim(u.email)) = lower(trim(a.primary_email)));
     IF v_blocking > 0 THEN
-        RAISE EXCEPTION 'financial ownership integrity: % owner/admin accounts whose allowed_users.id is not their users.id, aborting', v_blocking;
+        RAISE EXCEPTION 'financial ownership integrity: % owner/admin accounts whose allowed_users.id is not their users.id, aborting', v_blocking
+            USING ERRCODE = 'DI002';
     END IF;
 
     -- Users overtime writes allowed_users.id into payroll_events: if that table's
     -- FK references users(id), the writer must be fixed before the guard exists.
     IF public.dincr_user_id_space('payroll_events') = 'users' THEN
-        RAISE EXCEPTION 'financial ownership integrity: payroll_events.user_id references users but overtime writes allowed_users.id, aborting';
+        RAISE EXCEPTION 'financial ownership integrity: payroll_events.user_id references users but overtime writes allowed_users.id, aborting'
+            USING ERRCODE = 'DI003';
     END IF;
 
     -- Rows whose legacy id is in the other space than their FK would make an
@@ -647,7 +650,8 @@ BEGIN
     FROM public.dincr_ownership_audit_rows(FALSE)
     WHERE issue = 'USER_ID_WRONG_SPACE';
     IF v_blocking > 0 THEN
-        RAISE EXCEPTION 'financial ownership integrity: % rows carry a legacy id from the wrong space, aborting (run the preflight)', v_blocking;
+        RAISE EXCEPTION 'financial ownership integrity: % rows carry a legacy id from the wrong space, aborting (run the preflight)', v_blocking
+            USING ERRCODE = 'DI004';
     END IF;
 
     -- A stored mail-connection id outside its workspace would make every synced
@@ -656,7 +660,8 @@ BEGIN
     FROM public.dincr_ownership_audit_rows(FALSE)
     WHERE issue = 'LEGACY_USER_ID_NOT_IN_WORKSPACE';
     IF v_blocking > 0 THEN
-        RAISE EXCEPTION 'financial ownership integrity: % stored legacy ids outside their workspace, aborting (run the preflight)', v_blocking;
+        RAISE EXCEPTION 'financial ownership integrity: % stored legacy ids outside their workspace, aborting (run the preflight)', v_blocking
+            USING ERRCODE = 'DI005';
     END IF;
 
     -- A row whose FK points at another account's identity would make that
@@ -666,7 +671,8 @@ BEGIN
     FROM public.dincr_ownership_audit_rows(FALSE) r
     WHERE r.issue = 'USER_ID_FOREIGN' AND public.dincr_user_id_space(r.table_name) IS NOT NULL;
     IF v_blocking > 0 THEN
-        RAISE EXCEPTION 'financial ownership integrity: % rows reference another account''s identity through their FK, aborting (run the preflight)', v_blocking;
+        RAISE EXCEPTION 'financial ownership integrity: % rows reference another account''s identity through their FK, aborting (run the preflight)', v_blocking
+            USING ERRCODE = 'DI006';
     END IF;
 
     INSERT INTO public.financial_ownership_audit_snapshots(run_id, phase, table_name, classification, issue, row_count)
@@ -901,8 +907,8 @@ BEGIN
            NULLIF(current_setting('application_name', true), ''), txid_current()
     FROM old_rows o
     -- Tables keyed by something other than an integer id log counts only.
-    CROSS JOIN LATERAL (SELECT CASE WHEN pg_catalog.to_jsonb(o) ->> 'id' ~ '^-?[0-9]{1,18}$'
-                                    THEN (pg_catalog.to_jsonb(o) ->> 'id')::BIGINT END AS row_id) r
+    CROSS JOIN LATERAL (SELECT pg_catalog.to_jsonb(o) ->> 'id' AS raw_id) j
+    CROSS JOIN LATERAL (SELECT CASE WHEN j.raw_id ~ '^-?[0-9]{1,18}$' THEN j.raw_id::BIGINT END AS row_id) r
     LEFT JOIN public.workspaces w ON w.id = o.workspace_id
     HAVING COUNT(*) > 0;
 
@@ -916,11 +922,21 @@ BEGIN
                   HINT = 'delete one account''s rows per statement; never select financial rows by legacy user_id';
     END IF;
 
+    -- Rows without a workspace have no clear owner: every session, the app
+    -- included, deletes them only with the explicit declaration 'none' (the app
+    -- never addresses them; the NOT VALID CHECK keeps new ones from appearing).
+    IF v_declared IS DISTINCT FROM 'none' AND EXISTS (SELECT 1 FROM old_rows o WHERE o.workspace_id IS NULL) THEN
+        RAISE EXCEPTION 'financial delete on % touches rows without a workspace', TG_TABLE_NAME
+            USING ERRCODE = '23514',
+                  HINT = 'SET LOCAL dincr.delete_workspace = ''none'' to delete rows without a workspace, alone';
+    END IF;
+
     -- Every session other than the application (application_name 'dincr-backend',
     -- or 'Supavisor' when the pooler reports its own name) must declare the one
-    -- workspace it deletes from: SET LOCAL dincr.delete_workspace = '<uuid>'
-    -- (SET LOCAL only, so it cannot leak into a reused session). This covers the
-    -- SQL editor, psql, scripts, the CLI and agents.
+    -- workspace it deletes from: SET LOCAL dincr.delete_workspace = '<uuid>'.
+    -- Use SET LOCAL: a session-level SET is also honoured and would cover later
+    -- deletes in the same session. This covers the SQL editor, psql, scripts, the
+    -- CLI and agents.
     -- PRE-APPLY GATE: every process that deletes on behalf of the app must be
     -- the web app (backend/main.py sets 'dincr-backend') or connect through the
     -- pooler ('Supavisor'); any other process must declare its workspace or
@@ -932,8 +948,7 @@ BEGIN
     IF COALESCE(current_setting('application_name', true), '') NOT IN ('Supavisor', 'dincr-backend') THEN
         SELECT COUNT(*) INTO v_outside
         FROM old_rows o
-        WHERE (o.workspace_id IS NULL AND v_declared IS DISTINCT FROM 'none')
-           OR (o.workspace_id IS NOT NULL AND (v_declared IS NULL OR o.workspace_id::TEXT <> v_declared));
+        WHERE o.workspace_id IS NOT NULL AND (v_declared IS NULL OR o.workspace_id::TEXT <> v_declared);
         IF v_outside > 0 THEN
             RAISE EXCEPTION 'manual financial delete on % touches % rows outside the declared workspace', TG_TABLE_NAME, v_outside
                 USING ERRCODE = '23514',
@@ -981,6 +996,14 @@ BEGIN
         WHERE pg_catalog.lower(pg_catalog.btrim(a.primary_email)) = pg_catalog.lower(pg_catalog.btrim(OLD.email))
     ) THEN
         RAISE EXCEPTION 'deleting this users row would cascade into a live account''s financial rows'
+            USING ERRCODE = '23503', HINT = 'delete the account first (account deletion flow)';
+    END IF;
+    -- Same for allowed_users: its FK-cascading rows (fixed expenses, input
+    -- events, notification jobs) belong to the live account that maps to it.
+    IF TG_TABLE_NAME = 'allowed_users' AND EXISTS (
+        SELECT 1 FROM public.accounts a WHERE a.legacy_allowed_user_id = OLD.id
+    ) THEN
+        RAISE EXCEPTION 'deleting this allowed_users row would cascade into a live account''s financial rows'
             USING ERRCODE = '23503', HINT = 'delete the account first (account deletion flow)';
     END IF;
     FOR cfg IN SELECT o.table_name FROM public.dincr_ownership_tables() o
@@ -1031,7 +1054,13 @@ AS $fn$
         ('email_financial_accounts'),
         ('finva_email_candidates'),
         ('finva_statement_documents'),
-        ('investment_position_snapshots')
+        ('investment_position_snapshots'),
+        -- Parents whose deletes cascade into guarded tables row by row (a cascade
+        -- fires the child's statement trigger once per parent row), so they carry
+        -- the one-owner check themselves.
+        ('finva_gmail_connections'),
+        ('finva_email_messages'),
+        ('email_ingested_messages')
     ) AS t(table_name)
 $fn$;
 REVOKE ALL ON FUNCTION public.dincr_delete_guard_tables() FROM PUBLIC, anon, authenticated;
@@ -1062,6 +1091,24 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION public.dincr_guard_identity_bulk_delete() FROM PUBLIC, anon, authenticated;
 
+-- Guarded tables without a legacy user_id have no ownership trigger: keep their
+-- rows in their workspace (an UPDATE of workspace_id would move money between
+-- workspaces unseen). Updates that keep the value, like upserts, pass.
+CREATE OR REPLACE FUNCTION public.dincr_guard_workspace_move()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+BEGIN
+    IF NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+        RAISE EXCEPTION 'rows of % cannot move to another workspace', TG_TABLE_NAME
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_workspace_move() FROM PUBLIC, anon, authenticated;
+
 DO $$
 DECLARE
     cfg RECORD;
@@ -1083,6 +1130,13 @@ BEGIN
             'FOR EACH STATEMENT EXECUTE FUNCTION public.dincr_guard_financial_truncate()',
             'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name
         );
+        IF cfg.table_name NOT IN (SELECT o.table_name FROM public.dincr_ownership_tables() o) THEN
+            EXECUTE format(
+                'CREATE OR REPLACE TRIGGER %I BEFORE UPDATE OF workspace_id ON public.%I '
+                'FOR EACH ROW EXECUTE FUNCTION public.dincr_guard_workspace_move()',
+                'trg_' || cfg.table_name || '_workspace_move_guard', cfg.table_name
+            );
+        END IF;
     END LOOP;
     EXECUTE 'CREATE OR REPLACE TRIGGER trg_users_legacy_delete_guard BEFORE DELETE ON public.users '
             'FOR EACH ROW EXECUTE FUNCTION public.dincr_guard_legacy_identity_delete()';
@@ -1110,7 +1164,8 @@ BEGIN
                       'finva_savings_plans', 'finva_savings_plan_contributions']) t
     WHERE to_regclass(format('public.%I', t)) IS NULL;
     IF v_absent IS NOT NULL THEN
-        RAISE EXCEPTION 'financial ownership integrity: apply 20260925130000_request_path_schema.sql first (missing: %)', v_absent;
+        RAISE EXCEPTION 'financial ownership integrity: apply 20260925130000_request_path_schema.sql first (missing: %)', v_absent
+            USING ERRCODE = 'DI007';
     END IF;
 
     -- Tables with a legacy user_id: ownership trigger and workspace CHECK.
@@ -1140,10 +1195,21 @@ BEGIN
                           WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
                             AND tr.tgname = 'trg_' || t.table_name || '_truncate_guard'));
     SELECT v_missing + COUNT(*) INTO v_missing
+    FROM public.dincr_delete_guard_tables() t
+    WHERE t.table_name NOT IN (SELECT o.table_name FROM public.dincr_ownership_tables() o)
+      AND to_regclass(format('public.%I', t.table_name)) IS NOT NULL
+      AND EXISTS (SELECT 1 FROM information_schema.columns isc
+                  WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
+                    AND isc.column_name = 'workspace_id')
+      AND NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                      WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                        AND tr.tgname = 'trg_' || t.table_name || '_workspace_move_guard');
+    SELECT v_missing + COUNT(*) INTO v_missing
     FROM (VALUES ('accounts', 'trg_accounts_bulk_delete_guard'), ('workspaces', 'trg_workspaces_bulk_delete_guard')) g(tbl, trg)
     WHERE NOT EXISTS (SELECT 1 FROM pg_trigger tr WHERE tr.tgrelid = format('public.%I', g.tbl)::regclass AND tr.tgname = g.trg);
     IF v_missing > 0 THEN
-        RAISE EXCEPTION 'financial ownership integrity: prevention missing on % tables, aborting', v_missing;
+        RAISE EXCEPTION 'financial ownership integrity: prevention missing on % tables, aborting', v_missing
+            USING ERRCODE = 'DI008';
     END IF;
 
     -- For the reviewer: workspace-owned tables left without deletion guards (each

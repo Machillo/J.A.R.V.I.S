@@ -571,6 +571,9 @@ WHERE c.table_schema = 'public' AND c.column_name = 'workspace_id'
         ('email_financial_accounts'),
         ('finva_email_candidates'),
         ('finva_statement_documents'),
-        ('investment_position_snapshots')
+        ('investment_position_snapshots'),
+        ('finva_gmail_connections'),
+        ('finva_email_messages'),
+        ('email_ingested_messages')
     ) AS d(table_name))
 ORDER BY 1, 2, 3, 4, 5;
