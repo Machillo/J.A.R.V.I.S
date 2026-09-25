@@ -22,6 +22,7 @@ PLAN_COPY_EN = {
     "vip": {"name": "VIP", "tagline": "A more complete strategy with information you authorize.", "features": ["Everything in Basic", "Dynamic strategy, projections, and scenarios", "With your permission, it detects financial notices in supported emails so you can review transactions and keep your accounts and debts up to date", "Annual bonus (aguinaldo) estimate if DINCR detects CCSS employer statements in a connected email"]},
 }
 PLAN_RANK = {"free": 1, "basic": 2, "vip": 3}
+OWNER_ONLY_SUBSCRIPTION_FIELDS = frozenset({"granted_by", "courtesy_note"})
 BUILTIN_FEATURE_MIN_PLAN = {
     # Core DINCR capabilities must follow the product plan even if a deployment
     # has not yet synchronized plan_features rows.
@@ -212,7 +213,10 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
         "onboarding_completed": bool((account or {}).get("onboarding_completed")),
         "onboarding_level": (account or {}).get("onboarding_level"),
         "plan_selected": bool((account or {}).get("plan_selected")),
-        "subscription": subscription,
+        # granted_by (the granting Owner's account id) and courtesy_note (the Owner's
+        # internal note) stay Owner-side; the managed-user views show them.
+        "subscription": {key: value for key, value in (subscription or {}).items()
+                         if key not in OWNER_ONLY_SUBSCRIPTION_FIELDS} if subscription else subscription,
         "legal": legal,
     }
 

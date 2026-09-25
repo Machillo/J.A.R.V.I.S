@@ -122,18 +122,22 @@ def _owner_identity(conn) -> tuple[int, str]:
         raise RuntimeError("OWNER_EMAIL no está configurado.")
     row = conn.execute(
         """
-        SELECT u.id AS user_id, w.id AS workspace_id
-        FROM users u
-        JOIN accounts a ON a.legacy_allowed_user_id = u.id
+        SELECT u.id AS user_id, w.id AS workspace_id, a.id AS account_id
+        FROM accounts a
+        JOIN allowed_users au ON au.id = a.legacy_allowed_user_id
+        JOIN users u ON LOWER(u.email) = LOWER(au.email)
         JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
-        WHERE LOWER(u.email) = %s
+        WHERE LOWER(au.email) = %s AND a.role = 'owner' AND au.role = 'owner'
         ORDER BY w.created_at, w.id
-        LIMIT 1
         """,
         (owner_email,),
-    ).fetchone()
-    if not row:
-        raise RuntimeError("No encontré el workspace personal del owner.")
+    ).fetchall()
+    # The account is found through its own identity (allowed_users -> accounts), never by
+    # comparing a users.id with an allowed_users.id; anything but exactly one owner account
+    # fails closed. Its oldest personal workspace is used, as before.
+    if len({str(item["account_id"]) for item in row or []}) != 1:
+        raise RuntimeError("No encontré un único owner con workspace personal.")
+    row = row[0]
     return int(row["user_id"]), str(row["workspace_id"])
 
 

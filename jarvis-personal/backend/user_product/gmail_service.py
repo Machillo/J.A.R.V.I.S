@@ -134,36 +134,54 @@ def _list_message_page(service, query: str, *, page_token: str | None, limit: in
     return items, response.get("nextPageToken")
 
 
-def bank_sender_allowed(sender: str) -> bool:
-    """Exact bank address (or subdomain of an approved bank domain) from FINVA_QUERY."""
+def _single_sender_address(sender: str) -> str | None:
+    """The one address of a From header, or None when the header is ambiguous or malformed."""
     header = (sender or "").strip()
     brackets = re.findall(r"<([^<>]*)>", header)
     if len(brackets) > 1:
-        return False
+        return None
     if brackets:
         display, _, trailing = header.partition("<")
         # A display name holding an address ("alerta@banco <x@evil>") or a second
         # recipient after the brackets is never a genuine bank notification.
         if "@" in display or trailing.split(">", 1)[-1].strip():
-            return False
+            return None
         address = brackets[0]
     else:
         address = header
     address = address.strip().lower()
-    if not re.fullmatch(r"[a-z0-9_.+\-]+@[a-z0-9.\-]+", address):
+    return address if re.fullmatch(r"[a-z0-9_.+\-]+@[a-z0-9.\-]+", address) else None
+
+
+def _sender_in(sender: str, allowed: set[str]) -> bool:
+    address = _single_sender_address(sender)
+    if not address:
         return False
     domain = address.rsplit("@", 1)[-1]
-    allowed = {item.lower() for item in re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)}
     return any(address == item or domain == item or domain.endswith("." + item) for item in allowed)
+
+
+def bank_sender_allowed(sender: str) -> bool:
+    """Exact bank address (or subdomain of an approved bank domain) from FINVA_QUERY."""
+    return _sender_in(sender, {item.lower() for item in re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)})
+
+
+# CCSS payroll orders are financial records written without review (they shape the
+# aguinaldo), so they are only read from the CCSS itself, as the Outlook path does.
+CCSS_SENDERS = frozenset({"ccss.sa.cr"})
+
+
+def ccss_sender_allowed(sender: str) -> bool:
+    return _sender_in(sender, set(CCSS_SENDERS))
 
 
 def _aguinaldo_gmail_query(as_of: date | None = None) -> str:
     """Search the complete Costa Rican aguinaldo period for CCSS payroll orders."""
     current = as_of or date.today()
     period_start = date(current.year if current.month == 12 else current.year - 1, 12, 1)
+    # Only CCSS senders: a subject clause would list (and parse) anyone's mail.
     return (
-        '(from:noreply@ccss.sa.cr OR from:ccss@ccss.sa.cr '
-        'OR subject:"Generación de Orden Patronal Digital") '
+        '(from:ccss.sa.cr) '
         f'after:{period_start:%Y/%m/%d} -in:spam -in:trash'
     )
 
@@ -819,7 +837,8 @@ def _ingest_message(
     # The mailbox holder is this connection's own DINCR account; the email text
     # is parsed as received, never rewritten into another person's identity.
     identity = for_account_holder(str(connection.get("display_name") or ""))
-    payroll_report = parse_ccss_order_patronal(subject, sender, attachment_text or body)
+    payroll_report = (parse_ccss_order_patronal(subject, sender, attachment_text or body)
+                      if ccss_sender_allowed(sender) else None)
     financial_text = "\n".join(item for item in (body, attachment_text) if item)
     # Bank templates run only for an approved bank address. Gmail passes the raw
     # From header, whose display name an attacker controls ("alerta@banco <x@evil>").
