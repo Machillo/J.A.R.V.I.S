@@ -206,6 +206,8 @@ def main():
                             "DELETE FROM transactions WHERE id = ANY(%s) AND workspace_id=%s AND source='isolation_test'",
                             (created_ids, workspace_id),
                         )
+                # Deleting the temporary workspace cascades into its rows: declare it.
+                conn.execute("SELECT set_config('dincr.delete_workspace', %s, true)", (b["workspace_id"],))
                 conn.execute(
                     "DELETE FROM workspaces WHERE id=%s AND name='4E Isolation Temporary'",
                     (b["workspace_id"],),

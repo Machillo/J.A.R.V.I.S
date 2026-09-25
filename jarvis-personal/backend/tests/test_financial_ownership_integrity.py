@@ -296,3 +296,11 @@ def test_every_workspace_table_is_guarded_or_explicitly_exempt():
     assert not guarded & exempt, guarded & exempt
     unclassified = _repo_workspace_tables() - guarded - exempt
     assert unclassified == set(), "Add each table to dincr_delete_guard_tables() or UNGUARDED_WORKSPACE_TABLES with a reason"
+
+
+def test_preflight_lists_the_same_delete_guard_tables_as_the_migration():
+    preflight = (ROOT / "database" / "audits" / "financial_ownership_preflight.sql").read_text(encoding="utf-8")
+    block = preflight[preflight.index("'unguarded_workspace_table'"):]
+    block = block[block.index("(VALUES"):block.index("AS d(table_name)")]
+    inlined = set(re.findall(r"\('([a-z_]+)'\)", block))
+    assert inlined == _delete_guard_tables() - set(_ownership_tables())

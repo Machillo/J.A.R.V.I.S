@@ -20,6 +20,9 @@
 --   unguarded_table  tables with user_id AND workspace_id outside the guarded list
 --   user_id_fk  which table each financial user_id column really references
 --              (allowed_users vs users) and its ON DELETE rule
+--   would_abort  every condition on which the migration aborts: resolve them first
+--   unguarded_workspace_table  workspace-owned tables left without deletion guards;
+--              compare with the reviewed allowlist in the ownership tests
 
 BEGIN;
 
@@ -522,4 +525,52 @@ JOIN pg_class parent ON parent.oid = c.confrelid
 JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
 WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND att.attname = 'user_id'
   AND child.relname IN (SELECT table_name FROM pg_temp.dincr_ownership_tables())
+UNION ALL
+-- Conditions on which the migration aborts (would_abort rows must be resolved first).
+SELECT 'would_abort', 'accounts', NULL, 'NEEDS_REVIEW', 'OWNER_ADMIN_ALLOWED_ID_IS_NOT_USERS_ID', a.id::TEXT
+FROM public.accounts a
+WHERE ((a.role IN ('owner', 'admin') AND a.status = 'active')
+       OR EXISTS (SELECT 1 FROM public.allowed_users au
+                  WHERE au.id = a.legacy_allowed_user_id AND au.role IN ('owner', 'admin') AND au.status = 'active'))
+  AND EXISTS (SELECT 1 FROM pg_temp.dincr_ownership_tables() o WHERE pg_temp.dincr_user_id_space(o.table_name) = 'users')
+  AND NOT EXISTS (SELECT 1 FROM public.users u
+                  WHERE u.id = a.legacy_allowed_user_id AND lower(trim(u.email)) = lower(trim(a.primary_email)))
+UNION ALL
+SELECT 'would_abort', 'payroll_events', NULL, 'NEEDS_REVIEW', 'PAYROLL_EVENTS_FK_REFERENCES_USERS', NULL
+WHERE pg_temp.dincr_user_id_space('payroll_events') = 'users'
+UNION ALL
+SELECT 'would_abort', r.table_name, r.row_id, 'NEEDS_REVIEW', 'USER_ID_FOREIGN_IN_FK_TABLE', NULL
+FROM pg_temp.dincr_ownership_audit_rows(FALSE) r
+WHERE r.issue = 'USER_ID_FOREIGN' AND pg_temp.dincr_user_id_space(r.table_name) IS NOT NULL
+UNION ALL
+SELECT 'would_abort', t, NULL, 'NEEDS_REVIEW', 'PREREQUISITE_TABLE_MISSING', NULL
+FROM unnest(ARRAY['finva_budget_items', 'finva_recurring_items', 'finva_goal_contributions',
+                  'finva_savings_plans', 'finva_savings_plan_contributions']) t
+WHERE to_regclass('public.' || t) IS NULL
+UNION ALL
+-- Workspace-owned tables the migration leaves without deletion guards: compare
+-- with the reviewed allowlist in backend/tests/test_financial_ownership_integrity.py.
+SELECT 'unguarded_workspace_table', c.table_name, NULL, 'INFO', 'WORKSPACE_TABLE_NOT_GUARDED', NULL
+FROM information_schema.columns c
+JOIN information_schema.tables t
+  ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
+WHERE c.table_schema = 'public' AND c.column_name = 'workspace_id'
+  AND c.table_name NOT IN (SELECT table_name FROM pg_temp.dincr_ownership_tables())
+  AND c.table_name NOT IN (SELECT d.table_name FROM (VALUES
+        ('finva_budget_items'),
+        ('finva_recurring_items'),
+        ('finva_goal_contributions'),
+        ('finva_savings_plans'),
+        ('finva_savings_plan_contributions'),
+        ('financial_profiles'),
+        ('card_aliases'),
+        ('financial_input_events'),
+        ('email_transaction_candidates'),
+        ('email_statement_documents'),
+        ('email_statement_reconciliation_lines'),
+        ('email_financial_accounts'),
+        ('finva_email_candidates'),
+        ('finva_statement_documents'),
+        ('investment_position_snapshots')
+    ) AS d(table_name))
 ORDER BY 1, 2, 3, 4, 5;

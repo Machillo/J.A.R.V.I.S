@@ -26,15 +26,18 @@ DO $$
 DECLARE
     cfg RECORD;
 BEGIN
-    FOR cfg IN SELECT * FROM public.dincr_delete_guard_tables() LOOP
-        IF to_regclass(format('public.%I', cfg.table_name)) IS NULL THEN
-            CONTINUE;
-        END IF;
-        EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
-                       'trg_' || cfg.table_name || '_delete_guard', cfg.table_name);
-        EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
-                       'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name);
-    END LOOP;
+    -- A second run finds the list function already dropped: nothing to do here.
+    IF to_regprocedure('public.dincr_delete_guard_tables()') IS NOT NULL THEN
+        FOR cfg IN SELECT * FROM public.dincr_delete_guard_tables() LOOP
+            IF to_regclass(format('public.%I', cfg.table_name)) IS NULL THEN
+                CONTINUE;
+            END IF;
+            EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
+                           'trg_' || cfg.table_name || '_delete_guard', cfg.table_name);
+            EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
+                           'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name);
+        END LOOP;
+    END IF;
     FOR cfg IN SELECT * FROM public.dincr_ownership_tables() LOOP
         IF to_regclass(format('public.%I', cfg.table_name)) IS NULL THEN
             CONTINUE;

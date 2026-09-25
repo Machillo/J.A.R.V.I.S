@@ -109,7 +109,7 @@ Ad-hoc destructive SQL against production (`DELETE`, `UPDATE` of financial rows,
 
 **Any destructive statement, however it is run, must follow these rules:**
 - **Never select rows by a legacy integer identifier** (`user_id`, `allowed_users.id`, `users.id`). The same integer denotes different people in different tables. Select by `workspace_id` and primary key only.
-- **One workspace per statement.** Where the ownership guard is installed, declare it first: `SET LOCAL dincr.delete_workspace = '<workspace uuid>'`.
+- **One workspace per statement.** Where the ownership guard is installed, declare it first: `SET LOCAL dincr.delete_workspace = '<workspace uuid>'`. Rows without a workspace take the explicit declaration `'none'`, and are deleted in their own statement.
 - **Never loop over the catalog.** A `DO` block that deletes from "every table with column X" is forbidden: new tables silently join the blast radius.
 - **Preview in the same transaction.** Count the rows first. The delete uses `RETURNING`, and its count must equal the preview, or you `ROLLBACK`.
 - **Two people.** A second person reads the exact statement and the preview output before `COMMIT`.

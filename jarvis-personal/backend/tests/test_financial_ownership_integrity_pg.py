@@ -626,6 +626,7 @@ def test_rollback_removes_guards_keeps_evidence_and_can_revert_a_run(seeded):
         _debt(cur, IDENTITIES["A"]["allowed"], IDENTITIES["B"]["workspace"])  # guards gone
         cur.execute("SELECT COUNT(*) FROM pg_trigger WHERE tgname LIKE 'trg\\_%%\\_ownership_guard' OR tgname LIKE 'trg\\_%%\\_delete_guard' OR tgname LIKE 'trg\\_%%\\_truncate_guard'")
         assert cur.fetchone()[0] == 0
+        cur.execute(rollback)  # a second rollback run finds nothing to remove and succeeds
     _apply_migration(conn)  # re-applying after a rollback works
 
 
@@ -1188,3 +1189,79 @@ def test_new_guard_objects_are_closed_to_the_data_api(layout_fk):
             cur.execute("""SELECT p.proname FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
                            AND p.proname LIKE 'dincr\\_%%' AND has_function_privilege(%s, p.oid, 'EXECUTE')""", (role,))
             assert cur.fetchall() == [], role
+
+
+PREFLIGHT = ROOT / "database/audits/financial_ownership_preflight.sql"
+
+
+def _preflight(conn) -> list[tuple]:
+    with conn.cursor() as cur:
+        cur.execute(PREFLIGHT.read_text(encoding="utf-8"))
+        rows = cur.fetchall()
+        cur.execute("ROLLBACK")
+    return rows
+
+
+def test_the_preflight_reports_what_the_migration_would_abort_on(layout_fk):
+    conn, a1, a4 = layout_fk["conn"], _ids("a1"), _ids("a4")
+    with conn.cursor() as cur:
+        _debt(cur, a4["users"], a1["workspace"])  # a4's identity in a1's workspace
+        cur.execute("DROP TABLE finva_savings_plan_contributions")
+    rows = _preflight(conn)
+    aborts = {(r[1], r[4]) for r in rows if r[0] == "would_abort"}
+    assert ("debts", "USER_ID_FOREIGN_IN_FK_TABLE") in aborts
+    assert ("finva_savings_plan_contributions", "PREREQUISITE_TABLE_MISSING") in aborts
+    unguarded = {r[1] for r in rows if r[0] == "unguarded_workspace_table"}
+    assert "finva_gmail_connections" in unguarded and "debts" not in unguarded and "financial_profiles" not in unguarded
+    with conn.cursor() as cur:  # the preflight changed nothing
+        cur.execute("SELECT to_regprocedure('public.dincr_guard_financial_delete()') IS NULL")
+        assert cur.fetchone()[0] is True
+
+
+def test_the_real_account_deletion_runs_under_every_guard(layout_fk, monkeypatch):
+    """delete_current_account end to end (Supabase Auth HTTP and Vault stubbed)."""
+    from types import SimpleNamespace
+
+    from backend.auth import service as auth_service
+    from backend.auth.current_user import reset_current_user, set_current_user
+    from backend.core import database
+
+    conn, a3, a1 = layout_fk["conn"], _ids("a3"), _ids("a1")
+    auth_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "auth:a3"))
+    with conn.cursor() as cur:
+        cur.execute("CREATE SCHEMA IF NOT EXISTS vault")
+        cur.execute("CREATE TABLE IF NOT EXISTS vault.secrets (id UUID PRIMARY KEY, secret TEXT)")
+        cur.execute("CREATE OR REPLACE VIEW vault.decrypted_secrets AS SELECT id, secret AS decrypted_secret FROM vault.secrets")
+        cur.execute("ALTER TABLE finva_gmail_connections ADD COLUMN IF NOT EXISTS refresh_token_secret_id UUID, "
+                    "ADD COLUMN IF NOT EXISTS granted_scopes TEXT[]")
+        cur.execute("UPDATE accounts SET supabase_user_id=%s WHERE id=%s", (auth_id, a3["account"]))
+        cur.execute("UPDATE allowed_users SET supabase_user_id=%s WHERE id=%s", (auth_id, a3["allowed"]))
+        _debt(cur, a3["users"], a3["workspace"])
+        _debt(cur, a1["users"], a1["workspace"])  # someone else's data must survive
+    _apply_migration(conn)
+    monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"])
+    monkeypatch.setattr(database, "APPLICATION_NAME", "dincr-backend")
+    monkeypatch.setattr(auth_service, "SUPABASE_URL", "https://auth.example.invalid")
+    monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", "synthetic-admin-key")
+    ok = SimpleNamespace(status_code=200, ok=True, json=lambda: {}, text="")
+    monkeypatch.setattr(auth_service.requests, "delete", lambda *a, **k: ok)
+    monkeypatch.setattr(auth_service.requests, "get", lambda *a, **k: SimpleNamespace(status_code=404, ok=False, json=lambda: {}, text=""))
+    monkeypatch.setattr(auth_service.requests, "post", lambda *a, **k: ok)
+
+    token = set_current_user({"id": a3["allowed"], "email": a3["email"], "role": "user", "status": "active",
+                              "account_id": a3["account"], "supabase_user_id": auth_id,
+                              "workspace_id": a3["workspace"]})
+    try:
+        auth_service.delete_current_account()
+    finally:
+        reset_current_user(token)
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM accounts WHERE id=%s", (a3["account"],))
+        assert cur.fetchone()[0] == 0
+        cur.execute("SELECT COUNT(*) FROM debts WHERE workspace_id=%s", (a3["workspace"],))
+        assert cur.fetchone()[0] == 0
+        cur.execute("SELECT COUNT(*) FROM debts WHERE workspace_id=%s", (a1["workspace"],))
+        assert cur.fetchone()[0] == 1
+        cur.execute("SELECT COUNT(*) FROM users WHERE id=%s", (a3["users"],))
+        assert cur.fetchone()[0] == 0
