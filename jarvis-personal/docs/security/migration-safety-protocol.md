@@ -14,7 +14,8 @@ Every rule below breaks one link of that chain: ad-hoc destructive SQL, selectio
 
 - **Runtime:** Python 3.11 (`runtime.txt`) with `jarvis-personal/requirements.txt` installed (for example a dedicated venv).
 - **Canonical form, from `jarvis-personal/`:** `python3.11 -m backend.scripts.<apply_migration|db_backup_verify> …`. Running the file directly (`python3.11 backend/scripts/apply_migration.py …`) also works.
-- **Older Python:** anything older stops with a clear message instead of an import error. The pinned dependencies, e.g. `python-dotenv` 1.2, do not install on Python 3.9.
+- **Older Python:** an older interpreter, or one without `requirements.txt`, stops with an explicit error naming Python 3.11 and the command. The pinned dependencies, e.g. `python-dotenv` 1.2, do not install on Python 3.9.
+- **Never put a `DINCR_*_DSN` in `backend/.env`.** The backend package loads that file (without overriding exported variables). Export the DSN in the shell that runs the tool.
 - **Missing dependency:** the scripts name the missing module and the install step.
 
 ## 1. The BACKUP_VERIFIED gate

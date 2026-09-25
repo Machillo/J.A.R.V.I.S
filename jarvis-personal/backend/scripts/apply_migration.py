@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Apply one reviewed migration, only behind a verified backup of the same database.
 
-    python backend/scripts/apply_migration.py \
+    python3.11 -m backend.scripts.apply_migration \
         --file database/migrations/<name>.sql --backup-dir <private dir> --confirm <name>.sql
 
 Refuses unless:
@@ -51,8 +51,8 @@ try:
     from psycopg2 import extensions
     from backend.scripts import db_backup_verify
 except ModuleNotFoundError as missing:  # e.g. psycopg2 or python-dotenv not installed for this interpreter
-    raise SystemExit(f"apply_migration: missing dependency '{missing.name}'. Install jarvis-personal/requirements.txt "
-                     "for Python 3.11 and run from jarvis-personal/ with python3.11 -m backend.scripts.apply_migration") from None
+    raise SystemExit(f"apply_migration: cannot import '{missing.name}'. Run it from the jarvis-personal/ checkout with "
+                     "Python 3.11 and requirements.txt installed: python3.11 -m backend.scripts.apply_migration") from None
 
 REPO = Path(__file__).resolve().parents[3]
 MIGRATIONS = REPO / "jarvis-personal" / "database" / "migrations"

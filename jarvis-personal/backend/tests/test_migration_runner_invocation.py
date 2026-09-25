@@ -20,11 +20,26 @@ def test_both_invocations_reach_the_argument_parser(script, form):
     assert "usage:" in result.stdout
 
 
-def test_an_older_python_gets_a_clear_message_not_an_import_error():
-    source = (ROOT / "backend" / "scripts" / "apply_migration.py").read_text(encoding="utf-8")
-    guard = source.index("sys.version_info < (3, 11)")
-    assert guard < source.index("import psycopg2") and guard < source.index("from backend.scripts import")
-    assert "python3.11 -m backend.scripts.apply_migration" in source
-    init = (ROOT / "backend" / "__init__.py").read_text(encoding="utf-8")
-    assert init.index("sys.version_info < (3, 11)") < init.index("from backend.core.env import")
-    assert (ROOT / "runtime.txt").read_text().strip().startswith("python-3.11")
+@pytest.mark.parametrize("script", ["apply_migration", "db_backup_verify"])
+def test_an_older_python_stops_with_the_supported_command(script):
+    """Run the script as Python 3.9 would see it: the guard stops it before any import."""
+    probe = ("import sys, runpy; sys.version_info = (3, 9, 6); "
+             f"runpy.run_path({str(ROOT / 'backend' / 'scripts' / (script + '.py'))!r}, run_name='__main__')")
+    result = subprocess.run([sys.executable, "-c", probe], cwd=ROOT, capture_output=True, text=True, timeout=60)
+    assert result.returncode != 0
+    assert f"python3.11 -m backend.scripts.{script}" in result.stderr and "ModuleNotFoundError" not in result.stderr
+
+
+def test_a_missing_dependency_names_the_supported_setup():
+    probe = ("import sys, builtins; real = builtins.__import__\n"
+             "def blocked(name, *a, **k):\n"
+             "    if name == 'dotenv': raise ModuleNotFoundError(name=name)\n"
+             "    return real(name, *a, **k)\n"
+             "builtins.__import__ = blocked\nimport backend")
+    result = subprocess.run([sys.executable, "-c", probe], cwd=ROOT, capture_output=True, text=True, timeout=60)
+    assert result.returncode != 0 and "Python 3.11" in result.stderr and "python3.11 -m backend.scripts" in result.stderr
+
+
+def test_the_pinned_runtime_is_python_3_11():
+    for pin in (ROOT / "runtime.txt", ROOT / ".python-version"):
+        assert "3.11" in pin.read_text(encoding="utf-8")

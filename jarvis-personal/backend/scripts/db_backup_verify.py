@@ -58,8 +58,8 @@ try:
     import psycopg2
     from psycopg2.extensions import parse_dsn
 except ModuleNotFoundError as missing:  # e.g. psycopg2 or python-dotenv not installed for this interpreter
-    raise SystemExit(f"db_backup_verify: missing dependency '{missing.name}'. Install jarvis-personal/requirements.txt "
-                     "for Python 3.11 and run from jarvis-personal/ with python3.11 -m backend.scripts.db_backup_verify") from None
+    raise SystemExit(f"db_backup_verify: cannot import '{missing.name}'. Run it from the jarvis-personal/ checkout with "
+                     "Python 3.11 and requirements.txt installed: python3.11 -m backend.scripts.db_backup_verify") from None
 
 DEFAULT_SCHEMAS = ("public",)
 EXIT_GATE_CLOSED = 2
