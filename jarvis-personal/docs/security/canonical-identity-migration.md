@@ -42,6 +42,22 @@ that space cascades to the row.
 - Phase A therefore checks each table in the space its FK references, and flags existing wrong-space rows as `USER_ID_WRONG_SPACE`.
 - With every row in its FK's space, a cascade only removes the deleted person's own rows.
 
+## Production incident behind this plan (2026-09-17)
+
+Read-only evidence from `pg_stat_statements` (never reset, no evicted entries) and table counters:
+- A manual cleanup script (a DO block run in the SQL editor) deleted test accounts.
+- For every public table with `user_id` it ran `DELETE … WHERE workspace_id = ANY(targets) OR user_id = ANY(<the targets' allowed_users.id>)`.
+- In tables whose `user_id` references `users(id)`, those integers were **other people's** `users.id`. Their rows were deleted in every workspace.
+- Its final `DELETE FROM users WHERE id = … AND email = …` matched nothing, which proves the id-space mix-up.
+- No application DELETE was involved, and nothing recorded what was deleted.
+
+Phase A now:
+- rejects any financial DELETE that spans live workspaces of more than one owner;
+- blocks deleting a legacy identity whose FK would cascade into another workspace;
+- logs every financial deletion (identifiers only).
+
+Rule for humans and agents: **never delete or select financial rows by legacy `user_id`.** Remove an account through the account deletion flow; it deletes the account and its workspaces cascade.
+
 ## Inventory (backend, excluding tests)
 
 | Dependency | Where | Class |
@@ -67,6 +83,7 @@ that space cascades to the row.
 - Existing rows are never moved between workspaces by application writes.
 - A changed legacy `user_id` must be an identity of the workspace in the space its table's FK references (either space when the table has no such FK). NULL is accepted.
 - A colliding id is never used to repair a row.
+- Deletions: one owner per statement, no cross-workspace cascades from `users`/`allowed_users`, and a delete log.
 - Tested rollback.
 - Exit: preflight reviewed, every NEEDS_REVIEW/ORPHAN row resolved by a human, migration applied, check script PASS.
 

@@ -337,9 +337,15 @@ def test_debt_payment_keeps_the_debt_ownership(seeded):
         with pytest.raises(psycopg2.errors.ForeignKeyViolation):
             _payment(cur, B["allowed"], rows["ok_allowed_space"], B["workspace"])
         _payment(cur, A["users"], rows["ok_allowed_space"], A["workspace"])
-        # Deleting the debt still cascades to its payments.
-        cur.execute("DELETE FROM debts WHERE id=%s", (rows["ok_allowed_space"],))
-        cur.execute("SELECT COUNT(*) FROM debt_payments WHERE debt_id=%s", (rows["ok_allowed_space"],))
+        # A cascade that would cross owners (the seeded mismatched payment lives in
+        # B's workspace) fails closed instead of deleting B's row.
+        with pytest.raises(psycopg2.errors.CheckViolation, match="spans 2 live owners"):
+            cur.execute("DELETE FROM debts WHERE id=%s", (rows["ok_allowed_space"],))
+        # A debt whose payments all share its owner still cascades.
+        debt = _debt(cur, A["allowed"], A["workspace"])
+        _payment(cur, A["allowed"], debt, A["workspace"])
+        cur.execute("DELETE FROM debts WHERE id=%s", (debt,))
+        cur.execute("SELECT COUNT(*) FROM debt_payments WHERE debt_id=%s", (debt,))
         assert cur.fetchone()[0] == 0
 
 
@@ -614,7 +620,7 @@ def test_rollback_removes_guards_keeps_evidence_and_can_revert_a_run(seeded):
         cur.execute("SELECT COUNT(*) FROM financial_ownership_repair_log")
         assert cur.fetchone()[0] == 1  # evidence kept
         _debt(cur, IDENTITIES["A"]["allowed"], IDENTITIES["B"]["workspace"])  # guards gone
-        cur.execute("SELECT COUNT(*) FROM pg_trigger WHERE tgname LIKE 'trg\\_%%\\_ownership_guard'")
+        cur.execute("SELECT COUNT(*) FROM pg_trigger WHERE tgname LIKE 'trg\\_%%\\_ownership_guard' OR tgname LIKE 'trg\\_%%\\_delete_guard'")
         assert cur.fetchone()[0] == 0
     _apply_migration(conn)  # re-applying after a rollback works
 
@@ -827,3 +833,87 @@ def test_migration_aborts_when_overtime_table_references_users(layout_unmigrated
         _apply_migration(conn)
     with conn.cursor() as cur:
         cur.execute("ROLLBACK")
+
+
+# --- Deletions (production incident: a manual cleanup script deleted rows by
+# legacy user_id across workspaces) ------------------------------------------------
+
+INCIDENT_SCRIPT = """
+DO $$
+DECLARE
+    target_workspaces uuid[] := ARRAY['%(ws)s'::uuid];
+    target_legacy bigint[] := ARRAY[%(legacy)s];
+BEGIN
+    EXECUTE 'DELETE FROM public.debts WHERE workspace_id = ANY($1) OR user_id = ANY($2)'
+        USING target_workspaces, target_legacy;
+END $$;
+"""
+
+
+def _incident(cur, target: dict) -> None:
+    # The script's author meant the target's allowed_users.id; in a users-FK table
+    # the same integer is another person's users.id.
+    cur.execute(INCIDENT_SCRIPT % {"ws": target["workspace"], "legacy": target["allowed"]})
+
+
+def test_incident_script_deletes_another_tenants_debts_without_the_guard(layout_fk):
+    conn, a1, a3 = layout_fk["conn"], _ids("a1"), _ids("a3")
+    with conn.cursor() as cur:
+        victim = _debt(cur, a3["users"], a3["workspace"])     # users.id 21 == a1's allowed_users.id
+        _debt(cur, a1["users"], a1["workspace"])              # the target's own debt
+        _incident(cur, a1)
+        cur.execute("SELECT COUNT(*) FROM debts WHERE id=%s", (victim,))
+        assert cur.fetchone()[0] == 0  # the victim's debt is gone
+
+
+def test_delete_guard_rejects_the_incident_script(layout_fk):
+    conn, a1, a3 = layout_fk["conn"], _ids("a1"), _ids("a3")
+    with conn.cursor() as cur:
+        victim = _debt(cur, a3["users"], a3["workspace"])
+        _debt(cur, a1["users"], a1["workspace"])
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        with pytest.raises(psycopg2.errors.CheckViolation, match="spans 2 live owners"):
+            _incident(cur, a1)
+        cur.execute("SELECT COUNT(*) FROM debts WHERE id=%s", (victim,))
+        assert cur.fetchone()[0] == 1
+        # Deleting only the target's rows, by workspace, is allowed and logged.
+        cur.execute("DELETE FROM debts WHERE workspace_id=%s", (a1["workspace"],))
+        cur.execute("SELECT table_name, row_count, workspace_ids::text[], trigger_depth FROM financial_ownership_delete_log")
+        assert cur.fetchall() == [("debts", 1, [a1["workspace"]], 1)]
+
+
+def test_app_deletes_and_cascades_still_work_and_are_logged(layout_fk):
+    conn, a3 = layout_fk["conn"], _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        debt = _debt(cur, a3["users"], a3["workspace"])
+        _payment(cur, a3["users"], debt, a3["workspace"])
+        cur.execute("DELETE FROM debts WHERE id=%s AND workspace_id=%s", (debt, a3["workspace"]))
+        cur.execute("SELECT table_name, row_count FROM financial_ownership_delete_log ORDER BY id")
+        logged = cur.fetchall()
+    assert ("debts", 1) in logged and ("debt_payments", 1) in logged
+
+
+def test_account_deletion_cascade_is_not_blocked(layout_fk):
+    conn, a3 = layout_fk["conn"], _ids("a3")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        _debt(cur, a3["users"], a3["workspace"])
+        cur.execute("DELETE FROM accounts WHERE id=%s", (a3["account"],))       # workspace cascade
+        cur.execute("DELETE FROM users WHERE lower(email)=lower(%s)", (a3["email"],))
+        cur.execute("DELETE FROM allowed_users WHERE id=%s", (a3["allowed"],))
+        cur.execute("SELECT COUNT(*) FROM debts WHERE workspace_id=%s", (a3["workspace"],))
+        assert cur.fetchone()[0] == 0
+
+
+def test_identity_delete_cannot_cascade_into_another_workspace(layout_fk):
+    conn, a2, a6 = layout_fk["conn"], _ids("a2"), _ids("a6")
+    with conn.cursor() as cur:
+        wrong = _transaction(cur, a2["allowed"], a2["workspace"])  # 24 is a6's users.id
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        with pytest.raises(psycopg2.errors.ForeignKeyViolation, match="another workspace"):
+            cur.execute("DELETE FROM users WHERE id=%s", (a6["users"],))
+        cur.execute("SELECT COUNT(*) FROM transactions WHERE id=%s", (wrong,))
+        assert cur.fetchone()[0] == 1

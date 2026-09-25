@@ -1,9 +1,9 @@
 -- MANUAL rollback of 20260925120000_financial_ownership_integrity.sql.
 -- Human decision only; never run automatically. No financial row is deleted.
 --
--- Step 1 (always): remove the write guards (trigger, CHECK, parent FK and its
--- unique index). The read-only audit functions, the snapshots and the repair
--- log are kept as evidence.
+-- Step 1 (always): remove the write and delete guards (triggers, CHECK, parent
+-- FK and its unique index). The read-only audit functions, the snapshots, the
+-- repair log and the delete log are kept as evidence.
 --
 -- Step 2 (optional): undo the automatic repairs of ONE run. Replace
 -- <RUN_ID> with financial_ownership_repair_log.run_id and uncomment the block.
@@ -21,6 +21,8 @@ BEGIN
         END IF;
         EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
                        'trg_' || cfg.table_name || '_ownership_guard', cfg.table_name);
+        EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
+                       'trg_' || cfg.table_name || '_delete_guard', cfg.table_name);
         EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',
                        cfg.table_name, 'ck_' || cfg.table_name || '_workspace_required');
         EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',
@@ -37,7 +39,11 @@ BEGIN
     END LOOP;
 END $$;
 
+DROP TRIGGER IF EXISTS trg_users_legacy_delete_guard ON public.users;
+DROP TRIGGER IF EXISTS trg_allowed_users_legacy_delete_guard ON public.allowed_users;
 DROP FUNCTION IF EXISTS public.dincr_guard_financial_ownership();
+DROP FUNCTION IF EXISTS public.dincr_guard_financial_delete();
+DROP FUNCTION IF EXISTS public.dincr_guard_legacy_identity_delete();
 
 -- Step 2 (optional):
 -- DO $$

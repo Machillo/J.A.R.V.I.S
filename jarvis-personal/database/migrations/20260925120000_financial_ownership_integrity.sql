@@ -51,6 +51,14 @@
 --   * A stored mail-connection id outside its workspace aborts the migration,
 --     including disconnected connections: fix or remove those rows first.
 --
+--   6. Guards deletions (production incident, 2026-09-17: a manual cleanup script
+--      deleted "WHERE workspace_id = ANY(targets) OR user_id = ANY(<allowed_users
+--      ids>)" from every table, removing other tenants' rows whose users.id equals
+--      those integers). Any financial DELETE may only touch live workspaces of ONE
+--      owner; a users/allowed_users row cannot be deleted while its FK would
+--      cascade into another workspace; every financial deletion is logged in
+--      financial_ownership_delete_log (identifiers only).
+--
 -- What it deliberately does NOT do: it never changes user_id, never assigns a
 -- workspace from user_id alone (the Phase 2A mapping is ambiguous across id
 -- spaces), never deletes, never validates the NOT VALID constraints, and never
@@ -815,6 +823,132 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
+-- 3b. Deletions. Production evidence (pg_stat_statements): a manual cleanup
+--     script ran "DELETE ... WHERE workspace_id = ANY(targets) OR user_id =
+--     ANY(<allowed_users ids>)" on every table and removed rows of OTHER tenants
+--     whose users.id equals those integers. No app DELETE was involved and
+--     nothing recorded what was deleted. These guards reject that shape and log
+--     every financial deletion (identifiers only).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.financial_ownership_delete_log (
+    id BIGSERIAL PRIMARY KEY,
+    table_name TEXT NOT NULL,
+    row_count BIGINT NOT NULL,
+    row_ids BIGINT[] NOT NULL,
+    workspace_ids UUID[] NOT NULL,
+    trigger_depth INTEGER NOT NULL,
+    db_role TEXT NOT NULL,
+    application_name TEXT,
+    transaction_id BIGINT NOT NULL,
+    deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_financial_ownership_delete_log_at
+    ON public.financial_ownership_delete_log(deleted_at DESC);
+ALTER TABLE public.financial_ownership_delete_log ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE public.financial_ownership_delete_log FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON SEQUENCE public.financial_ownership_delete_log_id_seq FROM anon, authenticated;
+
+-- Statement level, after delete. Any DELETE (top level, inside a DO block or an
+-- FK cascade) may only remove rows of live workspaces that share ONE owner
+-- account. Rows of deleted workspaces (the account/workspace cascade) are not
+-- counted; a parent cascade (debts -> debt_payments) stays within its owner. A
+-- cascade that crosses owners only happens with anomalous rows and fails closed.
+CREATE OR REPLACE FUNCTION public.dincr_guard_financial_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+DECLARE
+    v_owners BIGINT;
+BEGIN
+    INSERT INTO public.financial_ownership_delete_log(
+        table_name, row_count, row_ids, workspace_ids, trigger_depth, db_role,
+        application_name, transaction_id)
+    SELECT TG_TABLE_NAME, COUNT(*),
+           COALESCE(array_agg(o.id ORDER BY o.id), ARRAY[]::BIGINT[]),
+           COALESCE(array_agg(DISTINCT o.workspace_id) FILTER (WHERE o.workspace_id IS NOT NULL), ARRAY[]::UUID[]),
+           pg_trigger_depth(), session_user::TEXT,
+           NULLIF(current_setting('application_name', true), ''), txid_current()
+    FROM old_rows o
+    HAVING COUNT(*) > 0;
+
+    SELECT COUNT(DISTINCT w.owner_account_id) INTO v_owners
+    FROM old_rows o
+    JOIN public.workspaces w ON w.id = o.workspace_id;
+    IF v_owners > 1 THEN
+        -- No identifiers or values in the message: it can reach logs.
+        RAISE EXCEPTION 'financial delete on % spans % live owners', TG_TABLE_NAME, v_owners
+            USING ERRCODE = '23514',
+                  HINT = 'delete one account''s rows per statement; never select financial rows by legacy user_id';
+    END IF;
+    RETURN NULL;
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_financial_delete() FROM PUBLIC, anon, authenticated;
+
+-- Row level, before delete on the legacy identity tables: refuse to delete an
+-- identity whose FK would cascade into rows of a live workspace that the
+-- identity does not belong to (rows written in the wrong id space).
+CREATE OR REPLACE FUNCTION public.dincr_guard_legacy_identity_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+DECLARE
+    cfg RECORD;
+    v_space TEXT := CASE TG_TABLE_NAME WHEN 'users' THEN 'users' ELSE 'allowed_users' END;
+    v_hit BOOLEAN;
+BEGIN
+    FOR cfg IN SELECT o.table_name FROM public.dincr_ownership_tables() o
+               WHERE public.dincr_user_id_space(o.table_name) = v_space LOOP
+        EXECUTE pg_catalog.format($sql$
+            SELECT EXISTS (
+                SELECT 1 FROM public.%I t
+                JOIN public.workspaces w ON w.id = t.workspace_id
+                WHERE t.user_id = $1
+                  AND NOT public.dincr_legacy_id_belongs_to_workspace(t.user_id::BIGINT, t.workspace_id, $2)
+            )
+        $sql$, cfg.table_name) INTO v_hit USING OLD.id, v_space;
+        IF v_hit THEN
+            RAISE EXCEPTION 'deleting this % row would cascade into another workspace''s % rows', TG_TABLE_NAME, cfg.table_name
+                USING ERRCODE = '23503',
+                      HINT = 'resolve the USER_ID_WRONG_SPACE rows reported by the preflight first';
+        END IF;
+    END LOOP;
+    RETURN OLD;
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_legacy_identity_delete() FROM PUBLIC, anon, authenticated;
+
+DO $$
+DECLARE
+    cfg RECORD;
+BEGIN
+    FOR cfg IN SELECT * FROM public.dincr_ownership_tables() LOOP
+        IF to_regclass(format('public.%I', cfg.table_name)) IS NULL
+           OR NOT EXISTS (SELECT 1 FROM information_schema.columns isc
+                          WHERE isc.table_schema = 'public' AND isc.table_name = cfg.table_name
+                            AND isc.column_name = 'workspace_id')
+           OR NOT EXISTS (SELECT 1 FROM information_schema.columns isc
+                          WHERE isc.table_schema = 'public' AND isc.table_name = cfg.table_name
+                            AND isc.column_name = 'id' AND isc.data_type IN ('bigint', 'integer')) THEN
+            CONTINUE;
+        END IF;
+        EXECUTE format(
+            'CREATE OR REPLACE TRIGGER %I AFTER DELETE ON public.%I REFERENCING OLD TABLE AS old_rows '
+            'FOR EACH STATEMENT EXECUTE FUNCTION public.dincr_guard_financial_delete()',
+            'trg_' || cfg.table_name || '_delete_guard', cfg.table_name
+        );
+    END LOOP;
+    EXECUTE 'CREATE OR REPLACE TRIGGER trg_users_legacy_delete_guard BEFORE DELETE ON public.users '
+            'FOR EACH ROW EXECUTE FUNCTION public.dincr_guard_legacy_identity_delete()';
+    EXECUTE 'CREATE OR REPLACE TRIGGER trg_allowed_users_legacy_delete_guard BEFORE DELETE ON public.allowed_users '
+            'FOR EACH ROW EXECUTE FUNCTION public.dincr_guard_legacy_identity_delete()';
+END $$;
+
+-- ---------------------------------------------------------------------------
 -- 4. Postflight: prevention is installed on every existing target table.
 -- ---------------------------------------------------------------------------
 DO $$
@@ -834,6 +968,12 @@ BEGIN
         OR NOT EXISTS (SELECT 1 FROM pg_constraint c
                        WHERE c.conrelid = format('public.%I', t.table_name)::regclass
                          AND c.conname = 'ck_' || t.table_name || '_workspace_required')
+        OR (EXISTS (SELECT 1 FROM information_schema.columns isc
+                    WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
+                      AND isc.column_name = 'id' AND isc.data_type IN ('bigint', 'integer'))
+            AND NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                            WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                              AND tr.tgname = 'trg_' || t.table_name || '_delete_guard'))
       );
     IF v_missing > 0 THEN
         RAISE EXCEPTION 'financial ownership integrity: prevention missing on % tables, aborting', v_missing;

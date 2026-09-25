@@ -310,3 +310,46 @@ WHERE s.dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
   AND s.query ~* '\mdebts\M'
   AND s.query ~* '\m(delete|update|insert|truncate|do|call|copy)\M'
 ORDER BY s.calls DESC;
+
+-- ===========================================================================
+-- Round 4 (what actually deleted rows). pg_stat_statements keeps every
+-- top-level statement shape since the last reset; check dealloc = 0 first:
+-- otherwise entries may have been evicted and absence proves nothing.
+-- ===========================================================================
+
+-- E24. Manual statements (DO blocks, scripts starting with a comment) that
+--      contain DELETEs: first run time, the tables they delete from, and their
+--      dynamic DELETE templates. Literal values (emails, UUIDs) are never
+--      returned; the numeric legacy ids a script targeted are returned because
+--      the id-space question needs them.
+SELECT s.queryid, s.calls, s.stats_since AS first_seen,
+       (SELECT array_agg(DISTINCT lower(m[1])) FROM regexp_matches(s.query, 'delete\s+from\s+(?:"?public"?\.)?"?([a-zA-Z_]+)', 'gi') AS m) AS delete_targets,
+       (SELECT array_agg(m[1]) FROM regexp_matches(s.query, 'format\(\s*''(DELETE[^'']*)''', 'gi') AS m) AS dynamic_delete_templates,
+       (regexp_match(s.query, 'bigint(?:\[\])?\s*:=\s*(?:ARRAY\[)?([0-9, ]+)', 'i'))[1] AS numeric_legacy_ids,
+       (SELECT dealloc FROM pg_stat_statements_info) AS evicted_entries
+FROM pg_stat_statements s
+WHERE s.dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+  AND NOT s.query ~* '^\s*(select|insert|update|delete|with|explain)\M'
+  AND s.query ~* 'delete\s+from'
+ORDER BY s.stats_since;
+
+-- E25. Row accounting for one table: successful INSERT statements vs rows alive
+--      vs tuples ever deleted (n_tup_del includes FK cascades and deletes run
+--      inside DO blocks, which pg_stat_statements does not list separately).
+SELECT (SELECT sum(s.rows) FROM pg_stat_statements s
+         WHERE s.dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+           AND s.query ~* 'insert\s+into\s+("?public"?\.)?"?debts\M') AS inserted_rows_by_statements,
+       (SELECT count(*) FROM public.debts) AS alive_rows,
+       t.n_tup_ins, t.n_tup_del,
+       (SELECT last_value FROM public.debts_id_seq) AS sequence_last_value
+FROM pg_stat_user_tables t WHERE t.schemaname = 'public' AND t.relname = 'debts';
+
+-- E26. PRESERVE the evidence before pg_stat_statements evicts it (it evicts the
+--      least-used entries once it holds pg_stat_statements.max statements; the
+--      scripts found by E24 ran once). Run once in the SQL editor, download the
+--      result as CSV and store it privately: it contains the full statement
+--      text, including emails and UUIDs. Never paste it into tickets or Git.
+--      Replace <QUERYIDS> with the queryids from E24 (comma separated).
+SELECT s.queryid, s.stats_since, s.calls, s.rows, s.query
+FROM pg_stat_statements s
+WHERE s.queryid IN (<QUERYIDS>);
