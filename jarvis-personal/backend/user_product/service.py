@@ -14,6 +14,7 @@ from backend.finance.service import (
     get_payroll_events,
 )
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
+from backend.user_product.basic_service import _require_basic_tables
 from backend.user_product.strategy_engine import (
     build_basic_strategy,
     build_paycheck_plan,
@@ -406,6 +407,8 @@ def contribute_user_goal(goal_id: int, payload):
             raise HTTPException(status_code=409, detail="La meta ya está completa.")
         current = float(goal["current_amount"]) + amount
         status = "completed" if current >= float(goal["target_amount"]) else "active"
+        # The contribution ledger comes from a migration; never move a goal without it.
+        _require_basic_tables(conn, "finva_goal_contributions")
         conn.execute(
             "INSERT INTO finva_goal_contributions(workspace_id,goal_id,amount,contribution_date) VALUES(%s,%s,%s,%s)",
             (workspace_id, goal_id, amount, contribution_date),

@@ -20,11 +20,16 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[1]
 
 DDL = re.compile(
-    r"(?:^|;)\s*(?:CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\s+"
-    r"(?:OR\s+REPLACE\s+|UNIQUE\s+|TEMP(?:ORARY)?\s+)?"
-    r"(?:TABLE|INDEX|SCHEMA|SEQUENCE|FUNCTION|TRIGGER|VIEW|EXTENSION|POLICY|TYPE|ALL|SELECT|INSERT|UPDATE|DELETE|USAGE|EXECUTE)\b",
+    r"(?:^|;|\bTHEN\b|\bBEGIN\b|\bELSE\b|\$\$|EXECUTE\s+')\s*"
+    r"(?:(?:CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\s+"
+    r"(?:OR\s+REPLACE\s+|UNIQUE\s+|TEMP(?:ORARY)?\s+|MATERIALIZED\s+)?"
+    r"(?:TABLE|INDEX|SCHEMA|SEQUENCE|FUNCTION|PROCEDURE|TRIGGER|VIEW|EXTENSION|POLICY|TYPE|DOMAIN|ROLE|DEFAULT|ALL|SELECT|INSERT|UPDATE|DELETE|USAGE|EXECUTE)\b"
+    r"|COMMENT\s+ON\b)",
     re.IGNORECASE,
 )
+SQL_COMMENT = re.compile(r"--[^\n]*")
+# Known limits: DDL assembled by concatenating separate literals, or passed in
+# from outside the module, is not seen. This is a guard, not a proof.
 
 LEGACY_OWNER_DDL = {
     "advisor/core.py": 2,
@@ -54,10 +59,10 @@ def _ddl_count(path: Path) -> int:
     f_string_parts = {id(part) for node in ast.walk(tree) if isinstance(node, ast.JoinedStr) for part in node.values}
     for node in ast.walk(tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in f_string_parts:
-            count += len(DDL.findall(node.value))
+            count += len(DDL.findall(SQL_COMMENT.sub("", node.value)))
         elif isinstance(node, ast.JoinedStr):
             text = "".join(part.value if isinstance(part, ast.Constant) else "{}" for part in node.values)
-            count += len(DDL.findall(text))
+            count += len(DDL.findall(SQL_COMMENT.sub("", text)))
     return count
 
 
@@ -88,10 +93,14 @@ def test_the_scanner_sees_ddl_and_ignores_prose(tmp_path):
         '    """Create a flow and drop expired ones."""\n'
         '    conn.execute("CREATE TABLE IF NOT EXISTS t (id INT)")\n'
         '    conn.execute(f"ALTER TABLE {name} ENABLE ROW LEVEL SECURITY")\n'
-        '    conn.execute("SELECT 1; REVOKE ALL ON TABLE t FROM anon")\n',
+        '    conn.execute("SELECT 1; REVOKE ALL ON TABLE t FROM anon")\n'
+        '    conn.execute("-- keep compatible\\nALTER TABLE t ADD COLUMN IF NOT EXISTS c INT")\n'
+        '    conn.execute("DO $$ BEGIN IF true THEN CREATE TRIGGER g AFTER INSERT ON t EXECUTE FUNCTION f(); END IF; END $$")\n'
+        '    conn.execute("ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon")\n'
+        '    conn.execute("SELECT 1 -- CREATE TABLE in a comment is not DDL")\n',
         encoding="utf-8",
     )
-    assert _ddl_count(module) == 3
+    assert _ddl_count(module) == 6
 
 
 def test_users_request_modules_have_no_ddl():

@@ -67,8 +67,14 @@ def test_migration_creates_closed_tables_and_is_idempotent(cur):
         cur.execute("SELECT relrowsecurity FROM pg_class WHERE oid = to_regclass(%s)", (f"public.{table}",))
         assert cur.fetchone() == (True,), table
         for role in ("anon", "authenticated"):
-            cur.execute("SELECT has_table_privilege(%s, %s, 'SELECT')", (role, f"public.{table}"))
-            assert cur.fetchone() == (False,), (role, table)
+            for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+                cur.execute("SELECT has_table_privilege(%s, %s, %s)", (role, f"public.{table}", privilege))
+                assert cur.fetchone() == (False,), (role, table, privilege)
+    for sequence in ("store_subscription_events_id_seq", "finva_budget_items_id_seq",
+                     "finva_recurring_items_id_seq", "finva_goal_contributions_id_seq"):
+        for role in ("anon", "authenticated"):
+            cur.execute("SELECT has_sequence_privilege(%s, %s, 'USAGE')", (role, f"public.{sequence}"))
+            assert cur.fetchone() == (False,), (role, sequence)
     cur.execute("SELECT count(*) FROM pg_indexes WHERE indexname IN "
                 "('idx_notification_jobs_user','idx_finva_recurring_workspace','idx_finva_goal_contributions_workspace',"
                 "'uq_store_event_provider_id','idx_store_subscription_status')")

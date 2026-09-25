@@ -115,7 +115,7 @@ def load_income_baseline(conn, *, account_id: str, workspace_id: str, today: dat
     recurring = [dict(row) for row in conn.execute(
         "SELECT amount,frequency,item_type,is_active FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE",
         (workspace_id,),
-    ).fetchall()] if _basic_tables_ready(conn) else []
+    ).fetchall()] if _basic_tables_ready(conn, "finva_recurring_items") else []
     return income_baseline(
         _profile(conn, account_id, workspace_id), months,
         imported_income_by_month(conn, workspace_id, _shift_month(current, -11)), recurring,

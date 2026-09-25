@@ -22,7 +22,9 @@ BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '2min';
 
--- 1. Store billing (created in production by the old runtime DDL; same shape).
+-- 1. Store billing (created in production by the old runtime DDL). Same shape
+--    as production: the pending_* columns were added later by ADD COLUMN, without
+--    CHECK constraints; the backend validates those values.
 CREATE TABLE IF NOT EXISTS store_subscriptions (
     account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
     workspace_id UUID,
@@ -73,7 +75,10 @@ REVOKE ALL ON SEQUENCE store_subscription_events_id_seq FROM anon, authenticated
 CREATE INDEX IF NOT EXISTS idx_notification_jobs_user ON notification_jobs(user_id, scheduled_at);
 
 -- 3. Basic plan tables (same shape as 20260909_finva_basic_01_07.sql, which was
---    never applied in production), now closed to the Data API roles.
+--    never applied in production: do NOT apply that older file, it re-enables
+--    plan features and leaves these tables open). Now closed to the Data API
+--    roles. finva_goal_contributions also backs the Free goal contribution
+--    write, which fails until this runs.
 CREATE TABLE IF NOT EXISTS finva_budget_items (
     id BIGSERIAL PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -137,6 +142,10 @@ ON CONFLICT (plan_id, feature_id) DO NOTHING;
 
 COMMIT;
 
+-- Operator note: while code older than this migration is deployed, requests run
+-- ALTER TABLE store_subscriptions at runtime and can hold its lock; if the 5 s
+-- lock_timeout aborts this migration, nothing was applied and it can be re-run.
+--
 -- Postflight (read-only): every row returned is a failure.
 -- SELECT t AS missing_or_open
 -- FROM unnest(ARRAY['store_subscriptions','store_subscription_events','finva_budget_items',
