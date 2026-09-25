@@ -6,7 +6,10 @@ DINCR_REQUIRE_PG_TESTS=1 so these tests fail instead of silently skipping.
 
 All identities and amounts are synthetic. The fixture reproduces the two legacy
 id spaces of user_id (allowed_users.id and users.id) with deliberate collisions:
-account A's users.id equals account B's allowed_users.id, as seen in production.
+account A's users.id equals account B's allowed_users.id.
+
+DINCR_TEST_POSTGRES_URL must point at a disposable server: the tests create
+databases and the anon/authenticated roles on it.
 """
 from __future__ import annotations
 
@@ -39,7 +42,7 @@ IDENTITIES = {
 }
 
 
-def _admin_uri() -> str:
+def _admin_uri(data_dir: Path) -> str:
     url = os.getenv("DINCR_TEST_POSTGRES_URL", "").strip()
     if url:
         return url
@@ -49,13 +52,12 @@ def _admin_uri() -> str:
         if os.getenv("DINCR_REQUIRE_PG_TESTS") == "1":
             pytest.fail("PostgreSQL tests are required but neither DINCR_TEST_POSTGRES_URL nor pgserver is available.")
         pytest.skip("No PostgreSQL available (set DINCR_TEST_POSTGRES_URL or install pgserver).")
-    data_dir = Path(os.getenv("DINCR_PGSERVER_DIR", "/tmp/dincr-ownership-pgserver"))
-    return pgserver.get_server(data_dir, cleanup_mode=None).get_uri()
+    return pgserver.get_server(data_dir, cleanup_mode="delete").get_uri()
 
 
 @pytest.fixture(scope="module")
-def admin_uri():
-    return _admin_uri()
+def admin_uri(tmp_path_factory):
+    return _admin_uri(tmp_path_factory.mktemp("pgserver"))
 
 
 def _with_database(uri: str, name: str) -> str:
@@ -144,7 +146,7 @@ def _payment(cur, user_id, debt_id, workspace_id) -> int:
 
 
 def _add_phase_2a_fks(cur) -> None:
-    for table in ("debts", "debt_payments", "transactions", "expenses", "receivables", "receivable_payments"):
+    for table in ("debts", "debt_payments", "transactions", "expenses", "receivables", "receivable_payments", "exchange_rates"):
         cur.execute(
             f"ALTER TABLE {table} ADD CONSTRAINT fk_{table}_workspace FOREIGN KEY (workspace_id) "
             "REFERENCES workspaces(id) ON DELETE CASCADE NOT VALID"
@@ -457,12 +459,13 @@ def test_an_ownership_table_without_id_is_reported_not_skipped(db):
     assert audit[("savings", None)] == ("TABLE_NOT_AUDITABLE", "NEEDS_REVIEW")
 
 
-# --- Production-shaped id layout ---------------------------------------------
-# Same numeric layout as production (labels only, synthetic emails): allowed_users.id
-# and users.id per account. "k" writes users.id 6, which is also "p"'s
-# allowed_users.id; "m" writes users.id 7, also "t"'s allowed_users.id; "s" has
-# no users row yet; the owner has the same id in both spaces.
-LAYOUT = {"owner": (1, 1), "p": (6, 4), "t": (7, 3), "k": (8, 6), "e": (9, 5), "s": (14, None), "m": (17, 7)}
+# --- Colliding id layout -------------------------------------------------------
+# (allowed_users.id, users.id) per synthetic account. "k" writes users.id 21, which
+# is also "p"'s allowed_users.id; "m" writes users.id 24, also "t"'s
+# allowed_users.id; "s" has no users row yet; the owner has the same id in both
+# spaces. Arbitrary numbers with the collision shapes the audit must handle.
+LAYOUT = {"owner": (3, 3), "p": (21, 15), "t": (24, 12), "k": (26, 21), "e": (28, 18), "s": (31, None), "m": (35, 24)}
+K_USERS, T_USERS, OWNER_ID = 21, 12, 3
 
 
 def _ids(label: str) -> dict:
@@ -496,11 +499,11 @@ def layout(admin_uri):
     uri, conn, drop = _create_database(admin_uri, _seed_layout)
     try:
         with conn.cursor() as cur:
-            # Historical rows exactly as production stores them today.
+            # Historical rows as the legacy writers store them.
             ids = {
-                "k_debt": _debt(cur, 6, _ids("k")["workspace"]),         # users.id of k == allowed id of p
-                "t_debt": _debt(cur, 3, _ids("t")["workspace"]),         # users.id of t, no collision
-                "owner_debt": _debt(cur, 1, _ids("owner")["workspace"]),
+                "k_debt": _debt(cur, K_USERS, _ids("k")["workspace"]),     # users.id of k == allowed id of p
+                "t_debt": _debt(cur, T_USERS, _ids("t")["workspace"]),     # users.id of t, no collision
+                "owner_debt": _debt(cur, OWNER_ID, _ids("owner")["workspace"]),
             }
             _add_phase_2a_fks(cur)
         _apply_migration(conn)
@@ -509,29 +512,30 @@ def layout(admin_uri):
         drop()
 
 
-def test_production_collisions_stay_valid_and_are_never_rewritten(layout):
+def test_id_space_collisions_stay_valid_and_are_never_rewritten(layout):
     audit = _audit(layout["conn"])
     assert audit[("debts", layout["rows"]["k_debt"])] == ("OK_ID_SPACE_COLLISION", "OK")
     assert audit[("debts", layout["rows"]["t_debt"])] == ("OK", "OK")
     assert audit[("debts", layout["rows"]["owner_debt"])] == ("OK", "OK")
     with layout["conn"].cursor() as cur:
         cur.execute("SELECT id, user_id FROM debts ORDER BY id")
-        assert cur.fetchall() == [(layout["rows"]["k_debt"], 6), (layout["rows"]["t_debt"], 3), (layout["rows"]["owner_debt"], 1)]
+        assert cur.fetchall() == [(layout["rows"]["k_debt"], K_USERS), (layout["rows"]["t_debt"], T_USERS),
+                                  (layout["rows"]["owner_debt"], OWNER_ID)]
         cur.execute("SELECT COUNT(*) FROM financial_ownership_repair_log")
         assert cur.fetchone()[0] == 0
 
 
-def test_cross_workspace_writes_are_rejected_in_the_real_layout(layout):
+def test_cross_workspace_writes_are_rejected_with_colliding_ids(layout):
     with layout["conn"].cursor() as cur:
-        for user_id, label in ((6, "m"), (7, "k"), (5, "k"), (9, "t"), (1, "e"), (14, "owner")):
+        for user_id, label in ((21, "m"), (24, "k"), (18, "k"), (28, "t"), (3, "e"), (31, "owner")):
             with pytest.raises(psycopg2.errors.CheckViolation):
                 _debt(cur, user_id, _ids(label)["workspace"])
         # The DINCR bridge id of each person is accepted in their own workspace.
         for label in ("p", "t", "k", "e", "m"):
             _debt(cur, _ids(label)["users"], _ids(label)["workspace"])
-        # A bare integer cannot say which space it came from: 6 IS an identity of p.
+        # A bare integer cannot say which space it came from: 21 IS an identity of p.
         # This is why no reader may ever decide ownership by user_id (static guard).
-        _debt(cur, 6, _ids("p")["workspace"])
+        _debt(cur, K_USERS, _ids("p")["workspace"])
 
 
 def test_account_without_users_row_writes_through_both_paths(layout, monkeypatch):
@@ -555,7 +559,7 @@ def test_account_without_users_row_writes_through_both_paths(layout, monkeypatch
 def test_owner_and_active_member_can_write_disabled_member_cannot(layout):
     e, s = _ids("e"), _ids("s")
     with layout["conn"].cursor() as cur:
-        _debt(cur, 1, _ids("owner")["workspace"])
+        _debt(cur, OWNER_ID, _ids("owner")["workspace"])
         cur.execute("INSERT INTO workspace_members(workspace_id,account_id,member_role,status) VALUES(%s,%s,'member','active')",
                     (e["workspace"], s["account"]))
         _debt(cur, s["allowed"], e["workspace"])
@@ -581,7 +585,7 @@ def test_canonical_writer_without_legacy_id_and_owner_default_fallback(layout):
 def test_account_deletion_still_cascades_with_the_guards(layout):
     k = _ids("k")
     with layout["conn"].cursor() as cur:
-        _payment(cur, 6, layout["rows"]["k_debt"], k["workspace"])
+        _payment(cur, K_USERS, layout["rows"]["k_debt"], k["workspace"])
         cur.execute("DELETE FROM accounts WHERE id=%s", (k["account"],))
         cur.execute("SELECT COUNT(*) FROM debts WHERE workspace_id=%s", (k["workspace"],))
         assert cur.fetchone()[0] == 0
@@ -613,3 +617,77 @@ def test_rollback_removes_guards_keeps_evidence_and_can_revert_a_run(seeded):
         cur.execute("SELECT COUNT(*) FROM pg_trigger WHERE tgname LIKE 'trg\\_%%\\_ownership_guard'")
         assert cur.fetchone()[0] == 0
     _apply_migration(conn)  # re-applying after a rollback works
+
+
+@pytest.fixture
+def layout_unmigrated(admin_uri):
+    uri, conn, drop = _create_database(admin_uri, _seed_layout)
+    try:
+        with conn.cursor() as cur:
+            _add_phase_2a_fks(cur)
+        yield {"uri": uri, "conn": conn}
+    finally:
+        drop()
+
+
+def test_child_with_a_colliding_id_is_never_auto_repaired(layout_unmigrated):
+    """K_USERS is p's allowed_users.id AND k's users.id: it cannot prove the owner."""
+    conn, p = layout_unmigrated["conn"], _ids("p")
+    with conn.cursor() as cur:
+        debt = _debt(cur, p["allowed"], p["workspace"])
+        colliding = _payment(cur, K_USERS, debt, None)
+        unambiguous = _payment(cur, p["users"], debt, None)
+    _apply_migration(conn)
+    audit = _audit(conn)
+    assert audit[("debt_payments", colliding)] == ("WORKSPACE_NULL", "NEEDS_REVIEW")
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, workspace_id::text FROM debt_payments ORDER BY id")
+        assert cur.fetchall() == [(colliding, None), (unambiguous, p["workspace"])]
+
+
+def test_existing_rows_cannot_be_moved_between_workspaces(layout):
+    with layout["conn"].cursor() as cur:
+        with pytest.raises(psycopg2.errors.CheckViolation, match="ownership change"):
+            cur.execute("UPDATE debts SET workspace_id=%s WHERE id=%s", (_ids("p")["workspace"], layout["rows"]["k_debt"]))
+
+
+def test_upsert_keeps_a_row_under_review_editable(layout_unmigrated):
+    """transactions/service.py rewrites workspace_id in its ON CONFLICT clause."""
+    conn, k = layout_unmigrated["conn"], _ids("k")
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO exchange_rates(user_id,workspace_id,rate_date,currency,exchange_rate) "
+                    "VALUES(999,%s,'2026-01-02','USD',500)", (k["workspace"],))  # NEEDS_REVIEW row
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO exchange_rates (user_id, workspace_id, rate_date, currency, exchange_rate, source)
+               VALUES (%s, %s, %s::date, UPPER(%s), %s, %s)
+               ON CONFLICT (workspace_id, rate_date, currency)
+               DO UPDATE SET workspace_id = EXCLUDED.workspace_id,
+                             exchange_rate = EXCLUDED.exchange_rate,
+                             source = EXCLUDED.source,
+                             updated_at = NOW()""",
+            (k["allowed"], k["workspace"], "2026-01-02", "usd", 510, "manual"),
+        )
+        cur.execute("SELECT user_id, exchange_rate FROM exchange_rates")
+        assert [(r[0], float(r[1])) for r in cur.fetchall()] == [(999, 510.0)]
+
+
+def test_migration_aborts_when_a_mail_connection_id_is_outside_its_workspace(layout_unmigrated):
+    conn, k = layout_unmigrated["conn"], _ids("k")
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO finva_gmail_connections(account_id,workspace_id,legacy_user_id) VALUES(%s,%s,%s)",
+                    (k["account"], k["workspace"], T_USERS))
+    with pytest.raises(psycopg2.Error, match="stored legacy ids outside their workspace"):
+        _apply_migration(conn)
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK")
+        cur.execute("UPDATE finva_gmail_connections SET legacy_user_id=%s", (K_USERS,))
+    _apply_migration(conn)
+
+
+def test_email_bridge_ignores_case_and_surrounding_spaces(layout):
+    k = _ids("k")
+    with layout["conn"].cursor() as cur:
+        cur.execute("UPDATE accounts SET primary_email=%s WHERE id=%s", (f"  {k['email'].upper()} ", k["account"]))
+        _debt(cur, K_USERS, k["workspace"])

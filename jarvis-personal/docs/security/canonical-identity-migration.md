@@ -28,10 +28,12 @@ range:
 | Owner/Personal services, email monitor, overtime, the `DEFAULT 1` | `allowed_users.id` |
 | DINCR Users services (`_legacy_financial_user_id`), mail candidates, statement discovery | `users.id` of the account email |
 
-In production, account K's `users.id` equals account P's `allowed_users.id`.
-A bare integer cannot say which space it came from. No reader may therefore
-decide anything with it. `test_no_backend_query_decides_by_legacy_user_id`
-enforces this: no SQL predicate on `user_id` exists in the backend.
+Real data contains collisions: one account's `users.id` equals another account's
+`allowed_users.id`. A bare integer cannot say which space it came from, so
+nothing may decide ownership with it.
+- No financial read is scoped by `user_id`: every read and write filters by `workspace_id`.
+- `test_no_backend_query_decides_by_legacy_user_id` scans every SQL literal for a comparison on `user_id`, on either side of any operator.
+- The only comparisons left are three notification joins to `allowed_users`, on tables written only with `allowed_users.id`. They are allowlisted, and removing them is part of Phase C.
 
 A second risk class exists: when a table's `user_id` FK points at one space
 and a writer stores a value from the other, **deleting an unrelated person** in
@@ -45,7 +47,9 @@ that space cascades to the row. The evidence query E10 lists the real FKs.
 | Workspace resolved from `accounts.legacy_allowed_user_id` | `auth/workspace_context.py::resolve_personal_workspace_context`, `sync_account_auth_identity` | CURRENT REQUIRED → SAFE TO MIGRATE (resolve by `accounts.supabase_user_id`) |
 | Per-person tables keyed by `allowed_users(id)` via FK: settings, memory, chat, preferences, advisor, `financial_input_events`, `notification_jobs` | `ai/*`, `advisor/core.py`, `notifications/service.py`, `user_product/gmail_service.py` | CURRENT REQUIRED (FK) → SAFE TO MIGRATE to `account_id` |
 | `users.id` bridge for legacy finance FKs | `user_product/service.py::_legacy_financial_user_id`, `gmail_service._financial_user_id_for_account`, `mail_oauth.py`, `microsoft_mail.py`, `financial_identity.py`, `finva_gmail_connections.legacy_user_id` (FK → users) | LEGACY COMPATIBILITY |
-| Financial `user_id` written by every financial writer (`get_current_user_id()` in about 25 modules; users bridge in DINCR) | `finance/*`, `goals`, `transactions`, `core/events`, `user_product/*`, `email_monitor/*` | LEGACY COMPATIBILITY (value only; no reader filters by it) |
+| Financial `user_id` written by every financial writer (`get_current_user_id()` in about 25 modules; users bridge in DINCR) | `finance/*`, `goals`, `transactions`, `core/events`, `user_product/*`, `email_monitor/*` | LEGACY COMPATIBILITY (value only; no financial read filters by it) |
+| Notification joins `allowed_users.id = <table>.user_id` (`notification_subscriptions`, `events`, `fixed_expenses`) | `notifications/service.py` | LEGACY COMPATIBILITY; correct only while those tables are written with `allowed_users.id` → Phase C |
+| Deletion of rows by `allowed_users.id` on every FK to `allowed_users` | `auth/service.py::_delete_allowed_user_dependents`, plus the FK cascade when the tombstone is deleted | NEEDS REVIEW. If any dual-space table references `allowed_users`, deleting one account removes another tenant's colliding rows (E10) → Phase E removes those FKs |
 | `DEFAULT 1` on legacy `user_id` columns (Owner fallback) | database | LEGACY. It is dangerous: the Phase A trigger rejects it outside the Owner workspace |
 | Id-space mixing: `notifications/service.py::_display_name` (`users` looked up with an `allowed_users.id`, hardcoded fallback name), `integrations/ibkr_readonly.py::_owner_identity` (`users.id = legacy_allowed_user_id` join), dead `email_monitor::_owner_user_id` | as listed | UNKNOWN / NEEDS REVIEW (fix before Phase B) |
 | Real FK set and ON DELETE rules of every financial `user_id` in production | database | UNKNOWN until E10 |
@@ -55,7 +59,10 @@ that space cascades to the row. The evidence query E10 lists the real FKs.
 **Phase A: immediate protection.**
 - Read-only audit, preflight, forensic queries and a release-gate script.
 - Safe repair only for the SAFE_AUTO_FIX class.
-- New writes must carry a workspace, children must match their parent's workspace, and a legacy `user_id` must be an identity of the workspace (either space during the transition; NULL is accepted).
+- New writes must carry a workspace, and children must match their parent's workspace.
+- Existing rows are never moved between workspaces by application writes.
+- A changed legacy `user_id` must be an identity of the workspace: either space during the transition, and NULL is accepted.
+- A colliding id is never used to repair a row.
 - Tested rollback.
 - Exit: preflight reviewed, every NEEDS_REVIEW/ORPHAN row resolved by a human, migration applied, check script PASS.
 

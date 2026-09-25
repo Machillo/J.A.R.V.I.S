@@ -81,3 +81,24 @@ CREATE TABLE IF NOT EXISTS financial_input_events (
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     event_name TEXT NOT NULL DEFAULT 'transaction_confirmed'
 );
+
+CREATE TABLE IF NOT EXISTS exchange_rates (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 1,
+    rate_date DATE NOT NULL,
+    currency TEXT NOT NULL,
+    exchange_rate NUMERIC(14, 4) NOT NULL,
+    source TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    workspace_id UUID
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_exchange_rates_workspace_date_currency
+    ON exchange_rates(workspace_id, rate_date, currency);
+
+CREATE TABLE IF NOT EXISTS finva_gmail_connections (
+    id BIGSERIAL PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    legacy_user_id BIGINT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active'
+);

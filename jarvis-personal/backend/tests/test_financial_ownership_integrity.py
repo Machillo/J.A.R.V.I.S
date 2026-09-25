@@ -5,6 +5,7 @@ test_financial_ownership_integrity_pg.py.
 """
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -50,8 +51,8 @@ def test_migration_is_transactional_and_non_destructive():
     ):
         assert not re.search(forbidden, upper), forbidden
     # The single data change: workspace_id of rows whose workspace_id is NULL.
-    updates = re.findall(r"UPDATE\s+public\.%I\s+t\s+SET\s+(\w+)", sql, re.I)
-    assert updates == ["workspace_id"]
+    statements = re.findall(r"\bUPDATE\s+(?!OF\b)(?:ONLY\s+)?(\S+)(?:\s+\w+)?\s+SET\s+(\w+)", sql, re.I)
+    assert statements == [("public.%I", "workspace_id")]
     assert "AND t.workspace_id IS NULL" in sql
     assert "a.classification = 'SAFE_AUTO_FIX'" in sql
     # Every new constraint leaves existing rows alone (NOT VALID).
@@ -75,8 +76,10 @@ def test_audit_sql_files_are_read_only():
     for path in (PREFLIGHT, EVIDENCE):
         sql = _strip_comments(path.read_text(encoding="utf-8")).upper()
         for forbidden in (
-            r"\bINSERT\s+INTO\b", r"\bUPDATE\s+[\w.]+\s+(\w+\s+)?SET\b", r"\bDELETE\s+FROM\b",
+            r"\bINSERT\s+INTO\b", r"\bUPDATE\s+(ONLY\s+)?[\w.\"]+\s+(\w+\s+)?SET\b", r"\bDELETE\s+FROM\b",
             r"\bALTER\s+\w+", r"\bDROP\s+\w+", r"\bTRUNCATE\b", r"\bGRANT\b", r"\bCOMMIT\b",
+            r"\bCREATE\s+(TABLE|INDEX|UNIQUE|VIEW|SCHEMA|TRIGGER|ROLE|EXTENSION)\b", r"\bINTO\s+(TEMP|TEMPORARY|UNLOGGED|TABLE)\b",
+            r"\bCOPY\b", r"\bSETVAL\b", r"\bNEXTVAL\b", r"\bVACUUM\b", r"\bREINDEX\b", r"\bCALL\b",
         ):
             assert not re.search(forbidden, sql), (path.name, forbidden)
         # Only session-local functions may be created.
@@ -102,18 +105,43 @@ def test_every_financial_insert_sets_workspace_and_user():
     assert offenders == []
 
 
+# Comparisons on user_id that exist today, each on a table written only with
+# allowed_users.id. Tracked for removal (canonical identity plan, Phase C).
+KNOWN_USER_ID_COMPARISONS = {
+    ("backend/notifications/service.py", "au.id = ns.user_id"),  # notification_subscriptions: FK -> allowed_users
+    ("backend/notifications/service.py", "au.id = e.user_id"),   # events: written by core/events with allowed_users.id
+    ("backend/notifications/service.py", "au.id = fe.user_id"),  # fixed_expenses: Owner-only writer, allowed_users.id
+}
+
+
+def _sql_literals(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+
+
 def test_no_backend_query_decides_by_legacy_user_id():
-    """Ownership is workspace_id. A SQL predicate on user_id would let the two
-    legacy id spaces (allowed_users.id vs users.id) be confused again."""
-    predicate = re.compile(r"\b(WHERE|AND|OR|ON)\s+(?:\w+\.)?user_id\s*(=|IN\b|<>|IS\b)", re.I)
-    offenders = []
+    """Ownership is workspace_id. A SQL comparison on user_id (either side, any
+    operator) would let the two legacy id spaces (allowed_users.id vs users.id)
+    be confused again. Only string literals are scanned, so Python is ignored."""
+    comparison = re.compile(
+        r"(?<![\w.])(?:\w+\.)?user_id\s*(?:=(?!\s*EXCLUDED\.)|<>|!=|\bIN\b|\bIS\b)"
+        r"|(?:=|<>|!=)\s*\(?\s*(?!EXCLUDED\.)(?:\w+\.)?user_id\b",
+        re.I,
+    )
+    found = set()
     for path in BACKEND.rglob("*.py"):
         if "tests" in path.parts or path.name.startswith("test_"):
             continue
-        text = path.read_text(encoding="utf-8")
-        for match in predicate.finditer(text):
-            offenders.append(f"{path.relative_to(ROOT)}:{text[: match.start()].count(chr(10)) + 1}")
-    assert offenders == []
+        for literal in _sql_literals(path):
+            if not re.search(r"\b(SELECT|UPDATE|DELETE|JOIN|WHERE)\b", literal, re.I):
+                continue
+            for match in comparison.finditer(literal):
+                start = max(literal.rfind("\n", 0, match.start()) + 1, 0)
+                end = literal.find("\n", match.end())
+                line = literal[start:end if end != -1 else None].strip()
+                snippet = next((known for file, known in KNOWN_USER_ID_COMPARISONS if known in line), line)
+                found.add((str(path.relative_to(ROOT)), snippet))
+    assert found == KNOWN_USER_ID_COMPARISONS
 
 
 def test_rollback_only_removes_guards():
@@ -140,6 +168,7 @@ def test_report_prints_counts_only_and_fails_on_findings():
     lines = check.render(list(results.values()))
     assert "FAIL | debts | rows=14 ok=12" in lines
     assert "    NEEDS_REVIEW USER_ID_FOREIGN: 2" in lines
+    assert "    OK OK_ID_SPACE_COLLISION: 5" in lines
     assert lines[-1] == "RESULT: FAIL (1 of 4 checks failing)"
 
 

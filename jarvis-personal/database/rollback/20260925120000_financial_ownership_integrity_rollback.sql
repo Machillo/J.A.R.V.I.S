@@ -27,7 +27,13 @@ BEGIN
                        cfg.table_name, 'fk_' || cfg.table_name || '_parent_workspace');
     END LOOP;
     FOR cfg IN SELECT DISTINCT parent_table FROM public.dincr_ownership_tables() WHERE parent_table IS NOT NULL LOOP
-        EXECUTE format('DROP INDEX IF EXISTS public.%I', 'uq_' || cfg.parent_table || '_id_workspace');
+        -- Only the indexes the migration created (it marks them); a pre-existing
+        -- index with the same name is kept.
+        IF to_regclass(format('public.%I', 'uq_' || cfg.parent_table || '_id_workspace')) IS NOT NULL
+           AND obj_description(to_regclass(format('public.%I', 'uq_' || cfg.parent_table || '_id_workspace')), 'pg_class')
+               = 'dincr-ownership-guard' THEN
+            EXECUTE format('DROP INDEX public.%I', 'uq_' || cfg.parent_table || '_id_workspace');
+        END IF;
     END LOOP;
 END $$;
 

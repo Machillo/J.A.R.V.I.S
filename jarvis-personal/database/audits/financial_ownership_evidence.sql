@@ -4,10 +4,10 @@
 -- editor only shows the last result set. Replace the placeholders:
 --   <WORKSPACE_ID>  a workspaces.id under review
 --   <ACCOUNT_ID>    the accounts.id that owns it
--- Every query returns identifiers, timestamps and counts only; none returns
--- names, emails, descriptions or amounts, except E7 (aggregated debt totals of
--- one workspace, needed to prove whether debts existed). Keep the output out of
--- tickets, logs and the repository.
+-- Queries return identifiers, timestamps and counts, never names, emails or
+-- descriptions. Two return amounts of ONE workspace because the question needs
+-- them: E7 (aggregated debt totals) and E17 (declared profile figures behind a
+-- Home number). Keep every output out of tickets, logs and the repository.
 
 -- E1. Which identity does each debt's legacy user_id denote, per id space?
 --     account_by_users_space = owner_account_id means the row was written by the
@@ -60,8 +60,9 @@ FROM generate_series(1, (SELECT last_value FROM public.debts_id_seq)) AS g(id)
 WHERE NOT EXISTS (SELECT 1 FROM public.debts d WHERE d.id = g.id)
 ORDER BY 1;
 
--- E5. API trace of debt writes by one account (idempotency records are never
---     purged). response_body is reduced to the debt id: no names or amounts.
+-- E5. API trace of debt writes by one account (the app does not purge
+--     idempotency records after expires_at; they cascade with the account).
+--     response_body is reduced to the debt id: no names or amounts.
 --     A debt created through the app leaves a POST here; rows that exist with no
 --     matching POST were not created through the app's debt endpoint.
 SELECT created_at, method, path, status, response_status,

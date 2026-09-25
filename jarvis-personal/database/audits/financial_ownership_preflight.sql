@@ -17,6 +17,7 @@
 --             the accounts that user_id can denote in either legacy id space
 --   identity  identity-core checks (accounts / workspaces / legacy bridges)
 --   user_id_only_table  public tables that still carry user_id without workspace_id
+--   unguarded_table  tables with user_id AND workspace_id outside the guarded list
 --   user_id_fk  which table each financial user_id column really references
 --              (allowed_users vs users) and its ON DELETE rule
 
@@ -27,7 +28,7 @@ CREATE OR REPLACE FUNCTION pg_temp.dincr_ownership_tables()
 RETURNS TABLE (table_name TEXT, parent_table TEXT, parent_column TEXT)
 LANGUAGE sql
 IMMUTABLE
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 AS $fn$
     SELECT t.table_name, t.parent_table, t.parent_column
     FROM (VALUES
@@ -71,8 +72,7 @@ CREATE OR REPLACE FUNCTION pg_temp.dincr_legacy_id_belongs_to_workspace(p_user_i
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
-SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 AS $fn$
     SELECT p_user_id IS NOT NULL AND p_workspace_id IS NOT NULL AND EXISTS (
         SELECT 1
@@ -92,7 +92,7 @@ AS $fn$
                 SELECT 1
                 FROM public.users u
                 WHERE u.id = p_user_id
-                  AND lower(u.email) = lower(a.primary_email)
+                  AND lower(trim(u.email)) = lower(trim(a.primary_email))
            )
     )
 $fn$;
@@ -102,8 +102,7 @@ CREATE OR REPLACE FUNCTION pg_temp.dincr_legacy_id_accounts(p_user_id BIGINT)
 RETURNS UUID[]
 LANGUAGE sql
 STABLE
-SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 AS $fn$
     SELECT COALESCE(array_agg(DISTINCT a.id ORDER BY a.id), ARRAY[]::UUID[])
     FROM public.accounts a
@@ -114,7 +113,7 @@ AS $fn$
             SELECT 1
             FROM public.users u
             WHERE u.id = p_user_id
-              AND lower(u.email) = lower(a.primary_email)
+              AND lower(trim(u.email)) = lower(trim(a.primary_email))
         )
       )
 $fn$;
@@ -123,7 +122,7 @@ CREATE OR REPLACE FUNCTION pg_temp.dincr_ownership_classification(p_issue TEXT)
 RETURNS TEXT
 LANGUAGE sql
 IMMUTABLE
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 AS $fn$
     SELECT CASE
         WHEN p_issue IN ('OK', 'OK_ID_SPACE_COLLISION', 'OK_NO_LEGACY_ID') THEN 'OK'
@@ -149,8 +148,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 STABLE
-SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 AS $fn$
 DECLARE
     cfg RECORD;
@@ -198,6 +196,9 @@ BEGIN
                      AND (p.user_id IS NULL OR pg_temp.dincr_legacy_id_belongs_to_workspace(p.user_id, p.workspace_id))
                      AND t.user_id IS NOT NULL
                      AND pg_temp.dincr_legacy_id_belongs_to_workspace(t.user_id, p.workspace_id)
+                     -- A colliding id (one account's allowed_users.id, another's users.id)
+                     -- cannot prove the row's owner: those rows stay NEEDS_REVIEW.
+                     AND cardinality(pg_temp.dincr_legacy_id_accounts(t.user_id)) = 1
                 THEN 'WORKSPACE_NULL_PARENT_RESOLVABLE'
             $sql$;
         ELSE
@@ -309,6 +310,50 @@ BEGIN
               )
         $sql$, cfg.table_name, cfg.table_name);
     END LOOP;
+
+    -- A FK from a dual-space user_id to users/allowed_users is a cascade risk:
+    -- deleting an unrelated person in that space deletes rows that carry the same
+    -- integer from the other space. Informational until the FKs are retired.
+    RETURN QUERY
+    SELECT child.relname::TEXT, NULL::BIGINT,
+           ('USER_ID_FK_TO_' || upper(parent.relname) || '_ON_DELETE_' ||
+            CASE c.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET_NULL' WHEN 'r' THEN 'RESTRICT'
+                               WHEN 'd' THEN 'SET_DEFAULT' ELSE 'NO_ACTION' END)::TEXT,
+           'INFO'::TEXT, NULL::UUID, NULL::UUID, NULL::BIGINT, ARRAY[]::UUID[]
+    FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
+    JOIN pg_catalog.pg_class parent ON parent.oid = c.confrelid
+    JOIN pg_catalog.pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
+    WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND att.attname = 'user_id'
+      AND parent.relname IN ('users', 'allowed_users')
+      AND child.relname IN (SELECT o.table_name FROM pg_temp.dincr_ownership_tables() o);
+
+    -- Tables that store a legacy id to write with later (mail connections): a
+    -- background sync writes that id into the financial tables, so it must be an
+    -- identity of the connection's workspace or every synced write is rejected.
+    FOR cfg IN
+        SELECT c1.table_name
+        FROM information_schema.columns c1
+        JOIN information_schema.columns c2
+          ON c2.table_schema = c1.table_schema AND c2.table_name = c1.table_name
+         AND c2.column_name = 'workspace_id' AND c2.data_type = 'uuid'
+        JOIN information_schema.columns c3
+          ON c3.table_schema = c1.table_schema AND c3.table_name = c1.table_name
+         AND c3.column_name = 'id' AND c3.data_type IN ('bigint', 'integer')
+        WHERE c1.table_schema = 'public'
+          AND c1.column_name = 'legacy_user_id'
+        ORDER BY c1.table_name
+    LOOP
+        RETURN QUERY EXECUTE pg_catalog.format($sql$
+            SELECT %L::TEXT, t.id::BIGINT, 'LEGACY_USER_ID_NOT_IN_WORKSPACE', 'NEEDS_REVIEW',
+                   t.workspace_id, NULL::UUID, t.legacy_user_id::BIGINT,
+                   pg_temp.dincr_legacy_id_accounts(t.legacy_user_id::BIGINT)
+            FROM public.%I t
+            WHERE t.workspace_id IS NOT NULL
+              AND NOT pg_temp.dincr_legacy_id_belongs_to_workspace(t.legacy_user_id::BIGINT, t.workspace_id)
+        $sql$, cfg.table_name, cfg.table_name);
+    END LOOP;
 END
 $fn$;
 
@@ -317,8 +362,7 @@ CREATE OR REPLACE FUNCTION pg_temp.dincr_identity_audit()
 RETURNS TABLE (check_name TEXT, subject_id TEXT, classification TEXT)
 LANGUAGE sql
 STABLE
-SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 AS $fn$
     SELECT 'WORKSPACE_OWNER_MISSING', w.id::TEXT, 'ORPHAN'
     FROM public.workspaces w
@@ -372,15 +416,14 @@ AS $fn$
     UNION ALL
     SELECT 'ACCOUNT_WITHOUT_USERS_ROW', a.id::TEXT, 'INFO'
     FROM public.accounts a
-    WHERE NOT EXISTS (SELECT 1 FROM public.users u WHERE lower(u.email) = lower(a.primary_email))
+    WHERE NOT EXISTS (SELECT 1 FROM public.users u WHERE lower(trim(u.email)) = lower(trim(a.primary_email)))
 $fn$;
 
 CREATE OR REPLACE FUNCTION pg_temp.dincr_ownership_audit_summary()
 RETURNS TABLE (table_name TEXT, classification TEXT, issue TEXT, row_count BIGINT)
 LANGUAGE sql
 STABLE
-SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, pg_temp
 AS $fn$
     SELECT r.table_name, r.classification, r.issue, COUNT(*)::BIGINT
     FROM pg_temp.dincr_ownership_audit_rows(TRUE) r
@@ -419,6 +462,16 @@ WHERE c.table_schema = 'public' AND c.column_name = 'user_id'
   AND NOT EXISTS (SELECT 1 FROM information_schema.columns w
                   WHERE w.table_schema = 'public' AND w.table_name = c.table_name
                     AND w.column_name = 'workspace_id')
+UNION ALL
+SELECT 'unguarded_table', c.table_name, NULL, 'INFO', 'USER_ID_AND_WORKSPACE_NOT_GUARDED', NULL
+FROM information_schema.columns c
+JOIN information_schema.tables t
+  ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
+WHERE c.table_schema = 'public' AND c.column_name = 'user_id'
+  AND EXISTS (SELECT 1 FROM information_schema.columns w
+              WHERE w.table_schema = 'public' AND w.table_name = c.table_name
+                AND w.column_name = 'workspace_id')
+  AND c.table_name NOT IN (SELECT table_name FROM pg_temp.dincr_ownership_tables())
 UNION ALL
 SELECT 'user_id_fk', child.relname, NULL, 'INFO', c.conname,
        parent.relname || ' ON DELETE ' || CASE c.confdeltype

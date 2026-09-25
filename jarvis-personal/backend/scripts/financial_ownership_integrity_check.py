@@ -66,7 +66,9 @@ def evaluate(summary: list[tuple[str, str, str, int]], present: list[str] = ()) 
         entry["counts"][classification] += count
         if classification != "INFO" and table != "_identity":
             entry["rows"] += count
-        if classification != "OK":
+        # Collisions and canonical rows are OK but still shown: a PASS must not hide
+        # the rows whose legacy id is ambiguous across the two id spaces.
+        if classification != "OK" or issue != "OK":
             entry["issues"][(classification, issue)] += count
     results = []
     for table in sorted(tables):
