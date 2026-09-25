@@ -882,17 +882,11 @@ BEGIN
 
         EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS workspace_id UUID', tbl);
 
-        -- Exact mapping: legacy allowed_users.id -> accounts.legacy_allowed_user_id -> personal workspace.
-        EXECUTE format($fmt$
-            UPDATE public.%I AS legacy
-               SET workspace_id = w.id
-              FROM public.accounts a
-              JOIN public.workspaces w
-                ON w.owner_account_id = a.id
-               AND w.workspace_type = 'personal'
-             WHERE legacy.workspace_id IS NULL
-               AND a.legacy_allowed_user_id = legacy.user_id
-        $fmt$, tbl);
+        -- The historical backfill (workspace from accounts.legacy_allowed_user_id =
+        -- legacy.user_id) is intentionally NOT re-run: user_id holds two id spaces
+        -- (allowed_users.id and users.id), so the mapping can pick another person's
+        -- workspace. Rows without a workspace are classified by
+        -- database/audits/financial_ownership_preflight.sql and resolved by a human.
 
         EXECUTE format(
             'CREATE INDEX IF NOT EXISTS %I ON public.%I(workspace_id)',

@@ -1,3 +1,4 @@
+import os
 from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import logging
@@ -7,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from backend.core.brain import process_input
+from backend.core import database as _database
 from backend.core.database import init_database
 from backend.core.events import add_event, get_events
 from backend.core.logs import get_logs
@@ -49,6 +51,9 @@ from backend.core.idempotency import (
 )
 from backend.core.feature_flags import disabled_feature_for_request
 from backend.core.i18n import is_dincr_users_path, language_for_request, reset_dincr_users, reset_language, set_dincr_users, set_language, use_language
+
+# The web app is the only process exempt from declaring a workspace for deletes.
+_database.APPLICATION_NAME = os.getenv("DINCR_DB_APPLICATION_NAME", "dincr-backend")
 
 app = FastAPI(title="Jarvis Core")
 logger = logging.getLogger("jarvis.api")

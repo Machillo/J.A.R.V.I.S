@@ -355,18 +355,23 @@ def main():
         # Cleanup ONLY rows created by this exact run.
         try:
             with get_connection() as conn:
-                conn.execute(
-                    "DELETE FROM debt_payments WHERE debt_id IN (%s,%s)",
-                    (p["debt"]["id"], f["debt"]["id"]),
-                )
-                conn.execute(
-                    "DELETE FROM debts WHERE id IN (%s,%s) AND name LIKE %s",
-                    (p["debt"]["id"], f["debt"]["id"], f"ISOLATION_DEBT_%_{marker}"),
-                )
-                conn.execute(
-                    "DELETE FROM financial_goals WHERE id IN (%s,%s) AND name LIKE %s",
-                    (p["goal"]["id"], f["goal"]["id"], f"ISOLATION_GOAL_%_{marker}"),
-                )
+                # One statement per workspace: a single financial DELETE may not
+                # span two owners (financial ownership delete guard).
+                for ctx in (p, f):
+                    # Scripts must declare the workspace they delete from.
+                    conn.execute("SELECT set_config('dincr.delete_workspace', %s, true)", (str(ctx["debt"]["workspace_id"]),))
+                    conn.execute(
+                        "DELETE FROM debt_payments WHERE debt_id=%s AND workspace_id=%s",
+                        (ctx["debt"]["id"], ctx["debt"]["workspace_id"]),
+                    )
+                    conn.execute(
+                        "DELETE FROM debts WHERE id=%s AND workspace_id=%s AND name=%s",
+                        (ctx["debt"]["id"], ctx["debt"]["workspace_id"], f"ISOLATION_DEBT_{marker}"),
+                    )
+                    conn.execute(
+                        "DELETE FROM financial_goals WHERE id=%s AND workspace_id=%s AND name=%s",
+                        (ctx["goal"]["id"], ctx["goal"]["workspace_id"], f"ISOLATION_GOAL_{marker}"),
+                    )
                 conn.commit()
         except Exception as cleanup_exc:
             print(f"WARNING: cleanup needs review: {cleanup_exc}", file=sys.stderr)

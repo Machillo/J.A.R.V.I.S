@@ -91,6 +91,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
    - **Verification queries** belong in the postflight, not after `COMMIT`.
 
 5. **Postflight.** Run the migration's postflight. Any failing row means stop, investigate, and use the migration's rollback file if it has one.
+   - **Rollback files** live in `database/rollback/`, so `apply_migration.py` refuses them by design. They are the one allowed exception to §3:
+     - the BACKUP_VERIFIED gate is open for the same database;
+     - a second person has read the file and agreed with the reason;
+     - it runs with `psql -v ON_ERROR_STOP=1` over a direct session connection, as the owner role, in the file's single transaction.
 6. **Quiet window.** Migrations set their own `lock_timeout`. If it fires, nothing was applied; retry later.
 
 ## 3. Destructive SQL policy
@@ -105,7 +109,7 @@ Ad-hoc destructive SQL against production (`DELETE`, `UPDATE` of financial rows,
 
 **Any destructive statement, however it is run, must follow these rules:**
 - **Never select rows by a legacy integer identifier** (`user_id`, `allowed_users.id`, `users.id`). The same integer denotes different people in different tables. Select by `workspace_id` and primary key only.
-- **One workspace per statement.** Where the ownership guard is installed, declare it first: `SET LOCAL dincr.delete_workspace = '<workspace uuid>'`.
+- **One workspace per statement.** Where the ownership guard is installed, declare it first: `SET LOCAL dincr.delete_workspace = '<workspace uuid>'`. Rows without a workspace take the explicit declaration `'none'`, and are deleted in their own statement.
 - **Never loop over the catalog.** A `DO` block that deletes from "every table with column X" is forbidden: new tables silently join the blast radius.
 - **Preview in the same transaction.** Count the rows first. The delete uses `RETURNING`, and its count must equal the preview, or you `ROLLBACK`.
 - **Two people.** A second person reads the exact statement and the preview output before `COMMIT`.

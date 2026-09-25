@@ -1,0 +1,1265 @@
+-- DINCR pre-release financial ownership integrity (prepared, NOT applied).
+--
+-- HUMAN GATE: run database/audits/financial_ownership_preflight.sql first and
+-- review every NEEDS_REVIEW / ORPHAN row with a human. Only then apply this file.
+--
+-- Background (see the PR for the full audit):
+--   * Ownership is workspace_id. Reads and writes are scoped by workspace_id.
+--   * The legacy user_id column has TWO id spaces:
+--       - allowed_users.id  (Owner/Personal writers, payroll overtime, DEFAULT 1);
+--       - users.id          (DINCR Users writers: _legacy_financial_user_id and the
+--                            mail candidates, resolved by the account email).
+--     Each table's user_id FK decides its space (production: debts, expenses,
+--     financial_goals, investments, savings, transactions -> users ON DELETE
+--     CASCADE; fixed_expenses, fixed_expense_matches, financial_input_events,
+--     notification_jobs -> allowed_users). A row is consistent when its user_id
+--     is an identity, in THAT space (either space if the table has no such FK),
+--     of an account that owns or is an active member of the row's workspace.
+--     A row carrying the workspace's id from the OTHER space is attached by the FK
+--     to whoever owns that integer there, so deleting that unrelated person
+--     cascades to it: USER_ID_WRONG_SPACE (NEEDS_REVIEW), rejected for new writes.
+--   * Therefore "SET user_id = owner.legacy_allowed_user_id" is NOT a safe repair:
+--     for DINCR rows it would point user_id at another person's users row.
+--
+-- What this migration does:
+--   1. Aborts if the identity core is inconsistent (workspace without owner,
+--      account with several personal workspaces, personal key mismatch).
+--   2. Installs read-only audit functions (same bodies as the preflight file).
+--   3. Records a before/after classification snapshot (counts only).
+--   4. Repairs ONLY the SAFE_AUTO_FIX class: a child row (e.g. debt_payments)
+--      with workspace_id NULL whose parent row has a valid workspace AND whose own
+--      user_id and the parent's user_id both belong to that workspace. Every change
+--      is written to financial_ownership_repair_log (old/new value) first.
+--   5. Prevents new inconsistencies for new writes:
+--      - CHECK (workspace_id IS NOT NULL) NOT VALID;
+--      - child (parent_id, workspace_id) -> parent (id, workspace_id) FK NOT VALID;
+--      - trigger rejecting a user_id that does not belong to the row's workspace
+--        and any move of an existing row to another workspace. It fires on INSERT
+--        and on UPDATE OF user_id/workspace_id, and ignores updates that leave both
+--        unchanged, so rows under review that HAVE a workspace stay editable.
+--        Rows with a NULL workspace are invisible to the app (every query is
+--        workspace-scoped) and the NOT VALID CHECK rejects any update of them:
+--        they are resolved by a human in one short transaction, as a destructive
+--        SQL operation under docs/security/migration-safety-protocol.md §3
+--        (BACKUP_VERIFIED gate, second reviewer, psql as owner):
+--          BEGIN; ALTER TABLE public.<t> DISABLE TRIGGER trg_<t>_ownership_guard;
+--          UPDATE ... (reviewed rows only); ALTER TABLE public.<t> ENABLE TRIGGER
+--          trg_<t>_ownership_guard; COMMIT;
+--        (the ALTER locks the table until COMMIT; the NOT VALID CHECK still needs a
+--        non-NULL workspace in the new row version).
+--   * The guard also rejects filling a NULL workspace from an application write.
+--   * A FK with ON DELETE CASCADE from a dual-space user_id to users/allowed_users
+--     is NEEDS_REVIEW (deleting one person deletes colliding rows of another).
+--   * A stored mail-connection id outside its workspace aborts the migration,
+--     including disconnected connections: fix or remove those rows first.
+--
+--   6. Guards deletions against the id-space class of error: a cleanup that
+--      selects financial rows "WHERE ... OR user_id = ANY(<allowed_users ids>)"
+--      also matches other people's rows in users-FK tables. A financial DELETE
+--      touching live workspaces of more than one owner is rejected; every
+--      session other than the application ('dincr-backend', or 'Supavisor') must declare the
+--      single workspace it deletes from; TRUNCATE of a financial table is rejected; a
+--      users/allowed_users row cannot be deleted while its FK would cascade into
+--      another workspace; committed financial deletions are logged in
+--      financial_ownership_delete_log (identifiers of live workspaces only).
+--
+-- What it deliberately does NOT do: it never changes user_id, never assigns a
+-- workspace from user_id alone (the Phase 2A mapping is ambiguous across id
+-- spaces), never deletes, never validates the NOT VALID constraints, and never
+-- touches NEEDS_REVIEW / ORPHAN rows. Idempotent: a second run repairs nothing.
+
+BEGIN;
+-- Fail fast instead of queueing behind application traffic.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '5min';
+
+-- ---------------------------------------------------------------------------
+-- 0. Preflight: identity core must exist.
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF to_regclass('public.accounts') IS NULL
+       OR to_regclass('public.workspaces') IS NULL
+       OR to_regclass('public.workspace_members') IS NULL
+       OR to_regclass('public.allowed_users') IS NULL
+       OR to_regclass('public.users') IS NULL THEN
+        RAISE EXCEPTION 'financial ownership integrity: identity tables missing, aborting';
+    END IF;
+    IF current_setting('server_version_num')::INT < 140000 THEN
+        RAISE EXCEPTION 'financial ownership integrity: PostgreSQL 14+ required, aborting';
+    END IF;
+END $$;
+
+-- Earlier drafts had two-argument versions; they would make calls ambiguous.
+DROP FUNCTION IF EXISTS public.dincr_legacy_id_belongs_to_workspace(BIGINT, UUID);
+DROP FUNCTION IF EXISTS public.dincr_legacy_id_accounts(BIGINT);
+
+-- BEGIN DINCR OWNERSHIP AUDIT FUNCTIONS
+CREATE OR REPLACE FUNCTION public.dincr_ownership_tables()
+RETURNS TABLE (table_name TEXT, parent_table TEXT, parent_column TEXT)
+LANGUAGE sql
+IMMUTABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT t.table_name, t.parent_table, t.parent_column
+    FROM (VALUES
+        ('events', NULL, NULL),
+        ('salaries', NULL, NULL),
+        ('bonuses', NULL, NULL),
+        ('debts', NULL, NULL),
+        ('debt_payments', 'debts', 'debt_id'),
+        ('savings', NULL, NULL),
+        ('investments', NULL, NULL),
+        ('expenses', NULL, NULL),
+        ('employment_profile', NULL, NULL),
+        ('payroll_deductions', NULL, NULL),
+        ('payroll_events', NULL, NULL),
+        ('financial_goals', NULL, NULL),
+        ('payment_schedules', NULL, NULL),
+        ('pay_schedule', NULL, NULL),
+        ('credit_card_settings', NULL, NULL),
+        ('transactions', NULL, NULL),
+        ('exchange_rates', NULL, NULL),
+        ('receivables', NULL, NULL),
+        ('receivable_payments', 'receivables', 'receivable_id'),
+        ('receivable_entries', 'receivables', 'receivable_id'),
+        ('fixed_expenses', NULL, NULL),
+        ('fixed_expense_matches', 'fixed_expenses', 'fixed_expense_id'),
+        ('investment_cashflows', NULL, NULL),
+        ('investment_portfolio_snapshots', NULL, NULL),
+        ('business_projects', NULL, NULL),
+        ('business_movements', 'business_projects', 'business_id'),
+        -- Financial tables created after Phase 2A with the same dual legacy user_id.
+        ('account_balances', NULL, NULL),
+        ('account_balance_history', 'account_balances', 'financial_account_id'),
+        ('net_worth_snapshots', NULL, NULL),
+        ('payroll_salary_reports', NULL, NULL)
+    ) AS t(table_name, parent_table, parent_column)
+$fn$;
+
+-- The id space a table's legacy user_id really points at: the table its FK
+-- references ('users' or 'allowed_users'), or NULL when there is no such FK (or
+-- more than one), in which case both spaces are accepted during the transition.
+CREATE OR REPLACE FUNCTION public.dincr_user_id_space(p_table TEXT)
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT CASE WHEN COUNT(DISTINCT parent.relname) = 1 THEN MIN(parent.relname::TEXT) END
+    FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
+    JOIN pg_catalog.pg_class parent ON parent.oid = c.confrelid
+    JOIN pg_catalog.pg_namespace pns ON pns.oid = parent.relnamespace AND pns.nspname = 'public'
+    JOIN pg_catalog.pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
+    WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND att.attname = 'user_id'
+      AND child.relname = p_table
+      AND parent.relname IN ('users', 'allowed_users')
+$fn$;
+
+-- True when p_user_id is an identity of an account that owns or is an active
+-- member of p_workspace_id, in p_space ('users', 'allowed_users') or, when
+-- p_space is NULL, in either legacy id space.
+CREATE OR REPLACE FUNCTION public.dincr_legacy_id_belongs_to_workspace(p_user_id BIGINT, p_workspace_id UUID, p_space TEXT DEFAULT NULL)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT p_user_id IS NOT NULL AND p_workspace_id IS NOT NULL AND EXISTS (
+        SELECT 1
+        FROM (
+            SELECT w.owner_account_id AS account_id
+            FROM public.workspaces w
+            WHERE w.id = p_workspace_id
+            UNION
+            SELECT wm.account_id
+            FROM public.workspace_members wm
+            WHERE wm.workspace_id = p_workspace_id
+              AND wm.status = 'active'
+        ) m
+        JOIN public.accounts a ON a.id = m.account_id
+        WHERE (p_space IS DISTINCT FROM 'users' AND a.legacy_allowed_user_id = p_user_id)
+           OR (p_space IS DISTINCT FROM 'allowed_users' AND EXISTS (
+                SELECT 1
+                FROM public.users u
+                WHERE u.id = p_user_id
+                  AND lower(trim(u.email)) = lower(trim(a.primary_email))
+           ))
+    )
+$fn$;
+
+-- Every account that p_user_id can denote, in p_space or (NULL) either space.
+CREATE OR REPLACE FUNCTION public.dincr_legacy_id_accounts(p_user_id BIGINT, p_space TEXT DEFAULT NULL)
+RETURNS UUID[]
+LANGUAGE sql
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT COALESCE(array_agg(DISTINCT a.id ORDER BY a.id), ARRAY[]::UUID[])
+    FROM public.accounts a
+    WHERE p_user_id IS NOT NULL
+      AND (
+        (p_space IS DISTINCT FROM 'users' AND a.legacy_allowed_user_id = p_user_id)
+        OR (p_space IS DISTINCT FROM 'allowed_users' AND EXISTS (
+            SELECT 1
+            FROM public.users u
+            WHERE u.id = p_user_id
+              AND lower(trim(u.email)) = lower(trim(a.primary_email))
+        ))
+      )
+$fn$;
+
+CREATE OR REPLACE FUNCTION public.dincr_ownership_classification(p_issue TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT CASE
+        WHEN p_issue IN ('OK', 'OK_ID_SPACE_COLLISION', 'OK_NO_LEGACY_ID') THEN 'OK'
+        WHEN p_issue = 'WORKSPACE_NULL_PARENT_RESOLVABLE' THEN 'SAFE_AUTO_FIX'
+        WHEN p_issue IN ('WORKSPACE_MISSING', 'WORKSPACE_OWNER_MISSING') THEN 'ORPHAN'
+        ELSE 'NEEDS_REVIEW'
+    END
+$fn$;
+
+-- Per-row classification. Returns identifiers only: never names, amounts,
+-- descriptions or emails. p_include_ok=false returns only rows with an issue
+-- (OK_ID_SPACE_COLLISION is returned as informational).
+CREATE OR REPLACE FUNCTION public.dincr_ownership_audit_rows(p_include_ok BOOLEAN DEFAULT FALSE)
+RETURNS TABLE (
+    table_name TEXT,
+    row_id BIGINT,
+    issue TEXT,
+    classification TEXT,
+    workspace_id UUID,
+    parent_workspace_id UUID,
+    legacy_user_id BIGINT,
+    user_id_accounts UUID[]
+)
+LANGUAGE plpgsql
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+DECLARE
+    cfg RECORD;
+    has_parent BOOLEAN;
+    parent_join TEXT;
+    parent_ws TEXT;
+    parent_mismatch TEXT;
+    parent_resolvable TEXT;
+    v_space TEXT;
+    v_parent_space TEXT;
+BEGIN
+    FOR cfg IN SELECT * FROM public.dincr_ownership_tables() LOOP
+        IF pg_catalog.to_regclass(pg_catalog.format('public.%I', cfg.table_name)) IS NULL THEN
+            CONTINUE;
+        END IF;
+        IF (SELECT COUNT(*) FROM information_schema.columns isc
+            WHERE isc.table_schema = 'public' AND isc.table_name = cfg.table_name
+              AND isc.column_name IN ('user_id', 'workspace_id')) < 2 THEN
+            CONTINUE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns isc
+                       WHERE isc.table_schema = 'public' AND isc.table_name = cfg.table_name
+                         AND isc.column_name = 'id' AND isc.data_type IN ('bigint', 'integer')) THEN
+            -- Never skip an ownership table silently.
+            RETURN QUERY SELECT cfg.table_name, NULL::BIGINT, 'TABLE_NOT_AUDITABLE'::TEXT, 'NEEDS_REVIEW'::TEXT,
+                                NULL::UUID, NULL::UUID, NULL::BIGINT, ARRAY[]::UUID[];
+            CONTINUE;
+        END IF;
+
+        has_parent := cfg.parent_table IS NOT NULL
+            AND pg_catalog.to_regclass(pg_catalog.format('public.%I', cfg.parent_table)) IS NOT NULL;
+        v_space := public.dincr_user_id_space(cfg.table_name);
+        v_parent_space := CASE WHEN has_parent THEN public.dincr_user_id_space(cfg.parent_table) END;
+
+        IF has_parent THEN
+            parent_join := pg_catalog.format(
+                'LEFT JOIN public.%I p ON p.id = t.%I',
+                cfg.parent_table, cfg.parent_column
+            );
+            parent_ws := 'p.workspace_id';
+            parent_mismatch := 'WHEN p.id IS NOT NULL AND p.workspace_id IS DISTINCT FROM t.workspace_id THEN ''PARENT_WORKSPACE_MISMATCH''';
+            parent_resolvable := pg_catalog.format($sql$
+                WHEN t.workspace_id IS NULL
+                     AND p.id IS NOT NULL
+                     AND p.workspace_id IS NOT NULL
+                     AND EXISTS (SELECT 1 FROM public.workspaces pw
+                                 JOIN public.accounts pa ON pa.id = pw.owner_account_id
+                                 WHERE pw.id = p.workspace_id)
+                     AND (p.user_id IS NULL OR public.dincr_legacy_id_belongs_to_workspace(p.user_id, p.workspace_id, %L::TEXT))
+                     AND t.user_id IS NOT NULL
+                     AND public.dincr_legacy_id_belongs_to_workspace(t.user_id, p.workspace_id, %L::TEXT)
+                     -- An id that can denote several accounts (one account's allowed_users.id,
+                     -- another's users.id) cannot prove the row's owner: NEEDS_REVIEW.
+                     AND cardinality(public.dincr_legacy_id_accounts(t.user_id, %L::TEXT)) = 1
+                THEN 'WORKSPACE_NULL_PARENT_RESOLVABLE'
+            $sql$, v_parent_space, v_space, v_space);
+        ELSE
+            parent_join := '';
+            parent_ws := 'NULL::UUID';
+            parent_mismatch := '';
+            parent_resolvable := '';
+        END IF;
+
+        RETURN QUERY EXECUTE pg_catalog.format($sql$
+            SELECT *
+            FROM (
+                SELECT
+                    %L::TEXT AS table_name,
+                    t.id::BIGINT AS row_id,
+                    c.issue,
+                    public.dincr_ownership_classification(c.issue) AS classification,
+                    t.workspace_id,
+                    %s AS parent_workspace_id,
+                    t.user_id::BIGINT AS legacy_user_id,
+                    public.dincr_legacy_id_accounts(t.user_id::BIGINT, %L::TEXT) AS user_id_accounts
+                FROM public.%I t
+                %s
+                LEFT JOIN public.workspaces w ON w.id = t.workspace_id
+                LEFT JOIN public.accounts o ON o.id = w.owner_account_id
+                CROSS JOIN LATERAL (
+                    SELECT CASE
+                        %s
+                        WHEN t.workspace_id IS NULL THEN 'WORKSPACE_NULL'
+                        WHEN w.id IS NULL THEN 'WORKSPACE_MISSING'
+                        WHEN o.id IS NULL THEN 'WORKSPACE_OWNER_MISSING'
+                        %s
+                        -- Canonical rows carry no legacy id: the workspace owns them.
+                        WHEN t.user_id IS NULL THEN 'OK_NO_LEGACY_ID'
+                        WHEN public.dincr_legacy_id_belongs_to_workspace(t.user_id::BIGINT, t.workspace_id, %L::TEXT)
+                            THEN CASE
+                                WHEN cardinality(public.dincr_legacy_id_accounts(t.user_id::BIGINT, %L::TEXT)) > 1
+                                    THEN 'OK_ID_SPACE_COLLISION'
+                                ELSE 'OK'
+                            END
+                        -- The workspace's identity, but in the other space than the FK:
+                        -- the FK ties the row to whoever owns that id there, so deleting
+                        -- that unrelated person cascades to this row.
+                        WHEN public.dincr_legacy_id_belongs_to_workspace(t.user_id::BIGINT, t.workspace_id)
+                            THEN 'USER_ID_WRONG_SPACE'
+                        WHEN cardinality(public.dincr_legacy_id_accounts(t.user_id::BIGINT)) > 0
+                            THEN 'USER_ID_FOREIGN'
+                        WHEN EXISTS (SELECT 1 FROM public.allowed_users au WHERE au.id = t.user_id)
+                          OR EXISTS (SELECT 1 FROM public.users u WHERE u.id = t.user_id)
+                            THEN 'USER_ID_UNLINKED'
+                        ELSE 'USER_ID_UNRESOLVED'
+                    END AS issue
+                ) c
+            ) r
+            WHERE %L OR r.issue <> 'OK'
+        $sql$,
+            cfg.table_name, parent_ws, v_space, cfg.table_name, parent_join,
+            parent_resolvable, parent_mismatch, v_space, v_space, p_include_ok
+        );
+    END LOOP;
+
+    -- Any table carrying both account_id and workspace_id: the account must own
+    -- or be an active member of the workspace.
+    FOR cfg IN
+        SELECT c1.table_name
+        FROM information_schema.columns c1
+        JOIN information_schema.columns c2
+          ON c2.table_schema = c1.table_schema
+         AND c2.table_name = c1.table_name
+         AND c2.column_name = 'workspace_id'
+        JOIN information_schema.columns c3
+          ON c3.table_schema = c1.table_schema
+         AND c3.table_name = c1.table_name
+         AND c3.column_name = 'id'
+        JOIN information_schema.tables it
+          ON it.table_schema = c1.table_schema
+         AND it.table_name = c1.table_name
+         AND it.table_type = 'BASE TABLE'
+        WHERE c1.table_schema = 'public'
+          AND c1.table_name <> 'workspace_members'
+          AND c1.column_name = 'account_id'
+          AND c1.data_type = 'uuid'
+          AND c2.data_type = 'uuid'
+          AND c3.data_type IN ('bigint', 'integer')
+        ORDER BY c1.table_name
+    LOOP
+        RETURN QUERY EXECUTE pg_catalog.format($sql$
+            SELECT %L::TEXT, t.id::BIGINT,
+                   CASE
+                       WHEN t.workspace_id IS NULL THEN 'WORKSPACE_NULL'
+                       WHEN w.id IS NULL THEN 'WORKSPACE_MISSING'
+                       ELSE 'ACCOUNT_NOT_IN_WORKSPACE'
+                   END,
+                   public.dincr_ownership_classification(
+                       CASE
+                           WHEN t.workspace_id IS NULL THEN 'WORKSPACE_NULL'
+                           WHEN w.id IS NULL THEN 'WORKSPACE_MISSING'
+                           ELSE 'ACCOUNT_NOT_IN_WORKSPACE'
+                       END),
+                   t.workspace_id, NULL::UUID, NULL::BIGINT, ARRAY[t.account_id]::UUID[]
+            FROM public.%I t
+            LEFT JOIN public.workspaces w ON w.id = t.workspace_id
+            WHERE t.account_id IS NOT NULL
+              AND (
+                  t.workspace_id IS NULL
+                  OR w.id IS NULL
+                  OR NOT (
+                      w.owner_account_id = t.account_id
+                      OR EXISTS (SELECT 1 FROM public.workspace_members wm
+                                 WHERE wm.workspace_id = t.workspace_id
+                                   AND wm.account_id = t.account_id
+                                   AND wm.status = 'active')
+                  )
+              )
+        $sql$, cfg.table_name, cfg.table_name);
+    END LOOP;
+
+    -- A FK from a dual-space user_id to users/allowed_users is a cascade risk:
+    -- deleting an unrelated person in that space deletes rows that carry the same
+    -- integer from the other space. Informational until the FKs are retired.
+    RETURN QUERY
+    SELECT child.relname::TEXT, NULL::BIGINT,
+           ('USER_ID_FK_TO_' || upper(parent.relname) || '_ON_DELETE_' ||
+            CASE c.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET_NULL' WHEN 'r' THEN 'RESTRICT'
+                               WHEN 'd' THEN 'SET_DEFAULT' ELSE 'NO_ACTION' END)::TEXT,
+           -- With every row in the FK's own space (USER_ID_WRONG_SPACE is NEEDS_REVIEW
+           -- and the guard rejects new ones) a cascade only removes the deleted
+           -- person's own rows. Informational until Phase E drops these FKs.
+           'INFO'::TEXT,
+           NULL::UUID, NULL::UUID, NULL::BIGINT, ARRAY[]::UUID[]
+    FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
+    JOIN pg_catalog.pg_class parent ON parent.oid = c.confrelid
+    JOIN pg_catalog.pg_namespace pns ON pns.oid = parent.relnamespace AND pns.nspname = 'public'
+    JOIN pg_catalog.pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
+    WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND att.attname = 'user_id'
+      AND parent.relname IN ('users', 'allowed_users')
+      AND child.relname IN (SELECT o.table_name FROM public.dincr_ownership_tables() o);
+
+    -- Tables that store a legacy id to write with later (mail connections): a
+    -- background sync writes that id into the financial tables, so it must be an
+    -- identity of the connection's workspace or every synced write is rejected.
+    FOR cfg IN
+        SELECT c1.table_name
+        FROM information_schema.columns c1
+        JOIN information_schema.columns c2
+          ON c2.table_schema = c1.table_schema AND c2.table_name = c1.table_name
+         AND c2.column_name = 'workspace_id' AND c2.data_type = 'uuid'
+        JOIN information_schema.columns c3
+          ON c3.table_schema = c1.table_schema AND c3.table_name = c1.table_name
+         AND c3.column_name = 'id' AND c3.data_type IN ('bigint', 'integer')
+        WHERE c1.table_schema = 'public'
+          AND c1.column_name = 'legacy_user_id'
+        ORDER BY c1.table_name
+    LOOP
+        RETURN QUERY EXECUTE pg_catalog.format($sql$
+            SELECT %L::TEXT, t.id::BIGINT, 'LEGACY_USER_ID_NOT_IN_WORKSPACE', 'NEEDS_REVIEW',
+                   t.workspace_id, NULL::UUID, t.legacy_user_id::BIGINT,
+                   public.dincr_legacy_id_accounts(t.legacy_user_id::BIGINT, 'users')
+            FROM public.%I t
+            WHERE t.workspace_id IS NOT NULL
+              -- legacy_user_id columns are users.id (FK -> users) everywhere.
+              AND NOT public.dincr_legacy_id_belongs_to_workspace(t.legacy_user_id::BIGINT, t.workspace_id, 'users')
+        $sql$, cfg.table_name, cfg.table_name);
+    END LOOP;
+END
+$fn$;
+
+-- Identity core checks (accounts / workspaces / legacy bridges). Identifiers only.
+CREATE OR REPLACE FUNCTION public.dincr_identity_audit()
+RETURNS TABLE (check_name TEXT, subject_id TEXT, classification TEXT)
+LANGUAGE sql
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT 'WORKSPACE_OWNER_MISSING', w.id::TEXT, 'ORPHAN'
+    FROM public.workspaces w
+    WHERE NOT EXISTS (SELECT 1 FROM public.accounts a WHERE a.id = w.owner_account_id)
+    UNION ALL
+    SELECT 'WORKSPACE_OWNER_NOT_MEMBER', w.id::TEXT, 'NEEDS_REVIEW'
+    FROM public.workspaces w
+    WHERE NOT EXISTS (SELECT 1 FROM public.workspace_members wm
+                      WHERE wm.workspace_id = w.id AND wm.account_id = w.owner_account_id
+                        AND wm.status = 'active')
+    UNION ALL
+    SELECT 'PERSONAL_WORKSPACE_KEY_MISMATCH', w.id::TEXT, 'NEEDS_REVIEW'
+    FROM public.workspaces w
+    WHERE w.workspace_type = 'personal'
+      AND w.workspace_key IS DISTINCT FROM 'personal:' || w.owner_account_id::TEXT
+    UNION ALL
+    SELECT 'ACCOUNT_PERSONAL_WORKSPACE_COUNT', a.id::TEXT, 'NEEDS_REVIEW'
+    FROM public.accounts a
+    WHERE (SELECT COUNT(*) FROM public.workspaces w
+           WHERE w.owner_account_id = a.id AND w.workspace_type = 'personal') <> 1
+    UNION ALL
+    SELECT 'ACCOUNT_LEGACY_ID_NULL', a.id::TEXT, 'NEEDS_REVIEW'
+    FROM public.accounts a
+    WHERE a.legacy_allowed_user_id IS NULL
+    UNION ALL
+    SELECT 'ACCOUNT_LEGACY_ID_DANGLING', a.id::TEXT, 'ORPHAN'
+    FROM public.accounts a
+    WHERE a.legacy_allowed_user_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM public.allowed_users au WHERE au.id = a.legacy_allowed_user_id)
+    UNION ALL
+    SELECT 'ACCOUNT_ALLOWED_USER_EMAIL_MISMATCH', a.id::TEXT, 'NEEDS_REVIEW'
+    FROM public.accounts a
+    JOIN public.allowed_users au ON au.id = a.legacy_allowed_user_id
+    WHERE lower(trim(au.email)) IS DISTINCT FROM lower(trim(a.primary_email))
+    UNION ALL
+    SELECT 'ACCOUNT_AUTH_ID_MISMATCH', a.id::TEXT, 'NEEDS_REVIEW'
+    FROM public.accounts a
+    JOIN public.allowed_users au ON au.id = a.legacy_allowed_user_id
+    WHERE a.supabase_user_id IS NOT NULL
+      AND NULLIF(lower(trim(au.supabase_user_id)), '') IS NOT NULL
+      AND lower(trim(au.supabase_user_id)) <> lower(a.supabase_user_id::TEXT)
+    UNION ALL
+    SELECT 'ACTIVE_ALLOWED_USER_WITHOUT_ACCOUNT', au.id::TEXT, 'NEEDS_REVIEW'
+    FROM public.allowed_users au
+    WHERE au.status = 'active'
+      AND NOT EXISTS (SELECT 1 FROM public.accounts a WHERE a.legacy_allowed_user_id = au.id)
+    UNION ALL
+    SELECT 'USERS_ROW_WITHOUT_ACCOUNT', u.id::TEXT, 'INFO'
+    FROM public.users u
+    WHERE NOT EXISTS (SELECT 1 FROM public.accounts a WHERE lower(a.primary_email) = lower(u.email))
+    UNION ALL
+    SELECT 'ACCOUNT_WITHOUT_USERS_ROW', a.id::TEXT, 'INFO'
+    FROM public.accounts a
+    WHERE NOT EXISTS (SELECT 1 FROM public.users u WHERE lower(trim(u.email)) = lower(trim(a.primary_email)))
+$fn$;
+
+CREATE OR REPLACE FUNCTION public.dincr_ownership_audit_summary()
+RETURNS TABLE (table_name TEXT, classification TEXT, issue TEXT, row_count BIGINT)
+LANGUAGE sql
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT r.table_name, r.classification, r.issue, COUNT(*)::BIGINT
+    FROM public.dincr_ownership_audit_rows(TRUE) r
+    GROUP BY r.table_name, r.classification, r.issue
+    UNION ALL
+    SELECT '_identity', i.classification, i.check_name, COUNT(*)::BIGINT
+    FROM public.dincr_identity_audit() i
+    GROUP BY i.classification, i.check_name
+    ORDER BY 1, 2, 3
+$fn$;
+-- END DINCR OWNERSHIP AUDIT FUNCTIONS
+
+-- Every table whose deletes and TRUNCATE are guarded: the ownership tables plus
+-- workspace-owned financial tables without a legacy user_id (no ownership
+-- trigger applies to them). New workspace tables must be listed here or in the
+-- reviewed allowlist of backend/tests/test_financial_ownership_integrity.py.
+CREATE OR REPLACE FUNCTION public.dincr_delete_guard_tables()
+RETURNS TABLE (table_name TEXT)
+LANGUAGE sql
+IMMUTABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT o.table_name FROM public.dincr_ownership_tables() o
+    UNION ALL
+    SELECT t.table_name FROM (VALUES
+        ('finva_budget_items'),
+        ('finva_recurring_items'),
+        ('finva_goal_contributions'),
+        ('finva_savings_plans'),
+        ('finva_savings_plan_contributions'),
+        ('financial_profiles'),
+        ('card_aliases'),
+        ('financial_input_events'),
+        ('email_transaction_candidates'),
+        ('email_statement_documents'),
+        ('email_statement_reconciliation_lines'),
+        ('email_financial_accounts'),
+        ('finva_email_candidates'),
+        ('finva_statement_documents'),
+        ('investment_position_snapshots'),
+        -- Parents whose deletes cascade into guarded tables row by row (a cascade
+        -- fires the child's statement trigger once per parent row), so they carry
+        -- the one-owner check themselves.
+        ('finva_gmail_connections'),
+        ('finva_email_messages'),
+        ('email_ingested_messages')
+    ) AS t(table_name)
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_delete_guard_tables() FROM PUBLIC, anon, authenticated;
+
+REVOKE ALL ON FUNCTION public.dincr_ownership_tables() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.dincr_user_id_space(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.dincr_legacy_id_belongs_to_workspace(BIGINT, UUID, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.dincr_legacy_id_accounts(BIGINT, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.dincr_ownership_classification(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.dincr_ownership_audit_rows(BOOLEAN) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.dincr_identity_audit() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.dincr_ownership_audit_summary() FROM PUBLIC, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 1. Audit storage: counts snapshots and a before/after log of every repair.
+--    Identifiers only; no names, amounts or descriptions.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.financial_ownership_audit_snapshots (
+    id BIGSERIAL PRIMARY KEY,
+    run_id UUID NOT NULL,
+    phase TEXT NOT NULL CHECK (phase IN ('before', 'after')),
+    table_name TEXT NOT NULL,
+    classification TEXT NOT NULL,
+    issue TEXT NOT NULL,
+    row_count BIGINT NOT NULL,
+    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.financial_ownership_repair_log (
+    id BIGSERIAL PRIMARY KEY,
+    run_id UUID NOT NULL,
+    table_name TEXT NOT NULL,
+    row_id BIGINT NOT NULL,
+    column_name TEXT NOT NULL,
+    old_value TEXT,
+    new_value TEXT,
+    reason TEXT NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_financial_ownership_repair_log_row
+    ON public.financial_ownership_repair_log(table_name, row_id);
+
+ALTER TABLE public.financial_ownership_audit_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.financial_ownership_repair_log ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE public.financial_ownership_audit_snapshots FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON TABLE public.financial_ownership_repair_log FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON SEQUENCE public.financial_ownership_audit_snapshots_id_seq FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON SEQUENCE public.financial_ownership_repair_log_id_seq FROM anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 2. Abort on an inconsistent identity core, snapshot, repair SAFE_AUTO_FIX only.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+    v_run UUID := gen_random_uuid();
+    v_blocking BIGINT;
+    v_repaired BIGINT := 0;
+    v_count BIGINT;
+    cfg RECORD;
+BEGIN
+    SELECT COUNT(*) INTO v_blocking
+    FROM public.dincr_identity_audit()
+    WHERE check_name IN (
+        'WORKSPACE_OWNER_MISSING',
+        'PERSONAL_WORKSPACE_KEY_MISMATCH',
+        'ACCOUNT_PERSONAL_WORKSPACE_COUNT'
+    );
+    IF v_blocking > 0 THEN
+        RAISE EXCEPTION 'financial ownership integrity: % identity-core inconsistencies, aborting (run the preflight)', v_blocking
+            USING ERRCODE = 'DI001';
+    END IF;
+
+    -- Internal (owner/admin) writers store allowed_users.id, also in tables whose
+    -- FK references users(id). That only stays valid when the account's users row
+    -- has the same id and email; otherwise the guard would reject every internal
+    -- finance write after this migration.
+    SELECT COUNT(*) INTO v_blocking
+    FROM public.accounts a
+    WHERE (
+            (a.role IN ('owner', 'admin') AND a.status = 'active')
+            -- Internal routes authorize by allowed_users.role (accounts.role only
+            -- syncs at login), so a pending promotion counts too.
+            OR EXISTS (SELECT 1 FROM public.allowed_users au
+                       WHERE au.id = a.legacy_allowed_user_id
+                         AND au.role IN ('owner', 'admin') AND au.status = 'active')
+          )
+      AND EXISTS (SELECT 1 FROM public.dincr_ownership_tables() o
+                  WHERE public.dincr_user_id_space(o.table_name) = 'users')
+      AND NOT EXISTS (SELECT 1 FROM public.users u
+                      WHERE u.id = a.legacy_allowed_user_id
+                        AND lower(trim(u.email)) = lower(trim(a.primary_email)));
+    IF v_blocking > 0 THEN
+        RAISE EXCEPTION 'financial ownership integrity: % owner/admin accounts whose allowed_users.id is not their users.id, aborting', v_blocking
+            USING ERRCODE = 'DI002';
+    END IF;
+
+    -- Users overtime writes allowed_users.id into payroll_events: if that table's
+    -- FK references users(id), the writer must be fixed before the guard exists.
+    IF public.dincr_user_id_space('payroll_events') = 'users' THEN
+        RAISE EXCEPTION 'financial ownership integrity: payroll_events.user_id references users but overtime writes allowed_users.id, aborting'
+            USING ERRCODE = 'DI003';
+    END IF;
+
+    -- Rows whose legacy id is in the other space than their FK would make an
+    -- unrelated person's account deletion fail (identity delete guard) or be
+    -- deleted by it: a human resolves them before the guards are installed.
+    SELECT COUNT(*) INTO v_blocking
+    FROM public.dincr_ownership_audit_rows(FALSE)
+    WHERE issue = 'USER_ID_WRONG_SPACE';
+    IF v_blocking > 0 THEN
+        RAISE EXCEPTION 'financial ownership integrity: % rows carry a legacy id from the wrong space, aborting (run the preflight)', v_blocking
+            USING ERRCODE = 'DI004';
+    END IF;
+
+    -- A stored mail-connection id outside its workspace would make every synced
+    -- write fail after the guard is installed: fix it first.
+    SELECT COUNT(*) INTO v_blocking
+    FROM public.dincr_ownership_audit_rows(FALSE)
+    WHERE issue = 'LEGACY_USER_ID_NOT_IN_WORKSPACE';
+    IF v_blocking > 0 THEN
+        RAISE EXCEPTION 'financial ownership integrity: % stored legacy ids outside their workspace, aborting (run the preflight)', v_blocking
+            USING ERRCODE = 'DI005';
+    END IF;
+
+    -- A row whose FK points at another account's identity would make that
+    -- person's account deletion fail (identity delete guard) until a human fixes
+    -- it: account deletion must keep working, so resolve these first.
+    SELECT COUNT(*) INTO v_blocking
+    FROM public.dincr_ownership_audit_rows(FALSE) r
+    WHERE r.issue = 'USER_ID_FOREIGN' AND public.dincr_user_id_space(r.table_name) IS NOT NULL;
+    IF v_blocking > 0 THEN
+        RAISE EXCEPTION 'financial ownership integrity: % rows reference another account''s identity through their FK, aborting (run the preflight)', v_blocking
+            USING ERRCODE = 'DI006';
+    END IF;
+
+    -- financial_profiles is upserted with the caller's personal workspace; a
+    -- profile stored under another workspace would fail the move guard forever.
+    IF to_regclass('public.financial_profiles') IS NOT NULL THEN
+        SELECT COUNT(*) INTO v_blocking
+        FROM public.financial_profiles fp
+        LEFT JOIN public.workspaces w ON w.id = fp.workspace_id
+        WHERE w.id IS NULL OR w.owner_account_id <> fp.account_id OR w.workspace_type <> 'personal';
+        IF v_blocking > 0 THEN
+            RAISE EXCEPTION 'financial ownership integrity: % financial profiles outside their personal workspace, aborting', v_blocking
+                USING ERRCODE = 'DI010';
+        END IF;
+    END IF;
+
+    INSERT INTO public.financial_ownership_audit_snapshots(run_id, phase, table_name, classification, issue, row_count)
+    SELECT v_run, 'before', s.table_name, s.classification, s.issue, s.row_count
+    FROM public.dincr_ownership_audit_summary() s;
+
+    FOR cfg IN
+        SELECT t.table_name, t.parent_table, t.parent_column
+        FROM public.dincr_ownership_tables() t
+        WHERE t.parent_table IS NOT NULL
+    LOOP
+        IF to_regclass(format('public.%I', cfg.table_name)) IS NULL
+           OR to_regclass(format('public.%I', cfg.parent_table)) IS NULL THEN
+            CONTINUE;
+        END IF;
+
+        -- On a re-run the guard already exists and rejects any workspace change;
+        -- the logged repair is the one reviewed exception, for this statement only.
+        IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = format('public.%I', cfg.table_name)::regclass
+                   AND tgname = 'trg_' || cfg.table_name || '_ownership_guard') THEN
+            EXECUTE format('ALTER TABLE public.%I DISABLE TRIGGER %I', cfg.table_name,
+                           'trg_' || cfg.table_name || '_ownership_guard');
+        END IF;
+
+        -- Re-derives the SAFE_AUTO_FIX predicate on the live rows (not on a
+        -- snapshot) and logs old/new values before they change.
+        EXECUTE format($sql$
+            WITH candidates AS (
+                SELECT a.row_id, a.parent_workspace_id
+                FROM public.dincr_ownership_audit_rows(FALSE) a
+                WHERE a.table_name = %L
+                  AND a.classification = 'SAFE_AUTO_FIX'
+            ),
+            changed AS (
+                UPDATE public.%I t
+                   SET workspace_id = c.parent_workspace_id
+                  FROM candidates c
+                 WHERE t.id = c.row_id
+                   AND t.workspace_id IS NULL
+                RETURNING t.id, t.workspace_id
+            )
+            INSERT INTO public.financial_ownership_repair_log(run_id, table_name, row_id, column_name, old_value, new_value, reason)
+            SELECT %L::UUID, %L, ch.id, 'workspace_id', NULL, ch.workspace_id::TEXT, 'WORKSPACE_NULL_PARENT_RESOLVABLE'
+            FROM changed ch
+        $sql$, cfg.table_name, cfg.table_name, v_run, cfg.table_name);
+        GET DIAGNOSTICS v_count = ROW_COUNT;
+        v_repaired := v_repaired + v_count;
+
+        IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = format('public.%I', cfg.table_name)::regclass
+                   AND tgname = 'trg_' || cfg.table_name || '_ownership_guard') THEN
+            EXECUTE format('ALTER TABLE public.%I ENABLE TRIGGER %I', cfg.table_name,
+                           'trg_' || cfg.table_name || '_ownership_guard');
+        END IF;
+    END LOOP;
+
+    INSERT INTO public.financial_ownership_audit_snapshots(run_id, phase, table_name, classification, issue, row_count)
+    SELECT v_run, 'after', s.table_name, s.classification, s.issue, s.row_count
+    FROM public.dincr_ownership_audit_summary() s;
+
+    -- Postflight: nothing auto-fixable may remain.
+    SELECT COUNT(*) INTO v_count
+    FROM public.dincr_ownership_audit_rows(FALSE)
+    WHERE classification = 'SAFE_AUTO_FIX';
+    IF v_count > 0 THEN
+        RAISE EXCEPTION 'financial ownership integrity: % SAFE_AUTO_FIX rows remain after repair, aborting', v_count
+            USING ERRCODE = 'DI011';
+    END IF;
+
+
+
+    RAISE NOTICE 'financial ownership integrity run %: repaired % rows', v_run, v_repaired;
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- 3. Prevention for new writes (NOT VALID: existing rows are not re-checked;
+--    validate only after every NEEDS_REVIEW row has been resolved by a human).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.dincr_guard_financial_ownership()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+BEGIN
+    -- Transitional guard. Ownership is workspace_id; the legacy user_id only has
+    -- to agree with it. NULL workspace is rejected by the table's CHECK. A NULL
+    -- user_id is the canonical future (no legacy attribution) and is accepted;
+    -- the column's NOT NULL keeps rejecting it until legacy writers are retired.
+    IF TG_OP = 'UPDATE' THEN
+        -- Moving a row to another workspace is a reviewed data operation, never a
+        -- side effect of an application write (run it with this trigger disabled).
+        -- Includes filling a NULL workspace: assigning an owner is a review decision.
+        IF NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+            RAISE EXCEPTION 'financial ownership change on %', TG_TABLE_NAME
+                USING ERRCODE = '23514',
+                      HINT = 'rows are not moved between workspaces by application writes';
+        END IF;
+        -- Unchanged legacy ids (e.g. an upsert rewriting the same values) keep rows
+        -- under review editable.
+        IF NEW.user_id IS NOT DISTINCT FROM OLD.user_id
+           AND NEW.workspace_id IS NOT DISTINCT FROM OLD.workspace_id THEN
+            RETURN NEW;
+        END IF;
+    END IF;
+    IF NEW.workspace_id IS NULL OR NEW.user_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+    -- The id must be the workspace's identity in the space the table's FK points
+    -- at (either space for tables without such a FK).
+    IF NOT public.dincr_legacy_id_belongs_to_workspace(
+        NEW.user_id::BIGINT, NEW.workspace_id, public.dincr_user_id_space(TG_TABLE_NAME)
+    ) THEN
+        -- No identifiers or values in the message: it can reach logs.
+        RAISE EXCEPTION 'financial ownership mismatch on %', TG_TABLE_NAME
+            USING ERRCODE = '23514',
+                  HINT = 'user_id must be an identity of an owner or active member of workspace_id';
+    END IF;
+    RETURN NEW;
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_financial_ownership() FROM PUBLIC, anon, authenticated;
+
+DO $$
+DECLARE
+    cfg RECORD;
+    v_name TEXT;
+BEGIN
+    FOR cfg IN SELECT * FROM public.dincr_ownership_tables() LOOP
+        IF to_regclass(format('public.%I', cfg.table_name)) IS NULL THEN
+            CONTINUE;
+        END IF;
+        IF (SELECT COUNT(*) FROM information_schema.columns isc
+            WHERE isc.table_schema = 'public' AND isc.table_name = cfg.table_name
+              AND isc.column_name IN ('user_id', 'workspace_id')) < 2 THEN
+            CONTINUE;
+        END IF;
+
+        v_name := 'ck_' || cfg.table_name || '_workspace_required';
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = v_name AND conrelid = format('public.%I', cfg.table_name)::regclass
+        ) THEN
+            EXECUTE format(
+                'ALTER TABLE public.%I ADD CONSTRAINT %I CHECK (workspace_id IS NOT NULL) NOT VALID',
+                cfg.table_name, v_name
+            );
+        END IF;
+
+        EXECUTE format(
+            'CREATE OR REPLACE TRIGGER %I BEFORE INSERT OR UPDATE OF user_id, workspace_id ON public.%I '
+            'FOR EACH ROW EXECUTE FUNCTION public.dincr_guard_financial_ownership()',
+            'trg_' || cfg.table_name || '_ownership_guard', cfg.table_name
+        );
+
+        IF cfg.parent_table IS NOT NULL
+           AND to_regclass(format('public.%I', cfg.parent_table)) IS NOT NULL THEN
+            IF to_regclass(format('public.%I', 'uq_' || cfg.parent_table || '_id_workspace')) IS NULL THEN
+                EXECUTE format(
+                    'CREATE UNIQUE INDEX %I ON public.%I(id, workspace_id)',
+                    'uq_' || cfg.parent_table || '_id_workspace', cfg.parent_table
+                );
+                -- Marker: the rollback only drops indexes this migration created.
+                EXECUTE format('COMMENT ON INDEX public.%I IS %L',
+                    'uq_' || cfg.parent_table || '_id_workspace', 'dincr-ownership-guard');
+            END IF;
+            v_name := 'fk_' || cfg.table_name || '_parent_workspace';
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = v_name AND conrelid = format('public.%I', cfg.table_name)::regclass
+            ) THEN
+                EXECUTE format(
+                    'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (%I, workspace_id) '
+                    -- NO ACTION (checked at statement end) never changes how the
+                    -- existing single-column FK already deletes or nulls children.
+                    'REFERENCES public.%I(id, workspace_id) NOT VALID',
+                    cfg.table_name, v_name, cfg.parent_column, cfg.parent_table
+                );
+            END IF;
+        END IF;
+    END LOOP;
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- 3b. Deletions. Class of error: selecting financial rows by a legacy user_id
+--     from the wrong space deletes other people's rows. These guards reject
+--     multi-owner deletes, undeclared manual deletes and TRUNCATE, and log every
+--     committed financial deletion (a rejected delete rolls its log row back;
+--     Postgres logs the error). Deletions from workspaces that no longer exist
+--     keep only a count. Purge log rows older than 180 days as a reviewed task.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.financial_ownership_delete_log (
+    id BIGSERIAL PRIMARY KEY,
+    table_name TEXT NOT NULL,
+    row_count BIGINT NOT NULL,
+    row_ids BIGINT[] NOT NULL,
+    workspace_ids UUID[] NOT NULL,
+    db_role TEXT NOT NULL,
+    application_name TEXT,
+    transaction_id BIGINT NOT NULL,
+    deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_financial_ownership_delete_log_at
+    ON public.financial_ownership_delete_log(deleted_at DESC);
+ALTER TABLE public.financial_ownership_delete_log ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE public.financial_ownership_delete_log FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON SEQUENCE public.financial_ownership_delete_log_id_seq FROM anon, authenticated;
+
+-- Statement level, after delete. Any DELETE (top level, inside a DO block or an
+-- FK cascade) may only remove rows of live workspaces that share ONE owner
+-- account. Rows of deleted workspaces (the account/workspace cascade) are not
+-- counted. A cascade runs as one statement per parent row: a parent whose child
+-- rows sit in another owner's workspace (PARENT_WORKSPACE_MISMATCH, anomalous)
+-- is caught for sessions that must declare their workspace, but NOT for the
+-- exempt application session (documented residual risk).
+CREATE OR REPLACE FUNCTION public.dincr_guard_financial_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+DECLARE
+    v_owners BIGINT;
+    v_declared TEXT := NULLIF(current_setting('dincr.delete_workspace', true), '');
+    v_outside BIGINT;
+BEGIN
+    -- Identifiers of live workspaces only: rows of a workspace that no longer
+    -- exists (account deletion) are logged as a count.
+    INSERT INTO public.financial_ownership_delete_log(
+        table_name, row_count, row_ids, workspace_ids, db_role,
+        application_name, transaction_id)
+    SELECT TG_TABLE_NAME, COUNT(*),
+           -- Ids of live-workspace rows and of rows without a workspace (the ones
+           -- whose owner is unclear); a deleted workspace's cascade is a count.
+           COALESCE(array_agg(r.row_id ORDER BY r.row_id) FILTER (WHERE r.row_id IS NOT NULL AND (w.id IS NOT NULL OR o.workspace_id IS NULL)), ARRAY[]::BIGINT[]),
+           COALESCE(array_agg(DISTINCT o.workspace_id) FILTER (WHERE w.id IS NOT NULL), ARRAY[]::UUID[]),
+           session_user::TEXT,
+           NULLIF(current_setting('application_name', true), ''), txid_current()
+    FROM old_rows o
+    -- Tables keyed by something other than an integer id log counts only.
+    CROSS JOIN LATERAL (SELECT pg_catalog.to_jsonb(o) ->> 'id' AS raw_id) j
+    CROSS JOIN LATERAL (SELECT CASE WHEN j.raw_id ~ '^-?[0-9]{1,18}$' THEN j.raw_id::BIGINT END AS row_id) r
+    LEFT JOIN public.workspaces w ON w.id = o.workspace_id
+    HAVING COUNT(*) > 0;
+
+    SELECT COUNT(DISTINCT w.owner_account_id) INTO v_owners
+    FROM old_rows o
+    JOIN public.workspaces w ON w.id = o.workspace_id;
+    IF v_owners > 1 THEN
+        -- No identifiers or values in the message: it can reach logs.
+        RAISE EXCEPTION 'financial delete on % spans % live owners', TG_TABLE_NAME, v_owners
+            USING ERRCODE = '23514',
+                  HINT = 'delete one account''s rows per statement; never select financial rows by legacy user_id';
+    END IF;
+
+    -- Rows without a workspace have no clear owner: every session, the app
+    -- included, deletes them only with the explicit declaration 'none'. The app
+    -- declares it only for an identity's own FK cascade: in account deletion and
+    -- when an admin deletes an allowed_users row that no account maps to; the
+    -- NOT VALID CHECK keeps new ones from appearing.
+    IF v_declared IS DISTINCT FROM 'none' AND EXISTS (SELECT 1 FROM old_rows o WHERE o.workspace_id IS NULL) THEN
+        RAISE EXCEPTION 'financial delete on % touches rows without a workspace', TG_TABLE_NAME
+            USING ERRCODE = '23514',
+                  HINT = 'SET LOCAL dincr.delete_workspace = ''none'' to delete rows without a workspace';
+    END IF;
+
+    -- Every session other than the application (application_name 'dincr-backend',
+    -- or 'Supavisor' when the pooler reports its own name) must declare the one
+    -- workspace it deletes from: SET LOCAL dincr.delete_workspace = '<uuid>'.
+    -- Use SET LOCAL: a session-level SET is also honoured and would cover later
+    -- deletes in the same session. This covers the SQL editor, psql, scripts, the
+    -- CLI and agents.
+    -- PRE-APPLY GATE: every process that deletes on behalf of the app must be
+    -- the web app (backend/main.py sets 'dincr-backend') or connect through the
+    -- pooler ('Supavisor'); any other process must declare its workspace or
+    -- its deletes of live rows are rejected here (fail closed). Scripts using
+    -- backend.core.database identify as 'dincr-script' and must declare.
+    -- Rows without a workspace belong to no declared workspace: deleting them
+    -- takes the explicit declaration 'none'. Rows of a workspace deleted in the
+    -- same statement (a manual account deletion) need that workspace declared.
+    IF COALESCE(current_setting('application_name', true), '') NOT IN ('Supavisor', 'dincr-backend') THEN
+        SELECT COUNT(*) INTO v_outside
+        FROM old_rows o
+        WHERE o.workspace_id IS NOT NULL AND (v_declared IS NULL OR o.workspace_id::TEXT <> v_declared);
+        IF v_outside > 0 THEN
+            RAISE EXCEPTION 'manual financial delete on % touches % rows outside the declared workspace', TG_TABLE_NAME, v_outside
+                USING ERRCODE = '23514',
+                      HINT = 'SET LOCAL dincr.delete_workspace to the one workspace being cleaned up';
+        END IF;
+    END IF;
+    RETURN NULL;
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_financial_delete() FROM PUBLIC, anon, authenticated;
+
+-- TRUNCATE bypasses row and statement DELETE triggers: financial tables are
+-- never truncated.
+CREATE OR REPLACE FUNCTION public.dincr_guard_financial_truncate()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+BEGIN
+    RAISE EXCEPTION 'TRUNCATE of financial table % is not allowed', TG_TABLE_NAME
+        USING ERRCODE = '23514', HINT = 'delete one account''s rows per statement';
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_financial_truncate() FROM PUBLIC, anon, authenticated;
+
+-- Row level, before delete on the legacy identity tables: refuse to delete an
+-- identity whose FK would cascade into rows of a live workspace that the
+-- identity does not belong to (rows written in the wrong id space).
+CREATE OR REPLACE FUNCTION public.dincr_guard_legacy_identity_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+DECLARE
+    cfg RECORD;
+    v_space TEXT := CASE TG_TABLE_NAME WHEN 'users' THEN 'users' ELSE 'allowed_users' END;
+    v_hit BOOLEAN;
+BEGIN
+    -- A users row goes after its account (the app deletes the account first):
+    -- deleting it while an account still maps to it by email cascades into that
+    -- live account's financial rows.
+    IF TG_TABLE_NAME = 'users' AND EXISTS (
+        SELECT 1 FROM public.accounts a
+        WHERE pg_catalog.lower(pg_catalog.btrim(a.primary_email)) = pg_catalog.lower(pg_catalog.btrim(OLD.email))
+    ) THEN
+        RAISE EXCEPTION 'deleting this users row would cascade into a live account''s financial rows'
+            USING ERRCODE = '23503', HINT = 'delete the account first (account deletion flow)';
+    END IF;
+    -- Same for allowed_users: its FK-cascading rows (fixed expenses, input
+    -- events, notification jobs) belong to the live account that maps to it.
+    IF TG_TABLE_NAME = 'allowed_users' AND EXISTS (
+        SELECT 1 FROM public.accounts a WHERE a.legacy_allowed_user_id = OLD.id
+    ) THEN
+        RAISE EXCEPTION 'deleting this allowed_users row would cascade into a live account''s financial rows'
+            USING ERRCODE = '23503', HINT = 'delete the account first (account deletion flow)';
+    END IF;
+    FOR cfg IN SELECT o.table_name FROM public.dincr_ownership_tables() o
+               WHERE public.dincr_user_id_space(o.table_name) = v_space LOOP
+        EXECUTE pg_catalog.format($sql$
+            SELECT EXISTS (
+                SELECT 1 FROM public.%I t
+                JOIN public.workspaces w ON w.id = t.workspace_id
+                WHERE t.user_id = $1
+                  AND NOT public.dincr_legacy_id_belongs_to_workspace(t.user_id::BIGINT, t.workspace_id, $2)
+            )
+        $sql$, cfg.table_name) INTO v_hit USING OLD.id, v_space;
+        IF v_hit THEN
+            RAISE EXCEPTION 'deleting this % row would cascade into another workspace''s % rows', TG_TABLE_NAME, cfg.table_name
+                USING ERRCODE = '23503',
+                      HINT = 'resolve the USER_ID_WRONG_SPACE rows reported by the preflight first';
+        END IF;
+    END LOOP;
+    RETURN OLD;
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_legacy_identity_delete() FROM PUBLIC, anon, authenticated;
+
+
+-- Identity rows are deleted one account (and its workspaces) per statement by
+-- every session: a statement deleting several accounts or several owners'
+-- workspaces would cascade into their financial rows as one bulk delete.
+CREATE OR REPLACE FUNCTION public.dincr_guard_identity_bulk_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+DECLARE
+    v_owners BIGINT;
+BEGIN
+    IF TG_TABLE_NAME = 'accounts' THEN
+        SELECT COUNT(*) INTO v_owners FROM old_rows;
+    ELSE
+        SELECT COUNT(DISTINCT o.owner_account_id) INTO v_owners FROM old_rows o;
+    END IF;
+    IF v_owners > 1 THEN
+        RAISE EXCEPTION 'delete on % spans % accounts', TG_TABLE_NAME, v_owners
+            USING ERRCODE = '23514', HINT = 'delete one account per statement';
+    END IF;
+    RETURN NULL;
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_identity_bulk_delete() FROM PUBLIC, anon, authenticated;
+
+-- Guarded tables without a legacy user_id have no ownership trigger: keep their
+-- rows in their workspace (an UPDATE of workspace_id would move money between
+-- workspaces unseen). Updates that keep the value, like upserts, pass.
+CREATE OR REPLACE FUNCTION public.dincr_guard_workspace_move()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+BEGIN
+    IF NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+        RAISE EXCEPTION 'rows of % cannot move to another workspace', TG_TABLE_NAME
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_guard_workspace_move() FROM PUBLIC, anon, authenticated;
+
+DO $$
+DECLARE
+    cfg RECORD;
+BEGIN
+    FOR cfg IN SELECT * FROM public.dincr_delete_guard_tables() LOOP
+        IF to_regclass(format('public.%I', cfg.table_name)) IS NULL
+           OR NOT EXISTS (SELECT 1 FROM information_schema.columns isc
+                          WHERE isc.table_schema = 'public' AND isc.table_name = cfg.table_name
+                            AND isc.column_name = 'workspace_id') THEN
+            CONTINUE;
+        END IF;
+        EXECUTE format(
+            'CREATE OR REPLACE TRIGGER %I AFTER DELETE ON public.%I REFERENCING OLD TABLE AS old_rows '
+            'FOR EACH STATEMENT EXECUTE FUNCTION public.dincr_guard_financial_delete()',
+            'trg_' || cfg.table_name || '_delete_guard', cfg.table_name
+        );
+        EXECUTE format(
+            'CREATE OR REPLACE TRIGGER %I BEFORE TRUNCATE ON public.%I '
+            'FOR EACH STATEMENT EXECUTE FUNCTION public.dincr_guard_financial_truncate()',
+            'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name
+        );
+        IF NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                       WHERE tr.tgrelid = format('public.%I', cfg.table_name)::regclass
+                         AND tr.tgname = 'trg_' || cfg.table_name || '_ownership_guard') THEN
+            EXECUTE format(
+                'CREATE OR REPLACE TRIGGER %I BEFORE UPDATE OF workspace_id ON public.%I '
+                'FOR EACH ROW EXECUTE FUNCTION public.dincr_guard_workspace_move()',
+                'trg_' || cfg.table_name || '_workspace_move_guard', cfg.table_name
+            );
+            -- New rows always carry a workspace (existing ones were checked above).
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                           WHERE conname = 'ck_' || cfg.table_name || '_workspace_required'
+                             AND conrelid = format('public.%I', cfg.table_name)::regclass) THEN
+                EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I CHECK (workspace_id IS NOT NULL) NOT VALID',
+                               cfg.table_name, 'ck_' || cfg.table_name || '_workspace_required');
+            END IF;
+        END IF;
+    END LOOP;
+    EXECUTE 'CREATE OR REPLACE TRIGGER trg_users_legacy_delete_guard BEFORE DELETE ON public.users '
+            'FOR EACH ROW EXECUTE FUNCTION public.dincr_guard_legacy_identity_delete()';
+    EXECUTE 'CREATE OR REPLACE TRIGGER trg_allowed_users_legacy_delete_guard BEFORE DELETE ON public.allowed_users '
+            'FOR EACH ROW EXECUTE FUNCTION public.dincr_guard_legacy_identity_delete()';
+    EXECUTE 'CREATE OR REPLACE TRIGGER trg_accounts_bulk_delete_guard AFTER DELETE ON public.accounts '
+            'REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.dincr_guard_identity_bulk_delete()';
+    EXECUTE 'CREATE OR REPLACE TRIGGER trg_workspaces_bulk_delete_guard AFTER DELETE ON public.workspaces '
+            'REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.dincr_guard_identity_bulk_delete()';
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- 4. Postflight: prevention is installed on every existing target table.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+    v_missing BIGINT;
+    v_absent TEXT;
+BEGIN
+    -- The workspace-only financial tables must already exist
+    -- (20260916_finva_scheduled_savings.sql and 20260925130000_request_path_schema.sql
+    -- applied first); otherwise their deletion guards would be skipped silently.
+    SELECT string_agg(t, ', ') INTO v_absent
+    FROM unnest(ARRAY['finva_budget_items', 'finva_recurring_items', 'finva_goal_contributions',
+                      'finva_savings_plans', 'finva_savings_plan_contributions']) t
+    WHERE to_regclass(format('public.%I', t)) IS NULL;
+    IF v_absent IS NOT NULL THEN
+        RAISE EXCEPTION 'financial ownership integrity: apply 20260925130000_request_path_schema.sql first (missing: %)', v_absent
+            USING ERRCODE = 'DI007';
+    END IF;
+
+    -- Tables with a legacy user_id: ownership trigger and workspace CHECK.
+    SELECT COUNT(*) INTO v_missing
+    FROM public.dincr_ownership_tables() t
+    WHERE to_regclass(format('public.%I', t.table_name)) IS NOT NULL
+      AND (SELECT COUNT(*) FROM information_schema.columns isc
+           WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
+             AND isc.column_name IN ('user_id', 'workspace_id')) = 2
+      AND (NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                       WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                         AND tr.tgname = 'trg_' || t.table_name || '_ownership_guard')
+           OR NOT EXISTS (SELECT 1 FROM pg_constraint c
+                          WHERE c.conrelid = format('public.%I', t.table_name)::regclass
+                            AND c.conname = 'ck_' || t.table_name || '_workspace_required'));
+    -- Every guarded workspace-owned table: delete and TRUNCATE guards.
+    SELECT v_missing + COUNT(*) INTO v_missing
+    FROM public.dincr_delete_guard_tables() t
+    WHERE to_regclass(format('public.%I', t.table_name)) IS NOT NULL
+      AND EXISTS (SELECT 1 FROM information_schema.columns isc
+                  WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
+                    AND isc.column_name = 'workspace_id')
+      AND (NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                       WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                         AND tr.tgname = 'trg_' || t.table_name || '_delete_guard')
+           OR NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                          WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                            AND tr.tgname = 'trg_' || t.table_name || '_truncate_guard'));
+    SELECT v_missing + COUNT(*) INTO v_missing
+    FROM public.dincr_delete_guard_tables() t
+    WHERE to_regclass(format('public.%I', t.table_name)) IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                      WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                        AND tr.tgname = 'trg_' || t.table_name || '_ownership_guard')
+      AND EXISTS (SELECT 1 FROM information_schema.columns isc
+                  WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
+                    AND isc.column_name = 'workspace_id')
+      AND (NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                       WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                         AND tr.tgname = 'trg_' || t.table_name || '_workspace_move_guard')
+           OR NOT EXISTS (SELECT 1 FROM pg_constraint c
+                          WHERE c.conrelid = format('public.%I', t.table_name)::regclass
+                            AND c.conname = 'ck_' || t.table_name || '_workspace_required'));
+    SELECT v_missing + COUNT(*) INTO v_missing
+    FROM (VALUES ('accounts', 'trg_accounts_bulk_delete_guard'), ('workspaces', 'trg_workspaces_bulk_delete_guard')) g(tbl, trg)
+    WHERE NOT EXISTS (SELECT 1 FROM pg_trigger tr WHERE tr.tgrelid = format('public.%I', g.tbl)::regclass AND tr.tgname = g.trg);
+    IF v_missing > 0 THEN
+        RAISE EXCEPTION 'financial ownership integrity: prevention missing on % tables, aborting', v_missing
+            USING ERRCODE = 'DI008';
+    END IF;
+
+    -- For the reviewer: workspace-owned tables left without deletion guards (each
+    -- must be in the reviewed allowlist of the ownership tests, with its reason).
+    RAISE NOTICE 'financial ownership integrity: unguarded workspace tables: %', (
+        SELECT COALESCE(string_agg(c.table_name, ', ' ORDER BY c.table_name), 'none')
+        FROM information_schema.columns c
+        JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+        WHERE c.table_schema = 'public' AND c.column_name = 'workspace_id' AND t.table_type = 'BASE TABLE'
+          AND c.table_name NOT IN (SELECT g.table_name FROM public.dincr_delete_guard_tables() g));
+END $$;
+
+COMMIT;
+
+-- Recovery (manual, human decision): database/rollback/
+-- 20260925140000_financial_ownership_integrity_rollback.sql removes the guards and,
+-- optionally, reverts the logged repairs of one run (tested in
+-- backend/tests/test_financial_ownership_integrity_pg.py).

@@ -8,6 +8,10 @@ from psycopg2.extras import RealDictCursor
 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+# Connection label seen by database guards. Scripts and ad-hoc tools default to
+# a name the financial delete guard does NOT exempt; backend/main.py (the web
+# app) sets "dincr-backend". DINCR_DB_APPLICATION_NAME overrides both.
+APPLICATION_NAME = os.getenv("DINCR_DB_APPLICATION_NAME", "dincr-script")
 
 
 class DatabaseConfigError(RuntimeError):
@@ -85,6 +89,8 @@ class PostgresConnection:
         self.conn = psycopg2.connect(
             DATABASE_URL,
             cursor_factory=RealDictCursor,
+            # Identifies the backend to database guards (the pooler may report its own name).
+            application_name=APPLICATION_NAME,
         )
 
     def __enter__(self):
