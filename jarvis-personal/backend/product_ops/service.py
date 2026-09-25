@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
-from backend.core.database import get_connection
+from backend.core.database import connection_pool_stats, get_connection
 from backend.core.feature_flags import FEATURE_DEFINITIONS, clear_feature_flag_cache
 from backend.product_ops.email_monitor_dashboard import build_email_monitor_dashboard
 
@@ -915,6 +915,8 @@ def owner_dashboard():
     return {"promotion": {**launch_promotion_status(), "plans": promotional},
             "support_email": support_email_configuration(),
             "support_channels": support_channel_configuration(),
+            # Owner-only: this process's idle-connection reuse counters (no connection details).
+            "database_connections": connection_pool_stats(),
             "pending_orders": pending, "feature_usage_30d": events,
             "tickets": [{**r, "public_id": f"DINCR-{int(r['id']):06d}"} for r in tickets],
             "release_policies": release_policies,
