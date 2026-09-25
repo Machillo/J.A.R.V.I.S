@@ -220,3 +220,87 @@ def test_the_ibkr_owner_is_resolved_in_one_identity_space(pg, monkeypatch):
     with get_connection() as conn:
         user_id, workspace_id = ibkr_readonly._owner_identity(conn)
     assert workspace_id == owner_ws and user_id == 7
+
+
+# --- Mail ingestion work bounds (security audit run-2) --------------------------------
+
+from backend.email_monitor import gmail_content, payroll_statement  # noqa: E402
+
+
+@pytest.mark.parametrize("hostile", ["<script " * 150_000, "<style " * 150_000, "<script>" + "x" * 900_000])
+def test_mail_html_is_stripped_in_bounded_time(hostile):
+    """A lazy DOTALL regex rescanned the rest of the text per unterminated tag (quadratic, GIL held)."""
+    started = time.process_time()
+    gmail_content.plain_text_from_html(hostile)
+    assert time.process_time() - started < 0.5
+
+
+def test_mail_html_stripping_keeps_the_visible_text():
+    raw = ("<html><head><style>p{color:red}</style><SCRIPT>alert(1)</SCRIPT></head>"
+           "<body><p>Compra&nbsp;aprobada</p><p>Monto: ₡12.500</p></body></html>")
+    assert gmail_content.plain_text_from_html(raw) == "Compra aprobada Monto: ₡12.500"
+    assert len(gmail_content.plain_text_from_html("a" * 1_000_000)) == gmail_content.MAX_BODY_CHARS
+
+
+def test_the_ccss_verifier_search_is_bounded():
+    text = ("Caja Costarricense de Seguro Social Orden Patronal Digital\nenero 2026 1.00 1.00 1.00 1.00\n"
+            + "codigo verificador " * 16_000)
+    started = time.process_time()
+    payroll_statement.parse_ccss_order_patronal("Generación de Orden Patronal Digital", "ccss", text)
+    assert time.process_time() - started < 0.5
+
+
+def test_mail_from_an_unapproved_sender_is_never_parsed(monkeypatch):
+    calls = []
+    monkeypatch.setattr(gmail_service, "_plain_text", lambda payload: calls.append("body") or "x")
+    monkeypatch.setattr(gmail_service, "extract_pdf_attachment_text", lambda *a: calls.append("pdf") or ("", []))
+    monkeypatch.setattr(gmail_service, "_ingest_message", lambda *a, **k: k)
+    message = {"payload": {"headers": [{"name": "From", "value": "Planillas <attacker@evil.example>"},
+                                       {"name": "Subject", "value": "Generación de Orden Patronal Digital"}],
+                           "parts": [{"filename": "orden.pdf", "body": {"attachmentId": "a1", "size": 10}}]}}
+    service = type("S", (), {"users": lambda self: type("U", (), {"messages": lambda self: type("M", (), {
+        "get": lambda self, **k: type("E", (), {"execute": lambda self: message})()})()})()})()
+    ingested = gmail_service._process_message(service, CONNECTION, "m-1")
+    assert calls == [] and ingested["body"] == "" and ingested["attachment_text"] == ""
+    assert ingested["attachment_names"] == ["orden.pdf"]
+
+
+def test_pdf_attachments_are_capped_in_number_and_size(monkeypatch):
+    fetched = []
+
+    class _Attachments:
+        def get(self, **kwargs):
+            fetched.append(kwargs["id"])
+            return type("E", (), {"execute": lambda self: {"data": ""}})()
+
+    service = type("S", (), {"users": lambda self: type("U", (), {"messages": lambda self: type("M", (), {
+        "attachments": lambda self: _Attachments()})()})()})()
+    many = [{"filename": f"f{i}.pdf", "attachment_id": f"a{i}", "mime_type": "application/pdf", "size": 100} for i in range(6)]
+    huge = [{"filename": "big.pdf", "attachment_id": "big", "mime_type": "application/pdf", "size": gmail_content.MAX_PDF_BYTES + 1}]
+    gmail_content.extract_pdf_attachment_text(service, "m-1", huge + many)
+    assert "big" not in fetched
+    assert len(fetched) <= len(many)  # empty data does not count as parsed; the count cap is exercised below
+
+
+def test_at_most_three_pdfs_are_parsed(monkeypatch):
+    import base64 as _b64
+    from io import BytesIO
+    from pypdf import PdfWriter
+
+    buffer = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=10, height=10)
+    writer.write(buffer)
+    data = _b64.urlsafe_b64encode(buffer.getvalue()).decode()
+    fetched = []
+
+    class _Attachments:
+        def get(self, **kwargs):
+            fetched.append(kwargs["id"])
+            return type("E", (), {"execute": lambda self: {"data": data}})()
+
+    service = type("S", (), {"users": lambda self: type("U", (), {"messages": lambda self: type("M", (), {
+        "attachments": lambda self: _Attachments()})()})()})()
+    many = [{"filename": f"f{i}.pdf", "attachment_id": f"a{i}", "mime_type": "application/pdf", "size": 100} for i in range(6)]
+    gmail_content.extract_pdf_attachment_text(service, "m-1", many)
+    assert len(fetched) == gmail_content.MAX_PDF_ATTACHMENTS

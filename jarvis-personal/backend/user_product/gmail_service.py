@@ -27,7 +27,7 @@ from backend.email_monitor.parser import parse_financial_email
 from backend.email_monitor.parser_identity import for_account_holder
 from backend.email_monitor.popular_pdf import parse_popular_email_document
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
-from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
+from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text, plain_text_from_html
 from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
@@ -740,10 +740,7 @@ def _decode_part(part: dict[str, Any]) -> str:
 
 
 def _plain_text(payload: dict[str, Any]) -> str:
-    raw = _decode_part(payload)
-    raw = re.sub(r"<script.*?</script>|<style.*?</style>", " ", raw, flags=re.I | re.S)
-    raw = re.sub(r"<[^>]+>", " ", raw)
-    return re.sub(r"\s+", " ", html.unescape(raw)).strip()
+    return plain_text_from_html(_decode_part(payload))
 
 
 def _insert_finva_candidate(
@@ -810,9 +807,15 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
     subject = headers.get("subject", "")
     sender = headers.get("from", "")
     payload = full.get("payload") or {}
-    body = _plain_text(payload) or full.get("snippet", "")
     attachments = collect_attachments(payload)
-    attachment_text, attachment_names = extract_pdf_attachment_text(service, message_id, attachments)
+    if bank_sender_allowed(sender) or ccss_sender_allowed(sender):
+        body = _plain_text(payload) or full.get("snippet", "")
+        attachment_text, attachment_names = extract_pdf_attachment_text(service, message_id, attachments)
+    else:
+        # Mail from anyone else is recorded as ignored without reading its body or
+        # attachments: no parser work for content DINCR will not use.
+        body, attachment_text = "", ""
+        attachment_names = [item.get("filename") or "" for item in attachments if item.get("filename")]
     received_at = None
     if headers.get("date"):
         try:
