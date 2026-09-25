@@ -164,8 +164,9 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
     account_id, workspace_id = str(flow["account_id"]), str(flow["workspace_id"])
     if not _has_active_vip_access(conn, account_id):
         raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
-    address = str(flow["mailbox_address"])
+    address = mail_oauth.canonical_mailbox(flow["mailbox_address"])
     secret_id = str(flow["pending_secret_id"])
+    mail_oauth.ensure_mailbox_available(conn, account_id, workspace_id, address)
     existing = conn.execute(
         """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
            WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
@@ -214,7 +215,9 @@ def _refresh(connection: dict, refresh_token: str) -> str:
         logger.warning("Outlook token refresh rejected connection_id=%s status=%s error=%s",
                        connection["id"], response.status_code, error_code)
         with get_connection() as conn:
-            conn.execute("UPDATE finva_gmail_connections SET status='reauthorization_required' WHERE id=%s", (connection["id"],))
+            # A disconnected mailbox stays disconnected (it no longer holds the address).
+            conn.execute("UPDATE finva_gmail_connections SET status='reauthorization_required' WHERE id=%s AND status='active'",
+                         (connection["id"],))
             conn.commit()
         raise HTTPException(status_code=409, detail="Outlook requiere volver a autorizar el correo.")
     response.raise_for_status()

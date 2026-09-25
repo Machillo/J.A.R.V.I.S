@@ -28,7 +28,8 @@ Everything below comes from the repository. Items marked **MANUAL** must be conf
 - only the DINCR session that started the flow can attach the mailbox (`/vip/mail/oauth/complete`; account and workspace must match, VIP entitlement re-checked).
 
 **2. Connection.**
-- `finva_gmail_connections` holds one row per `(account_id, workspace_id, google_email)`, with its own Vault secret, sync state, watch and disconnect.
+- `finva_gmail_connections` holds one row per `(workspace_id, google_email)`, with its own Vault secret, sync state, watch and disconnect.
+- A mailbox (Gmail or Outlook, compared as `lower(trim(address))`) is live in at most one DINCR account and workspace at a time: the attach step refuses it with one generic message, and the unique index `uq_finva_mail_connections_live_mailbox` closes concurrent completions. Disconnecting frees it; a connection awaiting reauthorization still holds it.
 - Several mailboxes per workspace are supported (tests: two Owner mailboxes, reconnect A keeps B, disconnect A keeps B).
 
 **3. Read.**

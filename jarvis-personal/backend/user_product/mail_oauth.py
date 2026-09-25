@@ -29,6 +29,7 @@ from datetime import date, datetime
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
+import psycopg2
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
@@ -43,6 +44,10 @@ FLOW_TTL_MINUTES = 10
 IMPORT_SCOPES = ("current_month", "current_year")
 DEFAULT_IMPORT_SCOPE = "current_year"
 CR_TZ = ZoneInfo("America/Costa_Rica")
+# One live connection per mailbox across every DINCR account and workspace. The
+# message is the same whatever the reason, so it never tells the person who is
+# connecting whether (or where) the mailbox is already used.
+MAILBOX_UNAVAILABLE = "No pudimos conectar este correo a tu cuenta. Si ya está conectado en otra cuenta DINCR, desconectalo ahí primero."
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
@@ -52,6 +57,30 @@ def _digest(value: str) -> str:
 
 def pkce_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).decode("ascii").rstrip("=")
+
+
+def canonical_mailbox(address: str | None) -> str:
+    """The identity DINCR compares mailboxes by (same expression as the unique index)."""
+    return str(address or "").strip().lower()
+
+
+def ensure_mailbox_available(conn, account_id: str, workspace_id: str, mailbox: str) -> None:
+    """Refuse a mailbox that is connected, and not disconnected, to another account or workspace.
+
+    A disconnected mailbox ('disabled', its token deleted) is free again: whoever
+    proves control of it through the provider's consent may connect it. The unique
+    index uq_finva_mail_connections_live_mailbox enforces the same rule in the
+    database for concurrent completions.
+    """
+    taken = conn.execute(
+        """SELECT 1 FROM finva_gmail_connections
+           WHERE lower(btrim(google_email))=%s AND status<>'disabled'
+             AND NOT (account_id=%s AND workspace_id=%s)
+           LIMIT 1""",
+        (canonical_mailbox(mailbox), account_id, workspace_id),
+    ).fetchone()
+    if taken:
+        raise HTTPException(status_code=409, detail=MAILBOX_UNAVAILABLE)
 
 
 def _delete_secret(conn, secret_id: Any) -> None:
@@ -215,7 +244,30 @@ def complete_flow(
             raise HTTPException(status_code=403, detail="Esta autorización de correo no pertenece a tu cuenta DINCR.")
         if flow["status"] == "completed":
             return {"connection_id": None, "provider": flow["provider"], "already_completed": True}
-        connection_id = attach(conn, flow)
+        try:
+            connection_id = attach(conn, flow)
+        except (HTTPException, psycopg2.errors.UniqueViolation) as refused:
+            # A refused mailbox is never left behind: the flow fails and its
+            # pending refresh token is deleted now, not at some later cleanup.
+            # The rollback released the flow's lock, so re-lock it and act only
+            # if nobody completed it meanwhile with that same token.
+            conn.rollback()
+            still = conn.execute(
+                "SELECT status,pending_secret_id FROM mail_oauth_flows WHERE id=%s::uuid FOR UPDATE",
+                (flow_id,),
+            ).fetchone()
+            if still and still["status"] == "authorized" and str(still["pending_secret_id"]) == str(flow["pending_secret_id"]):
+                _delete_secret(conn, flow["pending_secret_id"])
+                conn.execute(
+                    """UPDATE mail_oauth_flows SET status='failed',pending_secret_id=NULL,completion_hash=NULL,
+                              updated_at=NOW() WHERE id=%s::uuid AND status='authorized'""",
+                    (flow_id,),
+                )
+            conn.commit()
+            if isinstance(refused, HTTPException):
+                raise
+            logger.warning("Mail OAuth completion lost a race for the same mailbox provider=%s", flow["provider"])
+            raise HTTPException(status_code=409, detail=MAILBOX_UNAVAILABLE) from None
         # completion_hash is kept (a hash of a spent code) so the initiating
         # session can confirm the result idempotently until the flow expires.
         conn.execute(

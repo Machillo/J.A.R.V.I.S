@@ -53,6 +53,9 @@ class FakeConnection:
     def commit(self):
         self.db.state = copy.deepcopy(self.work)
 
+    def rollback(self):
+        self.work = copy.deepcopy(self.db.state)
+
     @staticmethod
     def _rows(rows):
         rows = [dict(row) for row in rows]
@@ -103,6 +106,9 @@ class FakeConnection:
         if q.startswith("SELECT id,provider,account_id,workspace_id,status,completion_hash"):
             f = flows.get(params[0])
             return self._rows([{**f, "active": f["expires_at"] > now}] if f else [])
+        if q.startswith("SELECT status,pending_secret_id FROM mail_oauth_flows WHERE id=%s::uuid FOR UPDATE"):
+            f = flows.get(params[0])
+            return self._rows([f] if f else [])
         if q.startswith("SELECT provider,account_id FROM mail_oauth_flows"):
             f = flows.get(params[0])
             return self._rows([f] if f else [])
@@ -122,6 +128,11 @@ class FakeConnection:
             return self._rows([])
         if q.startswith("SELECT 1 FROM account_subscriptions"):
             return self._rows([{"allowed": 1}] if params[0] in self.db.vip else [])
+        if q.startswith("SELECT 1 FROM finva_gmail_connections WHERE lower(btrim(google_email))=%s AND status<>'disabled'"):
+            mailbox, account, workspace = params
+            return self._rows({"taken": 1} for c in connections.values()
+                              if c["google_email"].strip().lower() == mailbox and c["status"] != "disabled"
+                              and (c["account_id"], c["workspace_id"]) != (account, workspace))
         if q.startswith("SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections"):
             account, workspace, email = params
             return self._rows(c for c in connections.values()
@@ -319,12 +330,115 @@ def test_concurrent_users_cannot_cross_their_connections(env):
     assert connections_of(env, B) == [("b@example.com", B["workspace_id"])]
 
 
-def test_workspaces_of_one_account_stay_isolated(env):
+def test_one_mailbox_is_never_live_in_two_workspaces_of_one_account(env):
     _, first = callback("gmail", *env.provider.authorize(start("gmail", A), "a@example.com"))
     _, second = callback("gmail", *env.provider.authorize(start("gmail", A2), "a@example.com"))
     complete(A, first)
-    complete(A2, second)
-    assert sorted(connections_of(env, A)) == sorted([("a@example.com", A["workspace_id"]), ("a@example.com", A2["workspace_id"])])
+    with pytest.raises(HTTPException) as refused:
+        complete(A2, second)
+    assert refused.value.status_code == 409 and refused.value.detail == mail_oauth.MAILBOX_UNAVAILABLE
+    assert connections_of(env, A) == [("a@example.com", A["workspace_id"])]
+
+
+def _connect(env, provider, user, mailbox):
+    _, params = callback(provider, *env.provider.authorize(start(provider, user), mailbox))
+    return complete(user, params), params
+
+
+@pytest.mark.parametrize(("first", "second"), [("gmail", "gmail"), ("microsoft", "microsoft"), ("gmail", "microsoft"), ("microsoft", "gmail")])
+def test_another_account_cannot_connect_a_live_mailbox(env, first, second):
+    _connect(env, first, A, "shared@example.com")
+    _, params = callback(second, *env.provider.authorize(start(second, B), "Shared@Example.com "))
+    with pytest.raises(HTTPException) as refused:
+        complete(B, params)
+    # Generic: the same text whatever the reason, with no address, account or workspace in it.
+    assert refused.value.status_code == 409 and refused.value.detail == mail_oauth.MAILBOX_UNAVAILABLE
+    assert "shared" not in refused.value.detail.lower() and A["account_id"] not in refused.value.detail
+    assert connections_of(env, B) == []
+    # B's refresh token is not left behind, and the flow cannot be retried.
+    assert len(env.db.state["vault"]) == 1
+    assert env.db.state["flows"][params["flow"]]["status"] == "failed"
+    with pytest.raises(HTTPException) as replayed:
+        complete(B, params)
+    assert replayed.value.status_code == 409
+
+
+def test_a_mailbox_awaiting_reauthorization_is_still_taken(env):
+    _connect(env, "gmail", A, "shared@example.com")
+    next(iter(env.db.state["connections"].values()))["status"] = "reauthorization_required"
+    _, params = callback("gmail", *env.provider.authorize(start("gmail", B), "shared@example.com"))
+    with pytest.raises(HTTPException) as refused:
+        complete(B, params)
+    assert refused.value.detail == mail_oauth.MAILBOX_UNAVAILABLE
+
+
+def test_a_disconnected_mailbox_can_be_connected_by_whoever_controls_it(env):
+    """A connects X, then disconnects it (token deleted, row disabled); B then proves control of X."""
+    _connect(env, "gmail", A, "shared@example.com")
+    next(iter(env.db.state["connections"].values()))["status"] = "disabled"
+    assert _connect(env, "gmail", B, "shared@example.com")[0] == {"status": "connected", "provider": "gmail"}
+    assert connections_of(env, B) == [("shared@example.com", B["workspace_id"])]
+    # While B holds it, A cannot take it back.
+    _, params = callback("gmail", *env.provider.authorize(start("gmail", A), "shared@example.com"))
+    with pytest.raises(HTTPException) as refused:
+        complete(A, params)
+    assert refused.value.detail == mail_oauth.MAILBOX_UNAVAILABLE
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_losing_the_database_race_is_the_same_generic_refusal(env, monkeypatch, provider):
+    """Two completions pass the check at once; the unique index rejects the second insert."""
+    import psycopg2
+
+    def lose_the_race(*_args, **_kwargs):
+        raise psycopg2.errors.UniqueViolation()
+
+    monkeypatch.setattr(gmail_service if provider == "gmail" else ms,
+                        "_attach_gmail_connection" if provider == "gmail" else "_attach_microsoft_connection", lose_the_race)
+    _, params = callback(provider, *env.provider.authorize(start(provider, B), "shared@example.com"))
+    with pytest.raises(HTTPException) as refused:
+        complete(B, params)
+    assert refused.value.status_code == 409 and refused.value.detail == mail_oauth.MAILBOX_UNAVAILABLE
+    assert env.db.state["vault"] == {} and env.db.state["flows"][params["flow"]]["status"] == "failed"
+
+
+def test_a_refusal_never_deletes_a_token_another_completion_already_used(env, monkeypatch):
+    """The refusal's cleanup runs after its rollback: if the same flow was completed
+    meanwhile (another device, same account), its token and result are left alone."""
+    _, params = callback("gmail", *env.provider.authorize(start("gmail", B), "b@example.com"))
+    flow_id = params["flow"]
+
+    def completed_elsewhere_then_refused(conn, flow, _legacy):
+        env.db.state["flows"][flow_id].update(status="completed", pending_secret_id=None)
+        raise HTTPException(status_code=409, detail=mail_oauth.MAILBOX_UNAVAILABLE)
+
+    monkeypatch.setattr(gmail_service, "_attach_gmail_connection", completed_elsewhere_then_refused)
+    secret = env.db.state["flows"][flow_id]["pending_secret_id"]
+    with pytest.raises(HTTPException):
+        complete(B, params)
+    assert env.db.state["flows"][flow_id]["status"] == "completed"
+    assert secret in env.db.state["vault"]
+
+
+def test_status_writers_never_revive_a_disconnected_mailbox():
+    """A sync or token refresh that finishes after a disconnect must not make the row live again:
+    it would hold the mailbox against every other account with no usable token."""
+    import inspect
+    import re
+
+    gmail = inspect.getsource(gmail_service)
+    outlook = inspect.getsource(ms)
+    success = re.search(r"SET status='active',last_sync_at=NOW\(\).*?WHERE id=%s([^\"]*)\"\"\"", gmail, re.S)
+    assert success and "status<>'disabled'" in success.group(1)
+    assert re.search(r"SET status='reauthorization_required',last_error=%s,updated_at=NOW\(\)\s+WHERE id=%s AND status='active'", gmail)
+    assert "SET status='reauthorization_required' WHERE id=%s AND status='active'" in outlook
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_reconnecting_your_own_mailbox_still_works(env, provider):
+    _connect(env, provider, A, "a@example.com")
+    assert _connect(env, provider, A, "A@example.com")[0]["status"] == "connected"
+    assert connections_of(env, A) == [("a@example.com", A["workspace_id"])]
 
 
 @pytest.mark.parametrize("provider", PROVIDERS)

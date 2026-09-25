@@ -282,7 +282,7 @@ def _mark_reconnect(connection_id: int, message: str = "Google solicitó reconec
         conn.execute(
             """UPDATE finva_gmail_connections
                SET status='reauthorization_required',last_error=%s,updated_at=NOW()
-               WHERE id=%s""",
+               WHERE id=%s AND status='active'""",
             (message, connection_id),
         )
         conn.commit()
@@ -631,8 +631,9 @@ def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) ->
     # Recheck at completion so a downgrade after consent cannot attach a mailbox.
     if not _has_active_vip_access(conn, account_id):
         raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
-    google_email = str(flow["mailbox_address"])
+    google_email = mail_oauth.canonical_mailbox(flow["mailbox_address"])
     secret_id = str(flow["pending_secret_id"])
+    mail_oauth.ensure_mailbox_available(conn, account_id, workspace_id, google_email)
     current = conn.execute(
         """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
            WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
@@ -1035,7 +1036,7 @@ def _run_sync_connection(connection_id: int, service=None, max_results: int = 10
                    initial_scan_page_token=CASE WHEN %s AND import_since IS NOT DISTINCT FROM %s::date THEN %s ELSE initial_scan_page_token END,
                    initial_scan_completed_at=CASE WHEN %s AND %s IS NULL AND import_since IS NOT DISTINCT FROM %s::date THEN NOW() ELSE initial_scan_completed_at END,
                    updated_at=NOW()
-               WHERE id=%s""",
+               WHERE id=%s AND status<>'disabled'""",
             (initial_sync, initial_sync, started_since, next_initial_page,
              initial_sync, next_initial_page, started_since, connection_id),
         )
