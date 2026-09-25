@@ -126,7 +126,6 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
     """
     from datetime import time, timedelta, timezone
     from backend.core.database import get_connection
-    from backend.notifications.service import ensure_notification_tables
 
     now_cr = datetime.now(CR_TZ)
     day_key = now_cr.strftime("%Y-%m-%d")
@@ -136,7 +135,6 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
     scheduled_utc = scheduled_cr.astimezone(timezone.utc)
 
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         owners = conn.execute(
             """
             SELECT au.id, w.id AS workspace_id
@@ -183,7 +181,6 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
     body = body[:450]
 
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         for (user_id, workspace_id), dedupe_key in pending_by_user.items():
             row = conn.execute(
                 """

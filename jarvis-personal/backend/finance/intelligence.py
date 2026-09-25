@@ -1187,89 +1187,9 @@ def apply_receivable_payment(
     }
 
 
-def _ensure_account_tables(conn) -> None:
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS account_balances (
-            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
-            workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-            account_name TEXT NOT NULL, bank_name TEXT NOT NULL DEFAULT '',
-            account_type TEXT NOT NULL DEFAULT 'checking', account_last4 TEXT NOT NULL DEFAULT '',
-            currency TEXT NOT NULL DEFAULT 'CRC', current_balance NUMERIC(18,2) NOT NULL DEFAULT 0,
-            annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0,
-            last_reconciliation_difference NUMERIC(18,2) NOT NULL DEFAULT 0,
-            balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
-            include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE, is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, account_name, account_last4)
-        )
-    """)
-    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'checking'")
-    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0")
-    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS last_reconciliation_difference NUMERIC(18,2) NOT NULL DEFAULT 0")
-    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS balance_as_of TIMESTAMPTZ NOT NULL DEFAULT NOW()")
-    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual'")
-    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS include_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE")
-    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
-    conn.execute("ALTER TABLE account_balances ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS account_balance_history (
-            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
-            workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-            financial_account_id BIGINT NOT NULL REFERENCES account_balances(id) ON DELETE CASCADE,
-            balance NUMERIC(18,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'CRC',
-            balance_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), source TEXT NOT NULL DEFAULT 'manual',
-            note TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
-    conn.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS financial_account_id BIGINT REFERENCES account_balances(id) ON DELETE SET NULL")
-    conn.execute("""
-        CREATE OR REPLACE FUNCTION public.jarvis_link_financial_account() RETURNS TRIGGER
-        LANGUAGE plpgsql
-        SET search_path = pg_catalog, public
-        AS $$
-        BEGIN
-            IF NEW.financial_account_id IS NULL
-               AND NULLIF(pg_catalog.btrim(NEW.account),'') IS NOT NULL THEN
-                SELECT account_row.id INTO NEW.financial_account_id
-                FROM public.account_balances AS account_row
-                WHERE account_row.workspace_id=NEW.workspace_id
-                  AND account_row.is_active=TRUE
-                  AND (
-                      pg_catalog.lower(pg_catalog.btrim(account_row.account_name))=
-                          pg_catalog.lower(pg_catalog.btrim(NEW.account))
-                      OR (
-                          account_row.account_last4<>''
-                          AND NEW.account LIKE pg_catalog.chr(37) || account_row.account_last4
-                      )
-                  )
-                ORDER BY CASE
-                    WHEN pg_catalog.lower(pg_catalog.btrim(account_row.account_name))=
-                         pg_catalog.lower(pg_catalog.btrim(NEW.account)) THEN 0
-                    ELSE 1
-                END, account_row.id
-                LIMIT 1;
-            END IF;
-            RETURN NEW;
-        END;
-        $$
-    """)
-    conn.execute("REVOKE ALL ON FUNCTION public.jarvis_link_financial_account() FROM PUBLIC, anon, authenticated")
-    conn.execute("GRANT EXECUTE ON FUNCTION public.jarvis_link_financial_account() TO postgres")
-    conn.execute("""
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='trg_transactions_financial_account') THEN
-                CREATE TRIGGER trg_transactions_financial_account
-                BEFORE INSERT OR UPDATE OF account, financial_account_id ON transactions
-                FOR EACH ROW EXECUTE FUNCTION public.jarvis_link_financial_account();
-            END IF;
-        END $$
-    """)
-
-
 def list_account_balances() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_account_tables(conn)
         rows = conn.execute(
             """
             SELECT a.id, a.account_name, a.bank_name, a.account_type, a.account_last4, a.currency, a.annual_interest_rate,
@@ -1328,7 +1248,6 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
     user_id = get_current_user_id()  # legacy compatibility during migration
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_account_tables(conn)
         existing = conn.execute(
             """
             SELECT a.id, a.current_balance, a.source,
@@ -1382,7 +1301,6 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
 def deactivate_account_balance(account_id: int) -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_account_tables(conn)
         row = conn.execute("UPDATE account_balances SET is_active=false,updated_at=NOW() WHERE id=%s AND workspace_id=%s RETURNING id", (account_id, workspace_id)).fetchone()
         conn.commit()
     if not row:

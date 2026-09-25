@@ -114,6 +114,8 @@ class ScopedConn:
                 if t["workspace_id"] == ws and t["type"] == "income" and t["source"] in sources and t["date"] >= since:
                     totals[t["date"].strftime("%Y-%m")] = totals.get(t["date"].strftime("%Y-%m"), 0) + t["amount"]
             rows = [{"month": k, "total": v} for k, v in totals.items()]
+        elif "to_regclass('public.' || t) IS NULL" in q:
+            rows = [{"missing": None}]
         elif "FROM finva_recurring_items" in q:
             rows = []
         else:

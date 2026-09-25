@@ -11,53 +11,34 @@ from backend.auth.current_user import get_current_account_id, get_current_worksp
 from backend.core.database import get_connection
 from backend.core.idempotency import mark_applied
 from backend.core.i18n import tx
+from backend.core.schema_state import tables_exist
 
 
 def _money(value: Any) -> float:
     return round(float(value or 0), 2)
 
 
-def _ensure_basic_schema(conn) -> None:
-    """Make Basic usable immediately even when deploy and SQL migration race."""
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS finva_budget_items (
-            id BIGSERIAL PRIMARY KEY,
-            account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-            workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-            category TEXT NOT NULL,
-            monthly_limit NUMERIC(14,2) NOT NULL CHECK (monthly_limit >= 0),
-            is_system BOOLEAN NOT NULL DEFAULT FALSE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, category)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS finva_recurring_items (
-            id BIGSERIAL PRIMARY KEY,
-            account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-            workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-            name TEXT NOT NULL,
-            amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
-            category TEXT NOT NULL DEFAULT 'general',
-            item_type TEXT NOT NULL DEFAULT 'expense' CHECK (item_type IN ('expense','income')),
-            frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (frequency IN ('weekly','biweekly','monthly','quarterly','annual')),
-            due_day INTEGER CHECK (due_day BETWEEN 1 AND 31),
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS finva_goal_contributions (
-            id BIGSERIAL PRIMARY KEY,
-            workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-            goal_id BIGINT NOT NULL REFERENCES financial_goals(id) ON DELETE CASCADE,
-            amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
-            contribution_date DATE NOT NULL DEFAULT CURRENT_DATE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
+BASIC_TABLES = ("finva_budget_items", "finva_recurring_items", "finva_goal_contributions")
+
+
+def _basic_tables_ready(conn, *tables: str) -> bool:
+    """Basic tables come from a migration; reads treat a missing table as no items.
+
+    Check only the tables a query reads: a table that exists keeps its rows visible
+    even while another Basic table is still missing.
+    """
+    return tables_exist(conn, tables or BASIC_TABLES)
+
+
+def _require_basic_tables(conn, *tables: str) -> None:
+    # 409, not 5xx: the app queues writes that fail with 5xx and replays every
+    # queued attempt later, which would apply repeated retries once the table
+    # exists. A 4xx is dropped from the queue and shown to the user.
+    if not _basic_tables_ready(conn, *tables):
+        raise HTTPException(status_code=409, detail=tx(
+            "Esta función se está habilitando. Intentá de nuevo más tarde.",
+            "This feature is being enabled. Please try again later.",
+        ))
 
 
 def _month(value: str | None = None) -> date:
@@ -115,7 +96,6 @@ def get_basic_dashboard() -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     current = date.today().replace(day=1)
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
         profile = _profile(conn, account_id, workspace_id)
         months = []
         for offset in range(-5, 1):
@@ -152,14 +132,15 @@ def get_guided_budget() -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     current = date.today().replace(day=1)
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
+        recurring_ready = _basic_tables_ready(conn, "finva_recurring_items")
+        budget_ready = _basic_tables_ready(conn, "finva_budget_items")
         profile = _profile(conn, account_id, workspace_id)
         income = _estimated_income(profile)
         debts = _money(conn.execute("SELECT COALESCE(SUM(monthly_payment),0) total FROM debts WHERE workspace_id=%s AND remaining_amount>0",(workspace_id,)).fetchone()["total"])
-        recurring_rows = conn.execute("SELECT amount,frequency,item_type FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE",(workspace_id,)).fetchall()
+        recurring_rows = conn.execute("SELECT amount,frequency,item_type FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE",(workspace_id,)).fetchall() if recurring_ready else []
         recurring_expenses = round(sum(_monthly_equivalent(_money(r["amount"]),r["frequency"]) for r in recurring_rows if r["item_type"]=="expense"),2)
         recurring_income = round(sum(_monthly_equivalent(_money(r["amount"]),r["frequency"]) for r in recurring_rows if r["item_type"]=="income"),2)
-        items = conn.execute("SELECT category,monthly_limit,is_system FROM finva_budget_items WHERE workspace_id=%s ORDER BY is_system DESC,category",(workspace_id,)).fetchall()
+        items = conn.execute("SELECT category,monthly_limit,is_system FROM finva_budget_items WHERE workspace_id=%s ORDER BY is_system DESC,category",(workspace_id,)).fetchall() if budget_ready else []
         actual = conn.execute("""SELECT category,ROUND(SUM(amount),2) amount FROM (
             SELECT category,amount FROM expenses WHERE workspace_id=%s AND created_at >= %s AND created_at < %s
             UNION ALL SELECT category,amount FROM transactions WHERE workspace_id=%s AND transaction_type='expense' AND transaction_date::date >= %s AND transaction_date::date < %s
@@ -183,7 +164,7 @@ def save_guided_budget(payload) -> dict:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     seen = set()
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
+        _require_basic_tables(conn, "finva_budget_items")
         conn.execute("DELETE FROM finva_budget_items WHERE workspace_id=%s", (workspace_id,))
         for item in payload.items:
             category = item.category.strip()
@@ -200,8 +181,7 @@ def save_guided_budget(payload) -> dict:
 def list_recurring_items() -> dict:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
-        rows=conn.execute("SELECT id,name,amount,category,item_type,frequency,due_day,is_active,created_at FROM finva_recurring_items WHERE workspace_id=%s ORDER BY is_active DESC,due_day NULLS LAST,id DESC",(workspace_id,)).fetchall()
+        rows=conn.execute("SELECT id,name,amount,category,item_type,frequency,due_day,is_active,created_at FROM finva_recurring_items WHERE workspace_id=%s ORDER BY is_active DESC,due_day NULLS LAST,id DESC",(workspace_id,)).fetchall() if _basic_tables_ready(conn, "finva_recurring_items") else []
     items=[]
     for row in rows:
         item=dict(row); item["monthly_amount"]=_monthly_equivalent(_money(item["amount"]),item["frequency"]); item["annual_amount"]=round(item["monthly_amount"]*12,2); items.append(item)
@@ -211,7 +191,7 @@ def list_recurring_items() -> dict:
 def create_recurring_item(payload) -> dict:
     account_id,workspace_id=get_current_account_id(),get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
+        _require_basic_tables(conn, "finva_recurring_items")
         row=conn.execute("""INSERT INTO finva_recurring_items(account_id,workspace_id,name,amount,category,item_type,frequency,due_day,is_active)
           VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,name,amount,category,item_type,frequency,due_day,is_active""",(account_id,workspace_id,payload.name.strip(),payload.amount,payload.category.strip() or "general",payload.item_type,payload.frequency,payload.due_day,payload.is_active)).fetchone()
         mark_applied(conn)
@@ -222,7 +202,7 @@ def create_recurring_item(payload) -> dict:
 def update_recurring_item(item_id:int,payload) -> dict:
     workspace_id=get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
+        _require_basic_tables(conn, "finva_recurring_items")
         row=conn.execute("""UPDATE finva_recurring_items SET name=%s,amount=%s,category=%s,item_type=%s,frequency=%s,due_day=%s,is_active=%s,updated_at=NOW()
           WHERE id=%s AND workspace_id=%s RETURNING id,name,amount,category,item_type,frequency,due_day,is_active""",(payload.name.strip(),payload.amount,payload.category.strip() or "general",payload.item_type,payload.frequency,payload.due_day,payload.is_active,item_id,workspace_id)).fetchone()
         if not row: raise HTTPException(status_code=404,detail="Recurrente no encontrado.")
@@ -234,7 +214,7 @@ def update_recurring_item(item_id:int,payload) -> dict:
 def delete_recurring_item(item_id:int) -> dict:
     workspace_id=get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
+        _require_basic_tables(conn, "finva_recurring_items")
         row=conn.execute("DELETE FROM finva_recurring_items WHERE id=%s AND workspace_id=%s RETURNING id",(item_id,workspace_id)).fetchone()
         if not row: raise HTTPException(status_code=404,detail="Recurrente no encontrado.")
         conn.commit()
@@ -244,9 +224,8 @@ def delete_recurring_item(item_id:int) -> dict:
 def get_financial_calendar(period: str | None = None) -> dict:
     account_id,workspace_id=get_current_account_id(),get_current_workspace_id(); start=_month(period); end=_next_month(start); events=[]
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
         profile=_profile(conn,account_id,workspace_id)
-        recurring=conn.execute("SELECT id,name,amount,item_type,due_day FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE AND due_day IS NOT NULL",(workspace_id,)).fetchall()
+        recurring=conn.execute("SELECT id,name,amount,item_type,due_day FROM finva_recurring_items WHERE workspace_id=%s AND is_active=TRUE AND due_day IS NOT NULL",(workspace_id,)).fetchall() if _basic_tables_ready(conn, "finva_recurring_items") else []
         debts=conn.execute("SELECT id,name,monthly_payment,payment_day,next_payment_date FROM debts WHERE workspace_id=%s AND remaining_amount>0",(workspace_id,)).fetchall()
         goals=conn.execute("SELECT id,name,target_amount,current_amount,target_date FROM financial_goals WHERE workspace_id=%s AND status='active' AND target_date IS NOT NULL",(workspace_id,)).fetchall()
     last=calendar.monthrange(start.year,start.month)[1]
@@ -275,12 +254,12 @@ def get_financial_calendar(period: str | None = None) -> dict:
 def get_basic_report(period: str | None = None) -> dict:
     account_id,workspace_id=get_current_account_id(),get_current_workspace_id();start=_month(period);previous=_shift_month(start,-1)
     with get_connection() as conn:
-        _ensure_basic_schema(conn)
+        contributions_ready=_basic_tables_ready(conn, "finva_goal_contributions")
         current=_ledger_totals(conn,workspace_id,start,_next_month(start)); prior=_ledger_totals(conn,workspace_id,previous,start)
         categories=conn.execute("""SELECT category,ROUND(SUM(amount),2) amount FROM (
           SELECT category,amount FROM expenses WHERE workspace_id=%s AND created_at >= %s AND created_at < %s
           UNION ALL SELECT category,amount FROM transactions WHERE workspace_id=%s AND transaction_type='expense' AND transaction_date::date >= %s AND transaction_date::date < %s) q GROUP BY category ORDER BY amount DESC""",(workspace_id,start,_next_month(start),workspace_id,start,_next_month(start))).fetchall()
-        contributions=_money(conn.execute("SELECT COALESCE(SUM(amount),0) total FROM finva_goal_contributions WHERE workspace_id=%s AND contribution_date >= %s AND contribution_date < %s",(workspace_id,start,_next_month(start))).fetchone()["total"])
+        contributions=_money(conn.execute("SELECT COALESCE(SUM(amount),0) total FROM finva_goal_contributions WHERE workspace_id=%s AND contribution_date >= %s AND contribution_date < %s",(workspace_id,start,_next_month(start))).fetchone()["total"]) if contributions_ready else 0.0
         debt=conn.execute("SELECT COALESCE(SUM(total_amount),0) original,COALESCE(SUM(remaining_amount),0) remaining FROM debts WHERE workspace_id=%s",(workspace_id,)).fetchone()
         goals=conn.execute("SELECT COALESCE(SUM(target_amount),0) target,COALESCE(SUM(current_amount),0) current FROM financial_goals WHERE workspace_id=%s",(workspace_id,)).fetchone()
         profile=_profile(conn,account_id,workspace_id)

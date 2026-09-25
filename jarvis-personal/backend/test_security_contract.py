@@ -289,17 +289,28 @@ def test_product_operations_migrations_close_tables_to_data_api_roles():
         assert f"REVOKE ALL PRIVILEGES ON TABLE {table_name} FROM anon, authenticated" in base
 
 
-def test_legal_runtime_schema_is_closed_to_data_api_roles():
-    connection = RecordingConnection()
-    legal.ensure_legal_schema(connection)
+def test_legal_schema_is_closed_to_data_api_roles():
+    migration = (
+        Path(__file__).parents[1] / "database" / "migrations" / "20260916_legal_acceptances.sql"
+    ).read_text(encoding="utf-8")
 
-    assert _contains_sql(
-        connection.queries,
-        "ALTER TABLE legal_acceptances ENABLE ROW LEVEL SECURITY",
-    )
-    assert _contains_sql(
-        connection.queries,
-        "REVOKE ALL PRIVILEGES ON TABLE legal_acceptances FROM anon, authenticated",
+    assert "ALTER TABLE legal_acceptances ENABLE ROW LEVEL SECURITY" in migration
+    assert "REVOKE ALL PRIVILEGES ON TABLE legal_acceptances FROM anon, authenticated" in migration
+
+
+def test_legal_status_runs_no_ddl():
+    class Connection(RecordingConnection):
+        def execute(self, query, params=()):
+            super().execute(query, params)
+            return type("Result", (), {"fetchone": staticmethod(lambda: None)})()
+
+    connection = Connection()
+    assert legal.legal_status(connection, "00000000-0000-0000-0000-000000000001")["required"] is True
+
+    assert not any(
+        keyword in " ".join(str(query).split()).upper()
+        for query in connection.queries
+        for keyword in ("CREATE ", "ALTER ", "REVOKE ", "GRANT ", "DROP ")
     )
 
 

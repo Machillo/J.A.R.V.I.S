@@ -85,58 +85,10 @@ def _normalize_subscription_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def ensure_notification_tables(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS notification_subscriptions (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
-            channel TEXT NOT NULL DEFAULT 'browser',
-            endpoint TEXT,
-            payload JSONB,
-            enabled BOOLEAN NOT NULL DEFAULT TRUE,
-            last_success_at TIMESTAMPTZ,
-            last_error TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, channel, endpoint)
-        )
-        """
-    )
-    conn.execute("ALTER TABLE notification_subscriptions ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ")
-    conn.execute("ALTER TABLE notification_subscriptions ADD COLUMN IF NOT EXISTS last_error TEXT")
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS notification_jobs (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
-            workspace_id UUID,
-            title TEXT NOT NULL,
-            body TEXT NOT NULL,
-            category TEXT NOT NULL DEFAULT 'general',
-            scheduled_at TIMESTAMPTZ NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-            reference_type TEXT,
-            reference_id TEXT,
-            dedupe_key TEXT,
-            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-            sent_at TIMESTAMPTZ,
-            last_error TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, dedupe_key)
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_jobs_due ON notification_jobs(status, scheduled_at)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_jobs_user ON notification_jobs(user_id, scheduled_at)")
-
-
 def notification_health() -> dict[str, Any]:
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         subscription_count = conn.execute(
             """
             SELECT COUNT(*) AS total
@@ -185,7 +137,6 @@ def save_push_subscription(payload: dict[str, Any]) -> dict[str, Any]:
         return {"status": "ERROR", "message": "El endpoint no pertenece a un servicio de notificaciones reconocido."}
 
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         conn.execute(
             """
             INSERT INTO notification_subscriptions (user_id, workspace_id, channel, endpoint, payload, enabled)
@@ -282,7 +233,6 @@ def send_system_push(title: str, body: str, category: str = "system", url: str =
     """Envía una alerta inmediata a todos los dispositivos owner habilitados."""
     sent = 0
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         subscriptions = conn.execute(
             """SELECT ns.* FROM notification_subscriptions ns
                JOIN allowed_users au ON au.id = ns.user_id
@@ -303,7 +253,6 @@ def send_test_notification() -> dict[str, Any]:
     body = "Señor, notificaciones reales activadas en este dispositivo."
 
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         subscriptions = conn.execute(
             """
             SELECT *
@@ -361,7 +310,6 @@ def create_notification_job(
     payload: dict[str, Any] | None = None,
 ) -> None:
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         workspace_id = _workspace_id_for_legacy_user(conn, user_id)
         conn.execute(
             """
@@ -399,7 +347,6 @@ def enqueue_calendar_reminders(days: int = 45) -> int:
     created = 0
 
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         rows = conn.execute(
             """
             SELECT e.*, au.email
@@ -456,7 +403,6 @@ def enqueue_fixed_expense_reminders() -> int:
     month_keys.append(f"{next_month.year:04d}-{next_month.month:02d}")
 
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         expenses = conn.execute(
             """
             SELECT fe.*, au.email
@@ -511,7 +457,6 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
         queued_sports = {"status": "ERROR", "message": str(exc)}
 
     with get_connection() as conn:
-        ensure_notification_tables(conn)
         jobs = conn.execute(
             """
             SELECT *

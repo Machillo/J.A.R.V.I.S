@@ -29,47 +29,10 @@ DEFAULT_SPORTS_PREFS = {
 }
 
 
-def ensure_preference_tables(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_preferences (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            preference_key TEXT NOT NULL,
-            preference_value JSONB NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, preference_key)
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS notification_subscriptions (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            channel TEXT NOT NULL DEFAULT 'browser',
-            endpoint TEXT,
-            payload JSONB,
-            enabled BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, channel, endpoint)
-        )
-        """
-    )
-
-    conn.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE")
-    conn.execute("ALTER TABLE notification_subscriptions ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_preferences_workspace_key ON user_preferences(workspace_id, preference_key)")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_subscriptions_workspace_endpoint ON notification_subscriptions(workspace_id, channel, endpoint)")
-
-
 def get_preference(key: str, default: Any = None) -> Any:
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        ensure_preference_tables(conn)
         row = conn.execute(
             """
             SELECT preference_value
@@ -86,7 +49,6 @@ def set_preference(key: str, value: Any) -> dict:
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        ensure_preference_tables(conn)
         conn.execute(
             """
             INSERT INTO user_preferences (user_id, workspace_id, preference_key, preference_value)
@@ -129,7 +91,6 @@ def save_browser_subscription(payload: dict) -> dict:
     workspace_id = get_current_workspace_id()
     endpoint = payload.get("endpoint") or "local-browser"
     with get_connection() as conn:
-        ensure_preference_tables(conn)
         conn.execute(
             """
             INSERT INTO notification_subscriptions (user_id, workspace_id, channel, endpoint, payload, enabled)

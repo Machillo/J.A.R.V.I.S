@@ -105,7 +105,9 @@ class LedgerConnection:
         q = " ".join(query.split())
         self.db.seen_workspaces.update(p for p in params if isinstance(p, str) and p.startswith("workspace"))
         work = self.work
-        if q.startswith("CREATE TABLE") or q.split()[0] in {"SAVEPOINT", "RELEASE", "ROLLBACK"}:
+        if "to_regclass('public.' || t) IS NULL" in q:  # every migrated table exists
+            return self._result(one={"missing": None})
+        if q.split()[0] in {"SAVEPOINT", "RELEASE", "ROLLBACK"}:
             return self._result()
         if "FROM financial_profiles WHERE account_id=%s AND workspace_id=%s" in q:
             profile = work["profiles"].get(params[0])
