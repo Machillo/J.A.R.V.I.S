@@ -126,7 +126,24 @@ def test_audit_sql_files_are_read_only():
             # temp functions use it, inside a READ ONLY transaction.
             assert not re.search(r"\bEXECUTE\b", sql)
         # Only session-local functions may be created.
-        assert re.findall(r"CREATE\s+OR\s+REPLACE\s+FUNCTION\s+([\w]+)\.", sql) in ([], ["PG_TEMP"] * 8)
+        assert re.findall(r"CREATE\s+OR\s+REPLACE\s+FUNCTION\s+([\w]+)\.", sql) in ([], ["PG_TEMP"] * 9)
+
+
+def test_every_guarded_insert_sets_its_workspace():
+    """Writers of workspace-only guarded tables must satisfy their CHECK from day one."""
+    extras = sorted(_delete_guard_tables() - set(_ownership_tables()))
+    pattern = re.compile(rf"INSERT\s+INTO\s+(?:public\.)?({'|'.join(extras)})\s*\(([^)]*)\)", re.I | re.S)
+    offenders, seen = [], 0
+    for path in BACKEND.rglob("*.py"):
+        if "tests" in path.parts or path.name.startswith("test_"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in pattern.finditer(text):
+            seen += 1
+            if "workspace_id" not in {c.strip().lower() for c in match.group(2).split(",")}:
+                offenders.append(f"{path.relative_to(ROOT)}:{text[: match.start()].count(chr(10)) + 1} {match.group(1)}")
+    assert seen > 10
+    assert offenders == []
 
 
 def test_every_financial_insert_sets_workspace_and_user():
@@ -297,7 +314,8 @@ def test_every_workspace_table_is_guarded_or_explicitly_exempt():
 
 def test_preflight_lists_the_same_delete_guard_tables_as_the_migration():
     preflight = (ROOT / "database" / "audits" / "financial_ownership_preflight.sql").read_text(encoding="utf-8")
-    block = preflight[preflight.index("'unguarded_workspace_table'"):]
-    block = block[block.index("(VALUES"):block.index("AS d(table_name)")]
-    inlined = set(re.findall(r"\('([a-z_]+)'\)", block))
-    assert inlined == _delete_guard_tables() - set(_ownership_tables())
+    lists = [preflight[:end].rsplit("(VALUES", 1)[1] for end in
+             (m.start() for m in re.finditer(r"AS d\(table_name\)", preflight))]
+    assert len(lists) == 2  # rows without a workspace, unguarded workspace tables
+    for block in lists:
+        assert set(re.findall(r"\('([a-z_]+)'\)", block)) == _delete_guard_tables() - set(_ownership_tables())

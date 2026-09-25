@@ -312,6 +312,9 @@ def delete_allowed_user(user_id: int):
                 "message": "El usuario tiene una cuenta activa: se elimina desde la eliminación de cuenta.",
             }
 
+        # No account maps to this row: its FK-cascading rows are its own, some
+        # possibly without a workspace ('none' for the financial delete guard).
+        conn.execute("SELECT set_config('dincr.delete_workspace', 'none', true)")
         conn.execute(
             """
             DELETE FROM allowed_users
@@ -483,6 +486,12 @@ def delete_current_account() -> dict[str, str]:
                 _log_deletion(deletion_id, stage, "COMPLETED")
 
             stage = "ACCOUNT_DELETE"
+            # The account and its workspaces are gone. What remains is selected by
+            # this person's own identity FKs, including rows left without a
+            # workspace (under review): declare that explicitly for the financial
+            # delete guard ('none' = rows without a workspace), for this
+            # transaction only.
+            conn.execute("SELECT set_config('dincr.delete_workspace', 'none', true)")
             # Rows that hang from allowed_users (chat, memory, settings, reminders,
             # advisor, ...) would otherwise survive until the tombstone is removed.
             dependents = _delete_allowed_user_dependents(conn, canonical_allowed_user_id)

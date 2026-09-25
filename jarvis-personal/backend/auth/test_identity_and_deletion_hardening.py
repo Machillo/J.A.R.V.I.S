@@ -122,6 +122,8 @@ class FakeConnection:
         return Result(self._run(sql, params))
 
     def _run(self, sql, params):
+        if sql.startswith("SELECT set_config('dincr.delete_workspace'"):
+            return []  # transaction-local declaration for the financial delete guard
         w = self.work
         accounts = w["accounts"]
         if sql.startswith("SELECT id, email, role, status, supabase_user_id"):

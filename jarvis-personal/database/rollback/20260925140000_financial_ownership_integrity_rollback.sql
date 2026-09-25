@@ -38,6 +38,8 @@ BEGIN
                            'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name);
             EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I',
                            'trg_' || cfg.table_name || '_workspace_move_guard', cfg.table_name);
+            EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',
+                           cfg.table_name, 'ck_' || cfg.table_name || '_workspace_required');
         END LOOP;
     END IF;
     FOR cfg IN SELECT * FROM public.dincr_ownership_tables() LOOP

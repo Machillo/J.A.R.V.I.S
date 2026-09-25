@@ -21,6 +21,8 @@
 --   user_id_fk  which table each financial user_id column really references
 --              (allowed_users vs users) and its ON DELETE rule
 --   would_abort  every condition on which the migration aborts: resolve them first
+--   rows_without_workspace  guarded tables with rows that have no workspace: they
+--              can only be deleted with the 'none' declaration; resolve them
 --   unguarded_workspace_table  workspace-owned tables left without deletion guards;
 --              compare with the reviewed allowlist in the ownership tests
 
@@ -476,6 +478,19 @@ AS $fn$
 $fn$;
 -- END DINCR OWNERSHIP AUDIT FUNCTIONS
 
+-- Row counts for the table named at run time (read-only helper, pg_temp only).
+CREATE OR REPLACE FUNCTION pg_temp.dincr_count_without_workspace(p_table TEXT)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $fn$
+DECLARE
+    v_count BIGINT;
+BEGIN
+    EXECUTE pg_catalog.format('SELECT count(*) FROM public.%I WHERE workspace_id IS NULL', p_table) INTO v_count;
+    RETURN v_count;
+END
+$fn$;
+
 SET LOCAL transaction_read_only = on;
 
 SELECT 'summary' AS section, s.table_name AS subject, NULL::BIGINT AS row_id,
@@ -536,6 +551,14 @@ WHERE ((a.role IN ('owner', 'admin') AND a.status = 'active')
   AND NOT EXISTS (SELECT 1 FROM public.users u
                   WHERE u.id = a.legacy_allowed_user_id AND lower(trim(u.email)) = lower(trim(a.primary_email)))
 UNION ALL
+SELECT 'would_abort', 'identity', NULL, 'NEEDS_REVIEW', i.check_name, i.subject_id
+FROM pg_temp.dincr_identity_audit() i
+WHERE i.check_name IN ('WORKSPACE_OWNER_MISSING', 'PERSONAL_WORKSPACE_KEY_MISMATCH', 'ACCOUNT_PERSONAL_WORKSPACE_COUNT')
+UNION ALL
+SELECT 'would_abort', r.table_name, r.row_id, 'NEEDS_REVIEW', r.issue, NULL
+FROM pg_temp.dincr_ownership_audit_rows(FALSE) r
+WHERE r.issue IN ('USER_ID_WRONG_SPACE', 'LEGACY_USER_ID_NOT_IN_WORKSPACE')
+UNION ALL
 SELECT 'would_abort', 'payroll_events', NULL, 'NEEDS_REVIEW', 'PAYROLL_EVENTS_FK_REFERENCES_USERS', NULL
 WHERE pg_temp.dincr_user_id_space('payroll_events') = 'users'
 UNION ALL
@@ -547,6 +570,39 @@ SELECT 'would_abort', t, NULL, 'NEEDS_REVIEW', 'PREREQUISITE_TABLE_MISSING', NUL
 FROM unnest(ARRAY['finva_budget_items', 'finva_recurring_items', 'finva_goal_contributions',
                   'finva_savings_plans', 'finva_savings_plan_contributions']) t
 WHERE to_regclass('public.' || t) IS NULL
+UNION ALL
+SELECT 'rows_without_workspace', g.table_name, NULL, 'NEEDS_REVIEW', 'ROWS_WITHOUT_WORKSPACE',
+       pg_temp.dincr_count_without_workspace(g.table_name)::TEXT
+FROM (SELECT o.table_name FROM pg_temp.dincr_ownership_tables() o
+      UNION SELECT d.table_name FROM (VALUES
+        ('finva_budget_items'),
+        ('finva_recurring_items'),
+        ('finva_goal_contributions'),
+        ('finva_savings_plans'),
+        ('finva_savings_plan_contributions'),
+        ('financial_profiles'),
+        ('card_aliases'),
+        ('financial_input_events'),
+        ('email_transaction_candidates'),
+        ('email_statement_documents'),
+        ('email_statement_reconciliation_lines'),
+        ('email_financial_accounts'),
+        ('finva_email_candidates'),
+        ('finva_statement_documents'),
+        ('investment_position_snapshots'),
+        ('finva_gmail_connections'),
+        ('finva_email_messages'),
+        ('email_ingested_messages')
+      ) AS d(table_name)) g
+WHERE to_regclass('public.' || g.table_name) IS NOT NULL
+  AND EXISTS (SELECT 1 FROM information_schema.columns isc
+              WHERE isc.table_schema = 'public' AND isc.table_name = g.table_name AND isc.column_name = 'workspace_id')
+  AND pg_temp.dincr_count_without_workspace(g.table_name) > 0
+UNION ALL
+SELECT 'would_abort', 'financial_profiles', NULL, 'NEEDS_REVIEW', 'PROFILE_OUTSIDE_PERSONAL_WORKSPACE', fp.account_id::TEXT
+FROM public.financial_profiles fp
+LEFT JOIN public.workspaces w ON w.id = fp.workspace_id
+WHERE w.id IS NULL OR w.owner_account_id <> fp.account_id OR w.workspace_type <> 'personal'
 UNION ALL
 -- Workspace-owned tables the migration leaves without deletion guards: compare
 -- with the reviewed allowlist in backend/tests/test_financial_ownership_integrity.py.

@@ -544,6 +544,44 @@ AS $fn$
 $fn$;
 -- END DINCR OWNERSHIP AUDIT FUNCTIONS
 
+-- Every table whose deletes and TRUNCATE are guarded: the ownership tables plus
+-- workspace-owned financial tables without a legacy user_id (no ownership
+-- trigger applies to them). New workspace tables must be listed here or in the
+-- reviewed allowlist of backend/tests/test_financial_ownership_integrity.py.
+CREATE OR REPLACE FUNCTION public.dincr_delete_guard_tables()
+RETURNS TABLE (table_name TEXT)
+LANGUAGE sql
+IMMUTABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT o.table_name FROM public.dincr_ownership_tables() o
+    UNION ALL
+    SELECT t.table_name FROM (VALUES
+        ('finva_budget_items'),
+        ('finva_recurring_items'),
+        ('finva_goal_contributions'),
+        ('finva_savings_plans'),
+        ('finva_savings_plan_contributions'),
+        ('financial_profiles'),
+        ('card_aliases'),
+        ('financial_input_events'),
+        ('email_transaction_candidates'),
+        ('email_statement_documents'),
+        ('email_statement_reconciliation_lines'),
+        ('email_financial_accounts'),
+        ('finva_email_candidates'),
+        ('finva_statement_documents'),
+        ('investment_position_snapshots'),
+        -- Parents whose deletes cascade into guarded tables row by row (a cascade
+        -- fires the child's statement trigger once per parent row), so they carry
+        -- the one-owner check themselves.
+        ('finva_gmail_connections'),
+        ('finva_email_messages'),
+        ('email_ingested_messages')
+    ) AS t(table_name)
+$fn$;
+REVOKE ALL ON FUNCTION public.dincr_delete_guard_tables() FROM PUBLIC, anon, authenticated;
+
 REVOKE ALL ON FUNCTION public.dincr_ownership_tables() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.dincr_user_id_space(TEXT) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.dincr_legacy_id_belongs_to_workspace(BIGINT, UUID, TEXT) FROM PUBLIC, anon, authenticated;
@@ -675,6 +713,19 @@ BEGIN
             USING ERRCODE = 'DI006';
     END IF;
 
+    -- financial_profiles is upserted with the caller's personal workspace; a
+    -- profile stored under another workspace would fail the move guard forever.
+    IF to_regclass('public.financial_profiles') IS NOT NULL THEN
+        SELECT COUNT(*) INTO v_blocking
+        FROM public.financial_profiles fp
+        LEFT JOIN public.workspaces w ON w.id = fp.workspace_id
+        WHERE w.id IS NULL OR w.owner_account_id <> fp.account_id OR w.workspace_type <> 'personal';
+        IF v_blocking > 0 THEN
+            RAISE EXCEPTION 'financial ownership integrity: % financial profiles outside their personal workspace, aborting', v_blocking
+                USING ERRCODE = 'DI010';
+        END IF;
+    END IF;
+
     INSERT INTO public.financial_ownership_audit_snapshots(run_id, phase, table_name, classification, issue, row_count)
     SELECT v_run, 'before', s.table_name, s.classification, s.issue, s.row_count
     FROM public.dincr_ownership_audit_summary() s;
@@ -737,8 +788,11 @@ BEGIN
     FROM public.dincr_ownership_audit_rows(FALSE)
     WHERE classification = 'SAFE_AUTO_FIX';
     IF v_count > 0 THEN
-        RAISE EXCEPTION 'financial ownership integrity: % SAFE_AUTO_FIX rows remain after repair, aborting', v_count;
+        RAISE EXCEPTION 'financial ownership integrity: % SAFE_AUTO_FIX rows remain after repair, aborting', v_count
+            USING ERRCODE = 'DI011';
     END IF;
+
+
 
     RAISE NOTICE 'financial ownership integrity run %: repaired % rows', v_run, v_repaired;
 END $$;
@@ -880,8 +934,10 @@ REVOKE ALL PRIVILEGES ON SEQUENCE public.financial_ownership_delete_log_id_seq F
 -- Statement level, after delete. Any DELETE (top level, inside a DO block or an
 -- FK cascade) may only remove rows of live workspaces that share ONE owner
 -- account. Rows of deleted workspaces (the account/workspace cascade) are not
--- counted; a parent cascade (debts -> debt_payments) stays within its owner. A
--- cascade that crosses owners only happens with anomalous rows and fails closed.
+-- counted. A cascade runs as one statement per parent row: a parent whose child
+-- rows sit in another owner's workspace (PARENT_WORKSPACE_MISMATCH, anomalous)
+-- is caught for sessions that must declare their workspace, but NOT for the
+-- exempt application session (documented residual risk).
 CREATE OR REPLACE FUNCTION public.dincr_guard_financial_delete()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -928,7 +984,7 @@ BEGIN
     IF v_declared IS DISTINCT FROM 'none' AND EXISTS (SELECT 1 FROM old_rows o WHERE o.workspace_id IS NULL) THEN
         RAISE EXCEPTION 'financial delete on % touches rows without a workspace', TG_TABLE_NAME
             USING ERRCODE = '23514',
-                  HINT = 'SET LOCAL dincr.delete_workspace = ''none'' to delete rows without a workspace, alone';
+                  HINT = 'SET LOCAL dincr.delete_workspace = ''none'' to delete rows without a workspace';
     END IF;
 
     -- Every session other than the application (application_name 'dincr-backend',
@@ -1027,43 +1083,6 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION public.dincr_guard_legacy_identity_delete() FROM PUBLIC, anon, authenticated;
 
--- Every table whose deletes and TRUNCATE are guarded: the ownership tables plus
--- workspace-owned financial tables without a legacy user_id (no ownership
--- trigger applies to them). New workspace tables must be listed here or in the
--- reviewed allowlist of backend/tests/test_financial_ownership_integrity.py.
-CREATE OR REPLACE FUNCTION public.dincr_delete_guard_tables()
-RETURNS TABLE (table_name TEXT)
-LANGUAGE sql
-IMMUTABLE
-SET search_path = pg_catalog, pg_temp
-AS $fn$
-    SELECT o.table_name FROM public.dincr_ownership_tables() o
-    UNION ALL
-    SELECT t.table_name FROM (VALUES
-        ('finva_budget_items'),
-        ('finva_recurring_items'),
-        ('finva_goal_contributions'),
-        ('finva_savings_plans'),
-        ('finva_savings_plan_contributions'),
-        ('financial_profiles'),
-        ('card_aliases'),
-        ('financial_input_events'),
-        ('email_transaction_candidates'),
-        ('email_statement_documents'),
-        ('email_statement_reconciliation_lines'),
-        ('email_financial_accounts'),
-        ('finva_email_candidates'),
-        ('finva_statement_documents'),
-        ('investment_position_snapshots'),
-        -- Parents whose deletes cascade into guarded tables row by row (a cascade
-        -- fires the child's statement trigger once per parent row), so they carry
-        -- the one-owner check themselves.
-        ('finva_gmail_connections'),
-        ('finva_email_messages'),
-        ('email_ingested_messages')
-    ) AS t(table_name)
-$fn$;
-REVOKE ALL ON FUNCTION public.dincr_delete_guard_tables() FROM PUBLIC, anon, authenticated;
 
 -- Identity rows are deleted one account (and its workspaces) per statement by
 -- every session: a statement deleting several accounts or several owners'
@@ -1130,12 +1149,21 @@ BEGIN
             'FOR EACH STATEMENT EXECUTE FUNCTION public.dincr_guard_financial_truncate()',
             'trg_' || cfg.table_name || '_truncate_guard', cfg.table_name
         );
-        IF cfg.table_name NOT IN (SELECT o.table_name FROM public.dincr_ownership_tables() o) THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                       WHERE tr.tgrelid = format('public.%I', cfg.table_name)::regclass
+                         AND tr.tgname = 'trg_' || cfg.table_name || '_ownership_guard') THEN
             EXECUTE format(
                 'CREATE OR REPLACE TRIGGER %I BEFORE UPDATE OF workspace_id ON public.%I '
                 'FOR EACH ROW EXECUTE FUNCTION public.dincr_guard_workspace_move()',
                 'trg_' || cfg.table_name || '_workspace_move_guard', cfg.table_name
             );
+            -- New rows always carry a workspace (existing ones were checked above).
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                           WHERE conname = 'ck_' || cfg.table_name || '_workspace_required'
+                             AND conrelid = format('public.%I', cfg.table_name)::regclass) THEN
+                EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I CHECK (workspace_id IS NOT NULL) NOT VALID',
+                               cfg.table_name, 'ck_' || cfg.table_name || '_workspace_required');
+            END IF;
         END IF;
     END LOOP;
     EXECUTE 'CREATE OR REPLACE TRIGGER trg_users_legacy_delete_guard BEFORE DELETE ON public.users '
@@ -1196,14 +1224,19 @@ BEGIN
                             AND tr.tgname = 'trg_' || t.table_name || '_truncate_guard'));
     SELECT v_missing + COUNT(*) INTO v_missing
     FROM public.dincr_delete_guard_tables() t
-    WHERE t.table_name NOT IN (SELECT o.table_name FROM public.dincr_ownership_tables() o)
-      AND to_regclass(format('public.%I', t.table_name)) IS NOT NULL
+    WHERE to_regclass(format('public.%I', t.table_name)) IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                      WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                        AND tr.tgname = 'trg_' || t.table_name || '_ownership_guard')
       AND EXISTS (SELECT 1 FROM information_schema.columns isc
                   WHERE isc.table_schema = 'public' AND isc.table_name = t.table_name
                     AND isc.column_name = 'workspace_id')
-      AND NOT EXISTS (SELECT 1 FROM pg_trigger tr
-                      WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
-                        AND tr.tgname = 'trg_' || t.table_name || '_workspace_move_guard');
+      AND (NOT EXISTS (SELECT 1 FROM pg_trigger tr
+                       WHERE tr.tgrelid = format('public.%I', t.table_name)::regclass
+                         AND tr.tgname = 'trg_' || t.table_name || '_workspace_move_guard')
+           OR NOT EXISTS (SELECT 1 FROM pg_constraint c
+                          WHERE c.conrelid = format('public.%I', t.table_name)::regclass
+                            AND c.conname = 'ck_' || t.table_name || '_workspace_required'));
     SELECT v_missing + COUNT(*) INTO v_missing
     FROM (VALUES ('accounts', 'trg_accounts_bulk_delete_guard'), ('workspaces', 'trg_workspaces_bulk_delete_guard')) g(tbl, trg)
     WHERE NOT EXISTS (SELECT 1 FROM pg_trigger tr WHERE tr.tgrelid = format('public.%I', g.tbl)::regclass AND tr.tgname = g.trg);

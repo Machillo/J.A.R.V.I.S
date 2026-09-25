@@ -1027,6 +1027,16 @@ def test_connection_names_web_app_vs_scripts():
     assert result.returncode == 0, result.stderr[-2000:]
 
 
+def _orphan_after_migration(conn, ids) -> int:
+    """A row without a workspace can only appear if its CHECK is gone (a regression)."""
+    with conn.cursor() as cur:
+        cur.execute("ALTER TABLE debts DROP CONSTRAINT ck_debts_workspace_required")
+        cur.execute("ALTER TABLE debts DISABLE TRIGGER trg_debts_ownership_guard")
+        orphan = _debt(cur, ids["users"], None, name="Orphan debt")
+        cur.execute("ALTER TABLE debts ENABLE TRIGGER trg_debts_ownership_guard")
+    return orphan
+
+
 WORKSPACE_ONLY = ("finva_budget_items", "finva_recurring_items", "finva_goal_contributions",
                   "finva_savings_plans", "finva_savings_plan_contributions")
 
@@ -1093,9 +1103,9 @@ def test_rows_without_a_workspace_need_an_explicit_declaration(layout_fk):
     """Orphans (owner unclear) cannot ride along with a declared workspace's cleanup."""
     conn, a1 = layout_fk["conn"], _ids("a1")
     with conn.cursor() as cur:
-        orphan = _debt(cur, a1["users"], None, name="Orphan debt")
         own = _debt(cur, a1["users"], a1["workspace"])
     _apply_migration(conn)
+    orphan = _orphan_after_migration(conn, a1)
     with conn.cursor() as cur:
         _manual(cur, a1["workspace"])
         with pytest.raises(psycopg2.errors.CheckViolation, match="without a workspace"):
@@ -1219,8 +1229,13 @@ def test_the_preflight_reports_what_the_migration_would_abort_on(layout_fk):
         assert cur.fetchone()[0] is True
 
 
-def test_the_real_account_deletion_runs_under_every_guard(layout_fk, monkeypatch):
-    """delete_current_account end to end (Supabase Auth HTTP and Vault stubbed)."""
+@pytest.mark.parametrize("with_orphan", [False, True])
+def test_the_real_account_deletion_runs_under_every_guard(layout_fk, monkeypatch, with_orphan):
+    """delete_current_account end to end (Supabase Auth HTTP and Vault stubbed).
+
+    with_orphan: the person also owns a row left without a workspace (under
+    review); the flow declares 'none' for its own identity cascade.
+    """
     from types import SimpleNamespace
 
     from backend.auth import service as auth_service
@@ -1240,6 +1255,7 @@ def test_the_real_account_deletion_runs_under_every_guard(layout_fk, monkeypatch
         _debt(cur, a3["users"], a3["workspace"])
         _debt(cur, a1["users"], a1["workspace"])  # someone else's data must survive
     _apply_migration(conn)
+    orphan = _orphan_after_migration(conn, a3) if with_orphan else None
     monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"])
     monkeypatch.setattr(database, "APPLICATION_NAME", "dincr-backend")
     monkeypatch.setattr(auth_service, "SUPABASE_URL", "https://auth.example.invalid")
@@ -1266,6 +1282,9 @@ def test_the_real_account_deletion_runs_under_every_guard(layout_fk, monkeypatch
         assert cur.fetchone()[0] == 1
         cur.execute("SELECT COUNT(*) FROM users WHERE id=%s", (a3["users"],))
         assert cur.fetchone()[0] == 0
+        if orphan:
+            cur.execute("SELECT COUNT(*) FROM debts WHERE id=%s", (orphan,))
+            assert cur.fetchone()[0] == 0  # the person's own orphan went with their identity
 
 
 def test_a_live_accounts_allowed_users_row_cannot_be_deleted(layout_fk, monkeypatch):
@@ -1299,9 +1318,8 @@ def test_a_parent_delete_spanning_owners_is_rejected_before_its_row_by_row_casca
 
 def test_rows_without_a_workspace_are_protected_in_the_apps_session_too(layout_fk):
     conn, a1 = layout_fk["conn"], _ids("a1")
-    with conn.cursor() as cur:
-        orphan = _debt(cur, a1["users"], None, name="Orphan debt")
     _apply_migration(conn)
+    orphan = _orphan_after_migration(conn, a1)
     with conn.cursor() as cur:  # 'Supavisor', exempt from declaring workspaces
         with pytest.raises(psycopg2.errors.CheckViolation, match="without a workspace"):
             cur.execute("DELETE FROM debts WHERE id = %s", (orphan,))
@@ -1331,3 +1349,25 @@ def test_each_abort_has_its_own_sqlstate(layout_fk):
     assert error.value.pgcode == "DI007"
     with conn.cursor() as cur:
         cur.execute("ROLLBACK")
+
+
+
+def test_migration_aborts_on_a_profile_outside_its_personal_workspace(layout_fk):
+    conn, a1, a3 = layout_fk["conn"], _ids("a1"), _ids("a3")
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO financial_profiles(account_id, workspace_id) VALUES (%s, %s)", (a1["account"], a3["workspace"]))
+    with pytest.raises(psycopg2.Error) as error:
+        _apply_migration(conn)
+    assert error.value.pgcode == "DI010"
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK")
+
+
+def test_new_rows_of_workspace_only_tables_need_a_workspace(layout_fk):
+    conn = layout_fk["conn"]
+    with conn.cursor() as cur:
+        cur.execute("ALTER TABLE finva_goal_contributions ALTER COLUMN workspace_id DROP NOT NULL")
+    _apply_migration(conn)
+    with conn.cursor() as cur:
+        with pytest.raises(psycopg2.errors.CheckViolation, match="workspace_required"):
+            cur.execute("INSERT INTO finva_goal_contributions(workspace_id, goal_id, amount) VALUES (NULL, 1, 5)")
