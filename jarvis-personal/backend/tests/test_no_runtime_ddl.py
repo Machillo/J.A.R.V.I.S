@@ -29,8 +29,10 @@ DDL = re.compile(
     re.IGNORECASE,
 )
 SQL_COMMENT = re.compile(r"--[^\n]*")
-# Known limits: DDL assembled by concatenating separate literals, or passed in
-# from outside the module, is not seen. This is a guard, not a proof.
+# Known limits: DDL assembled by concatenating separate literals, SQL kept in
+# module-level constants, method calls on objects (self.m(), obj.m()) and
+# unaliased dotted imports (import backend.x.y; backend.x.y.f()) are not
+# followed. This is a guard, not a proof.
 
 LEGACY_OWNER_DDL = {
     "advisor/core.py": 2,
@@ -145,19 +147,18 @@ def _call_graph():
                 key = f"{module}.{fn.name}"
                 functions[key] = fn
                 targets = set()
-                for call in ast.walk(fn):
-                    if not isinstance(call, ast.Call):
-                        continue
-                    func = call.func
-                    if isinstance(func, ast.Name):
-                        if func.id in imported:
-                            source, name = imported[func.id]
-                            targets.add(f"{source}.{name or func.id}")
+                # Every reference counts, not only calls: a function passed as a
+                # callback (Depends(fn), _safe(fn), executor.submit(fn)) runs too.
+                for ref in ast.walk(fn):
+                    if isinstance(ref, ast.Name):
+                        if ref.id in imported:
+                            source, name = imported[ref.id]
+                            targets.add(f"{source}.{name or ref.id}")
                         else:
-                            targets.add(f"{module}.{func.id}")
-                    elif isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id in imported:
-                        source, name = imported[func.value.id]
-                        targets.add(f"{source}.{name}.{func.attr}" if name else f"{source}.{func.attr}")
+                            targets.add(f"{module}.{ref.id}")
+                    elif isinstance(ref, ast.Attribute) and isinstance(ref.value, ast.Name) and ref.value.id in imported:
+                        source, name = imported[ref.value.id]
+                        targets.add(f"{source}.{name}.{ref.attr}" if name else f"{source}.{ref.attr}")
                 calls[key] = targets
     return functions, calls
 
@@ -175,17 +176,33 @@ def _function_has_ddl(fn) -> bool:
     return False
 
 
-def _reachable_ddl(entry_modules=USERS_ROUTE_MODULES):
+# Call edges Users never take at runtime; each names its proof (a test below).
+GUARDED_EDGES = {
+    # build_advisor_strategy persists (DDL + writes) only when persist=True; every
+    # Users-reachable caller passes persist=False
+    # (test_users_build_the_advisor_strategy_without_persisting_it).
+    ("backend.advisor.core.build_advisor_strategy", "backend.advisor.core._persist_strategy"),
+}
+
+
+def _users_reachable(entry_modules=USERS_ROUTE_MODULES, guarded=GUARDED_EDGES):
     functions, calls = _call_graph()
     entries = [key for key in functions if any(key.startswith(_module_name(m) + ".") for m in entry_modules)]
     seen, stack, parent = set(entries), list(entries), {}
     while stack:
         current = stack.pop()
         for target in calls.get(current, ()):
+            if (current, target) in guarded:
+                continue
             if target in functions and target not in seen:
                 seen.add(target)
                 parent[target] = current
                 stack.append(target)
+    return functions, calls, seen, parent
+
+
+def _reachable_ddl(entry_modules=USERS_ROUTE_MODULES, guarded=GUARDED_EDGES):
+    functions, _, seen, parent = _users_reachable(entry_modules, guarded)
     found = {}
     for key in sorted(seen):
         if _function_has_ddl(functions[key]):
@@ -197,23 +214,22 @@ def _reachable_ddl(entry_modules=USERS_ROUTE_MODULES):
     return found
 
 
-# Reachable only through a branch Users never take; each entry names the proof.
-REACHABLE_BUT_GUARDED = {
-    # _persist_strategy runs only when build_advisor_strategy(persist=True);
-    # the only Users caller passes persist=False (pinned below).
-    "backend.advisor.core._ensure_strategy_tables",
-}
-
-
 def test_users_routes_never_reach_ddl():
-    reachable = {key: chain for key, chain in _reachable_ddl().items() if key not in REACHABLE_BUT_GUARDED}
-    assert reachable == {}, "A Users request path reaches runtime DDL; move it to a migration"
+    assert _reachable_ddl() == {}, "A Users request path reaches runtime DDL; move it to a migration"
 
 
 def test_users_build_the_advisor_strategy_without_persisting_it():
-    state = (BACKEND / "financial_lifecycle" / "state.py").read_text(encoding="utf-8")
-    calls = re.findall(r"build_advisor_strategy\(([^)]*)\)", state)
-    assert calls and all(args.strip() == "persist=False" for args in calls)
+    functions, calls, seen, _ = _users_reachable()
+    callers = [key for key in seen if "backend.advisor.core.build_advisor_strategy" in calls.get(key, ())
+               and key != "backend.advisor.core.build_advisor_strategy"]
+    assert callers, "the guarded edge is obsolete; remove it from GUARDED_EDGES"
+    for key in callers:
+        invocations = [node for node in ast.walk(functions[key]) if isinstance(node, ast.Call)
+                       and getattr(node.func, "id", getattr(node.func, "attr", None)) == "build_advisor_strategy"]
+        assert invocations, f"{key} references build_advisor_strategy without calling it"
+        for node in invocations:
+            persist = [kw.value for kw in node.keywords if kw.arg == "persist"]
+            assert persist and isinstance(persist[0], ast.Constant) and persist[0].value is False, key
     core = (BACKEND / "advisor" / "core.py").read_text(encoding="utf-8")
     assert "_persist_strategy(strategy) if persist else" in core
 

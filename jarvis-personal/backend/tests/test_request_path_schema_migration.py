@@ -31,6 +31,9 @@ def test_the_store_lock_is_taken_last():
     statements = apply_migration.statements(MIGRATION.read_text(encoding="utf-8"))
     first_store = next(i for i, s in enumerate(statements) if "store_subscription" in s)
     assert all("store_subscription" in s for s in statements[first_store:-1])
+    # Waiting for that lock while holding the Basic tables' locks on accounts etc.
+    # blocks logins, so the wait is short.
+    assert statements[first_store - 1] == "SET LOCAL lock_timeout = '1s'"
 
 
 def test_the_superseded_basic_migration_cannot_be_applied(tmp_path):

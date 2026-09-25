@@ -11,7 +11,9 @@
 -- apply it with backend/scripts/apply_migration.py (BACKUP_VERIFIED gate), as
 -- the role that owns the existing public tables (postgres).
 -- Store billing is last: its ALTER TABLE takes an ACCESS EXCLUSIVE lock that is
--- held until COMMIT, so it is taken as late as possible.
+-- held until COMMIT, so it is taken as late as possible, with a 1 s lock wait.
+-- While the migration runs (normally well under a second), writes to accounts,
+-- workspaces and financial_goals wait: apply at low traffic.
 --
 -- Preflight (read-only): every listed object must be present.
 --   SELECT t FROM unnest(ARRAY['accounts','workspaces','financial_goals','features',
@@ -93,6 +95,13 @@ ON CONFLICT (plan_id, feature_id) DO NOTHING;
 -- 3. Notification job index the runtime DDL created (schema.sql only).
 CREATE INDEX IF NOT EXISTS idx_notification_jobs_user ON notification_jobs(user_id, scheduled_at);
 
+-- The Basic tables above hold SHARE ROW EXCLUSIVE on accounts, workspaces and
+-- financial_goals until COMMIT (their foreign keys), which blocks writes to
+-- those tables, including the per-request UPDATE accounts at login. Wait at most
+-- 1 s for the store lock so that blocking stays short; on timeout nothing is
+-- applied and the migration can be re-run.
+SET LOCAL lock_timeout = '1s';
+
 -- 4. Store billing (created in production by the old runtime DDL). Same shape
 --    as production: the pending_* columns were added later by ADD COLUMN, without
 --    CHECK constraints; the backend validates those values.
@@ -171,4 +180,12 @@ COMMIT;
 -- UNION ALL
 -- SELECT 'Free has a Basic feature: ' || f.code FROM plan_features pf JOIN plans p ON p.id = pf.plan_id
 --   JOIN features f ON f.id = pf.feature_id
---  WHERE p.code = 'free' AND f.code IN ('basic_dashboard','guided_budget','financial_calendar','recurring_items','basic_reports');
+--  WHERE p.code = 'free' AND f.code IN ('basic_dashboard','guided_budget','financial_calendar','recurring_items','basic_reports')
+-- UNION ALL
+-- SELECT 'missing feature: ' || code FROM (VALUES ('basic_dashboard'),('guided_budget'),('financial_calendar'),
+--        ('recurring_items'),('basic_reports')) c(code)
+--  WHERE NOT EXISTS (SELECT 1 FROM features f WHERE f.code = c.code)
+-- UNION ALL
+-- SELECT 'missing index: ' || name FROM (VALUES ('idx_finva_recurring_workspace'),('idx_finva_goal_contributions_workspace'),
+--        ('idx_notification_jobs_user'),('uq_store_event_provider_id'),('idx_store_subscription_status')) i(name)
+--  WHERE to_regclass('public.' || name) IS NULL;
