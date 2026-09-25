@@ -189,7 +189,8 @@ ORDER BY first_event;
 
 -- E15. Automatic incident reports of one account (screen, time, reference; no
 --      message text). Confirms/refutes: creating the debts failed and they were
---      never stored.
+--      never stored. Automatic reports exist only since 2026-09-20 (Phase 0A):
+--      an empty result says nothing about earlier failures.
 SELECT created_at, last_seen_at, source, severity, category, screen, platform,
        app_version, occurrence_count, error_reference, status
 FROM public.feedback_reports
@@ -219,15 +220,82 @@ SELECT 'payroll_events', workspace_id, user_id, COUNT(*) FROM public.payroll_eve
 --      hero is computed from the DECLARED profile plus recurring items and
 --      account balances, not from transactions (see the PR description).
 --      Returns the inputs of one workspace; keep the output private.
+--      finva_recurring_items is not queried: in production it does not exist
+--      (Basic/VIP reads create it inside a transaction that is never committed),
+--      so recurring items are always empty there.
 SELECT
     (SELECT p.code FROM public.account_subscriptions s JOIN public.plans p ON p.id = s.plan_id
       WHERE s.account_id = '<ACCOUNT_ID>'::uuid) AS plan,
     fp.income_type, fp.fixed_monthly_salary, fp.hourly_rate, fp.hours_per_day, fp.work_days_per_week,
     fp.essential_monthly_expenses, fp.liquid_savings, fp.emergency_fund_target,
     fp.created_at AS profile_created_at, fp.updated_at AS profile_updated_at,
-    (SELECT COUNT(*) FROM public.finva_recurring_items r WHERE r.workspace_id = '<WORKSPACE_ID>'::uuid AND r.is_active) AS active_recurring_items,
     (SELECT COUNT(*) FROM public.account_balances b WHERE b.workspace_id = '<WORKSPACE_ID>'::uuid) AS account_balance_rows,
     (SELECT COUNT(*) FROM public.payroll_events pe WHERE pe.workspace_id = '<WORKSPACE_ID>'::uuid) AS payroll_events_rows,
     (SELECT COUNT(*) FROM public.finva_savings_plans sp WHERE sp.workspace_id = '<WORKSPACE_ID>'::uuid) AS savings_plans_rows
 FROM public.financial_profiles fp
 WHERE fp.account_id = '<ACCOUNT_ID>'::uuid;
+
+-- ===========================================================================
+-- Round 3. product_events has no `screen` column: the screen is `surface`
+-- (plus event_name). Replace <AUTH_USER_ID> with accounts.supabase_user_id.
+-- ===========================================================================
+
+-- E18. Which code created each users (legacy finance) row, from its defaults:
+--      country 'Unknown' / timezone 'UTC' = user_product._legacy_financial_user_id
+--      (first Income/Expense/Debt/Goal/Transaction write); 'Costa Rica' /
+--      'America/Costa_Rica' = the mail connection bridge. No emails or names.
+SELECT u.id, u.created_at, u.country, u.timezone,
+       (SELECT a.id FROM public.accounts a WHERE lower(trim(a.primary_email)) = lower(trim(u.email))) AS account_id
+FROM public.users u
+ORDER BY u.id;
+
+-- E19. The account balances that feed a Home figure (they replace the declared
+--      savings only when CRC and counted in net worth). Balance shown only then.
+SELECT b.id, b.created_at, b.source, b.currency, b.include_in_net_worth, b.is_active,
+       CASE WHEN b.include_in_net_worth AND b.currency = 'CRC' THEN b.current_balance END AS counted_balance
+FROM public.account_balances b
+WHERE b.workspace_id = '<WORKSPACE_ID>'::uuid
+ORDER BY b.id;
+
+-- E20. Every financial row created in a time window, in ANY workspace (ids and
+--      workspaces only). Confirms/refutes: a row written at the moment the users
+--      bridge row was created (E18) still exists somewhere.
+SELECT 'debts' AS table_name, id, workspace_id, user_id, created_at FROM public.debts
+ WHERE created_at BETWEEN '<FROM_UTC>'::timestamptz AND '<TO_UTC>'::timestamptz
+UNION ALL SELECT 'expenses', id, workspace_id, user_id, created_at FROM public.expenses
+ WHERE created_at BETWEEN '<FROM_UTC>'::timestamptz AND '<TO_UTC>'::timestamptz
+UNION ALL SELECT 'salaries', id, workspace_id, user_id, created_at FROM public.salaries
+ WHERE created_at BETWEEN '<FROM_UTC>'::timestamptz AND '<TO_UTC>'::timestamptz
+UNION ALL SELECT 'financial_goals', id, workspace_id, user_id, created_at FROM public.financial_goals
+ WHERE created_at BETWEEN '<FROM_UTC>'::timestamptz AND '<TO_UTC>'::timestamptz
+UNION ALL SELECT 'transactions', id, workspace_id, user_id, created_at FROM public.transactions
+ WHERE created_at BETWEEN '<FROM_UTC>'::timestamptz AND '<TO_UTC>'::timestamptz
+ORDER BY created_at;
+
+-- E21. The screen trail of one account in a window, event by event (surface,
+--      not screen). Shows what was open around a given instant.
+SELECT created_at, event_name, surface, success, plan_code, app_version
+FROM public.product_events
+WHERE account_id = '<ACCOUNT_ID>'::uuid
+  AND created_at BETWEEN '<FROM_UTC>'::timestamptz AND '<TO_UTC>'::timestamptz
+ORDER BY created_at;
+
+-- E22. Supabase Auth audit trail of one Auth user (logins, refreshes, logouts),
+--      if the project writes auth audit logs to the database. Shows whether the
+--      account was used on the days rows could have been deleted.
+SELECT created_at, payload ->> 'action' AS action
+FROM auth.audit_log_entries
+WHERE payload ->> 'actor_id' = '<AUTH_USER_ID>'
+   OR payload -> 'traits' ->> 'user_id' = '<AUTH_USER_ID>'
+ORDER BY created_at;
+
+-- E23. Normalized statements ever executed against debts since the statistics
+--      reset (pg_stat_statements strips literal values). App deletes look like
+--      "DELETE FROM debts WHERE id=$1 AND workspace_id=$2 RETURNING id"; any
+--      other DELETE/UPDATE/INSERT shape on debts is a manual or script write
+--      (e.g. the single-statement insert behind rows sharing one created_at).
+SELECT s.calls, s.rows, left(regexp_replace(s.query, '\s+', ' ', 'g'), 300) AS normalized_query,
+       (SELECT stats_reset FROM pg_stat_statements_info) AS stats_since
+FROM pg_stat_statements s
+WHERE s.query ~* '\m(delete|update|insert)\M' AND s.query ~* '\mdebts\M'
+ORDER BY s.calls DESC;

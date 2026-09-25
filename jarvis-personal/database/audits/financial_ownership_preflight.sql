@@ -66,9 +66,30 @@ AS $fn$
     ) AS t(table_name, parent_table, parent_column)
 $fn$;
 
--- True when p_user_id is, in either legacy id space, an identity of an account
--- that owns or is an active member of p_workspace_id.
-CREATE OR REPLACE FUNCTION pg_temp.dincr_legacy_id_belongs_to_workspace(p_user_id BIGINT, p_workspace_id UUID)
+-- The id space a table's legacy user_id really points at: the table its FK
+-- references ('users' or 'allowed_users'), or NULL when there is no such FK (or
+-- more than one), in which case both spaces are accepted during the transition.
+CREATE OR REPLACE FUNCTION pg_temp.dincr_user_id_space(p_table TEXT)
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SET search_path = pg_catalog, pg_temp
+AS $fn$
+    SELECT CASE WHEN COUNT(DISTINCT parent.relname) = 1 THEN MIN(parent.relname::TEXT) END
+    FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace ns ON ns.oid = child.relnamespace AND ns.nspname = 'public'
+    JOIN pg_catalog.pg_class parent ON parent.oid = c.confrelid
+    JOIN pg_catalog.pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = c.conkey[1]
+    WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND att.attname = 'user_id'
+      AND child.relname = p_table
+      AND parent.relname IN ('users', 'allowed_users')
+$fn$;
+
+-- True when p_user_id is an identity of an account that owns or is an active
+-- member of p_workspace_id, in p_space ('users', 'allowed_users') or, when
+-- p_space is NULL, in either legacy id space.
+CREATE OR REPLACE FUNCTION pg_temp.dincr_legacy_id_belongs_to_workspace(p_user_id BIGINT, p_workspace_id UUID, p_space TEXT DEFAULT NULL)
 RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
@@ -87,18 +108,18 @@ AS $fn$
               AND wm.status = 'active'
         ) m
         JOIN public.accounts a ON a.id = m.account_id
-        WHERE a.legacy_allowed_user_id = p_user_id
-           OR EXISTS (
+        WHERE (p_space IS DISTINCT FROM 'users' AND a.legacy_allowed_user_id = p_user_id)
+           OR (p_space IS DISTINCT FROM 'allowed_users' AND EXISTS (
                 SELECT 1
                 FROM public.users u
                 WHERE u.id = p_user_id
                   AND lower(trim(u.email)) = lower(trim(a.primary_email))
-           )
+           ))
     )
 $fn$;
 
--- Every account that p_user_id can denote, in either legacy id space.
-CREATE OR REPLACE FUNCTION pg_temp.dincr_legacy_id_accounts(p_user_id BIGINT)
+-- Every account that p_user_id can denote, in p_space or (NULL) either space.
+CREATE OR REPLACE FUNCTION pg_temp.dincr_legacy_id_accounts(p_user_id BIGINT, p_space TEXT DEFAULT NULL)
 RETURNS UUID[]
 LANGUAGE sql
 STABLE
@@ -108,13 +129,13 @@ AS $fn$
     FROM public.accounts a
     WHERE p_user_id IS NOT NULL
       AND (
-        a.legacy_allowed_user_id = p_user_id
-        OR EXISTS (
+        (p_space IS DISTINCT FROM 'users' AND a.legacy_allowed_user_id = p_user_id)
+        OR (p_space IS DISTINCT FROM 'allowed_users' AND EXISTS (
             SELECT 1
             FROM public.users u
             WHERE u.id = p_user_id
               AND lower(trim(u.email)) = lower(trim(a.primary_email))
-        )
+        ))
       )
 $fn$;
 
@@ -157,6 +178,8 @@ DECLARE
     parent_ws TEXT;
     parent_mismatch TEXT;
     parent_resolvable TEXT;
+    v_space TEXT;
+    v_parent_space TEXT;
 BEGIN
     FOR cfg IN SELECT * FROM pg_temp.dincr_ownership_tables() LOOP
         IF pg_catalog.to_regclass(pg_catalog.format('public.%I', cfg.table_name)) IS NULL THEN
@@ -178,6 +201,8 @@ BEGIN
 
         has_parent := cfg.parent_table IS NOT NULL
             AND pg_catalog.to_regclass(pg_catalog.format('public.%I', cfg.parent_table)) IS NOT NULL;
+        v_space := pg_temp.dincr_user_id_space(cfg.table_name);
+        v_parent_space := CASE WHEN has_parent THEN pg_temp.dincr_user_id_space(cfg.parent_table) END;
 
         IF has_parent THEN
             parent_join := pg_catalog.format(
@@ -186,21 +211,21 @@ BEGIN
             );
             parent_ws := 'p.workspace_id';
             parent_mismatch := 'WHEN p.id IS NOT NULL AND p.workspace_id IS DISTINCT FROM t.workspace_id THEN ''PARENT_WORKSPACE_MISMATCH''';
-            parent_resolvable := $sql$
+            parent_resolvable := pg_catalog.format($sql$
                 WHEN t.workspace_id IS NULL
                      AND p.id IS NOT NULL
                      AND p.workspace_id IS NOT NULL
                      AND EXISTS (SELECT 1 FROM public.workspaces pw
                                  JOIN public.accounts pa ON pa.id = pw.owner_account_id
                                  WHERE pw.id = p.workspace_id)
-                     AND (p.user_id IS NULL OR pg_temp.dincr_legacy_id_belongs_to_workspace(p.user_id, p.workspace_id))
+                     AND (p.user_id IS NULL OR pg_temp.dincr_legacy_id_belongs_to_workspace(p.user_id, p.workspace_id, %L::TEXT))
                      AND t.user_id IS NOT NULL
-                     AND pg_temp.dincr_legacy_id_belongs_to_workspace(t.user_id, p.workspace_id)
-                     -- A colliding id (one account's allowed_users.id, another's users.id)
-                     -- cannot prove the row's owner: those rows stay NEEDS_REVIEW.
-                     AND cardinality(pg_temp.dincr_legacy_id_accounts(t.user_id)) = 1
+                     AND pg_temp.dincr_legacy_id_belongs_to_workspace(t.user_id, p.workspace_id, %L::TEXT)
+                     -- An id that can denote several accounts (one account's allowed_users.id,
+                     -- another's users.id) cannot prove the row's owner: NEEDS_REVIEW.
+                     AND cardinality(pg_temp.dincr_legacy_id_accounts(t.user_id, %L::TEXT)) = 1
                 THEN 'WORKSPACE_NULL_PARENT_RESOLVABLE'
-            $sql$;
+            $sql$, v_parent_space, v_space, v_space);
         ELSE
             parent_join := '';
             parent_ws := 'NULL::UUID';
@@ -219,7 +244,7 @@ BEGIN
                     t.workspace_id,
                     %s AS parent_workspace_id,
                     t.user_id::BIGINT AS legacy_user_id,
-                    pg_temp.dincr_legacy_id_accounts(t.user_id::BIGINT) AS user_id_accounts
+                    pg_temp.dincr_legacy_id_accounts(t.user_id::BIGINT, %L::TEXT) AS user_id_accounts
                 FROM public.%I t
                 %s
                 LEFT JOIN public.workspaces w ON w.id = t.workspace_id
@@ -233,12 +258,17 @@ BEGIN
                         %s
                         -- Canonical rows carry no legacy id: the workspace owns them.
                         WHEN t.user_id IS NULL THEN 'OK_NO_LEGACY_ID'
-                        WHEN pg_temp.dincr_legacy_id_belongs_to_workspace(t.user_id::BIGINT, t.workspace_id)
+                        WHEN pg_temp.dincr_legacy_id_belongs_to_workspace(t.user_id::BIGINT, t.workspace_id, %L::TEXT)
                             THEN CASE
-                                WHEN cardinality(pg_temp.dincr_legacy_id_accounts(t.user_id::BIGINT)) > 1
+                                WHEN cardinality(pg_temp.dincr_legacy_id_accounts(t.user_id::BIGINT, %L::TEXT)) > 1
                                     THEN 'OK_ID_SPACE_COLLISION'
                                 ELSE 'OK'
                             END
+                        -- The workspace's identity, but in the other space than the FK:
+                        -- the FK ties the row to whoever owns that id there, so deleting
+                        -- that unrelated person cascades to this row.
+                        WHEN pg_temp.dincr_legacy_id_belongs_to_workspace(t.user_id::BIGINT, t.workspace_id)
+                            THEN 'USER_ID_WRONG_SPACE'
                         WHEN cardinality(pg_temp.dincr_legacy_id_accounts(t.user_id::BIGINT)) > 0
                             THEN 'USER_ID_FOREIGN'
                         WHEN EXISTS (SELECT 1 FROM public.allowed_users au WHERE au.id = t.user_id)
@@ -250,8 +280,8 @@ BEGIN
             ) r
             WHERE %L OR r.issue <> 'OK'
         $sql$,
-            cfg.table_name, parent_ws, cfg.table_name, parent_join,
-            parent_resolvable, parent_mismatch, p_include_ok
+            cfg.table_name, parent_ws, v_space, cfg.table_name, parent_join,
+            parent_resolvable, parent_mismatch, v_space, v_space, p_include_ok
         );
     END LOOP;
 
@@ -319,9 +349,10 @@ BEGIN
            ('USER_ID_FK_TO_' || upper(parent.relname) || '_ON_DELETE_' ||
             CASE c.confdeltype WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET_NULL' WHEN 'r' THEN 'RESTRICT'
                                WHEN 'd' THEN 'SET_DEFAULT' ELSE 'NO_ACTION' END)::TEXT,
-           -- CASCADE deletes rows of another tenant; the other rules fail closed
-           -- (RESTRICT/NO ACTION/SET NULL error, SET DEFAULT is rejected by the guard).
-           CASE WHEN c.confdeltype = 'c' THEN 'NEEDS_REVIEW' ELSE 'INFO' END::TEXT,
+           -- With every row in the FK's own space (USER_ID_WRONG_SPACE is NEEDS_REVIEW
+           -- and the guard rejects new ones) a cascade only removes the deleted
+           -- person's own rows. Informational until Phase E drops these FKs.
+           'INFO'::TEXT,
            NULL::UUID, NULL::UUID, NULL::BIGINT, ARRAY[]::UUID[]
     FROM pg_catalog.pg_constraint c
     JOIN pg_catalog.pg_class child ON child.oid = c.conrelid
@@ -351,10 +382,11 @@ BEGIN
         RETURN QUERY EXECUTE pg_catalog.format($sql$
             SELECT %L::TEXT, t.id::BIGINT, 'LEGACY_USER_ID_NOT_IN_WORKSPACE', 'NEEDS_REVIEW',
                    t.workspace_id, NULL::UUID, t.legacy_user_id::BIGINT,
-                   pg_temp.dincr_legacy_id_accounts(t.legacy_user_id::BIGINT)
+                   pg_temp.dincr_legacy_id_accounts(t.legacy_user_id::BIGINT, 'users')
             FROM public.%I t
             WHERE t.workspace_id IS NOT NULL
-              AND NOT pg_temp.dincr_legacy_id_belongs_to_workspace(t.legacy_user_id::BIGINT, t.workspace_id)
+              -- legacy_user_id columns are users.id (FK -> users) everywhere.
+              AND NOT pg_temp.dincr_legacy_id_belongs_to_workspace(t.legacy_user_id::BIGINT, t.workspace_id, 'users')
         $sql$, cfg.table_name, cfg.table_name);
     END LOOP;
 END

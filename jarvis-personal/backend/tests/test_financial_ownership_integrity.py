@@ -83,7 +83,7 @@ def test_audit_sql_files_are_read_only():
         ):
             assert not re.search(forbidden, sql), (path.name, forbidden)
         # Only session-local functions may be created.
-        assert re.findall(r"CREATE\s+OR\s+REPLACE\s+FUNCTION\s+([\w]+)\.", sql) in ([], ["PG_TEMP"] * 7)
+        assert re.findall(r"CREATE\s+OR\s+REPLACE\s+FUNCTION\s+([\w]+)\.", sql) in ([], ["PG_TEMP"] * 8)
 
 
 def test_every_financial_insert_sets_workspace_and_user():

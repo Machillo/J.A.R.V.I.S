@@ -37,7 +37,10 @@ nothing may decide ownership with it.
 
 A second risk class exists: when a table's `user_id` FK points at one space
 and a writer stores a value from the other, **deleting an unrelated person** in
-that space cascades to the row. The evidence query E10 lists the real FKs.
+that space cascades to the row.
+- E10 confirmed the production FKs.
+- Phase A therefore checks each table in the space its FK references, and flags existing wrong-space rows as `USER_ID_WRONG_SPACE`.
+- With every row in its FK's space, a cascade only removes the deleted person's own rows.
 
 ## Inventory (backend, excluding tests)
 
@@ -52,7 +55,8 @@ that space cascades to the row. The evidence query E10 lists the real FKs.
 | Deletion of rows by `allowed_users.id` on every FK to `allowed_users` | `auth/service.py::_delete_allowed_user_dependents`, plus the FK cascade when the tombstone is deleted | NEEDS REVIEW. If any dual-space table references `allowed_users`, deleting one account removes another tenant's colliding rows (E10) → Phase E removes those FKs |
 | `DEFAULT 1` on legacy `user_id` columns (Owner fallback) | database | LEGACY. It is dangerous: the Phase A trigger rejects it outside the Owner workspace |
 | Id-space mixing: `notifications/service.py::_display_name` (`users` looked up with an `allowed_users.id`, hardcoded fallback name), `integrations/ibkr_readonly.py::_owner_identity` (`users.id = legacy_allowed_user_id` join), dead `email_monitor::_owner_user_id` | as listed | UNKNOWN / NEEDS REVIEW (fix before Phase B) |
-| Real FK set and ON DELETE rules of every financial `user_id` in production | database | UNKNOWN until E10 |
+| Production FKs (E10): `debts`, `expenses`, `financial_goals`, `investments`, `savings`, `transactions` → `users(id)` ON DELETE CASCADE; `fixed_expenses`, `fixed_expense_matches`, `financial_input_events`, `notification_jobs` → `allowed_users(id)` CASCADE | database | CURRENT REQUIRED (the FK decides the space of each table) → retired in Phase E |
+| FK of `payroll_events.user_id`, which is written with `allowed_users.id` by overtime | database | UNKNOWN: if it references `users`, overtime rows attach to another person |
 
 ## Phases
 
@@ -61,7 +65,7 @@ that space cascades to the row. The evidence query E10 lists the real FKs.
 - Safe repair only for the SAFE_AUTO_FIX class.
 - New writes must carry a workspace, and children must match their parent's workspace.
 - Existing rows are never moved between workspaces by application writes.
-- A changed legacy `user_id` must be an identity of the workspace: either space during the transition, and NULL is accepted.
+- A changed legacy `user_id` must be an identity of the workspace in the space its table's FK references (either space when the table has no such FK). NULL is accepted.
 - A colliding id is never used to repair a row.
 - Tested rollback.
 - Exit: preflight reviewed, every NEEDS_REVIEW/ORPHAN row resolved by a human, migration applied, check script PASS.

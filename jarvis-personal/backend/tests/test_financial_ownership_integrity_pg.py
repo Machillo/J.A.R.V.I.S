@@ -720,11 +720,88 @@ def test_rerun_repairs_a_child_once_a_human_resolved_its_parent(seeded):
         assert cur.fetchone()[0] == 1  # guard re-enabled after the repair
 
 
-def test_cascading_user_id_fk_fails_the_gate(db):
+def test_user_id_fk_rules_are_reported(db):
     with db["conn"].cursor() as cur:
         cur.execute("ALTER TABLE debts ADD CONSTRAINT debts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE NOT VALID")
         cur.execute("ALTER TABLE expenses ADD CONSTRAINT expenses_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT NOT VALID")
     _apply_migration(db["conn"])
     audit = _audit(db["conn"])
-    assert audit[("debts", None)] == ("USER_ID_FK_TO_USERS_ON_DELETE_CASCADE", "NEEDS_REVIEW")
+    assert audit[("debts", None)] == ("USER_ID_FK_TO_USERS_ON_DELETE_CASCADE", "INFO")
     assert audit[("expenses", None)] == ("USER_ID_FK_TO_USERS_ON_DELETE_RESTRICT", "INFO")
+
+
+# --- The FK decides the id space (production: debts.user_id -> users ON DELETE CASCADE,
+# fixed_expenses-style tables -> allowed_users) ------------------------------------
+
+@pytest.fixture
+def layout_fk(layout_unmigrated):
+    """Colliding ids plus the real FK shapes: debts/transactions -> users, expenses -> allowed_users."""
+    conn = layout_unmigrated["conn"]
+    with conn.cursor() as cur:
+        cur.execute("ALTER TABLE debts ADD CONSTRAINT debts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE")
+        cur.execute("ALTER TABLE transactions ADD CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE")
+        cur.execute("ALTER TABLE expenses ADD CONSTRAINT expenses_user_id_fkey FOREIGN KEY (user_id) REFERENCES allowed_users(id) ON DELETE CASCADE")
+    return layout_unmigrated
+
+
+def _transaction(cur, user_id, workspace_id) -> int:
+    cur.execute("INSERT INTO transactions(user_id,transaction_date,description,amount,transaction_type,workspace_id) "
+                "VALUES(%s,CURRENT_DATE,'Synthetic',1,'expense',%s) RETURNING id", (user_id, workspace_id))
+    return cur.fetchone()[0]
+
+
+def test_wrong_space_row_is_deleted_by_an_unrelated_persons_cascade(layout_fk):
+    """The hazard itself, without the migration: a2 writes its allowed_users.id (24)
+    into a users-FK table; 24 is a6's users.id, so deleting a6 deletes a2's row."""
+    conn, a2, a6 = layout_fk["conn"], _ids("a2"), _ids("a6")
+    with conn.cursor() as cur:
+        victim = _transaction(cur, a2["allowed"], a2["workspace"])
+        cur.execute("DELETE FROM users WHERE id=%s", (a6["users"],))
+        cur.execute("SELECT COUNT(*) FROM transactions WHERE id=%s", (victim,))
+        assert cur.fetchone()[0] == 0
+
+
+def test_existing_wrong_space_rows_are_flagged_and_left_untouched(layout_fk):
+    conn, a2, a3 = layout_fk["conn"], _ids("a2"), _ids("a3")
+    with conn.cursor() as cur:
+        wrong = _transaction(cur, a2["allowed"], a2["workspace"])  # a2's allowed id in a users-FK table
+        right = _debt(cur, a3["users"], a3["workspace"])            # users-space, collides with a1's allowed id
+    _apply_migration(conn)
+    audit = _audit(conn)
+    assert audit[("transactions", wrong)] == ("USER_ID_WRONG_SPACE", "NEEDS_REVIEW")
+    assert audit[("debts", right)] == ("OK", "OK")  # the FK removes the ambiguity: no collision here
+    with conn.cursor() as cur:
+        cur.execute("SELECT user_id, workspace_id::text FROM transactions WHERE id=%s", (wrong,))
+        assert cur.fetchone() == (a2["allowed"], a2["workspace"])
+
+
+def test_guard_enforces_the_fk_space_for_new_writes(layout_fk):
+    conn = layout_fk["conn"]
+    _apply_migration(conn)
+    a1, a2, a3 = _ids("a1"), _ids("a2"), _ids("a3")
+    with conn.cursor() as cur:
+        # users-FK table: only the workspace's users.id.
+        _debt(cur, a3["users"], a3["workspace"])
+        with pytest.raises(psycopg2.errors.CheckViolation):
+            _transaction(cur, a2["allowed"], a2["workspace"])     # would attach the row to a6
+        with pytest.raises(psycopg2.errors.CheckViolation):
+            _debt(cur, a1["allowed"], a1["workspace"])            # 21 is a3's users row, not a1's
+        # allowed_users-FK table: only the workspace's allowed_users.id.
+        cur.execute("INSERT INTO expenses(user_id,category,amount,workspace_id) VALUES(%s,'Otros',1,%s)", (a1["allowed"], a1["workspace"]))
+        with pytest.raises(psycopg2.errors.CheckViolation):
+            cur.execute("INSERT INTO expenses(user_id,category,amount,workspace_id) VALUES(%s,'Otros',1,%s)", (a1["users"], a1["workspace"]))
+        # The owner's ids coincide in both spaces and work everywhere.
+        _debt(cur, OWNER_ID, _ids("owner")["workspace"])
+
+
+def test_dincr_writers_pass_the_fk_space_guard(layout_fk, monkeypatch):
+    from backend.core import database
+    from backend.user_product import service
+    from backend.user_product.models import UserDebtCreateRequest
+
+    _apply_migration(layout_fk["conn"])
+    monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"])
+    a3 = _ids("a3")
+    row = _as(a3, service.create_user_debt, UserDebtCreateRequest(name="Synthetic", remaining_amount=100))
+    result = _as(a3, service.pay_user_debt, row["id"], 10)  # writes a transaction (users-FK) too
+    assert result["new_remaining_amount"] == 90
