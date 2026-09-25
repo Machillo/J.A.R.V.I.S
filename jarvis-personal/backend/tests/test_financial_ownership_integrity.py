@@ -316,6 +316,6 @@ def test_preflight_lists_the_same_delete_guard_tables_as_the_migration():
     preflight = (ROOT / "database" / "audits" / "financial_ownership_preflight.sql").read_text(encoding="utf-8")
     lists = [preflight[:end].rsplit("(VALUES", 1)[1] for end in
              (m.start() for m in re.finditer(r"AS d\(table_name\)", preflight))]
-    assert len(lists) == 2  # rows without a workspace, unguarded workspace tables
+    assert len(lists) == 3  # rows without a workspace, colliding ids, unguarded workspace tables
     for block in lists:
         assert set(re.findall(r"\('([a-z_]+)'\)", block)) == _delete_guard_tables() - set(_ownership_tables())

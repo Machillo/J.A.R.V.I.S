@@ -980,8 +980,9 @@ BEGIN
 
     -- Rows without a workspace have no clear owner: every session, the app
     -- included, deletes them only with the explicit declaration 'none'. The app
-    -- declares it only in account deletion, for the deleting identity's own FK
-    -- cascade; the NOT VALID CHECK keeps new ones from appearing.
+    -- declares it only for an identity's own FK cascade: in account deletion and
+    -- when an admin deletes an allowed_users row that no account maps to; the
+    -- NOT VALID CHECK keeps new ones from appearing.
     IF v_declared IS DISTINCT FROM 'none' AND EXISTS (SELECT 1 FROM old_rows o WHERE o.workspace_id IS NULL) THEN
         RAISE EXCEPTION 'financial delete on % touches rows without a workspace', TG_TABLE_NAME
             USING ERRCODE = '23514',

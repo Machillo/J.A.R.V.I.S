@@ -1379,3 +1379,24 @@ def test_the_preflight_flags_rows_without_a_workspace_that_a_colliding_id_would_
         _debt(cur, a1["allowed"], None, name="Orphan with a colliding id")
     rows = _preflight(conn)
     assert ("debts", "ROWS_WITHOUT_WORKSPACE_WITH_COLLIDING_ID") in {(r[1], r[4]) for r in rows if r[0] == "workspace_null_collision"}
+
+
+def test_the_collision_gate_ignores_an_orphan_whose_id_is_the_same_person_in_both_spaces(layout_fk):
+    conn, owner = layout_fk["conn"], _ids("owner")
+    with conn.cursor() as cur:  # the owner's allowed_users id equals its own users.id (same email)
+        _debt(cur, owner["users"], None, name="Orphan, same person in both spaces")
+    rows = _preflight(conn)
+    assert not [r for r in rows if r[0] == "workspace_null_collision"]
+    assert ("debts", "ROWS_WITHOUT_WORKSPACE") in {(r[1], r[4]) for r in rows if r[0] == "rows_without_workspace"}
+
+
+def test_the_collision_gate_covers_guarded_tables_outside_the_ownership_list(layout_fk):
+    conn, a1 = layout_fk["conn"], _ids("a1")
+    with conn.cursor() as cur:  # financial_input_events: user_id -> allowed_users, not an ownership table
+        cur.execute("ALTER TABLE financial_input_events ALTER COLUMN workspace_id DROP NOT NULL, "
+                    "ADD COLUMN user_id BIGINT REFERENCES allowed_users(id) ON DELETE CASCADE")
+        cur.execute("INSERT INTO financial_input_events(account_id, workspace_id, user_id) VALUES (%s, NULL, %s)",
+                    (a1["account"], a1["allowed"]))  # a1's allowed_users id is another person's users.id here
+    rows = _preflight(conn)
+    assert ("financial_input_events", "ROWS_WITHOUT_WORKSPACE_WITH_COLLIDING_ID") in {
+        (r[1], r[4]) for r in rows if r[0] == "workspace_null_collision"}

@@ -627,12 +627,37 @@ WHERE w.id IS NULL OR w.owner_account_id <> fp.account_id OR w.workspace_type <>
 UNION ALL
 -- PRE-APPLY GATE: must be empty. Such rows would be deleted with whoever owns that
 -- integer in the FK's id space when that person deletes their account.
-SELECT 'workspace_null_collision', o.table_name, NULL, 'NEEDS_REVIEW', 'ROWS_WITHOUT_WORKSPACE_WITH_COLLIDING_ID',
-       pg_temp.dincr_count_null_workspace_collisions(o.table_name)::TEXT
-FROM pg_temp.dincr_ownership_tables() o
-WHERE to_regclass('public.' || o.table_name) IS NOT NULL
-  AND pg_temp.dincr_user_id_space(o.table_name) IS NOT NULL
-  AND pg_temp.dincr_count_null_workspace_collisions(o.table_name) > 0
+SELECT 'workspace_null_collision', g.table_name, NULL, 'NEEDS_REVIEW', 'ROWS_WITHOUT_WORKSPACE_WITH_COLLIDING_ID',
+       pg_temp.dincr_count_null_workspace_collisions(g.table_name)::TEXT
+FROM (SELECT o.table_name FROM pg_temp.dincr_ownership_tables() o
+      UNION SELECT d.table_name FROM (VALUES
+        ('finva_budget_items'),
+        ('finva_recurring_items'),
+        ('finva_goal_contributions'),
+        ('finva_savings_plans'),
+        ('finva_savings_plan_contributions'),
+        ('financial_profiles'),
+        ('card_aliases'),
+        ('financial_input_events'),
+        ('email_transaction_candidates'),
+        ('email_statement_documents'),
+        ('email_statement_reconciliation_lines'),
+        ('email_financial_accounts'),
+        ('finva_email_candidates'),
+        ('finva_statement_documents'),
+        ('investment_position_snapshots'),
+        ('finva_gmail_connections'),
+        ('finva_email_messages'),
+        ('email_ingested_messages')
+    ) AS d(table_name)) g
+WHERE to_regclass('public.' || g.table_name) IS NOT NULL
+  AND EXISTS (SELECT 1 FROM information_schema.columns c
+              WHERE c.table_schema = 'public' AND c.table_name = g.table_name AND c.column_name = 'workspace_id')
+  -- Only tables whose user_id has one FK into users/allowed_users (the cascade path);
+  -- CASE keeps the count from running on any other table.
+  AND CASE WHEN pg_temp.dincr_user_id_space(g.table_name) IS NOT NULL
+           THEN pg_temp.dincr_count_null_workspace_collisions(g.table_name) > 0
+           ELSE FALSE END
 UNION ALL
 -- Workspace-owned tables the migration leaves without deletion guards: compare
 -- with the reviewed allowlist in backend/tests/test_financial_ownership_integrity.py.
