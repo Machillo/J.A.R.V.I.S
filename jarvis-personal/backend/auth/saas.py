@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_user_id, get_current_workspace_id
 from backend.auth.plan_lifecycle import (
-    PLAN_RANK, clear_pending, lock_billing_then_subscription, pending_change, plan_after_entitlement_end, request_plan_change,
+    PLAN_RANK, clear_pending, pending_change, plan_after_entitlement_end, request_plan_change,
 )
 from backend.core.database import get_connection
 from backend.core.i18n import tx
@@ -46,29 +46,22 @@ BUILTIN_FEATURE_MIN_PLAN = {
 def _end_expired_courtesy(conn, account_id: str):
     """Move an expired courtesy (the launch promotion included) to the next plan.
 
-    The next plan is a still-paid plan or Free, capped by a pending change the
-    customer scheduled. A previous paid SINPE subscription is kept in
-    ``billing_subscriptions`` while the courtesy is active, so a courtesy never
-    destroys access the customer already purchased.
+    The next plan is the one of a live App Store / Google Play subscription, or
+    Free (see plan_lifecycle.plan_after_entitlement_end). A courtesy never
+    destroys access the customer bought in a store.
     """
     from backend.product_ops.service import LAUNCH_PROMOTION_CODE
 
-    expired = conn.execute(
-        """SELECT courtesy_note FROM account_subscriptions
-           WHERE account_id=%s AND access_source='courtesy'
-             AND expires_at IS NOT NULL AND expires_at<=NOW()""",
-        (account_id,),
-    ).fetchone()
+    due = """SELECT courtesy_note FROM account_subscriptions
+             WHERE account_id=%s AND access_source='courtesy'
+               AND expires_at IS NOT NULL AND expires_at<=NOW()"""
+    if not conn.execute(due, (account_id,)).fetchone():
+        return None
+    # Re-check under the row lock every plan change takes: two requests end it once.
+    expired = conn.execute(due + " FOR UPDATE", (account_id,)).fetchone()
     if not expired:
         return None
-    paid = conn.execute(
-        """SELECT plan_code FROM billing_subscriptions
-           WHERE account_id=%s AND status='active' AND provider<>'promotion'
-             AND (current_period_end IS NULL OR current_period_end>NOW())
-           ORDER BY updated_at DESC LIMIT 1""",
-        (account_id,),
-    ).fetchone()
-    fallback_code = plan_after_entitlement_end(conn, account_id, (paid or {}).get("plan_code") or "free")
+    fallback_code = plan_after_entitlement_end(conn, account_id)
     plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (fallback_code,)).fetchone()
     if not plan:
         return None
@@ -91,7 +84,7 @@ def _end_expired_courtesy(conn, account_id: str):
 
 
 def _expire_unpaid_subscription(conn, account_id: str):
-    """Expire a finished off-store paid period and move its plan to the next one."""
+    """Expire a finished paid period and return the account to Free."""
     expired = conn.execute(
         """UPDATE billing_subscriptions
            SET status='expired',updated_at=NOW()
@@ -102,51 +95,29 @@ def _expire_unpaid_subscription(conn, account_id: str):
     ).fetchone()
     if not expired:
         return None
-    current = conn.execute("SELECT access_source FROM account_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
-    if (current or {}).get("access_source") != "self_service":
-        # A courtesy or owner grant is independent of the paid period: it keeps
-        # its plan, and its own end decides what comes next.
-        return None
-    next_code = plan_after_entitlement_end(conn, account_id, "free")
-    plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (next_code,)).fetchone()
-    if not plan:
+    free = conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
+    if not free:
         return None
     conn.execute(
         """UPDATE account_subscriptions
            SET plan_id=%s,status='active',access_source='self_service',started_at=NOW(),
                expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()
-           WHERE account_id=%s AND access_source='self_service'""",
-        (plan["id"], account_id),
+           WHERE account_id=%s""",
+        (free["id"], account_id),
     )
     return {
         "code": "subscription_expired",
         "title": "Tu suscripción terminó",
-        "message": (
-            f"Continuás con tu plan {next_code.upper()}."
-            if next_code != "free"
-            else "Ahora estás en el plan Gratis. Las compras de Basic y VIP estarán disponibles más adelante en las tiendas oficiales."
-        ),
+        "message": "Ahora estás en el plan Gratis. Las compras de Basic y VIP estarán disponibles más adelante en las tiendas oficiales.",
         "previous_plan": expired.get("plan_code"),
         "expired_at": expired.get("current_period_end"),
     }
 
 
 def _subscription(conn, account_id: str):
-    notice = None
-    due = conn.execute(
-        """SELECT EXISTS (SELECT 1 FROM billing_subscriptions WHERE account_id=%s AND status='active'
-                            AND current_period_end IS NOT NULL AND current_period_end<=NOW())
-               OR EXISTS (SELECT 1 FROM account_subscriptions WHERE account_id=%s AND access_source='courtesy'
-                            AND expires_at IS NOT NULL AND expires_at<=NOW()) AS due""",
-        (account_id, account_id),
-    ).fetchone()
-    if (due or {}).get("due"):
-        # A period ended: lock in the order every plan change uses (billing, then
-        # subscription) and move on; the steps re-check their conditions under the lock.
-        lock_billing_then_subscription(conn, account_id)
-        notice = _expire_unpaid_subscription(conn, account_id)
-        if notice is None:
-            notice = _end_expired_courtesy(conn, account_id)
+    notice = _expire_unpaid_subscription(conn, account_id)
+    if notice is None:
+        notice = _end_expired_courtesy(conn, account_id)
     row = conn.execute(
         """SELECT s.id, p.code AS plan, p.name AS plan_name,
                   CASE WHEN s.access_source='courtesy' AND s.expires_at IS NOT NULL AND s.expires_at<=NOW() THEN 'expired' ELSE s.status END AS status,

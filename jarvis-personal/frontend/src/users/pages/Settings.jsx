@@ -35,7 +35,7 @@ function PlanChangeNotice({ confirming, currentPlan, pendingPlan, accessEndDate,
     : tx(`Si tu plan ${current} tiene un período vigente, lo conservás hasta que termine.`, `If your ${current} plan has a current period, you keep it until it ends.`);
   const then = confirming === "free"
     ? tx("Después pasás a Gratis.", "Then you move to Free.")
-    : tx(`Después pasás a ${next} si tenés una compra activa de ${next}; si no, a Gratis.`, `Then you move to ${next} if you have an active ${next} purchase; otherwise to Free.`);
+    : tx(`Después pasás a ${next} si tenés una suscripción de ${next} en App Store o Google Play; si no, a Gratis.`, `Then you move to ${next} if you have a ${next} subscription in the App Store or Google Play; otherwise to Free.`);
   return <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{until} {then}</span></div>;
 }
 const pricesUnavailable = () => tx("No pudimos confirmar los precios. Reintentá antes de elegir Basic o VIP.", "We couldn’t confirm prices. Retry before choosing Basic or VIP.");
@@ -174,7 +174,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
             {tx(`Tu plan ${planName(currentPlan)} sigue activo hasta el ${pendingDate}.`, `Your ${planName(currentPlan)} plan stays active until ${pendingDate}.`)}
             {" "}
             {user?.subscription?.pending_requires_payment
-              ? tx(`Después pasarás a ${planName(pendingPlan)} si tenés una compra activa; si no, a Gratis.`, `Then you’ll move to ${planName(pendingPlan)} if you have an active purchase; otherwise to Free.`)
+              ? tx(`Después pasarás a ${planName(pendingPlan)} si tenés esa suscripción en App Store o Google Play; si no, a Gratis.`, `Then you’ll move to ${planName(pendingPlan)} if you have that subscription in the App Store or Google Play; otherwise to Free.`)
               : tx(`Después pasarás a ${planName(pendingPlan)}.`, `Then you’ll move to ${planName(pendingPlan)}.`)}
             {" "}
             <button type="button" className="change-plan-button" disabled={Boolean(changing)} onClick={() => setConfirming(currentPlan)}>

@@ -1000,7 +1000,6 @@ def _activate_order(conn, order, verification_source: str, bank_reference: str |
       VALUES(%s,%s,'active','self_service',NOW(),NOW(),NOW(),NOW()) ON CONFLICT(account_id) DO UPDATE SET
       plan_id=EXCLUDED.plan_id,status='active',access_source='self_service',started_at=NOW(),last_payment_at=NOW(),updated_at=NOW()""",
       (order["account_id"], plan["id"]))
-    clear_pending(conn, order["account_id"])
     conn.execute(
       "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level=%s,updated_at=NOW() WHERE id=%s",
       (order["plan_code"], order["account_id"]),

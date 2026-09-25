@@ -1,5 +1,6 @@
--- Scheduled plan changes: a downgrade or cancellation keeps the current plan
--- until its stored end (courtesy/promotion expires_at, or the paid period end).
+-- Scheduled plan changes: a downgrade or cancellation of a courtesy (the launch
+-- promotion included) keeps the current plan until its stored expires_at. Store
+-- subscriptions (App Store / Google Play) are changed only in the store.
 --
 -- account_subscriptions.pending_plan_id is the plan the account moves to at
 -- pending_effective_at; the current plan_id keeps every benefit until then.

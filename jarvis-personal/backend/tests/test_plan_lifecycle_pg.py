@@ -1,4 +1,5 @@
-"""Plan changes on a real PostgreSQL: downgrades keep the current plan until its stored end.
+"""Plan changes on a real PostgreSQL: downgrades keep the current plan until its stored end;
+paid plans come only from App Store / Google Play subscriptions.
 
 Skipped when the embedded server (pgserver) is not installed.
 """
@@ -37,6 +38,7 @@ CREATE TABLE account_subscriptions (
     started_at TIMESTAMPTZ, expires_at TIMESTAMPTZ, last_payment_at TIMESTAMPTZ, courtesy_note TEXT,
     granted_by UUID, granted_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+-- Still read by main's _expire_unpaid_subscription until the off-store tables are retired.
 CREATE TABLE billing_subscriptions (
     account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE, workspace_id UUID,
     plan_code TEXT NOT NULL CHECK (plan_code IN ('basic','vip')),
@@ -45,7 +47,8 @@ CREATE TABLE billing_subscriptions (
     cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE billing_orders (id BIGSERIAL PRIMARY KEY, account_id UUID, status TEXT, updated_at TIMESTAMPTZ);
 CREATE TABLE store_subscriptions (account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
-    provider TEXT NOT NULL, plan_code TEXT NOT NULL, status TEXT NOT NULL);
+    provider TEXT NOT NULL, plan_code TEXT NOT NULL, status TEXT NOT NULL,
+    trial_ends_at TIMESTAMPTZ, current_period_end TIMESTAMPTZ);
 """
 PROMO = billing.LAUNCH_PROMOTION_CODE
 
@@ -153,43 +156,46 @@ def test_at_the_end_of_the_promotion_the_pending_free_plan_applies(migrated):
     assert denied.value.status_code == 403
 
 
-def test_a_pending_basic_needs_a_payment_after_the_promotion(migrated):
+def _store(db, account, plan, status="active", period="NOW() + INTERVAL '20 days'", trial="NULL", provider="google"):
+    db["cur"].execute(f"""INSERT INTO store_subscriptions(account_id, provider, plan_code, status, trial_ends_at, current_period_end)
+                          VALUES (%s, %s, %s, %s, {trial}, {period})""", (account, provider, plan, status))
+
+
+def test_a_pending_basic_needs_a_store_subscription_after_the_promotion(migrated):
     account = _account(migrated)
     saas.select_plan("basic")
     _expire(migrated, account)
-    assert _subscription(account)["plan"] == "free"
+    assert _subscription(account)["plan"] == "free"  # nobody bought Basic: DINCR never grants it
 
     paid = _account(migrated)
     saas.select_plan("basic")
-    migrated["cur"].execute("""INSERT INTO billing_subscriptions(account_id, plan_code, status, current_period_end)
-                               VALUES (%s, 'basic', 'active', NOW() + INTERVAL '20 days')""", (paid,))
+    _store(migrated, paid, "basic")  # bought in the store before the promotion ended
     _expire(migrated, paid)
     assert _subscription(paid)["plan"] == "basic"
 
 
-def test_a_paid_period_that_outlives_the_courtesy_runs_to_its_own_end(migrated):
+def test_the_store_subscription_decides_the_plan_after_the_courtesy(migrated):
+    """A pending Free cannot cancel a store purchase; the store is authoritative for paid plans."""
     account = _account(migrated)
     saas.select_plan("free")
-    migrated["cur"].execute("""INSERT INTO billing_subscriptions(account_id, plan_code, status, current_period_end)
-                               VALUES (%s, 'vip', 'active', NOW() + INTERVAL '20 days')""", (account,))
+    _store(migrated, account, "vip")
     _expire(migrated, account)
 
     subscription = _subscription(account)
 
-    assert subscription["plan"] == "vip" and subscription["pending_plan"] == "free"
-    migrated["cur"].execute("""SELECT s.pending_effective_at = b.current_period_end, b.cancel_at_period_end
-                               FROM account_subscriptions s JOIN billing_subscriptions b USING (account_id) WHERE account_id = %s""", (account,))
-    assert migrated["cur"].fetchone() == (True, True)
-    migrated["cur"].execute("UPDATE billing_subscriptions SET current_period_end = NOW() - INTERVAL '1 minute' WHERE account_id = %s", (account,))
-    ended = _subscription(account)
-    assert ended["plan"] == "free" and ended["pending_plan"] is None
+    assert subscription["plan"] == "vip" and subscription["access_source"] == "self_service"
+    assert subscription["pending_plan"] is None
 
 
-def test_a_pending_paid_plan_says_it_needs_a_payment(migrated):
+def test_a_pending_paid_plan_says_it_needs_a_store_subscription(migrated):
     _account(migrated)
     assert saas.select_plan("basic")["profile"]["subscription"]["pending_requires_payment"] is True
     _account(migrated)
     assert saas.select_plan("free")["profile"]["subscription"]["pending_requires_payment"] is False
+    covered = _account(migrated)
+    saas.select_plan("basic")
+    _store(migrated, covered, "basic")
+    assert _subscription(covered)["pending_requires_payment"] is False
 
 
 def test_an_ended_period_is_applied_before_the_decision(migrated):
@@ -258,30 +264,11 @@ def test_concurrent_requests_are_serialized_and_never_downgrade_immediately(migr
     assert (code, source) == ("vip", "courtesy") and pending in {"free", "basic"}
 
 
-def test_an_off_store_paid_period_is_kept_and_not_renewed(migrated):
+def test_a_plan_without_a_running_grant_changes_now(migrated):
+    """No courtesy end and no store subscription: nothing is left to keep."""
     account = _account(migrated, source="self_service", note=None, expires="NULL")
-    migrated["cur"].execute("""INSERT INTO billing_subscriptions(account_id, plan_code, status, current_period_end)
-                               VALUES (%s, 'vip', 'active', NOW() + INTERVAL '12 days')""", (account,))
-
-    response = saas.select_plan("free")
-
-    assert response["status"] == "downgrade_scheduled"
-    migrated["cur"].execute("SELECT status, cancel_at_period_end FROM billing_subscriptions WHERE account_id = %s", (account,))
-    assert migrated["cur"].fetchone() == ("active", True)
-    assert _row(migrated, account)[0] == "vip"
-    assert saas.require_feature("strategy_vip") is True
-    migrated["cur"].execute("UPDATE billing_subscriptions SET current_period_end = NOW() - INTERVAL '1 minute' WHERE account_id = %s", (account,))
-    migrated["cur"].execute("UPDATE account_subscriptions SET pending_effective_at = NOW() - INTERVAL '1 minute' WHERE account_id = %s", (account,))
-    subscription = _subscription(account)
-    assert subscription["plan"] == "free" and subscription["access_notice"]["code"] == "subscription_expired"
-
-
-def test_an_ended_paid_period_does_not_remove_an_active_courtesy(migrated):
-    account = _account(migrated)
-    migrated["cur"].execute("""INSERT INTO billing_subscriptions(account_id, plan_code, status, current_period_end)
-                               VALUES (%s, 'basic', 'active', NOW() - INTERVAL '1 minute')""", (account,))
-    assert _subscription(account)["plan"] == "vip"
-    assert _row(migrated, account)[1] == "courtesy"
+    assert saas.select_plan("free")["status"] == "ok"
+    assert _row(migrated, account)[0] == "free"
 
 
 def test_an_expired_owner_courtesy_returns_to_free_features(migrated):
@@ -299,13 +286,40 @@ def test_the_owner_is_never_changed(migrated, monkeypatch):
     assert _row(migrated, account)[:2] == ("vip", "owner")
 
 
-def test_a_store_managed_plan_is_changed_only_in_the_store(migrated):
-    account = _account(migrated, source="self_service", note=None, expires="NULL")
-    migrated["cur"].execute("INSERT INTO store_subscriptions VALUES (%s, 'apple', 'vip', 'active')", (account,))
+@pytest.mark.parametrize("source", ["self_service", "courtesy"])
+@pytest.mark.parametrize("target", ["free", "basic"])
+def test_a_store_managed_plan_is_changed_only_in_the_store(migrated, source, target):
+    account = _account(migrated, source=source, note=None if source == "self_service" else PROMO,
+                       expires="NULL" if source == "self_service" else "NOW() + INTERVAL '90 days'")
+    _store(migrated, account, "vip")
     with pytest.raises(HTTPException) as refused:
-        saas.select_plan("free")
+        saas.select_plan(target)
     assert refused.value.status_code == 409 and "App Store" in refused.value.detail
-    assert _row(migrated, account)[0] == "vip"
+    assert _row(migrated, account)[0] == "vip" and _row(migrated, account)[3] is None
+
+
+@pytest.mark.parametrize(("status", "trial", "period"), [
+    ("expired", "NULL", "NOW() + INTERVAL '5 days'"),
+    ("revoked", "NULL", "NOW() + INTERVAL '5 days'"),
+    ("canceled", "NULL", "NOW() + INTERVAL '5 days'"),
+    ("active", "NULL", "NOW() - INTERVAL '1 minute'"),
+    ("grace_period", "NULL", "NOW() - INTERVAL '1 minute'"),
+    ("trialing", "NOW() - INTERVAL '1 minute'", "NOW() + INTERVAL '30 days'"),
+])
+def test_a_store_subscription_that_ended_grants_nothing(migrated, status, trial, period):
+    account = _account(migrated)
+    _store(migrated, account, "vip", status=status, trial=trial, period=period)
+    assert saas.select_plan("free")["status"] == "downgrade_scheduled"  # not store-managed any more
+    _expire(migrated, account)
+    assert _subscription(account)["plan"] == "free"
+
+
+@pytest.mark.parametrize(("status", "trial"), [("trialing", "NOW() + INTERVAL '3 days'"), ("grace_period", "NULL")])
+def test_a_trial_or_grace_period_is_a_live_store_subscription(migrated, status, trial):
+    account = _account(migrated)
+    _store(migrated, account, "basic", status=status, trial=trial)
+    _expire(migrated, account)
+    assert _subscription(account)["plan"] == "basic"
 
 
 def test_a_free_account_still_selects_free_during_onboarding(migrated):
@@ -343,3 +357,12 @@ def test_the_migration_is_idempotent_constrained_and_reversible(db):
     cur.execute(ROLLBACK.read_text(encoding="utf-8"))
     cur.execute("SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.account_subscriptions'::regclass AND attname LIKE 'pending%' AND NOT attisdropped")
     assert cur.fetchone() == (0,)
+
+
+def test_a_simulated_sandbox_subscription_is_not_a_store_plan(migrated):
+    """The Owner-only QA simulator writes provider 'sandbox': it neither blocks changes nor grants a plan."""
+    account = _account(migrated)
+    _store(migrated, account, "vip", provider="sandbox")
+    assert saas.select_plan("free")["status"] == "downgrade_scheduled"
+    _expire(migrated, account)
+    assert _subscription(account)["plan"] == "free"
