@@ -11,7 +11,7 @@ def test_aguinaldo_period_runs_from_december_to_november():
 
 def test_finva_gmail_searches_complete_aguinaldo_period_for_ccss_orders():
     query = _aguinaldo_gmail_query(date(2026, 9, 3))
-    assert 'subject:"Generación de Orden Patronal Digital"' in query
+    assert "from:ccss.sa.cr" in query and "subject:" not in query  # never listed by subject alone
     assert "after:2025/12/01" in query
     assert "-in:spam -in:trash" in query
 
