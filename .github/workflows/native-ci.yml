@@ -92,12 +92,11 @@ jobs:
         working-directory: jarvis-personal/native/ios
     steps:
       - uses: actions/checkout@v4
-      - name: Pick an iPhone simulator
+      - name: Pick an iPhone simulator this Xcode supports
         id: sim
         run: |
-          udid=$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          devices = json.load(sys.stdin)["devices"]
-          print(next(d["udid"] for runtime, items in sorted(devices.items(), reverse=True) if "iOS" in runtime for d in items if d["name"].startswith("iPhone")))')
-          echo "udid=$udid" >> "$GITHUB_OUTPUT"
-      - run: xcodebuild -project DINCR.xcodeproj -scheme DINCR -destination "id=${{ steps.sim.outputs.udid }}" CODE_SIGNING_ALLOWED=NO test
+          id=$(xcodebuild -project DINCR.xcodeproj -scheme DINCR -showdestinations 2>/dev/null \
+            | grep "platform:iOS Simulator" | grep -m1 "name:iPhone" | sed -E 's/.*id:([^,]+),.*/\1/')
+          test -n "$id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - run: xcodebuild -project DINCR.xcodeproj -scheme DINCR -destination "id=${{ steps.sim.outputs.id }}" CODE_SIGNING_ALLOWED=NO test

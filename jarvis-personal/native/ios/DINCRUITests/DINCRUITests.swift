@@ -1,12 +1,11 @@
 import XCTest
 
 /// End-to-end flows on synthetic fixture data (no backend, no real account).
+/// XCUIApplication is main-actor isolated (Swift 6 language mode), so the tests are too.
+@MainActor
 final class DINCRUITests: XCTestCase {
-    override func setUp() {
-        continueAfterFailure = false
-    }
-
     private func launch(_ scenario: String = "populated", skipLogin: Bool = true, extra: [String] = []) -> XCUIApplication {
+        continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", scenario, "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"] + (skipLogin ? ["-DincrSkipLogin"] : []) + extra
         app.launch()
@@ -128,6 +127,7 @@ final class DINCRUITests: XCTestCase {
 }
 
 extension XCUIElement {
+    @MainActor
     func clearAndType(_ text: String) {
         guard let current = value as? String, !current.isEmpty else { typeText(text); return }
         typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
