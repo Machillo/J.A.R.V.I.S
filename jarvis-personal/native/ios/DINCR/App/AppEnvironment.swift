@@ -10,14 +10,18 @@ struct AppEnvironment {
         case fixtures(FixtureDincrService.Scenario)
     }
 
-    /// Supabase already allows this redirect for the Capacitor app (nativeAuth.js).
-    static let authCallbackScheme = "com.dincr.app"
-    static let authRedirect = "com.dincr.app://auth/callback"
+    /// The prototype's own redirect, so it can never receive (or steal) the store app's
+    /// `com.dincr.app://auth/callback`. Live sign-in needs this URL in Supabase Auth → Redirect
+    /// URLs (external gate, native/README.md).
+    static let authCallbackScheme = "com.dincr.app.nativedev"
+    static let authRedirect = "com.dincr.app.nativedev://auth/callback"
 
     let mode: Mode
 
     static func current(bundle: Bundle = .main, arguments: [String] = ProcessInfo.processInfo.arguments) -> AppEnvironment {
-        if let index = arguments.firstIndex(of: "-DincrFixtures") {
+        // Launch-argument fixtures are a Debug (UI test) switch only: a release build with a
+        // backend configured can never be pointed at sample data.
+        if Self.allowsLaunchFixtures, let index = arguments.firstIndex(of: "-DincrFixtures") {
             let raw = arguments.indices.contains(index + 1) ? arguments[index + 1] : "populated"
             return AppEnvironment(mode: .fixtures(FixtureDincrService.Scenario(rawValue: raw) ?? .populated))
         }
@@ -32,6 +36,12 @@ struct AppEnvironment {
         }
         return AppEnvironment(mode: .live(apiURL: api, supabaseURL: supabase, anonKey: key))
     }
+
+    #if DEBUG
+    static let allowsLaunchFixtures = true
+    #else
+    static let allowsLaunchFixtures = false
+    #endif
 
     var isFixtures: Bool {
         if case .fixtures = mode { return true }

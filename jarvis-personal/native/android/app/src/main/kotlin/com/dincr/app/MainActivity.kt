@@ -47,10 +47,13 @@ class MainActivity : ComponentActivity() {
         handleAuthCallback(intent)
     }
 
-    /** Only the OAuth return on our redirect is handled; the code is exchanged with our PKCE verifier. */
+    /**
+     * VIEW intents carry the OAuth return. The model accepts only our exact redirect with a code,
+     * and only while a sign-in it started is pending; the code is exchanged with its PKCE verifier.
+     */
     private fun handleAuthCallback(intent: Intent?) {
-        val data = intent?.dataString ?: return
-        if (data.startsWith(AppEnvironment.AUTH_REDIRECT)) model.handleCallback(data)
+        if (intent?.action != Intent.ACTION_VIEW) return
+        intent.dataString?.let(model::handleCallback)
     }
 }
 

@@ -65,15 +65,24 @@ public struct SupabaseAuthClient: Sendable {
         return components.url!
     }
 
-    /// Extracts the authorization code from the callback. Errors reported by the provider and
-    /// callbacks without a code are rejected.
-    public static func authorizationCode(from callback: URL, expectedPrefix: String) throws -> String {
-        guard callback.absoluteString.hasPrefix(expectedPrefix),
-              let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems else {
+    /// Extracts the authorization code from the callback. Fails closed: the URL must be exactly
+    /// our redirect (scheme, host and path; no user, port or fragment) carrying one non-empty
+    /// `code`. Look-alike URLs ("…/callbackX", other hosts), tokens in a fragment (implicit
+    /// flow), duplicated codes and provider errors are all rejected.
+    public static func authorizationCode(from callback: URL, redirect: String) throws -> String {
+        guard let actual = URLComponents(url: callback, resolvingAgainstBaseURL: false),
+              let expected = URLComponents(string: redirect),
+              actual.scheme?.lowercased() == expected.scheme?.lowercased(),
+              actual.host?.lowercased() == expected.host?.lowercased(),
+              actual.path == expected.path,
+              actual.user == nil, actual.password == nil, actual.port == nil,
+              (actual.fragment ?? "").isEmpty else {
             throw AuthError.invalidCallback
         }
+        let items = actual.queryItems ?? []
         if items.contains(where: { $0.name == "error" || $0.name == "error_description" }) { throw AuthError.providerRejected }
-        guard let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty else { throw AuthError.invalidCallback }
+        let codes = items.filter { $0.name == "code" }
+        guard codes.count == 1, let code = codes[0].value, !code.isEmpty else { throw AuthError.invalidCallback }
         return code
     }
 

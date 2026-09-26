@@ -32,11 +32,14 @@ class ContractTest {
 
     @Test fun decodesMovements() {
         val rows = json.decodeFromString<List<Movement>>(fixture("free_movements"))
+        assertEquals(4, rows.size)
         assertEquals(MovementKind.INCOME, rows[0].kind)
         assertTrue(rows[0].editable)
-        assertFalse(rows[1].editable)
-        assertEquals("debt payments are money leaving", MovementKind.EXPENSE, rows[2].kind)
-        assertNull(rows[2].day)
+        assertEquals("cents survive decoding", 0, BigDecimal("18450.5").compareTo(rows[1].amount))
+        assertFalse(rows[2].editable)
+        assertEquals("debt payments arrive as read-only expenses", MovementKind.EXPENSE, rows[3].kind)
+        assertNull(rows[3].day)
+        assertNull(rows[3].category)
     }
 
     @Test fun decodesProfilePreferences() {
@@ -50,7 +53,7 @@ class ContractTest {
     }
 
     @Test fun ownerSessionsAreRecognized() {
-        listOf("owner", "admin").forEach { assertTrue(json.decodeFromString<Profile>("""{"id":"x","role":"$it"}""").isOwner) }
+        listOf("owner", "admin").forEach { assertTrue(json.decodeFromString<Profile>("""{"id":1,"role":"$it"}""").isOwner) }
     }
 
     @Test fun encodesBodiesInSnakeCaseWithExactAmounts() {
@@ -173,17 +176,37 @@ class AuthTest {
         assertEquals("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", Pkce("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk").challenge)
     }
 
-    @Test fun callbackAcceptsOnlyCodeOnExpectedScheme() {
-        val prefix = "com.dincr.app://auth/callback"
-        assertEquals("abc", SupabaseAuthClient.authorizationCode("$prefix?code=abc", prefix))
-        listOf("evil://auth/callback?code=abc", "$prefix#access_token=x", "$prefix?error=access_denied").forEach {
-            try { SupabaseAuthClient.authorizationCode(it, prefix); fail(it) } catch (_: AuthException) {}
+    private val redirect = "com.dincr.app.nativedev://auth/callback"
+
+    @Test fun callbackAcceptsOnlyCodeOnTheExactRedirect() {
+        assertEquals("abc", SupabaseAuthClient.authorizationCode("$redirect?code=abc", redirect))
+        assertEquals("abc", SupabaseAuthClient.authorizationCode("COM.DINCR.APP.NATIVEDEV://auth/callback?code=abc&state=s", redirect))
+        try { SupabaseAuthClient.authorizationCode("$redirect?error=access_denied", redirect); fail() } catch (_: AuthException.ProviderRejected) {}
+    }
+
+    @Test fun callbackRejectsAnythingElse() {
+        listOf(
+            "evil://auth/callback?code=abc",
+            "com.dincr.app://auth/callback?code=abc",
+            "com.dincr.app.nativedev://auth/callbackX?code=abc",
+            "com.dincr.app.nativedev://auth/callback/x?code=abc",
+            "com.dincr.app.nativedev://evil/callback?code=abc",
+            "com.dincr.app.nativedev://user@auth/callback?code=abc",
+            "com.dincr.app.nativedev://auth:99/callback?code=abc",
+            "com.dincr.app.nativedev://auth/callback#access_token=x&refresh_token=y",
+            "com.dincr.app.nativedev://auth/callback?code=abc#access_token=x",
+            "com.dincr.app.nativedev://auth/callback",
+            "com.dincr.app.nativedev://auth/callback?code=",
+            "com.dincr.app.nativedev://auth/callback?code=a&code=b",
+            "not a url at all",
+        ).forEach {
+            try { SupabaseAuthClient.authorizationCode(it, redirect); fail(it) } catch (_: AuthException.InvalidCallback) {}
         }
     }
 
     @Test fun authorizeUrlCarriesPkce() {
         val pkce = Pkce("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
-        val url = SupabaseAuthClient("https://project.example.test", "anon").authorizeUrl(OAuthProvider.GOOGLE, "com.dincr.app://auth/callback", pkce)
+        val url = SupabaseAuthClient("https://project.example.test", "anon").authorizeUrl(OAuthProvider.GOOGLE, redirect, pkce)
         assertTrue(url, url.startsWith("https://project.example.test/auth/v1/authorize?provider=google"))
         assertTrue(url, url.contains("code_challenge=${pkce.challenge}") && url.contains("code_challenge_method=s256") && url.contains("prompt=select_account"))
     }

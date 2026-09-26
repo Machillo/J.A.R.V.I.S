@@ -26,12 +26,13 @@ import Testing
 
     @Test func decodesMovementsIncludingReadOnlyAndDebtPayments() throws {
         let rows = try APIClient.decoder.decode([Movement].self, from: fixture("free_movements"))
-        #expect(rows.count == 3)
+        #expect(rows.count == 4)
         #expect(rows[0].transactionType == .income)
         #expect(rows[0].editable)
-        #expect(rows[1].editable == false)
-        #expect(rows[2].transactionType == .expense, "debt payments are money leaving")
-        #expect(rows[2].day == nil)
+        #expect(rows[1].amount == Decimal(string: "18450.5"), "cents survive decoding")
+        #expect(rows[2].editable == false)
+        #expect(rows[3].transactionType == .expense, "debt payments arrive as read-only expenses")
+        #expect(rows[3].day == nil && rows[3].category == nil)
     }
 
     @Test func decodesProfileFormattingPreferences() throws {
@@ -47,7 +48,7 @@ import Testing
 
     @Test func ownerSessionsAreRecognized() throws {
         for role in ["owner", "admin"] {
-            let json = #"{"id":"x","role":"\#(role)"}"#
+            let json = #"{"id":1,"role":"\#(role)"}"#
             #expect(try APIClient.decoder.decode(Profile.self, from: Data(json.utf8)).isOwner)
         }
     }

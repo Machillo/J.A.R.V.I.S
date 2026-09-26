@@ -1,9 +1,10 @@
 import Foundation
 
 // Client models for the DINCR API. They decode only the fields the native screens use and
-// ignore everything else, so backend additions never break the app. Field names follow the
-// JSON contract (see docs/native/CURRENT_STATE_AUDIT.md §6: responses are not typed in
-// OpenAPI yet, so each model is pinned by a fixture test instead).
+// ignore everything else, so backend additions never break the app. Field names, types and
+// optionality follow the FastAPI code (auth/saas.py enrich_identity,
+// user_product/free_service.py); responses are not typed in OpenAPI yet, so each model is
+// pinned by a fixture that mirrors what the backend builds (native/CONTRACT.md).
 
 /// `GET /auth/me`
 public struct Profile: Decodable, Sendable, Equatable {
@@ -17,7 +18,8 @@ public struct Profile: Decodable, Sendable, Equatable {
         public let privacyVersion: String?
     }
 
-    public let id: String
+    /// `allowed_users.id`: an integer, not the Supabase UUID.
+    public let id: Int
     public let email: String?
     public let displayName: String?
     public let role: String?
@@ -30,7 +32,7 @@ public struct Profile: Decodable, Sendable, Equatable {
     public let legal: Legal?
 
     public init(
-        id: String, email: String? = nil, displayName: String? = nil, role: String? = "user",
+        id: Int, email: String? = nil, displayName: String? = nil, role: String? = "user",
         planSelected: Bool? = true, profileSetupCompleted: Bool? = true, baseCurrency: String? = "CRC",
         numberFormat: String? = "dot_comma", currencyPlacement: String? = "before",
         subscription: Subscription? = nil, legal: Legal? = nil
@@ -58,6 +60,10 @@ public struct MonthTotals: Decodable, Sendable, Equatable, Identifiable {
     public let debtPaid: Decimal?
     public let balance: Decimal?
     public var id: String { month }
+
+    public init(month: String, income: Decimal, expenses: Decimal, debtPaid: Decimal? = nil, balance: Decimal? = nil) {
+        self.month = month; self.income = income; self.expenses = expenses; self.debtPaid = debtPaid; self.balance = balance
+    }
 }
 
 public struct CategoryAmount: Decodable, Sendable, Equatable, Identifiable {
@@ -96,8 +102,10 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public let category: String?
     public let notes: String?
     public let editable: Bool
-    /// Present once movements carry their own currency (multi-currency work in progress).
-    public let currency: String?
+    /// Set only when the amount was typed in another currency (PR #269): `amount` is already
+    /// in the base currency and these keep what was typed. Absent on current main.
+    public let originalAmount: Decimal?
+    public let originalCurrency: String?
 
     public var id: String { movementId }
     /// `YYYY-MM-DD` or nil when the backend has no usable date.
@@ -106,17 +114,26 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public init(
         movementId: String, sourceId: Int? = nil, origin: String? = nil, transactionDate: String?,
         description: String?, amount: Decimal, transactionType: Kind, category: String?,
-        notes: String? = nil, editable: Bool = true, currency: String? = nil
+        notes: String? = nil, editable: Bool = true, originalAmount: Decimal? = nil, originalCurrency: String? = nil
     ) {
         self.movementId = movementId; self.sourceId = sourceId; self.origin = origin
         self.transactionDate = transactionDate; self.description = description; self.amount = amount
         self.transactionType = transactionType; self.category = category; self.notes = notes
-        self.editable = editable; self.currency = currency
+        self.editable = editable; self.originalAmount = originalAmount; self.originalCurrency = originalCurrency
+    }
+
+    /// Whether this app may edit the row. A row typed in another currency must send its currency
+    /// and rate back on edit (PR #269), which this client does not do yet, so it stays read-only
+    /// instead of being silently turned into a base-currency amount.
+    public func isEditable(baseCurrency: String) -> Bool {
+        guard editable else { return false }
+        guard let originalCurrency else { return true }
+        return originalCurrency.uppercased() == baseCurrency.uppercased()
     }
 
     enum CodingKeys: String, CodingKey {
         case movementId, sourceId, origin, transactionDate, description, amount, transactionType
-        case category, notes, editable, currency
+        case category, notes, editable, originalAmount, originalCurrency
     }
 
     public init(from decoder: Decoder) throws {
@@ -127,13 +144,15 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
         transactionDate = try c.decodeIfPresent(String.self, forKey: .transactionDate)
         description = try c.decodeIfPresent(String.self, forKey: .description)
         amount = try c.decode(Decimal.self, forKey: .amount)
-        // Anything that is not income is money leaving (expense, debt payment).
+        // The backend sends only "income" or "expense" (debt payments arrive as read-only
+        // "expense" rows); anything else is treated as money leaving.
         let rawType = try c.decodeIfPresent(String.self, forKey: .transactionType)
         transactionType = rawType == "income" ? .income : .expense
         category = try c.decodeIfPresent(String.self, forKey: .category)
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
         editable = try c.decodeIfPresent(Bool.self, forKey: .editable) ?? false
-        currency = try c.decodeIfPresent(String.self, forKey: .currency)
+        originalAmount = try c.decodeIfPresent(Decimal.self, forKey: .originalAmount)
+        originalCurrency = try c.decodeIfPresent(String.self, forKey: .originalCurrency)
     }
 }
 
@@ -187,7 +206,8 @@ public struct ProfileEnvelope: Decodable, Sendable {
     public let profile: Profile
 }
 
-/// Generic `{"status": "ok", ...}` acknowledgement.
+/// Any JSON object. Create routes return the stored row; update and delete return
+/// `{"status": "ok", "movement_id": ...}`. Nothing in them is needed.
 public struct Acknowledgement: Decodable, Sendable {
     public let status: String?
 }

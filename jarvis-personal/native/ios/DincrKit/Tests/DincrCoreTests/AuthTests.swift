@@ -18,7 +18,7 @@ import Testing
     @Test func authorizeURLCarriesPKCEAndProviderOptions() throws {
         let client = SupabaseAuthClient(projectURL: URL(string: "https://project.example.test")!, anonKey: "anon")
         let pkce = PKCE(verifier: "dBjftJeZ4CVP-mJ92K9XgX3VWNdcbmRz3-GrjqTwZqHhWcm")
-        let url = client.authorizeURL(provider: .google, redirectTo: "com.dincr.app://auth/callback", pkce: pkce)
+        let url = client.authorizeURL(provider: .google, redirectTo: Self.redirect, pkce: pkce)
         let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
         let query = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
         #expect(url.path == "/auth/v1/authorize")
@@ -26,21 +26,36 @@ import Testing
         #expect(query["code_challenge_method"] == "s256")
         #expect(query["code_challenge"] == pkce.challenge)
         #expect(query["prompt"] == "select_account")
-        #expect(query["redirect_to"] == "com.dincr.app://auth/callback")
+        #expect(query["redirect_to"] == Self.redirect)
     }
 
-    @Test func callbackAcceptsOnlyACodeOnTheExpectedScheme() throws {
-        let prefix = "com.dincr.app://auth/callback"
-        #expect(try SupabaseAuthClient.authorizationCode(from: URL(string: "\(prefix)?code=abc")!, expectedPrefix: prefix) == "abc")
-        #expect(throws: AuthError.invalidCallback) {
-            try SupabaseAuthClient.authorizationCode(from: URL(string: "evil://auth/callback?code=abc")!, expectedPrefix: prefix)
-        }
-        #expect(throws: AuthError.invalidCallback) {
-            // Tokens in the URL (implicit flow) are never accepted.
-            try SupabaseAuthClient.authorizationCode(from: URL(string: "\(prefix)#access_token=x&refresh_token=y")!, expectedPrefix: prefix)
-        }
+    static let redirect = "com.dincr.app.nativedev://auth/callback"
+
+    @Test func callbackAcceptsOnlyACodeOnTheExactRedirect() throws {
+        #expect(try SupabaseAuthClient.authorizationCode(from: URL(string: "\(Self.redirect)?code=abc")!, redirect: Self.redirect) == "abc")
+        #expect(try SupabaseAuthClient.authorizationCode(from: URL(string: "COM.DINCR.APP.NATIVEDEV://auth/callback?code=abc&state=s")!, redirect: Self.redirect) == "abc")
         #expect(throws: AuthError.providerRejected) {
-            try SupabaseAuthClient.authorizationCode(from: URL(string: "\(prefix)?error=access_denied")!, expectedPrefix: prefix)
+            try SupabaseAuthClient.authorizationCode(from: URL(string: "\(Self.redirect)?error=access_denied")!, redirect: Self.redirect)
+        }
+    }
+
+    @Test(arguments: [
+        "evil://auth/callback?code=abc",                              // other scheme
+        "com.dincr.app://auth/callback?code=abc",                    // the production app's scheme
+        "com.dincr.app.nativedev://auth/callbackX?code=abc",         // look-alike path
+        "com.dincr.app.nativedev://auth/callback/x?code=abc",
+        "com.dincr.app.nativedev://evil/callback?code=abc",          // other host
+        "com.dincr.app.nativedev://user@auth/callback?code=abc",
+        "com.dincr.app.nativedev://auth:99/callback?code=abc",
+        "com.dincr.app.nativedev://auth/callback#access_token=x&refresh_token=y", // implicit-flow tokens
+        "com.dincr.app.nativedev://auth/callback?code=abc#access_token=x",
+        "com.dincr.app.nativedev://auth/callback",                    // missing code
+        "com.dincr.app.nativedev://auth/callback?code=",              // empty code
+        "com.dincr.app.nativedev://auth/callback?code=a&code=b",      // ambiguous code
+    ])
+    func callbackRejectsAnythingElse(url: String) {
+        #expect(throws: AuthError.invalidCallback) {
+            try SupabaseAuthClient.authorizationCode(from: URL(string: url)!, redirect: Self.redirect)
         }
     }
 

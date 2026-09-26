@@ -72,7 +72,7 @@ fun DincrCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
 @Composable
 fun MoneyText(amount: BigDecimal?, modifier: Modifier = Modifier, sign: MoneyFormat.Sign = MoneyFormat.Sign.NONE, style: TextStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), currency: String? = null) {
     val format = Dincr.money
-    val spoken = amount?.let { format.spoken(it, sign) } ?: AppLanguage.current().pick("sin dato", "no data")
+    val spoken = amount?.let { format.spoken(it, sign, currencyOverride = currency) } ?: AppLanguage.current().pick("sin dato", "no data")
     Text(
         text = amount?.let { format.format(it, sign, currency) } ?: "—",
         style = style.merge(TabularNums),
@@ -227,7 +227,7 @@ fun IncomeExpenseBars(months: List<Triple<String, BigDecimal, BigDecimal>>) {
             Legend(c.chartExpense, language.pick("Gastos", "Expenses"))
         }
         Row(
-            Modifier.fillMaxWidth().height(160.dp).clearAndSetSemantics { contentDescription = summary },
+            Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = summary },
             horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom,
         ) {
             months.forEach { (month, income, expenses) ->

@@ -56,7 +56,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
 import com.dincr.app.tx
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.data.ApiError
+import com.dincr.data.AuthException
+import com.dincr.data.SearchText
 import com.dincr.data.Movement
 import com.dincr.data.MovementKind
 import com.dincr.design.Dincr
@@ -73,7 +76,11 @@ import kotlinx.coroutines.launch
 
 enum class MovementFilter { ALL, INCOME, EXPENSE }
 
-/** PARITY D1, D3–D6 — movements by day, search, filter, add, edit, delete. */
+/**
+ * PARITY D1, D3–D6 (partial: no debt or category filter yet) — movements by day, search, filter,
+ * add, edit, delete. The backend returns the whole history; search and the type filter only
+ * narrow what is already on screen.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarHostState) {
@@ -84,7 +91,14 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     var pendingDelete by remember { mutableStateOf<Movement?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    suspend fun load() { state = try { Load.Ready(model.service.movements()) } catch (e: ApiError) { Load.Failed(e.message) } }
+    val profile by model.profile.collectAsStateWithLifecycle()
+    val baseCurrency = profile?.baseCurrency ?: "CRC"
+    var deleting by remember { mutableStateOf(false) }
+    suspend fun load() {
+        model.load(tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions.")) { model.service.movements() }
+            .onSuccess { state = Load.Ready(it) }
+            .onFailure { if (it !is AuthException.SignedOut) state = Load.Failed(it.message.orEmpty()) }
+    }
     LaunchedEffect(Unit) { load() }
 
     Box(Modifier.fillMaxSize().padding(padding)) {
@@ -105,10 +119,9 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                     Load.Loading -> item { Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) { SkeletonBlock(rows = 5, showsFigure = false) } }
                     is Load.Failed -> item { Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) { ErrorState(s.message) { scope.launch { state = Load.Loading; load() } } } }
                     is Load.Ready -> {
-                        val term = query.trim().lowercase()
                         val visible = s.value.filter {
                             (filter == MovementFilter.ALL || (filter == MovementFilter.INCOME) == (it.kind == MovementKind.INCOME)) &&
-                                (term.isEmpty() || "${it.description.orEmpty()} ${it.category.orEmpty()}".lowercase().contains(term))
+                                SearchText.matches(query, listOf(it.description, it.category))
                         }
                         if (visible.isEmpty()) item {
                             Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) {
@@ -125,14 +138,15 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                     modifier = Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(top = DincrSpacing.s5, bottom = DincrSpacing.s1).semantics { heading() })
                             }
                             items(rows, key = { it.movementId }) { movement ->
+                                val editable = movement.isEditable(baseCurrency)
                                 val edit = CustomAccessibilityAction(tx("Editar", "Edit")) { editing = EditorMode.Edit(movement); true }
                                 val delete = CustomAccessibilityAction(tx("Eliminar", "Delete")) { pendingDelete = movement; true }
                                 MoneyRow(
                                     title = movement.description?.takeIf { it.isNotBlank() } ?: movement.category ?: tx("Movimiento", "Transaction"),
-                                    subtitle = listOfNotNull(movement.category, if (movement.editable) null else tx("Solo lectura", "Read only")).joinToString(" · "),
-                                    amount = movement.amount, kind = movement.kind, icon = iconFor(movement), readOnly = !movement.editable, currency = movement.currency,
+                                    subtitle = listOfNotNull(movement.category, if (editable) null else tx("Solo lectura", "Read only")).joinToString(" · "),
+                                    amount = movement.amount, kind = movement.kind, icon = iconFor(movement), readOnly = !editable,
                                     modifier = Modifier.widthIn(max = 600.dp)
-                                        .then(if (movement.editable) Modifier.clickable { editing = EditorMode.Edit(movement) }.semantics { customActions = listOf(edit, delete) } else Modifier),
+                                        .then(if (editable) Modifier.clickable { editing = EditorMode.Edit(movement) }.semantics { customActions = listOf(edit, delete) } else Modifier),
                                 )
                             }
                         }
@@ -167,9 +181,18 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
             confirmButton = {
                 TextButton({
                     pendingDelete = null
+                    if (deleting) return@TextButton
+                    deleting = true
                     scope.launch {
-                        try { model.service.delete(movement.movementId); load(); snackbar.showSnackbar(tx("Movimiento eliminado", "Transaction deleted")) }
-                        catch (e: ApiError) { snackbar.showSnackbar(e.message) }
+                        val result = model.load(tx("No pudimos eliminarlo. Intentá de nuevo.", "We couldn’t delete it. Please try again.")) { model.service.delete(movement.movementId) }
+                        deleting = false
+                        val gone = (result.exceptionOrNull() as? ApiError)?.kind == ApiError.Kind.NOT_FOUND
+                        when {
+                            result.isSuccess -> { load(); snackbar.showSnackbar(tx("Movimiento eliminado", "Transaction deleted")) }
+                            // Already gone (deleted elsewhere or twice): show the list as it really is.
+                            gone -> { load(); snackbar.showSnackbar(tx("Ese movimiento ya no existía.", "That transaction was already gone.")) }
+                            result.exceptionOrNull() !is AuthException.SignedOut -> snackbar.showSnackbar(result.exceptionOrNull()?.message.orEmpty())
+                        }
                     }
                 }) { Text(tx("Eliminar", "Delete"), color = Dincr.colors.negative) }
             },

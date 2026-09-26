@@ -8,7 +8,8 @@ interface DincrService {
     /** A9 */ suspend fun completeProfileSetup(setup: ProfileSetup): Profile
     /** C1 */ suspend fun freeDashboard(): FreeDashboard
     /** D1, D5 */ suspend fun movements(): List<Movement>
-    /** D3 */ suspend fun create(kind: MovementKind, entry: EntryCreate)
+    /** D3. [idempotencyKey] identifies one user submission: sending it again cannot create a second row. */
+    suspend fun create(kind: MovementKind, entry: EntryCreate, idempotencyKey: String)
     /** D4, D5 */ suspend fun update(movementId: String, update: MovementUpdate)
     /** D6 */ suspend fun delete(movementId: String)
 }
@@ -22,9 +23,9 @@ class LiveDincrService(private val client: ApiClient) : DincrService {
         client.send<ProfileSetup, ProfileEnvelope>("POST", "/auth/profile-setup", setup).profile
     override suspend fun freeDashboard(): FreeDashboard = client.get("/user-product/free/dashboard")
     override suspend fun movements(): List<Movement> = client.get("/user-product/free/movements")
-    override suspend fun create(kind: MovementKind, entry: EntryCreate) {
+    override suspend fun create(kind: MovementKind, entry: EntryCreate, idempotencyKey: String) {
         val path = if (kind == MovementKind.INCOME) "/user-product/finance/income" else "/user-product/finance/expenses"
-        client.send<EntryCreate, Acknowledgement>("POST", path, entry)
+        client.send<EntryCreate, Acknowledgement>("POST", path, entry, idempotencyKey)
     }
     override suspend fun update(movementId: String, update: MovementUpdate) {
         client.send<MovementUpdate, Acknowledgement>("PUT", "/user-product/free/movements/${encode(movementId)}", update)

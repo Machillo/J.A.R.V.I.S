@@ -32,9 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.AppModel
 import com.dincr.app.tx
-import com.dincr.data.ApiError
+import com.dincr.data.AuthException
 import com.dincr.data.FreeDashboard
 import com.dincr.data.MoneyFormat
+import com.dincr.design.BannerTone
 import com.dincr.design.CategoryBars
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
@@ -44,6 +45,7 @@ import com.dincr.design.ErrorState
 import com.dincr.design.IncomeExpenseBars
 import com.dincr.design.MoneyText
 import com.dincr.design.SkeletonBlock
+import com.dincr.design.StatusBanner
 import com.dincr.design.generated.DincrSpacing
 import java.math.BigDecimal
 import kotlinx.coroutines.launch
@@ -59,7 +61,9 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, openMovements: () -> Uni
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     suspend fun load() {
-        state = try { Load.Ready(model.service.freeDashboard()) } catch (e: ApiError) { Load.Failed(e.message) }
+        model.load(tx("No pudimos cargar tu resumen.", "We couldn’t load your overview.")) { model.service.freeDashboard() }
+            .onSuccess { state = Load.Ready(it) }
+            .onFailure { if (it !is AuthException.SignedOut) state = Load.Failed(it.message.orEmpty()) }
     }
     LaunchedEffect(Unit) { load() }
 
@@ -79,8 +83,18 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, openMovements: () -> Uni
                 is Load.Failed -> item { Column(Modifier.widthIn(max = 600.dp)) { ErrorState(s.message) { scope.launch { state = Load.Loading; load() } } } }
                 is Load.Ready -> {
                     val d = s.value
+                    if (profile?.plan != "free") item {
+                        // Basic and VIP dashboards (PARITY C2, C3) are not built yet; say so.
+                        val plan = planName(profile?.plan)
+                        Column(Modifier.widthIn(max = 600.dp)) {
+                            StatusBanner(BannerTone.INFO, tx("Resumen básico", "Basic overview"),
+                                tx("Tu panel completo de $plan todavía está en la app actual de DINCR.", "Your full $plan dashboard is still in the current DINCR app."))
+                        }
+                    }
                     item { Column(Modifier.widthIn(max = 600.dp)) { KeyFigure(d) } }
-                    val empty = d.monthlyHistory.isEmpty() && d.categories.isEmpty() && d.income.signum() == 0 && d.expenses.signum() == 0
+                    // Presentation only: the backend always sends six months, zero-filled for new accounts.
+                    val empty = d.categories.isEmpty() && d.income.signum() == 0 && d.expenses.signum() == 0 &&
+                        d.monthlyHistory.all { it.income.signum() == 0 && it.expenses.signum() == 0 }
                     if (empty) item {
                         Column(Modifier.widthIn(max = 600.dp)) {
                             EmptyState(Icons.Rounded.Inbox, tx("Todavía no hay movimientos", "No transactions yet"),

@@ -48,6 +48,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.AmountInput
 import com.dincr.data.ApiError
+import com.dincr.data.AuthException
 import com.dincr.data.EntryCreate
 import com.dincr.data.Movement
 import com.dincr.data.MovementKind
@@ -61,6 +62,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.UUID
 import kotlinx.coroutines.launch
 
 sealed interface EditorMode { data object Create : EditorMode; data class Edit(val movement: Movement) : EditorMode }
@@ -68,17 +70,27 @@ sealed interface EditorMode { data object Create : EditorMode; data class Edit(v
 private val expenseCategories = listOf("Comida", "Vivienda", "Servicios", "Internet", "Teléfono", "Transporte", "Gasolina", "Restaurante", "Salud", "Entretenimiento", "Compras", "Seguros", "Deporte", "Mascotas", "Otros")
 private val incomeCategories = listOf("Salario", "Boleta de pago", "Bono", "Reembolso", "Otros ingresos")
 
-/** PARITY D3/D4/D5 — bottom sheet form: visible labels, inline errors, summary for 2+ errors. */
+/**
+ * PARITY D3/D4/D5 — bottom sheet form: visible labels, inline errors, summary for 2+ errors,
+ * single-flight save. An edit sends back exactly what is stored unless the user changes it: the
+ * amount is prefilled unrounded and the stored category stays selectable.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit, onSaved: (String) -> Unit, onDelete: (Movement) -> Unit) {
     val format = Dincr.money
     val editing = (mode as? EditorMode.Edit)?.movement
     var kind by remember { mutableStateOf(editing?.kind ?: MovementKind.EXPENSE) }
-    var amountText by remember { mutableStateOf(editing?.let { format.format(it.amount).removePrefix(format.symbol).removeSuffix(format.symbol).trim() } ?: "") }
+    val prefilledAmount = remember { editing?.let { format.inputText(it.amount) } ?: "" }
+    var amountText by remember { mutableStateOf(prefilledAmount) }
     var description by remember { mutableStateOf(editing?.description.orEmpty()) }
-    val categories = if (kind == MovementKind.INCOME) incomeCategories else expenseCategories
-    var category by remember { mutableStateOf(editing?.category?.takeIf { it in categories } ?: categories.first()) }
+    val storedCategory = editing?.category?.takeIf { it.isNotEmpty() }
+    val baseCategories = if (kind == MovementKind.INCOME) incomeCategories else expenseCategories
+    val categories = if (storedCategory != null && storedCategory !in baseCategories) listOf(storedCategory) + baseCategories else baseCategories
+    var category by remember { mutableStateOf(storedCategory ?: categories.first()) }
+    // One key per distinct submission: a retry of the same body reuses it, so the backend answers
+    // from the first request instead of creating a second movement.
+    var submission by remember { mutableStateOf<Pair<EntryCreate, String>?>(null) }
     var date by remember { mutableStateOf(editing?.day?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()) }
     var amountError by remember { mutableStateOf<String?>(null) }
     var descriptionError by remember { mutableStateOf<String?>(null) }
@@ -90,22 +102,41 @@ fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     fun save() {
-        val amount = AmountInput.parse(amountText, format.separators)
+        if (saving) return
+        // Untouched on edit: send the stored value, digit for digit.
+        val amount = if (editing != null && amountText == prefilledAmount) editing.amount else AmountInput.parse(amountText, format.separators)
         val example = format.format(BigDecimal(18450)).removePrefix(format.symbol).trim()
         amountError = if (amount == null) tx("Escribí un monto mayor que cero, por ejemplo $example.", "Enter an amount above zero, for example $example.") else null
         descriptionError = if (description.isBlank()) tx("Escribí una descripción.", "Enter a description.") else null
         if (amount == null || description.isBlank()) { haptics.performHapticFeedback(HapticFeedbackType.Reject); return }
+        saving = true; saveError = null
         scope.launch {
-            saving = true; saveError = null
-            try {
-                if (editing == null) model.service.create(kind, EntryCreate(amount, description.trim(), category, date.toString()))
-                else model.service.update(editing.movementId, MovementUpdate(date.toString(), description.trim(), amount, editing.transactionType ?: "expense", category, editing.notes.orEmpty()))
-                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                onSaved(if (editing != null) tx("Cambios guardados", "Changes saved") else if (kind == MovementKind.INCOME) tx("Ingreso guardado", "Income saved") else tx("Gasto guardado", "Expense saved"))
-            } catch (e: ApiError) {
-                saveError = e.message
-                haptics.performHapticFeedback(HapticFeedbackType.Reject)
-            } finally { saving = false }
+            val result = model.load(tx("No pudimos guardar. Revisá tu conexión e intentá de nuevo.", "We couldn’t save. Check your connection and try again.")) {
+                if (editing == null) {
+                    val entry = EntryCreate(amount, description.trim(), category, date.toString())
+                    val key = submission?.takeIf { it.first == entry }?.second ?: UUID.randomUUID().toString()
+                    submission = entry to key
+                    model.service.create(kind, entry, key)
+                } else {
+                    model.service.update(editing.movementId, MovementUpdate(date.toString(), description.trim(), amount, editing.transactionType ?: "expense", category, editing.notes.orEmpty()))
+                }
+            }
+            saving = false
+            val error = result.exceptionOrNull()
+            when {
+                error == null -> {
+                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                    onSaved(if (editing != null) tx("Cambios guardados", "Changes saved") else if (kind == MovementKind.INCOME) tx("Ingreso guardado", "Income saved") else tx("Gasto guardado", "Expense saved"))
+                }
+                // Deleted or locked elsewhere: nothing to save; the list refreshes and says so.
+                editing != null && (error as? ApiError)?.kind == ApiError.Kind.NOT_FOUND ->
+                    onSaved(tx("Ese movimiento ya no existe. Actualizamos la lista.", "That transaction no longer exists. The list was refreshed."))
+                error is AuthException.SignedOut -> Unit
+                else -> {
+                    saveError = error.message
+                    haptics.performHapticFeedback(HapticFeedbackType.Reject)
+                }
+            }
         }
     }
 

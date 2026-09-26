@@ -224,6 +224,7 @@ struct ProfileSetupView: View {
     }
 
     private func finish() async {
+        guard !saving else { return } // one submit, however fast the taps
         saving = true
         error = nil
         defer { saving = false }
@@ -238,6 +239,10 @@ struct ProfileSetupView: View {
             model.apply(try await model.service.completeProfileSetup(setup))
         } catch let apiError as APIError {
             error = apiError.message
+        } catch is CancellationError {
+            return
+        } catch AuthError.signedOut {
+            await model.signOut()
         } catch {
             self.error = tx("No pudimos guardar tus preferencias. Intentá nuevamente.", "We couldn’t save your preferences. Please try again.")
         }

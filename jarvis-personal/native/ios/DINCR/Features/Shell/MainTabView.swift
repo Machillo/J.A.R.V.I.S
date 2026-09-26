@@ -97,16 +97,27 @@ struct ProfileView: View {
     }
 }
 
+/// Display name of a backend plan code. The plan itself always comes from `/auth/me`.
+enum PlanLabel {
+    static func name(_ plan: String?) -> String {
+        switch plan ?? "free" {
+        case "free": tx("Gratis", "Free")
+        case "vip": "VIP"
+        case let other: other.capitalized
+        }
+    }
+}
+
 /// Quiet plan badge; VIP uses its reserved color (DESIGN.md → plan-badge-vip).
 struct PlanBadge: View {
     let plan: String
     var body: some View {
         let vip = plan == "vip"
-        Text(plan == "free" ? tx("Gratis", "Free") : plan.capitalized.replacingOccurrences(of: "Vip", with: "VIP"))
+        Text(PlanLabel.name(plan))
             .font(DincrFont.caption.weight(.semibold))
             .foregroundStyle(vip ? DincrColor.vip : DincrColor.text2)
             .padding(.horizontal, 8).padding(.vertical, 2)
             .background(vip ? DincrColor.vipContainer : DincrColor.surface2, in: Capsule())
-            .accessibilityLabel(tx("Plan \(plan)", "\(plan) plan"))
+            .accessibilityLabel(tx("Plan \(PlanLabel.name(plan))", "\(PlanLabel.name(plan)) plan"))
     }
 }

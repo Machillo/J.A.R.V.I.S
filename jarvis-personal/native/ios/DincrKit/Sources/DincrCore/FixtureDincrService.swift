@@ -5,7 +5,8 @@ import Foundation
 ///
 /// It stores what the screens write so flows can be exercised end to end, but it does not
 /// compute financial results: dashboard figures are fixed sample values, exactly like the
-/// backend would return them.
+/// backend would return them. Write semantics follow the backend: a repeated idempotency key
+/// is answered without a second row, and a missing movement is a 404.
 public actor FixtureDincrService: DincrService {
     public enum Scenario: String, Sendable {
         case populated, empty, failing, newUser
@@ -16,13 +17,15 @@ public actor FixtureDincrService: DincrService {
     private let scenario: Scenario
     private let latency: Duration
     private var nextID = 100
+    private var seenKeys: Set<String> = []
 
     public init(scenario: Scenario = .populated, latency: Duration = .milliseconds(350), today: Date = .now) {
         self.scenario = scenario
         self.latency = latency
         self.profile = Profile(
-            id: "fixture-account", email: "ana@example.com", displayName: "Ana Solís",
-            profileSetupCompleted: scenario != .newUser,
+            // Every field /auth/me always sends (auth/saas.py enrich_identity), same as Android.
+            id: 4201, email: "ana@example.com", displayName: "Ana Solís", role: "user", planSelected: true,
+            profileSetupCompleted: scenario != .newUser, baseCurrency: "CRC", numberFormat: "dot_comma", currencyPlacement: "before",
             subscription: .init(plan: "free", status: "active")
         )
         self.rows = scenario == .populated ? Self.sampleMovements(today: today) : []
@@ -47,8 +50,11 @@ public actor FixtureDincrService: DincrService {
     public func freeDashboard() async throws -> FreeDashboard {
         try await pause()
         if scenario == .empty || scenario == .newUser {
-            return FreeDashboard(month: "2026-09", income: 0, expenses: 0, debtPaid: 0, debtBalance: nil, balance: 0,
-                                 availableAfterCommitments: 0, categories: [], monthlyHistory: [])
+            // The backend always returns six months, zero-filled.
+            let months = ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"]
+            return FreeDashboard(month: "2026-09", income: 0, expenses: 0, debtPaid: 0, debtBalance: 0, balance: 0,
+                                 availableAfterCommitments: 0, categories: [],
+                                 monthlyHistory: months.map { MonthTotals(month: $0, income: 0, expenses: 0, debtPaid: 0, balance: 0) })
         }
         return Self.sampleDashboard
     }
@@ -58,8 +64,9 @@ public actor FixtureDincrService: DincrService {
         return rows.sorted { ($0.day ?? "") > ($1.day ?? "") }
     }
 
-    public func create(_ kind: Movement.Kind, _ entry: EntryCreate) async throws {
+    public func create(_ kind: Movement.Kind, _ entry: EntryCreate, idempotencyKey: String) async throws {
         try await pause()
+        guard seenKeys.insert(idempotencyKey).inserted else { return }
         nextID += 1
         let origin = kind == .income ? "salary" : "expense"
         rows.append(Movement(
@@ -83,6 +90,9 @@ public actor FixtureDincrService: DincrService {
 
     public func delete(movementID: String) async throws {
         try await pause()
+        guard rows.contains(where: { $0.movementId == movementID }) else {
+            throw APIError(kind: .notFound, status: 404, message: "Movimiento no encontrado o no eliminable.")
+        }
         rows.removeAll { $0.movementId == movementID }
     }
 
@@ -126,6 +136,8 @@ public actor FixtureDincrService: DincrService {
         return [
             Movement(movementId: "expense:11", sourceId: 11, origin: "expense", transactionDate: day(0), description: "Supermercado", amount: 18_450, transactionType: .expense, category: "Comida"),
             Movement(movementId: "expense:10", sourceId: 10, origin: "expense", transactionDate: day(0), description: "Café", amount: 2_300, transactionType: .expense, category: "Restaurante"),
+            // Cents and a category outside the editor's list: editing must keep both.
+            Movement(movementId: "expense:12", sourceId: 12, origin: "expense", transactionDate: day(1), description: "Feria del agricultor", amount: Decimal(string: "12345.5")!, transactionType: .expense, category: "Feria"),
             Movement(movementId: "transaction:9", sourceId: 9, origin: "transaction", transactionDate: day(1), description: "Aviso bancario · Gasolinera", amount: 25_000, transactionType: .expense, category: "Gasolina", editable: false),
             Movement(movementId: "salary:8", sourceId: 8, origin: "salary", transactionDate: day(3), description: "Salario quincenal", amount: 432_500, transactionType: .income, category: "Salario"),
             Movement(movementId: "expense:7", sourceId: 7, origin: "expense", transactionDate: day(4), description: "Internet del hogar", amount: 24_900, transactionType: .expense, category: "Internet"),

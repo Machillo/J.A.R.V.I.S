@@ -70,7 +70,11 @@ fun LoginScreen(model: AppModel) {
         OutlinedButton(
             onClick = {
                 if (model.isFixtures) model.signInWithFixtures()
-                else model.beginSignIn(OAuthProvider.GOOGLE)?.let { CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, Uri.parse(it)) }
+                else model.beginSignIn(OAuthProvider.GOOGLE)?.let { url ->
+                    // Custom Tab (falls back to the default browser); never a WebView.
+                    runCatching { CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, Uri.parse(url)) }
+                        .onFailure { model.signInFailed() }
+                }
             },
             enabled = !signingIn,
             modifier = Modifier.fillMaxWidth().widthIn(max = 600.dp).heightIn(min = 52.dp).testTag("login.google"),

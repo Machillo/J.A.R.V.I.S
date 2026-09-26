@@ -2,8 +2,10 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY D1, D3, D4, D5, D6 — movements by day, search, type filter, add, edit, delete.
-/// The debt filter (D2) and debt classification wait for the backend `kind` (audit §5).
+/// PARITY D1, D3, D4, D5, D6 (partial: no debt or category filter yet) — movements by day,
+/// search, type filter, add, edit, delete. The backend returns the whole history; search and the
+/// type filter only narrow what is already on screen. The debt filter (D2) and debt
+/// classification wait for the backend `kind` (audit §5).
 struct MovementsView: View {
     enum Filter: String, CaseIterable, Identifiable {
         case all, income, expense
@@ -114,14 +116,15 @@ struct MovementsView: View {
 
     @ViewBuilder
     private func row(_ movement: Movement) -> some View {
+        let editable = movement.isEditable(baseCurrency: model.moneyFormat.currency)
         let content = MoneyRow(
             title: movement.description?.isEmpty == false ? movement.description! : CategoryStyle.label(movement.category),
-            subtitle: [CategoryStyle.label(movement.category), movement.editable ? nil : tx("Solo lectura", "Read only")].compactMap { $0 }.joined(separator: " · "),
+            subtitle: [CategoryStyle.label(movement.category), editable ? nil : tx("Solo lectura", "Read only")].compactMap { $0 }.joined(separator: " · "),
             amount: movement.amount, kind: movement.transactionType,
             symbol: CategoryStyle.symbol(for: movement.category, kind: movement.transactionType),
-            isReadOnly: !movement.editable, currency: movement.currency
+            isReadOnly: !editable
         )
-        if movement.editable {
+        if editable {
             Button { editor = .edit(movement) } label: { content }
                 .buttonStyle(.plain)
                 .swipeActions(edge: .trailing) {
@@ -138,10 +141,9 @@ struct MovementsView: View {
     }
 
     private func grouped(_ rows: [Movement]) -> [(day: String, rows: [Movement])] {
-        let term = query.trimmingCharacters(in: .whitespaces).lowercased()
         let visible = rows.filter { row in
             (filter == .all || row.transactionType.rawValue == filter.rawValue)
-                && (term.isEmpty || "\(row.description ?? "") \(row.category ?? "")".lowercased().contains(term))
+                && SearchText.matches(query, in: [row.description, row.category])
         }
         let byDay = Dictionary(grouping: visible) { $0.day ?? "" }
         return byDay.keys.sorted(by: >).map { (day: $0, rows: byDay[$0]!) }
@@ -152,6 +154,8 @@ struct MovementsView: View {
             state = .loaded(try await model.service.movements())
         } catch let error as APIError {
             state = .failed(error.message)
+        } catch is CancellationError {
+            return
         } catch AuthError.signedOut {
             await model.signOut()
         } catch {
@@ -165,8 +169,14 @@ struct MovementsView: View {
             try await model.service.delete(movementID: movement.movementId)
             announce(tx("Movimiento eliminado", "Transaction deleted"))
             await load()
+        } catch let error as APIError where error.kind == .notFound {
+            // Already gone (deleted elsewhere or twice): show the list as it really is.
+            announce(tx("Ese movimiento ya no existía.", "That transaction was already gone."))
+            await load()
         } catch let error as APIError {
             deleteError = error.message
+        } catch AuthError.signedOut {
+            await model.signOut()
         } catch {
             deleteError = tx("Intentá de nuevo.", "Please try again.")
         }

@@ -11,8 +11,9 @@ public protocol DincrService: Sendable {
     func freeDashboard() async throws -> FreeDashboard
     /// D1, D5 — `GET /user-product/free/movements`
     func movements() async throws -> [Movement]
-    /// D3 — `POST /user-product/finance/income` | `/expenses`
-    func create(_ kind: Movement.Kind, _ entry: EntryCreate) async throws
+    /// D3 — `POST /user-product/finance/income` | `/expenses`. `idempotencyKey` identifies one
+    /// user submission (8–80 of `A-Za-z0-9_-`): sending it again cannot create a second row.
+    func create(_ kind: Movement.Kind, _ entry: EntryCreate, idempotencyKey: String) async throws
     /// D4, D5 — `PUT /user-product/free/movements/{id}`
     func update(movementID: String, _ update: MovementUpdate) async throws
     /// D6 — `DELETE /user-product/free/movements/{id}`
@@ -35,9 +36,9 @@ public struct LiveDincrService: DincrService {
 
     public func movements() async throws -> [Movement] { try await client.get("/user-product/free/movements") }
 
-    public func create(_ kind: Movement.Kind, _ entry: EntryCreate) async throws {
+    public func create(_ kind: Movement.Kind, _ entry: EntryCreate, idempotencyKey: String) async throws {
         let path = kind == .income ? "/user-product/finance/income" : "/user-product/finance/expenses"
-        let _: Acknowledgement = try await client.send("POST", path, body: entry)
+        let _: Acknowledgement = try await client.send("POST", path, body: entry, idempotencyKey: idempotencyKey)
     }
 
     public func update(movementID: String, _ update: MovementUpdate) async throws {

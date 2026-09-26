@@ -25,7 +25,8 @@ public struct URLSessionTransport: HTTPTransport {
 /// - `Authorization: Bearer`, `Accept-Language`, `X-Request-ID` (stable across retries),
 ///   `X-Retry-Attempt`;
 /// - safe methods (GET/HEAD) retry up to 2 times on 408, 425, 429, 502, 503, 504 and on
-///   network loss; writes are never retried automatically;
+///   network loss; writes are never retried automatically, and creates carry an
+///   `X-Idempotency-Key` so a repeated submit is answered from the first one;
 /// - a 401 refreshes the session once and repeats the request;
 /// - 20 s timeout per attempt.
 public struct APIClient: Sendable {
@@ -65,17 +66,17 @@ public struct APIClient: Sendable {
         try await perform(method: "GET", path: path, query: query, body: nil)
     }
 
-    public func send<Body: Encodable, Response: Decodable>(_ method: String, _ path: String, body: Body, as type: Response.Type = Response.self) async throws -> Response {
+    public func send<Body: Encodable, Response: Decodable>(_ method: String, _ path: String, body: Body, idempotencyKey: String? = nil, as type: Response.Type = Response.self) async throws -> Response {
         let data: Data
         do { data = try Self.encoder.encode(body) } catch { throw APIError.decoding(language) }
-        return try await perform(method: method, path: path, query: [], body: data)
+        return try await perform(method: method, path: path, query: [], body: data, idempotencyKey: idempotencyKey)
     }
 
     public func send<Response: Decodable>(_ method: String, _ path: String, as type: Response.Type = Response.self) async throws -> Response {
         try await perform(method: method, path: path, query: [], body: nil)
     }
 
-    func perform<Response: Decodable>(method: String, path: String, query: [URLQueryItem], body: Data?) async throws -> Response {
+    func perform<Response: Decodable>(method: String, path: String, query: [URLQueryItem], body: Data?, idempotencyKey: String? = nil) async throws -> Response {
         let requestID = UUID().uuidString.lowercased()
         let safe = method == "GET" || method == "HEAD"
         let maxRetries = safe ? 2 : 0
@@ -93,12 +94,15 @@ public struct APIClient: Sendable {
             request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
             request.setValue(String(attempt), forHTTPHeaderField: "X-Retry-Attempt")
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let idempotencyKey { request.setValue(idempotencyKey, forHTTPHeaderField: "X-Idempotency-Key") }
 
             let data: Data
             let response: HTTPURLResponse
             do {
                 (data, response) = try await transport.send(request)
             } catch let error as URLError {
+                // A cancelled task (the screen went away) is not an outage: never show "offline".
+                if error.code == .cancelled { throw CancellationError() }
                 if attempt < maxRetries, Self.isTransient(error) {
                     await backoff(attempt); attempt += 1; continue
                 }

@@ -46,8 +46,8 @@ class OkHttpTransport(
 /**
  * DINCR API client. Same contract as `frontend/src/lib/authenticatedFetch.js` and iOS `APIClient`:
  * Bearer token, Accept-Language, stable X-Request-ID, X-Retry-Attempt; safe methods retry up to
- * 2 times on 408/425/429/502/503/504 or network loss; writes are never retried; a 401 refreshes
- * the session once.
+ * 2 times on 408/425/429/502/503/504 or network loss; writes are never retried and creates carry
+ * an `X-Idempotency-Key`; a 401 refreshes the session once.
  */
 class ApiClient(
     private val baseUrl: String,
@@ -61,8 +61,8 @@ class ApiClient(
     suspend inline fun <reified T> get(path: String, query: Map<String, String> = emptyMap()): T =
         decode(perform("GET", path, query, null))
 
-    suspend inline fun <reified B, reified T> send(method: String, path: String, body: B): T =
-        decode(perform(method, path, emptyMap(), json.encodeToString(body)))
+    suspend inline fun <reified B, reified T> send(method: String, path: String, body: B, idempotencyKey: String? = null): T =
+        decode(perform(method, path, emptyMap(), json.encodeToString(body), idempotencyKey))
 
     suspend inline fun <reified T> send(method: String, path: String): T =
         decode(perform(method, path, emptyMap(), null))
@@ -76,7 +76,7 @@ class ApiClient(
 
     val currentLanguage: AppLanguage get() = language
 
-    suspend fun perform(method: String, path: String, query: Map<String, String>, body: String?): String {
+    suspend fun perform(method: String, path: String, query: Map<String, String>, body: String?, idempotencyKey: String? = null): String {
         val requestId = UUID.randomUUID().toString()
         val safe = method == "GET" || method == "HEAD"
         val maxRetries = if (safe) 2 else 0
@@ -95,6 +95,7 @@ class ApiClient(
                 put("X-Request-ID", requestId)
                 put("X-Retry-Attempt", attempt.toString())
                 put("Authorization", "Bearer $token")
+                if (idempotencyKey != null) put("X-Idempotency-Key", idempotencyKey)
             }
             val response = try {
                 transport.send(HttpRequest(method, url, headers, body))

@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.AppModel
 import com.dincr.app.tx
-import com.dincr.data.ApiError
+import com.dincr.data.AuthException
 import com.dincr.data.MoneyFormat
 import com.dincr.data.ProfileSetup
 import com.dincr.design.Dincr
@@ -151,12 +151,15 @@ fun ProfileSetupScreen(model: AppModel) {
                 enabled = canContinue, loading = saving, modifier = Modifier.widthIn(max = 600.dp).testTag("setup.continue"),
                 onClick = {
                     if (step < total - 1) step += 1
-                    else scope.launch {
-                        saving = true; error = null
-                        try {
+                    else if (!saving) {
+                        saving = true; error = null // set before launching: one submit, however fast the taps
+                        scope.launch {
                             val currencies = listOf(currency) + if (alsoOther) listOf(if (currency == "CRC") "USD" else "CRC") else emptyList()
-                            model.apply(model.service.completeProfileSetup(ProfileSetup(name.trim(), goal, currency, currencies, separators.wire, placement.wire, banks.sorted())))
-                        } catch (e: ApiError) { error = e.message } finally { saving = false }
+                            model.load(tx("No pudimos guardar tus preferencias. Intentá nuevamente.", "We couldn’t save your preferences. Please try again.")) {
+                                model.service.completeProfileSetup(ProfileSetup(name.trim(), goal, currency, currencies, separators.wire, placement.wire, banks.sorted()))
+                            }.onSuccess { model.apply(it) }.onFailure { if (it !is AuthException.SignedOut) error = it.message }
+                            saving = false
+                        }
                     }
                 },
             )

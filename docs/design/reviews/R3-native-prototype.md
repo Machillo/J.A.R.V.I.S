@@ -46,3 +46,35 @@ stack rules (commit `dcc40ff`). Native code has no Impeccable detector (it reads
 
 - iOS screenshots for Movements, Profile setup, AX5 Dynamic Type and English were captured but not reviewed:
   the image-reading tool was unavailable in this session. Re-review before C4 is merged.
+
+## Final audit (R3.1), 2026-09-26
+
+Checked against the FastAPI code on `main` (contract in `jarvis-personal/native/CONTRACT.md`) and
+the #267 parity matrix. Impeccable and UI/UX Pro Max were **not installed** in this environment and
+were not re-run; the review below is a manual pass with their R3 checklists plus a rendered check on
+an Android emulator (API 35). iOS changes were validated by CI only (no Mac in this session).
+
+| # | Finding | Severity | Change | Evidence |
+|---|---|---|---|---|
+| N15 | `/auth/me` returns `id` as an integer; both clients decoded a string, so identity never loaded against the real backend (fixtures hid it) | **blocker** | `Profile.id` Int/Long; fixtures rebuilt from `enrich_identity` | contract tests + mutation (String id → test fails) |
+| N16 | Editing a movement prefilled the rounded display value (₡18.450,5 → "18.450") and saved it, rewriting the amount even when only the description changed | **blocker** (financial truth) | `inputText` exact prefill; untouched amount sent as stored | unit round-trip tests; Android UI test `editKeepsTheStoredAmountAndCategory` fails with the old prefill |
+| N17 | Editing silently replaced a category outside the fixed list with the first option | important | stored category stays selectable | same UI test (iOS twin added) |
+| N18 | Android: a rejected session refresh (`AuthException.SignedOut`) or any non-`ApiError` crashed Home, Movements, the editor and onboarding | important | `AppModel.load` maps failures; sign-out instead of crash | code review; unit + UI tests green |
+| N19 | Android double tap could submit create/profile setup twice (state set inside the launched coroutine) | important | synchronous single-flight guard + `X-Idempotency-Key` on creates (both platforms, as the Capacitor app) | unit tests: header sent, writes never retried, fixture replays the key |
+| N20 | OAuth callback accepted any URL starting with the redirect (`…/callbackX`), and shared `com.dincr.app://auth/callback` with the store app (Android chooser / collision) | important (security) | exact scheme/host/path, no fragment/userinfo/port, exactly one code; own scheme `com.dincr.app.nativedev`; redirect via a forwarding `AuthCallbackActivity` | 12 rejected-URL cases per platform; mutation (prefix match) fails |
+| N21 | Android exported launcher activity honoured the `dincrFixtures` extra in any build: another app could show DINCR with fake balances | important (security) | launch fixtures only in Debug builds (both platforms) | code review |
+| N22 | `1,000` (dot_comma) / `1.000` (comma_dot) parsed as 1; no upper bound | important (financial) | max 2 decimals, max 12 integer digits (NUMERIC(14,2)); ambiguity rejected | 21-case matrix per separator, identical on both platforms; mutation fails |
+| N23 | Spoken amount ignored the row currency; Kotlin spoke "EUR" where iOS said "euros"; display rounding half-even vs the web's half-up | moderate | spoken currency override; same units; half away from zero | unit tests |
+| N24 | Basic/VIP users saw the Free overview with no notice; `plan_selected` null opened the app (Capacitor gates on `!plan_selected`) | moderate | notice on Home; gate on `!= true` | code review |
+| N25 | Home empty state could never show against the real backend (it always sends six zero-filled months) | moderate | empty = all months zero | fixture now mirrors the backend |
+| N26 | Deleting an already-deleted movement / editing a removed one showed an error and left the list stale | moderate | 404 → refresh + notice | fixture 404 semantics + unit test |
+| N27 | Swift mapped a cancelled `URLSession` task to "Sin conexión" | minor | `CancellationError` passes through | unit test |
+| N28 | Android chart month labels clipped at 200 % font scale | moderate (a11y) | chart height no longer fixed | emulator screenshot at font scale 2.0 |
+| N11 | Compose instrumented tests "could not see the UI" | resolved | root causes: `singleTask` moved MainActivity out of the ActivityScenario task, and tests forced `Locale.setDefault` which Android resets at launch. `singleTop` + forwarding callback activity; locale-independent tests | 8/8 on API 35 emulator locally; CI job on API 24 and 35 |
+| N29 | Token generator crashed on CRLF checkouts (Windows `core.autocrlf`) | minor | normalizes line endings | `--check` passes on a CRLF checkout |
+| N30 | Search was case-sensitive to accents ("credito" ≠ "Crédito") | minor | presentation-only accent/case folding | unit tests |
+| N31 | Android tab labels truncate at 200 % font ("Trans…") | minor | Material 3 behaviour; revisit with navigation work | screenshot |
+| N32 | Pre-existing backend: an editable manual `transaction` with type `debt_payment` is listed as `expense`, and a PUT writes `expense` back (Capacitor has the same bug) | out of scope | reported, not changed | backend `free_service.py` |
+
+Rendered on Android (API 35 emulator): Login, Home light/dark, Home at font scale 2.0, Movements,
+edit sheet. iOS renders were not reviewed in this session: **HUMAN VISUAL GATE** for iOS.

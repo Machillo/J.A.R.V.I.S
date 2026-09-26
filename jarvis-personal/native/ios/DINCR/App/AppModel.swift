@@ -83,7 +83,7 @@ final class AppModel {
         isSigningIn = true
         defer { isSigningIn = false }
         do {
-            let code = try SupabaseAuthClient.authorizationCode(from: callback, expectedPrefix: AppEnvironment.authRedirect)
+            let code = try SupabaseAuthClient.authorizationCode(from: callback, redirect: AppEnvironment.authRedirect)
             let session = try await auth.exchange(code: code, verifier: pkce.verifier)
             await sessions.accept(session)
             await loadIdentity()
@@ -126,7 +126,7 @@ final class AppModel {
             phase = .notYetSupported(language.pick("Aceptá los términos actualizados desde la app actual de DINCR.", "Accept the updated terms in the current DINCR app."))
         } else if profile.profileSetupCompleted != true {
             phase = .profileSetup
-        } else if profile.planSelected == false {
+        } else if profile.planSelected != true {
             phase = .notYetSupported(language.pick("Elegí tu plan desde la app actual de DINCR.", "Choose your plan in the current DINCR app."))
         } else {
             phase = .ready

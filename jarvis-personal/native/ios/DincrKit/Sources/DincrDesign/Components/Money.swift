@@ -32,7 +32,7 @@ public struct MoneyText: View {
             .foregroundStyle(sign == .income ? DincrColor.positive : DincrColor.text)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
-            .accessibilityLabel(amount.map { format.spoken($0, sign: sign) } ?? AppLanguage.current.pick("sin dato", "no data"))
+            .accessibilityLabel(amount.map { format.spoken($0, sign: sign, currency: currency) } ?? AppLanguage.current.pick("sin dato", "no data"))
     }
 }
 

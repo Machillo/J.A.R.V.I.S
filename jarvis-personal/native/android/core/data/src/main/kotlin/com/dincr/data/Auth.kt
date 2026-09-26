@@ -105,16 +105,27 @@ class SupabaseAuthClient(
     }
 
     companion object {
-        /** Accepts only a `code` on the expected redirect; tokens in the URL are never accepted. */
-        fun authorizationCode(callback: String, expectedPrefix: String): String {
-            if (!callback.startsWith(expectedPrefix)) throw AuthException.InvalidCallback()
-            val query = runCatching { URI(callback).rawQuery }.getOrNull() ?: throw AuthException.InvalidCallback()
-            val params = query.split("&").mapNotNull { part ->
+        /**
+         * Extracts the authorization code. Fails closed, same rules as iOS: the URL must be
+         * exactly our redirect (scheme, host and path; no user, port or fragment) carrying one
+         * non-empty `code`. Look-alike URLs, tokens in a fragment, duplicated codes and provider
+         * errors are rejected.
+         */
+        fun authorizationCode(callback: String, redirect: String): String {
+            val actual = runCatching { URI(callback) }.getOrNull() ?: throw AuthException.InvalidCallback()
+            val expected = URI(redirect)
+            val matches = actual.scheme.equals(expected.scheme, ignoreCase = true) &&
+                actual.host.equals(expected.host, ignoreCase = true) &&
+                actual.rawPath == expected.rawPath && actual.rawUserInfo == null && actual.port == -1 &&
+                actual.rawFragment.isNullOrEmpty()
+            if (!matches) throw AuthException.InvalidCallback()
+            val params = actual.rawQuery.orEmpty().split("&").filter { it.isNotEmpty() }.map { part ->
                 val pieces = part.split("=", limit = 2)
-                if (pieces.size == 2) pieces[0] to URLDecoder.decode(pieces[1], "UTF-8") else null
-            }.toMap()
-            if ("error" in params || "error_description" in params) throw AuthException.ProviderRejected()
-            return params["code"]?.takeIf { it.isNotEmpty() } ?: throw AuthException.InvalidCallback()
+                URLDecoder.decode(pieces[0], "UTF-8") to URLDecoder.decode(pieces.getOrElse(1) { "" }, "UTF-8")
+            }
+            if (params.any { it.first == "error" || it.first == "error_description" }) throw AuthException.ProviderRejected()
+            val codes = params.filter { it.first == "code" }
+            return codes.singleOrNull()?.second?.takeIf { it.isNotEmpty() } ?: throw AuthException.InvalidCallback()
         }
     }
 }

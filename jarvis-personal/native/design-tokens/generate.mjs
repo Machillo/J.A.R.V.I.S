@@ -17,7 +17,11 @@ const outputs = {
   kotlin: path.join(here, "../android/core/design/src/main/kotlin/com/dincr/design/generated/DincrTokens.kt"),
 };
 
-export function parseTokens(source) {
+// Windows checkouts with core.autocrlf turn LF into CRLF; the tokens do not depend on it.
+const lf = (text) => text.replace(/\r\n/g, "\n");
+
+export function parseTokens(raw) {
+  const source = lf(raw);
   const frontmatter = source.match(/^---\n([\s\S]*?)\n---/);
   if (!frontmatter) throw new Error("DESIGN.md must start with YAML frontmatter");
   const block = (name) => {
@@ -126,7 +130,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const check = process.argv.includes("--check");
   let stale = 0;
   for (const [kind, file] of Object.entries(outputs)) {
-    const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
+    const current = fs.existsSync(file) ? lf(fs.readFileSync(file, "utf8")) : null;
     if (current === rendered[kind]) continue;
     if (check) {
       console.error(`stale: ${path.relative(repoRoot, file)} — run node jarvis-personal/native/design-tokens/generate.mjs`);

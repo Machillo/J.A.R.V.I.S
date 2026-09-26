@@ -4,6 +4,9 @@ import SwiftUI
 
 /// PARITY D3 (add income/expense), D4/D5 (edit). Sheet with Cancel/Save, visible labels,
 /// inline errors plus a summary when more than one field fails, single-flight save.
+/// An edit sends back exactly what is stored unless the user changes it: the amount is prefilled
+/// unrounded and the stored category stays selectable, so saving a new description never
+/// rewrites the amount or the category.
 struct MovementEditor: View {
     enum Mode: Identifiable {
         case create
@@ -24,6 +27,11 @@ struct MovementEditor: View {
 
     @State private var kind: Movement.Kind = .expense
     @State private var amountText = ""
+    @State private var prefilledAmountText = ""
+    @State private var storedCategory: String?
+    /// One key per distinct submission: a retry of the same body reuses it, so the backend
+    /// answers from the first request instead of creating a second movement.
+    @State private var submission: (body: EntryCreate, key: String)?
     @State private var description = ""
     @State private var category = ""
     @State private var date = Date.now
@@ -130,7 +138,11 @@ struct MovementEditor: View {
         .presentationDetents([.large])
     }
 
-    private var categories: [String] { kind == .income ? Self.incomeCategories : Self.expenseCategories }
+    private var categories: [String] {
+        let base = kind == .income ? Self.incomeCategories : Self.expenseCategories
+        guard let storedCategory, !base.contains(storedCategory) else { return base }
+        return [storedCategory] + base
+    }
 
     private var hasChanges: Bool {
         guard case .edit(let movement) = mode else { return !amountText.isEmpty || !description.isEmpty }
@@ -147,15 +159,22 @@ struct MovementEditor: View {
             return
         }
         kind = movement.transactionType
-        amountText = format.string(movement.amount).replacingOccurrences(of: format.symbol, with: "").trimmingCharacters(in: .whitespaces)
+        amountText = format.inputText(movement.amount)
+        prefilledAmountText = amountText
         description = movement.description ?? ""
-        category = movement.category.flatMap { categories.contains($0) ? $0 : nil } ?? categories[0]
+        storedCategory = movement.category.flatMap { $0.isEmpty ? nil : $0 }
+        category = storedCategory ?? categories[0]
         if let day = movement.day, let parsed = Self.dayFormatter.date(from: day) { date = parsed }
     }
 
     private func validate() -> Decimal? {
         var errors: [Field: String] = [:]
-        let amount = AmountInput.parse(amountText, separators: format.separators)
+        let amount: Decimal?
+        if case .edit(let movement) = mode, amountText == prefilledAmountText {
+            amount = movement.amount // untouched: send the stored value, digit for digit
+        } else {
+            amount = AmountInput.parse(amountText, separators: format.separators)
+        }
         if amount == nil {
             errors[.amount] = tx("Escribí un monto mayor que cero, por ejemplo \(format.string(18_450).replacingOccurrences(of: format.symbol, with: "")).",
                                  "Enter an amount above zero, for example \(format.string(18_450).replacingOccurrences(of: format.symbol, with: "")).")
@@ -178,7 +197,10 @@ struct MovementEditor: View {
         do {
             switch mode {
             case .create:
-                try await model.service.create(kind, EntryCreate(amount: amount, description: text, category: category, entryDate: day))
+                let entry = EntryCreate(amount: amount, description: text, category: category, entryDate: day)
+                let key = (submission?.body == entry ? submission?.key : nil) ?? UUID().uuidString.lowercased()
+                submission = (entry, key)
+                try await model.service.create(kind, entry, idempotencyKey: key)
             case .edit(let movement):
                 try await model.service.update(movementID: movement.movementId, MovementUpdate(
                     transactionDate: day, description: text, amount: amount, transactionType: movement.transactionType,
@@ -187,8 +209,16 @@ struct MovementEditor: View {
             saved += 1
             onSaved(isEditing ? tx("Cambios guardados", "Changes saved") : (kind == .income ? tx("Ingreso guardado", "Income saved") : tx("Gasto guardado", "Expense saved")))
             dismiss()
+        } catch let error as APIError where error.kind == .notFound && isEditing {
+            // Deleted or locked elsewhere: nothing to save; the list refreshes and says so.
+            onSaved(tx("Ese movimiento ya no existe. Actualizamos la lista.", "That transaction no longer exists. The list was refreshed."))
+            dismiss()
         } catch let error as APIError {
             saveError = error.message
+        } catch is CancellationError {
+            return
+        } catch AuthError.signedOut {
+            await model.signOut()
         } catch {
             saveError = tx("No pudimos guardar. Revisá tu conexión e intentá de nuevo.", "We couldn’t save. Check your connection and try again.")
         }

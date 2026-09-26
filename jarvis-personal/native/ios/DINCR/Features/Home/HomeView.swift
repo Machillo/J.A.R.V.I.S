@@ -35,7 +35,17 @@ struct HomeView: View {
 
     @ViewBuilder
     private func content(_ dashboard: FreeDashboard) -> some View {
-        let empty = dashboard.monthlyHistory.isEmpty && dashboard.categories.isEmpty && dashboard.income == 0 && dashboard.expenses == 0
+        // Presentation only: the backend always sends six months, zero-filled for new accounts.
+        let empty = dashboard.categories.isEmpty && dashboard.income == 0 && dashboard.expenses == 0
+            && dashboard.monthlyHistory.allSatisfy { $0.income == 0 && $0.expenses == 0 }
+
+        if model.profile?.plan != "free" {
+            // Basic and VIP dashboards (PARITY C2, C3) are not built yet; say so instead of
+            // pretending this is their whole overview.
+            StatusBanner(tone: .info, title: tx("Resumen básico", "Basic overview"),
+                         message: tx("Tu panel completo de \(PlanLabel.name(model.profile?.plan)) todavía está en la app actual de DINCR.",
+                                     "Your full \(PlanLabel.name(model.profile?.plan)) dashboard is still in the current DINCR app."))
+        }
 
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Text(tx("Disponible este mes", "Available this month")).font(DincrFont.label).foregroundStyle(DincrColor.text2)
@@ -113,6 +123,8 @@ struct HomeView: View {
             state = .loaded(try await model.service.freeDashboard())
         } catch let error as APIError {
             state = .failed(error.message)
+        } catch is CancellationError {
+            return
         } catch AuthError.signedOut {
             await model.signOut()
         } catch {

@@ -9,7 +9,8 @@ import kotlinx.coroutines.sync.withLock
 /**
  * In-memory service with synthetic data for previews, UI tests and screenshots. All names and
  * amounts are invented (CLAUDE.md §4.F). Dashboard figures are fixed sample values, exactly as
- * the backend would return them; nothing is computed here.
+ * the backend would return them; nothing is computed here. Write semantics follow the backend:
+ * a repeated idempotency key adds no second row, and a missing movement is a 404.
  */
 class FixtureDincrService(
     private val scenario: Scenario = Scenario.POPULATED,
@@ -20,12 +21,15 @@ class FixtureDincrService(
 
     private val mutex = Mutex()
     private var profile = Profile(
-        id = "fixture-account", email = "ana@example.com", displayName = "Ana Solís",
+        // Every field /auth/me always sends (auth/saas.py enrich_identity), same as the iOS fixture.
+        id = 4201, email = "ana@example.com", displayName = "Ana Solís", role = "user", planSelected = true,
+        baseCurrency = "CRC", numberFormat = "dot_comma", currencyPlacement = "before",
         profileSetupCompleted = scenario != Scenario.NEW_USER,
         subscription = Profile.Subscription(plan = "free", status = "active"),
     )
     private val rows = if (scenario == Scenario.POPULATED) sampleMovements(today).toMutableList() else mutableListOf()
     private var nextId = 100
+    private val seenKeys = mutableSetOf<String>()
 
     override suspend fun me(): Profile = pause { profile }
 
@@ -39,13 +43,17 @@ class FixtureDincrService(
 
     override suspend fun freeDashboard(): FreeDashboard = pause {
         if (scenario == Scenario.EMPTY || scenario == Scenario.NEW_USER) {
-            FreeDashboard(month = "2026-09", income = BigDecimal.ZERO, expenses = BigDecimal.ZERO, balance = BigDecimal.ZERO, availableAfterCommitments = BigDecimal.ZERO)
+            // The backend always returns six months, zero-filled.
+            val zero = BigDecimal.ZERO
+            FreeDashboard(month = "2026-09", income = zero, expenses = zero, debtPaid = zero, debtBalance = zero, balance = zero, availableAfterCommitments = zero,
+                monthlyHistory = listOf("2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09").map { MonthTotals(it, zero, zero, zero, zero) })
         } else SAMPLE_DASHBOARD
     }
 
     override suspend fun movements(): List<Movement> = pause { rows.sortedByDescending { it.day.orEmpty() } }
 
-    override suspend fun create(kind: MovementKind, entry: EntryCreate) = pause {
+    override suspend fun create(kind: MovementKind, entry: EntryCreate, idempotencyKey: String) = pause {
+        if (!seenKeys.add(idempotencyKey)) return@pause
         nextId += 1
         val origin = if (kind == MovementKind.INCOME) "salary" else "expense"
         rows += Movement(
@@ -61,7 +69,9 @@ class FixtureDincrService(
         rows[index] = rows[index].copy(transactionDate = update.transactionDate, description = update.description, amount = update.amount, category = update.category, notes = update.notes)
     }
 
-    override suspend fun delete(movementId: String) = pause { rows.removeAll { it.movementId == movementId }; Unit }
+    override suspend fun delete(movementId: String) = pause {
+        if (!rows.removeAll { it.movementId == movementId }) throw ApiError(ApiError.Kind.NOT_FOUND, 404, message = "Movimiento no encontrado o no eliminable.")
+    }
 
     private suspend fun <T> pause(block: () -> T): T {
         if (latencyMs > 0) delay(latencyMs)
@@ -95,12 +105,16 @@ class FixtureDincrService(
 
         fun sampleMovements(today: LocalDate): List<Movement> {
             fun day(offset: Long) = today.minusDays(offset).toString()
-            fun row(id: String, offset: Long, text: String, amount: Long, type: String, category: String, editable: Boolean = true) =
+            fun row(id: String, offset: Long, text: String, amount: BigDecimal, type: String, category: String, editable: Boolean = true) =
                 Movement(movementId = id, sourceId = id.substringAfter(':').toInt(), origin = id.substringBefore(':'), transactionDate = day(offset),
-                    description = text, amount = m(amount), transactionType = type, category = category, editable = editable)
+                    description = text, amount = amount, transactionType = type, category = category, editable = editable)
+            fun row(id: String, offset: Long, text: String, amount: Long, type: String, category: String, editable: Boolean = true) =
+                row(id, offset, text, m(amount), type, category, editable)
             return listOf(
                 row("expense:11", 0, "Supermercado", 18_450, "expense", "Comida"),
                 row("expense:10", 0, "Café", 2_300, "expense", "Restaurante"),
+                // Cents and a category outside the editor's list: editing must keep both.
+                row("expense:12", 1, "Feria del agricultor", BigDecimal("12345.5"), "expense", "Feria"),
                 row("transaction:9", 1, "Aviso bancario · Gasolinera", 25_000, "expense", "Gasolina", editable = false),
                 row("salary:8", 3, "Salario quincenal", 432_500, "income", "Salario"),
                 row("expense:7", 4, "Internet del hogar", 24_900, "expense", "Internet"),

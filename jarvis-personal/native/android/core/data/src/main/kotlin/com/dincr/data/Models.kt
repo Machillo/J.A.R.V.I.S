@@ -14,8 +14,9 @@ import kotlinx.serialization.json.JsonUnquotedLiteral
 import kotlinx.serialization.json.jsonPrimitive
 
 // Client models for the DINCR API. They decode only the fields the screens use and ignore
-// the rest (Json { ignoreUnknownKeys = true }). Same contract as the iOS DincrCore models;
-// pinned by fixture tests because OpenAPI has no response schemas yet.
+// the rest (Json { ignoreUnknownKeys = true }). Same fields, types and optionality as the iOS
+// DincrCore models, following the FastAPI code; pinned by fixtures that mirror what the
+// backend builds (native/CONTRACT.md).
 
 /** Money travels as JSON numbers; BigDecimal keeps them exact (no Double rounding). */
 object MoneySerializer : KSerializer<BigDecimal> {
@@ -35,15 +36,17 @@ typealias Money = @Serializable(with = MoneySerializer::class) BigDecimal
 /** `GET /auth/me` */
 @Serializable
 data class Profile(
-    val id: String,
+    /** `allowed_users.id`: an integer, not the Supabase UUID. */
+    val id: Long,
     val email: String? = null,
     @SerialName("display_name") val displayName: String? = null,
-    val role: String? = "user",
-    @SerialName("plan_selected") val planSelected: Boolean? = true,
-    @SerialName("profile_setup_completed") val profileSetupCompleted: Boolean? = true,
-    @SerialName("base_currency") val baseCurrency: String? = "CRC",
-    @SerialName("number_format") val numberFormat: String? = "dot_comma",
-    @SerialName("currency_placement") val currencyPlacement: String? = "before",
+    // Missing fields decode to null, as on iOS, so a missing gate flag never opens the app.
+    val role: String? = null,
+    @SerialName("plan_selected") val planSelected: Boolean? = null,
+    @SerialName("profile_setup_completed") val profileSetupCompleted: Boolean? = null,
+    @SerialName("base_currency") val baseCurrency: String? = null,
+    @SerialName("number_format") val numberFormat: String? = null,
+    @SerialName("currency_placement") val currencyPlacement: String? = null,
     val subscription: Subscription? = null,
     val legal: Legal? = null,
 ) {
@@ -108,10 +111,22 @@ data class Movement(
     val category: String? = null,
     val notes: String? = null,
     val editable: Boolean = false,
-    /** Present once movements carry their own currency (multi-currency work in progress). */
-    val currency: String? = null,
+    /**
+     * Set only when the amount was typed in another currency (PR #269): [amount] is already in
+     * the base currency and these keep what was typed. Absent on current main.
+     */
+    @SerialName("original_amount") val originalAmount: Money? = null,
+    @SerialName("original_currency") val originalCurrency: String? = null,
 ) {
-    /** Anything that is not income is money leaving (expense, debt payment). */
+    /**
+     * A row typed in another currency must send its currency and rate back on edit (PR #269),
+     * which this client does not do yet, so it stays read-only instead of being silently
+     * turned into a base-currency amount.
+     */
+    fun isEditable(baseCurrency: String): Boolean =
+        editable && (originalCurrency == null || originalCurrency.equals(baseCurrency, ignoreCase = true))
+
+    /** The backend sends only "income" or "expense"; anything else is money leaving. */
     val kind: MovementKind get() = if (transactionType == "income") MovementKind.INCOME else MovementKind.EXPENSE
     val day: String? get() = transactionDate?.take(10)
 }

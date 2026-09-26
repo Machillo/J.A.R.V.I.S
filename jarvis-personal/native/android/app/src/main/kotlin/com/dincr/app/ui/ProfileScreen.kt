@@ -86,10 +86,17 @@ fun ProfileScreen(model: AppModel, padding: PaddingValues, appearance: Appearanc
     )
 }
 
+/** Display name of a backend plan code. The plan itself always comes from `/auth/me`. */
+fun planName(plan: String?): String = when (plan ?: "free") {
+    "free" -> tx("Gratis", "Free")
+    "vip" -> "VIP"
+    else -> (plan ?: "").replaceFirstChar { it.uppercase() }
+}
+
 @Composable
 fun PlanBadge(plan: String) {
     val vip = plan == "vip"
-    Text(if (plan == "free") tx("Gratis", "Free") else plan.replaceFirstChar { it.uppercase() }.replace("Vip", "VIP"),
+    Text(planName(plan),
         style = MaterialTheme.typography.labelMedium, color = if (vip) Dincr.colors.vip else Dincr.colors.text2,
         modifier = Modifier.background(if (vip) Dincr.colors.vipContainer else Dincr.colors.surface2, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp))
 }

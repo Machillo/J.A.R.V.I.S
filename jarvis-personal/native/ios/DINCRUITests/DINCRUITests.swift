@@ -60,6 +60,46 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Panadería"].waitForExistence(timeout: 10))
     }
 
+    /// Saving only a new description must keep the stored cents and the stored category.
+    func testEditKeepsTheStoredAmountAndCategory() {
+        let app = launch()
+        app.tabBars.buttons["Movimientos"].tap()
+        let row = app.staticTexts["Feria del agricultor"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        let amount = app.textFields["editor.amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        XCTAssertEqual(amount.value as? String, "12.345,5", "the edit form shows the stored value, unrounded")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Feria' OR value == 'Feria'")).firstMatch.exists,
+                      "the stored category stays selected")
+        let description = app.textFields["editor.description"]
+        description.tap()
+        description.clearAndType("Feria de Zapote")
+        app.buttons["editor.save"].tap()
+        XCTAssertTrue(app.buttons["editor.save"].waitForNonExistence(timeout: 10))
+        let edited = app.staticTexts["Feria de Zapote"]
+        XCTAssertTrue(edited.waitForExistence(timeout: 10))
+        edited.tap()
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        XCTAssertEqual(amount.value as? String, "12.345,5")
+    }
+
+    func testDeleteAsksAndRemovesTheRow() {
+        let app = launch()
+        app.tabBars.buttons["Movimientos"].tap()
+        let row = app.staticTexts["Feria del agricultor"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.press(forDuration: 1.0) // context menu: Editar / Eliminar
+        let delete = app.buttons["Eliminar"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        delete.tap()
+        // The confirmation dialog repeats "Eliminar" as its destructive action.
+        let confirm = app.buttons.matching(NSPredicate(format: "label == 'Eliminar'")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 10))
+    }
+
     func testEmptyAccountTeachesTheFirstAction() {
         let app = launch("empty")
         XCTAssertTrue(app.staticTexts["Todavía no hay movimientos"].waitForExistence(timeout: 5))

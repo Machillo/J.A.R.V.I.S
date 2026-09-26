@@ -18,21 +18,27 @@ import com.dincr.data.Pkce
 import com.dincr.data.Profile
 import com.dincr.data.SessionManager
 import com.dincr.data.SupabaseAuthClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Build/launch configuration. No backend configured, or `dincrFixtures` extra → fixture data. */
+/**
+ * Build/launch configuration. No backend configured, or the `dincrFixtures` extra in a debug
+ * build (UI tests) → fixture data. MainActivity is exported, so a release build ignores the
+ * extra: no other app can point DINCR at sample data.
+ */
 sealed interface AppEnvironment {
     data class Live(val apiUrl: String, val supabaseUrl: String, val anonKey: String) : AppEnvironment
     data class Fixtures(val scenario: FixtureDincrService.Scenario, val skipLogin: Boolean, val latencyMs: Long = 350) : AppEnvironment
 
     companion object {
-        const val AUTH_REDIRECT = "com.dincr.app://auth/callback"
+        /** The prototype's own redirect (never the store app's com.dincr.app://auth/callback). */
+        const val AUTH_REDIRECT = "com.dincr.app.nativedev://auth/callback"
 
-        fun from(intent: Intent?): AppEnvironment {
-            intent?.getStringExtra("dincrFixtures")?.let { raw ->
+        fun from(intent: Intent?, allowLaunchFixtures: Boolean = BuildConfig.DEBUG): AppEnvironment {
+            intent?.takeIf { allowLaunchFixtures }?.getStringExtra("dincrFixtures")?.let { raw ->
                 val scenario = FixtureDincrService.Scenario.entries.firstOrNull { it.name.equals(raw, ignoreCase = true) }
                     ?: FixtureDincrService.Scenario.POPULATED
                 // UI tests pass dincrLatencyMs=0: Compose's test dispatcher does not advance simulated network delays.
@@ -79,6 +85,23 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     val isFixtures get() = environment is AppEnvironment.Fixtures
     val moneyFormat get() = MoneyFormat.from(_profile.value)
 
+    /**
+     * Runs [block] for a screen and maps every failure to a message it can show. A rejected
+     * session signs out (instead of crashing the screen that noticed it); cancellation passes.
+     */
+    suspend fun <T> load(fallback: String, block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: AuthException.SignedOut) {
+        signedOut()
+        Result.failure(error)
+    } catch (error: ApiError) {
+        Result.failure(error)
+    } catch (error: Exception) {
+        Result.failure(IllegalStateException(fallback))
+    }
+
     /** Called once from the activity with its launch intent. */
     fun configure(environment: AppEnvironment) {
         if (this::environment.isInitialized) return
@@ -112,9 +135,21 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         return Pkce.generate().also { pendingPkce = it }.let { client.authorizeUrl(provider, AppEnvironment.AUTH_REDIRECT, it) }
     }
 
+    /** The browser could not be opened: nothing is pending any more. */
+    fun signInFailed() {
+        pendingPkce = null
+        _signInError.value = language.pick("No pudimos abrir el navegador para iniciar sesión.", "We couldn’t open the browser to sign in.")
+    }
+
     fun handleCallback(uri: String) {
         val client = auth ?: return
-        val pkce = pendingPkce ?: return
+        val pkce = pendingPkce
+        if (pkce == null) {
+            // No sign-in in progress (a replayed or foreign link, or the process restarted while
+            // the browser was open): nothing is exchanged. Ask for a fresh attempt.
+            _signInError.value = language.pick("No pudimos completar el acceso. Intentá nuevamente.", "We couldn’t sign you in. Please try again.")
+            return
+        }
         pendingPkce = null
         viewModelScope.launch {
             _signingIn.value = true
@@ -122,6 +157,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                 val code = SupabaseAuthClient.authorizationCode(uri, AppEnvironment.AUTH_REDIRECT)
                 sessions.accept(client.exchange(code, pkce.verifier))
                 loadIdentity()
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 _signInError.value = language.pick("No pudimos completar el acceso. Intentá nuevamente.", "We couldn’t sign you in. Please try again.")
             } finally {
@@ -155,7 +192,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             profile.isOwner -> Phase.OwnerNotSupported
             profile.legal?.required == true -> Phase.NotYetSupported(language.pick("Aceptá los términos actualizados desde la app actual de DINCR.", "Accept the updated terms in the current DINCR app."))
             profile.profileSetupCompleted != true -> Phase.ProfileSetup
-            profile.planSelected == false -> Phase.NotYetSupported(language.pick("Elegí tu plan desde la app actual de DINCR.", "Choose your plan in the current DINCR app."))
+            profile.planSelected != true -> Phase.NotYetSupported(language.pick("Elegí tu plan desde la app actual de DINCR.", "Choose your plan in the current DINCR app."))
             else -> Phase.Ready
         }
     }
