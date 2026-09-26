@@ -119,3 +119,68 @@ def test_a_stale_job_is_never_delivered(cur, monkeypatch):
     assert service.send_due_notifications()["due_jobs"] == 1
     cur.execute("SELECT id, status FROM notification_jobs ORDER BY id")
     assert cur.fetchall() == [(stale, "pending"), (fresh, "failed")]  # no subscription for the fresh one
+
+
+def _no_enqueue(monkeypatch):
+    monkeypatch.setattr(service, "enqueue_calendar_reminders", lambda: 0)
+    monkeypatch.setattr(service, "enqueue_fixed_expense_reminders", lambda: 0)
+    import backend.sports.service as sports
+    monkeypatch.setattr(sports, "enqueue_owner_sports_digest_notifications", lambda: {"status": "OK"})
+
+
+def test_two_concurrent_cron_runs_send_each_job_once(cur, monkeypatch):
+    """Two schedulers overlap: every due job is pushed exactly once, and no database
+    transaction is open while a push service is being called."""
+    import threading
+    import time
+
+    _no_enqueue(monkeypatch)
+    now = datetime.now(timezone.utc)
+    cur.execute("INSERT INTO notification_subscriptions(workspace_id) VALUES (%s)", (WS_A,))
+    for i in range(12):
+        cur.execute("""INSERT INTO notification_jobs(user_id, workspace_id, title, body, category, scheduled_at)
+                       VALUES (11, %s, %s, 'b', 'calendar', %s)""", (WS_A, f"t{i}", now - timedelta(minutes=5)))
+    pushes, open_tx = [], []
+    lock = threading.Lock()
+    probe = psycopg2.connect(database.DATABASE_URL)
+    probe.autocommit = True
+
+    def fake_send(_conn, _subscription, title, _body, _category):
+        with probe.cursor() as c:  # nothing of the scheduler holds a transaction during the push
+            c.execute("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() "
+                      "AND state LIKE 'idle in transaction%%' AND pid <> pg_backend_pid()")
+            open_tx.append(c.fetchone()[0])
+        time.sleep(0.05)
+        with lock:
+            pushes.append(title)
+        return True, None
+
+    monkeypatch.setattr(service, "_send_to_subscription", fake_send)
+    runs = [threading.Thread(target=service.send_due_notifications) for _ in range(2)]
+    for run in runs:
+        run.start()
+    for run in runs:
+        run.join()
+    probe.close()
+    assert sorted(pushes) == sorted(f"t{i}" for i in range(12))  # each once, none lost
+    assert set(open_tx) == {0}
+    cur.execute("SELECT DISTINCT status FROM notification_jobs")
+    assert cur.fetchall() == [("sent",)]
+
+
+def test_a_lost_claim_is_retried_after_its_lease(cur, monkeypatch):
+    """A crash between claiming and recording leaves the job 'sending': it is retried
+    only once the lease has passed, never while another run may still be sending it."""
+    _no_enqueue(monkeypatch)
+    now = datetime.now(timezone.utc)
+    cur.execute("INSERT INTO notification_subscriptions(workspace_id) VALUES (%s)", (WS_A,))
+    cur.execute("""INSERT INTO notification_jobs(user_id, workspace_id, title, body, category, scheduled_at, status, updated_at)
+                   VALUES (11, %s, 'recent', 'b', 'calendar', %s, 'sending', NOW()),
+                          (11, %s, 'lost', 'b', 'calendar', %s, 'sending', NOW() - make_interval(mins => %s))""",
+                (WS_A, now - timedelta(minutes=5), WS_A, now - timedelta(minutes=5), service.CLAIM_LEASE_MINUTES + 1))
+    sent = []
+    monkeypatch.setattr(service, "_send_to_subscription", lambda _c, _s, title, _b, _cat: (sent.append(title), (True, None))[1])
+    assert service.send_due_notifications()["due_jobs"] == 1
+    assert sent == ["lost"]
+    cur.execute("SELECT title, status FROM notification_jobs ORDER BY title")
+    assert cur.fetchall() == [("lost", "sent"), ("recent", "sending")]

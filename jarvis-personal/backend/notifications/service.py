@@ -28,6 +28,11 @@ VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
 # (it stays pending, untouched), so a scheduler outage does not end in a burst of
 # stale pushes such as "starts in 30 minutes" for a past event.
 MAX_DELIVERY_DELAY_HOURS = 12
+# Delivery claims a job before sending it: concurrent cron runs never send the same
+# job twice, and no database transaction stays open while push services answer.
+# A claim older than this is taken as lost (a crash between sending and recording
+# the result), so the job is retried: delivery is at-least-once, never concurrent.
+CLAIM_LEASE_MINUTES = 10
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.invalid").strip()
 
 
@@ -402,6 +407,53 @@ def enqueue_fixed_expense_reminders() -> int:
     return created
 
 
+def _claim_due_job(conn) -> dict[str, Any] | None:
+    """Mark the next due job as being sent. SKIP LOCKED: two runs never claim the same job."""
+    return conn.execute(
+        """
+        UPDATE notification_jobs
+        SET status = 'sending', updated_at = NOW()
+        WHERE id = (
+            SELECT id
+            FROM notification_jobs
+            WHERE (status = 'pending'
+                   OR (status = 'sending' AND updated_at < NOW() - make_interval(mins => %s)))
+              AND scheduled_at <= NOW()
+              AND scheduled_at > NOW() - make_interval(hours => %s)
+            ORDER BY scheduled_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+        )
+        RETURNING *
+        """,
+        (CLAIM_LEASE_MINUTES, MAX_DELIVERY_DELAY_HOURS),
+    ).fetchone()
+
+
+def _deliver_job(job: dict[str, Any]) -> tuple[int, list[str]]:
+    """Push one claimed job to its workspace's subscriptions. Each push runs outside any
+    open transaction; its subscription bookkeeping is committed right after it."""
+    with get_connection() as conn:
+        subscriptions = conn.execute(
+            """
+            SELECT *
+            FROM notification_subscriptions
+            WHERE workspace_id = %s AND enabled = TRUE
+            """,
+            (job["workspace_id"],),
+        ).fetchall()
+        conn.commit()
+        sent_to = 0
+        errors: list[str] = []
+        for subscription in subscriptions:
+            ok, error = _send_to_subscription(conn, subscription, job["title"], job["body"], job["category"])
+            conn.commit()
+            sent_to += 1 if ok else 0
+            if error:
+                errors.append(error[:160])
+    return sent_to, errors
+
+
 def send_due_notifications(limit: int = 50) -> dict[str, Any]:
     queued_calendar = enqueue_calendar_reminders()
     queued_fixed = enqueue_fixed_expense_reminders()
@@ -411,43 +463,22 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
     except Exception as exc:
         queued_sports = {"status": "ERROR", "message": str(exc)}
 
-    with get_connection() as conn:
-        jobs = conn.execute(
-            """
-            SELECT *
-            FROM notification_jobs
-            WHERE status = 'pending' AND scheduled_at <= NOW()
-              AND scheduled_at > NOW() - make_interval(hours => %s)
-            ORDER BY scheduled_at ASC
-            LIMIT %s
-            """,
-            (MAX_DELIVERY_DELAY_HOURS, limit),
-        ).fetchall()
-
-        sent_jobs = 0
-        failed_jobs = 0
-        for job in jobs:
-            subscriptions = conn.execute(
-                """
-                SELECT *
-                FROM notification_subscriptions
-                WHERE workspace_id = %s AND enabled = TRUE
-                """,
-                (job["workspace_id"],),
-            ).fetchall()
-            sent_to = 0
-            errors: list[str] = []
-            for subscription in subscriptions:
-                ok, error = _send_to_subscription(conn, subscription, job["title"], job["body"], job["category"])
-                sent_to += 1 if ok else 0
-                if error:
-                    errors.append(error[:160])
+    due_jobs = sent_jobs = failed_jobs = 0
+    for _ in range(limit):
+        with get_connection() as conn:
+            job = _claim_due_job(conn)
+            conn.commit()
+        if not job:
+            break
+        due_jobs += 1
+        sent_to, errors = _deliver_job(job)
+        with get_connection() as conn:
             if sent_to:
                 conn.execute(
                     """
                     UPDATE notification_jobs
                     SET status = 'sent', sent_at = NOW(), last_error = NULL, updated_at = NOW()
-                    WHERE id = %s
+                    WHERE id = %s AND status = 'sending'
                     """,
                     (job["id"],),
                 )
@@ -457,19 +488,19 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
                     """
                     UPDATE notification_jobs
                     SET status = 'failed', last_error = %s, updated_at = NOW()
-                    WHERE id = %s
+                    WHERE id = %s AND status = 'sending'
                     """,
                     (("; ".join(errors) or "No hay suscripciones activas")[:500], job["id"]),
                 )
                 failed_jobs += 1
-        conn.commit()
+            conn.commit()
 
     return {
         "status": "OK",
         "queued_calendar": queued_calendar,
         "queued_fixed_expenses": queued_fixed,
         "queued_sports": queued_sports,
-        "due_jobs": len(jobs),
+        "due_jobs": due_jobs,
         "sent_jobs": sent_jobs,
         "failed_jobs": failed_jobs,
     }
