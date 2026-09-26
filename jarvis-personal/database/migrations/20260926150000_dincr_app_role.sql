@@ -66,6 +66,9 @@ BEGIN
             USING ERRCODE = 'APP01';
     END IF;
 END $$;
+-- Start from nothing. NEVER re-run this file once a later migration has granted
+-- dincr_app more: these two lines would revoke those grants too (apply_migration.py
+-- refuses a second apply of the same file; do not bypass it).
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM dincr_app;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM dincr_app;
 

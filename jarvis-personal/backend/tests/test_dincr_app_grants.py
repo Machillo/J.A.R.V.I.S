@@ -149,3 +149,57 @@ def test_every_interpolated_table_name_is_declared():
     for reach in DYNAMIC_SITES.values():
         if isinstance(reach, str):
             assert reach in role, f"the role migration no longer grants from: {reach}"
+
+
+# 20260926150000 grants sequence USAGE, the catalog-rule privileges and the
+# dincr_app_access policy only for the tables that exist when it runs. A later
+# migration must carry its own: without sequence USAGE an INSERT fails (42501),
+# without a policy the table silently reads as empty (unknown is not zero), and
+# without SELECT the export silently skips it and account deletion fails.
+ROLE_MIGRATION = "20260926150000_dincr_app_role.sql"
+CREATE_TABLE = re.compile(r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?" + TABLE + r"\s*\(", re.I)
+
+
+def _table_bodies(sql: str):
+    for match in CREATE_TABLE.finditer(sql):
+        depth, end = 1, match.end()
+        while depth and end < len(sql):
+            depth += {"(": 1, ")": -1}.get(sql[end], 0)
+            end += 1
+        yield match.group(1).lower(), sql[match.end():end]
+
+
+def role_gaps(later: dict[str, str]) -> list[str]:
+    """What later migrations (name -> SQL) leave the application role without."""
+    text = "\n".join(later.values())
+    table_grants = {t.lower() for _p, t in re.findall(r"GRANT\s+([A-Z, ]+?)\s+ON\s+TABLE\s+public\.(\w+)\s+TO\s+dincr_app\b", text, re.I)}
+    policies = {t.lower() for t in re.findall(r"CREATE\s+POLICY\s+\w+\s+ON\s+(?:public\.)?(\w+)[^;]*?\bTO\s+dincr_app\b", text, re.I | re.S)}
+    gaps = []
+    for name, sql in sorted(later.items()):
+        for table, body in _table_bodies(sql):
+            if re.search(r"\b(?:BIG)?SERIAL\b|\bGENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY\b", body, re.I) \
+                    and table in table_grants and not re.search(r"GRANT\s+USAGE\s+ON\s+SEQUENCE\s+[^;]*\b" + table, text, re.I):
+                gaps.append(f"{name}: {table} is granted to dincr_app but not its sequence (GRANT USAGE ON SEQUENCE)")
+            if re.search(r"\b(?:account_id|workspace_id)\b|REFERENCES\s+(?:public\.)?allowed_users\b", body, re.I) \
+                    and table not in table_grants:
+                gaps.append(f"{name}: {table} has account/workspace ownership or an allowed_users FK but no GRANT to dincr_app "
+                            "(the export would skip it; account deletion would fail)")
+    for table in sorted(table_grants - policies):
+        gaps.append(f"{table} is granted to dincr_app in a later migration without CREATE POLICY ... TO dincr_app")
+    return gaps
+
+
+def test_migrations_after_the_role_carry_its_privileges():
+    later = {path.name: path.read_text(encoding="utf-8") for path in sorted(MIGRATIONS.glob("*.sql")) if path.name > ROLE_MIGRATION}
+    assert role_gaps(later) == [], "A migration after the role migration must grant dincr_app what it needs: " + repr(role_gaps(later))
+
+
+def test_the_role_gap_check_sees_what_it_guards():
+    new_table = "CREATE TABLE IF NOT EXISTS public.widgets (id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL);"
+    assert len(role_gaps({"x.sql": new_table})) == 1  # ownership column, no grant
+    granted_only = new_table + "\nGRANT SELECT, INSERT ON TABLE public.widgets TO dincr_app;"
+    assert len(role_gaps({"x.sql": granted_only})) == 2  # no sequence usage, no policy
+    complete = granted_only + ("\nGRANT USAGE ON SEQUENCE public.widgets_id_seq TO dincr_app;"
+                               "\nCREATE POLICY dincr_app_access ON public.widgets AS PERMISSIVE FOR ALL TO dincr_app USING (true);")
+    assert role_gaps({"x.sql": complete}) == []
+    assert role_gaps({"x.sql": "ALTER TABLE public.salaries ADD COLUMN IF NOT EXISTS original_amount NUMERIC(14,2);"}) == []

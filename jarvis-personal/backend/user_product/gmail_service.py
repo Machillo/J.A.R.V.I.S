@@ -253,7 +253,7 @@ def _financial_user_id_for_account(account_id: str) -> int:
 
 
 # Mail refresh tokens live in Supabase Vault. The application role has no access to
-# Vault: it goes through dincr_private functions (migration 20260926150000) that
+# Vault: it goes through dincr_private functions (migration 20260926149000) that
 # only handle DINCR mail tokens labelled with the account that owns them.
 def _vault_create(conn, token: str, account_id: str, provider: str = "Gmail") -> str:
     row = conn.execute(
