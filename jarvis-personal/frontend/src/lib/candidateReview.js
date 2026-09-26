@@ -73,7 +73,7 @@ export function reviewFailure(error) {
 // After an unknown outcome only the refreshed list tells what the backend
 // stored. `rows` is that list, or null when the refresh failed too. Only a
 // stored status equal to the action's target is reported as done.
-export function reconcileReview(action, candidateId, rows, failure) {
+export function reconcileReview(action, candidateId, rows, failure, { internalTransfer = false } = {}) {
   if (!rows) {
     return {
       applied: false,
@@ -99,7 +99,7 @@ export function reconcileReview(action, candidateId, rows, failure) {
       message: tx("La revisión no se completó: el movimiento sigue pendiente. Podés intentarlo de nuevo.", "The review didn’t go through: the transaction is still pending. You can try again."),
     };
   }
-  return reviewOutcome(action, { status: row.review_status });
+  return reviewOutcome(action, { status: row.review_status }, { internalTransfer });
 }
 
 // Refreshes overlap (a review, returning to the app, a sync, a filter change).
@@ -130,7 +130,7 @@ export async function runCandidateReview({ gate, item, action, send, reload, isM
     ui.pageError(failure.message);
     const rows = await reload();
     if (!isMounted()) return "unmounted";
-    const settled = reconcileReview(action, item.candidate_id, rows, failure);
+    const settled = reconcileReview(action, item.candidate_id, rows, failure, { internalTransfer: Boolean(item.is_internal_transfer) });
     // A stored status settles the card; otherwise it stays open for a retry.
     if (settled.status) ui.settle(settled);
     else ui.pageError(settled.message);

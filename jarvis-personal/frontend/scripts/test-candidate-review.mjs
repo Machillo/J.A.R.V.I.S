@@ -148,6 +148,12 @@ for (const [stored, action, applied] of [["confirmed", "accept", true], ["reject
   assert.equal(state.applied, 0, "an unknown outcome is not counted as a review in analytics");
 }
 {
+  // An internal transfer proven by the refresh keeps its own copy: it is not counted as income or expense.
+  const { state, run } = harness({ item: { candidate_id: 7, is_internal_transfer: true }, list: [row(7, "confirmed")] });
+  assert.equal(await run("accept", failWith(0)), "applied");
+  assert.match(state.message, /Transferencia interna confirmada|Internal transfer confirmed/);
+}
+{
   const { state, run } = harness({ list: [row(7, "pending")] });
   assert.equal(await run("accept", failWith(502)), "unknown");
   assert.equal(state.editorOpen, true, "still pending: the card stays open");

@@ -31,7 +31,7 @@ USER_A = {"id": 11, "email": "a@example.test", "role": "user", "status": "active
 USER_B = {**USER_A, "id": 12, "email": "b@example.test", "account_id": ACC_B, "workspace_id": WS_B}
 
 SCHEMA = """
-CREATE TABLE accounts (id UUID PRIMARY KEY);
+CREATE TABLE accounts (id UUID PRIMARY KEY, base_currency TEXT NOT NULL DEFAULT 'CRC');
 CREATE TABLE workspaces (id UUID PRIMARY KEY);
 CREATE TABLE allowed_users (id BIGINT PRIMARY KEY);
 CREATE TABLE users (id BIGINT PRIMARY KEY);
@@ -39,6 +39,7 @@ CREATE TABLE transactions (
     id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id), transaction_date DATE NOT NULL,
     description TEXT NOT NULL, amount NUMERIC(14,2) NOT NULL, transaction_type TEXT NOT NULL, category TEXT,
     account TEXT, source TEXT, notes TEXT, workspace_id UUID REFERENCES workspaces(id), financial_account_id BIGINT,
+    original_amount NUMERIC(14,2), original_currency TEXT, exchange_rate NUMERIC(14,6),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE financial_input_events (
     id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL REFERENCES accounts(id), workspace_id UUID NOT NULL REFERENCES workspaces(id),
@@ -61,7 +62,8 @@ CREATE TABLE finva_email_candidates (
     id BIGSERIAL PRIMARY KEY, email_message_id BIGINT NOT NULL UNIQUE REFERENCES finva_email_messages(id),
     account_id UUID NOT NULL REFERENCES accounts(id), workspace_id UUID NOT NULL REFERENCES workspaces(id),
     transaction_id BIGINT REFERENCES transactions(id), transaction_date DATE NOT NULL, description TEXT NOT NULL,
-    amount NUMERIC(18,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'CRC', transaction_type TEXT NOT NULL,
+    amount NUMERIC(18,2) NOT NULL, currency TEXT NOT NULL DEFAULT 'CRC',
+    original_amount NUMERIC(18,2), original_currency TEXT, transaction_type TEXT NOT NULL,
     category TEXT NOT NULL, bank TEXT NOT NULL, financial_account_id BIGINT, source_type TEXT NOT NULL DEFAULT 'gmail',
     source_provider TEXT NOT NULL DEFAULT 'gmail',
     is_internal_transfer BOOLEAN NOT NULL DEFAULT FALSE, related_candidate_id BIGINT, resolution_reason TEXT,
