@@ -16,6 +16,29 @@ const tx = (es, en) => language === "es" ? es : en;
 const icons = { free: WalletCards, basic: Sparkles, vip: Crown };
 const ROLE_LABELS = { owner: ["Propietario", "Owner"], admin: ["Administrador", "Admin"], user: ["Usuario", "User"] };
 const roleLabel = (role) => ROLE_LABELS[role] ? tx(...ROLE_LABELS[role]) : role;
+const PLAN_RANK = { free: 1, basic: 2, vip: 3 };
+// Access ends at a stored instant; show the last day it still includes, in Costa Rica time
+// (the launch promotion ends 2027-01-01 06:00 UTC, which is "until December 31, 2026").
+const formatDay = (ms) => new Date(ms).toLocaleDateString(language === "es" ? "es-CR" : "en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Costa_Rica" });
+const planDate = (value) => value ? formatDay(Date.parse(value) - 1) : "";
+// The first day of the new plan (the instant itself, not the last day of the current one).
+const planStartDate = (value) => value ? formatDay(Date.parse(value)) : "";
+
+function PlanChangeNotice({ confirming, currentPlan, pendingPlan, accessEndDate, planName, isDowngrade }) {
+  const current = planName(currentPlan);
+  const next = planName(confirming);
+  if (confirming === currentPlan) {
+    return <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Cancelamos el cambio a ${planName(pendingPlan)} y seguís con ${current}.`, `We cancel the change to ${planName(pendingPlan)} and you keep ${current}.`)}</span></div>;
+  }
+  if (!isDowngrade(confirming)) return null;
+  const until = accessEndDate
+    ? tx(`Seguís con ${current} y todos sus beneficios hasta el ${accessEndDate}.`, `You keep ${current} and all its benefits until ${accessEndDate}.`)
+    : tx(`El cambio a ${next} es inmediato.`, `The change to ${next} is immediate.`);
+  const then = confirming === "free"
+    ? tx("Después pasás a Gratis.", "Then you move to Free.")
+    : tx(`Después pasás a ${next} si tenés una suscripción de ${next} en App Store o Google Play; si no, a Gratis.`, `Then you move to ${next} if you have a ${next} subscription in the App Store or Google Play; otherwise to Free.`);
+  return <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{accessEndDate ? `${until} ${then}` : until}</span></div>;
+}
 const pricesUnavailable = () => tx("No pudimos confirmar los precios. Reintentá antes de elegir Basic o VIP.", "We couldn’t confirm prices. Retry before choosing Basic or VIP.");
 
 export default function Settings({ user, onUserChange, onLogout }) {
@@ -30,6 +53,13 @@ export default function Settings({ user, onUserChange, onLogout }) {
   useFinvaBackHandler(() => { if (!changing) setConfirming(""); }, Boolean(confirming));
 
   const currentPlan = user?.subscription?.plan || "free";
+  // A downgrade keeps the current plan until its end; the backend owns the dates.
+  const pendingPlan = user?.subscription?.pending_plan || "";
+  const pendingDate = planDate(user?.subscription?.pending_effective_at);
+  const pendingStartDate = planStartDate(user?.subscription?.pending_effective_at);
+  const accessEndDate = planDate(user?.subscription?.expires_at);
+  const isDowngrade = (code) => (PLAN_RANK[code] || 0) < (PLAN_RANK[currentPlan] || 0);
+  const planName = (code) => plans.find((plan) => plan.code === code)?.name || codeLabel("plans", code);
   const currentPlanInfo = useMemo(
     () => plans.find((plan) => plan.code === currentPlan),
     [plans, currentPlan],
@@ -54,8 +84,8 @@ export default function Settings({ user, onUserChange, onLogout }) {
 
 
   const openPlanDialog = (planCode) => {
-    if (planCode === currentPlan) return;
-    if (planCode !== "free" && !billing) { setError(tx("Confirmá los precios antes de elegir un plan de pago.", "Confirm prices before choosing a paid plan.")); return; }
+    if (planCode === currentPlan || planCode === pendingPlan) return;
+    if (planCode !== "free" && !isDowngrade(planCode) && !billing) { setError(tx("Confirmá los precios antes de elegir un plan de pago.", "Confirm prices before choosing a paid plan.")); return; }
     setConfirming(planCode);
     setMessage("");
     setError("");
@@ -63,8 +93,8 @@ export default function Settings({ user, onUserChange, onLogout }) {
 
   const changePlan = async () => {
     const planCode = confirming;
-    if (!planCode || planCode === currentPlan) return;
-    if (planCode !== "free" && !promotionActive) return;
+    if (!planCode || (planCode === currentPlan && !pendingPlan)) return;
+    if (planCode !== "free" && planCode !== currentPlan && !isDowngrade(planCode) && !promotionActive) return;
     setChanging(planCode);
     setError("");
     setMessage("");
@@ -72,12 +102,22 @@ export default function Settings({ user, onUserChange, onLogout }) {
       const response = await selectPlan(planCode, false);
       const activeProfile = await confirmedPlanProfile(response, planCode, getMe);
       identifyTelemetryUser(activeProfile);
-      trackEvent("plan_selected", { plan: planCode });
-      trackEvent("plan_access_granted", { plan: planCode, access_type: planCode === "free" ? "free" : "promotion" });
+      const change = response?.status === "downgrade_scheduled" ? "scheduled" : response?.status === "plan_kept" ? "kept" : "immediate";
+      trackEvent("plan_selected", { plan: planCode, change });
+      if (!["downgrade_scheduled", "plan_kept"].includes(response?.status)) {
+        trackEvent("plan_access_granted", { plan: planCode, access_type: planCode === "free" ? "free" : "promotion" });
+      }
       onUserChange?.(activeProfile);
       setConfirming("");
       const newPlan = activeProfile.subscription.plan;
-      setMessage(tx(`Plan cambiado a ${newPlan === "free" ? "Gratis" : newPlan.toUpperCase()}.`, `Plan changed to ${newPlan === "free" ? "Free" : newPlan.toUpperCase()}.`));
+      if (response?.status === "downgrade_scheduled") {
+        const when = planDate(activeProfile.subscription.pending_effective_at);
+        setMessage(tx(`Listo. Seguís con ${planName(newPlan)} hasta el ${when}; después cambia tu plan.`, `Done. You keep ${planName(newPlan)} until ${when}; then your plan changes.`));
+      } else if (response?.status === "plan_kept") {
+        setMessage(tx(`Seguís con ${planName(newPlan)}. Cancelamos el cambio programado.`, `You keep ${planName(newPlan)}. We canceled the scheduled change.`));
+      } else {
+        setMessage(tx(`Plan cambiado a ${newPlan === "free" ? "Gratis" : newPlan.toUpperCase()}.`, `Plan changed to ${newPlan === "free" ? "Free" : newPlan.toUpperCase()}.`));
+      }
     } catch (err) {
       setError(err.message || tx("No se pudo cambiar el plan.", "We couldn’t change the plan."));
     } finally {
@@ -129,6 +169,22 @@ export default function Settings({ user, onUserChange, onLogout }) {
         </div>
         <span className="plan-status-pill">{tx("Actual","Current")}</span>
       </article>
+      {pendingPlan && (
+        <p className="plan-payment-notice" role="status">
+          <CheckCircle2 size={19}/>
+          <span>
+            {tx(`Tu plan ${planName(currentPlan)} sigue activo hasta el ${pendingDate}.`, `Your ${planName(currentPlan)} plan stays active until ${pendingDate}.`)}
+            {" "}
+            {user?.subscription?.pending_requires_payment
+              ? tx(`Después pasarás a ${planName(pendingPlan)} si tenés esa suscripción en App Store o Google Play; si no, a Gratis.`, `Then you’ll move to ${planName(pendingPlan)} if you have that subscription in the App Store or Google Play; otherwise to Free.`)
+              : tx(`Después pasarás a ${planName(pendingPlan)}.`, `Then you’ll move to ${planName(pendingPlan)}.`)}
+            {" "}
+            <button type="button" className="change-plan-button" disabled={Boolean(changing)} onClick={() => setConfirming(currentPlan)}>
+              {tx(`Mantener ${planName(currentPlan)}`, `Keep ${planName(currentPlan)}`)}
+            </button>
+          </span>
+        </p>
+      )}
 
       <div className="section-heading compact plan-change-heading">
         <div>
@@ -145,6 +201,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
           {plans.map((plan) => {
             const Icon = icons[plan.code] || WalletCards;
             const isCurrent = plan.code === currentPlan;
+            const isPending = plan.code === pendingPlan;
             return (
               <article className={`settings-plan-row ${isCurrent ? "is-current" : ""}`} key={plan.code}>
                 <div className="settings-plan-main">
@@ -159,11 +216,13 @@ export default function Settings({ user, onUserChange, onLogout }) {
 
                 {isCurrent ? (
                   <span className="selected-plan-label"><Check size={16} /> {tx("Seleccionado","Selected")}</span>
+                ) : isPending ? (
+                  <span className="selected-plan-label">{tx(`Desde el ${pendingStartDate}`, `From ${pendingStartDate}`)}</span>
                 ) : (
                   <button
                     type="button"
                     className="change-plan-button"
-                    disabled={Boolean(changing) || (plan.code !== "free" && (!billing || !promotionActive))}
+                    disabled={Boolean(changing) || (plan.code !== "free" && !isDowngrade(plan.code) && (!billing || !promotionActive))}
                     onClick={() => openPlanDialog(plan.code)}
                   >
                     <>{tx("Elegir","Choose")} <ChevronRight size={17} /></>
@@ -180,7 +239,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
       {message && <p className="success-banner">{message}</p>}
       {!confirming && error && <p className="onboarding-error">{error}</p>}
 
-      {confirming && confirming !== currentPlan && (() => {
+      {confirming && (confirming !== currentPlan || pendingPlan) && (() => {
         const selected = plans.find((plan) => plan.code === confirming);
         const SelectedIcon = icons[confirming] || WalletCards;
         return <div className="plan-dialog-backdrop" role="presentation" onMouseDown={(event)=>{if(event.target===event.currentTarget&&!changing)setConfirming("");}}>
@@ -188,9 +247,17 @@ export default function Settings({ user, onUserChange, onLogout }) {
             <button className="plan-dialog-close" type="button" aria-label={tx("Cerrar","Close")} disabled={Boolean(changing)} onClick={()=>setConfirming("")}><X size={20}/></button>
             <div className="plan-dialog-icon"><SelectedIcon size={28}/></div>
             <p className="eyebrow">{tx("Confirmar cambio","Confirm change")}</p>
-            <h2 id="plan-dialog-title">{tx("Cambiar a", "Switch to")} {selected?.name || confirming.toUpperCase()}</h2>
+            <h2 id="plan-dialog-title">{confirming === currentPlan ? tx("Mantener", "Keep") : tx("Cambiar a", "Switch to")} {selected?.name || confirming.toUpperCase()}</h2>
             <p>{selected?.tagline || tx("Tu nuevo plan DINCR", "Your new DINCR plan")}</p>
-            {confirming !== "free" && <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio previsto será ${confirming === "basic" ? "₡2.990" : "₡4.990"}/mes, sin cobro automático.`, `This plan will be free until December 31, 2026. From January its planned price will be ${confirming === "basic" ? "₡2,990" : "₡4,990"}/month, with no automatic charge.`)}</span></div>}
+            <PlanChangeNotice
+              confirming={confirming}
+              currentPlan={currentPlan}
+              pendingPlan={pendingPlan}
+              accessEndDate={accessEndDate}
+              planName={planName}
+              isDowngrade={isDowngrade}
+            />
+            {confirming !== "free" && confirming !== currentPlan && !isDowngrade(confirming) && <div className="plan-payment-notice"><CheckCircle2 size={19}/><span>{tx(`Este plan estará gratis hasta el 31 de diciembre de 2026. Desde enero su precio previsto será ${confirming === "basic" ? "₡2.990" : "₡4.990"}/mes, sin cobro automático.`, `This plan will be free until December 31, 2026. From January its planned price will be ${confirming === "basic" ? "₡2,990" : "₡4,990"}/month, with no automatic charge.`)}</span></div>}
             {error && <div className="plan-dialog-error"><AlertTriangle size={18}/><span>{error}</span></div>}
             <div className="plan-dialog-actions"><button type="button" className="plan-dialog-cancel" disabled={Boolean(changing)} onClick={()=>setConfirming("")}>{tx("Cancelar","Cancel")}</button><button type="button" className="plan-dialog-confirm" disabled={Boolean(changing)} onClick={changePlan}>{changing ? tx("Procesando...","Processing...") : `${tx("Confirmar","Confirm")} ${selected?.name || confirming.toUpperCase()}`}</button></div>
           </section>

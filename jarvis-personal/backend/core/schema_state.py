@@ -24,3 +24,13 @@ def missing_tables(conn, tables: Iterable[str]) -> list[str]:
 
 def tables_exist(conn, tables: Iterable[str]) -> bool:
     return not missing_tables(conn, tables)
+
+
+def columns_exist(conn, table: str, columns: Iterable[str]) -> bool:
+    names = list(columns)
+    row = conn.execute(
+        "SELECT count(*) AS present FROM pg_catalog.pg_attribute "
+        "WHERE attrelid = to_regclass('public.' || %s) AND attname = ANY(%s::text[]) AND attnum > 0 AND NOT attisdropped",
+        (table, names),
+    ).fetchone() or {}
+    return int(row.get("present") or 0) == len(names)
