@@ -244,9 +244,10 @@ retired.
 - `focus-ring`: 2 pt ring, 2 pt offset, for hardware-keyboard / switch-control focus (iPad,
   Android with keyboard). `scrim`: 40% (light) / 60% (dark) behind modal sheets and dialogs where
   the platform does not supply one.
-- Native implementation: every color is a named asset (iOS asset catalog with Any, Dark and
-  Increased Contrast appearances; Android `ColorScheme` roles for light and dark). No raw hex in
-  screen code.
+- Native implementation: every color comes from the token set generated from this file (iOS
+  dynamic colors or asset-catalog colors for Any and Dark, with the increased-contrast mapping in
+  `DESIGN_SYSTEM.md` §7; Android `ColorScheme` roles for light and dark). No raw hex in screen
+  code.
 
 ### Semantic (status)
 
