@@ -325,8 +325,9 @@ def _send_support_discord(*, public_id: str, plan: str, payload, severity: str =
             "Support Discord notification failed for %s host=%s status=%s",
             public_id, webhook_host, response.status_code,
         )
-    except Exception:
-        logger.exception("Support Discord notification failed for %s", public_id)
+    except Exception as exc:
+        # Type only: a connection error's message carries the webhook URL (its secret).
+        logger.error("Support Discord notification failed for %s host=%s error=%s", public_id, webhook_host, type(exc).__name__)
     return False
 
 
