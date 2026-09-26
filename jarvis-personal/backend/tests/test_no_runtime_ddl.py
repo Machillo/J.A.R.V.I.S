@@ -180,7 +180,7 @@ def _function_has_ddl(fn) -> bool:
 
 # Call edges Users never take at runtime; each names its proof (a test below).
 GUARDED_EDGES = {
-    # build_advisor_strategy persists (DDL + writes) only when persist=True; every
+    # build_advisor_strategy persists (writes) only when persist=True; every
     # Users-reachable caller passes persist=False
     # (test_users_build_the_advisor_strategy_without_persisting_it).
     ("backend.advisor.core.build_advisor_strategy", "backend.advisor.core._persist_strategy"),

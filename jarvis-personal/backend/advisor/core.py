@@ -104,7 +104,7 @@ def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
             RETURNING workspace_id
         """, (workspace_id, user_id, ADVISOR_VERSION, fingerprint, canonical))
         conn.commit()
-    return {"strategy_hash": fingerprint, "changed": changed}
+    return {"strategy_hash": fingerprint, "changed": changed, "persisted": True}
 
 
 def _data_quality(summary: dict[str, Any], accounts: list[dict[str, Any]], debts: list[dict[str, Any]], reconciliation: dict[str, Any]) -> dict[str, Any]:

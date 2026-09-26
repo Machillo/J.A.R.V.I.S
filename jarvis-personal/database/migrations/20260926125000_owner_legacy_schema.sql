@@ -9,8 +9,13 @@
 --
 -- On production every statement is a no-op except the two advisor tables, which
 -- were never created there (verified on a restored backup: the schema dump is
--- identical before and after, apart from those tables). The advisor tables are
--- created with an optional legacy user_id (never written; ownership is the workspace).
+-- identical before and after, apart from those tables). The advisor tables get an
+-- optional legacy user_id (ownership is the workspace) and the history index of
+-- the superseded 20260908_advisor_core.sql. Where a captured CREATE TABLE named
+-- workspace_id only in a UNIQUE clause (the column used to be added by a later
+-- ALTER), the column is declared. The file applies to a production-shape database
+-- (verified on a restored backup) and, in CI, to the identity baseline plus
+-- investment_portfolio_snapshots (backend/tests/test_owner_legacy_schema_pg.py).
 -- Every statement is idempotent (IF NOT EXISTS). No row is read or changed.
 -- Apply with backend/scripts/apply_migration.py (BACKUP_VERIFIED) as postgres,
 -- BEFORE the code of this PR is deployed (the code no longer creates these relations).
@@ -25,8 +30,11 @@
 --     'payroll_salary_reports','receivable_entries','receivable_payments','receivables','user_preferences']) t
 --   WHERE to_regclass('public.' || t) IS NULL
 --   UNION ALL SELECT 'row level security off on ' || c.relname FROM pg_class c
---   WHERE c.oid IN ('public.advisor_current_strategy'::regclass, 'public.advisor_strategy_history'::regclass)
---     AND NOT c.relrowsecurity;
+--   WHERE c.oid IN (to_regclass('public.advisor_current_strategy'), to_regclass('public.advisor_strategy_history'))
+--     AND NOT c.relrowsecurity
+--   UNION ALL SELECT 'advisor user_id required on ' || table_name FROM information_schema.columns
+--   WHERE table_schema = 'public' AND table_name IN ('advisor_current_strategy', 'advisor_strategy_history')
+--     AND column_name = 'user_id' AND is_nullable = 'NO';
 -- Rollback: none. Dropping these relations would delete data; the previous code
 -- recreated them anyway, so reverting the code needs no schema change.
 
@@ -49,6 +57,7 @@ CREATE TABLE IF NOT EXISTS email_monitor_settings (
 );
 CREATE TABLE IF NOT EXISTS email_ingested_messages (
     id BIGSERIAL PRIMARY KEY,
+    workspace_id UUID,
     user_id BIGINT NOT NULL,
     provider TEXT NOT NULL DEFAULT 'gmail',
     provider_message_id TEXT,
@@ -73,6 +82,7 @@ ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS attachment_count IN
 ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS parse_reason TEXT;
 CREATE TABLE IF NOT EXISTS email_transaction_candidates (
     id BIGSERIAL PRIMARY KEY,
+    workspace_id UUID,
     user_id BIGINT NOT NULL,
     email_message_id BIGINT REFERENCES email_ingested_messages(id) ON DELETE CASCADE,
     fingerprint TEXT NOT NULL,
@@ -115,6 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_email_candidates_semantic_dedupe
 ON email_transaction_candidates(user_id, transaction_date, amount, transaction_time, status);
 CREATE TABLE IF NOT EXISTS email_statement_documents (
     id BIGSERIAL PRIMARY KEY,
+    workspace_id UUID,
     user_id BIGINT NOT NULL,
     email_message_id BIGINT REFERENCES email_ingested_messages(id) ON DELETE CASCADE,
     bank TEXT NOT NULL,
@@ -151,6 +162,7 @@ CREATE TABLE IF NOT EXISTS payroll_salary_reports (
 );
 CREATE TABLE IF NOT EXISTS card_aliases (
     id BIGSERIAL PRIMARY KEY,
+    workspace_id UUID,
     user_id BIGINT NOT NULL,
     card_last4 TEXT NOT NULL,
     owner_label TEXT NOT NULL,
@@ -399,6 +411,13 @@ CREATE TABLE IF NOT EXISTS advisor_strategy_history (
     strategy JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- 20260908_advisor_core.sql declared the same tables with a required user_id; where
+-- it was applied, relax it here (idempotent). That file is superseded by this one.
+ALTER TABLE advisor_current_strategy ALTER COLUMN user_id DROP NOT NULL;
+ALTER TABLE advisor_strategy_history ALTER COLUMN user_id DROP NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_advisor_strategy_history_workspace_created
+    ON advisor_strategy_history(workspace_id, created_at DESC);
 
 -- Like every other table: row level security on (no policies) and no access for
 -- the public API roles, which Supabase grants by default on new tables.
