@@ -304,3 +304,48 @@ def test_at_most_three_pdfs_are_parsed(monkeypatch):
     many = [{"filename": f"f{i}.pdf", "attachment_id": f"a{i}", "mime_type": "application/pdf", "size": 100} for i in range(6)]
     gmail_content.extract_pdf_attachment_text(service, "m-1", many)
     assert len(fetched) == gmail_content.MAX_PDF_ATTACHMENTS
+
+
+# --- Mail authorization ends with the plan (security audit run-2) ---------------------
+
+def test_withdrawing_mail_authorization_never_depends_on_the_plan(monkeypatch):
+    from backend.user_product import routes
+
+    monkeypatch.setattr(routes, "require_feature", lambda *_a: pytest.fail("disconnect must not require a plan"))
+    monkeypatch.setattr(routes, "disconnect_gmail", lambda connection_id=None: {"status": "disconnected"})
+    assert routes.vip_gmail_disconnect(7) == {"status": "disconnected"}
+
+
+def test_a_lapsed_plan_ends_the_stored_mail_authorization(pg, monkeypatch):
+    from backend.core.database import get_connection
+
+    pg.execute("""CREATE SCHEMA vault; CREATE TABLE vault.secrets (id UUID PRIMARY KEY, secret TEXT);
+                  CREATE VIEW vault.decrypted_secrets AS SELECT id, secret AS decrypted_secret FROM vault.secrets;
+                  CREATE TABLE plans (id BIGSERIAL PRIMARY KEY, code TEXT);
+                  INSERT INTO plans(code) VALUES ('free'), ('vip');
+                  CREATE TABLE account_subscriptions (account_id UUID PRIMARY KEY, plan_id BIGINT, status TEXT,
+                      access_source TEXT, expires_at TIMESTAMPTZ);
+                  CREATE TABLE finva_gmail_connections (id BIGSERIAL PRIMARY KEY, account_id UUID, status TEXT,
+                      refresh_token_secret_id UUID, granted_scopes TEXT[], history_id TEXT, watch_expiration TIMESTAMPTZ,
+                      initial_scan_page_token TEXT, last_error TEXT, updated_at TIMESTAMPTZ)""")
+    revoked = []
+    monkeypatch.setattr(gmail_service.requests, "post", lambda url, data=None, **k: revoked.append(data["token"]))
+    people = {}
+    for name, expires in (("lapsed", "NOW() - interval '1 minute'"), ("vip", "NOW() + interval '5 days'")):
+        account, secret = str(uuid.uuid4()), str(uuid.uuid4())
+        pg.execute("INSERT INTO vault.secrets VALUES (%s, %s)", (secret, f"token-{name}"))
+        pg.execute(f"""INSERT INTO account_subscriptions SELECT %s, id, 'active', 'courtesy', {expires} FROM plans WHERE code='vip'""",
+                   (account,))
+        pg.execute("""INSERT INTO finva_gmail_connections(account_id, status, refresh_token_secret_id, granted_scopes)
+                      VALUES (%s, 'active', %s, %s) RETURNING id""", (account, secret, [gmail_service.GMAIL_SCOPE]))
+        people[name] = (pg.fetchone()[0], secret)
+    with get_connection() as conn:
+        assert gmail_service.end_unentitled_mail_connections(conn) == 1
+        conn.commit()
+    pg.execute("SELECT status, last_error IS NOT NULL FROM finva_gmail_connections WHERE id = %s", (people["lapsed"][0],))
+    assert pg.fetchone() == ("disabled", True)
+    pg.execute("SELECT id::text FROM vault.secrets")
+    assert [row[0] for row in pg.fetchall()] == [people["vip"][1]]  # only the entitled account keeps its token
+    assert revoked == ["token-lapsed"]
+    pg.execute("SELECT status FROM finva_gmail_connections WHERE id = %s", (people["vip"][0],))
+    assert pg.fetchone() == ("active",)

@@ -1204,6 +1204,44 @@ def _start_watch(connection_id: int, service, suppress_errors: bool = False) -> 
             raise
 
 
+MAIL_ACCESS_ENDED = "Tu plan ya no incluye correos financieros: desconectamos este correo y borramos su autorización. Podés volver a conectarlo cuando tengas VIP."
+
+
+def end_unentitled_mail_connections(conn) -> int:
+    """End stored mail authorization for accounts that no longer have VIP.
+
+    A lapsed plan must not keep a mailbox credential that a later grant would
+    silently reuse: the token is revoked (Gmail) and deleted, and the connection
+    is disabled, so reading again needs a new consent and OAuth. What was already
+    imported stays in the account. Caller commits.
+    """
+    rows = conn.execute(
+        """SELECT id,account_id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections
+           WHERE status<>'disabled' ORDER BY id FOR UPDATE"""
+    ).fetchall() or []
+    ended = 0
+    for row in rows:
+        if _has_active_vip_access(conn, str(row["account_id"])):
+            continue
+        secret_id = str(row["refresh_token_secret_id"]) if row.get("refresh_token_secret_id") else None
+        if secret_id and GMAIL_SCOPE in (row.get("granted_scopes") or []):
+            try:
+                token = _vault_read(conn, secret_id)
+                requests.post("https://oauth2.googleapis.com/revoke", data={"token": token}, timeout=10)
+            except Exception:
+                logger.warning("Gmail token revocation failed when a plan ended")
+        conn.execute(
+            """UPDATE finva_gmail_connections
+               SET status='disabled',history_id=NULL,watch_expiration=NULL,initial_scan_page_token=NULL,
+                   last_error=%s,updated_at=NOW()
+               WHERE id=%s""",
+            (MAIL_ACCESS_ENDED, int(row["id"])),
+        )
+        _vault_delete(conn, secret_id)
+        ended += 1
+    return ended
+
+
 def gmail_maintenance(secret: str | None) -> dict[str, Any]:
     expected = os.getenv("FINVA_GMAIL_CRON_SECRET", "")
     if not expected:
@@ -1213,6 +1251,7 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
     with get_connection() as conn:
         # Abandoned OAuth flows must not keep a pending refresh token in Vault.
         mail_oauth.discard_stale_flows(conn)
+        ended = end_unentitled_mail_connections(conn)
         conn.commit()
     with get_connection() as conn:
         rows = conn.execute(
@@ -1249,7 +1288,8 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
         except Exception:
             continue
     retention = apply_gmail_retention()
-    return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect, "retention": retention}
+    return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect,
+            "ended_without_plan": ended, "retention": retention}
 
 
 def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, Any]:
