@@ -474,6 +474,15 @@ def _cents(value: Any) -> Decimal | None:
     return None if value is None else Decimal(str(value)).quantize(Decimal("0.01"))
 
 
+def _corrected(key: str, value: Any, original: Any) -> bool:
+    # Amounts compare in cents; the stored date is read back as an ISO string.
+    if key == "amount":
+        return _cents(value) != _cents(original)
+    if key == "transaction_date":
+        return str(value)[:10] != str(original)[:10]
+    return value != original
+
+
 def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str, Any] | None = None) -> dict[str, Any]:
     if action not in {"accept", "reject"}:
         raise HTTPException(status_code=422, detail="Acción de revisión inválida.")
@@ -550,7 +559,7 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
         original = {**candidate, "amount": native_amount}
         corrected_fields = sorted(
             key for key, value in corrections.items()
-            if (_cents(value) != _cents(original.get(key)) if key == "amount" else value != original.get(key))
+            if _corrected(key, value, original.get(key))
         )
         money = transaction_amounts(native_currency, values["amount"], candidate.get("account_base_currency"), exchange_rate)
         transaction_id = _create_candidate_transaction(conn, candidate, values, money)
