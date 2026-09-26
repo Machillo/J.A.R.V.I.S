@@ -54,6 +54,7 @@ jobs:
       - run: npm run test:phase0h
       - run: npm run test:unified-movements
       - run: npm run test:double-submit
+      - run: npm run test:candidate-review
       - run: npm run test:phase0a
       - run: npm run test:phase0b
       - run: npm run test:phase0d

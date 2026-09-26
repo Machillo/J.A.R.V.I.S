@@ -18,6 +18,7 @@
     "test:debts-in-transactions": "node scripts/test-debts-in-transactions.mjs",
     "test:unified-movements": "node scripts/test-unified-movements.mjs",
     "test:double-submit": "node scripts/test-double-submit.mjs",
+    "test:candidate-review": "node scripts/test-candidate-review.mjs",
     "test:native-navigation": "node scripts/test-native-navigation.mjs",
     "test:store-readiness": "node scripts/test-store-readiness.mjs",
     "test:legal-links": "node scripts/test-legal-links.mjs",
