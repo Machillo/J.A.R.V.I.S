@@ -60,7 +60,7 @@ BEGIN
     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(x.indkey) AND a.attname = 'user_id'
     WHERE x.indisunique AND c.relname NOT LIKE 'audit\_backup\_%'
       AND NOT EXISTS (
-          SELECT 1 FROM pg_index y WHERE y.indrelid = x.indrelid AND y.indisunique AND y.indexrelid <> x.indexrelid
+          SELECT 1 FROM pg_index y WHERE y.indrelid = x.indrelid AND y.indisunique AND y.indisvalid AND y.indexrelid <> x.indexrelid
             AND regexp_replace(pg_get_indexdef(y.indexrelid), '^.* USING ', '')
               = replace(regexp_replace(pg_get_indexdef(x.indexrelid), '^.* USING ', ''), 'user_id', 'workspace_id'));
     IF missing IS NOT NULL THEN
@@ -77,6 +77,6 @@ COMMIT;
 --  JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
 --  JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(x.indkey) AND a.attname = 'user_id'
 --  WHERE x.indisunique AND c.relname NOT LIKE 'audit\_backup\_%' AND NOT EXISTS (
---    SELECT 1 FROM pg_index y WHERE y.indrelid = x.indrelid AND y.indisunique AND y.indexrelid <> x.indexrelid
+--    SELECT 1 FROM pg_index y WHERE y.indrelid = x.indrelid AND y.indisunique AND y.indisvalid AND y.indexrelid <> x.indexrelid
 --      AND regexp_replace(pg_get_indexdef(y.indexrelid), '^.* USING ', '')
 --        = replace(regexp_replace(pg_get_indexdef(x.indexrelid), '^.* USING ', ''), 'user_id', 'workspace_id'));

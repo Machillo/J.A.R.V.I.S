@@ -124,3 +124,14 @@ def test_the_rollback_drops_only_the_twins_it_created(cur):
     assert _twins(cur) == {"uq_ai_usage_daily_workspace_date"}
     cur.execute(_postflight())
     assert len(cur.fetchall()) == 4
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))  # re-apply after rollback
+    cur.execute(_postflight())
+    assert cur.fetchall() == []
+
+
+def test_an_invalid_index_is_not_a_twin(cur):
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    cur.execute("""UPDATE pg_index SET indisvalid = FALSE
+                   WHERE indexrelid = 'public.uq_fixed_expenses_workspace_name'::regclass""")
+    cur.execute(_postflight())
+    assert [row[0] for row in cur.fetchall()] == ["no workspace twin for fixed_expenses_user_id_name_key"]
