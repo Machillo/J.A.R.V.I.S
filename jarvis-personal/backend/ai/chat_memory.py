@@ -23,7 +23,6 @@ def _safe_json_loads(value: Any, default: Any):
 
 def get_or_create_chat_session() -> int:
     """Devuelve una sesión activa simple por usuario para conversaciones con JARVIS."""
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -44,10 +43,10 @@ def get_or_create_chat_session() -> int:
 
         cursor = conn.execute(
             """
-            INSERT INTO chat_sessions (user_id, workspace_id, status, created_at, updated_at)
-            VALUES (%s, %s, 'active', NOW(), NOW())
+            INSERT INTO chat_sessions (workspace_id, status, created_at, updated_at)
+            VALUES (%s, 'active', NOW(), NOW())
             """,
-            (user_id, workspace_id),
+            (workspace_id),
         )
         conn.commit()
 
@@ -55,7 +54,6 @@ def get_or_create_chat_session() -> int:
 
 
 def get_pending_action() -> dict[str, Any] | None:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -107,13 +105,12 @@ def create_pending_action(
         cursor = conn.execute(
             """
             INSERT INTO chat_pending_actions (
-                user_id, workspace_id, session_id, action_type, status, current_field,
+                workspace_id, session_id, action_type, status, current_field,
                 payload, missing_fields, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, 'pending', %s, %s::jsonb, %s::jsonb, NOW(), NOW())
+            VALUES (%s, %s, %s, 'pending', %s, %s::jsonb, %s::jsonb, NOW(), NOW())
             """,
             (
-                user_id,
                 workspace_id,
                 session_id,
                 action_type,
@@ -142,7 +139,6 @@ def update_pending_action(
     missing_fields: list[str],
     current_field: str | None,
 ) -> None:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -168,7 +164,6 @@ def update_pending_action(
 
 
 def finish_pending_action(action_id: int, status: str = "completed") -> None:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:

@@ -468,12 +468,12 @@ def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None)
                 conn.execute(
                     """
                     INSERT INTO debt_payments (
-                        user_id, workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                        workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
                         fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
                         previous_monthly_payment, new_monthly_payment, description,
                         payment_date, installment_number, source, created_at
                     )
-                    SELECT %s, %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto_schedule', NOW()
+                    SELECT %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto_schedule', NOW()
                     WHERE NOT EXISTS (
                         SELECT 1 FROM debt_payments
                         WHERE workspace_id = %s AND debt_id = %s
@@ -481,7 +481,7 @@ def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None)
                     )
                     """,
                     (
-                        user_id, workspace_id, debt["id"], actual_payment, principal, interest, fee, extra_principal, previous_balance, balance,
+                        workspace_id, debt["id"], actual_payment, principal, interest, fee, extra_principal, previous_balance, balance,
                         monthly_payment, monthly_payment,
                         f"Cuota automática {installment_number}/{term or '?'} de {debt.get('name') or 'deuda'}",
                         due.isoformat(), installment_number,
@@ -491,17 +491,17 @@ def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None)
                 conn.execute(
                     """
                     INSERT INTO transactions (
-                        user_id, workspace_id, transaction_date, description, amount, transaction_type,
+                        workspace_id, transaction_date, description, amount, transaction_type,
                         category, account, source, notes, created_at
                     )
-                    SELECT %s, %s, %s, %s, %s, 'debt_payment', %s, NULL, 'auto_debt_schedule', %s, NOW()
+                    SELECT %s, %s, %s, %s, 'debt_payment', %s, NULL, 'auto_debt_schedule', %s, NOW()
                     WHERE NOT EXISTS (
                         SELECT 1 FROM transactions
                         WHERE workspace_id = %s AND source = 'auto_debt_schedule' AND notes = %s
                     )
                     """,
                     (
-                        user_id, workspace_id, due.isoformat(), f"Cuota {debt.get('name') or 'deuda'}", actual_payment,
+                        workspace_id, due.isoformat(), f"Cuota {debt.get('name') or 'deuda'}", actual_payment,
                         debt.get("name") or "Deudas", f"debt_id:{debt['id']};installment:{installment_number}",
                         workspace_id, f"debt_id:{debt['id']};installment:{installment_number}",
                     ),
@@ -584,10 +584,10 @@ def add_salary(amount: float, source: str):
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO salaries (amount, source, user_id, workspace_id, created_at)
-            VALUES (%s, %s, %s, %s, NOW())
+            INSERT INTO salaries (amount, source, workspace_id, created_at)
+            VALUES (%s, %s, %s, NOW())
             """,
-            (amount, source, user_id, workspace_id)
+            (amount, source, workspace_id)
         )
         conn.commit()
 
@@ -624,10 +624,10 @@ def add_bonus(amount: float, description: str = ""):
     with get_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO bonuses (amount, description, user_id, workspace_id, created_at)
-            VALUES (%s, %s, %s, %s, NOW())
+            INSERT INTO bonuses (amount, description, workspace_id, created_at)
+            VALUES (%s, %s, %s, NOW())
             """,
-            (amount, description, user_id, workspace_id)
+            (amount, description, workspace_id)
         )
         conn.commit()
 
@@ -726,12 +726,11 @@ def add_debt(
                 installments_paid,
                 interest_method,
                 fixed_fee_amount,
-                user_id,
                 workspace_id,
                 created_at,
                 updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             RETURNING id
             """,
             (
@@ -749,7 +748,6 @@ def add_debt(
                 max(int(installments_paid or 0), 0),
                 str(interest_method or "monthly"),
                 max(_as_float(fixed_fee_amount), 0),
-                user_id,
                 workspace_id
             )
         )
@@ -872,17 +870,16 @@ def get_debts():
 
 
 def add_saving(name: str, amount: float):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         row = conn.execute(
             """
-            INSERT INTO savings (name, amount, user_id, workspace_id, created_at)
-            VALUES (%s, %s, %s, %s, NOW())
+            INSERT INTO savings (name, amount, workspace_id, created_at)
+            VALUES (%s, %s, %s, NOW())
             RETURNING id, name, amount, created_at, user_id, workspace_id
             """,
-            (name, amount, user_id, workspace_id)
+            (name, amount, workspace_id)
         ).fetchone()
         conn.commit()
 
@@ -966,17 +963,16 @@ def delete_saving(saving_id: int):
 
 
 def add_investment(name: str, amount: float):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
         row = conn.execute(
             """
-            INSERT INTO investments (name, amount, user_id, workspace_id, created_at)
-            VALUES (%s, %s, %s, %s, NOW())
+            INSERT INTO investments (name, amount, workspace_id, created_at)
+            VALUES (%s, %s, %s, NOW())
             RETURNING id, name, amount, created_at, user_id, workspace_id
             """,
-            (name, amount, user_id, workspace_id)
+            (name, amount, workspace_id)
         ).fetchone()
         conn.commit()
 
@@ -1078,18 +1074,16 @@ def add_expense(
                 expense_type,
                 description,
                 amount,
-                user_id,
                 workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
             (
                 category,
                 expense_type,
                 description,
                 amount,
-                user_id,
                 workspace_id
             )
         )
@@ -1658,18 +1652,16 @@ def set_employment_profile(
                 regular_hours_per_week,
                 overtime_multiplier,
                 holiday_multiplier,
-                user_id,
                 workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
             (
                 hourly_rate,
                 regular_hours_per_week,
                 overtime_multiplier,
                 holiday_multiplier,
-                user_id,
                 workspace_id
             )
         )
@@ -1725,13 +1717,12 @@ def add_payroll_deduction(
                 deduction_type,
                 amount,
                 frequency,
-                user_id,
                 workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
-            (name, deduction_type, amount, frequency, user_id, workspace_id)
+            (name, deduction_type, amount, frequency, workspace_id)
         )
 
         conn.commit()
@@ -1797,7 +1788,6 @@ def add_payroll_event(
         multiplier = 1
         amount = hours * hourly_rate
 
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -1809,11 +1799,10 @@ def add_payroll_event(
                 multiplier,
                 amount,
                 description,
-                user_id,
                 workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 event_type,
@@ -1821,7 +1810,6 @@ def add_payroll_event(
                 multiplier,
                 amount,
                 description,
-                user_id,
                 workspace_id
             )
         )
@@ -2105,7 +2093,6 @@ def update_expense(
     }
 
 def delete_debt(debt_id: int):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -2271,7 +2258,6 @@ def apply_extra_payment_to_debt(
     description: str = ""
 ):
     """Apply a pure extraordinary payment directly to principal."""
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     amount = max(_as_float(amount), 0)
     if amount <= 0:
@@ -2305,21 +2291,21 @@ def apply_extra_payment_to_debt(
         cursor = conn.execute(
             """
             INSERT INTO debt_payments (
-                user_id, workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
                 fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
                 previous_monthly_payment, new_monthly_payment, description, payment_date,
                 installment_number, source, created_at
-            ) VALUES (%s, %s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra', NOW())
+            ) VALUES (%s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra', NOW())
             """,
-            (user_id, workspace_id, debt_id, principal, principal, principal, previous_balance, final_balance,
+            (workspace_id, debt_id, principal, principal, principal, previous_balance, final_balance,
              previous_payment, final_payment, description or "Abono extraordinario a principal",
              date.today().isoformat(), int(debt.get("installments_paid") or 0)),
         )
         conn.execute(
-            """INSERT INTO transactions (user_id, workspace_id, transaction_date, description, amount, transaction_type,
+            """INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type,
                                       category, account, source, notes, created_at)
-               VALUES (%s, %s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
-            (user_id, workspace_id, date.today().isoformat(), f"Abono extra {debt['name']}", principal, debt['name'],
+               VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
+            (workspace_id, date.today().isoformat(), f"Abono extra {debt['name']}", principal, debt['name'],
              f"debt_id:{debt_id};extra_payment_id:{cursor.lastrowid}"),
         )
         conn.commit()
@@ -2334,7 +2320,6 @@ def apply_extra_payment_to_debt(
     }
 
 def get_debt_by_name(name: str):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     search = f"%{name.lower()}%"
@@ -2389,7 +2374,6 @@ def apply_monthly_payment_to_debt(
     `new_remaining_amount` is kept only for backwards API compatibility and is ignored
     when the amortization engine has the required debt data.
     """
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     amount = max(_as_float(amount), 0)
     paid_on = _parse_date(payment_date) or date.today()
@@ -2457,21 +2441,21 @@ def apply_monthly_payment_to_debt(
                 cursor = conn.execute(
                     """
                     INSERT INTO debt_payments (
-                        user_id, workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                        workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
                         fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
                         previous_monthly_payment, new_monthly_payment, description, payment_date,
                         installment_number, source, created_at
-                    ) VALUES (%s, %s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra_after_auto', NOW())
+                    ) VALUES (%s, %s, 'extra_payment', %s, %s, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, 'manual_extra_after_auto', NOW())
                     """,
-                    (user_id, workspace_id, debt_id, extra_principal, extra_principal, extra_principal, previous_balance,
+                    (workspace_id, debt_id, extra_principal, extra_principal, extra_principal, previous_balance,
                      final_balance, scheduled, scheduled, description or "Excedente de cuota a principal",
                      paid_on.isoformat(), int(latest_auto.get("installment_number") or 0)),
                 )
                 conn.execute(
-                    """INSERT INTO transactions (user_id, workspace_id, transaction_date, description, amount, transaction_type,
+                    """INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type,
                                               category, account, source, notes, created_at)
-                       VALUES (%s, %s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
-                    (user_id, workspace_id, paid_on.isoformat(), f"Abono extra {debt['name']}", extra_principal, debt['name'],
+                       VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_extra', %s, NOW())""",
+                    (workspace_id, paid_on.isoformat(), f"Abono extra {debt['name']}", extra_principal, debt['name'],
                      f"debt_id:{debt_id};extra_payment_id:{cursor.lastrowid}"),
                 )
                 conn.commit()
@@ -2526,13 +2510,13 @@ def apply_monthly_payment_to_debt(
         cursor = conn.execute(
             """
             INSERT INTO debt_payments (
-                user_id, workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
                 fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
                 previous_monthly_payment, new_monthly_payment, description, payment_date,
                 installment_number, source, created_at
-            ) VALUES (%s, %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual', NOW())
+            ) VALUES (%s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'manual', NOW())
             """,
-            (user_id, workspace_id, debt_id, actual_payment, principal, interest, fee, extra_principal,
+            (workspace_id, debt_id, actual_payment, principal, interest, fee, extra_principal,
              previous_balance, final_balance, previous_monthly, final_monthly,
              description or f"Pago cuota {installment_number}", paid_on.isoformat(), installment_number),
         )
@@ -2540,11 +2524,11 @@ def apply_monthly_payment_to_debt(
         note = f"debt_id:{debt_id};payment_id:{cursor.lastrowid}"
         conn.execute(
             """
-            INSERT INTO transactions (user_id, workspace_id, transaction_date, description, amount, transaction_type,
+            INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type,
                                       category, account, source, notes, created_at)
-            VALUES (%s, %s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_payment', %s, NOW())
+            VALUES (%s, %s, %s, %s, 'debt_payment', %s, NULL, 'manual_debt_payment', %s, NOW())
             """,
-            (user_id, workspace_id, paid_on.isoformat(), f"Pago {debt['name']}", actual_payment, debt['name'], note),
+            (workspace_id, paid_on.isoformat(), f"Pago {debt['name']}", actual_payment, debt['name'], note),
         )
         conn.commit()
 
@@ -2599,9 +2583,9 @@ def _save_net_worth_snapshot(workspace_id: str, *, liquid_assets: float, investm
     with get_connection() as conn:
         conn.execute("""
             INSERT INTO net_worth_snapshots(
-                user_id,workspace_id,snapshot_date,liquid_assets,investments,
+                workspace_id,snapshot_date,liquid_assets,investments,
                 assets_total,liabilities_total,net_worth
-            ) VALUES(%s,%s,CURRENT_DATE,%s,%s,%s,%s,%s)
+            ) VALUES(%s,CURRENT_DATE,%s,%s,%s,%s,%s)
             ON CONFLICT(workspace_id,snapshot_date) DO UPDATE SET
                 liquid_assets=EXCLUDED.liquid_assets,
                 investments=EXCLUDED.investments,
@@ -2610,7 +2594,7 @@ def _save_net_worth_snapshot(workspace_id: str, *, liquid_assets: float, investm
                 net_worth=EXCLUDED.net_worth,
                 updated_at=NOW()
             RETURNING id
-        """, (user_id, workspace_id, liquid_assets, investments, assets_total, liabilities_total, net_worth))
+        """, (workspace_id, liquid_assets, investments, assets_total, liabilities_total, net_worth))
         history = conn.execute("""
             SELECT snapshot_date,liquid_assets,investments,assets_total,liabilities_total,net_worth
             FROM net_worth_snapshots WHERE workspace_id=%s

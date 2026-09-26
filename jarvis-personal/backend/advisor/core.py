@@ -10,7 +10,7 @@ import json
 from datetime import date, datetime, timezone
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id, get_current_workspace_id
+from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.deterioration import get_financial_deterioration
 from backend.finance.emergency_fund import get_salvavidas_state
@@ -69,7 +69,7 @@ def _ensure_strategy_tables(conn) -> None:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS advisor_current_strategy (
             workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
-            user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+            user_id BIGINT REFERENCES allowed_users(id) ON DELETE CASCADE,  -- legacy, never written
             advisor_version TEXT NOT NULL,
             strategy_hash TEXT NOT NULL,
             strategy JSONB NOT NULL,
@@ -81,7 +81,7 @@ def _ensure_strategy_tables(conn) -> None:
         CREATE TABLE IF NOT EXISTS advisor_strategy_history (
             id BIGSERIAL PRIMARY KEY,
             workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-            user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
+            user_id BIGINT REFERENCES allowed_users(id) ON DELETE CASCADE,  -- legacy, never written
             advisor_version TEXT NOT NULL,
             strategy_hash TEXT NOT NULL,
             strategy JSONB NOT NULL,
@@ -92,7 +92,6 @@ def _ensure_strategy_tables(conn) -> None:
 
 def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
-    user_id = get_current_user_id()
     stable_strategy = {key: value for key, value in strategy.items() if key != "generated_at"}
     canonical = json.dumps(stable_strategy, ensure_ascii=False, sort_keys=True, default=str)
     fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -106,21 +105,20 @@ def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
         if changed:
             conn.execute("""
                 INSERT INTO advisor_strategy_history(
-                    workspace_id,user_id,advisor_version,strategy_hash,strategy
-                ) VALUES(%s,%s,%s,%s,%s::jsonb)
-            """, (workspace_id, user_id, ADVISOR_VERSION, fingerprint, canonical))
+                    workspace_id,advisor_version,strategy_hash,strategy
+                ) VALUES(%s,%s,%s,%s::jsonb)
+            """, (workspace_id, ADVISOR_VERSION, fingerprint, canonical))
         conn.execute("""
             INSERT INTO advisor_current_strategy(
-                workspace_id,user_id,advisor_version,strategy_hash,strategy
-            ) VALUES(%s,%s,%s,%s,%s::jsonb)
+                workspace_id,advisor_version,strategy_hash,strategy
+            ) VALUES(%s,%s,%s,%s::jsonb)
             ON CONFLICT(workspace_id) DO UPDATE SET
-                user_id=EXCLUDED.user_id,
                 advisor_version=EXCLUDED.advisor_version,
                 strategy_hash=EXCLUDED.strategy_hash,
                 strategy=EXCLUDED.strategy,
                 generated_at=NOW(),
                 updated_at=NOW()
-        """, (workspace_id, user_id, ADVISOR_VERSION, fingerprint, canonical))
+        """, (workspace_id, ADVISOR_VERSION, fingerprint, canonical))
         conn.commit()
     return {"strategy_hash": fingerprint, "changed": changed}
 

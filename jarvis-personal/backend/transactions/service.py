@@ -21,15 +21,15 @@ def _saved_exchange_rate(conn, workspace_id: str, transaction_date: str, currenc
 def _save_exchange_rate(conn, user_id: int, workspace_id: str, transaction_date: str, rate: float, currency: str = "USD", source: str = "manual"):
     conn.execute(
         """
-        INSERT INTO exchange_rates (user_id, workspace_id, rate_date, currency, exchange_rate, source)
-        VALUES (%s, %s, %s::date, UPPER(%s), %s, %s)
+        INSERT INTO exchange_rates (workspace_id, rate_date, currency, exchange_rate, source)
+        VALUES (%s, %s::date, UPPER(%s), %s, %s)
         ON CONFLICT (workspace_id, rate_date, currency)
         DO UPDATE SET workspace_id = EXCLUDED.workspace_id,
                       exchange_rate = EXCLUDED.exchange_rate,
                       source = EXCLUDED.source,
                       updated_at = NOW()
         """,
-        (user_id, workspace_id, transaction_date, currency, rate, source),
+        (workspace_id, transaction_date, currency, rate, source),
     )
 
 
@@ -94,11 +94,10 @@ def create_transaction(
                 original_amount,
                 original_currency,
                 exchange_rate,
-                user_id,
                 workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 transaction_date,
@@ -112,7 +111,6 @@ def create_transaction(
                 original_amount,
                 original_currency,
                 exchange_rate,
-                user_id,
                 workspace_id
             )
         )
@@ -127,7 +125,6 @@ def create_transaction(
 
 
 def get_transactions():
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -168,7 +165,6 @@ def get_transaction(transaction_id: int):
 
 
 def delete_transaction(transaction_id: int):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -245,7 +241,6 @@ def update_transaction(
     original_currency: str | None = None,
     exchange_rate: float | None = None
 ):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     category = normalize_category(category, transaction_type)
 
@@ -306,7 +301,6 @@ def update_transaction(
 
 def get_currency_alerts():
     """Return every old/new USD transaction still missing a daily conversion rate."""
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         # First reuse any rate that was already saved for that date. This makes

@@ -33,12 +33,11 @@ def add_financial_goal(
                 target_date,
                 priority,
                 status,
-                user_id,
                 workspace_id,
                 created_at, goal_type, alternative_group, is_selected,
                 funding_order, depends_on_group
             )
-            VALUES (%s, %s, %s, %s, %s, 'active', %s, %s, NOW(), %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, 'active', %s, NOW(), %s, %s, %s, %s, %s)
             """,
             (
                 name,
@@ -46,7 +45,6 @@ def add_financial_goal(
                 current_amount,
                 target_date,
                 priority,
-                user_id,
                 workspace_id, goal_type, alternative_group, is_selected,
                 funding_order, depends_on_group
             )
@@ -70,7 +68,6 @@ def add_financial_goal(
 
 
 def get_financial_goals():
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -90,7 +87,6 @@ def get_financial_goals():
 
 
 def get_financial_goal(goal_id: int):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -126,7 +122,6 @@ def update_financial_goal(
     is_selected: bool = True, funding_order: int = 100,
     depends_on_group: str | None = None,
 ):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -186,7 +181,6 @@ def update_financial_goal(
 
 
 def delete_financial_goal(goal_id: int):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -227,7 +221,6 @@ def delete_financial_goal(goal_id: int):
 
 
 def add_goal_contribution(goal_id: int, amount: float):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
 
     with get_connection() as conn:
@@ -314,7 +307,6 @@ def format_goal(goal: dict):
 
 
 def get_financial_goal_by_name(name: str):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     search = f"%{name.lower()}%"
 
