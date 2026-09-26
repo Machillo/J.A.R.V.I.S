@@ -1507,4 +1507,6 @@ body:has(.users-app) { background: var(--f-bg); }
 .users-app .mail-history-option input{margin-top:3px;accent-color:#23a8a1}
 .users-app .mail-history-option span{display:grid;gap:3px;min-width:0}
 .users-app .mail-history-option small,.users-app .mail-history-sheet p{color:var(--muted);font-size:.82rem;line-height:1.5;overflow-wrap:anywhere}
-.users-app .mail-history-sheet p{margin:0}.users-app .gmail-email-card.is-reviewing{opacity:.72;cursor:progress}.users-app .gmail-review-notice{margin:4px 0 0}
+.users-app .mail-history-sheet p{margin:0}
+.users-app .gmail-email-card.is-reviewing{opacity:.72;cursor:progress}
+.users-app .gmail-review-notice{margin:4px 0 0}

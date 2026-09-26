@@ -21,7 +21,7 @@ import { bankBranding, resolveBank } from "../../lib/bankBranding";
 import BankLogo from "../../components/BankLogo";
 import { categoryLabel, categoryValue } from "../../lib/categories";
 import { trackEvent } from "../../lib/telemetry";
-import { createReviewGate, reviewFailure, reviewOutcome } from "../../lib/candidateReview";
+import { createLatestOnly, createReviewGate, runCandidateReview } from "../../lib/candidateReview";
 import { MAIL_OAUTH_RESULT_EVENT, takeMailOAuthOutcome } from "../../lib/mailOAuth";
 import { mailOAuthErrorCodes } from "../../lib/analyticsContract";
 import LegalLink from "../../components/LegalLink";
@@ -101,10 +101,15 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
   // Inline result of the last review, shown on the candidate it belongs to.
   const [reviewNotice, setReviewNotice] = useState(null);
   const [reviewGate] = useState(createReviewGate);
+  const [loads] = useState(createLatestOnly);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
+  // Returns the refreshed rows (null if the refresh failed). Only the latest
+  // refresh of a mounted screen writes state.
   const load = useCallback(async () => {
+    const isLatest = loads.start();
+    const current = () => mounted.current && isLatest();
     try {
       const [status, inbox, accounts, pendingInbox] = await Promise.all([
         getVipGmailStatus(), getVipGmailEmails(accountsView ? "" : filter), getVipFinancialIdentity(),
@@ -112,45 +117,48 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
       ]);
       const rows = new Map();
       for (const row of [...(pendingInbox?.items || []), ...(inbox?.items || [])]) rows.set(row.candidate_id || `email-${row.email_id}`, row);
-      setGmail(status); setEmails([...rows.values()]); setIdentity(accounts || { items: [], summary: {} });
+      const items = [...rows.values()];
+      if (!current()) return items;
+      setGmail(status); setEmails(items); setIdentity(accounts || { items: [], summary: {} });
       const proposed = await getVipOwnTransferSuggestions().catch(() => ({ items: [] }));
-      setTransferSuggestions(proposed.items || []);
+      if (current()) setTransferSuggestions(proposed.items || []);
+      return items;
     }
-    catch (err) { setError(err.message || tx("No se pudo consultar el correo.", "Couldn’t check mail.")); }
-  }, [filter, accountsView]);
+    catch (err) {
+      if (current()) setError(err.message || tx("No se pudo consultar el correo.", "Couldn’t check mail."));
+      return null;
+    }
+  }, [filter, accountsView, loads]);
 
-  const review = async (item, action, corrections = null) => {
-    if (!reviewGate.begin(item.candidate_id, action)) return;
-    setBusy(`${action}-${item.candidate_id}`); setError(""); setMessage(""); setReviewNotice(null);
-    try {
-      const result = action === "reject"
-        ? await rejectVipGmailCandidate(item.candidate_id)
-        : await acceptVipGmailCandidate(item.candidate_id, corrections);
-      const outcome = reviewOutcome(action, result, { internalTransfer: item.is_internal_transfer });
-      if (outcome.applied) {
-        const decision = action === "reject" ? "rejected" : corrections ? "corrected" : "accepted";
-        trackEvent("email_candidate_reviewed", { decision, source_type: "email" });
-        trackEvent("transaction_candidate_reviewed", { decision, source_type: "email" });
-        if (action === "reject") trackEvent("transaction_rejected", { source_type: "email" });
-        else if (!item.is_internal_transfer) trackEvent("transaction_confirmed", { source_type: "email" });
-      }
-      if (!mounted.current) return;
-      setEditing(null);
-      setMessage(outcome.message);
-      // The candidate leaves the list only when the refreshed list says so.
-      await load();
-    } catch (err) {
-      if (!mounted.current) return;
-      const failure = reviewFailure(err);
-      // An unknown outcome reloads the list, which may drop this card: report it
-      // at page level. A definite failure keeps the card, so it is shown there.
-      if (failure.ambiguous) { setError(failure.message); await load(); }
-      else setReviewNotice({ candidateId: item.candidate_id, message: failure.message });
-    } finally {
-      reviewGate.end();
-      if (mounted.current) setBusy("");
-    }
-  };
+  const review = (item, action, corrections = null) => runCandidateReview({
+    gate: reviewGate, item, action,
+    send: () => (action === "reject"
+      ? rejectVipGmailCandidate(item.candidate_id)
+      : acceptVipGmailCandidate(item.candidate_id, corrections)),
+    reload: load,
+    isMounted: () => mounted.current,
+    onApplied: () => {
+      const decision = action === "reject" ? "rejected" : corrections ? "corrected" : "accepted";
+      trackEvent("email_candidate_reviewed", { decision, source_type: "email" });
+      trackEvent("transaction_candidate_reviewed", { decision, source_type: "email" });
+      if (action === "reject") trackEvent("transaction_rejected", { source_type: "email" });
+      else if (!item.is_internal_transfer) trackEvent("transaction_confirmed", { source_type: "email" });
+    },
+    ui: {
+      begin: () => { setBusy(`${action}-${item.candidate_id}`); setError(""); setMessage(""); setReviewNotice(null); },
+      // The stored status is known: close the editor, and report success only if it matches the action.
+      settle: (outcome) => {
+        setEditing(null);
+        if (outcome.applied) { setError(""); setMessage(outcome.message); }
+        else { setMessage(""); setError(outcome.message); }
+      },
+      // An unknown outcome may drop the card on reload: report it at page level.
+      pageError: (text) => { setMessage(""); setError(text); },
+      // A definite failure keeps the card, so it is shown there.
+      cardError: (text) => setReviewNotice({ candidateId: item.candidate_id, message: text }),
+      end: () => setBusy(""),
+    },
+  });
 
   const confirmAccount = async (item, ownershipStatus) => {
     setBusy(`account-${item.id}`); setError(""); setMessage("");
