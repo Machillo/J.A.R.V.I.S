@@ -193,3 +193,14 @@ def test_inbox_shows_the_native_amount_and_the_account_base(monkeypatch):
     assert "c.original_amount,c.original_currency" in query
     assert "a.base_currency AS account_base_currency" in query and "JOIN accounts a ON a.id=m.account_id" in query
     assert params == ("account-a", "workspace-a", "pending")
+
+
+def test_saving_a_candidate_always_needs_the_converted_money():
+    """No default: a caller cannot fall back to the reviewed (possibly matching-only) amount."""
+    import inspect
+    for helper in (gmail_service._create_candidate_transaction, gmail_service._publish_confirmed_financial_input):
+        money = inspect.signature(helper).parameters["money"]
+        assert money.default is inspect.Parameter.empty, helper.__name__
+    source = inspect.getsource(gmail_service._create_candidate_transaction) + inspect.getsource(
+        gmail_service._publish_confirmed_financial_input)
+    assert "money or" not in source and 'values["amount"]' not in source

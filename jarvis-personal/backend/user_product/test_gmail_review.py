@@ -192,6 +192,7 @@ def test_statement_confirmation_records_statement_source():
         connection, candidate,
         {"transaction_date": date(2026, 9, 20), "description": "Compra", "amount": 1250,
          "transaction_type": "expense", "category": "food"},
+        {"amount": 1250, "original_amount": None, "original_currency": None, "exchange_rate": None},
     )
     _query, params = connection.calls[0]
     assert params[6] == "finva_statement"
@@ -209,7 +210,9 @@ def test_phase_1_contract_excludes_raw_email_and_is_idempotent():
         "amount": 4200, "transaction_type": "expense", "category": "food",
     }
 
-    gmail_service._publish_confirmed_financial_input(connection, candidate, values, 55, ALLOWED_USER_ID)
+    gmail_service._publish_confirmed_financial_input(
+        connection, candidate, values, 55, ALLOWED_USER_ID, {"amount": 4200, "original_amount": None, "original_currency": None, "exchange_rate": None},
+    )
 
     event_query, event_params = connection.calls[0]
     notification_query, notification_params = next(

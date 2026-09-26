@@ -374,9 +374,8 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
     ]}
 
 
-def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any], money: dict[str, Any] | None = None) -> int:
-    # Without a conversion, the transaction records the reviewed amount as is.
-    money = money or {"amount": values["amount"], "original_amount": None, "original_currency": None, "exchange_rate": None}
+def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any], money: dict[str, Any]) -> int:
+    # `money` comes from candidate_currency.transaction_amounts: never the reviewed amount as is.
     category = normalize_category(values["category"], values["transaction_type"])
     source = "finva_statement" if candidate.get("source_type") == "statement" else "finva_gmail"
     note = (
@@ -404,7 +403,7 @@ def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[
 
 def _publish_confirmed_financial_input(
     conn, candidate: dict[str, Any], values: dict[str, Any], transaction_id: int, allowed_user_id: int,
-    money: dict[str, Any] | None = None,
+    money: dict[str, Any],
 ) -> None:
     """Publish the privacy-safe Phase 1 boundary in the same DB transaction.
 
@@ -421,10 +420,10 @@ def _publish_confirmed_financial_input(
         "transaction_id": transaction_id,
         "transaction_date": str(values["transaction_date"]),
         # What the transaction records: the base amount, plus the original when converted.
-        "amount": float((money or values)["amount"]),
+        "amount": float(money["amount"]),
         "currency": str(candidate.get("account_base_currency") or candidate.get("currency") or "CRC").upper(),
         **({"original_amount": float(money["original_amount"]), "original_currency": money["original_currency"],
-            "exchange_rate": float(money["exchange_rate"])} if money and money["original_currency"] else {}),
+            "exchange_rate": float(money["exchange_rate"])} if money["original_currency"] else {}),
         "transaction_type": str(values["transaction_type"]),
         "category": category,
         "financial_account_id": candidate.get("financial_account_id"),
