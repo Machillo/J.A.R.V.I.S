@@ -252,29 +252,32 @@ def _financial_user_id_for_account(account_id: str) -> int:
         return int(created["id"])
 
 
+# Mail refresh tokens live in Supabase Vault. The application role has no access to
+# Vault: it goes through dincr_private functions (migration 20260926150000) that
+# only handle DINCR mail tokens labelled with the account that owns them.
 def _vault_create(conn, token: str, account_id: str, provider: str = "Gmail") -> str:
     row = conn.execute(
-        "SELECT vault.create_secret(%s, NULL, %s) AS secret_id",
-        (token, f"DINCR {provider} refresh token for account {account_id}"),
+        "SELECT dincr_private.mail_secret_create(%s, %s::uuid, %s) AS secret_id",
+        (token, account_id, provider),
     ).fetchone()
     if not row or not row.get("secret_id"):
         raise RuntimeError("No se pudo proteger la autorización de Gmail.")
     return str(row["secret_id"])
 
 
-def _vault_read(conn, secret_id: str) -> str:
+def _vault_read(conn, secret_id: str, account_id: str) -> str:
     row = conn.execute(
-        "SELECT decrypted_secret FROM vault.decrypted_secrets WHERE id=%s::uuid",
-        (secret_id,),
+        "SELECT dincr_private.mail_secret_read(%s::uuid, %s::uuid) AS decrypted_secret",
+        (secret_id, account_id),
     ).fetchone()
     if not row or not row.get("decrypted_secret"):
         raise RuntimeError("La autorización de Gmail no está disponible.")
     return str(row["decrypted_secret"])
 
 
-def _vault_delete(conn, secret_id: str | None) -> None:
+def _vault_delete(conn, secret_id: str | None, account_id: str) -> None:
     if secret_id:
-        conn.execute("DELETE FROM vault.secrets WHERE id=%s::uuid", (secret_id,))
+        conn.execute("SELECT dincr_private.mail_secret_delete(ARRAY[%s::uuid], %s::uuid)", (secret_id, account_id))
 
 
 def _credentials(refresh_token: str):
@@ -684,7 +687,7 @@ def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) ->
         ).fetchone()
     old_secret = (current or {}).get("refresh_token_secret_id")
     if old_secret and str(old_secret) != secret_id:
-        _vault_delete(conn, str(old_secret))
+        _vault_delete(conn, str(old_secret), account_id)
     return int(row["id"])
 
 
@@ -712,7 +715,7 @@ def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
             return {"status": "disconnected"}
         if GMAIL_SCOPE in (row.get("granted_scopes") or []):
             try:
-                token = _vault_read(conn, str(row["refresh_token_secret_id"]))
+                token = _vault_read(conn, str(row["refresh_token_secret_id"]), account_id)
                 requests.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
             except Exception:
                 # Best effort: the local secret is deleted anyway; never log the token.
@@ -724,7 +727,7 @@ def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
                WHERE id=%s""",
             (int(row["id"]),),
         )
-        _vault_delete(conn, str(row["refresh_token_secret_id"]))
+        _vault_delete(conn, str(row["refresh_token_secret_id"]), account_id)
         conn.commit()
     return {"status": "disconnected"}
 
@@ -833,8 +836,11 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
 INGEST_FAILED_REASON = "No se pudo procesar este aviso. Quedó registrado y se reintenta si vuelve a aparecer en una sincronización."
 # SQLSTATE classes of conditions that pass on their own: connection (08), transaction
 # rollback such as deadlock or serialization (40), resources (53), cancel or
-# shutdown (57), lock not available (55).
+# shutdown (57), lock not available (55). Insufficient privilege (42501) is not the
+# message's fault either: a missing grant of the application role must stop the
+# sync and keep the cursor, never mark every message of a scan as failed.
 _TRANSIENT_SQLSTATE_CLASSES = frozenset({"08", "40", "53", "55", "57"})
+_TRANSIENT_SQLSTATES = frozenset({"42501"})
 
 
 def _is_transient_failure(exc: BaseException) -> bool:
@@ -843,7 +849,8 @@ def _is_transient_failure(exc: BaseException) -> bool:
 
     if isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError, DatabaseConfigError)):
         return True
-    return str(getattr(exc, "pgcode", "") or "")[:2] in _TRANSIENT_SQLSTATE_CLASSES
+    code = str(getattr(exc, "pgcode", "") or "")
+    return code[:2] in _TRANSIENT_SQLSTATE_CLASSES or code in _TRANSIENT_SQLSTATES
 
 
 def _ingest_message(
@@ -1075,7 +1082,7 @@ def _connection_with_token(connection_id: int) -> tuple[dict[str, Any], str]:
                 status_code=403,
                 detail="La automatización de Gmail está disponible únicamente en el plan VIP.",
             )
-        token = _vault_read(conn, str(row["refresh_token_secret_id"]))
+        token = _vault_read(conn, str(row["refresh_token_secret_id"]), str(row["account_id"]))
     return dict(row), token
 
 
@@ -1226,7 +1233,7 @@ def end_unentitled_mail_connections(conn) -> int:
         secret_id = str(row["refresh_token_secret_id"]) if row.get("refresh_token_secret_id") else None
         if secret_id and GMAIL_SCOPE in (row.get("granted_scopes") or []):
             try:
-                token = _vault_read(conn, secret_id)
+                token = _vault_read(conn, secret_id, str(row["account_id"]))
                 requests.post("https://oauth2.googleapis.com/revoke", data={"token": token}, timeout=10)
             except Exception:
                 logger.warning("Gmail token revocation failed when a plan ended")
@@ -1237,7 +1244,7 @@ def end_unentitled_mail_connections(conn) -> int:
                WHERE id=%s""",
             (MAIL_ACCESS_ENDED, int(row["id"])),
         )
-        _vault_delete(conn, secret_id)
+        _vault_delete(conn, secret_id, str(row["account_id"]))
         ended += 1
     return ended
 

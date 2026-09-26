@@ -33,7 +33,7 @@ class Clock:
 
 class FakeDb:
     def __init__(self):
-        self.state = {"flows": {}, "connections": {}, "vault": {}}
+        self.state = {"flows": {}, "connections": {}, "vault": {}, "vault_owner": {}}
         self.vip = {A["account_id"], B["account_id"]}
 
     def connect(self):
@@ -61,7 +61,8 @@ class FakeConnection:
     def execute(self, query, params=()):
         q, now = " ".join(query.split()), Clock.now
         flows, connections, vault = self.work["flows"], self.work["connections"], self.work["vault"]
-        if q.startswith("SELECT id,pending_secret_id FROM mail_oauth_flows"):
+        vault_owner = self.work["vault_owner"]
+        if q.startswith("SELECT id,account_id,pending_secret_id FROM mail_oauth_flows"):
             return self._rows(f for f in flows.values()
                               if (f["expires_at"] <= now or f["status"] == "failed") and f["status"] != "completed"
                               and (not params or f["account_id"] == params[0]))
@@ -113,11 +114,13 @@ class FakeConnection:
             assert "completion_hash" not in q  # kept for the initiator's idempotent retry
             flows[params[0]].update(status="completed", pending_secret_id=None)
             return self._rows([])
-        if q.startswith("SELECT vault.create_secret"):
+        if q.startswith("SELECT dincr_private.mail_secret_create"):
             secret_id = str(uuid4())
             vault[secret_id] = params[0]
+            vault_owner[secret_id] = params[1]
             return self._rows([{"secret_id": secret_id}])
-        if q.startswith("DELETE FROM vault.secrets"):
+        if q.startswith("SELECT dincr_private.mail_secret_delete"):
+            assert vault_owner.get(params[0], params[1]) == params[1], "a token deleted on behalf of another account"
             vault.pop(params[0], None)
             return self._rows([])
         if q.startswith("SELECT 1 FROM account_subscriptions"):
