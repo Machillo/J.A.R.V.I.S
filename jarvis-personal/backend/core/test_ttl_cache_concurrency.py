@@ -136,9 +136,10 @@ def test_waiters_share_the_single_failed_load_and_the_next_call_recovers(clock):
     loader.release.set()
     join_all(threads)
 
-    # One database attempt for the whole wave; every caller sees the same error.
+    # One database attempt for the whole wave; every caller sees that error.
     assert loader.calls == 1
-    assert all(kind == "error" and exc is failure for kind, exc in results)
+    assert sum(exc is failure for _, exc in results) == 1
+    assert all(kind == "error" and (exc is failure or exc.__cause__ is failure) for kind, exc in results)
     assert cache.stats()["failures"] == 1
     # The failure is not cached and nothing stays locked: the next call reloads.
     assert cache._lock.acquire(timeout=1)
@@ -190,5 +191,72 @@ def test_repeated_reloads_keep_one_value_and_no_threads_or_errors(clock):
     assert cache._load is None
     assert threading.active_count() == threads_before
     assert set(vars(cache)) == {
-        "name", "ttl_seconds", "_loader", "_lock", "_value", "_loaded_at", "_load", "hits", "misses", "failures",
+        "name", "ttl_seconds", "wait_timeout", "_loader", "_lock", "_value", "_loaded_at", "_load",
+        "hits", "misses", "failures",
     }
+
+
+class HangingFirstLoader:
+    """First call hangs until released (a half-open connection); later calls answer at once."""
+
+    def __init__(self):
+        self.calls = 0
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    def __call__(self):
+        self.calls += 1
+        call = self.calls
+        if call == 1:
+            self.entered.set()
+            assert self.release.wait(TIMEOUT), "hung load was never released"
+        return {"version": call}
+
+
+def start_leader(cache):
+    outcome = {}
+
+    def lead():
+        outcome["value"] = cache.get()
+
+    thread = threading.Thread(target=lead, daemon=True)
+    thread.start()
+    return thread, outcome
+
+
+def test_a_waiter_of_a_hung_load_gives_up_after_the_wait_timeout(clock):
+    loader = HangingFirstLoader()
+    cache = TTLValue("t", 15, loader, wait_timeout=0.2)
+    leader, _ = start_leader(cache)
+    assert loader.entered.wait(TIMEOUT)
+
+    started = time.monotonic()
+    with pytest.raises(ttl_cache.TTLLoadTimeout):
+        cache.get()
+    assert time.monotonic() - started < TIMEOUT
+    # The waiter leaves the leader's load alone: still in flight, not replaced.
+    assert cache._load is not None and loader.calls == 1
+
+    loader.release.set()
+    leader.join(TIMEOUT)
+    assert cache.get() == {"version": 1} and loader.calls == 1
+
+
+def test_a_load_stuck_past_the_wait_timeout_is_replaced_and_the_cache_heals(clock):
+    loader = HangingFirstLoader()
+    cache = TTLValue("t", 15, loader, wait_timeout=5)
+    leader, outcome = start_leader(cache)
+    assert loader.entered.wait(TIMEOUT)
+    hung_load = cache._load
+
+    clock.now += 5  # the database is back; the first load is still stuck
+    assert cache.read() == ({"version": 2}, 0.0, True)
+    assert loader.calls == 2 and cache._load is None
+
+    # The stuck load finally returns: its caller gets its own value, but it
+    # neither overwrites the newer value nor touches the in-flight slot.
+    loader.release.set()
+    leader.join(TIMEOUT)
+    assert outcome["value"] == {"version": 1}
+    assert hung_load.done.is_set() and cache._load is None
+    assert cache.get() == {"version": 2} and loader.calls == 2

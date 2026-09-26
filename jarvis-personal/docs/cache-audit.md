@@ -33,7 +33,7 @@ Failures are never cached.
 
 - **Key:** none; there is one value per process. **Max entries:** 1.
 - **TTL:** 15 s. **Invalidation:** TTL only. A new incident shows up within 15 s.
-- **Concurrency:** simultaneous misses in a process share one load and its outcome. If that load fails, every caller waiting on it gets the same error (one database attempt, not one per waiter), and the next call retries. The loader runs outside the lock.
+- **Concurrency:** simultaneous misses in a process share one load and its outcome. If that load fails, every caller waiting on it gets the same error (one database attempt, not one per waiter), and the next call retries. The loader runs outside the lock. A caller waits for someone else's load at most 5 s and then gets an error (5xx); a load running longer than that is treated as stuck (e.g. a half-open connection) and the next caller starts a new one, so a hung load cannot block the process's health requests after the database recovers.
 - **Multi-worker:** each process has its own copy, and they can differ for up to 15 s (one worker may answer `operational` while another still answers `degraded`). Health only drives an informational banner and the support screen; nothing uses it for billing, entitlements, security or data writes.
 - **Cold start:** the first call queries the database.
 - **Failure:** a database error propagates as before and is not cached, so the next call retries.

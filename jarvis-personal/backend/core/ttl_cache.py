@@ -12,10 +12,19 @@ from time import monotonic
 from typing import Any, Callable
 
 
+class TTLLoadTimeout(TimeoutError):
+    """The shared in-flight load did not finish within the wait timeout."""
+
+
+class TTLLoadFailed(RuntimeError):
+    """The shared in-flight load failed; the original error is the cause."""
+
+
 class _Load:
     """One in-flight load, shared by every caller that arrives while it runs."""
 
-    def __init__(self):
+    def __init__(self, started_at: float):
+        self.started_at = started_at
         self.done = threading.Event()
         self.value: Any = None
         self.error: BaseException | None = None
@@ -23,9 +32,10 @@ class _Load:
 
 
 class TTLValue:
-    def __init__(self, name: str, ttl_seconds: float, loader: Callable[[], Any]):
+    def __init__(self, name: str, ttl_seconds: float, loader: Callable[[], Any], wait_timeout: float = 5.0):
         self.name = name
         self.ttl_seconds = ttl_seconds
+        self.wait_timeout = wait_timeout
         self._loader = loader
         self._lock = threading.Lock()
         self._value: Any = None
@@ -45,22 +55,30 @@ class TTLValue:
         failing database is queried once per wave instead of once per waiter.
         The loader runs outside the lock. A failure is never cached: the next
         call after it tries again.
+
+        A caller waits for someone else's load at most `wait_timeout` seconds,
+        then raises TTLLoadTimeout. A load running longer than that is treated
+        as stuck (for example a half-open connection): the next caller starts
+        a new one, so the cache heals once the database answers again, and the
+        stuck load can no longer overwrite the value or the in-flight slot.
         """
         with self._lock:
             now = monotonic()
             if self._loaded_at is not None and now - self._loaded_at < self.ttl_seconds:
                 self.hits += 1
                 return self._value, now - self._loaded_at, False
-            load, leader = self._load, self._load is None
+            load = self._load
+            leader = load is None or now - load.started_at >= self.wait_timeout
             if leader:
-                load = self._load = _Load()
+                load = self._load = _Load(now)
                 self.misses += 1
             else:
                 self.hits += 1
         if not leader:
-            load.done.wait()
+            if not load.done.wait(self.wait_timeout):
+                raise TTLLoadTimeout(f"{self.name}: shared load still running after {self.wait_timeout}s")
             if load.error is not None:
-                raise load.error
+                raise TTLLoadFailed(f"{self.name}: shared load failed") from load.error
             return load.value, max(0.0, monotonic() - load.loaded_at), False
         try:
             value = self._loader()
@@ -68,12 +86,14 @@ class TTLValue:
             load.error = exc
             with self._lock:
                 self.failures += 1
-                self._load = None
+                if self._load is load:
+                    self._load = None
             raise
         else:
             with self._lock:
                 load.value, load.loaded_at = value, monotonic()
-                self._value, self._loaded_at, self._load = value, load.loaded_at, None
+                if self._load is load:
+                    self._value, self._loaded_at, self._load = value, load.loaded_at, None
             return value, 0.0, True
         finally:
             load.done.set()
