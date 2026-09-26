@@ -210,7 +210,7 @@ def test_the_ibkr_owner_is_resolved_in_one_identity_space(pg, monkeypatch):
     from backend.integrations import ibkr_readonly
 
     pg.execute("""CREATE TABLE users (id BIGINT PRIMARY KEY, email TEXT);
-                  CREATE TABLE allowed_users (id BIGINT PRIMARY KEY, email TEXT, role TEXT);
+                  CREATE TABLE allowed_users (id BIGINT PRIMARY KEY, email TEXT, role TEXT, status TEXT DEFAULT 'active');
                   CREATE TABLE accounts (id UUID PRIMARY KEY, legacy_allowed_user_id BIGINT, role TEXT);
                   CREATE TABLE workspaces (id UUID PRIMARY KEY, owner_account_id UUID, workspace_type TEXT, created_at TIMESTAMPTZ DEFAULT NOW())""")
     owner_account, other_account = str(uuid.uuid4()), str(uuid.uuid4())
@@ -220,7 +220,8 @@ def test_the_ibkr_owner_is_resolved_in_one_identity_space(pg, monkeypatch):
     pg.execute("INSERT INTO accounts VALUES (%s, 1, 'owner'), (%s, 7, 'user')", (owner_account, other_account))
     pg.execute("INSERT INTO workspaces(id, owner_account_id, workspace_type) VALUES (%s, %s, 'personal'), (%s, %s, 'personal')",
                (owner_ws, owner_account, other_ws, other_account))
-    monkeypatch.setenv("OWNER_EMAIL", "owner@example.test")
+    # The explicit Owner role (backend/auth/owner_role.py): stored role and OWNER_EMAILS.
+    monkeypatch.setenv("OWNER_EMAILS", "owner@example.test")
     with get_connection() as conn:
         user_id, workspace_id = ibkr_readonly._owner_identity(conn)
     assert workspace_id == owner_ws and user_id == 7
