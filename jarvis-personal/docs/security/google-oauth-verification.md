@@ -28,7 +28,16 @@ Everything below comes from the repository. Items marked **MANUAL** must be conf
 - only the DINCR session that started the flow can attach the mailbox (`/vip/mail/oauth/complete`; account and workspace must match, VIP entitlement re-checked).
 
 **2. Connection.**
-- `finva_gmail_connections` holds one row per `(account_id, workspace_id, google_email)`, with its own Vault secret, sync state, watch and disconnect.
+- `finva_gmail_connections` holds one row per `(workspace_id, google_email)`, with its own Vault secret, sync state, watch and disconnect.
+- A mailbox (Gmail or Outlook) is live in at most one DINCR account and workspace at a time (`mail_oauth.claim_mailbox`).
+  - **Identity.** Google's account id (`sub`, from tokeninfo, only for DINCR's client) or Microsoft Graph's user `id` plus tenant, and always the canonical address (gmail.com/googlemail.com without dots or `+tag`). The address shown to the user is display only. Both have a unique index among live rows. Existing rows start with the address identity; `backend/scripts/backfill_mailbox_identity.py` upgrades them (dry run by default, aborts on ambiguity).
+  - **Refusal.** A live mailbox of an account with VIP is refused with one generic message that reveals nothing about the other account.
+  - **Stale takeover.** A connection that lost provider access (`reauthorization_required`) or whose account no longer has VIP can be taken over. Only a new, real provider consent for that same mailbox does it, never an address typed by someone. In one transaction:
+    - the old connection is disconnected;
+    - its token is deleted (not reused; not revoked, since revoking would also revoke the new grant);
+    - the takeover is audited in `mail_connection_takeovers`, with account ids only.
+    Its account keeps everything it imported. No data moves.
+  - Disconnecting frees the mailbox.
 - Several mailboxes per workspace are supported (tests: two Owner mailboxes, reconnect A keeps B, disconnect A keeps B).
 
 **3. Read.**

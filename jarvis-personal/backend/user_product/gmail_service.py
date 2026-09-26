@@ -301,7 +301,7 @@ def _mark_reconnect(connection_id: int, message: str = "Google solicitó reconec
         conn.execute(
             """UPDATE finva_gmail_connections
                SET status='reauthorization_required',last_error=%s,updated_at=NOW()
-               WHERE id=%s""",
+               WHERE id=%s AND status='active'""",
             (message, connection_id),
         )
         conn.commit()
@@ -565,6 +565,29 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
     return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": transaction_id}
 
 
+def _google_subject(access_token: str | None, client_id: str) -> str | None:
+    """The Google account id (``sub``) of a token DINCR just received, without the openid scope.
+
+    Google's tokeninfo reports it for the access token; it is accepted only when
+    the token was issued to DINCR's own client. When Google does not return it,
+    the mailbox is identified by its canonical address instead (mail_oauth.mailbox_key).
+    """
+    if not access_token:
+        return None
+    try:
+        response = requests.post("https://oauth2.googleapis.com/tokeninfo", data={"access_token": access_token}, timeout=10)
+        info = response.json() if response.status_code == 200 else {}
+    except (requests.RequestException, ValueError):
+        return None
+    if client_id not in (info.get("aud"), info.get("azp")):
+        return None
+    subject = str(info.get("sub") or "").strip()
+    if not subject.isdigit():
+        logger.info("Gmail identity fallback: Google returned no account id; the address identifies the mailbox")
+        return None
+    return subject
+
+
 def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
     require_gmail_consent()
     client_id, _, redirect_uri = _google_config()
@@ -634,10 +657,12 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     google_email = str(profile.get("emailAddress") or "").strip().lower()
     if not google_email:
         return failed("profile_failed")
+    subject = _google_subject(tokens.get("access_token"), client_id)
 
     with get_connection() as conn:
         secret_id = _vault_create(conn, refresh_token, account_id)
-        completion = mail_oauth.authorize_flow(conn, flow["id"], secret_id=secret_id, mailbox=google_email, scopes=[GMAIL_SCOPE])
+        completion = mail_oauth.authorize_flow(conn, flow["id"], secret_id=secret_id, mailbox=google_email,
+                                               scopes=[GMAIL_SCOPE], subject=subject)
         conn.commit()
     return RedirectResponse(_return_url("authorized", flow=str(flow["id"]), completion=completion), status_code=302)
 
@@ -650,12 +675,18 @@ def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) ->
     # Recheck at completion so a downgrade after consent cannot attach a mailbox.
     if not _has_active_vip_access(conn, account_id):
         raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
-    google_email = str(flow["mailbox_address"])
+    google_email = str(flow["mailbox_address"]).strip().lower()  # display only
+    email = mail_oauth.mailbox_email("gmail", google_email)
+    key = mail_oauth.mailbox_key("gmail", google_email, flow.get("provider_subject"))
     secret_id = str(flow["pending_secret_id"])
+    mail_oauth.claim_mailbox(conn, provider="gmail", account_id=account_id, workspace_id=workspace_id,
+                             key=key, email=email, display=google_email, is_entitled=_has_active_vip_access)
     current = conn.execute(
         """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
-           WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
-        (account_id, workspace_id, google_email),
+           WHERE account_id=%s AND workspace_id=%s
+             AND (mailbox_key=%s OR mailbox_email=%s OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s))
+           ORDER BY (status<>'disabled') DESC, id LIMIT 1 FOR UPDATE""",
+        (account_id, workspace_id, key, email, google_email),
     ).fetchone()
     if current and "Mail.Read" in (current.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
@@ -664,23 +695,25 @@ def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) ->
         row = conn.execute(
             """UPDATE finva_gmail_connections SET
                legacy_user_id=%s,refresh_token_secret_id=%s::uuid,granted_scopes=%s,
+               google_email=%s,mailbox_email=%s,mailbox_key=%s,provider_subject=%s,
                status='active',last_error=NULL,history_id=NULL,watch_expiration=NULL,
                import_scope=%s,import_since=%s,
                initial_scan_page_token=CASE WHEN %s THEN NULL ELSE initial_scan_page_token END,
                initial_scan_completed_at=CASE WHEN %s THEN NULL ELSE initial_scan_completed_at END,
                connected_at=NOW(),updated_at=NOW() WHERE id=%s RETURNING id""",
-            (legacy_user_id, secret_id, [GMAIL_SCOPE], window["import_scope"], window["import_since"],
+            (legacy_user_id, secret_id, [GMAIL_SCOPE], google_email, email, key, flow.get("provider_subject"),
+             window["import_scope"], window["import_since"],
              window["restart_scan"], window["restart_scan"], current["id"]),
         ).fetchone()
     else:
         row = conn.execute(
             """INSERT INTO finva_gmail_connections(
-               account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
-               granted_scopes,import_scope,import_since,status,connected_at,updated_at
-           ) VALUES(%s,%s,%s,%s,%s::uuid,%s,%s,%s,'active',NOW(),NOW())
+               account_id,workspace_id,legacy_user_id,google_email,mailbox_email,mailbox_key,provider_subject,
+               refresh_token_secret_id,granted_scopes,import_scope,import_since,status,connected_at,updated_at
+           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s::uuid,%s,%s,%s,'active',NOW(),NOW())
            RETURNING id""",
-            (account_id, workspace_id, legacy_user_id, google_email, secret_id, [GMAIL_SCOPE],
-             window["import_scope"], window["import_since"]),
+            (account_id, workspace_id, legacy_user_id, google_email, email, key, flow.get("provider_subject"),
+             secret_id, [GMAIL_SCOPE], window["import_scope"], window["import_since"]),
         ).fetchone()
     old_secret = (current or {}).get("refresh_token_secret_id")
     if old_secret and str(old_secret) != secret_id:
@@ -1110,7 +1143,7 @@ def _run_sync_connection(connection_id: int, service=None, max_results: int = 10
             raise HTTPException(status_code=409, detail="La conexión de Gmail venció. Volvé a autorizarla desde DINCR.") from exc
         with get_connection() as conn:
             conn.execute(
-                "UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_error=%s,updated_at=NOW() WHERE id=%s",
+                "UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_error=%s,updated_at=NOW() WHERE id=%s AND status<>'disabled'",
                 ("No se pudo completar la sincronización.", connection_id),
             )
             conn.commit()
@@ -1127,7 +1160,7 @@ def _run_sync_connection(connection_id: int, service=None, max_results: int = 10
                    initial_scan_page_token=CASE WHEN %s AND import_since IS NOT DISTINCT FROM %s::date THEN %s ELSE initial_scan_page_token END,
                    initial_scan_completed_at=CASE WHEN %s AND %s IS NULL AND import_since IS NOT DISTINCT FROM %s::date THEN NOW() ELSE initial_scan_completed_at END,
                    updated_at=NOW()
-               WHERE id=%s""",
+               WHERE id=%s AND status<>'disabled'""",
             (initial_sync, initial_sync, started_since, next_initial_page,
              initial_sync, next_initial_page, started_since, connection_id),
         )
@@ -1195,7 +1228,7 @@ def _start_watch(connection_id: int, service, suppress_errors: bool = False) -> 
         with get_connection() as conn:
             conn.execute(
                 """UPDATE finva_gmail_connections SET history_id=%s,watch_expiration=%s,
-                          last_error=NULL,updated_at=NOW() WHERE id=%s""",
+                          last_error=NULL,updated_at=NOW() WHERE id=%s AND status<>'disabled'""",
                 (str(response.get("historyId") or ""), expiration, connection_id),
             )
             conn.commit()

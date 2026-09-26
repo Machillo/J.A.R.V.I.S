@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import html
+import json
 import logging
 import os
 import re
@@ -38,6 +39,8 @@ REQUIRED_SCOPE = "mail.read"
 # "common" accepts personal Microsoft accounts (Outlook.com, Hotmail, Live) and
 # work/school accounts, matching the multitenant + personal app registration.
 AUTHORITY = "https://login.microsoftonline.com/common/oauth2/v2.0"
+# Microsoft's fixed tenant id for personal (outlook.com, hotmail.com) accounts.
+CONSUMER_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad"
 GRAPH = "https://graph.microsoft.com/v1.0"
 GRAPH_SCOPE_PREFIX = "https://graph.microsoft.com/"
 ALLOWED_SENDERS = frozenset(re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)) | {"ccss.sa.cr"}
@@ -153,9 +156,34 @@ def finish_connection(code: str | None, state: str | None, error: str | None = N
         return failed("mailbox_unavailable")
     with get_connection() as conn:
         secret_id = _vault_create(conn, tokens["refresh_token"], account_id, "Microsoft")
-        completion = mail_oauth.authorize_flow(conn, flow["id"], secret_id=secret_id, mailbox=address, scopes=["Mail.Read"])
+        subject, tenant = _graph_identity(profile, tokens["access_token"])
+        completion = mail_oauth.authorize_flow(conn, flow["id"], secret_id=secret_id, mailbox=address,
+                                               scopes=["Mail.Read"], subject=subject, tenant=tenant)
         conn.commit()
     return RedirectResponse(_return_url("authorized", flow=str(flow["id"]), completion=completion), status_code=302)
+
+
+def _graph_identity(profile: dict, access_token: str) -> tuple[str | None, str | None]:
+    """The Graph user ``id`` and its tenant, for a token DINCR just received from Microsoft.
+
+    Work and school tokens are JWTs whose ``tid`` names the tenant (read, not
+    trusted for authorization: the token came straight from Microsoft's token
+    endpoint over TLS). Personal Microsoft accounts use opaque tokens and a
+    16-hex-digit id, all in the consumer tenant. Anything else stays unknown and
+    the mailbox is identified by its address instead.
+    """
+    user_id = str(profile.get("id") or "").strip().lower()
+    if not user_id:
+        return None, None
+    try:
+        payload = access_token.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        tenant = str(claims.get("tid") or "").strip().lower() or None
+    except (IndexError, ValueError, AttributeError):
+        tenant = None
+    if tenant is None and re.fullmatch(r"[0-9a-f]{16}", user_id):
+        tenant = CONSUMER_TENANT
+    return (user_id, tenant) if tenant else (None, None)
 
 
 def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
@@ -165,12 +193,18 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
     account_id, workspace_id = str(flow["account_id"]), str(flow["workspace_id"])
     if not _has_active_vip_access(conn, account_id):
         raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
-    address = str(flow["mailbox_address"])
+    address = str(flow["mailbox_address"]).strip().lower()  # display only
+    email = mail_oauth.mailbox_email("microsoft", address)
+    key = mail_oauth.mailbox_key("microsoft", address, flow.get("provider_subject"), flow.get("provider_tenant"))
     secret_id = str(flow["pending_secret_id"])
+    mail_oauth.claim_mailbox(conn, provider="microsoft", account_id=account_id, workspace_id=workspace_id,
+                             key=key, email=email, display=address, is_entitled=_has_active_vip_access)
     existing = conn.execute(
         """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
-           WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
-        (account_id, workspace_id, address),
+           WHERE account_id=%s AND workspace_id=%s
+             AND (mailbox_key=%s OR mailbox_email=%s OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s))
+           ORDER BY (status<>'disabled') DESC, id LIMIT 1 FOR UPDATE""",
+        (account_id, workspace_id, key, email, address),
     ).fetchone()
     if existing and "Mail.Read" not in (existing.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
@@ -179,12 +213,14 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
         row = conn.execute(
             """UPDATE finva_gmail_connections SET legacy_user_id=%s,
                  refresh_token_secret_id=%s::uuid,granted_scopes=%s,
+                 google_email=%s,mailbox_email=%s,mailbox_key=%s,provider_subject=%s,provider_tenant=%s,
                  status='active',last_error=NULL,import_scope=%s,import_since=%s,
                  initial_scan_page_token=CASE WHEN %s THEN NULL ELSE initial_scan_page_token END,
                  initial_scan_completed_at=CASE WHEN %s THEN NULL ELSE initial_scan_completed_at END,
                  connected_at=NOW(),updated_at=NOW()
                WHERE id=%s RETURNING id""",
-            (legacy_user_id, secret_id, ["Mail.Read"], window["import_scope"], window["import_since"],
+            (legacy_user_id, secret_id, ["Mail.Read"], address, email, key, flow.get("provider_subject"),
+             flow.get("provider_tenant"), window["import_scope"], window["import_since"],
              window["restart_scan"], window["restart_scan"], existing["id"]),
         ).fetchone()
         if existing.get("refresh_token_secret_id") and str(existing["refresh_token_secret_id"]) != secret_id:
@@ -192,11 +228,12 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
     else:
         row = conn.execute(
             """INSERT INTO finva_gmail_connections(
-                   account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
+                   account_id,workspace_id,legacy_user_id,google_email,mailbox_email,mailbox_key,
+                   provider_subject,provider_tenant,refresh_token_secret_id,
                    granted_scopes,import_scope,import_since,status,connected_at,updated_at)
-               VALUES(%s,%s,%s,%s,%s::uuid,%s,%s,%s,'active',NOW(),NOW()) RETURNING id""",
-            (account_id, workspace_id, legacy_user_id, address, secret_id, ["Mail.Read"],
-             window["import_scope"], window["import_since"]),
+               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::uuid,%s,%s,%s,'active',NOW(),NOW()) RETURNING id""",
+            (account_id, workspace_id, legacy_user_id, address, email, key, flow.get("provider_subject"),
+             flow.get("provider_tenant"), secret_id, ["Mail.Read"], window["import_scope"], window["import_since"]),
         ).fetchone()
     return int(row["id"])
 
@@ -215,7 +252,9 @@ def _refresh(connection: dict, refresh_token: str) -> str:
         logger.warning("Outlook token refresh rejected connection_id=%s status=%s error=%s",
                        connection["id"], response.status_code, error_code)
         with get_connection() as conn:
-            conn.execute("UPDATE finva_gmail_connections SET status='reauthorization_required' WHERE id=%s", (connection["id"],))
+            # A disconnected mailbox stays disconnected (it no longer holds the address).
+            conn.execute("UPDATE finva_gmail_connections SET status='reauthorization_required' WHERE id=%s AND status='active'",
+                         (connection["id"],))
             conn.commit()
         raise HTTPException(status_code=409, detail="Outlook requiere volver a autorizar el correo.")
     response.raise_for_status()
@@ -224,10 +263,12 @@ def _refresh(connection: dict, refresh_token: str) -> str:
         with get_connection() as conn:
             # Another sync could rotate a token concurrently: only replace the one we used.
             current = conn.execute(
-                "SELECT refresh_token_secret_id FROM finva_gmail_connections WHERE id=%s FOR UPDATE",
+                "SELECT refresh_token_secret_id,status FROM finva_gmail_connections WHERE id=%s FOR UPDATE",
                 (connection["id"],),
             ).fetchone()
-            if current and str(current["refresh_token_secret_id"]) == str(connection["refresh_token_secret_id"]):
+            # A connection disconnected or taken over meanwhile never gets a live token back.
+            if (current and current["status"] != "disabled"
+                    and str(current["refresh_token_secret_id"]) == str(connection["refresh_token_secret_id"])):
                 replacement = _vault_create(conn, tokens["refresh_token"], str(connection["account_id"]), "Microsoft")
                 conn.execute("UPDATE finva_gmail_connections SET refresh_token_secret_id=%s::uuid WHERE id=%s",
                              (replacement, connection["id"]))
@@ -344,7 +385,7 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
                  initial_scan_page_token=CASE WHEN import_since IS NOT DISTINCT FROM %s::date THEN %s ELSE initial_scan_page_token END,
                  initial_scan_started_at=COALESCE(initial_scan_started_at,NOW()),
                  initial_scan_completed_at=CASE WHEN %s AND import_since IS NOT DISTINCT FROM %s::date THEN NOW() ELSE initial_scan_completed_at END,
-                 updated_at=NOW() WHERE id=%s""",
+                 updated_at=NOW() WHERE id=%s AND status<>'disabled'""",
             # A reconnection that widened the history while this sync ran keeps its reset.
             (connection.get("import_since"), page if initial else None, initial and not page,
              connection.get("import_since"), connection_id),
