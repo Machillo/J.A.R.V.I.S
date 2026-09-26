@@ -18,6 +18,9 @@ SECRET_PROTECTED = {
     "/user-product/vip/gmail/maintenance", "/user-product/vip/gmail/push", "/notifications/cron",
     "/deployment-monitor/webhook/github", "/deployment-monitor/webhook/vercel", "/deployment-monitor/webhook/render",
     "/integrations/ibkr/snapshot", "/integrations/ibkr/flex/cron", "/internal/owner-bridge/verify",
+    # Store purchases: Apple's JWS signature, Google's OIDC token, the store cron secret.
+    "/product-ops/billing/store/apple/notifications", "/product-ops/billing/store/google/notifications",
+    "/product-ops/billing/store/cron",
 }
 # The retired Owner Gmail reader (#233): still public so leftover crons and a Pub/Sub
 # subscription get a definitive answer, but they never read mail or data.

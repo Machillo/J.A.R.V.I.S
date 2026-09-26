@@ -119,7 +119,7 @@ def test_users_request_modules_have_no_ddl():
 # calls from every Users route through module imports and fails if any
 # reachable function contains DDL.
 USERS_ROUTE_MODULES = ("user_product/routes.py", "financial_lifecycle/routes.py", "auth/routes.py",
-                       "product_ops/routes.py", "notifications/routes.py")
+                       "product_ops/routes.py", "notifications/routes.py", "product_ops/store_routes.py")
 # Routers main.py mounts without INTERNAL_ONLY that are not Users entries, and why.
 OWNER_GATED_ROUTER_MODULES = {
     "ai/routes.py": "router dependency require_roles('owner', 'admin')",

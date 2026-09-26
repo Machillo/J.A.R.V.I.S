@@ -37,6 +37,7 @@ from backend.deployment_monitor.routes import router as deployment_monitor_route
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.posthog_events import capture_backend_event_later
 from backend.product_ops.routes import router as product_ops_router
+from backend.product_ops.store_routes import router as store_billing_router
 from backend.financial_lifecycle.routes import router as financial_lifecycle_router
 from backend.core.idempotency import (
     IDEMPOTENCY_KEY_PATTERN,
@@ -93,6 +94,11 @@ PUBLIC_PATHS = {
     "/user-product/vip/gmail/maintenance",
     "/user-product/vip/gmail/push",
     "/notifications/cron",
+    # App Store / Google Play: authenticated by Apple's signature, Google's OIDC
+    # token or the cron secret (backend/product_ops/store_verification.py).
+    "/product-ops/billing/store/apple/notifications",
+    "/product-ops/billing/store/google/notifications",
+    "/product-ops/billing/store/cron",
     "/deployment-monitor/webhook/github",
     "/deployment-monitor/webhook/vercel",
     "/deployment-monitor/webhook/render",
@@ -436,6 +442,7 @@ app.include_router(owner_bridge_router)
 app.include_router(user_product_router)
 app.include_router(deployment_monitor_router)
 app.include_router(product_ops_router)
+app.include_router(store_billing_router)
 app.include_router(financial_lifecycle_router)
 
 class AskRequest(BaseModel):
