@@ -169,8 +169,6 @@ def test_every_financial_insert_sets_workspace_and_user():
 # allowed_users.id. Tracked for removal (canonical identity plan, Phase C).
 KNOWN_USER_ID_COMPARISONS = {
     ("backend/notifications/service.py", "au.id = ns.user_id"),  # notification_subscriptions: FK -> allowed_users
-    ("backend/notifications/service.py", "au.id = e.user_id"),   # events: written by core/events with allowed_users.id
-    ("backend/notifications/service.py", "au.id = fe.user_id"),  # fixed_expenses: Owner-only writer, allowed_users.id
 }
 
 
