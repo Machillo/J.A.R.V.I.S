@@ -1233,7 +1233,7 @@ def end_unentitled_mail_connections(conn) -> int:
         secret_id = str(row["refresh_token_secret_id"]) if row.get("refresh_token_secret_id") else None
         if secret_id and GMAIL_SCOPE in (row.get("granted_scopes") or []):
             try:
-                token = _vault_read(conn, secret_id)
+                token = _vault_read(conn, secret_id, str(row["account_id"]))
                 requests.post("https://oauth2.googleapis.com/revoke", data={"token": token}, timeout=10)
             except Exception:
                 logger.warning("Gmail token revocation failed when a plan ended")
@@ -1244,7 +1244,7 @@ def end_unentitled_mail_connections(conn) -> int:
                WHERE id=%s""",
             (MAIL_ACCESS_ENDED, int(row["id"])),
         )
-        _vault_delete(conn, secret_id)
+        _vault_delete(conn, secret_id, str(row["account_id"]))
         ended += 1
     return ended
 
