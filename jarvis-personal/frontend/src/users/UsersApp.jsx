@@ -26,6 +26,7 @@ import ReleaseUpdateNotice from "../components/ReleaseUpdateNotice";
 import { dismissRelease, isReleaseDismissed } from "../lib/releasePolicy";
 import { cachedFeatureFlags, featureDisabledMessage, featureEnabled, getOperationalFeatureFlags } from "../lib/featureFlags";
 import ProgressiveProfileNudge from "./components/ProgressiveProfileNudge";
+import { setBaseCurrency } from "../lib/currency";
 
 export default function UsersApp({ user, onUserChange, releasePolicy }) {
   const initialPage = window.sessionStorage.getItem("finva:support-context") ? "feedback" : "overview";
@@ -39,6 +40,9 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
   const [releaseDismissed, setReleaseDismissed] = useState(() => isReleaseDismissed(releasePolicy));
   const [featureFlags, setFeatureFlags] = useState(() => cachedFeatureFlags());
   const plan = user?.subscription?.plan || "free";
+  // Pages format and convert against the account's base currency; set it before
+  // they render (idempotent, so running it on every render is harmless).
+  setBaseCurrency(user?.base_currency);
   const platform = detectNativePlatform();
 
   useEffect(() => {

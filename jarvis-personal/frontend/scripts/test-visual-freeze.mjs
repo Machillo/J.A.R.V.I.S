@@ -62,9 +62,14 @@ assert.doesNotMatch(read("src/users/pages/Settings.jsx"), /tx\("Desarrollo", "De
 assert.match(read("src/users/components/AppLockSettings.jsx"), /role="switch" aria-checked=\{config\.enabled\} aria-label=/);
 
 // Every public CRC formatter shows ₡ in English too.
-for (const file of ["src/users/pages/Finance.jsx", "src/users/pages/Debts.jsx", "src/products/finva/features/vip/VipScreens.jsx", "src/users/pages/Budget.jsx"]) {
+for (const file of ["src/users/pages/Debts.jsx", "src/products/finva/features/vip/VipScreens.jsx", "src/users/pages/Budget.jsx"]) {
   assert.match(read(file), /currency: ?"CRC", ?currencyDisplay: ?"narrowSymbol"/, `${file} uses the ₡ symbol`);
 }
+// Finance formats in the account's base currency through the shared formatter,
+// which also uses the narrow symbol (₡, not "CRC", in English).
+assert.match(read("src/users/pages/Finance.jsx"), /const money = \(value\) => formatMoney\(value\);/);
+assert.match(read("src/lib/currency.js"), /currencyDisplay: "narrowSymbol"/);
+assert.equal(new Intl.NumberFormat("en-US", { style: "currency", currency: "CRC", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }).format(1500), "₡1,500");
 
 // Owner operations styles are loaded (they used to live in the never-imported App.css).
 assert.ok(!fs.existsSync(new URL("../src/App.css", import.meta.url)), "the unused Vite template App.css stays removed");

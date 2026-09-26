@@ -9,12 +9,10 @@ from backend.auth.current_user import get_current_account_id, get_current_user_i
 from backend.auth.saas import require_feature
 from backend.core.database import get_connection
 from backend.core.idempotency import mark_applied
-from backend.finance.service import (
-    get_expenses,
-    get_payroll_events,
-)
+from backend.finance.service import get_payroll_events
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
 from backend.user_product.basic_service import _require_basic_tables
+from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 from backend.user_product.strategy_engine import (
     build_basic_strategy,
     build_paycheck_plan,
@@ -109,11 +107,24 @@ def get_user_finance_summary():
     }
 
 
+ORIGINAL_COLUMNS = "original_amount,original_currency,exchange_rate"
+
+
+def _entry_values(conn, payload) -> dict:
+    """Base-currency amount plus what the user typed, from the account's own base.
+
+    Without a currency (older app versions) the amount is in the base currency.
+    """
+    currency = getattr(payload, "currency", None)
+    base = account_base_currency(conn, get_current_account_id()) if currency else None
+    return resolve_entry_amount(base, payload.amount, currency, getattr(payload, "exchange_rate", None))
+
+
 def list_income():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT id,amount,source,COALESCE(category,'Salario') category,user_id,workspace_id,created_at
+            f"""SELECT id,amount,source,COALESCE(category,'Salario') category,{ORIGINAL_COLUMNS},user_id,workspace_id,created_at
                FROM salaries WHERE workspace_id=%s ORDER BY created_at DESC,id DESC""",
             (workspace_id,),
         ).fetchall()
@@ -124,12 +135,14 @@ def create_income(payload):
     user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
+        values = _entry_values(conn, payload)
         row = conn.execute(
-            """INSERT INTO salaries(user_id,workspace_id,amount,source,category,created_at)
-               VALUES(%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
-               RETURNING id,amount,source,category,created_at""",
-            (user_id, workspace_id, payload.amount, (payload.description or payload.category or "Ingreso").strip(),
-             (payload.category or "Otros ingresos").strip(), payload.entry_date),
+            f"""INSERT INTO salaries(user_id,workspace_id,amount,source,category,{ORIGINAL_COLUMNS},created_at)
+               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
+               RETURNING id,amount,source,category,{ORIGINAL_COLUMNS},created_at""",
+            (user_id, workspace_id, values["amount"], (payload.description or payload.category or "Ingreso").strip(),
+             (payload.category or "Otros ingresos").strip(), values["original_amount"], values["original_currency"],
+             values["exchange_rate"], payload.entry_date),
         ).fetchone()
         mark_applied(conn)
         conn.commit()
@@ -139,13 +152,16 @@ def create_income(payload):
 def update_income(income_id: int, payload):
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
+        values = _entry_values(conn, payload)
         row = conn.execute(
-            """UPDATE salaries SET amount=%s,source=%s,category=%s,
+            f"""UPDATE salaries SET amount=%s,source=%s,category=%s,
+                      original_amount=%s,original_currency=%s,exchange_rate=%s,
                       created_at=COALESCE(%s::date,created_at::date)+TIME '12:00'
                WHERE id=%s AND workspace_id=%s
-               RETURNING id,amount,source,category,created_at""",
-            (payload.amount, (payload.description or payload.category or "Ingreso").strip(),
-             (payload.category or "Otros ingresos").strip(), payload.entry_date, income_id, workspace_id),
+               RETURNING id,amount,source,category,{ORIGINAL_COLUMNS},created_at""",
+            (values["amount"], (payload.description or payload.category or "Ingreso").strip(),
+             (payload.category or "Otros ingresos").strip(), values["original_amount"], values["original_currency"],
+             values["exchange_rate"], payload.entry_date, income_id, workspace_id),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Ingreso no encontrado.")
@@ -165,10 +181,14 @@ def delete_income(income_id: int):
 
 
 def list_expenses():
-    return [
-        {**row, "entry_date": str(row.get("created_at") or "")[:10]}
-        for row in get_expenses()
-    ]
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""SELECT id,category,expense_type,description,amount,{ORIGINAL_COLUMNS},created_at,user_id,workspace_id
+               FROM expenses WHERE workspace_id=%s ORDER BY id DESC""",
+            (workspace_id,),
+        ).fetchall()
+    return [{**row, "entry_date": str(row.get("created_at") or "")[:10]} for row in rows]
 
 
 def create_expense_entry(payload):
@@ -177,11 +197,13 @@ def create_expense_entry(payload):
     category = (payload.category or "Compras").strip()
     expense_type = expense_type_for_category(category)
     with get_connection() as conn:
+        values = _entry_values(conn, payload)
         row = conn.execute(
-            """INSERT INTO expenses(category,expense_type,description,amount,user_id,workspace_id,created_at)
-               VALUES(%s,%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
-               RETURNING id,category,expense_type,description,amount,user_id,workspace_id,created_at""",
-            (category, expense_type, payload.description or "", payload.amount, user_id, workspace_id, payload.entry_date),
+            f"""INSERT INTO expenses(category,expense_type,description,amount,{ORIGINAL_COLUMNS},user_id,workspace_id,created_at)
+               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::date,CURRENT_DATE)+TIME '12:00')
+               RETURNING id,category,expense_type,description,amount,{ORIGINAL_COLUMNS},user_id,workspace_id,created_at""",
+            (category, expense_type, payload.description or "", values["amount"], values["original_amount"],
+             values["original_currency"], values["exchange_rate"], user_id, workspace_id, payload.entry_date),
         ).fetchone()
         mark_applied(conn)
         conn.commit()
@@ -192,12 +214,15 @@ def update_expense(expense_id: int, payload):
     workspace_id = get_current_workspace_id()
     category = (payload.category or "Compras").strip()
     with get_connection() as conn:
+        values = _entry_values(conn, payload)
         row = conn.execute(
-            """UPDATE expenses SET amount=%s,description=%s,category=%s,expense_type=%s,
+            f"""UPDATE expenses SET amount=%s,description=%s,category=%s,expense_type=%s,
+                      original_amount=%s,original_currency=%s,exchange_rate=%s,
                       created_at=COALESCE(%s::date,created_at::date)+TIME '12:00'
                WHERE id=%s AND workspace_id=%s
-               RETURNING id,category,expense_type,description,amount,created_at""",
-            (payload.amount, payload.description or "", category, expense_type_for_category(category),
+               RETURNING id,category,expense_type,description,amount,{ORIGINAL_COLUMNS},created_at""",
+            (values["amount"], payload.description or "", category, expense_type_for_category(category),
+             values["original_amount"], values["original_currency"], values["exchange_rate"],
              payload.entry_date, expense_id, workspace_id),
         ).fetchone()
         if not row:
