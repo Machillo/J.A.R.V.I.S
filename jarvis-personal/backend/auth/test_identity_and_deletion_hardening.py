@@ -130,8 +130,9 @@ class FakeConnection:
         accounts = w["accounts"]
         if sql.startswith("SELECT id, email, role, status, supabase_user_id"):
             return [dict(row) for row in w["allowed_users"].values() if row["email"] == params[0]]
-        if sql.startswith("SELECT supabase_user_id FROM accounts WHERE legacy_allowed_user_id"):
-            return [{"supabase_user_id": a["supabase_user_id"]} for a in accounts.values() if a["legacy_allowed_user_id"] == params[0]]
+        if sql.startswith("SELECT supabase_user_id, role, last_login_at FROM accounts WHERE legacy_allowed_user_id"):
+            return [{"supabase_user_id": a["supabase_user_id"], "role": a.get("role"), "last_login_at": a.get("last_login_at")}
+                    for a in accounts.values() if a["legacy_allowed_user_id"] == params[0]]
         if sql.startswith("UPDATE allowed_users SET supabase_user_id"):
             sid, uid, expected = params
             row = w["allowed_users"].get(uid)
@@ -755,3 +756,59 @@ def test_same_id_on_a_pending_account_must_finish_via_delete(env):
     _assert_pending_409(error)
     assert not any(call[0] == "ADMIN_GET" for call in env.supabase.calls)
     assert 42 in env.db.state["allowed_users"]
+
+
+# --- Fresh identities skip the refresh writes, never the checks -------------------
+
+def _recently_seen(env, minutes=1):
+    from datetime import datetime, timedelta, timezone
+    seen = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+    env.db.state["allowed_users"][42]["last_login_at"] = seen
+    env.db.state["accounts"][ACCOUNT_ID]["last_login_at"] = seen
+
+
+def test_a_bound_recent_identity_authenticates_without_writes(env):
+    _recently_seen(env)
+    identity = _login(env)
+    assert identity["account_id"] == ACCOUNT_ID
+    assert not [sql for sql, _ in env.db.writes() if sql.startswith(("UPDATE allowed_users", "UPDATE accounts"))]
+
+
+def test_the_fresh_path_still_rejects_another_auth_identity(env):
+    _recently_seen(env)
+    with pytest.raises(HTTPException) as rejected:
+        _login(env, auth_id=OTHER_AUTH_ID)
+    assert rejected.value.status_code in {401, 403}
+
+
+def test_an_old_login_still_writes_and_no_login_changes_the_role(env, monkeypatch):
+    """Login writes only the binding and last_login_at (backend/auth/owner_role.py): being
+    listed in OWNER_EMAILS neither forces a write nor promotes anyone."""
+    _recently_seen(env)
+    monkeypatch.setenv("OWNER_EMAILS", EMAIL)
+    _login(env)
+    assert env.db.state["allowed_users"][42]["role"] == "user"
+    assert not any(sql.startswith("UPDATE allowed_users") for sql, _ in env.db.writes())
+
+    env.db.log.clear()
+    _recently_seen(env, minutes=10)
+    _login(env)
+    assert any(sql.startswith("UPDATE allowed_users") for sql, _ in env.db.writes())
+    assert env.db.state["allowed_users"][42]["role"] == "user"
+
+
+def test_a_first_sign_in_that_loses_the_race_uses_the_winners_account(env, monkeypatch):
+    """Authentication runs in parallel: two first requests of a new user both try to create it."""
+    import psycopg2
+
+    winner = env.db.state["allowed_users"].pop(42)
+    winner_account = env.db.state["accounts"].pop(ACCOUNT_ID)
+
+    def created_by_the_other_request(conn, supabase_user):
+        env.db.state["allowed_users"][42] = winner
+        env.db.state["accounts"][ACCOUNT_ID] = winner_account
+        raise psycopg2.errors.UniqueViolation()
+
+    monkeypatch.setattr(auth_service, "_create_personal_account", created_by_the_other_request)
+    identity = _login(env)
+    assert identity["account_id"] == ACCOUNT_ID
