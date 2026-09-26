@@ -23,7 +23,7 @@ CLAUDE_DIR = REPO / ".claude"
 # boundaries, or the Owner-role resolution itself).
 OWNER_CONFIGURATION = {
     "OWNER_EMAIL": {"email_monitor/service.py", "integrations/ibkr_readonly.py"},
-    "OWNER_EMAILS": {"auth/service.py", "email_monitor/service.py", "integrations/ibkr_readonly.py",
+    "OWNER_EMAILS": {"auth/owner_role.py", "email_monitor/service.py", "integrations/ibkr_readonly.py",
                      "scripts/workspace_isolation_check.py"},
     "OWNER_DISPLAY_NAME": {"email_monitor/parser_identity.py", "sports/service.py"},
     "JARVIS_OWN_ACCOUNT_IBANS": {"email_monitor/parser_identity.py"},

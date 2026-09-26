@@ -14,6 +14,7 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.auth.owner_role import enabled_owner_email
 from backend.core.database import get_connection, serialize_row, serialize_rows
 
 
@@ -62,26 +63,27 @@ FLEX_PENDING_CODES = {"1018", "1019"}
 
 
 def _owner_identity(conn) -> tuple[int, str]:
-    owner_email = (
-        os.getenv("OWNER_EMAIL", "").strip()
-        or next((value.strip() for value in os.getenv("OWNER_EMAILS", "").split(",") if value.strip()), "")
-    ).lower()
-    if not owner_email:
-        raise RuntimeError("OWNER_EMAIL no está configurado.")
+    # The Owner is the one account holding both keys (backend/auth/owner_role.py); a listed
+    # email alone is not enough, or a User's workspace could receive Owner snapshots.
+    owner_email = enabled_owner_email(conn)
     row = conn.execute(
         """
-        SELECT u.id AS user_id, w.id AS workspace_id
-        FROM users u
-        JOIN accounts a ON a.legacy_allowed_user_id = u.id
+        SELECT u.id AS user_id, w.id AS workspace_id, a.id AS account_id
+        FROM accounts a
+        JOIN allowed_users au ON au.id = a.legacy_allowed_user_id
+        JOIN users u ON LOWER(u.email) = LOWER(au.email)
         JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
-        WHERE LOWER(u.email) = %s
+        WHERE LOWER(au.email) = %s AND a.role = 'owner' AND au.role = 'owner'
         ORDER BY w.created_at, w.id
-        LIMIT 1
         """,
         (owner_email,),
-    ).fetchone()
-    if not row:
-        raise RuntimeError("No encontré el workspace personal del owner.")
+    ).fetchall()
+    # The account is found through its own identity (allowed_users -> accounts), never by
+    # comparing a users.id with an allowed_users.id; anything but exactly one owner account
+    # fails closed. Its oldest personal workspace is used, as before.
+    if len({str(item["account_id"]) for item in row or []}) != 1:
+        raise RuntimeError("No encontré un único owner con workspace personal.")
+    row = row[0]
     return int(row["user_id"]), str(row["workspace_id"])
 
 
@@ -385,9 +387,10 @@ def sync_flex_cron(x_jarvis_cron_secret: str | None = Header(default=None)):
         raise HTTPException(status_code=403, detail="Credencial del cron IBKR inválida.")
     try:
         return sync_flex_snapshot()
-    except RuntimeError as exc:
-        logger.exception("IBKR scheduled sync failed")
-        raise HTTPException(status_code=502, detail="No se pudo sincronizar IBKR en este momento.") from exc
+    except (RuntimeError, requests.RequestException) as exc:
+        # The Flex token travels in the request URL: never log an exception message.
+        logger.error("IBKR scheduled sync failed type=%s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="No se pudo sincronizar IBKR en este momento.") from None
 
 
 def latest_ibkr_snapshot(conn, workspace_id: str):

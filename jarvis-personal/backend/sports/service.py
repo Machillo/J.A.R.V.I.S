@@ -125,6 +125,7 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
     instead of spamming one notification per uncertain web result.
     """
     from datetime import time, timedelta, timezone
+    from backend.auth.owner_role import owner_enabled
     from backend.core.database import get_connection
 
     now_cr = datetime.now(CR_TZ)
@@ -135,15 +136,18 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
     scheduled_utc = scheduled_cr.astimezone(timezone.utc)
 
     with get_connection() as conn:
-        owners = conn.execute(
-            """
-            SELECT au.id, w.id AS workspace_id
-            FROM allowed_users au
-            JOIN accounts a ON a.legacy_allowed_user_id = au.id
-            JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
-            WHERE au.role IN ('owner', 'admin') AND au.status = 'active'
-            """
-        ).fetchall()
+        owners = [
+            row for row in conn.execute(
+                """
+                SELECT au.id, au.role, au.email, w.id AS workspace_id
+                FROM allowed_users au
+                JOIN accounts a ON a.legacy_allowed_user_id = au.id
+                JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
+                WHERE au.role IN ('owner', 'admin') AND au.status = 'active'
+                """
+            ).fetchall()
+            if row["role"] != "owner" or owner_enabled(row["email"])
+        ]
 
         created = 0
         skipped = 0
