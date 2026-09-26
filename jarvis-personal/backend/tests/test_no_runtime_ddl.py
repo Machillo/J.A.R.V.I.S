@@ -7,10 +7,8 @@ ALTER TABLE ... IF NOT EXISTS still locks the whole table. Schema belongs in
 database/migrations; a path whose table may be missing checks
 backend.core.schema_state and degrades explicitly.
 
-LEGACY_OWNER_DDL lists modules that still carry DDL outside Users request paths
-(test_users_routes_never_reach_ddl proves no Users route reaches it). Each count must
-match exactly: removing DDL lowers the number in the same change, and no new
-module may be added.
+No runtime module runs DDL: the dedicated application database role has no DDL
+privileges, so any DDL left in a request path would fail in production.
 """
 from __future__ import annotations
 
@@ -34,16 +32,9 @@ SQL_COMMENT = re.compile(r"--[^\n]*")
 # unaliased dotted imports (import backend.x.y; backend.x.y.f()) are not
 # followed. This is a guard, not a proof.
 
-LEGACY_OWNER_DDL = {
-    "advisor/core.py": 2,
-    "ai/memory_service.py": 8,
-    "ai/strategy_dashboard.py": 1,
-    "deployment_monitor/service.py": 2,
-    "email_monitor/service.py": 45,
-    "finance/business_center.py": 2,
-    "finance/intelligence.py": 24,
-    "integrations/ibkr_readonly.py": 17,
-}
+# Every module that used to run DDL at request time now relies on versioned
+# migrations (the last Owner modules: migration 20260926125000). Keep it empty.
+LEGACY_OWNER_DDL: dict[str, int] = {}
 
 
 def _is_runtime_module(relative: str) -> bool:
@@ -189,7 +180,7 @@ def _function_has_ddl(fn) -> bool:
 
 # Call edges Users never take at runtime; each names its proof (a test below).
 GUARDED_EDGES = {
-    # build_advisor_strategy persists (DDL + writes) only when persist=True; every
+    # build_advisor_strategy persists (writes) only when persist=True; every
     # Users-reachable caller passes persist=False
     # (test_users_build_the_advisor_strategy_without_persisting_it).
     ("backend.advisor.core.build_advisor_strategy", "backend.advisor.core._persist_strategy"),

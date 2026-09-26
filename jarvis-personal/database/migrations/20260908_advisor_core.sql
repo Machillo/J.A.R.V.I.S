@@ -1,3 +1,4 @@
+-- SUPERSEDED by 20260926125000_owner_legacy_schema.sql (optional user_id). Do not apply.
 CREATE TABLE IF NOT EXISTS advisor_current_strategy (
     workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
     user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,

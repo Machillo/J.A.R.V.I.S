@@ -22,29 +22,10 @@ class BusinessMovementRequest(BaseModel):
     category: Optional[str] = None
 
 
-def _ensure_tables(conn):
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS business_projects (
-          id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1, workspace_id UUID, name TEXT NOT NULL,
-          description TEXT, ownership_pct NUMERIC(6,2) NOT NULL DEFAULT 100,
-          status TEXT NOT NULL DEFAULT 'active', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS business_movements (
-          id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1, workspace_id UUID,
-          business_id BIGINT NOT NULL REFERENCES business_projects(id) ON DELETE CASCADE,
-          movement_date DATE NOT NULL DEFAULT CURRENT_DATE, movement_type TEXT NOT NULL,
-          amount NUMERIC(14,2) NOT NULL, description TEXT NOT NULL, category TEXT,
-          transaction_id BIGINT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
-
 @router.get("")
 def get_business_center():
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_tables(conn)
         businesses = conn.execute("SELECT * FROM business_projects WHERE workspace_id=%s ORDER BY status, name", (workspace_id,)).fetchall()
         movements = conn.execute("SELECT * FROM business_movements WHERE workspace_id=%s ORDER BY movement_date DESC,id DESC LIMIT 200", (workspace_id,)).fetchall()
         totals = conn.execute("""
@@ -66,7 +47,6 @@ def create_business(request: BusinessRequest):
     user_id = get_current_user_id()  # legacy compatibility during migration
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_tables(conn)
         row = conn.execute("""INSERT INTO business_projects(user_id,workspace_id,name,description,ownership_pct)
           VALUES(%s,%s,%s,%s,%s) RETURNING *""", (user_id, workspace_id, request.name.strip(), request.description, request.ownership_pct)).fetchone()
         conn.commit()
@@ -81,7 +61,6 @@ def add_business_movement(request: BusinessMovementRequest):
         raise HTTPException(400, "movement_type debe ser income, expense o capital")
     movement_date = request.movement_date or date.today()
     with get_connection() as conn:
-        _ensure_tables(conn)
         business = conn.execute("SELECT * FROM business_projects WHERE id=%s AND workspace_id=%s", (request.business_id,workspace_id)).fetchone()
         if not business: raise HTTPException(404, "Negocio no encontrado")
         transaction_id = None
