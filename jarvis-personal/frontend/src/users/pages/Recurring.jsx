@@ -4,12 +4,14 @@ import { Plus, Repeat2 } from "lucide-react";
 import { createRecurring, deleteRecurring, getRecurring, updateRecurring } from "../services/jarvisApi";
 import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
-import { codeLabel, deviceLanguage, localeTag, tx } from "../../lib/locale";
+import { codeLabel, deviceLanguage, tx } from "../../lib/locale";
+import { currencySymbol, formatMoney } from "../../lib/currency";
 import { categoryLabel, categoryValue } from "../../lib/categories";
 
 const language=deviceLanguage();
 const copy=(es,en)=>tx(es,en,language);
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:0 }).format(Number(value) || 0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value);
 const empty = { name:"", amount:"", category:categoryLabel("general"), item_type:"expense", frequency:"monthly", due_day:"", is_active:true };
 
 export default function Recurring({ plan = "basic" }) {
@@ -62,7 +64,7 @@ export default function Recurring({ plan = "basic" }) {
       <form className="form finva-sheet-form" onSubmit={submit}>
         <div className="finva-compact-fields">
           <label><span>{copy("Nombre","Name")}</span><input required placeholder={copy("Ej. Netflix","E.g. Netflix")} value={form.name} onChange={(e) => setForm({...form,name:e.target.value})}/></label>
-          <label><span>{copy("Monto","Amount")}</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="₡0" value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></label>
+          <label><span>{copy("Monto","Amount")}</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder={`${currencySymbol()}0`} value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></label>
           <label><span>{copy("Categoría","Category")}</span><input placeholder={copy("Categoría","Category")} value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/></label>
           <label><span>{copy("Tipo","Type")}</span><select value={form.item_type} onChange={(e) => setForm({...form,item_type:e.target.value})}><option value="expense">{copy("Gasto","Expense")}</option><option value="income">{copy("Ingreso","Income")}</option></select></label>
           <label><span>{copy("Frecuencia","Frequency")}</span><select value={form.frequency} onChange={(e) => setForm({...form,frequency:e.target.value})}><option value="weekly">{copy("Semanal","Weekly")}</option><option value="biweekly">{copy("Quincenal","Twice monthly")}</option><option value="monthly">{copy("Mensual","Monthly")}</option><option value="quarterly">{copy("Trimestral","Quarterly")}</option><option value="annual">{copy("Anual","Annual")}</option></select></label>

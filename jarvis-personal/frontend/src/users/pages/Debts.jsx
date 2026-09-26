@@ -4,11 +4,13 @@ import { ArrowLeft, ChevronRight, CreditCard, Plus } from "lucide-react";
 import { createDebt, deleteDebt, getDebts, payDebt, updateDebt } from "../services/jarvisApi";
 import { AmountDialog, ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
-import { codeLabel, deviceLanguage, localeTag } from "../../lib/locale";
+import { codeLabel, deviceLanguage } from "../../lib/locale";
+import { currencySymbol, formatMoney } from "../../lib/currency";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
-const money = (value) => value == null ? tx("Sin dato", "No data") : new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:0 }).format(Number(value) || 0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => value == null ? tx("Sin dato", "No data") : formatMoney(value);
 const empty = { name:"", debt_type:"other", total_amount:"", remaining_amount:"", monthly_payment:"", interest_rate:"", term_months:"", payment_day:"", next_payment_date:"" };
 const opt = (value) => value === "" ? null : Number(value);
 const monthsLeft = (debt) => {
@@ -25,9 +27,9 @@ function DebtFields({ value, setValue, advanced }) {
   return <div className="finva-compact-fields">
     <label><span>{tx("Nombre de la deuda", "Debt name")}</span><input required placeholder={tx("Ej. Tarjeta BAC", "E.g. BAC credit card")} value={value.name} onChange={(e) => setValue({...value,name:e.target.value})}/></label>
     {advanced && <label><span>{tx("Tipo", "Type")}</span><select value={value.debt_type} onChange={(e) => setValue({...value,debt_type:e.target.value})}><option value="credit_card">{tx("Tarjeta", "Credit card")}</option><option value="loan">{tx("Préstamo", "Loan")}</option><option value="other">{tx("Otra", "Other")}</option></select></label>}
-    <label><span>{tx("Saldo pendiente", "Outstanding balance")}</span><input required type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.remaining_amount} onChange={(e) => setValue({...value,remaining_amount:e.target.value})}/></label>
-    <label><span>{tx("Monto original", "Original amount")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.total_amount} onChange={(e) => setValue({...value,total_amount:e.target.value})}/></label>
-    <label><span>{tx("Cuota mensual", "Monthly payment")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.monthly_payment} onChange={(e) => setValue({...value,monthly_payment:e.target.value})}/></label>
+    <label><span>{tx("Saldo pendiente", "Outstanding balance")}</span><input required type="number" inputMode="decimal" min="0" step="0.01" placeholder={`${currencySymbol()}0`} value={value.remaining_amount} onChange={(e) => setValue({...value,remaining_amount:e.target.value})}/></label>
+    <label><span>{tx("Monto original", "Original amount")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder={`${currencySymbol()}0`} value={value.total_amount} onChange={(e) => setValue({...value,total_amount:e.target.value})}/></label>
+    <label><span>{tx("Cuota mensual", "Monthly payment")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder={`${currencySymbol()}0`} value={value.monthly_payment} onChange={(e) => setValue({...value,monthly_payment:e.target.value})}/></label>
     {advanced && <>
       <label><span>{tx("Interés anual", "Annual interest")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="0%" value={value.interest_rate} onChange={(e) => setValue({...value,interest_rate:e.target.value})}/></label>
       <label><span>{tx("Plazo en meses", "Term in months")}</span><input type="number" inputMode="numeric" min="1" placeholder={tx("Ej. 24", "E.g. 24")} value={value.term_months} onChange={(e) => setValue({...value,term_months:e.target.value})}/></label>

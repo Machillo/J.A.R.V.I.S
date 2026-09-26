@@ -22,6 +22,7 @@ import {
 import { trackEvent } from "../lib/telemetry";
 import JarvisDisclosure from "../products/jarvis/components/JarvisDisclosure";
 import { deviceLanguage, localeTag, t } from "../lib/locale";
+import { baseCurrency, currencySymbol, formatMoney } from "../lib/currency";
 import { categoryLabel } from "../lib/categories";
 
 const language = deviceLanguage();
@@ -29,7 +30,8 @@ const tr = (key) => t(key, language);
 const tx = (es, en) => language === "es" ? es : en;
 const monthUnit = (count) => count === 1 ? tx("mes", "month") : tx("meses", "months");
 
-const money = (value) => `₡${Math.round(Number(value || 0)).toLocaleString(localeTag(language))}`;
+// VIP Users see their account's base currency; CRC (and the Owner, who never sets one) keep this exact format.
+const money = (value) => baseCurrency() === "CRC" ? `₡${Math.round(Number(value || 0)).toLocaleString(localeTag(language))}` : formatMoney(value);
 
 const allocationLabels = {
   ataque_de_deuda: tx("Ataque extra a deuda", "Extra debt payment"),
@@ -354,7 +356,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
             <label className="salvavidas-amount-field">
               <span>{tx("¿Cuánto tenés guardado hoy?", "How much do you have saved today?")}</span>
               <div className="salvavidas-money-input">
-                <span>₡</span>
+                <span>{currencySymbol()}</span>
                 <input
                   type="number"
                   min="0"

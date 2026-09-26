@@ -4,11 +4,13 @@ import { ArrowLeft, CalendarClock, ChevronRight, Plus, Target } from "lucide-rea
 import { contributeGoal, contributeSavingsPlan, createGoal, createSavingsPlan, deleteGoal, deleteSavingsPlan, getGoals, getSavingsPlans, getVipCommandCenter, updateGoal, updateSavingsPlan } from "../services/jarvisApi";
 import { AmountDialog, ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
-import { codeLabel, deviceLanguage, localeTag } from "../../lib/locale";
+import { codeLabel, deviceLanguage } from "../../lib/locale";
+import { baseCurrency, currencySymbol, formatMoney } from "../../lib/currency";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:2 }).format(Number(value) || 0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value, baseCurrency(), { maximumFractionDigits: 2 });
 const today = () => new Date().toISOString().slice(0,10);
 const goalEmpty = { name:"", target_amount:"", current_amount:0, target_date:"", priority:"medium", status:"active" };
 const savingsEmpty = { name:"", monthly_amount:"", saved_amount:0, start_date:today(), end_date:"", status:"active" };
@@ -27,9 +29,9 @@ const monthly = (goal) => {
 function GoalFields({ value, setValue, advanced }) {
   return <div className="finva-compact-fields">
     <label><span>{tx("Nombre de la meta", "Goal name")}</span><input required placeholder={tx("Ej. Viaje familiar", "E.g. Family trip")} value={value.name} onChange={(e) => setValue({...value,name:e.target.value})}/></label>
-    <label><span>{tx("Monto objetivo", "Target amount")}</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="₡0" value={value.target_amount} onChange={(e) => setValue({...value,target_amount:e.target.value})}/></label>
+    <label><span>{tx("Monto objetivo", "Target amount")}</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder={`${currencySymbol()}0`} value={value.target_amount} onChange={(e) => setValue({...value,target_amount:e.target.value})}/></label>
     {advanced && <>
-      <label><span>{tx("Ya ahorrado", "Already saved")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.current_amount} onChange={(e) => setValue({...value,current_amount:e.target.value})}/></label>
+      <label><span>{tx("Ya ahorrado", "Already saved")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder={`${currencySymbol()}0`} value={value.current_amount} onChange={(e) => setValue({...value,current_amount:e.target.value})}/></label>
       <label><span>{tx("Fecha objetivo", "Target date")}</span><input type="date" value={value.target_date || ""} onChange={(e) => setValue({...value,target_date:e.target.value})}/></label>
       <label><span>{tx("Prioridad", "Priority")}</span><select value={value.priority} onChange={(e) => setValue({...value,priority:e.target.value})}><option value="low">{tx("Baja", "Low")}</option><option value="medium">{tx("Media", "Medium")}</option><option value="high">{tx("Alta", "High")}</option><option value="critical">{tx("Prioritaria", "Critical")}</option></select></label>
     </>}
@@ -39,8 +41,8 @@ function GoalFields({ value, setValue, advanced }) {
 function SavingsFields({ value, setValue }) {
   return <div className="finva-compact-fields">
     <label><span>{tx("Nombre del ahorro", "Savings name")}</span><input required placeholder={tx("Ej. Marchamo", "E.g. Annual vehicle fee")} value={value.name} onChange={(e) => setValue({...value,name:e.target.value})}/></label>
-    <label><span>{tx("Monto por mes", "Amount per month")}</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="₡0" value={value.monthly_amount} onChange={(e) => setValue({...value,monthly_amount:e.target.value})}/></label>
-    <label><span>{tx("Ya tenés ahorrado", "Already saved")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder="₡0" value={value.saved_amount} onChange={(e) => setValue({...value,saved_amount:e.target.value})}/></label>
+    <label><span>{tx("Monto por mes", "Amount per month")}</span><input required type="number" inputMode="decimal" min="0.01" step="0.01" placeholder={`${currencySymbol()}0`} value={value.monthly_amount} onChange={(e) => setValue({...value,monthly_amount:e.target.value})}/></label>
+    <label><span>{tx("Ya tenés ahorrado", "Already saved")}</span><input type="number" inputMode="decimal" min="0" step="0.01" placeholder={`${currencySymbol()}0`} value={value.saved_amount} onChange={(e) => setValue({...value,saved_amount:e.target.value})}/></label>
     <label><span>{tx("Empezar", "Start")}</span><input required type="date" value={value.start_date} onChange={(e) => setValue({...value,start_date:e.target.value})}/></label>
     <label><span>{tx("Ahorrar hasta", "Save until")}</span><input required type="date" min={value.start_date || undefined} value={value.end_date} onChange={(e) => setValue({...value,end_date:e.target.value})}/></label>
   </div>;

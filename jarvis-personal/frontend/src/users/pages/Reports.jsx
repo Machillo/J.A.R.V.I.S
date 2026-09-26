@@ -1,10 +1,12 @@
 import { useEffect,useMemo,useState } from "react";
 import { deviceLanguage, localeTag } from "../../lib/locale";
+import { formatMoney } from "../../lib/currency";
 import { categoryLabel } from "../../lib/categories";
 import { getBasicReport } from "../services/jarvisApi";
 const language=deviceLanguage();
 const tx=(es,en)=>language==="es"?es:en;
-const money=v=>new Intl.NumberFormat(localeTag(language),{style:"currency",currency:"CRC",currencyDisplay:"narrowSymbol",maximumFractionDigits:0}).format(Number(v)||0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value);
 const now=()=>new Date().toISOString().slice(0,7);
 const shift=(period,delta)=>{const [y,m]=period.split("-").map(Number);const d=new Date(y,m-1+delta,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`};
 

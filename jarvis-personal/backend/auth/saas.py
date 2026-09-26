@@ -185,6 +185,7 @@ def ensure_default_subscription(conn, account_id: str, role: str = "user"):
 
 def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
     from backend.auth.legal import legal_status
+    from backend.user_product.entry_currency import entry_currencies
 
     account_id = str(user["account_id"])
     with get_connection() as conn:
@@ -205,6 +206,7 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
         "display_name": (account or {}).get("display_name"),
         "usage_goal": (account or {}).get("usage_goal"),
         "base_currency": (account or {}).get("base_currency") or "CRC",
+        "entry_currencies": entry_currencies((account or {}).get("base_currency")),
         "enabled_currencies": (account or {}).get("enabled_currencies") or ["CRC"],
         "number_format": (account or {}).get("number_format") or "dot_comma",
         "currency_placement": (account or {}).get("currency_placement") or "before",

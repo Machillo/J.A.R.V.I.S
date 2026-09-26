@@ -1508,3 +1508,11 @@ body:has(.users-app) { background: var(--f-bg); }
 .users-app .mail-history-option span{display:grid;gap:3px;min-width:0}
 .users-app .mail-history-option small,.users-app .mail-history-sheet p{color:var(--muted);font-size:.82rem;line-height:1.5;overflow-wrap:anywhere}
 .users-app .mail-history-sheet p{margin:0}
+/* [ amount ] [ CRC | USD ] on income and expense forms. */
+.users-app .entry-amount-row { display:flex; align-items:flex-end; gap:8px; }
+.users-app .entry-amount-row .entry-amount-field { flex:1; min-width:0; }
+.users-app .entry-currency-toggle { display:flex; flex:none; padding:4px; border:1px solid var(--f-border-strong); border-radius:15px; }
+.users-app .entry-currency-toggle button { min-width:48px; min-height:44px; border:0; border-radius:11px; background:transparent; color:var(--f-text-2); font-weight:800; }
+.users-app .entry-currency-toggle button.active { background:var(--accent-soft, rgba(93,214,255,.13)); color:var(--f-text, var(--text)); }
+.users-app .entry-original-amount { display:block; color:var(--f-text-2, var(--muted)); font-size:.72rem; }
+.users-app .entry-amount-cell { display:grid; justify-items:end; }

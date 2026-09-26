@@ -23,6 +23,10 @@ class IncomeCreateRequest(BaseModel):
     description: str = ""
     category: str = "salario"
     entry_date: date | None = None
+    # Currency the amount was typed in; omitted = the account's base currency.
+    # The other currency needs the user's rate (CRC per 1 USD); DINCR never invents one.
+    currency: Literal["CRC", "USD"] | None = None
+    exchange_rate: float | None = Field(default=None, gt=0, le=100000)
 
 
 class ExpenseCreateRequest(BaseModel):
@@ -30,6 +34,10 @@ class ExpenseCreateRequest(BaseModel):
     description: str = ""
     category: str = "general"
     entry_date: date | None = None
+    # Currency the amount was typed in; omitted = the account's base currency.
+    # The other currency needs the user's rate (CRC per 1 USD); DINCR never invents one.
+    currency: Literal["CRC", "USD"] | None = None
+    exchange_rate: float | None = Field(default=None, gt=0, le=100000)
 
 
 class IncomeUpdateRequest(IncomeCreateRequest):
@@ -200,3 +208,6 @@ class MovementUpdateRequest(BaseModel):
     transaction_type: Literal["expense", "income"]
     category: str = "general"
     notes: str = ""
+    # Only manual income and expenses accept another currency.
+    currency: Literal["CRC", "USD"] | None = None
+    exchange_rate: float | None = Field(default=None, gt=0, le=100000)
