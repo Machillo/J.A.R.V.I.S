@@ -438,9 +438,10 @@ def sync_flex_cron(x_jarvis_cron_secret: str | None = Header(default=None)):
         raise HTTPException(status_code=403, detail="Credencial del cron IBKR inválida.")
     try:
         return sync_flex_snapshot()
-    except RuntimeError as exc:
-        logger.exception("IBKR scheduled sync failed")
-        raise HTTPException(status_code=502, detail="No se pudo sincronizar IBKR en este momento.") from exc
+    except (RuntimeError, requests.RequestException) as exc:
+        # The Flex token travels in the request URL: never log an exception message.
+        logger.error("IBKR scheduled sync failed type=%s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="No se pudo sincronizar IBKR en este momento.") from None
 
 
 def latest_ibkr_snapshot(conn, workspace_id: str):
