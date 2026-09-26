@@ -13,7 +13,7 @@ except Exception:  # pragma: no cover - keeps backend alive if dependency is not
     WebPushException = Exception
     webpush = None
 
-from backend.auth.current_user import get_current_user, get_current_user_id, get_current_workspace_id
+from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
@@ -27,33 +27,6 @@ def _now() -> datetime:
 
 def _json(data: Any) -> str:
     return json.dumps(data or {}, ensure_ascii=False)
-
-
-def _display_name(user: dict[str, Any] | None = None) -> str:
-    user = user or get_current_user()
-    email = str(user.get("email") or "")
-    user_id = int(user.get("id") or 0)
-
-    try:
-        with get_connection() as conn:
-            row = conn.execute(
-                """
-                SELECT name
-                FROM users
-                WHERE allowed_user_id = %s OR email = %s OR id = %s
-                ORDER BY allowed_user_id NULLS LAST
-                LIMIT 1
-                """,
-                (user_id, email, user_id),
-            ).fetchone()
-        if row and row.get("name"):
-            return str(row["name"]).split()[0].title()
-    except Exception:
-        pass
-
-    if email:
-        return email.split("@", 1)[0].split(".", 1)[0].title()
-    return "Kenneth"
 
 
 # Web Push services the browsers actually use; any other endpoint would make the
@@ -86,7 +59,6 @@ def _normalize_subscription_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def notification_health() -> dict[str, Any]:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         subscription_count = conn.execute(
@@ -246,8 +218,6 @@ def send_system_push(title: str, body: str, category: str = "system", url: str =
 
 
 def send_test_notification() -> dict[str, Any]:
-    user = get_current_user()
-    user_id = int(user["id"])
     workspace_id = get_current_workspace_id()
     title = "DINCR Owner"
     body = "Señor, notificaciones reales activadas en este dispositivo."
@@ -281,51 +251,6 @@ def send_test_notification() -> dict[str, Any]:
     }
 
 
-def _workspace_id_for_legacy_user(conn, user_id: int) -> str:
-    row = conn.execute(
-        """
-        SELECT w.id
-        FROM accounts a
-        JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
-        WHERE a.legacy_allowed_user_id = %s
-        ORDER BY w.created_at, w.id
-        LIMIT 1
-        """,
-        (user_id,),
-    ).fetchone()
-    if not row:
-        raise RuntimeError(f"No workspace personal found for legacy user_id={user_id}.")
-    return str(row["id"])
-
-
-def create_notification_job(
-    user_id: int,
-    title: str,
-    body: str,
-    scheduled_at: datetime,
-    category: str = "general",
-    reference_type: str | None = None,
-    reference_id: str | None = None,
-    dedupe_key: str | None = None,
-    payload: dict[str, Any] | None = None,
-) -> None:
-    with get_connection() as conn:
-        workspace_id = _workspace_id_for_legacy_user(conn, user_id)
-        conn.execute(
-            """
-            INSERT INTO notification_jobs (
-                user_id, workspace_id, title, body, category, scheduled_at,
-                reference_type, reference_id, dedupe_key, payload
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            ON CONFLICT (workspace_id, dedupe_key) WHERE dedupe_key IS NOT NULL
-            DO NOTHING
-            """,
-            (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key or f"manual:{workspace_id}:{scheduled_at.isoformat()}:{title}", _json(payload or {})),
-        )
-        conn.commit()
-
-
 def _parse_event_datetime(event_date: str | None) -> datetime | None:
     if not event_date:
         return None
@@ -349,9 +274,9 @@ def enqueue_calendar_reminders(days: int = 45) -> int:
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT e.*, au.email
+            SELECT e.*
             FROM events e
-            JOIN allowed_users au ON au.id = e.user_id
+            JOIN workspaces w ON w.id = e.workspace_id
             WHERE NULLIF(TRIM(e.event_date::text), '') IS NOT NULL
               AND TRIM(e.event_date::text) ~ '^\\d{4}-\\d{2}-\\d{2}'
             ORDER BY e.event_date ASC
@@ -362,7 +287,6 @@ def enqueue_calendar_reminders(days: int = 45) -> int:
             event_dt = _parse_event_datetime(event.get("event_date"))
             if not event_dt or event_dt < today or event_dt > limit:
                 continue
-            user_id = int(event["user_id"])
             title = str(event.get("title") or "Compromiso")
             for label, delta in (("mañana", timedelta(days=1)), ("30min", timedelta(minutes=30))):
                 scheduled = event_dt - delta
@@ -379,7 +303,7 @@ def enqueue_calendar_reminders(days: int = 45) -> int:
                     RETURNING id
                     """,
                     (
-                        user_id,
+                        event.get("user_id"),
                         str(event["workspace_id"]),
                         "Recordatorio de calendario",
                         body,
@@ -405,9 +329,9 @@ def enqueue_fixed_expense_reminders() -> int:
     with get_connection() as conn:
         expenses = conn.execute(
             """
-            SELECT fe.*, au.email
+            SELECT fe.*
             FROM fixed_expenses fe
-            JOIN allowed_users au ON au.id = fe.user_id
+            JOIN workspaces w ON w.id = fe.workspace_id
             WHERE fe.is_active = TRUE AND fe.due_day IS NOT NULL
             """
         ).fetchall()
@@ -432,7 +356,8 @@ def enqueue_fixed_expense_reminders() -> int:
                         RETURNING id
                         """,
                         (
-                            int(expense["user_id"]),
+                            expense.get("user_id"),
+                            str(expense["workspace_id"]),
                             "Pago recurrente",
                             body,
                             scheduled,
