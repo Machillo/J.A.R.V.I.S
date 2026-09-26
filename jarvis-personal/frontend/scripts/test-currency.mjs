@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import {
   baseCurrency, entryCurrencies, entryCurrencyPayload, entryFormAmount, formatMoney,
   latestUserRate, setBaseCurrency, toBaseAmount,
@@ -57,4 +57,16 @@ for (const [name, text] of [["Finance", finance], ["Transactions", history]]) {
   assert.doesNotMatch(text, /<b>₡<\/b>/, `${name} does not hardcode the ₡ symbol`);
 }
 assert.match(source("users/UsersApp.jsx"), /setBaseCurrency\(user\?\.base_currency\)/);
+
+// No Users screen hardcodes colones: a USD account must not see ₡ on its own money.
+// (GmailAutomation formats each bank movement in its own currency; Settings shows store prices.)
+const walk = (dir) => readdirSync(new URL(`../src/${dir}`, import.meta.url)).flatMap((name) => {
+  const path = `${dir}/${name}`;
+  return statSync(new URL(`../src/${path}`, import.meta.url)).isDirectory() ? walk(path) : [path];
+});
+for (const path of [...walk("users"), ...walk("products/finva")].filter((file) => file.endsWith(".jsx"))) {
+  const text = source(path);
+  assert.doesNotMatch(text, /currency: ?"CRC", ?currencyDisplay/, `${path} hardcodes a CRC formatter`);
+  assert.doesNotMatch(text, /placeholder="₡0"|<b>₡<\/b>/, `${path} hardcodes the ₡ symbol`);
+}
 console.log("currency tests passed");

@@ -1,5 +1,6 @@
 import { AlertTriangle, Banknote, X } from "lucide-react";
 import { tx } from "../../lib/locale";
+import { currencySymbol } from "../../lib/currency";
 import { useFinvaBackHandler } from "../../products/finva/navigation/useFinvaNavigation";
 
 function DialogFrame({ title, description, icon: Icon, tone = "primary", children, onClose, busy }) {
@@ -49,7 +50,7 @@ export function AmountDialog({
         <label>
           <span>{tx("Monto", "Amount")}</span>
           <div className="finva-money-input">
-            <b>₡</b>
+            <b>{currencySymbol()}</b>
             <input
               autoFocus
               required

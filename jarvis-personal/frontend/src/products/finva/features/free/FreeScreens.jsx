@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, CircleHelp, Clock3, History, Landmark, PiggyBank, ReceiptText, ShieldCheck, WalletCards } from "lucide-react";
 import AppearanceSelector from "../../../../components/AppearanceSelector";
 import AccountActions from "../../components/AccountActions";
-import { deviceLanguage, localeTag } from "../../../../lib/locale";
+import { deviceLanguage } from "../../../../lib/locale";
+import { formatMoney } from "../../../../lib/currency";
 import { getSavingsPlans } from "../../../../users/services/jarvisApi";
 
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:0 }).format(Number(value) || 0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value);
 
 function MenuRow({ icon: Icon, title, subtitle, onClick, danger = false }) {
   return <button className={`free-menu-row ${danger ? "danger" : ""}`} type="button" onClick={onClick}>

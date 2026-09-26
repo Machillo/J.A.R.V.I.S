@@ -2,16 +2,14 @@ import { ChevronRight, Crown, PiggyBank, Sparkles, TrendingDown, TrendingUp, Wal
 import { useEffect, useMemo, useState } from "react";
 import { getBasicDashboard, getBudget, getFinancialCalendar, getFreeDashboard } from "../../../../users/services/jarvisApi";
 import "./overview.css";
-import { codeLabel, deviceLanguage, localeTag } from "../../../../lib/locale";
+import { codeLabel, deviceLanguage } from "../../../../lib/locale";
+import { formatMoney } from "../../../../lib/currency";
 import { categoryLabel } from "../../../../lib/categories";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
-const money = (value) => new Intl.NumberFormat(localeTag(language), {
-  style: "currency",
-  currency: "CRC", currencyDisplay: "narrowSymbol",
-  maximumFractionDigits: 0,
-}).format(Number(value) || 0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value);
 
 const change = (value) => `${Number(value) >= 0 ? "+" : ""}${money(value)}`;
 const currentPeriod = () => new Date().toISOString().slice(0, 7);

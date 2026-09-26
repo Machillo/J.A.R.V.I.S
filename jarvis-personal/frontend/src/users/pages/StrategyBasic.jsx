@@ -14,18 +14,15 @@ import {
   simulateStrategyBasic,
   simulateStrategyVip,
 } from "../services/jarvisApi";
-import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import { deviceLanguage, tx } from "../../lib/locale";
+import { formatMoney } from "../../lib/currency";
 import StrategyOptionalActions from "../components/StrategyOptionalActions";
 
 const language = deviceLanguage();
 const copy = (es, en) => tx(es, en, language);
 
-const money = (value) =>
-  new Intl.NumberFormat(localeTag(language), {
-    style: "currency",
-    currency: "CRC", currencyDisplay: "narrowSymbol",
-    maximumFractionDigits: 0,
-  }).format(Number(value) || 0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value);
 
 const priorityLabel = {
   income: copy("Completar ingresos", "Complete income details"),

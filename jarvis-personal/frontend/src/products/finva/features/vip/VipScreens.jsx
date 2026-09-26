@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, ChevronRight, Mail, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { codeLabel, deviceLanguage, localeTag } from "../../../../lib/locale";
+import { formatMoney } from "../../../../lib/currency";
 import AccountActions from "../../components/AccountActions";
 import {
   captureVipLifecycleSnapshot,
@@ -18,9 +19,8 @@ import {
 
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
-const money = (value) => new Intl.NumberFormat(localeTag(language), {
-  style: "currency", currency: "CRC", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0,
-}).format(Number(value) || 0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value);
 const percent = (value) => `${Math.round(Number(value) || 0)}%`;
 
 function VipHeader({ title, user, onNavigate }) {
