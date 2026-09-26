@@ -54,7 +54,7 @@ class ProfileSetupRequest(BaseModel):
     # New onboarding offers only the currencies DINCR supports end to end. Accounts
     # that stored another currency earlier keep it: nothing here rewrites them.
     base_currency: Literal["CRC", "USD"] = "CRC"
-    enabled_currencies: list[Literal["CRC", "USD"]] = Field(default_factory=lambda: ["CRC"], min_length=1, max_length=2)
+    enabled_currencies: list[Literal["CRC", "USD"]] = Field(default_factory=lambda: ["CRC"], min_length=1)
     number_format: Literal["dot_comma", "comma_dot"] = "dot_comma"
     currency_placement: Literal["before", "after"] = "before"
     selected_financial_institutions: list[Literal[
