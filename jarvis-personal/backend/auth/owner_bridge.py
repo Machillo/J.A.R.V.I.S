@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import Header, HTTPException, status
 
+from backend.auth import owner_role
 from backend.core.database import get_connection
 from backend.auth.workspace_context import resolve_personal_workspace_context
 
@@ -55,7 +56,7 @@ def verify_personal_owner(personal_supabase_user_id: str) -> dict:
         )
     if row["status"] != "active":
         raise HTTPException(status_code=403, detail="La identidad Personal no está activa.")
-    if row["role"] != "owner":
+    if row["role"] != "owner" or not owner_role.owner_enabled(row.get("email")):
         raise HTTPException(status_code=403, detail="La identidad Personal no tiene rol owner.")
 
     return {
@@ -122,7 +123,7 @@ def authenticate_owner_bridge_token(token: str) -> dict:
             (allowed_user_id, personal_uid),
         ).fetchone()
 
-        if not row or row["status"] != "active" or row["role"] != "owner":
+        if not row or row["status"] != "active" or row["role"] != "owner" or not owner_role.owner_enabled(row.get("email")):
             raise HTTPException(status_code=403, detail="La identidad owner de Personal ya no está autorizada.")
 
         workspace_context = resolve_personal_workspace_context(conn, int(row["id"]))
