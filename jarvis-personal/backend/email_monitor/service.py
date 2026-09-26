@@ -94,244 +94,6 @@ def build_current_month_gmail_query(base_query: str | None = None, today: date |
     return f"{base} after:{start:%Y/%m/%d} before:{before:%Y/%m/%d}".strip()
 
 
-def ensure_email_tables(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS email_monitor_settings (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL UNIQUE,
-            enabled BOOLEAN NOT NULL DEFAULT TRUE,
-            auto_commit_confidence NUMERIC NOT NULL DEFAULT 0.90,
-            monitored_senders TEXT[] NOT NULL DEFAULT ARRAY['bac','credomatic','popular','multimoney'],
-            gmail_query TEXT NOT NULL DEFAULT '',
-            last_scan_at TIMESTAMPTZ,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS email_ingested_messages (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            provider TEXT NOT NULL DEFAULT 'gmail',
-            provider_message_id TEXT,
-            fingerprint TEXT NOT NULL,
-            sender TEXT,
-            subject TEXT,
-            received_at TIMESTAMPTZ,
-            bank TEXT,
-            status TEXT NOT NULL DEFAULT 'processed',
-            raw_excerpt TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, fingerprint),
-            UNIQUE(workspace_id, provider, provider_message_id)
-        )
-        """
-    )
-    for ddl in [
-        "ALTER TABLE email_monitor_settings ADD COLUMN IF NOT EXISTS gmail_history_id TEXT",
-        "ALTER TABLE email_monitor_settings ADD COLUMN IF NOT EXISTS gmail_watch_expiration TIMESTAMPTZ",
-        "ALTER TABLE email_monitor_settings ADD COLUMN IF NOT EXISTS gmail_watch_topic TEXT",
-        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS raw_body TEXT",
-        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS body_text TEXT",
-        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS attachment_names TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]",
-        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS attachment_count INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE email_ingested_messages ADD COLUMN IF NOT EXISTS parse_reason TEXT",
-    ]:
-        conn.execute(ddl)
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS email_transaction_candidates (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            email_message_id BIGINT REFERENCES email_ingested_messages(id) ON DELETE CASCADE,
-            fingerprint TEXT NOT NULL,
-            transaction_id BIGINT,
-            transaction_date DATE NOT NULL,
-            description TEXT NOT NULL,
-            amount NUMERIC NOT NULL,
-            transaction_type TEXT NOT NULL,
-            category TEXT NOT NULL,
-            account TEXT DEFAULT '',
-            source TEXT NOT NULL DEFAULT 'email_monitor',
-            notes TEXT DEFAULT '',
-            original_amount NUMERIC,
-            original_currency TEXT,
-            exchange_rate NUMERIC,
-            confidence NUMERIC NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'pending',
-            review_reason TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, fingerprint)
-        )
-        """
-    )
-
-    for ddl in [
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS card_last4 TEXT",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS card_owner TEXT",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS billing_cycle_start DATE",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS billing_cycle_end DATE",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS dedupe_key TEXT",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS duplicate_of BIGINT",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS canonical_transaction_id BIGINT",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS transaction_time TIME",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS raw_description TEXT",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS normalized_description TEXT",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS auto_commit_allowed BOOLEAN NOT NULL DEFAULT FALSE",
-        "ALTER TABLE email_transaction_candidates ADD COLUMN IF NOT EXISTS personal_rule_id BIGINT",
-    ]:
-        conn.execute(ddl)
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_email_candidates_card_cycle
-        ON email_transaction_candidates(workspace_id, card_last4, billing_cycle_start, billing_cycle_end)
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_email_candidates_dedupe
-        ON email_transaction_candidates(workspace_id, transaction_date, amount, transaction_type, status)
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_email_candidates_semantic_dedupe
-        ON email_transaction_candidates(user_id, transaction_date, amount, transaction_time, status)
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS email_statement_documents (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            email_message_id BIGINT REFERENCES email_ingested_messages(id) ON DELETE CASCADE,
-            bank TEXT NOT NULL,
-            subject TEXT,
-            statement_month TEXT,
-            received_at TIMESTAMPTZ,
-            attachment_names TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
-            extracted_text_excerpt TEXT,
-            extracted_text TEXT,
-            status TEXT NOT NULL DEFAULT 'pending_reconciliation',
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, email_message_id)
-        )
-        """
-    )
-    conn.execute("ALTER TABLE email_statement_documents ADD COLUMN IF NOT EXISTS extracted_text TEXT")
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS payroll_salary_reports (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            workspace_id UUID NOT NULL,
-            email_message_id BIGINT REFERENCES email_ingested_messages(id) ON DELETE SET NULL,
-            provider_message_id TEXT,
-            period_month TEXT NOT NULL,
-            reported_salary NUMERIC NOT NULL,
-            trans_previous_salary NUMERIC,
-            previous_salary NUMERIC,
-            daily_subsidy NUMERIC,
-            employer_number TEXT,
-            verification_code TEXT,
-            source TEXT NOT NULL DEFAULT 'ccss_order_patronal',
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, period_month),
-            UNIQUE(workspace_id, provider_message_id)
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS card_aliases (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            card_last4 TEXT NOT NULL,
-            owner_label TEXT NOT NULL,
-            relationship TEXT,
-            is_primary BOOLEAN NOT NULL DEFAULT FALSE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, card_last4)
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_card_aliases_user
-        ON card_aliases(user_id)
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS credit_card_settings (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL DEFAULT 1,
-            name TEXT NOT NULL DEFAULT 'BAC tarjetas',
-            cut_day INTEGER NOT NULL DEFAULT 21,
-            payment_day INTEGER NOT NULL DEFAULT 5,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    for ddl in [
-        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS bank TEXT NOT NULL DEFAULT 'bac'",
-        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS card_last4 TEXT",
-        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS owner_label TEXT",
-        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
-        "ALTER TABLE credit_card_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
-    ]:
-        conn.execute(ddl)
-    conn.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_card_settings_user_bank_card
-        ON credit_card_settings(user_id, bank, card_last4)
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS email_parser_logs (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            email_message_id BIGINT,
-            provider_message_id TEXT,
-            sender TEXT,
-            subject TEXT,
-            bank TEXT,
-            action TEXT NOT NULL,
-            result TEXT,
-            reason TEXT,
-            extracted_payload JSONB,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    for ddl in [
-        "ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS email_message_id BIGINT",
-        "ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS result TEXT",
-        "ALTER TABLE email_parser_logs ADD COLUMN IF NOT EXISTS extracted_payload JSONB",
-    ]:
-        conn.execute(ddl)
-
-    for table_name in [
-        "email_monitor_settings",
-        "email_ingested_messages",
-        "email_transaction_candidates",
-        "email_statement_documents",
-        "card_aliases",
-        "email_parser_logs",
-    ]:
-        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS workspace_id UUID")
-
-
 def _owner_user_id(conn) -> int | None:
     if not OWNER_EMAIL:
         raise RuntimeError("OWNER_EMAIL no está configurado.")
@@ -346,7 +108,6 @@ def _owner_user_id(conn) -> int | None:
         (OWNER_EMAIL,),
     ).fetchone()
     return int(row["id"]) if row else None
-
 
 
 def _workspace_id_for_user(conn, user_id: int) -> str:
@@ -793,7 +554,6 @@ def get_email_monitor_status() -> dict[str, Any]:
         workspace_id = _workspace_id_for_user(conn, user_id)
 
     with get_connection() as conn:
-        ensure_email_tables(conn)
         _seed_default_card_aliases(conn, user_id, workspace_id)
         settings = conn.execute(
             """
@@ -873,37 +633,6 @@ def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transactio
     if not payer:
         return
     try:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS receivables (
-                id BIGSERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL DEFAULT 1,
-                person_name TEXT NOT NULL,
-                original_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-                paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-                pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-                status TEXT NOT NULL DEFAULT 'pending',
-                notes TEXT,
-                source_type TEXT NOT NULL DEFAULT 'manual',
-                source_key TEXT,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS receivable_payments (
-                id BIGSERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL DEFAULT 1,
-                receivable_id BIGINT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,
-                amount NUMERIC(14,2) NOT NULL,
-                source_transaction_id BIGINT,
-                notes TEXT,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-            """
-        )
         rec = conn.execute(
             """
             SELECT id, original_amount, paid_amount, pending_amount
@@ -1129,8 +858,6 @@ def _candidate_duplicate_match(conn, workspace_id: str, candidate: dict[str, Any
             return row
 
     return find_semantic_duplicate(conn, workspace_id, candidate, current_fingerprint)
-
-
 
 
 def _repair_orphan_duplicate_links(conn, workspace_id: str) -> int:
@@ -1359,7 +1086,6 @@ def scan_email_text(
 
     if payroll_report:
         with get_connection() as conn:
-            ensure_email_tables(conn)
             workspace_id = _workspace_id_for_user(conn, user_id)
             email_message_id = _upsert_ingested_message(
                 conn, user_id=user_id, provider_message_id=provider_message_id,
@@ -1428,7 +1154,6 @@ def scan_email_text(
     parsed["attachment_names"] = attachment_names
 
     with get_connection() as conn:
-        ensure_email_tables(conn)
         workspace_id = _workspace_id_for_user(conn, user_id)
         parsed = apply_workspace_email_rules(conn, workspace_id, parsed)
         email_message_id = _upsert_ingested_message(
@@ -1900,7 +1625,6 @@ def list_email_candidates(status_filter: str | None = None, limit: int = 250) ->
     params.append(safe_limit)
 
     with get_connection() as conn:
-        ensure_email_tables(conn)
         _seed_default_card_aliases(conn, user_id, workspace_id)
         rows = conn.execute(
             f"""
@@ -1950,7 +1674,6 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
     decision_clean = (decision or "").lower().strip()
 
     with get_connection() as conn:
-        ensure_email_tables(conn)
         row = conn.execute(
             """
             SELECT *
@@ -2068,7 +1791,6 @@ def classify_candidate(
 
     with get_connection() as conn:
         workspace_id = _workspace_id_for_user(conn, user_id)
-        ensure_email_tables(conn)
         row = conn.execute(
             "SELECT * FROM email_transaction_candidates WHERE id = %s AND workspace_id = %s",
             (candidate_id, workspace_id),
@@ -2182,7 +1904,6 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
     items: list[dict[str, Any]] = []
 
     with get_connection() as conn:
-        ensure_email_tables(conn)
         placeholders = ",".join(["%s"] * len(unique_ids))
         rows = conn.execute(
             f"""
