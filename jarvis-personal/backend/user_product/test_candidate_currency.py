@@ -12,7 +12,9 @@ from decimal import Decimal
 import pytest
 from fastapi import HTTPException
 
+from backend.email_monitor.parser import parse_financial_email
 from backend.user_product import gmail_service
+from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.candidate_currency import native_money, transaction_amounts
 from backend.user_product.models import GmailCandidateReviewRequest
 from backend.user_product.test_gmail_accept import FakeConnection, FakeDatabase, signed_in  # noqa: F401
@@ -28,6 +30,22 @@ def test_a_usd_movement_is_worth_its_usd_amount_whatever_the_parser_converted():
     assert native_money(MULTIMONEY_USD) == ("USD", Decimal("50.00"))
     assert native_money({"amount": 18500, "currency": "CRC"}) == ("CRC", Decimal("18500.00"))
     assert native_money({"amount": 18500}) == ("CRC", Decimal("18500.00"))
+
+
+def test_a_bac_usd_notification_is_worth_its_usd_amount_in_gmail_and_outlook():
+    body = (  # synthetic BAC card notification
+        "Hola CLIENTE PRUEBA:\nA continuación le detallamos la transacción realizada:\n"
+        "Comercio:\nHOSTING EJEMPLO\nCiudad y país:\nSAN FRANCISCO, USA\n"
+        "Fecha:\nSep 22, 2026, 10:15\nVISA\n************1234\nAutorización:\n123456\n"
+        "Referencia:\n000011112222\nTipo de Transacción:\nCOMPRA\nMonto:\nUSD 21.00"
+    )
+    parsed = parse_financial_email("Notificación de transacción", "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+                                   body, "2026-09-22T16:15:00Z")
+    assert (parsed["original_amount"], parsed["original_currency"]) == (21.0, "USD")
+    assert parsed["amount"] == 10395.0, "the parser still converts at its default 495: that number is not trusted"
+    for provider in ("gmail", "microsoft"):
+        candidate = canonical_candidate(parsed, provider_message_id="m-1", subject="Compra", source_provider=provider)
+        assert native_money(candidate) == ("USD", Decimal("21.00")), provider
 
 
 def test_conversion_needs_the_users_rate_and_never_guesses():
