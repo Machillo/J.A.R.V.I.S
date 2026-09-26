@@ -25,9 +25,11 @@ BACKEND = Path(__file__).resolve().parents[1]
 # test_financial_ownership_integrity.py::test_no_backend_query_decides_by_legacy_user_id.
 PATTERNS = {
     # An account found from a legacy id instead of its own id or Supabase id.
-    "account_by_legacy_id": re.compile(r"legacy_allowed_user_id\s*(?:=|IN)\s*(?:%s|ANY|[a-z_]+\.id\b)", re.I),
+    "account_by_legacy_id": re.compile(
+        r"legacy_allowed_user_id\s*(?:=|IN)\s*(?:%s|ANY|\(?\s*SELECT|[a-z_]+\.id\b)"
+        r"|(?:%s|[a-z_]+\.id)\s*=\s*(?:[a-z_]+\.)?legacy_allowed_user_id\b", re.I),
     # The legacy users table (a second id space) read at runtime.
-    "read_users_table": re.compile(r"\bFROM\s+(?:public\.)?users\b", re.I),
+    "read_users_table": re.compile(r"\b(?:FROM|JOIN)\s+(?:public\.)?users\b", re.I),
 }
 
 REMAINING = {
@@ -87,5 +89,8 @@ def test_the_patterns_recognise_what_they_guard():
     }
     for name, sample in samples.items():
         assert PATTERNS[name].search(sample), name
+    assert PATTERNS["account_by_legacy_id"].search("JOIN accounts a ON u.id = a.legacy_allowed_user_id")
+    assert PATTERNS["account_by_legacy_id"].search("WHERE legacy_allowed_user_id IN (SELECT id FROM allowed_users)")
+    assert PATTERNS["read_users_table"].search("SELECT u.id FROM accounts a JOIN public.users u ON true")
     assert not PATTERNS["account_by_legacy_id"].search("SELECT legacy_allowed_user_id FROM accounts WHERE id=%s")
     assert not PATTERNS["read_users_table"].search("FROM allowed_users WHERE id = %s")

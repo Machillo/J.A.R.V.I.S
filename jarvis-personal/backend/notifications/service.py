@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
+
+import psycopg2
 
 try:
     from pywebpush import WebPushException, webpush
@@ -16,8 +19,14 @@ except Exception:  # pragma: no cover - keeps backend alive if dependency is not
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 
+logger = logging.getLogger(__name__)
+
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
+# A reminder is useful only near its time: a job older than this is never delivered
+# (it stays pending, untouched), so a scheduler outage does not end in a burst of
+# stale pushes such as "starts in 30 minutes" for a past event.
+MAX_DELIVERY_DELAY_HOURS = 12
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.invalid").strip()
 
 
@@ -266,10 +275,37 @@ def _parse_event_datetime(event_date: str | None) -> datetime | None:
     return None
 
 
+# A reminder only lands in the workspace that owns its source row. Rows are read by
+# workspace (never through the legacy user_id); the legacy value is copied as-is while
+# notification_jobs still carries the column. A row the job table refuses (for
+# example a legacy id outside its foreign key) is skipped and counted, so one bad
+# row never stops the reminders of every other workspace. These sources (events,
+# fixed_expenses) and push subscriptions are written only from Owner-internal routes.
+def _enqueue_job(conn, values: tuple, skipped: list[int]) -> bool:
+    conn.execute("SAVEPOINT reminder_job")
+    try:
+        row = conn.execute(
+            """
+            INSERT INTO notification_jobs (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            ON CONFLICT (workspace_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
+            RETURNING id
+            """,
+            values,
+        ).fetchone()
+    except psycopg2.IntegrityError:
+        conn.execute("ROLLBACK TO SAVEPOINT reminder_job")
+        skipped.append(1)
+        return False
+    conn.execute("RELEASE SAVEPOINT reminder_job")
+    return bool(row)
+
+
 def enqueue_calendar_reminders(days: int = 45) -> int:
     today = _now()
     limit = today + timedelta(days=days)
     created = 0
+    skipped: list[int] = []
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -295,33 +331,28 @@ def enqueue_calendar_reminders(days: int = 45) -> int:
                 body = f"Señor, {title} está programado para {event.get('event_date')}."
                 if label == "30min":
                     body = f"Señor, {title} inicia en 30 minutos."
-                before_count = conn.execute(
-                    """
-                    INSERT INTO notification_jobs (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
-                    VALUES (%s, %s, %s, %s, 'calendar', %s, 'event', %s, %s, %s::jsonb)
-                    ON CONFLICT (workspace_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
-                    RETURNING id
-                    """,
-                    (
-                        event.get("user_id"),
-                        str(event["workspace_id"]),
-                        "Recordatorio de calendario",
-                        body,
-                        scheduled,
-                        str(event.get("id")),
-                        f"calendar:{event.get('id')}:{label}",
-                        _json({"event": event}),
-                    ),
-                ).fetchone()
-                if before_count:
-                    created += 1
+                created += _enqueue_job(conn, (
+                    event.get("user_id"),
+                    str(event["workspace_id"]),
+                    "Recordatorio de calendario",
+                    body,
+                    "calendar",
+                    scheduled,
+                    "event",
+                    str(event.get("id")),
+                    f"calendar:{event.get('id')}:{label}",
+                    _json({"event": event}),
+                ), skipped)
         conn.commit()
+    if skipped:
+        logger.warning("calendar reminders skipped: %d", len(skipped))
     return created
 
 
 def enqueue_fixed_expense_reminders() -> int:
     today = date.today()
     created = 0
+    skipped: list[int] = []
     month_keys = [f"{today.year:04d}-{today.month:02d}"]
     next_month = (today.replace(day=28) + timedelta(days=4)).replace(day=1)
     month_keys.append(f"{next_month.year:04d}-{next_month.month:02d}")
@@ -348,27 +379,21 @@ def enqueue_fixed_expense_reminders() -> int:
                     amount = expense.get("expected_amount")
                     amount_text = f" por ₡{float(amount):,.0f}".replace(",", ".") if amount else ""
                     body = f"Señor, {expense.get('name')} vence el {due.date().isoformat()}{amount_text}."
-                    row = conn.execute(
-                        """
-                        INSERT INTO notification_jobs (user_id, workspace_id, title, body, category, scheduled_at, reference_type, reference_id, dedupe_key, payload)
-                        VALUES (%s, %s, %s, %s, 'fixed_expense', %s, 'fixed_expense', %s, %s, %s::jsonb)
-                        ON CONFLICT (workspace_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
-                        RETURNING id
-                        """,
-                        (
-                            expense.get("user_id"),
-                            str(expense["workspace_id"]),
-                            "Pago recurrente",
-                            body,
-                            scheduled,
-                            str(expense.get("id")),
-                            f"fixed:{expense.get('id')}:{month_key}:{label}",
-                            _json({"fixed_expense": expense, "due_date": due.date().isoformat()}),
-                        ),
-                    ).fetchone()
-                    if row:
-                        created += 1
+                    created += _enqueue_job(conn, (
+                        expense.get("user_id"),
+                        str(expense["workspace_id"]),
+                        "Pago recurrente",
+                        body,
+                        "fixed_expense",
+                        scheduled,
+                        "fixed_expense",
+                        str(expense.get("id")),
+                        f"fixed:{expense.get('id')}:{month_key}:{label}",
+                        _json({"fixed_expense": expense, "due_date": due.date().isoformat()}),
+                    ), skipped)
         conn.commit()
+    if skipped:
+        logger.warning("fixed-expense reminders skipped: %d", len(skipped))
     return created
 
 
@@ -387,10 +412,11 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
             SELECT *
             FROM notification_jobs
             WHERE status = 'pending' AND scheduled_at <= NOW()
+              AND scheduled_at > NOW() - make_interval(hours => %s)
             ORDER BY scheduled_at ASC
             LIMIT %s
             """,
-            (limit,),
+            (MAX_DELIVERY_DELAY_HOURS, limit),
         ).fetchall()
 
         sent_jobs = 0
