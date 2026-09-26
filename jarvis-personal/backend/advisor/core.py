@@ -10,7 +10,7 @@ import json
 from datetime import date, datetime, timezone
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id, get_current_workspace_id
+from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.schema_state import tables_exist
 from backend.finance.deterioration import get_financial_deterioration
@@ -71,7 +71,6 @@ STRATEGY_TABLES = ("advisor_current_strategy", "advisor_strategy_history")
 
 def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
-    user_id = get_current_user_id()
     stable_strategy = {key: value for key, value in strategy.items() if key != "generated_at"}
     canonical = json.dumps(stable_strategy, ensure_ascii=False, sort_keys=True, default=str)
     fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -87,22 +86,21 @@ def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
         if changed:
             conn.execute("""
                 INSERT INTO advisor_strategy_history(
-                    workspace_id,user_id,advisor_version,strategy_hash,strategy
-                ) VALUES(%s,%s,%s,%s,%s::jsonb)
-            """, (workspace_id, user_id, ADVISOR_VERSION, fingerprint, canonical))
+                    workspace_id,advisor_version,strategy_hash,strategy
+                ) VALUES(%s,%s,%s,%s::jsonb)
+            """, (workspace_id, ADVISOR_VERSION, fingerprint, canonical))
         conn.execute("""
             INSERT INTO advisor_current_strategy(
-                workspace_id,user_id,advisor_version,strategy_hash,strategy
-            ) VALUES(%s,%s,%s,%s,%s::jsonb)
+                workspace_id,advisor_version,strategy_hash,strategy
+            ) VALUES(%s,%s,%s,%s::jsonb)
             ON CONFLICT(workspace_id) DO UPDATE SET
-                user_id=EXCLUDED.user_id,
                 advisor_version=EXCLUDED.advisor_version,
                 strategy_hash=EXCLUDED.strategy_hash,
                 strategy=EXCLUDED.strategy,
                 generated_at=NOW(),
                 updated_at=NOW()
             RETURNING workspace_id
-        """, (workspace_id, user_id, ADVISOR_VERSION, fingerprint, canonical))
+        """, (workspace_id, ADVISOR_VERSION, fingerprint, canonical))
         conn.commit()
     return {"strategy_hash": fingerprint, "changed": changed, "persisted": True}
 

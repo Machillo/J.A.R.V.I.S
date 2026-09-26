@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id, get_current_workspace_id
+from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 
 MEMORY_CATEGORIES = {
@@ -77,7 +77,6 @@ def _extract_memory_text(user_message: str) -> str:
 
 
 def list_memory_items(category: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     limit = max(1, min(int(limit or 100), 250))
 
@@ -110,7 +109,6 @@ def list_memory_items(category: str | None = None, limit: int = 100) -> list[dic
 
 
 def search_memory_items(query: str, limit: int = 10) -> list[dict[str, Any]]:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     query = _clean_text(query)
     limit = max(1, min(int(limit or 10), 50))
@@ -162,7 +160,6 @@ def create_memory_item(
     source: str = "manual",
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     content = _clean_text(content)
     if not content:
@@ -206,10 +203,10 @@ def create_memory_item(
 
         cursor = conn.execute(
             """
-            INSERT INTO memory_items (user_id, workspace_id, category, title, content, importance, source, metadata)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            INSERT INTO memory_items (workspace_id, category, title, content, importance, source, metadata)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
             """,
-            (user_id, workspace_id, category, title, content, importance, source, _json(metadata)),
+            (workspace_id, category, title, content, importance, source, _json(metadata)),
         )
         conn.commit()
 
@@ -228,7 +225,6 @@ def remember_from_message(user_message: str) -> dict[str, Any]:
 
 
 def forget_memory_item(memory_id: int) -> dict[str, Any]:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         result = conn.execute(
@@ -244,7 +240,6 @@ def forget_memory_item(memory_id: int) -> dict[str, Any]:
 
 
 def get_profile_preferences() -> dict[str, Any]:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         row = conn.execute(
@@ -264,7 +259,6 @@ def get_profile_preferences() -> dict[str, Any]:
 
 
 def update_profile_preferences(payload: dict[str, Any]) -> dict[str, Any]:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     current = get_profile_preferences()
     allowed = set(DEFAULT_PROFILE_PREFERENCES.keys()) | {"display_name", "timezone", "language", "avatar_data_url"}
@@ -274,12 +268,12 @@ def update_profile_preferences(payload: dict[str, Any]) -> dict[str, Any]:
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO user_preferences (user_id, workspace_id, preference_key, preference_value)
-            VALUES (%s, %s, 'profile', %s::jsonb)
+            INSERT INTO user_preferences (workspace_id, preference_key, preference_value)
+            VALUES (%s, 'profile', %s::jsonb)
             ON CONFLICT (workspace_id, preference_key)
             DO UPDATE SET preference_value = EXCLUDED.preference_value, updated_at = NOW()
             """,
-            (user_id, workspace_id, _json(merged)),
+            (workspace_id, _json(merged)),
         )
         conn.commit()
 
