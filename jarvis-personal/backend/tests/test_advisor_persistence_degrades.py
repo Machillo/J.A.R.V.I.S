@@ -38,7 +38,6 @@ def test_strategy_is_not_persisted_and_history_is_empty_without_the_tables(monke
     connection = _Connection()
     monkeypatch.setattr(core, "get_connection", lambda: connection)
     monkeypatch.setattr(core, "get_current_workspace_id", lambda: "workspace-a")
-    monkeypatch.setattr(core, "get_current_user_id", lambda: 1)
     result = core._persist_strategy({"summary": "synthetic"})
     assert result["persisted"] is False and result["changed"] is False and result["strategy_hash"]
     assert core.get_strategy_history() == []
@@ -59,7 +58,7 @@ def test_the_current_strategy_upsert_returns_its_key(monkeypatch):
     connection = _PresentConnection()
     monkeypatch.setattr(core, "get_connection", lambda: connection)
     monkeypatch.setattr(core, "get_current_workspace_id", lambda: "workspace-a")
-    monkeypatch.setattr(core, "get_current_user_id", lambda: 1)
     assert core._persist_strategy({"summary": "synthetic"})["changed"] is True
     upsert = next(q for q in connection.queries if q.startswith("INSERT INTO advisor_current_strategy"))
     assert upsert.endswith("RETURNING workspace_id")
+    assert all("user_id" not in q for q in connection.queries if q.startswith("INSERT")), "ownership is workspace_id only"

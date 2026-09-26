@@ -95,7 +95,6 @@ def test_a_required_user_id_from_the_superseded_migration_becomes_optional(db):
 
 def test_advisor_persistence_is_per_workspace_through_the_real_wrapper(db, monkeypatch):
     db.execute(MIGRATION.read_text(encoding="utf-8"))
-    monkeypatch.setattr(core, "get_current_user_id", lambda: 1)
     for workspace, strategy in ((WS_A, {"plan": "a"}), (WS_B, {"plan": "b"})):
         monkeypatch.setattr(core, "get_current_workspace_id", lambda workspace=workspace: workspace)
         first = core._persist_strategy(strategy)
@@ -106,3 +105,6 @@ def test_advisor_persistence_is_per_workspace_through_the_real_wrapper(db, monke
     assert [row["strategy"] for row in history] == [{"plan": "a"}]
     db.execute("SELECT count(*) FROM advisor_current_strategy")
     assert db.fetchone() == (2,)
+    db.execute("""SELECT (SELECT count(*) FROM advisor_current_strategy WHERE user_id IS NOT NULL)
+                       + (SELECT count(*) FROM advisor_strategy_history WHERE user_id IS NOT NULL)""")
+    assert db.fetchone() == (0,)  # the legacy user_id is never written
