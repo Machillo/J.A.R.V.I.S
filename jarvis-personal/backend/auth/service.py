@@ -14,6 +14,7 @@ from fastapi import HTTPException, status
 from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.auth.workspace_context import resolve_personal_workspace_context, sync_account_auth_identity
+from backend.auth import owner_role
 from backend.auth.saas import enrich_identity
 
 
@@ -23,7 +24,6 @@ SUPABASE_ADMIN_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABA
 
 VALID_ROLES = {"owner", "admin", "user", "viewer"}
 VALID_STATUSES = {"active", "blocked", "pending"}
-OWNER_EMAILS = {email.strip().lower() for email in os.getenv("OWNER_EMAILS", "").split(",") if email.strip()}
 logger = logging.getLogger(__name__)
 
 DELETION_STAGES = (
@@ -748,12 +748,15 @@ def _recent(value) -> bool:
     return datetime.now(timezone.utc) - seen < LOGIN_REFRESH
 
 
-def _identity_fresh(app_user: dict, account_rows: list, token_auth_id: str, effective_role: str) -> bool:
-    """True when every identity row is already bound to this Auth user, with this role, seen recently."""
+def _identity_fresh(app_user: dict, account_rows: list, token_auth_id: str) -> bool:
+    """True when every identity row is already bound to this Auth user and was seen recently.
+
+    Login writes only the binding and last_login_at (never the role, see owner_role),
+    so the role plays no part in whether those writes can be skipped.
+    """
     rows = [app_user, *account_rows]
     return bool(account_rows) and all(
         _auth_id(row.get("supabase_user_id")) == token_auth_id
-        and row.get("role") == effective_role
         and _recent(row.get("last_login_at"))
         for row in rows
     )
@@ -817,7 +820,7 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
             return {
                 "id": app_user["id"],
                 "email": app_user["email"],
-                "role": app_user["role"],
+                "role": owner_role.session_role(app_user["role"], app_user["email"]),
                 "status": app_user["status"],
                 "supabase_user_id": supabase_user["supabase_user_id"],
             }
@@ -828,27 +831,28 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
                 detail="Tu usuario no está activo.",
             )
 
-        effective_role = "owner" if app_user["email"] in OWNER_EMAILS else app_user["role"]
+        # The stored role decides; OWNER_EMAILS only gates it (backend/auth/owner_role.py).
+        effective_role = owner_role.effective_role(app_user["role"], app_user["email"], account_ref=app_user["id"])
 
-        # Already bound to this Auth user with the same role and seen recently: the
+        # Already bound to this Auth user and seen recently: the
         # binding cannot change (only the same id may bind), so skip the two writes
         # every request would otherwise make just to refresh last_login_at. They
         # took row locks that serialized the app's parallel requests of one user.
-        fresh = _identity_fresh(app_user, account_rows, token_auth_id, effective_role)
+        fresh = _identity_fresh(app_user, account_rows, token_auth_id)
 
         # Conditional binds: a concurrent login that bound another id wins and
         # this one fails closed (the connection rolls back on the exception).
+        # The role is never written here: login cannot promote or demote anyone.
         bound = fresh or conn.execute(
             """
             UPDATE allowed_users
             SET supabase_user_id = %s,
-                role = %s,
                 last_login_at = NOW()
             WHERE id = %s
               AND (supabase_user_id IS NULL OR lower(trim(supabase_user_id)) = %s)
             RETURNING id
             """,
-            (supabase_user["supabase_user_id"], effective_role, app_user["id"], token_auth_id),
+            (supabase_user["supabase_user_id"], app_user["id"], token_auth_id),
         ).fetchone()
         if not bound:
             raise _identity_rejected(app_user["id"], "concurrent_bind")
@@ -856,7 +860,6 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
             conn,
             legacy_allowed_user_id=int(app_user["id"]),
             supabase_user_id=supabase_user["supabase_user_id"],
-            effective_role=effective_role,
         )
         if synced < len(account_rows):
             raise _identity_rejected(app_user["id"], "concurrent_bind")

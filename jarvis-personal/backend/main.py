@@ -238,7 +238,17 @@ async def auth_middleware(request: Request, call_next):
                 },
                 headers={**cors_headers, "X-Request-ID": request_id},
             )
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Same redaction as authenticated paths: an escaping exception would be
+            # re-raised by Starlette and logged verbatim (URLs with tokens) by uvicorn.
+            logger.error("Unhandled API error id=%s path=%s error=%s", request_id, request.url.path, _safe_exception_summary(exc))
+            return JSONResponse(
+                status_code=500,
+                content=_internal_error_payload(request_id),
+                headers={**cors_headers, "X-Request-ID": request_id},
+            )
         response.headers["X-Request-ID"] = request_id
         return response
 

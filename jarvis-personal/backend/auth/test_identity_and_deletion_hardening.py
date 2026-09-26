@@ -134,18 +134,18 @@ class FakeConnection:
             return [{"supabase_user_id": a["supabase_user_id"], "role": a.get("role"), "last_login_at": a.get("last_login_at")}
                     for a in accounts.values() if a["legacy_allowed_user_id"] == params[0]]
         if sql.startswith("UPDATE allowed_users SET supabase_user_id"):
-            sid, role, uid, expected = params
+            sid, uid, expected = params
             row = w["allowed_users"].get(uid)
             if row and (row["supabase_user_id"] is None or _norm(row["supabase_user_id"]) == expected):
-                row.update(supabase_user_id=sid, role=role)
+                row.update(supabase_user_id=sid)
                 return [{"id": uid}]
             return []
         if sql.startswith("UPDATE accounts SET supabase_user_id"):
-            sid, role, legacy, expected = params
+            sid, legacy, expected = params
             updated = []
             for account in accounts.values():
                 if account["legacy_allowed_user_id"] == legacy and account["supabase_user_id"] in (None, expected):
-                    account.update(supabase_user_id=sid, role=role)
+                    account.update(supabase_user_id=sid)
                     updated.append({"id": account["id"]})
             return updated
         if "FROM accounts a" in sql and "JOIN workspaces" in sql:
@@ -294,7 +294,7 @@ def env(monkeypatch):
     monkeypatch.setattr(auth_service, "SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setattr(auth_service, "SUPABASE_ANON_KEY", "anon-example")
     monkeypatch.setattr(auth_service, "SUPABASE_ADMIN_KEY", "sb_secret_example")
-    monkeypatch.setattr(auth_service, "OWNER_EMAILS", set())
+    monkeypatch.setenv("OWNER_EMAILS", "")
     monkeypatch.setattr(auth_service, "enrich_identity", lambda identity: identity)
     monkeypatch.setattr(auth_service.requests, "get", lambda *a, **k: holder.supabase.get(*a, **k))
     monkeypatch.setattr(auth_service.requests, "delete", lambda *a, **k: holder.supabase.delete(*a, **k))
@@ -465,16 +465,42 @@ def test_concurrent_bind_by_another_id_loses_and_rolls_back(env, race_on):
 
 
 def test_owner_email_with_a_different_auth_id_is_rejected_and_role_not_rewritten(env, monkeypatch):
-    monkeypatch.setattr(auth_service, "OWNER_EMAILS", {EMAIL})
+    env.db = FakeDB(_state(role="owner"))
+    monkeypatch.setenv("OWNER_EMAILS", EMAIL)
     env.supabase.auth_users.add(NEW_AUTH_ID)
     with pytest.raises(HTTPException) as error:
         _login(env, NEW_AUTH_ID)
     assert error.value.status_code == 403
-    assert env.db.state["allowed_users"][42]["role"] == "user"
-    assert env.db.state["accounts"][ACCOUNT_ID]["role"] == "user"
     assert env.db.writes() == []
-    # The bound Owner identity keeps its effective role.
+    # The bound Owner identity keeps its role.
     assert _login(env)["role"] == "owner"
+
+
+def test_being_listed_never_makes_a_user_an_owner(env, monkeypatch):
+    monkeypatch.setenv("OWNER_EMAILS", EMAIL)
+    assert _login(env)["role"] == "user"
+    assert env.db.state["allowed_users"][42]["role"] == env.db.state["accounts"][ACCOUNT_ID]["role"] == "user"
+
+
+@pytest.mark.parametrize("configured", ["", "someone-else@example.com", " , "])
+def test_an_owner_missing_from_the_allowlist_gets_no_session_and_is_not_demoted(env, monkeypatch, configured):
+    """Removing the email ends Owner access at once; a transient bad value never rewrites the role."""
+    env.db = FakeDB(_state(role="owner"))
+    monkeypatch.setenv("OWNER_EMAILS", configured)
+    with pytest.raises(HTTPException) as refused:
+        _login(env)
+    assert refused.value.status_code == 403  # neither Owner nor a downgraded User session
+    assert env.db.writes() == []
+    assert env.db.state["allowed_users"][42]["role"] == env.db.state["accounts"][ACCOUNT_ID]["role"] == "owner"
+    monkeypatch.setenv("OWNER_EMAILS", f"x@example.com,{EMAIL.upper()}")  # the configuration is fixed
+    assert _login(env)["role"] == "owner"
+
+
+def test_login_never_writes_a_role(env, monkeypatch):
+    env.db = FakeDB(_state(role="owner"))
+    monkeypatch.setenv("OWNER_EMAILS", EMAIL)
+    _login(env)
+    assert not [sql for sql, _ in env.db.writes() if "role" in sql.split("WHERE")[0].lower()]
 
 
 def test_google_and_linked_apple_identity_share_the_same_account(env):
@@ -755,18 +781,20 @@ def test_the_fresh_path_still_rejects_another_auth_identity(env):
     assert rejected.value.status_code in {401, 403}
 
 
-def test_a_role_change_or_an_old_login_still_writes(env, monkeypatch):
+def test_an_old_login_still_writes_and_no_login_changes_the_role(env, monkeypatch):
+    """Login writes only the binding and last_login_at (backend/auth/owner_role.py): being
+    listed in OWNER_EMAILS neither forces a write nor promotes anyone."""
     _recently_seen(env)
-    monkeypatch.setattr(auth_service, "OWNER_EMAILS", {EMAIL})
+    monkeypatch.setenv("OWNER_EMAILS", EMAIL)
     _login(env)
-    assert env.db.state["allowed_users"][42]["role"] == "owner"
-    assert any(sql.startswith("UPDATE allowed_users") for sql, _ in env.db.writes())
+    assert env.db.state["allowed_users"][42]["role"] == "user"
+    assert not any(sql.startswith("UPDATE allowed_users") for sql, _ in env.db.writes())
 
     env.db.log.clear()
-    monkeypatch.setattr(auth_service, "OWNER_EMAILS", set())
     _recently_seen(env, minutes=10)
     _login(env)
     assert any(sql.startswith("UPDATE allowed_users") for sql, _ in env.db.writes())
+    assert env.db.state["allowed_users"][42]["role"] == "user"
 
 
 def test_a_first_sign_in_that_loses_the_race_uses_the_winners_account(env, monkeypatch):

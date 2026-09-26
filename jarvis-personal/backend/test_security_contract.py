@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
+from pydantic import ValidationError
 
 from backend import main
 from backend.core import idempotency
@@ -391,13 +392,31 @@ def test_profile_setup_normalizes_name_and_preserves_base_currency():
         display_name="  Ana   María  ",
         usage_goal="save",
         base_currency="USD",
-        enabled_currencies=["ARS", "USD", "ARS"],
+        enabled_currencies=["CRC", "USD", "CRC"],
         selected_financial_institutions=["bac", "multimoney", "bac"],
     )
 
     assert request.display_name == "Ana María"
-    assert request.enabled_currencies == ["USD", "ARS"]
+    assert request.enabled_currencies == ["USD", "CRC"]
     assert request.selected_financial_institutions == ["bac", "multimoney"]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("base_currency", "EUR"),
+    ("base_currency", "ARS"),
+    ("enabled_currencies", ["CRC", "MXN"]),
+    ("enabled_currencies", ["PAB"]),
+])
+def test_profile_setup_offers_only_crc_and_usd(field, value):
+    payload = {"display_name": "Ana", "usage_goal": "save", field: value}
+    with pytest.raises(ValidationError):
+        ProfileSetupRequest(**payload)
+
+
+def test_profile_setup_defaults_to_crc():
+    request = ProfileSetupRequest(display_name="Ana", usage_goal="save")
+    assert request.base_currency == "CRC"
+    assert request.enabled_currencies == ["CRC"]
 
 
 def test_profile_setup_migration_does_not_modify_financial_records():

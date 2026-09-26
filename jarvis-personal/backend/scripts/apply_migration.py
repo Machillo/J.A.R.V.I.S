@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Apply one reviewed migration, only behind a verified backup of the same database.
 
-    python backend/scripts/apply_migration.py \
+    python3.11 -m backend.scripts.apply_migration \
         --file database/migrations/<name>.sql --backup-dir <private dir> --confirm <name>.sql
 
 Refuses unless:
@@ -24,6 +24,20 @@ See docs/security/migration-safety-protocol.md.
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Supported runtime: Python 3.11 (runtime.txt) with requirements.txt installed.
+# Canonical invocation, from jarvis-personal/:  python3.11 -m backend.scripts.apply_migration ...
+# Running the file directly also works: the project root is put on sys.path.
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        f"apply_migration needs Python 3.11 (found {sys.version.split()[0]}). From jarvis-personal/ run: "
+        "python3.11 -m backend.scripts.apply_migration ..."
+    )
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 import argparse
 import datetime as dt
 import hashlib
@@ -31,13 +45,14 @@ import json
 import os
 import re
 import subprocess
-import sys
-from pathlib import Path
 
-import psycopg2
-from psycopg2 import extensions
-
-from backend.scripts import db_backup_verify
+try:
+    import psycopg2
+    from psycopg2 import extensions
+    from backend.scripts import db_backup_verify
+except ModuleNotFoundError as missing:  # e.g. psycopg2 or python-dotenv not installed for this interpreter
+    raise SystemExit(f"apply_migration: cannot import '{missing.name}'. Run it from the jarvis-personal/ checkout with "
+                     "Python 3.11 and requirements.txt installed: python3.11 -m backend.scripts.apply_migration") from None
 
 REPO = Path(__file__).resolve().parents[3]
 MIGRATIONS = REPO / "jarvis-personal" / "database" / "migrations"
