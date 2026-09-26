@@ -19,7 +19,7 @@ Failures are never cached.
 | Candidate | Where | Decision | Why |
 |---|---|---|---|
 | Platform health | `GET /product-ops/health` → `platform_health()` | **Cached, 15 s** (`product_ops/health_cache.py`) | Global, no user data. Clients call it on launch and **on every reconnect**, so an outage turns into a burst of identical aggregate queries against a struggling database. 15 s of staleness is small next to its 15-minute incident window. |
-| Feature flags | `core/feature_flags.py` | Already cached, 30 s, cleared in-process on Owner update | Read on every request by the flag middleware. Unchanged. |
+| Feature flags | `core/feature_flags.py` | Already cached, 30 s, cleared in-process on Owner update | Read on every request by the flag middleware. Unchanged. Global kill switches, not per-user entitlements. Exception to "failures are never cached": when the read fails it caches the safe defaults for 30 s, by design. |
 | Release policy | `GET /product-ops/release-policy` | **Not cached** | One indexed single-row read per app launch. Negligible gain, and caching would delay a forced update. |
 | Plans list | `GET /auth/plans` | **Not cached** | Read only on plan screens. Negligible gain, and it sits next to entitlement state. |
 | Store catalog | `GET /product-ops/billing/store/catalog` | **Not cached** | Built from environment variables, with no database read. |
@@ -33,13 +33,13 @@ Failures are never cached.
 
 - **Key:** none; there is one value per process. **Max entries:** 1.
 - **TTL:** 15 s. **Invalidation:** TTL only. A new incident shows up within 15 s.
-- **Concurrency:** a lock collapses simultaneous misses into one database query.
-- **Multi-worker:** each process has its own copy, and they can differ for up to 15 s.
+- **Concurrency:** simultaneous misses in a process share one load and its outcome. If that load fails, every caller waiting on it gets the same error (one database attempt, not one per waiter), and the next call retries. The loader runs outside the lock.
+- **Multi-worker:** each process has its own copy, and they can differ for up to 15 s (one worker may answer `operational` while another still answers `degraded`). Health only drives an informational banner and the support screen; nothing uses it for billing, entitlements, security or data writes.
 - **Cold start:** the first call queries the database.
 - **Failure:** a database error propagates as before and is not cached, so the next call retries.
 - **Metrics:**
-  - hit, miss and failure counters are logged on each miss, which happens at most once per 15 s per process;
+  - hit, miss and failure counters (no user data) are logged once per load this process runs, which is at most about once per 15 s per process;
   - the response carries `cache.ttl_seconds` and `cache.age_seconds`.
 - **Expected effect:**
-  - per process, at most one health aggregate every 15 s, instead of one per launch or reconnect;
-  - under a reconnect storm of N clients in 15 s, database reads drop from N to 1 per process.
+  - about one health aggregate per process per 15 s under normal operation, instead of one per launch or reconnect. With N workers on M instances that is up to N x M loads per 15 s, not one for the whole platform;
+  - under a reconnect storm of N clients in 15 s, database reads drop from N to about 1 per process. No latency improvement has been measured.

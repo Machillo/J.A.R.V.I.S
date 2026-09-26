@@ -12,6 +12,16 @@ from time import monotonic
 from typing import Any, Callable
 
 
+class _Load:
+    """One in-flight load, shared by every caller that arrives while it runs."""
+
+    def __init__(self):
+        self.done = threading.Event()
+        self.value: Any = None
+        self.error: BaseException | None = None
+        self.loaded_at = 0.0
+
+
 class TTLValue:
     def __init__(self, name: str, ttl_seconds: float, loader: Callable[[], Any]):
         self.name = name
@@ -20,27 +30,53 @@ class TTLValue:
         self._lock = threading.Lock()
         self._value: Any = None
         self._loaded_at: float | None = None
+        self._load: _Load | None = None
         self.hits = 0
         self.misses = 0
         self.failures = 0
 
     def get(self) -> Any:
-        # The lock also makes concurrent misses wait for one load instead of
-        # all hitting the database at once.
+        return self.read()[0]
+
+    def read(self) -> tuple[Any, float, bool]:
+        """Return (value, its age in seconds, whether this call ran the loader).
+
+        Concurrent misses share one load and its outcome, success or error, so a
+        failing database is queried once per wave instead of once per waiter.
+        The loader runs outside the lock. A failure is never cached: the next
+        call after it tries again.
+        """
         with self._lock:
             now = monotonic()
             if self._loaded_at is not None and now - self._loaded_at < self.ttl_seconds:
                 self.hits += 1
-                return self._value
-            self.misses += 1
-            try:
-                value = self._loader()
-            except Exception:
-                # A failure is never cached: the next call tries again.
+                return self._value, now - self._loaded_at, False
+            load, leader = self._load, self._load is None
+            if leader:
+                load = self._load = _Load()
+                self.misses += 1
+            else:
+                self.hits += 1
+        if not leader:
+            load.done.wait()
+            if load.error is not None:
+                raise load.error
+            return load.value, max(0.0, monotonic() - load.loaded_at), False
+        try:
+            value = self._loader()
+        except BaseException as exc:
+            load.error = exc
+            with self._lock:
                 self.failures += 1
-                raise
-            self._value, self._loaded_at = value, monotonic()
-            return value
+                self._load = None
+            raise
+        else:
+            with self._lock:
+                load.value, load.loaded_at = value, monotonic()
+                self._value, self._loaded_at, self._load = value, load.loaded_at, None
+            return value, 0.0, True
+        finally:
+            load.done.set()
 
     def clear(self) -> None:
         with self._lock:

@@ -9,10 +9,14 @@ data), and at most HEALTH_TTL_SECONDS of staleness is harmless next to its own
 - Key: none, one value per process. Max entries: 1.
 - Invalidation: TTL only. A new incident shows up within the TTL.
 - Multi-worker: every process keeps its own copy; they can differ for up to
-  the TTL.
+  the TTL. With N workers on M instances there can be up to N x M loads per
+  TTL window: about one load per process per TTL, not one per platform.
+- Concurrency: simultaneous misses in a process share one load and its
+  outcome, success or error.
 - Cold start / failure: a miss queries the database; errors are not cached.
-- Metrics: hit/miss/failure counters, logged on each miss (at most once per
-  TTL per process) and returned in the response as `cache`.
+- Metrics: hit/miss/failure counters (no user data), logged once per load
+  that this process runs. The response carries only `cache.ttl_seconds` and
+  `cache.age_seconds`.
 """
 
 import logging
@@ -28,9 +32,7 @@ platform_health_cache = TTLValue("platform_health", HEALTH_TTL_SECONDS, lambda: 
 
 
 def cached_platform_health():
-    misses = platform_health_cache.misses
-    value = platform_health_cache.get()
-    stats = platform_health_cache.stats()
-    if stats["misses"] != misses:
-        logger.info("platform_health cache miss stats=%s", stats)
-    return {**value, "cache": {"ttl_seconds": stats["ttl_seconds"], "age_seconds": stats["age_seconds"]}}
+    value, age, loaded = platform_health_cache.read()
+    if loaded:
+        logger.info("platform_health cache miss stats=%s", platform_health_cache.stats())
+    return {**value, "cache": {"ttl_seconds": HEALTH_TTL_SECONDS, "age_seconds": round(age, 1)}}
