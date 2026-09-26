@@ -14,6 +14,7 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.auth.owner_role import enabled_owner_email
 from backend.core.database import get_connection, serialize_row, serialize_rows
 
 
@@ -114,12 +115,9 @@ def ensure_ibkr_tables(conn) -> None:
 
 
 def _owner_identity(conn) -> tuple[int, str]:
-    owner_email = (
-        os.getenv("OWNER_EMAIL", "").strip()
-        or next((value.strip() for value in os.getenv("OWNER_EMAILS", "").split(",") if value.strip()), "")
-    ).lower()
-    if not owner_email:
-        raise RuntimeError("OWNER_EMAIL no está configurado.")
+    # The Owner is the one account holding both keys (backend/auth/owner_role.py); a listed
+    # email alone is not enough, or a User's workspace could receive Owner snapshots.
+    owner_email = enabled_owner_email(conn)
     row = conn.execute(
         """
         SELECT u.id AS user_id, w.id AS workspace_id
