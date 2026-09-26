@@ -5,6 +5,7 @@ from backend.auth.current_user import require_roles
 from backend.product_ops.models import AutomaticIncidentCreate, FeatureFlagUpdate, FeedbackCreate, FeedbackResolutionUpdate, FeedbackUpdate, ProductEvent, ReleasePolicyUpdate, StoreLifecycleSimulation, TestPaymentUpdate
 from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_automatic_incident, create_feedback, get_receipt, list_feedback, owner_dashboard, platform_health, record_event, release_policy, resend_feedback_email, resolve_test_order, send_discord_test, submit_receipt, update_feature_flag, update_feedback, update_release_policy, update_user_feedback_resolution
 from backend.core.feature_flags import user_feature_flags
+from backend.product_ops.health_cache import cached_platform_health
 from backend.product_ops.store_billing import entitlement_state, restore_owner_access, simulate_lifecycle, store_catalog
 
 router = APIRouter(prefix="/product-ops", tags=["Product Operations"])
@@ -40,7 +41,7 @@ def event(payload: ProductEvent): return record_event(**payload.model_dump())
 def feedback_list(): return list_feedback()
 
 @router.get("/health")
-def health(): return platform_health()
+def health(): return cached_platform_health()
 
 @router.get("/release-policy")
 def get_release_policy(
