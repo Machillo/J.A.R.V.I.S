@@ -1,0 +1,7 @@
+Config/Local.xcconfig
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+DincrKit/.build/

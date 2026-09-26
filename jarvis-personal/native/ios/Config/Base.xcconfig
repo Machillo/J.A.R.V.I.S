@@ -1,0 +1,30 @@
+// DINCR native (prototype) build settings.
+// The prototype uses its own bundle id so it can never replace the store app by accident.
+// Taking over com.dincr.app is a release decision (docs/native/PARITY_MATRIX.md).
+PRODUCT_BUNDLE_IDENTIFIER = com.dincr.app.nativedev
+PRODUCT_NAME = DINCR
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+TARGETED_DEVICE_FAMILY = 1,2
+SWIFT_VERSION = 6.0
+INFOPLIST_FILE = Config/Info.plist
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_KEY_CFBundleDisplayName = DINCR
+INFOPLIST_KEY_UILaunchScreen_Generation = YES
+INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES
+INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+ENABLE_PREVIEWS = YES
+CODE_SIGN_STYLE = Automatic
+
+// Backend configuration. Empty values run the app on synthetic fixture data.
+// Real values go in Config/Local.xcconfig (git-ignored); see Local.xcconfig.example.
+DINCR_API_URL =
+DINCR_SUPABASE_URL =
+DINCR_SUPABASE_ANON_KEY =
+
+#include? "Local.xcconfig"

@@ -1,0 +1,7 @@
+// Copy to Config/Local.xcconfig (git-ignored) to run against a real backend.
+// xcconfig treats "//" as a comment, so URLs are written with $() between the slashes.
+DINCR_API_URL = https:/$()/your-backend.example.com
+DINCR_SUPABASE_URL = https:/$()/your-project.supabase.co
+DINCR_SUPABASE_ANON_KEY = your-public-anon-key
+// Optional: a team for device builds.
+// DEVELOPMENT_TEAM = XXXXXXXXXX

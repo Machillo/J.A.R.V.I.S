@@ -1,0 +1,109 @@
+name: Native apps
+
+# DESIGN.md is the token source for both apps, so a change there runs the drift check and both
+# platform builds. The workflow file itself is included so CI changes are exercised too.
+on:
+  pull_request:
+    paths:
+      - "DESIGN.md"
+      - "jarvis-personal/native/**"
+      - ".github/workflows/native-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "DESIGN.md"
+      - "jarvis-personal/native/**"
+      - ".github/workflows/native-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  tokens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node jarvis-personal/native/design-tokens/generate.mjs --check
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: jarvis-personal/native/android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew :core:data:test :app:assembleDebug :app:lintDebug --console=plain
+
+  # Compose flows on an emulator: the minimum (API 24, java.time through desugaring) and a
+  # current release. Fixture data only; no backend, no account.
+  android-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [24, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: ${{ matrix.api-level == 24 && 'default' || 'google_apis' }}
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          working-directory: jarvis-personal/native/android
+          script: ./gradlew :app:connectedDebugAndroidTest --console=plain
+
+  ios-kit:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: jarvis-personal/native/ios/DincrKit
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+
+  # The app target (Swift 6 language mode: concurrency errors fail the build) and the XCUITest
+  # flows on fixture data in a simulator.
+  ios-app:
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: jarvis-personal/native/ios
+    steps:
+      - uses: actions/checkout@v4
+      # Runner images ship several Xcodes, and only some have a matching iOS simulator runtime.
+      # Use the newest stable Xcode that lists a concrete iPhone simulator for this scheme.
+      - name: Pick an Xcode and an iPhone simulator it supports
+        id: sim
+        run: |
+          for xcode in $(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -Vr); do
+            sudo xcode-select -s "$xcode"
+            id=$(xcodebuild -project DINCR.xcodeproj -scheme DINCR -showdestinations 2>/dev/null \
+              | grep "platform:iOS Simulator" | grep -v placeholder | grep "name:iPhone" | head -1 | sed -E 's/.*id:([^,]+),.*/\1/')
+            if [ -n "$id" ]; then echo "Using $xcode, simulator $id"; break; fi
+          done
+          test -n "$id"
+          xcodebuild -version
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - run: xcodebuild -project DINCR.xcodeproj -scheme DINCR -destination "id=${{ steps.sim.outputs.id }}" CODE_SIGNING_ALLOWED=NO test
