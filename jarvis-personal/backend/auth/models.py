@@ -51,8 +51,10 @@ class UnifiedOnboardingRequest(BaseModel):
 class ProfileSetupRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=80)
     usage_goal: Literal["debt", "save", "partner", "life_change", "control", "explore"]
-    base_currency: Literal["CRC", "USD", "ARS", "EUR", "MXN", "COP", "GTQ", "PAB"] = "CRC"
-    enabled_currencies: list[Literal["CRC", "USD", "ARS", "EUR", "MXN", "COP", "GTQ", "PAB"]] = Field(default_factory=lambda: ["CRC"], min_length=1, max_length=8)
+    # New onboarding offers only the currencies DINCR supports end to end. Accounts
+    # that stored another currency earlier keep it: nothing here rewrites them.
+    base_currency: Literal["CRC", "USD"] = "CRC"
+    enabled_currencies: list[Literal["CRC", "USD"]] = Field(default_factory=lambda: ["CRC"], min_length=1, max_length=2)
     number_format: Literal["dot_comma", "comma_dot"] = "dot_comma"
     currency_placement: Literal["before", "after"] = "before"
     selected_financial_institutions: list[Literal[
@@ -65,7 +67,5 @@ class ProfileSetupRequest(BaseModel):
         if not self.display_name:
             raise ValueError("Indicá cómo querés que te llamemos.")
         self.enabled_currencies = list(dict.fromkeys([self.base_currency, *self.enabled_currencies]))
-        if len(self.enabled_currencies) > 8:
-            raise ValueError("Podés activar hasta ocho monedas.")
         self.selected_financial_institutions = list(dict.fromkeys(self.selected_financial_institutions))
         return self
