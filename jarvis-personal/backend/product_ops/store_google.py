@@ -73,7 +73,7 @@ def _time(value: Any) -> datetime | None:
 
 
 def purchase_state(purchase_token: str, subscription: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
-    """Map a subscriptionsv2 resource to DINCR's per-purchase state."""
+    """Map a subscriptionsv2 resource to DINCR's per-purchase state (read now, so it is the newest)."""
     now = now or datetime.now(timezone.utc)
     items = subscription.get("lineItems") or []
     if len(items) != 1:
@@ -96,10 +96,16 @@ def purchase_state(purchase_token: str, subscription: dict[str, Any], *, now: da
         status = "expired"
     auto_renew = bool((item.get("autoRenewingPlan") or {}).get("autoRenewEnabled"))
     identifiers = subscription.get("externalAccountIdentifiers") or {}
+    # The order this state is about; never built from a missing value.
+    order = item.get("latestSuccessfulOrderId") or subscription.get("latestOrderId") or (
+        f"expiry:{item.get('expiryTime')}" if item.get("expiryTime") else None)
+    if not order:
+        raise GoogleVerificationError("purchase without order or expiry")
     return {
         "provider": "google",
         "purchase_key": purchase_key(purchase_token),
-        "event_id": f"google:{subscription.get('latestOrderId')}:{status}",
+        "transaction_id": str(order),
+        "state_version": int(now.timestamp() * 1000),  # a fresh API read is the newest state
         "customer_token": str(identifiers.get("obfuscatedExternalAccountId") or "").lower() or None,
         "environment": "sandbox" if subscription.get("testPurchase") is not None else "production",
         "product_id": str(item.get("productId") or ""),
@@ -146,9 +152,14 @@ def decode_push(body: dict[str, Any]) -> dict[str, Any]:
     """The developer notification inside a Pub/Sub push body."""
     try:
         message = body["message"]
-        notification = json.loads(base64.b64decode(message["data"]))
+        data = message["data"]
+        notification = json.loads(base64.b64decode(data))
+        if not isinstance(notification, dict):
+            raise ValueError("not a JSON object")
     except (KeyError, ValueError, TypeError) as exc:
         raise GoogleVerificationError("malformed push body") from exc
     if notification.get("packageName") != package_name():
         raise GoogleVerificationError("notification is for another app")
-    return {"message_id": str(message.get("messageId") or ""), **notification}
+    # Pub/Sub always sets messageId; the hash of the data is a stable fallback.
+    message_id = str(message.get("messageId") or hashlib.sha256(str(data).encode("utf-8")).hexdigest())
+    return {"message_id": message_id, **notification}

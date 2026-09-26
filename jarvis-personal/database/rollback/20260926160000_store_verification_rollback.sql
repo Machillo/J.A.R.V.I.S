@@ -19,6 +19,7 @@ BEGIN
 END $$;
 
 DROP TABLE IF EXISTS public.store_purchase_conflicts;
+DROP TABLE IF EXISTS public.store_revocations;
 DROP TABLE IF EXISTS public.store_purchases;
 DROP TABLE IF EXISTS public.store_customer_tokens;
 ALTER TABLE public.store_subscriptions

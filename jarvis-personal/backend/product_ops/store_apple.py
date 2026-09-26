@@ -21,13 +21,14 @@ from datetime import datetime, timezone
 from typing import Any
 
 from cryptography import x509
-from cryptography.exceptions import InvalidSignature
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 
 # SHA-256 of the DER of "Apple Root CA - G3" (https://www.apple.com/certificateauthority/).
-# PRE-RELEASE CHECK (human): compare with the certificate published by Apple.
+# PRE-RELEASE CHECK (human): compare with the certificate published by Apple. It is a
+# constant on purpose: no configuration value can replace the trust anchor.
 APPLE_ROOT_CA_G3_SHA256 = "63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179"
 APPLE_LEAF_OID = x509.ObjectIdentifier("1.2.840.113635.100.6.11.1")
 APPLE_INTERMEDIATE_OID = x509.ObjectIdentifier("1.2.840.113635.100.6.2.1")
@@ -42,7 +43,7 @@ def _b64url(data: str) -> bytes:
 
 
 def _pinned_root() -> str:
-    return (os.getenv("DINCR_APPLE_ROOT_CA_SHA256") or APPLE_ROOT_CA_G3_SHA256).replace(":", "").lower()
+    return APPLE_ROOT_CA_G3_SHA256
 
 
 def _verify_chain(chain: list[x509.Certificate], now: datetime) -> None:
@@ -60,7 +61,7 @@ def _verify_chain(chain: list[x509.Certificate], now: datetime) -> None:
         try:
             parent.public_key().verify(child.signature, child.tbs_certificate_bytes,
                                        ec.ECDSA(child.signature_hash_algorithm))
-        except (InvalidSignature, TypeError, AttributeError) as exc:
+        except (InvalidSignature, UnsupportedAlgorithm, TypeError, AttributeError, ValueError) as exc:
             raise AppleVerificationError("certificate signature is invalid") from exc
     for cert, oid in ((leaf, APPLE_LEAF_OID), (intermediate, APPLE_INTERMEDIATE_OID)):
         try:
@@ -82,8 +83,10 @@ def verify_jws(token: str, *, now: datetime | None = None) -> dict[str, Any]:
         header = json.loads(_b64url(header_b64))
         payload = json.loads(_b64url(payload_b64))
         raw_signature = _b64url(signature_b64)
+        if not isinstance(header, dict) or not isinstance(payload, dict):
+            raise ValueError("not a JSON object")
         chain = [x509.load_der_x509_certificate(base64.b64decode(item)) for item in header.get("x5c") or []]
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, AttributeError) as exc:
         raise AppleVerificationError("malformed signed payload") from exc
     if header.get("alg") != "ES256" or len(raw_signature) != 64:
         raise AppleVerificationError("unexpected signature algorithm")
@@ -91,7 +94,7 @@ def verify_jws(token: str, *, now: datetime | None = None) -> dict[str, Any]:
     signature = encode_dss_signature(int.from_bytes(raw_signature[:32], "big"), int.from_bytes(raw_signature[32:], "big"))
     try:
         chain[0].public_key().verify(signature, f"{header_b64}.{payload_b64}".encode("ascii"), ec.ECDSA(hashes.SHA256()))
-    except InvalidSignature as exc:
+    except (InvalidSignature, UnsupportedAlgorithm, TypeError, AttributeError, ValueError) as exc:
         raise AppleVerificationError("payload signature is invalid") from exc
     return payload
 
@@ -114,9 +117,14 @@ def _ms(value: Any) -> datetime | None:
 
 
 def verify_transaction(signed_transaction: str, *, now: datetime | None = None) -> dict[str, Any]:
-    """Verified JWSTransactionDecodedPayload of DINCR."""
+    """Verified JWSTransactionDecodedPayload of DINCR: an auto-renewable subscription
+    bought by this Apple account (Family Sharing does not extend a DINCR plan)."""
     payload = verify_jws(signed_transaction, now=now)
     _check_app(payload)
+    if payload.get("type") not in (None, "Auto-Renewable Subscription"):
+        raise AppleVerificationError("not a subscription")
+    if payload.get("inAppOwnershipType") not in (None, "PURCHASED"):
+        raise AppleVerificationError("family-shared purchases do not grant a plan")
     return payload
 
 
@@ -134,13 +142,20 @@ def verify_notification(signed_payload: str, *, now: datetime | None = None) -> 
 
 
 def purchase_state(transaction: dict[str, Any], renewal: dict[str, Any] | None = None, *,
-                   now: datetime | None = None) -> dict[str, Any]:
-    """Map a verified transaction (+ renewal info) to DINCR's per-purchase state."""
+                   now: datetime | None = None) -> dict[str, Any] | None:
+    """Map a verified transaction (+ renewal info) to DINCR's per-purchase state.
+
+    None for a transaction that was replaced by an upgrade (isUpgraded): the newer
+    transaction of the same subscription describes the plan.
+    """
+    if transaction.get("isUpgraded"):
+        return None
     now = now or datetime.now(timezone.utc)
     expires = _ms(transaction.get("expiresDate"))
     revoked = _ms(transaction.get("revocationDate"))
     grace = _ms((renewal or {}).get("gracePeriodExpiresDate"))
-    trial = transaction.get("offerType") == 1 and (transaction.get("offerDiscountType") in (None, "FREE_TRIAL"))
+    trial = transaction.get("offerDiscountType") == "FREE_TRIAL" or (
+        transaction.get("offerType") == 1 and "offerDiscountType" not in transaction and not transaction.get("price"))
     if revoked:
         status = "revoked"
     elif expires and expires > now:
@@ -150,10 +165,16 @@ def purchase_state(transaction: dict[str, Any], renewal: dict[str, Any] | None =
     else:
         status = "expired"
     auto_renew_product = (renewal or {}).get("autoRenewProductId")
+    transaction_id = str(transaction.get("transactionId") or "")
+    purchased = transaction.get("purchaseDate") or transaction.get("signedDate")
+    if not transaction_id or purchased in (None, ""):
+        raise AppleVerificationError("transaction without id or purchase date")
     return {
         "provider": "apple",
         "purchase_key": str(transaction["originalTransactionId"]),
-        "event_id": f"apple:{transaction.get('transactionId')}:{status}",
+        "transaction_id": transaction_id,
+        # A later purchase (renewal, upgrade) of the same subscription has a later date.
+        "state_version": int(purchased),
         "customer_token": str(transaction.get("appAccountToken") or "").lower() or None,
         "environment": "sandbox" if transaction.get("environment") == "Sandbox" else "production",
         "product_id": str(transaction.get("productId") or ""),

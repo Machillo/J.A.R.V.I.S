@@ -61,7 +61,7 @@ def _sign(payload: dict, key, chain, *, alg="ES256") -> str:
 @pytest.fixture
 def apple(monkeypatch):
     key, chain = _chain()
-    monkeypatch.setenv("DINCR_APPLE_ROOT_CA_SHA256", hashlib.sha256(chain[2].public_bytes(Encoding.DER)).hexdigest())
+    monkeypatch.setattr(store_apple, "APPLE_ROOT_CA_G3_SHA256", hashlib.sha256(chain[2].public_bytes(Encoding.DER)).hexdigest())
     monkeypatch.setenv("FINVA_APPLE_BUNDLE_ID", "com.dincr.app")
     monkeypatch.delenv("DINCR_APPLE_ENVIRONMENTS", raising=False)
     return key, chain
@@ -70,7 +70,8 @@ def apple(monkeypatch):
 def _transaction(**overrides):
     base = {"bundleId": "com.dincr.app", "environment": "Production", "productId": "finva.vip.monthly",
             "transactionId": "2000", "originalTransactionId": "1000", "appAccountToken": "AAAA-bbbb",
-            "expiresDate": MS(NOW + timedelta(days=20))}
+            "purchaseDate": MS(NOW - timedelta(days=10)), "expiresDate": MS(NOW + timedelta(days=20)),
+            "type": "Auto-Renewable Subscription", "inAppOwnershipType": "PURCHASED"}
     return {**base, **overrides}
 
 
@@ -101,7 +102,7 @@ def test_malformed_or_foreign_certificates_are_rejected(apple, monkeypatch, case
     elif case == "expired":
         key, chain = _chain(leaf_not_after=NOW - timedelta(days=1))
     if case in ("no_oid", "expired"):
-        monkeypatch.setenv("DINCR_APPLE_ROOT_CA_SHA256", hashlib.sha256(chain[2].public_bytes(Encoding.DER)).hexdigest())
+        monkeypatch.setattr(store_apple, "APPLE_ROOT_CA_G3_SHA256", hashlib.sha256(chain[2].public_bytes(Encoding.DER)).hexdigest())
     token = {"short_chain": lambda: _sign(_transaction(), key, chain[:2]),
              "alg_none": lambda: _sign(_transaction(), key, chain, alg="none"),
              "garbage": lambda: "not.a.jws"}.get(case, lambda: _sign(_transaction(), key, chain))()
@@ -116,8 +117,27 @@ def test_other_apps_and_sandbox_are_rejected_by_default(apple, overrides):
         store_apple.verify_transaction(_sign(_transaction(**overrides), key, chain), now=NOW)
 
 
-def test_the_pinned_root_is_apple_root_ca_g3_by_default():
-    assert store_apple.APPLE_ROOT_CA_G3_SHA256 == "63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179"
+def test_the_pinned_root_is_apple_root_ca_g3_and_no_setting_replaces_it(monkeypatch):
+    monkeypatch.setenv("DINCR_APPLE_ROOT_CA_SHA256", "00" * 32)
+    assert store_apple._pinned_root() == store_apple.APPLE_ROOT_CA_G3_SHA256 == \
+        "63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179"
+
+
+@pytest.mark.parametrize("overrides", [{"inAppOwnershipType": "FAMILY_SHARED"}, {"type": "Consumable"}])
+def test_family_shared_and_non_subscription_purchases_grant_nothing(apple, overrides):
+    key, chain = apple
+    with pytest.raises(store_apple.AppleVerificationError):
+        store_apple.verify_transaction(_sign(_transaction(**overrides), key, chain), now=NOW)
+
+
+def test_a_header_that_is_not_an_object_is_rejected_not_a_500(apple):
+    token = f"{_b64url(b'[1]')}.{_b64url(b'{}')}.{_b64url(bytes(64))}"
+    with pytest.raises(store_apple.AppleVerificationError):
+        store_apple.verify_transaction(token, now=NOW)
+
+
+def test_an_upgraded_transaction_describes_nothing():
+    assert store_apple.purchase_state(_transaction(isUpgraded=True), now=NOW) is None
 
 
 def test_a_notification_decodes_its_signed_transaction_and_renewal(apple):
@@ -133,7 +153,8 @@ def test_a_notification_decodes_its_signed_transaction_and_renewal(apple):
 
 @pytest.mark.parametrize(("transaction", "renewal", "status"), [
     ({}, None, "active"),
-    ({"offerType": 1}, None, "trialing"),
+    ({"offerType": 1, "offerDiscountType": "FREE_TRIAL"}, None, "trialing"),
+    ({"offerType": 1, "offerDiscountType": "PAY_AS_YOU_GO", "price": 990}, None, "active"),  # paid intro offer
     ({"expiresDate": MS(NOW - timedelta(days=1))}, {"gracePeriodExpiresDate": MS(NOW + timedelta(days=5))}, "grace_period"),
     ({"expiresDate": MS(NOW - timedelta(days=1))}, None, "expired"),
     ({"revocationDate": MS(NOW - timedelta(hours=1))}, None, "revoked"),
@@ -142,3 +163,4 @@ def test_purchase_state_covers_the_lifecycle(transaction, renewal, status):
     state = store_apple.purchase_state(_transaction(**transaction), renewal, now=NOW)
     assert state["status"] == status
     assert state["purchase_key"] == "1000" and state["customer_token"] == "aaaa-bbbb"
+    assert state["transaction_id"] == "2000" and state["state_version"] == MS(NOW - timedelta(days=10))

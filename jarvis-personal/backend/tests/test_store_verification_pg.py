@@ -92,16 +92,17 @@ def _token(account_id):
 
 
 def _state(key="orig-1", *, provider="apple", product="finva.vip.monthly", status="active", end=NOW + timedelta(days=20),
-           token=None, **extra):
-    return {"provider": provider, "purchase_key": key, "event_id": f"{provider}:{key}:{status}:{end}", "customer_token": token,
-            "environment": "production", "product_id": product, "status": status, "auto_renew": status == "active",
-            "trial_ends_at": end if status == "trialing" else None, "current_period_end": end,
-            "grace_ends_at": None, "revoked_at": None, "pending_product_id": None, "superseded_key": None, **extra}
+           token=None, txn="t1", version=1, **extra):
+    return {"provider": provider, "purchase_key": key, "transaction_id": txn, "state_version": version,
+            "customer_token": token, "environment": "production", "product_id": product, "status": status,
+            "auto_renew": status == "active", "trial_ends_at": end if status == "trialing" else None,
+            "current_period_end": end, "grace_ends_at": None, "revoked_at": None, "pending_product_id": None,
+            "superseded_key": None, **extra}
 
 
-def _record(state, claimed=None):
+def _record(state, claimed=None, **kwargs):
     with database.get_connection() as conn:
-        result = store_state.record_verified_purchase(conn, state, claimed_account_id=claimed)
+        result = store_state.record_verified_purchase(conn, state, claimed_account_id=claimed, **kwargs)
         conn.commit()
     return result
 
@@ -134,7 +135,7 @@ def test_the_token_always_decides_the_account(db):
 def test_a_purchase_without_token_binds_to_the_first_account_forever(db):
     a, b = db["accounts"]["a"], db["accounts"]["b"]
     assert _record(_state(), claimed=a)["account_id"] == a
-    assert _record(_state(status="active", end=NOW + timedelta(days=40)), claimed=b)["conflict"]
+    assert _record(_state(status="active", end=NOW + timedelta(days=40), txn="t2", version=2), claimed=b)["conflict"]
     assert _plan(db["cur"], a) == "vip" and _plan(db["cur"], b) is None
 
 
@@ -154,14 +155,88 @@ def test_an_unknown_token_product_or_sandbox_grants_nothing(db, monkeypatch):
     assert _record(_state(environment="sandbox"), claimed=a)["plan"] == "vip"
 
 
-def test_an_older_state_never_overwrites_a_newer_one_but_a_refund_always_applies(db):
+def test_an_older_transaction_never_overwrites_a_newer_one(db):
     a = db["accounts"]["a"]
-    _record(_state(end=NOW + timedelta(days=40)), claimed=a)
-    assert _record(_state(status="expired", end=NOW - timedelta(days=1)))["applied"] is False
+    _record(_state(txn="t2", version=2, end=NOW + timedelta(days=40)), claimed=a)
+    assert _record(_state(txn="t1", version=1, status="expired", end=NOW - timedelta(days=1)))["applied"] is False
     assert _plan(db["cur"], a) == "vip"
-    assert _record(_state(status="revoked", end=NOW + timedelta(days=40), revoked_at=NOW))["plan"] == "free"
+
+
+def test_an_upgrade_applies_even_with_an_earlier_period_end(db):
+    a = db["accounts"]["a"]
+    _record(_state(product="finva.basic.annual", txn="t1", version=1, end=NOW + timedelta(days=300)), claimed=a)
+    assert _record(_state(product="finva.vip.monthly", txn="t2", version=2, end=NOW + timedelta(days=30)))["applied"]
+    assert _plan(db["cur"], a) == "vip"
+
+
+def test_a_refund_revokes_only_its_own_transaction(db):
+    a, cur = db["accounts"]["a"], db["cur"]
+    _record(_state(txn="t1", version=1), claimed=a)
+    _record(_state(txn="t2", version=2, end=NOW + timedelta(days=50)))  # the next renewal, paid
+    # A refund of the earlier renewal arrives later: it is recorded, the current renewal stays.
+    _record(_state(txn="t1", version=1, status="revoked", revoked_at=NOW))
+    assert _plan(cur, a) == "vip"
+    cur.execute("SELECT transaction_id FROM store_revocations")
+    assert cur.fetchall() == [("t1",)]
+    # A refund of the current renewal ends the plan; its pre-refund receipt stays refunded.
+    _record(_state(txn="t2", version=2, status="revoked", revoked_at=NOW, end=NOW + timedelta(days=50)))
+    assert _plan(cur, a) == "free"
+    assert _record(_state(txn="t2", version=2, end=NOW + timedelta(days=50)))["status"] == "revoked"
+    assert _plan(cur, a) == "free"
+    # A later paid renewal of the same subscription restores the plan.
+    _record(_state(txn="t3", version=3, end=NOW + timedelta(days=80)))
+    assert _plan(cur, a) == "vip"
+
+
+def test_a_reversed_refund_restores_the_plan(db):
+    a = db["accounts"]["a"]
+    _record(_state(txn="t1", version=1), claimed=a)
+    _record(_state(txn="t1", version=1, status="revoked", revoked_at=NOW))
     assert _plan(db["cur"], a) == "free"
-    assert _record(_state(end=NOW + timedelta(days=80)))["applied"] is False  # a refunded purchase stays refunded
+    _record(_state(txn="t1", version=1), reversed_refund=True)
+    assert _plan(db["cur"], a) == "vip"
+
+
+def test_a_client_confirms_live_purchases_but_never_ends_one(db):
+    a = db["accounts"]["a"]
+    _record(_state(status="grace_period", end=NOW - timedelta(hours=1), grace_ends_at=NOW + timedelta(days=3)), claimed=a)
+    result = _record(_state(status="expired", end=NOW - timedelta(hours=1)), claimed=a, from_client=True)
+    assert result["applied"] is False and _plan(db["cur"], a) == "vip"
+
+
+def test_a_refunded_purchase_stays_refunded_after_the_account_is_deleted(db):
+    a, b, cur = db["accounts"]["a"], db["accounts"]["b"], db["cur"]
+    _record(_state(), claimed=a)
+    _record(_state(status="revoked", revoked_at=NOW))
+    cur.execute("DELETE FROM accounts WHERE id=%s", (a,))
+    assert _record(_state(), claimed=b)["status"] == "revoked"  # the pre-refund receipt, presented again
+    assert _plan(cur, b) == "free"
+
+
+def test_sandbox_purchases_are_accepted_only_for_listed_accounts(db, monkeypatch):
+    a, b = db["accounts"]["a"], db["accounts"]["b"]
+    monkeypatch.setenv("DINCR_STORE_SANDBOX_ACCOUNT_IDS", a)
+    assert _record(_state("review", environment="sandbox"), claimed=a)["plan"] == "vip"
+    with pytest.raises(HTTPException):
+        _record(_state("other", environment="sandbox"), claimed=b)
+
+
+def test_a_voided_google_order_revokes_only_the_current_order(db):
+    a = db["accounts"]["a"]
+    _record(_state("g", provider="google", txn="GPA.2", version=2), claimed=a)
+    with database.get_connection() as conn:
+        assert store_verification.void_order(conn, "g", "GPA.1") is None  # an older, refunded renewal
+        conn.commit()
+    assert _plan(db["cur"], a) == "vip"
+    with database.get_connection() as conn:
+        assert store_verification.void_order(conn, "g", "GPA.2") == a
+        conn.commit()
+    assert _plan(db["cur"], a) == "free"
+
+
+def test_the_customer_token_is_stable_and_needs_no_update(db):
+    a = db["accounts"]["a"]
+    assert _token(a) == _token(a)
 
 
 def test_the_best_live_purchase_across_stores_wins(db):
@@ -170,7 +245,7 @@ def test_the_best_live_purchase_across_stores_wins(db):
     _record(_state("apple-basic", product="finva.basic.monthly", token=token), claimed=a)
     _record(_state("google-vip", provider="google", end=NOW + timedelta(days=5), token=token), claimed=a)
     assert _plan(db["cur"], a) == "vip"
-    _record(_state("google-vip", provider="google", status="expired", end=NOW + timedelta(days=5), token=token))
+    _record(_state("google-vip", provider="google", status="expired", end=NOW + timedelta(days=5), token=token, version=2))
     assert _plan(db["cur"], a) == "basic"
 
 
@@ -191,7 +266,7 @@ def test_grace_keeps_the_plan_until_the_stores_grace_end(db):
 def test_a_replacing_google_purchase_supersedes_the_old_one(db):
     a = db["accounts"]["a"]
     _record(_state("old", provider="google", product="finva.basic.monthly"), claimed=a)
-    _record(_state("new", provider="google", superseded_key="old"), claimed=a)
+    _record(_state("new", provider="google", superseded_key="old", txn="t2"), claimed=a)
     db["cur"].execute("SELECT purchase_key, status FROM store_purchases ORDER BY purchase_key")
     assert db["cur"].fetchall() == [("new", "active"), ("old", "superseded")]
     assert _plan(db["cur"], a) == "vip"
@@ -209,8 +284,10 @@ def test_owner_and_courtesy_access_are_never_changed_by_stores(db):
 def test_a_repeated_store_event_is_applied_once(db, monkeypatch):
     a = db["accounts"]["a"]
     state = _state(token=_token(a))
-    first = store_verification._apply(dict(state), event_type="apple:DID_RENEW", event_id="apple-notification:n-1")
-    again = store_verification._apply(dict(state), event_type="apple:DID_RENEW", event_id="apple-notification:n-1")
+    first = store_verification._apply(dict(state), event_type="apple:DID_RENEW", event_id="apple-notification:n-1",
+                                      notification=True)
+    again = store_verification._apply(dict(state), event_type="apple:DID_RENEW", event_id="apple-notification:n-1",
+                                      notification=True)
     assert first["status"] == "applied" and again == {"status": "duplicate"}
 
 
@@ -219,7 +296,7 @@ def test_a_conflict_is_recorded_even_though_the_request_is_refused(db):
     _record(_state(), claimed=a)
     with pytest.raises(HTTPException) as refused:
         store_verification._apply(_state(end=NOW + timedelta(days=41)), event_type="client_verification",
-                                  event_id="apple:x", claimed_account_id=b)
+                                  event_id="apple-client:x", claimed_account_id=b, from_client=True)
     assert refused.value.status_code == 409
     db["cur"].execute("SELECT count(*) FROM store_purchase_conflicts")
     assert db["cur"].fetchone() == (1,)

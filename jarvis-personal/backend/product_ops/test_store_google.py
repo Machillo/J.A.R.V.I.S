@@ -100,3 +100,15 @@ def test_a_push_for_another_package_is_rejected(push_env):
     data = base64.b64encode(json.dumps({"packageName": "com.dincr.app",
                                         "subscriptionNotification": {"purchaseToken": "t", "notificationType": 2}}).encode()).decode()
     assert store_google.decode_push({"message": {"data": data, "messageId": "7"}})["message_id"] == "7"
+
+
+def test_the_order_is_the_latest_successful_one_and_never_a_missing_value():
+    with_line_order = _subscription(item={"latestSuccessfulOrderId": "GPA.2"})
+    assert store_google.purchase_state("t", with_line_order, now=NOW)["transaction_id"] == "GPA.2"
+    assert store_google.purchase_state("t", _subscription(), now=NOW)["transaction_id"] == "GPA.1"
+    without = _subscription()
+    without.pop("latestOrderId")
+    assert store_google.purchase_state("t", without, now=NOW)["transaction_id"].startswith("expiry:")
+    without["lineItems"][0].pop("expiryTime")
+    with pytest.raises(store_google.GoogleVerificationError):
+        store_google.purchase_state("t", without, now=NOW)
