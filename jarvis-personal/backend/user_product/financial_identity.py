@@ -49,18 +49,22 @@ def discover_candidate_account(
     candidate: dict[str, Any],
     account_id: str,
     workspace_id: str,
-    legacy_user_id: int,
+    legacy_user_id: int | None = None,
 ) -> int | None:
-    """Link a stable account signal without assuming that the account is owned."""
+    """Link a stable account signal without assuming that the account is owned.
+
+    ``legacy_user_id`` is no longer written (ownership is the workspace); it stays
+    in the signature until its callers stop passing it.
+    """
     signal = _account_signal(candidate)
     if not signal:
         return None
     row = conn.execute(
         """INSERT INTO account_balances(
-               user_id,workspace_id,account_id,account_name,bank_name,institution_code,
+               workspace_id,account_id,account_name,bank_name,institution_code,
                institution_country,account_type,account_last4,currency,current_balance,
                source,include_in_net_worth,is_active,ownership_status,detected_at,last_seen_at,signals_count
-           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0,'finva_email_discovery',FALSE,TRUE,
+           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,0,'finva_email_discovery',FALSE,TRUE,
                     'pending',NOW(),NOW(),1)
            ON CONFLICT(workspace_id,account_id,institution_code,account_last4,currency)
                WHERE account_id IS NOT NULL AND account_last4 IS NOT NULL AND account_last4<>''
@@ -71,7 +75,7 @@ def discover_candidate_account(
                updated_at=NOW()
            RETURNING id""",
         (
-            legacy_user_id, workspace_id, account_id, signal["account_name"],
+            workspace_id, account_id, signal["account_name"],
             signal["institution_name"], signal["institution_code"],
             signal["institution_country"], signal["account_type"],
             signal["account_last4"], signal["currency"],

@@ -78,7 +78,6 @@ def test_snapshot_capture_binds_authenticated_workspace_and_account(monkeypatch)
     monkeypatch.setattr(snapshots, "build_financial_state", lambda: state)
     monkeypatch.setattr(snapshots, "get_current_workspace_id", lambda: "workspace-a")
     monkeypatch.setattr(snapshots, "get_current_account_id", lambda: "account-a")
-    monkeypatch.setattr(snapshots, "get_current_user_id", lambda: 77)
     monkeypatch.setattr(snapshots, "get_connection", lambda: connection)
 
     result = snapshots.capture_financial_snapshot()
@@ -109,7 +108,6 @@ def test_snapshot_queues_proactive_alerts_once_with_safe_payload(monkeypatch):
     monkeypatch.setattr(snapshots, "build_financial_state", lambda: current)
     monkeypatch.setattr(snapshots, "get_current_workspace_id", lambda: "workspace-a")
     monkeypatch.setattr(snapshots, "get_current_account_id", lambda: "account-a")
-    monkeypatch.setattr(snapshots, "get_current_user_id", lambda: 77)
     monkeypatch.setattr(snapshots, "get_connection", lambda: connection)
 
     result = snapshots.capture_financial_snapshot()
@@ -119,9 +117,10 @@ def test_snapshot_queues_proactive_alerts_once_with_safe_payload(monkeypatch):
     assert len(notifications) == 1
     query, params = notifications[0]
     assert "ON CONFLICT DO NOTHING" in query
-    assert params[5].startswith("financial-lifecycle:")
-    assert "state" not in params[6]
-    assert "raw_payload" not in params[6]
+    assert "user_id" not in query  # the job belongs to the workspace, not to a legacy id
+    assert params[4].startswith("financial-lifecycle:")
+    assert "state" not in params[5]
+    assert "raw_payload" not in params[5]
 
 
 def test_snapshot_history_query_is_scoped_to_authenticated_workspace(monkeypatch):

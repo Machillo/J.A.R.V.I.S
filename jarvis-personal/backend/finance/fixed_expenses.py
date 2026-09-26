@@ -7,7 +7,6 @@ from calendar import monthrange
 from datetime import date, datetime
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 
@@ -204,7 +203,6 @@ def create_fixed_expense(
     start_month: str | None = None,
     currency: str = "CRC",
 ):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         existing = conn.execute(
@@ -228,14 +226,14 @@ def create_fixed_expense(
             cursor = conn.execute(
                 """
                 INSERT INTO fixed_expenses (
-                    user_id, workspace_id, name, category, expected_amount, currency, frequency,
+                    workspace_id, name, category, expected_amount, currency, frequency,
                     interval_months, start_month, due_day, payment_method, auto_deducted, aliases,
                     notes, is_active, created_at, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, TRUE, NOW(), NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, TRUE, NOW(), NOW())
                 RETURNING id
                 """,
-                (user_id, workspace_id, name, category, expected_amount, currency, frequency,
+                (workspace_id, name, category, expected_amount, currency, frequency,
                  interval_months, start_month, due_day, payment_method, auto_deducted,
                  _encode_aliases(aliases), notes),
             )

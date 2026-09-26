@@ -31,11 +31,10 @@ def add_payment_schedule(
                 payment_day,
                 auto_deducted,
                 notes,
-                user_id,
                 workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             """,
             (
                 name,
@@ -48,7 +47,6 @@ def add_payment_schedule(
                 payment_day,
                 auto_deducted,
                 notes,
-                user_id,
                 workspace_id,
             ),
         )

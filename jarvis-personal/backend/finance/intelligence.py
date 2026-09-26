@@ -166,13 +166,13 @@ def _get_or_create_person_receivable(conn, user_id: int, person_name: str) -> di
     created = conn.execute(
         """
         INSERT INTO receivables (
-            user_id, workspace_id, person_name, original_amount, paid_amount, pending_amount,
+            workspace_id, person_name, original_amount, paid_amount, pending_amount,
             status, notes, source_type, source_key
         )
-        VALUES (%s, %s, %s, 0, 0, 0, 'completed', '', 'person_account', %s)
+        VALUES (%s, %s, 0, 0, 0, 'completed', '', 'person_account', %s)
         RETURNING *
         """,
-        (user_id, workspace_id, clean_name, f"person:{_person_key(clean_name)}"),
+        (workspace_id, clean_name, f"person:{_person_key(clean_name)}"),
     ).fetchone()
     return dict(created)
 
@@ -194,14 +194,13 @@ def _backfill_receivable_entries(conn, user_id: int) -> None:
         conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, workspace_id, receivable_id, entry_type, amount, description,
+                workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, source_key
             )
-            VALUES (%s, %s, %s, 'charge', %s, %s, %s, 'legacy', %s)
+            VALUES (%s, %s, 'charge', %s, %s, %s, 'legacy', %s)
             ON CONFLICT DO NOTHING
             """,
             (
-                user_id,
                 workspace_id,
                 row["id"],
                 row["original_amount"],
@@ -222,10 +221,10 @@ def _backfill_receivable_entries(conn, user_id: int) -> None:
         conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, workspace_id, receivable_id, entry_type, amount, description,
+                workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, source_key, source_transaction_id
             )
-            SELECT %s, %s, %s, 'payment', %s, %s, %s, 'legacy_payment', %s, %s
+            SELECT %s, %s, 'payment', %s, %s, %s, 'legacy_payment', %s, %s
             WHERE NOT EXISTS (
                 SELECT 1
                 FROM receivable_entries existing
@@ -238,7 +237,6 @@ def _backfill_receivable_entries(conn, user_id: int) -> None:
             ON CONFLICT DO NOTHING
             """,
             (
-                user_id,
                 workspace_id,
                 row["receivable_id"],
                 row["amount"],
@@ -445,10 +443,10 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
         status = "completed" if new_pending <= 0.01 else "partial"
         conn.execute(
             """
-            INSERT INTO receivable_payments (user_id, workspace_id, receivable_id, amount, source_transaction_id, notes)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO receivable_payments (workspace_id, receivable_id, amount, source_transaction_id, notes)
+            VALUES (%s, %s, %s, %s, %s)
             """,
-            (user_id, workspace_id, rec["id"], payment, tx["id"], f"Pago detectado automáticamente desde ingreso: {tx.get('description') or ''}"),
+            (workspace_id, rec["id"], payment, tx["id"], f"Pago detectado automáticamente desde ingreso: {tx.get('description') or ''}"),
         )
         payment_date = tx.get("transaction_date") or date.today()
         if isinstance(payment_date, str):
@@ -457,15 +455,14 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
         conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, workspace_id, receivable_id, entry_type, amount, description,
+                workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, source_key, source_transaction_id,
                 cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, %s, 'payment', %s, %s, %s, 'income_auto', %s, %s, %s, %s, FALSE)
+            VALUES (%s, %s, 'payment', %s, %s, %s, 'income_auto', %s, %s, %s, %s, FALSE)
             ON CONFLICT DO NOTHING
             """,
             (
-                user_id,
                 workspace_id,
                 rec["id"],
                 payment,
@@ -504,10 +501,10 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
             conn.execute(
                 """
                 INSERT INTO receivable_entries (
-                    user_id, workspace_id, receivable_id, entry_type, amount, description,
+                    workspace_id, receivable_id, entry_type, amount, description,
                     entry_date, source_type, source_key, cycle_start, cycle_end, is_archived
                 )
-                VALUES (%s, %s, %s, 'charge', %s, %s, %s, 'additional_card_auto', %s, %s, %s, FALSE)
+                VALUES (%s, %s, 'charge', %s, %s, %s, 'additional_card_auto', %s, %s, %s, FALSE)
                 ON CONFLICT (workspace_id, source_key) WHERE source_key IS NOT NULL
                 DO UPDATE SET
                     receivable_id = EXCLUDED.receivable_id,
@@ -519,7 +516,7 @@ def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
                     is_archived = FALSE
                 """,
                 (
-                    user_id, workspace_id, account["id"], amount, description, cycle_start,
+                    workspace_id, account["id"], amount, description, cycle_start,
                     source_key, cycle_start, cycle_end,
                 ),
             )
@@ -638,7 +635,6 @@ def calculate_goal_reserves(goals: list[dict[str, Any]]) -> dict[str, Any]:
 
 def get_real_availability() -> dict[str, Any]:
     """Ingreso neto - gastos fijos - deudas - metas críticas/ponderadas."""
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     start, end = _month_bounds()
     date_sql = _date_expr("transaction_date")
@@ -985,14 +981,14 @@ def add_receivable_entry(
         entry = conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, workspace_id, receivable_id, entry_type, amount, description,
+                workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, %s, 'charge', %s, %s, %s, %s, %s, %s, FALSE)
+            VALUES (%s, %s, 'charge', %s, %s, %s, %s, %s, %s, FALSE)
             RETURNING *
             """,
             (
-                user_id, workspace_id, account["id"], numeric_amount, final_description,
+                workspace_id, account["id"], numeric_amount, final_description,
                 safe_date, f"manual_{clean_kind}", cycle_start, cycle_end,
             ),
         ).fetchone()
@@ -1090,7 +1086,6 @@ def apply_receivable_payment(
             tx_row = conn.execute(
                 """
                 INSERT INTO transactions (
-                    user_id,
                     workspace_id,
                     transaction_date,
                     description,
@@ -1105,11 +1100,10 @@ def apply_receivable_payment(
                     exchange_rate,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, 'income', 'Cuentas por cobrar', %s, 'receivable_manual', %s, %s, 'CRC', 1, NOW())
+                VALUES (%s, %s, %s, %s, 'income', 'Cuentas por cobrar', %s, 'receivable_manual', %s, %s, 'CRC', 1, NOW())
                 RETURNING id
                 """,
                 (
-                    user_id,
                     workspace_id,
                     safe_payment_date,
                     f"Pago de {person_name}",
@@ -1139,11 +1133,10 @@ def apply_receivable_payment(
 
         conn.execute(
             """
-            INSERT INTO receivable_payments (user_id, workspace_id, receivable_id, amount, source_transaction_id, notes)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO receivable_payments (workspace_id, receivable_id, amount, source_transaction_id, notes)
+            VALUES (%s, %s, %s, %s, %s)
             """,
             (
-                user_id,
                 workspace_id,
                 receivable_id,
                 payment,
@@ -1156,15 +1149,14 @@ def apply_receivable_payment(
         conn.execute(
             """
             INSERT INTO receivable_entries (
-                user_id, workspace_id, receivable_id, entry_type, amount, description,
+                workspace_id, receivable_id, entry_type, amount, description,
                 entry_date, source_type, source_key, source_transaction_id,
                 cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, %s, 'payment', %s, %s, %s, 'manual_payment', %s, %s, %s, %s, FALSE)
+            VALUES (%s, %s, 'payment', %s, %s, %s, 'manual_payment', %s, %s, %s, %s, FALSE)
             ON CONFLICT DO NOTHING
             """,
             (
-                user_id,
                 workspace_id,
                 receivable_id,
                 payment,
@@ -1245,7 +1237,6 @@ def list_account_balances() -> dict[str, Any]:
 
 
 def upsert_account_balance(account_name: str, current_balance: float, bank_name: str = "", account_last4: str = "", currency: str = "CRC", account_type: str = "checking", annual_interest_rate: float = 0, include_in_net_worth: bool = True, source: str = "manual", note: str = "") -> dict[str, Any]:
-    user_id = get_current_user_id()  # legacy compatibility during migration
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         existing = conn.execute(
@@ -1282,14 +1273,14 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
         else:
             row = conn.execute(
                 """
-                INSERT INTO account_balances (user_id, workspace_id, account_name, bank_name, account_type, account_last4, currency, current_balance, annual_interest_rate, source, include_in_net_worth)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO account_balances (workspace_id, account_name, bank_name, account_type, account_last4, currency, current_balance, annual_interest_rate, source, include_in_net_worth)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING *
                 """,
-                (user_id, workspace_id, account_name, bank_name, account_type, account_last4, currency.upper(), current_balance, max(annual_interest_rate, 0), source, include_in_net_worth),
+                (workspace_id, account_name, bank_name, account_type, account_last4, currency.upper(), current_balance, max(annual_interest_rate, 0), source, include_in_net_worth),
             ).fetchone()
-        conn.execute("""INSERT INTO account_balance_history(user_id,workspace_id,financial_account_id,balance,currency,source,note)
-                        VALUES(%s,%s,%s,%s,%s,%s,%s)""", (user_id, workspace_id, row["id"], current_balance, currency.upper(), source, note))
+        conn.execute("""INSERT INTO account_balance_history(workspace_id,financial_account_id,balance,currency,source,note)
+                        VALUES(%s,%s,%s,%s,%s,%s)""", (workspace_id, row["id"], current_balance, currency.upper(), source, note))
         conn.execute("""UPDATE transactions SET financial_account_id=%s
                         WHERE workspace_id=%s AND financial_account_id IS NULL
                           AND (LOWER(BTRIM(account))=LOWER(BTRIM(%s)) OR (%s<>'' AND account LIKE %s))""",

@@ -6,6 +6,7 @@ test_financial_ownership_integrity_pg.py.
 from __future__ import annotations
 
 import ast
+from collections import Counter
 import re
 from pathlib import Path
 
@@ -146,11 +147,25 @@ def test_every_guarded_insert_sets_its_workspace():
     assert offenders == []
 
 
-def test_every_financial_insert_sets_workspace_and_user():
-    """New writers must satisfy the ownership CHECK and trigger from day one."""
+# Writers that still write the legacy user_id into a financial table (per file).
+# Ownership is workspace_id; the legacy id is being retired. These are in modules
+# with open work on them (mail ingestion, the Users product, the Owner IBKR bridge)
+# and an operator script. The count may only go down.
+LEGACY_USER_ID_WRITERS = {
+    "backend/email_monitor/service.py": 3,
+    "backend/integrations/ibkr_readonly.py": 1,
+    "backend/scripts/finva_personal_isolation_check.py": 2,
+    "backend/user_product/gmail_service.py": 2,
+    "backend/user_product/service.py": 7,
+}
+
+
+def test_every_financial_insert_sets_its_workspace_and_no_new_legacy_user_id():
+    """Every writer satisfies the ownership CHECK (workspace_id) from day one, and no
+    new writer adds the legacy user_id (a NULL user_id is the canonical state)."""
     tables = "|".join(_ownership_tables())
     pattern = re.compile(rf"INSERT\s+INTO\s+(?:public\.)?({tables})\s*\(([^)]*)\)", re.I | re.S)
-    offenders, seen = [], 0
+    offenders, legacy, seen = [], Counter(), 0
     for path in BACKEND.rglob("*.py"):
         if "tests" in path.parts or path.name.startswith("test_"):
             continue
@@ -158,19 +173,24 @@ def test_every_financial_insert_sets_workspace_and_user():
         for match in pattern.finditer(text):
             seen += 1
             columns = {c.strip().lower() for c in match.group(2).split(",")}
-            if not {"workspace_id", "user_id"} <= columns:
+            if "workspace_id" not in columns:
                 line = text[: match.start()].count("\n") + 1
                 offenders.append(f"{path.relative_to(ROOT)}:{line} {match.group(1)}")
+            if "user_id" in columns:
+                legacy[str(path.relative_to(ROOT))] += 1
     assert seen > 40  # the scan really finds the writers
     assert offenders == []
+    assert dict(legacy) == LEGACY_USER_ID_WRITERS, "lower LEGACY_USER_ID_WRITERS when a writer stops writing user_id"
 
 
 # Comparisons on user_id that exist today, each on a table written only with
 # allowed_users.id. Tracked for removal (canonical identity plan, Phase C).
 KNOWN_USER_ID_COMPARISONS = {
     ("backend/notifications/service.py", "au.id = ns.user_id"),  # notification_subscriptions: FK -> allowed_users
-    ("backend/notifications/service.py", "au.id = e.user_id"),   # events: written by core/events with allowed_users.id
-    ("backend/notifications/service.py", "au.id = fe.user_id"),  # fixed_expenses: Owner-only writer, allowed_users.id
+    # events and fixed_expenses: their writers no longer set user_id; these joins are
+    # replaced by workspace reads in the canonical-readers change, which must land first.
+    ("backend/notifications/service.py", "au.id = e.user_id"),
+    ("backend/notifications/service.py", "au.id = fe.user_id"),
 }
 
 

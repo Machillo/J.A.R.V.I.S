@@ -436,15 +436,14 @@ def _import_missing_statement_movement(
     row = conn.execute(
         """
         INSERT INTO transactions (
-            user_id, workspace_id, transaction_date, description, amount,
+            workspace_id, transaction_date, description, amount,
             transaction_type, category, account, source, notes,
             original_amount, original_currency, exchange_rate, created_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         RETURNING id
         """,
         (
-            user_id,
             workspace_id,
             movement["transaction_date"],
             movement["description"],
@@ -466,10 +465,10 @@ def _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movem
     conn.execute(
         """
         INSERT INTO email_statement_reconciliation_lines (
-            user_id, workspace_id, statement_document_id, transaction_date, reference,
+            workspace_id, statement_document_id, transaction_date, reference,
             description, amount, debit, credit, balance, transaction_type, category,
             reconciliation_status, matched_transaction_id, reason
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (workspace_id, statement_document_id, reference, transaction_date, amount)
         DO UPDATE SET
             description = EXCLUDED.description,
@@ -484,7 +483,7 @@ def _upsert_reconciliation_line(conn, user_id, workspace_id, statement_id, movem
             updated_at = NOW()
         """,
         (
-            user_id, workspace_id, statement_id, movement["transaction_date"], movement["reference"],
+            workspace_id, statement_id, movement["transaction_date"], movement["reference"],
             movement["description"], movement["amount"], movement["debit"], movement["credit"],
             movement["balance"], movement["transaction_type"], movement["category"], status,
             matched_id, reason,

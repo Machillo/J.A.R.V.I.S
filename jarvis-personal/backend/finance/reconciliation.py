@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from backend.auth.current_user import get_current_user_id, get_current_workspace_id
+from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
 from backend.finance.intelligence import list_account_balances
 
@@ -64,12 +64,11 @@ def get_financial_reconciliation() -> dict[str, Any]:
 def confirm_account_reconciliation(account_id: int, real_balance: float, note: str = "") -> dict[str, Any]:
     """Store a new explicit balance snapshot only after user confirmation."""
     workspace_id = get_current_workspace_id()
-    user_id = get_current_user_id()
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM account_balances WHERE id=%s AND workspace_id=%s AND COALESCE(is_active,TRUE)=TRUE", (account_id, workspace_id)).fetchone()
         if not row:
             raise ValueError("Cuenta financiera no encontrada.")
         conn.execute("UPDATE account_balances SET current_balance=%s, balance_as_of=NOW(), last_reconciliation_difference=0, updated_at=NOW() WHERE id=%s AND workspace_id=%s", (real_balance, account_id, workspace_id))
-        conn.execute("INSERT INTO account_balance_history(user_id,workspace_id,financial_account_id,balance,currency,source,note) VALUES(%s,%s,%s,%s,%s,'confirmed_reconciliation',%s)", (user_id, workspace_id, account_id, real_balance, row.get("currency") or "CRC", note or "Saldo confirmado por el usuario."))
+        conn.execute("INSERT INTO account_balance_history(workspace_id,financial_account_id,balance,currency,source,note) VALUES(%s,%s,%s,%s,'confirmed_reconciliation',%s)", (workspace_id, account_id, real_balance, row.get("currency") or "CRC", note or "Saldo confirmado por el usuario."))
         conn.commit()
     return {"status": "OK", "account_id": account_id, "real_balance": round(float(real_balance), 2), "confirmed": True}

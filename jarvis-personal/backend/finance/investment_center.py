@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException
 
-from backend.auth.current_user import get_current_user_id, get_current_workspace_id
+from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection, serialize_row, serialize_rows
 from backend.integrations.ibkr_readonly import ensure_ibkr_tables, flex_is_configured, sync_flex_snapshot
 
@@ -142,19 +142,17 @@ def sync_ibkr():
 
 @router.post("/cashflows")
 def add_cashflow(request: CashflowRequest):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         row = conn.execute(
             """
             INSERT INTO investment_cashflows(
-                user_id, workspace_id, flow_date, flow_type, amount, currency, source, description
+                workspace_id, flow_date, flow_type, amount, currency, source, description
             )
-            VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES(%s,%s,%s,%s,%s,%s,%s)
             RETURNING *
             """,
             (
-                user_id,
                 workspace_id,
                 request.flow_date or date.today(),
                 request.flow_type,
@@ -170,21 +168,19 @@ def add_cashflow(request: CashflowRequest):
 
 @router.post("/snapshots")
 def add_snapshot(request: SnapshotRequest):
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         row = conn.execute(
             """
             INSERT INTO investment_portfolio_snapshots(
-                user_id, workspace_id, snapshot_date, market_value, contributed_capital,
+                workspace_id, snapshot_date, market_value, contributed_capital,
                 realized_pnl, unrealized_pnl, dividends, taxes, commissions,
                 funding_fees, currency, source
             )
-            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING *
             """,
             (
-                user_id,
                 workspace_id,
                 request.snapshot_date or date.today(),
                 request.market_value,

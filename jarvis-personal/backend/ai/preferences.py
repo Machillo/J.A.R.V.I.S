@@ -30,7 +30,6 @@ DEFAULT_SPORTS_PREFS = {
 
 
 def get_preference(key: str, default: Any = None) -> Any:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         row = conn.execute(
@@ -46,17 +45,16 @@ def get_preference(key: str, default: Any = None) -> Any:
 
 
 def set_preference(key: str, value: Any) -> dict:
-    user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO user_preferences (user_id, workspace_id, preference_key, preference_value)
-            VALUES (%s, %s, %s, %s::jsonb)
+            INSERT INTO user_preferences (workspace_id, preference_key, preference_value)
+            VALUES (%s, %s, %s::jsonb)
             ON CONFLICT (workspace_id, preference_key)
             DO UPDATE SET preference_value = EXCLUDED.preference_value, updated_at = NOW()
             """,
-            (user_id, workspace_id, key, __import__('json').dumps(value, ensure_ascii=False)),
+            (workspace_id, key, __import__('json').dumps(value, ensure_ascii=False)),
         )
         conn.commit()
     return {"status": "OK", "key": key, "value": value}

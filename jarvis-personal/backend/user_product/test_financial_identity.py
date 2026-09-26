@@ -57,8 +57,9 @@ def test_discovery_creates_pending_identity_and_links_candidate():
     assert result == 42
     insert_query, insert_params = connection.calls[0]
     assert "'pending'" in insert_query
-    assert insert_params[1:3] == ("workspace-a", "account-a")
-    assert insert_params[7:10] == ("credit_card", "1234", "CRC")
+    assert "user_id" not in insert_query  # the legacy id is no longer written
+    assert insert_params[0:2] == ("workspace-a", "account-a")
+    assert insert_params[6:9] == ("credit_card", "1234", "CRC")
     link_query, link_params = connection.calls[1]
     assert "financial_account_id=%s" in link_query
     assert link_params == (42, 8, "account-a", "workspace-a")
