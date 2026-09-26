@@ -8,9 +8,10 @@ with "permission denied". This test reads the SQL the runtime code runs and ever
 code needs more than is granted. A new table or command therefore ships with its
 GRANT in the migration that introduces it.
 
-Known limits (it is a guard, not a proof): SQL assembled from separate literals and
-dynamic table names are not followed; the dynamic deletions of account deletion are
-listed in DYNAMIC_DELETE.
+Known limits (it is a guard, not a proof): SQL assembled from separate literals is
+not followed. SQL whose table name is interpolated must be declared in DYNAMIC_SITES,
+either with the tables it can reach or with the catalog rule the role migration
+grants from.
 """
 from __future__ import annotations
 
@@ -40,12 +41,17 @@ NOT_TABLES = {
     "public", "vault", "set", "select", "lateral", "unnest", "generate_series", "jsonb_array_elements",
     "jsonb_each", "values", "x",
 }
-# Account deletion deletes, by dynamic SQL, from every table with a foreign key to
-# allowed_users (backend/auth/service.py::_delete_allowed_user_dependents).
-DYNAMIC_DELETE = {
-    "accounts", "advisor_current_strategy", "advisor_strategy_history", "chat_pending_actions", "chat_sessions",
-    "financial_input_events", "fixed_expense_matches", "fixed_expenses", "memory_items", "notification_jobs",
+# SQL whose table name is interpolated: (module, command) -> the tables it can reach,
+# or the catalog rule 20260926150000 grants from (a marker string in that migration).
+DYNAMIC_SITES: dict[tuple[str, str], set[str] | str] = {
+    # Free movements: {"salary": "salaries", "expense": "expenses", "payroll": "payroll_events"}.
+    ("user_product/free_service.py", "DELETE"): {"salaries", "expenses", "payroll_events"},
+    # Account deletion: every table with a foreign key to allowed_users.
+    ("auth/service.py", "DELETE"): "c.confrelid = 'public.allowed_users'::regclass",
+    # Personal data export: every table with account_id or workspace_id.
+    ("auth/data_export.py", "SELECT"): "a.attname IN ('account_id', 'workspace_id')",
 }
+DYNAMIC_TABLE = re.compile(r'\b(DELETE\s+FROM|UPDATE|INSERT\s+INTO|FROM|JOIN)\s+"?(?:\{x\}"?\."?)?\{x\}', re.I)
 
 
 @lru_cache(maxsize=1)
@@ -80,8 +86,9 @@ def needed() -> dict[str, set[str]]:
         if LOCKING.search(sql) and re.search(r"\bSELECT\b", sql):
             for match in COMMANDS["SELECT"].finditer(sql):
                 need[match.group(1).lower()].add("UPDATE")
-    for table in DYNAMIC_DELETE:
-        need[table].add("DELETE")
+    for (_module, command), reach in DYNAMIC_SITES.items():
+        for table in reach if isinstance(reach, set) else ():
+            need[table].add(command)
     for privileges in need.values():
         privileges.add("SELECT")  # every write here filters or returns rows
     return {table: privileges for table, privileges in need.items() if table not in NOT_TABLES}
@@ -125,3 +132,20 @@ def test_runtime_sql_never_reaches_vault_auth_or_storage_directly():
     direct = sorted({f"{relative}: {match.group(0)}" for relative, sql in _runtime_sql()
                      for match in re.finditer(r"\b(?:vault|auth|storage)\.[a-z_]+\b", sql)})
     assert direct == [], f"Use dincr_private.mail_secret_* instead of: {direct}"
+
+
+def _command(verb: str) -> str:
+    verb = " ".join(verb.upper().split())
+    return {"DELETE FROM": "DELETE", "INSERT INTO": "INSERT", "UPDATE": "UPDATE"}.get(verb, "SELECT")
+
+
+def test_every_interpolated_table_name_is_declared():
+    found = {(relative, _command(match.group(1))) for relative, sql in _runtime_sql() for match in DYNAMIC_TABLE.finditer(sql)}
+    assert found == set(DYNAMIC_SITES), (
+        "SQL with an interpolated table name must be declared in DYNAMIC_SITES (and granted): "
+        f"undeclared {sorted(found - set(DYNAMIC_SITES))}, stale {sorted(set(DYNAMIC_SITES) - found)}"
+    )
+    role = (MIGRATIONS / "20260926150000_dincr_app_role.sql").read_text(encoding="utf-8")
+    for reach in DYNAMIC_SITES.values():
+        if isinstance(reach, str):
+            assert reach in role, f"the role migration no longer grants from: {reach}"

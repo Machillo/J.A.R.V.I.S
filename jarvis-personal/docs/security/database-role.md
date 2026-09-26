@@ -27,9 +27,25 @@ Migrations, in order:
 - **Ownership:** nothing, and no CREATE on any schema. The migration aborts (`APP01`) if PUBLIC would give it CREATE on `public`.
 - **Table privileges:** explicit per table (SELECT/INSERT/UPDATE/DELETE), derived from the SQL the backend runs. `backend/tests/test_dincr_app_grants.py` fails when code needs a privilege no migration grants, and when a grant is no longer used.
 - **Sequences:** USAGE (nextval) only on those owned by tables it inserts into. No setval.
-- **Row level security:** stays on everywhere, with one explicit policy per granted table: `dincr_app_access`, `USING (true)`. The strict phase below replaces it.
+- **Catalog-derived grants:**
+  - DELETE on every table with a foreign key to `allowed_users`, because account deletion deletes from them dynamically;
+  - SELECT on every table with `account_id` or `workspace_id`, because the personal-data export reads them all and must never silently skip one.
+- **Row level security:** stays on for every table the role can reach, with one explicit policy each: `dincr_app_access`, `USING (true)`. Without it the role would silently read no rows. The strict phase below replaces it.
 - **Schemas:** no USAGE on `vault`, `auth` or `storage`. Mail tokens go only through `dincr_private`.
-- **Functions:** EXECUTE on the three `dincr_private` mail functions only.
+- **Functions:** EXECUTE on the three `dincr_private` mail functions only. They are STRICT: a NULL account does nothing.
+- **Migrator:** everything is created by a non-superuser migrator with CREATEROLE/CREATEDB, like Supabase's `postgres`. Superuser-only attributes are verified (`APP01`), not altered. The rollback revokes explicitly instead of `DROP OWNED BY`. `backend/tests/test_dincr_app_role_pg.py` runs as such a migrator (Postgres 16).
+
+**What the role does not protect against.** A compromised `dincr_app` can still:
+- read every connection's `(secret id, account)` pair and so every mail token, through the boundary;
+- read and write every granted table.
+
+It cannot:
+- run DDL;
+- read other Vault secrets, `auth` or `storage`;
+- disable the triggers;
+- delete financial rows across owners.
+
+Strict RLS (below) narrows the table access.
 
 The #245 delete guard used to recognise "the application" by `application_name`, which any client sets freely. It now uses the login role, which a client cannot fake. Every other login must `SET LOCAL dincr.delete_workspace`.
 
@@ -43,8 +59,14 @@ The production DSN, the password and the Render and Supabase settings are human 
    ```sql
    ALTER ROLE dincr_app PASSWORD '<generated, 32+ random characters>';
    ```
-4. **Build the pooler connection string** for the role. The Supavisor transaction-mode user is `dincr_app.<project-ref>`, with the same host and port as today. Put it in Render as the backend's `DATABASE_URL` for the web service and every worker or cron. Keep the migration runner's DSN on the owner role; migrations need DDL.
-5. **Verify** after the redeploy:
+4. **Check database-level settings** that every role could read, listing names only and never values:
+   - `SELECT setdatabase, setrole, array_length(setconfig, 1) FROM pg_db_role_setting;`
+   - `SELECT name FROM pg_settings WHERE name LIKE 'app.%';`
+
+   A readable JWT or service secret there would undo this work.
+
+5. **Build the pooler connection string** for the role. The Supavisor transaction-mode user is `dincr_app.<project-ref>`, with the same host and port as today. Put it in Render as the backend's `DATABASE_URL` for the web service and every worker or cron. Keep the migration runner's DSN on the owner role; migrations need DDL.
+6. **Verify** after the redeploy:
    - `SELECT usename, application_name, count(*) FROM pg_stat_activity WHERE datname = current_database() GROUP BY 1, 2;` shows the backend's sessions as `dincr_app`.
    - The log shows no `permission denied`.
    - The Owner and a User account can:
@@ -53,7 +75,9 @@ The production DSN, the password and the Render and Supabase settings are human 
      - connect and disconnect a mailbox;
      - export data;
      - delete a test account.
-6. **Only then** apply `20260926151000` (PRE-APPLY GATE: step 5 done). Postflight: 0 rows.
+7. **Only then** apply `20260926151000` (PRE-APPLY GATE: step 6 done). Postflight: 0 rows.
+
+After that, any session using the application's connection string is "the application" for the delete guard. Keep that password in Render only. Operator scripts use the owner connection string and declare `dincr.delete_workspace`.
 
 **Rollback of the switch:**
 1. Put the previous `DATABASE_URL` back in Render.
@@ -67,28 +91,28 @@ The `dincr_app_access` policies are `USING (true)`: tenancy is still enforced by
 ### Design
 
 - **Context:** the workspace is passed per transaction with `set_config('dincr.workspace_id', '<uuid>', true)`.
-  - `is_local = true` makes it transaction-scoped. That is required with Supavisor in transaction mode: a server connection is shared between clients across transactions, so session-level settings (`SET`, `is_local = false`) would leak from one request to another.
+  - `is_local = true` makes it transaction-scoped. That is required with Supavisor in transaction mode: a server connection is shared between clients across transactions, so session-level settings would leak from one request to another.
   - `backend/core/database.get_connection()` sets it at the start of each transaction, from the authenticated request context. Background jobs set it per job, from the row they process.
-- **Policies:** each workspace-owned table gets:
+- **Missing context is an error, never an empty result.** In finance, an empty result reads as "no debts" or "no income", and unknown is not zero. Policies call `dincr_private.current_workspace()`, which raises `42501` when the setting is missing or not a UUID. So a transaction without context fails; it never shows zero, and it never falls back to the Owner.
   ```sql
-  USING (workspace_id = NULLIF(current_setting('dincr.workspace_id', true), '')::uuid)
+  USING (workspace_id = dincr_private.current_workspace())
   WITH CHECK (the same)
   ```
-  A transaction without context sees no rows and cannot write: it fails closed. It never falls back to the Owner.
-- **Cross-workspace paths** are explicit, never an ambient bypass:
+- **Cross-workspace paths are not unlocked by a setting.** The application role can set any setting itself, so a setting would be no protection against an injection. These paths use SECURITY DEFINER functions with their own checks, or run under a separate role with its own credentials, never `dincr_app`:
   - account deletion;
-  - crons that fan out across workspaces (mail maintenance, notifications);
+  - crons that fan out across workspaces (mail maintenance, notifications, store lapses);
   - Owner administration;
   - identity resolution at login.
 
-  They use SECURITY DEFINER functions with their own checks, or run as a separate role whose policies allow a declared scope (`dincr.scope = 'system'`), set with `is_local = true` and only in those code paths. The strict-RLS change carries a guard test listing them.
-- **Identity tables:** `accounts`, `workspaces`, `workspace_members` and `allowed_users` are read before a workspace is known, at login. Their policies key on the Supabase user id (`dincr.auth_user_id`, transaction-local) instead of the workspace.
+  The strict-RLS change carries a guard test listing them.
+- **Identity tables:** `accounts`, `workspaces`, `workspace_members` and `allowed_users` are read at login, before a workspace is known, through a SECURITY DEFINER lookup keyed by the verified Supabase user id. The login path gets no ambient read.
+- **Guard test:** every table the role can reach must have a `dincr_app` policy, so a new table can never be silently empty. The role migration's postflight already checks this for `dincr_app_access`.
 - **Rollout:**
   1. Ship the context setting in `get_connection()`, with a test that every transaction sets it.
-  2. Add the strict policies next to `dincr_app_access` as `RESTRICTIVE`, table by table, and watch for denials.
+  2. Add the strict policies next to `dincr_app_access` as `RESTRICTIVE`, table by table, and watch for `42501`.
   3. Drop `dincr_app_access`.
 
-  Each step is a reviewed migration with a rollback. Denials surface as empty results or `42501`, never as wrong data.
+  Each step is a reviewed migration with a rollback.
 
 ## Out of scope here
 

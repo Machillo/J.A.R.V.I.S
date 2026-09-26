@@ -1,9 +1,10 @@
 """The dedicated application role (dincr_app) on PostgreSQL, connected as that role.
 
-Builds the identity baseline, the ownership fixture and guard (#245), a synthetic
-Vault, the mail secret boundary (20260926149000) and the role (20260926150000).
-Tables of the production schema that the fixture lacks are created as stubs: the
-role's privileges are what is under test here. Synthetic data only.
+Everything is built and migrated by a non-superuser migrator with CREATEROLE and
+CREATEDB, like Supabase's postgres: the identity baseline, the ownership fixture and
+guard (#245), a synthetic Vault, the mail secret boundary (20260926149000) and the
+role (20260926150000). Tables of the production schema that the fixture lacks are
+created as stubs: the role's privileges are what is under test. Synthetic data only.
 """
 from __future__ import annotations
 
@@ -67,9 +68,15 @@ def env(tmp_path):
             c.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,))
             if not c.fetchone():
                 c.execute(f'CREATE ROLE "{role}" NOLOGIN')
-        c.execute(f'CREATE DATABASE "{name}"')
+        c.execute("SELECT 1 FROM pg_roles WHERE rolname='dincr_migrator'")
+        if not c.fetchone():
+            c.execute("CREATE ROLE dincr_migrator LOGIN NOSUPERUSER CREATEROLE CREATEDB")
+        c.execute("SELECT 1 FROM pg_roles WHERE rolname='dincr_app'")
+        if c.fetchone():  # left by an earlier database of this shared server: start clean
+            c.execute("DROP ROLE dincr_app")
+        c.execute(f'CREATE DATABASE "{name}" OWNER dincr_migrator')
     uri = _with(admin_uri, name)
-    owner = psycopg2.connect(uri, application_name="psql")
+    owner = psycopg2.connect(uri, user="dincr_migrator", application_name="psql")
     owner.autocommit = True
     cur = owner.cursor()
     cur.execute(BASELINE.read_text(encoding="utf-8"))
@@ -90,6 +97,13 @@ def env(tmp_path):
                        VALUES(%s,%s,%s,'Personal','personal')""", (workspace, f"personal:{account}", account))
         cur.execute("""INSERT INTO workspace_members(workspace_id,account_id,member_role,status)
                        VALUES(%s,%s,'owner','active')""", (workspace, account))
+    # Not in the code's SQL: reached only by account deletion (FK to allowed_users) and
+    # by the data export (workspace_id). The role migration grants them from the catalog.
+    cur.execute("""CREATE TABLE extra_dependent (id BIGSERIAL PRIMARY KEY,
+                   user_id BIGINT REFERENCES allowed_users(id) ON DELETE CASCADE)""")
+    cur.execute("CREATE TABLE extra_personal (id BIGSERIAL PRIMARY KEY, workspace_id UUID)")
+    cur.execute("ALTER TABLE extra_personal ENABLE ROW LEVEL SECURITY")
+    cur.execute("INSERT INTO extra_personal(workspace_id) VALUES (%s)", (WS_A,))
     cur.execute(BOUNDARY.read_text(encoding="utf-8"))
     cur.execute(ROLE.read_text(encoding="utf-8"))
     connections = [owner]
@@ -107,6 +121,7 @@ def env(tmp_path):
             conn.close()
         with admin.cursor() as c:
             c.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+            c.execute("DROP ROLE IF EXISTS dincr_app")
         admin.close()
 
 
@@ -235,3 +250,30 @@ def test_the_rollback_removes_the_role(env):
     owner.execute("SELECT count(*) FROM pg_policies WHERE policyname = 'dincr_app_access'")
     assert owner.fetchone() == (0,)
     owner.execute(ROLE.read_text(encoding="utf-8"))  # and it can be applied again
+
+
+def test_a_null_account_never_passes_the_ownership_check(env):
+    owner, app = env["owner"], env["as_app"]()
+    owner.execute("SELECT vault.create_secret('not-a-mail-token', NULL, 'service key')")
+    other = owner.fetchone()[0]
+    app.execute("SELECT dincr_private.mail_secret_read(%s::uuid, NULL)", (other,))
+    assert app.fetchone() == (None,)
+    app.execute("SELECT dincr_private.mail_secret_delete(ARRAY[%s::uuid], NULL)", (other,))
+    assert app.fetchone() == (None,)
+    app.execute("SELECT dincr_private.mail_secret_create('x', NULL, 'Gmail')")
+    assert app.fetchone() == (None,)
+    owner.execute("SELECT count(*) FROM vault.secrets WHERE id=%s", (other,))
+    assert owner.fetchone() == (1,)
+    with pytest.raises(psycopg2.Error) as refused:  # a secret that is not a DINCR mail token
+        app.execute("SELECT dincr_private.mail_secret_read(%s::uuid, %s::uuid)", (other, ACC_A))
+    assert refused.value.pgcode == "42501"
+
+
+def test_tables_reached_only_by_deletion_or_export_are_granted_from_the_catalog(env):
+    app = env["as_app"]()
+    app.execute("DELETE FROM extra_dependent WHERE user_id = 11")
+    app.execute("SELECT count(*) FROM extra_personal")
+    assert app.fetchone() == (1,)  # a policy exists: the row is visible, not silently hidden
+    for table in ("salaries", "expenses", "payroll_events"):  # free movement deletion
+        app.execute(f"SELECT has_table_privilege('dincr_app', 'public.{table}', 'DELETE')")
+        assert app.fetchone() == (True,)

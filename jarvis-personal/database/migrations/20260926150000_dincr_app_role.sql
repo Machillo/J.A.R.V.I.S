@@ -36,15 +36,21 @@ BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '2min';
 
+-- CREATE ROLE's defaults are NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION
+-- NOBYPASSRLS; a non-superuser migrator (Supabase's postgres) may not even name the
+-- superuser-only attributes, so they are verified instead of altered.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dincr_app') THEN
-        CREATE ROLE dincr_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT;
+        CREATE ROLE dincr_app LOGIN NOINHERIT;
     ELSE
-        ALTER ROLE dincr_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT;
+        ALTER ROLE dincr_app LOGIN NOINHERIT;
     END IF;
-    IF EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid
-               WHERE m.member = 'dincr_app'::regrole) THEN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dincr_app'
+               AND (rolsuper OR rolreplication OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit)) THEN
+        RAISE EXCEPTION 'dincr_app has a privileged attribute; a superuser must remove it first' USING ERRCODE = 'APP01';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.member = 'dincr_app'::regrole) THEN
         RAISE EXCEPTION 'dincr_app is a member of another role; remove the membership first' USING ERRCODE = 'APP01';
     END IF;
 END $$;
@@ -78,7 +84,7 @@ BEGIN
         'features', 'feedback_reports', 'financial_goals', 'financial_health_snapshots', 'financial_input_events',
         'financial_profiles', 'financial_state_snapshots', 'finva_budget_items', 'finva_email_candidates', 'finva_email_messages',
         'finva_gmail_connections', 'finva_gmail_consents', 'finva_goal_contributions', 'finva_recurring_items', 'finva_savings_plan_contributions',
-        'finva_savings_plans', 'finva_statement_documents', 'fixed_expense_matches', 'fixed_expenses', 'investment_cashflows',
+        'finva_savings_plans', 'finva_statement_documents', 'fixed_expenses', 'investment_cashflows',
         'investment_portfolio_snapshots', 'investment_position_snapshots', 'investments', 'legal_acceptances', 'logs',
         'mail_oauth_flows', 'memory_items', 'net_worth_snapshots', 'notification_jobs', 'notification_subscriptions',
         'operation_idempotency', 'pay_schedule', 'payment_schedules', 'payroll_deductions', 'payroll_events',
@@ -144,7 +150,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.finva_recurring_items TO di
 GRANT SELECT, INSERT ON TABLE public.finva_savings_plan_contributions TO dincr_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.finva_savings_plans TO dincr_app;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.finva_statement_documents TO dincr_app;
-GRANT SELECT, DELETE ON TABLE public.fixed_expense_matches TO dincr_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.fixed_expenses TO dincr_app;
 GRANT SELECT, INSERT ON TABLE public.investment_cashflows TO dincr_app;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.investment_portfolio_snapshots TO dincr_app;
@@ -161,7 +166,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.operation_idempotency TO di
 GRANT SELECT, INSERT, DELETE ON TABLE public.pay_schedule TO dincr_app;
 GRANT SELECT, INSERT ON TABLE public.payment_schedules TO dincr_app;
 GRANT SELECT, INSERT ON TABLE public.payroll_deductions TO dincr_app;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.payroll_events TO dincr_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.payroll_events TO dincr_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.payroll_salary_reports TO dincr_app;
 GRANT SELECT ON TABLE public.plan_features TO dincr_app;
 GRANT SELECT ON TABLE public.plans TO dincr_app;
@@ -217,31 +222,45 @@ BEGIN
     END LOOP;
 END $$;
 
--- Row level security stays on; the application role reads and writes through one
--- explicit policy per table, replaced by workspace predicates in the strict RLS change.
+-- Privileges that follow the catalog rather than a list:
+-- - account deletion deletes, by dynamic SQL, from every table with a foreign key to
+--   allowed_users (backend/auth/service.py::_delete_allowed_user_dependents);
+-- - the personal data export reads every table with account_id or workspace_id
+--   (backend/auth/data_export.py); a table it cannot read would silently be missing.
 DO $$
 DECLARE
     t TEXT;
 BEGIN
-    FOREACH t IN ARRAY ARRAY[
-        'account_balance_history', 'account_balances', 'account_subscriptions', 'accounts', 'advisor_current_strategy',
-        'advisor_strategy_history', 'allowed_users', 'app_feature_flag_audit', 'app_feature_flags', 'app_release_policies',
-        'billing_orders', 'billing_subscriptions', 'bonuses', 'business_movements', 'business_projects',
-        'card_aliases', 'category_catalog', 'chat_pending_actions', 'chat_sessions', 'credit_card_settings',
-        'debt_payments', 'debts', 'deployment_events', 'email_classification_rules', 'email_financial_accounts',
-        'email_ingested_messages', 'email_monitor_settings', 'email_parser_logs', 'email_statement_documents', 'email_statement_reconciliation_lines',
-        'email_transaction_candidates', 'employment_profile', 'events', 'exchange_rates', 'expenses',
-        'features', 'feedback_reports', 'financial_goals', 'financial_health_snapshots', 'financial_input_events',
-        'financial_profiles', 'financial_state_snapshots', 'finva_budget_items', 'finva_email_candidates', 'finva_email_messages',
-        'finva_gmail_connections', 'finva_gmail_consents', 'finva_goal_contributions', 'finva_recurring_items', 'finva_savings_plan_contributions',
-        'finva_savings_plans', 'finva_statement_documents', 'fixed_expense_matches', 'fixed_expenses', 'investment_cashflows',
-        'investment_portfolio_snapshots', 'investment_position_snapshots', 'investments', 'legal_acceptances', 'logs',
-        'mail_oauth_flows', 'memory_items', 'net_worth_snapshots', 'notification_jobs', 'notification_subscriptions',
-        'operation_idempotency', 'pay_schedule', 'payment_schedules', 'payroll_deductions', 'payroll_events',
-        'payroll_salary_reports', 'plan_features', 'plans', 'product_events', 'receivable_entries',
-        'receivable_payments', 'receivables', 'salaries', 'savings', 'settings',
-        'store_subscription_events', 'store_subscriptions', 'transactions', 'user_preferences', 'users',
-        'workspace_members', 'workspaces']
+    FOR t IN
+        SELECT DISTINCT child.relname FROM pg_constraint c
+        JOIN pg_class child ON child.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = child.relnamespace AND n.nspname = 'public'
+        WHERE c.contype = 'f' AND c.confrelid = 'public.allowed_users'::regclass
+          AND array_length(c.conkey, 1) = 1 AND c.conrelid <> c.confrelid AND c.confdeltype IN ('a', 'r', 'c')
+    LOOP
+        EXECUTE format('GRANT SELECT, DELETE ON TABLE public.%I TO dincr_app', t);
+    END LOOP;
+    FOR t IN
+        SELECT DISTINCT c.relname FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname IN ('account_id', 'workspace_id') AND NOT a.attisdropped
+        WHERE c.relkind IN ('r', 'p')
+    LOOP
+        EXECUTE format('GRANT SELECT ON TABLE public.%I TO dincr_app', t);
+    END LOOP;
+END $$;
+
+-- Row level security stays on for every table the role can reach, with one explicit
+-- policy each (without it the role would silently read no rows). Workspace-scoped
+-- policies replace it in the strict RLS change.
+DO $$
+DECLARE
+    t TEXT;
+BEGIN
+    FOR t IN
+        SELECT c.relname FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+        WHERE c.relkind IN ('r', 'p') AND has_table_privilege('dincr_app', c.oid, 'SELECT')
     LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
         IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = t
@@ -343,9 +362,6 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION public.dincr_guard_financial_delete() FROM PUBLIC, anon, authenticated;
 
--- TRUNCATE bypasses row and statement DELETE triggers: financial tables are
-REVOKE ALL ON FUNCTION public.dincr_guard_financial_delete() FROM PUBLIC, anon, authenticated;
-
 COMMIT;
 
 -- Postflight (read-only): must return zero rows.
@@ -362,6 +378,18 @@ COMMIT;
 --   WHERE n.nspname = 'public' AND CASE WHEN c.relkind = 'S' THEN has_sequence_privilege('dincr_app', c.oid, 'UPDATE') ELSE false END
 -- UNION ALL SELECT 'public may run ' || p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 --   WHERE n.nspname = 'dincr_private' AND has_function_privilege('public', p.oid, 'EXECUTE')
+-- UNION ALL SELECT 'can create in the database' WHERE has_database_privilege('dincr_app', current_database(), 'CREATE')
+-- UNION ALL SELECT 'uses schema ' || nspname FROM pg_namespace
+--   WHERE nspname NOT IN ('public', 'dincr_private', 'pg_catalog', 'information_schema') AND nspname NOT LIKE 'pg\_%'
+--     AND has_schema_privilege('dincr_app', oid, 'USAGE')
+-- UNION ALL SELECT 'cannot delete from allowed_users dependent ' || c.conrelid::regclass FROM pg_constraint c
+--   WHERE c.contype = 'f' AND c.confrelid = 'public.allowed_users'::regclass AND array_length(c.conkey, 1) = 1
+--     AND c.conrelid <> c.confrelid AND c.confdeltype IN ('a', 'r', 'c')
+--     AND NOT has_table_privilege('dincr_app', c.conrelid, 'DELETE')
+-- UNION ALL SELECT 'cannot export ' || c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+--   WHERE c.relkind IN ('r', 'p') AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid
+--     AND a.attname IN ('account_id', 'workspace_id') AND NOT a.attisdropped)
+--     AND NOT has_table_privilege('dincr_app', c.oid, 'SELECT')
 -- UNION ALL SELECT 'no policy on ' || c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
 --   WHERE CASE WHEN c.relkind = 'r' THEN has_table_privilege('dincr_app', c.oid, 'SELECT') ELSE false END
 --     AND NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname = 'public' AND p.tablename = c.relname

@@ -6,6 +6,7 @@
 -- search_path; EXECUTE revoked from PUBLIC, anon and authenticated) handle only
 -- DINCR mail tokens, and only for the account named in the token's description
 -- ('DINCR <provider> refresh token for account <id>', 'FINVA' before the rename).
+-- They are STRICT: a NULL account or secret id does nothing (NULL result).
 -- The dedicated application role gets EXECUTE in 20260926150000.
 --
 -- Aborts (APP02), changing nothing, if a live connection or pending flow references
@@ -43,12 +44,14 @@ LANGUAGE sql
 IMMUTABLE
 SET search_path = pg_catalog, pg_temp
 AS $fn$
-    SELECT p_description ~ ('^(DINCR|FINVA) (Gmail|Microsoft) refresh token for account ' || p_account_id::TEXT || '$')
+    SELECT COALESCE(p_description ~ ('^(DINCR|FINVA) (Gmail|Microsoft) refresh token for account '
+                                     || p_account_id::TEXT || '$'), false)
 $fn$;
 
 CREATE OR REPLACE FUNCTION dincr_private.mail_secret_create(p_secret TEXT, p_account_id UUID, p_provider TEXT)
 RETURNS UUID
 LANGUAGE plpgsql
+STRICT
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $fn$
@@ -64,6 +67,7 @@ $fn$;
 CREATE OR REPLACE FUNCTION dincr_private.mail_secret_read(p_secret_id UUID, p_account_id UUID)
 RETURNS TEXT
 LANGUAGE plpgsql
+STRICT
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $fn$
@@ -76,7 +80,7 @@ BEGIN
     IF NOT FOUND THEN
         RETURN NULL;
     END IF;
-    IF NOT dincr_private.mail_secret_owned(v_description, p_account_id) THEN
+    IF dincr_private.mail_secret_owned(v_description, p_account_id) IS NOT TRUE THEN
         -- No identifiers in the message: it can reach logs.
         RAISE EXCEPTION 'mail secret belongs to another account' USING ERRCODE = '42501';
     END IF;
@@ -87,6 +91,7 @@ $fn$;
 CREATE OR REPLACE FUNCTION dincr_private.mail_secret_delete(p_secret_ids UUID[], p_account_id UUID)
 RETURNS INTEGER
 LANGUAGE plpgsql
+STRICT
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $fn$
@@ -94,7 +99,7 @@ DECLARE
     v_deleted INTEGER;
 BEGIN
     IF EXISTS (SELECT 1 FROM vault.secrets s WHERE s.id = ANY(p_secret_ids)
-               AND NOT dincr_private.mail_secret_owned(s.description, p_account_id)) THEN
+               AND dincr_private.mail_secret_owned(s.description, p_account_id) IS NOT TRUE) THEN
         RAISE EXCEPTION 'mail secret belongs to another account' USING ERRCODE = '42501';
     END IF;
     DELETE FROM vault.secrets WHERE id = ANY(p_secret_ids);
@@ -129,13 +134,13 @@ BEGIN
     IF to_regclass('public.finva_gmail_connections') IS NOT NULL THEN
         SELECT count(*) INTO v_count FROM public.finva_gmail_connections c
         JOIN vault.secrets s ON s.id = c.refresh_token_secret_id
-        WHERE NOT dincr_private.mail_secret_owned(s.description, c.account_id);
+        WHERE dincr_private.mail_secret_owned(s.description, c.account_id) IS NOT TRUE;
         v_bad := v_bad + v_count;
     END IF;
     IF to_regclass('public.mail_oauth_flows') IS NOT NULL THEN
         SELECT count(*) INTO v_count FROM public.mail_oauth_flows f
         JOIN vault.secrets s ON s.id = f.pending_secret_id
-        WHERE NOT dincr_private.mail_secret_owned(s.description, f.account_id);
+        WHERE dincr_private.mail_secret_owned(s.description, f.account_id) IS NOT TRUE;
         v_bad := v_bad + v_count;
     END IF;
     IF v_bad > 0 THEN

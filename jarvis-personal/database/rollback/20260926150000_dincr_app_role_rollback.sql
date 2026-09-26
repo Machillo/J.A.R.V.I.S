@@ -90,9 +90,6 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION public.dincr_guard_financial_delete() FROM PUBLIC, anon, authenticated;
 
--- TRUNCATE bypasses row and statement DELETE triggers: financial tables are
-REVOKE ALL ON FUNCTION public.dincr_guard_financial_delete() FROM PUBLIC, anon, authenticated;
-
 DO $$
 DECLARE
     t TEXT;
@@ -101,8 +98,16 @@ BEGIN
         EXECUTE format('DROP POLICY dincr_app_access ON public.%I', t);
     END LOOP;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dincr_app') THEN
-        -- Privileges only: dincr_app owns nothing (checked by the migration postflight).
-        DROP OWNED BY dincr_app;
+        -- Explicit revokes: DROP OWNED BY needs the role's own privileges, which a
+        -- non-superuser migrator (Supabase's postgres) does not have. dincr_app owns
+        -- nothing (checked by the migration postflight).
+        REVOKE ALL ON ALL TABLES IN SCHEMA public FROM dincr_app;
+        REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM dincr_app;
+        REVOKE ALL ON SCHEMA public FROM dincr_app;
+        IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'dincr_private') THEN
+            REVOKE ALL ON ALL FUNCTIONS IN SCHEMA dincr_private FROM dincr_app;
+            REVOKE ALL ON SCHEMA dincr_private FROM dincr_app;
+        END IF;
         DROP ROLE dincr_app;
     END IF;
 END $$;

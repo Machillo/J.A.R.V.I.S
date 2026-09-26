@@ -96,9 +96,6 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION public.dincr_guard_financial_delete() FROM PUBLIC, anon, authenticated;
 
--- TRUNCATE bypasses row and statement DELETE triggers: financial tables are
-REVOKE ALL ON FUNCTION public.dincr_guard_financial_delete() FROM PUBLIC, anon, authenticated;
-
 COMMIT;
 
 -- Postflight (read-only): must return zero rows.

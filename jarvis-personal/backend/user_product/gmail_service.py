@@ -815,8 +815,11 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
 INGEST_FAILED_REASON = "No se pudo procesar este aviso. Quedó registrado y se reintenta si vuelve a aparecer en una sincronización."
 # SQLSTATE classes of conditions that pass on their own: connection (08), transaction
 # rollback such as deadlock or serialization (40), resources (53), cancel or
-# shutdown (57), lock not available (55).
+# shutdown (57), lock not available (55). Insufficient privilege (42501) is not the
+# message's fault either: a missing grant of the application role must stop the
+# sync and keep the cursor, never mark every message of a scan as failed.
 _TRANSIENT_SQLSTATE_CLASSES = frozenset({"08", "40", "53", "55", "57"})
+_TRANSIENT_SQLSTATES = frozenset({"42501"})
 
 
 def _is_transient_failure(exc: BaseException) -> bool:
@@ -825,7 +828,8 @@ def _is_transient_failure(exc: BaseException) -> bool:
 
     if isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError, DatabaseConfigError)):
         return True
-    return str(getattr(exc, "pgcode", "") or "")[:2] in _TRANSIENT_SQLSTATE_CLASSES
+    code = str(getattr(exc, "pgcode", "") or "")
+    return code[:2] in _TRANSIENT_SQLSTATE_CLASSES or code in _TRANSIENT_SQLSTATES
 
 
 def _ingest_message(
