@@ -35,7 +35,15 @@ CREATE TABLE notification_jobs (
     workspace_id UUID NOT NULL,
     title TEXT NOT NULL);
 CREATE TABLE audit_backup_synthetic (user_id BIGINT, workspace_id UUID NOT NULL);
+-- A user_id that was optional before the migration: the rollback must leave it optional.
+CREATE TABLE settings_synthetic (
+    user_id BIGINT, workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE);
 """
+
+# Financial tables that already cascade from workspaces in production (checked on a
+# restored backup); the migration refuses to run (LI003) if one does not.
+PRODUCTION_WORKSPACE_CASCADES = ("debt_payments", "debts", "exchange_rates", "expenses", "receivable_payments",
+                                 "receivables", "transactions")
 
 
 def _admin_uri(data_dir: Path) -> str:
@@ -77,6 +85,8 @@ def cur(admin_uri):
     c.execute(BASELINE.read_text(encoding="utf-8"))
     c.execute(FIXTURE.read_text(encoding="utf-8"))
     c.execute(LEGACY_CASCADE_ONLY)
+    for table in PRODUCTION_WORKSPACE_CASCADES:  # present in production, absent from the shared fixture
+        c.execute(f"ALTER TABLE {table} ADD FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE")
     c.execute(OWNERSHIP.read_text(encoding="utf-8"))
     for allowed, account, workspace in ((11, ACC, WS), (12, OTHER_ACC, OTHER_WS)):
         c.execute("INSERT INTO allowed_users(id,email,role,status) VALUES(%s,%s,'user','active')",
@@ -129,12 +139,24 @@ def test_a_row_without_an_existing_workspace_aborts_and_changes_nothing(cur):
     assert cur.fetchone() == (1,)  # never deleted by the migration
 
 
+def test_a_table_without_a_workspace_cascade_aborts_and_changes_nothing(cur):
+    cur.execute("CREATE TABLE uncovered_synthetic (user_id BIGINT NOT NULL, workspace_id UUID NOT NULL)")
+    before = _required(cur)
+    with pytest.raises(psycopg2.Error) as refused:
+        cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    assert refused.value.pgcode == "LI003" and "uncovered_synthetic" in str(refused.value)
+    cur.execute("ROLLBACK")
+    assert _required(cur) == before
+
+
 def test_user_id_becomes_optional_and_the_guard_still_holds(cur):
     cur.execute(MIGRATION.read_text(encoding="utf-8"))
     cur.execute(MIGRATION.read_text(encoding="utf-8"))  # idempotent
     cur.execute(_postflight())
     assert cur.fetchall() == []
     assert _required(cur) == set()
+    cur.execute("SELECT to_regclass('public.notification_jobs_workspace_id_idx') IS NOT NULL")
+    assert cur.fetchone() == (True,)
     # An omitted user_id is no longer attributed to legacy id 1.
     assert _debt(cur, WS) is None
     # A wrong legacy id is still refused by the ownership guard.
@@ -154,9 +176,12 @@ def test_a_row_without_user_id_is_deleted_with_its_workspace(cur):
 def test_the_rollback_restores_not_null_only_while_no_row_needs_a_decision(cur):
     cur.execute(MIGRATION.read_text(encoding="utf-8"))
     cur.execute(ROLLBACK.read_text(encoding="utf-8"))
-    assert "debts" in _required(cur) and "audit_backup_synthetic" not in _required(cur)
+    assert "debts" in _required(cur)
+    assert not {"audit_backup_synthetic", "settings_synthetic"} & _required(cur)  # never NOT NULL before
     cur.execute("SELECT count(*) FROM pg_constraint WHERE conname='notification_jobs_workspace_fk'")
     assert cur.fetchone() == (0,)
+    cur.execute("SELECT to_regclass('public.notification_jobs_workspace_id_idx')")
+    assert cur.fetchone() == (None,)
     cur.execute("SELECT column_default FROM information_schema.columns WHERE table_name='debts' AND column_name='user_id'")
     assert cur.fetchone() == (None,)  # DEFAULT 1 is not restored
 
