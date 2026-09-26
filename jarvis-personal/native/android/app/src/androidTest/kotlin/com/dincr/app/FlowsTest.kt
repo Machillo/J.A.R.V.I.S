@@ -3,6 +3,7 @@ package com.dincr.app
 import android.content.Intent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
@@ -11,6 +12,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.printToLog
@@ -59,6 +62,9 @@ class FlowsTest {
     private fun waitForTag(tag: String) =
         waitUntil("tag $tag") { compose.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty() }
 
+    /** Rows below the fold of a lazy list exist only once scrolled to. */
+    private fun rowText(text: String) = compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text)).let { compose.onNodeWithText(text) }
+
     private fun openMovements() {
         waitForText(tx("Disponible este mes", "Available this month"))
         compose.onNodeWithText(tx("Movimientos", "Transactions")).performClick()
@@ -75,23 +81,25 @@ class FlowsTest {
     @Test fun homeShowsKeyFigureAndSections() {
         launch()
         waitForText(tx("Disponible este mes", "Available this month"))
-        compose.onNodeWithText(tx("Ingresos y gastos", "Income and expenses")).assertExists()
-        compose.onNodeWithText(tx("En qué se va el dinero", "Where the money goes")).assertExists()
+        // Lazy list: sections below the fold are composed only once scrolled to.
+        val list = compose.onNode(hasScrollToNodeAction())
+        list.performScrollToNode(hasText(tx("Ingresos y gastos", "Income and expenses")))
+        list.performScrollToNode(hasText(tx("En qué se va el dinero", "Where the money goes")))
     }
 
     @Test fun addExpenseRejectsAmbiguousAmountThenSaves() {
         launch()
         openMovements()
         compose.onNodeWithTag("movements.add").performClick()
-        compose.onNodeWithTag("editor.save").performClick()
+        compose.onNodeWithTag("editor.save").performScrollTo().performClick()
         waitForText(tx("Revisá 2 campos", "Check 2 fields"))
         compose.onNodeWithTag("editor.amount").performTextInput("1.5.2")
         compose.onNodeWithTag("editor.description").performTextInput("Panadería")
-        compose.onNodeWithTag("editor.save").performClick()
+        compose.onNodeWithTag("editor.save").performScrollTo().performClick()
         waitForText(tx("Escribí un monto", "Enter an amount"), substring = true)
         compose.onNodeWithTag("editor.amount").performTextClearance()
         compose.onNodeWithTag("editor.amount").performTextInput("4.250")
-        compose.onNodeWithTag("editor.save").performClick()
+        compose.onNodeWithTag("editor.save").performScrollTo().performClick()
         waitForText("Panadería")
         waitForGone(tx("Nuevo movimiento", "New transaction"))
         val rows = compose.onAllNodesWithText("Panadería").fetchSemanticsNodes().size
@@ -102,7 +110,7 @@ class FlowsTest {
     @Test fun editKeepsTheStoredAmountAndCategory() {
         launch()
         openMovements()
-        compose.onNodeWithText("Feria del agricultor").performClick()
+        rowText("Feria del agricultor").performClick()
         waitForTag("editor.amount")
         compose.onNodeWithTag("editor.amount").assert(hasText("12.345,5"))
         val categoryField = compose.onAllNodesWithText("Feria", useUnmergedTree = true).fetchSemanticsNodes()
@@ -110,10 +118,10 @@ class FlowsTest {
         check(categoryField) { "the stored category must stay selected in the editor" }
         compose.onNodeWithTag("editor.description").performTextClearance()
         compose.onNodeWithTag("editor.description").performTextInput("Feria de Zapote")
-        compose.onNodeWithTag("editor.save").performClick()
+        compose.onNodeWithTag("editor.save").performScrollTo().performClick()
         waitForText("Feria de Zapote")
         waitForGone(tx("Editar movimiento", "Edit transaction"))
-        compose.onNodeWithText("Feria de Zapote").performClick()
+        rowText("Feria de Zapote").performClick()
         waitForTag("editor.amount")
         compose.onNodeWithTag("editor.amount").assert(hasText("12.345,5"))
     }
@@ -121,7 +129,7 @@ class FlowsTest {
     @Test fun deleteAsksAndRemovesTheRow() {
         launch()
         openMovements()
-        compose.onNodeWithText("Feria del agricultor").performClick()
+        rowText("Feria del agricultor").performClick()
         waitForText(tx("Eliminar movimiento", "Delete transaction"))
         compose.onNodeWithText(tx("Eliminar movimiento", "Delete transaction")).performClick()
         waitForText(tx("Esta acción no se puede deshacer.", "This can’t be undone."))
