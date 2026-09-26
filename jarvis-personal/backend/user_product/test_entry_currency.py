@@ -229,3 +229,51 @@ def test_migration_is_additive_and_never_rewrites_rows():
     assert "original_currency IN (''CRC'', ''USD'')" in body
     for forbidden in ("UPDATE ", "DELETE ", "DROP ", "TRUNCATE", "DEFAULT"):
         assert forbidden not in body.upper().replace("DEFAULT PRIVILEGES", ""), forbidden
+
+
+# --------------------------------------------------------------------------- final-audit edges
+
+@pytest.mark.parametrize("args", [
+    ("USD", 50500, "CRC", 0.0000004),   # a rate that rounds to 0 at 6 decimals: no division by zero
+    ("CRC", 100, "USD", 0.0000004),
+    ("CRC", float("inf"), None, None),  # JSON 1e999 reaches the model as inf (gt=0 accepts it)
+    ("CRC", float("inf"), "USD", 505),
+    ("CRC", 100, "USD", float("inf")),  # direct callers: the models already bound the rate
+    ("CRC", 100, "USD", float("nan")),
+])
+def test_degenerate_amounts_and_rates_are_a_422_not_a_500(args):
+    with pytest.raises(HTTPException) as error:
+        resolve_entry_amount(*args)
+    assert error.value.status_code == 422
+
+
+def test_an_infinite_amount_from_json_is_refused_by_the_service(as_user, monkeypatch):
+    import json
+    conn = _use(monkeypatch, RecordingConnection("CRC"), service)
+    payload = IncomeCreateRequest(**json.loads('{"amount": 1e999, "currency": "USD", "exchange_rate": 505}'))
+    with pytest.raises(HTTPException) as error:
+        service.create_income(payload)
+    assert error.value.status_code == 422
+    assert not any(not sql.startswith("SELECT") for sql, _ in conn.queries), "nothing is written"
+
+
+@pytest.mark.parametrize(("base", "expected"), [("CRC", ["CRC", "USD"]), ("USD", ["CRC", "USD"]),
+                                                ("EUR", ["EUR"]), (None, ["CRC", "USD"])])
+def test_the_identity_declares_which_currencies_this_backend_converts(base, expected, monkeypatch):
+    """A client offers another currency only when its backend declares it: an older
+    backend ignores `currency`/`exchange_rate` and would store a USD figure as base."""
+    import backend.auth.legal as legal
+    from backend.auth import saas
+
+    class AccountConnection(RecordingConnection):
+        def execute(self, query, params=()):
+            row = {"base_currency": base}
+            return SimpleNamespace(fetchone=lambda: row, fetchall=lambda: [row])
+
+    monkeypatch.setattr(saas, "get_connection", lambda: AccountConnection())
+    monkeypatch.setattr(saas, "ensure_default_subscription", lambda *_a: {"plan": "free"})
+    monkeypatch.setattr(saas, "_activate_self_service_if_ready", lambda *_a: None)
+    monkeypatch.setattr(legal, "legal_status", lambda *_a: {})
+    identity = saas.enrich_identity({"id": 41, "account_id": ACCOUNT, "role": "user"})
+    assert identity["base_currency"] == (base or "CRC")
+    assert identity["entry_currencies"] == expected

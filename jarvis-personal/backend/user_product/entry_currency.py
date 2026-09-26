@@ -10,6 +10,7 @@ The rate is always expressed as CRC per 1 USD, whichever currency is the base.
 
 from __future__ import annotations
 
+import math
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -26,6 +27,17 @@ def account_base_currency(conn, account_id: str) -> str:
     return str((row or {}).get("base_currency") or "CRC").upper()
 
 
+def entry_currencies(base_currency: str | None) -> list[str]:
+    """Currencies this backend converts for an account, published with its identity.
+
+    A client offers another currency only when its backend declares it here: an
+    older backend ignores `currency`/`exchange_rate` and would store the typed
+    figure as if it were in the base currency.
+    """
+    base = str(base_currency or "CRC").upper()
+    return list(SUPPORTED_CURRENCIES) if base in SUPPORTED_CURRENCIES else [base]
+
+
 def resolve_entry_amount(base_currency: str | None, amount: float, currency: str | None, exchange_rate: float | None) -> dict[str, Any]:
     """Return the stored columns for an amount typed in `currency`.
 
@@ -33,6 +45,8 @@ def resolve_entry_amount(base_currency: str | None, amount: float, currency: str
     supported currency needs the user's rate. Accounts whose legacy base
     currency is not CRC or USD can only record entries in their base currency.
     """
+    if not math.isfinite(float(amount)):
+        raise HTTPException(status_code=422, detail="El monto no es válido.")
     typed = Decimal(str(amount)).quantize(CENT, ROUND_HALF_UP)
     if typed > MAX_AMOUNT:
         raise HTTPException(status_code=422, detail="El monto es demasiado grande.")
@@ -44,10 +58,12 @@ def resolve_entry_amount(base_currency: str | None, amount: float, currency: str
         return {"amount": typed, "original_amount": None, "original_currency": None, "exchange_rate": None}
     if base not in SUPPORTED_CURRENCIES or code not in SUPPORTED_CURRENCIES:
         raise HTTPException(status_code=422, detail=f"Tu moneda principal es {base}: registrá el monto en {base}.")
-    if exchange_rate is None or exchange_rate <= 0:
+    if exchange_rate is None or not math.isfinite(float(exchange_rate)) or exchange_rate <= 0:
         raise HTTPException(status_code=422, detail="Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.")
     # Computed with the rate exactly as it is stored.
     rate = Decimal(str(exchange_rate)).quantize(RATE_STEP, ROUND_HALF_UP)
+    if rate <= 0:  # below 0.0000005 it rounds to zero as stored
+        raise HTTPException(status_code=422, detail="Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.")
     converted = typed * rate if code == "USD" else typed / rate
     converted = converted.quantize(CENT, ROUND_HALF_UP)
     if converted <= 0:

@@ -42,7 +42,7 @@ export default function UsersApp({ user, onUserChange, releasePolicy }) {
   const plan = user?.subscription?.plan || "free";
   // Pages format and convert against the account's base currency; set it before
   // they render (idempotent, so running it on every render is harmless).
-  setBaseCurrency(user?.base_currency);
+  setBaseCurrency(user?.base_currency, user?.entry_currencies);
   const platform = detectNativePlatform();
 
   useEffect(() => {

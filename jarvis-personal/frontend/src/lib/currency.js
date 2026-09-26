@@ -4,14 +4,24 @@ import { deviceLanguage, localeTag } from "./locale.js";
 export const ENTRY_CURRENCIES = ["CRC", "USD"];
 
 // The account's base currency: every stored `amount` and every total is in it.
-// UsersApp sets it from the signed-in account before pages render.
+// UsersApp sets it from the signed-in account before pages render, together with
+// the currencies the backend declares it converts (identity `entry_currencies`).
 let base = "CRC";
-export const setBaseCurrency = (code) => { base = String(code || "CRC").toUpperCase(); };
+let declared = [];
+export const setBaseCurrency = (code, entryCodes) => {
+  base = String(code || "CRC").toUpperCase();
+  declared = Array.isArray(entryCodes) ? entryCodes.map((item) => String(item).toUpperCase()) : [];
+};
 export const baseCurrency = () => base;
 
-// Currencies offered for a new entry. An account whose legacy base currency is
-// not CRC or USD records only in its own currency (the backend refuses others).
-export const entryCurrencies = () => (ENTRY_CURRENCIES.includes(base) ? ENTRY_CURRENCIES : [base]);
+// Currencies offered for a new entry. Only what the backend declared: an older
+// backend ignores `currency`/`exchange_rate` and would store a USD figure as base,
+// so without the declaration only the base is offered. An account whose legacy
+// base currency is not CRC or USD records only in its own currency.
+export const entryCurrencies = () => {
+  const offered = ENTRY_CURRENCIES.filter((code) => declared.includes(code));
+  return offered.length > 1 && offered.includes(base) ? offered : [base];
+};
 
 export function formatMoney(value, currency = base, { maximumFractionDigits } = {}) {
   const code = String(currency || base).toUpperCase();
@@ -43,8 +53,10 @@ export function entryCurrencyPayload({ currency, exchange_rate: rate }) {
 }
 
 // Form state for editing a stored entry: the amount the user typed, in its currency.
+// Without a declared conversion (older backend), a foreign entry is edited by its
+// stored base amount, as an older app does: never its typed figure read as base.
 export function entryFormAmount(row) {
-  return row?.original_currency
+  return row?.original_currency && entryCurrencies().includes(String(row.original_currency).toUpperCase())
     ? { amount: row.original_amount, currency: row.original_currency, exchange_rate: row.exchange_rate ?? "" }
     : { amount: row?.amount ?? "", currency: base, exchange_rate: "" };
 }
