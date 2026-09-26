@@ -44,3 +44,27 @@ steps, features, pricing table, download page. Headless full-page captures were 
 |-------|------------|---------------|------------|
 | Display face on a Persuade page | Wants a face with a point of view; system face flagged as fallback | Neutral | System stack kept: brand consistency with the native apps, no third-party font request on a no-tracking site; revisit only with a licensed, self-hosted face |
 | Page pattern | Refuses category templates | Recommends app-store template | Structure unchanged (content-led sections already pass); screenshots deferred to real captures |
+
+## Final audit (R2.1, 2026-09-26)
+
+Impeccable and UI/UX Pro Max were **not installed** in the environment of this pass, so they were
+not re-run; the same checklists were applied by hand to the built HTML and CSS and the site was
+rendered in the in-app browser (320, 360, 375, 390, 430, 768, 1280 px; light and dark).
+
+Status of L1–L15: L1–L5, L7, L8, L14, L15 **RESOLVED** (re-checked in code and render). L6
+**RESOLVED, revised**: table marks no longer use `role="img"` on empty spans; the icon is
+`aria-hidden` and the cell carries visually hidden text ("Incluido" / "No incluido"). L9
+**REJECTED, false positive confirmed** (16 px `.wrap` gutters, summary and cell padding visible
+in every render). L10 **REJECTED with rationale** (footer group labels). L11 **REJECTED, false
+positive** (the "—" marks are decorative, with text alternatives). L12 **DEFERRED** (real captures,
+C4). L13 **REJECTED** (unchanged rationale).
+
+| # | Source | Finding | Severity | Decision | Change | Re-audit |
+|---|--------|---------|----------|----------|--------|----------|
+| L16 | Render 320–430 px | `/precios/` comparison table had `min-width: 520px`: at phone widths the Free/Basic/VIP columns started off-screen, and the new visually hidden cell text widened the page to 518 px | important | Accepted | No min-width; tighter cell padding below 640 px; `.table-wrap` is the containing block | PASS: no horizontal overflow on any route at 320–1280 px |
+| L17 | Manual (forced colors) | CSS-mask icons are painted with `background`, which forced-colors mode replaces, so the table checks, FAQ chevron and list icons vanished in Windows high contrast | important | Accepted | `@media (forced-colors: active)` paints them in `CanvasText` | Contract test; not rendered in forced colors (HUMAN) |
+| L18 | Claim audit | `/soporte/` sent users to "la sección Reportes" for help; in the app, Reportes is financial reports and help is "Ayuda y soporte" | important | Accepted | Copy fixed | Contract test |
+| L19 | Claim audit | Android lock copy said "huella o PIN"; the code uses `BIOMETRIC_WEAK` + device credential (PIN, pattern or password) | moderate | Accepted | "biometría del teléfono (como la huella) o con su PIN, patrón o contraseña" | PASS |
+| L20 | Claim audit | "Una sola cuenta DINCR en los dos sistemas" is only true when the same sign-in is used (a different sign-in, e.g. Apple with "Hide My Email" on iPhone and Google on Android, can produce a different account) | moderate | Accepted | "Si entrás con la misma cuenta en los dos sistemas…" | PASS |
+| L21 | Own check vs #270 | Tokens were copied by hand with no drift control | moderate | Accepted | Each CSS color names its DESIGN.md token; `test:landing` checks AA for every text/control pair and, when DESIGN.md exists, equality with the token | PASS (checked with #270's DESIGN.md present) |
+| L22 | Claim audit | "Requiere iOS 15" is true only for the current Capacitor project (deployment target 15.0); the native prototype (#279) proposes iOS 17, pending product-owner decision | important | **Accepted as guard, decision open** | `test:landing` fails if the iOS deployment target or Android `minSdk` changes without updating `/descargar/` | HUMAN release decision |

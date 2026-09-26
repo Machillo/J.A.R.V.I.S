@@ -121,6 +121,68 @@ assert.match(css, /:focus-visible/);
 assert.match(css, /@media \(min-width: 760px\)/);
 assert.match(css, /min-height: 44px/);
 assert.match(home, /href="\/style\.css\?v=[a-f0-9]{10}"/);
+assert.match(css, /@media \(forced-colors: active\)/, 'masked icons stay visible in forced colors');
+
+// Colors: every landing variable names its DESIGN.md token; text and control pairs meet WCAG AA
+// in both schemes; when DESIGN.md (DINCR 2.0 tokens) is present the values must not drift from it.
+{
+  const block = source => Object.fromEntries([...source.matchAll(/--([a-z0-9-]+): (#[0-9A-Fa-f]{6}); \/\* ([a-z0-9-]+) \*\//g)].map(([, name, hex, token]) => [name, { hex, token }]));
+  const lightStart = css.indexOf('@media (prefers-color-scheme: light)');
+  const schemes = { dark: block(css.slice(0, lightStart)), light: block(css.slice(lightStart, lightStart + css.slice(lightStart).search(/\n\}\r?\n/))) };
+  const luminance = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const layers = ['bg', 'surface', 'surface-2'];
+  const pairs = [
+    ...['text', 'text-2', 'muted', 'accent-text'].flatMap(fg => layers.map(bg => [fg, bg, 4.5])),
+    ['on-accent', 'accent', 4.5], ['on-accent', 'accent-pressed', 4.5], ['on-accent-soft', 'accent-soft', 4.5],
+    ['accent-text', 'accent-soft', 4.5], ['text', 'accent-soft', 4.5], ['vip', 'vip-soft', 4.5],
+    // Non-text (WCAG 1.4.11): ghost button and chip borders, focus ring, status dot and icons.
+    ...['field-border', 'accent-text', 'warning'].flatMap(fg => layers.map(bg => [fg, bg, 3])),
+  ];
+  let design = null;
+  try { design = await readFile(new URL('../../../DESIGN.md', import.meta.url), 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  for (const [scheme, vars] of Object.entries(schemes)) {
+    assert.ok(Object.keys(vars).length >= 19, `${scheme}: every color variable names its DESIGN.md token`);
+    for (const [fg, bg, min] of pairs) {
+      const value = ratio(vars[fg].hex, vars[bg].hex);
+      assert.ok(value >= min, `${scheme}: ${fg} on ${bg} is ${value.toFixed(2)}:1, needs ${min}:1`);
+    }
+    if (design) for (const [name, { hex, token }] of Object.entries(vars)) {
+      const key = scheme === 'dark' ? `dark-${token}` : token;
+      const match = design.match(new RegExp(`^\\s{2}${key}: "(#[0-9A-Fa-f]{6})"`, 'm'));
+      assert.ok(match, `DESIGN.md defines ${key} (landing --${name})`);
+      assert.equal(hex.toUpperCase(), match[1].toUpperCase(), `landing --${name} (${scheme}) drifted from DESIGN.md ${key}`);
+    }
+  }
+}
+
+// Table marks: decorative icon plus real text, not role="img" on an empty span.
+assert.doesNotMatch(pagesHtml['precios/index.html'], /role="img"/);
+assert.match(pagesHtml['precios/index.html'], /<span class="sr-only">Incluido<\/span>/);
+assert.match(pagesHtml['precios/index.html'], /<span class="sr-only">No incluido<\/span>/);
+
+// Download page: platform facts come from the native projects, and no store looks available
+// before its official URL is configured.
+{
+  const download = pagesHtml['descargar/index.html'];
+  const gradle = await readFile(new URL('../android/variables.gradle', import.meta.url), 'utf8');
+  assert.equal(gradle.match(/minSdkVersion = (\d+)/)?.[1], '24', 'Android minSdk changed: update "Android 7.0" on /descargar/');
+  assert.match(download, /Requiere Android 7\.0 o posterior\./);
+  const pbxproj = await readFile(new URL('../ios-dincr/App/App.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
+  const iosTargets = new Set([...pbxproj.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = ([0-9.]+);/g)].map(m => m[1]));
+  assert.deepEqual([...iosTargets], ['15.0'], 'iOS deployment target changed: update "iOS 15" on /descargar/ (release decision)');
+  assert.match(download, /Requiere iOS 15 o posterior\./);
+  for (const [store, key] of [['Google Play', 'googlePlayUrl'], ['App Store', 'appStoreUrl']]) {
+    if (config[key]) continue;
+    assert.ok(download.includes(`Disponible próximamente en ${store}.`), `${store}: upcoming state is explicit`);
+    assert.ok(!Object.values(pagesHtml).some(html => html.includes(`Descargar en ${store}`)), `${store}: no download button without a URL`);
+  }
+}
+// In-app help lives in "Ayuda y soporte" ("Reportes" is the financial reports screen).
+assert.match(support, /Ayuda y soporte/);
+assert.doesNotMatch(support, /sección (de )?Reportes/);
 
 // Legal: Firebase Analytics/Crashlytics may stay in the published text only until the
 // approved Privacy v5 replaces v4 (docs/legal/privacy-v5-proposal.md). Marketing pages never mention them.
