@@ -24,14 +24,19 @@ def _money_text(value: float) -> str:
     """An amount in the account's base currency (from the authenticated identity).
 
     Only a label: without an identity currency it keeps the previous ₡.
+    The sign goes before the symbol (-$1,234.60), as in the app's formatMoney,
+    and an amount that rounds to zero never reads as "-0".
     """
     try:
         currency = str(get_current_user().get("base_currency") or "CRC").upper()
     except HTTPException:
         currency = "CRC"
+    decimals = 2 if currency == "USD" else 0
+    shown = round(float(value), decimals) + 0.0  # + 0.0 turns -0.0 into 0.0
+    sign, number = "-" if shown < 0 else "", f"{abs(shown):,.{decimals}f}"
     if currency == "USD":
-        return f"${value:,.2f}"
-    return f"₡{value:,.0f}" if currency == "CRC" else f"{value:,.0f} {currency}"
+        return f"{sign}${number}"
+    return f"{sign}₡{number}" if currency == "CRC" else f"{sign}{number} {currency}"
 
 
 def _money(value: Any) -> float:
