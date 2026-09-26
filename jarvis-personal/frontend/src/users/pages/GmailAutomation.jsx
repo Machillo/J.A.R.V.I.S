@@ -59,6 +59,21 @@ const money = (value, currency) => new Intl.NumberFormat(localeTag(deviceLanguag
   currencyDisplay: "narrowSymbol", maximumFractionDigits: 2,
 }).format(Number(value) || 0);
 
+// A movement is worth what it was in its own currency. For a USD movement the
+// bank email or statement also carries an amount converted with a default rate
+// (or not converted at all): it is never shown as if it were real.
+const upper = (code, fallback = "") => String(code || fallback).toUpperCase();
+const nativeMoney = (item) => item.original_currency && upper(item.original_currency) !== upper(item.currency, "CRC") && item.original_amount != null
+  ? { amount: item.original_amount, currency: upper(item.original_currency) }
+  : { amount: item.amount, currency: upper(item.currency, "CRC") };
+const baseOf = (item) => upper(item.account_base_currency, "CRC");
+const differs = (item) => nativeMoney(item).currency !== baseOf(item);
+// DINCR converts only between CRC and USD (a legacy base such as EUR cannot).
+const convertible = (item) => ["CRC", "USD"].includes(baseOf(item)) && ["CRC", "USD"].includes(nativeMoney(item).currency);
+// Saving it in another currency than the account's needs the user's own rate.
+const needsRate = (item) => differs(item) && convertible(item);
+const cannotConvert = (item) => differs(item) && !convertible(item);
+
 // One institution per resolved bank; unrecognised senders are grouped as "Other".
 const institutionFor = (code, name) => {
   if (resolveBank(code) || resolveBank(name)) return bankBranding(code, name);
@@ -362,15 +377,18 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
           <div className="gmail-email-meta"><span>{resolveBank(item.bank)?.name || (item.bank && item.bank !== "unknown" ? item.bank : tx("Banco", "Bank"))}</span><time>{item.received_at ? new Date(item.received_at).toLocaleDateString() : ""}</time></div>
           <strong>{item.subject || item.description || tx("Movimiento bancario", "Bank transaction")}</strong>
           <small>{item.sender}</small>
+          {pending && item.candidate_id && cannotConvert(item) && <p className="gmail-resolution-note">{tx(`Este movimiento está en ${nativeMoney(item).currency} y tu moneda principal es ${baseOf(item)}: DINCR no puede convertirlo. Podés rechazarlo.`, `This transaction is in ${nativeMoney(item).currency} and your main currency is ${baseOf(item)}: DINCR can’t convert it. You can reject it.`)}</p>}
+          {pending && item.candidate_id && needsRate(item) && <p className="gmail-resolution-note">{tx(`Este movimiento está en ${nativeMoney(item).currency}. Tocá Corregir e indicá el tipo de cambio que usaste para guardarlo en tu moneda principal.`, `This transaction is in ${nativeMoney(item).currency}. Tap Edit and enter the exchange rate you used to save it in your main currency.`)}</p>}
           {item.source_type === "statement" && <p className="gmail-resolution-note">{tx("Detectado en un estado de cuenta PDF. Revisalo igual que cualquier otro movimiento antes de guardarlo.", "Detected in a PDF statement. Review it like any other movement before saving it.")}</p>}
           {item.resolution_reason === "possible_cross_source_match" && <p className="gmail-resolution-note">{tx("Posible coincidencia con otro aviso bancario o estado de cuenta. DINCR la deja para tu revisión en vez de eliminarla automáticamente.", "Possible match with another bank notice or statement. DINCR leaves it for your review instead of deleting it automatically.")}</p>}
-          {item.candidate_id ? edit ? <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); review(item, "accept", { transaction_date: form.get("transaction_date"), description: form.get("description"), amount: Number(form.get("amount")), transaction_type: form.get("transaction_type"), category: categoryValue(form.get("category")) }); }} className="gmail-candidate-editor">
+          {item.candidate_id ? edit ? <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); review(item, "accept", { transaction_date: form.get("transaction_date"), description: form.get("description"), amount: Number(form.get("amount")), transaction_type: form.get("transaction_type"), category: categoryValue(form.get("category")), exchange_rate: needsRate(item) ? Number(form.get("exchange_rate")) : null }); }} className="gmail-candidate-editor">
             <input name="description" defaultValue={item.description} required aria-label={tx("Descripción", "Description")}/>
-            <div><input name="amount" type="number" step="0.01" min="0.01" defaultValue={item.amount} required aria-label={tx("Monto", "Amount")}/><input name="transaction_date" type="date" defaultValue={item.transaction_date} required aria-label={tx("Fecha", "Date")}/></div>
+            <div><input name="amount" type="number" step="0.01" min="0.01" defaultValue={nativeMoney(item).amount} required aria-label={`${tx("Monto", "Amount")} (${nativeMoney(item).currency})`}/><input name="transaction_date" type="date" defaultValue={item.transaction_date} required aria-label={tx("Fecha", "Date")}/></div>
+            {needsRate(item) && <input name="exchange_rate" type="number" step="0.0001" min="0.0001" required placeholder={tx("Tipo de cambio (₡ por $1)", "Exchange rate (₡ per $1)")} aria-label={tx("Tipo de cambio (₡ por $1)", "Exchange rate (₡ per $1)")}/>}
             <div><select name="transaction_type" defaultValue={item.transaction_type} aria-label={tx("Tipo de movimiento", "Movement type")}><option value="expense">{tx("Gasto", "Expense")}</option><option value="income">{tx("Ingreso", "Income")}</option><option value="debt_payment">{tx("Pago de deuda", "Debt payment")}</option></select><input name="category" defaultValue={categoryLabel(item.category || "general")} required aria-label={tx("Categoría", "Category")}/></div>
             <div className="gmail-review-actions"><button type="button" onClick={() => setEditing(null)}><X size={16}/>{tx("Cancelar", "Cancel")}</button><button className="primary" disabled={Boolean(busy)}><Check size={16}/>{tx("Guardar", "Save")}</button></div>
           </form> : <>
-            <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>{money(item.amount, item.currency)}</b></span></div>
+            <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>{money(nativeMoney(item).amount, nativeMoney(item).currency)}</b></span></div>
             {item.is_internal_transfer && <p className="gmail-resolution-note">{item.resolution_reason === "paired_owned_transfer" ? tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, ambos quedan revisados sin sumarse a ingresos o gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming reviews both without adding income or expense.") : tx("DINCR encontró ambas cuentas entre las que confirmaste como propias. Al aceptar, no se registrará como gasto ni ingreso.", "DINCR matched both endpoints to accounts you confirmed as yours. Accepting won’t record income or expense.")}</p>}
             {item.review_status === "duplicate" && <p className="gmail-resolution-note">{DUPLICATE_NOTES[item.resolution_reason]?.() || tx("DINCR detectó que este correo representa el mismo movimiento que otro registro y evitó contarlo dos veces.", "DINCR detected that this email represents the same movement as another record and avoided double counting it.")}</p>}
             {possibleTransfers.length > 0 && <div className="gmail-transfer-review">

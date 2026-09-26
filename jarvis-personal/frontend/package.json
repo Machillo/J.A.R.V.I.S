@@ -26,6 +26,7 @@
     "release:version": "node scripts/release-version.mjs",
     "test:android-identity": "node scripts/test-android-identity.mjs",
     "test:mail-oauth": "node scripts/test-mail-oauth.mjs",
+    "test:mail-currency": "node scripts/test-mail-currency.mjs",
     "test:bank-accounts": "node scripts/test-bank-accounts.mjs",
     "test:product-analytics": "node scripts/test-product-analytics-contract.mjs",
     "test:phase0a": "node scripts/test-phase-0a.mjs",

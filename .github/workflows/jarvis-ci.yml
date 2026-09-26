@@ -49,6 +49,7 @@ jobs:
       - run: npm run test:release-identity
       - run: npm run test:android-identity
       - run: npm run test:mail-oauth
+      - run: npm run test:mail-currency
       - run: npm run test:bank-accounts
       - run: npm run test:phase0j
       - run: npm run test:phase0h

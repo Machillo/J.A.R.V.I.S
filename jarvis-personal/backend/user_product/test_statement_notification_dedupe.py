@@ -130,7 +130,9 @@ class Conn:
             rows[params[0]]["status"] = "rejected"
             return _rows([])
         if q.startswith("UPDATE finva_email_candidates SET transaction_id=%s"):
-            rows[params[-1]].update(transaction_id=params[0], status="confirmed")
+            assert "amount=%s,original_amount=%s," in q
+            # What the review stores back is what later sources are matched against.
+            rows[params[-1]].update(transaction_id=params[0], status="confirmed", amount=params[3], original_amount=params[4])
             return _rows([])
         raise AssertionError(f"Unexpected query: {q[:110]}")
 
@@ -338,6 +340,20 @@ def test_usd_purchases_converted_at_different_rates_match_by_the_original_amount
     row, result = add(db, source="statement", amount=10500, original_amount=21, original_currency="USD",
                       record_key="statement:doc-a:0")  # statement rate
     assert result == {"status": "duplicate", "related_candidate_id": email}
+
+
+def test_a_usd_notification_accepted_with_the_users_rate_still_absorbs_its_statement_row(db):
+    email, _ = add(db, amount=10395, original_amount=21, original_currency="USD")  # parser @495
+    corrections = {"transaction_date": DAY, "description": "AUTOMERCADO ESCAZU", "amount": 21,
+                   "transaction_type": "expense", "category": "Compras", "exchange_rate": 505}
+    assert gmail_service.review_gmail_candidate(email, "accept", corrections)["status"] == "confirmed"
+    assert [str(t["amount"]) for t in db.state["transactions"]] == ["10605.00"]  # the user's rate
+    assert (candidate(db, email)["amount"], candidate(db, email)["original_amount"]) == (10395, 21)  # matching shape kept
+    row, result = add(db, source="statement", amount=10500, original_amount=21, original_currency="USD",
+                      record_key="statement:doc-a:0")  # statement rate
+    assert result == {"status": "duplicate", "related_candidate_id": email}
+    assert accept(row)["status"] == "duplicate"
+    assert len(db.state["transactions"]) == 1, "fixing FX never creates a second movement"
 
 
 def test_a_usd_purchase_never_matches_a_colon_purchase_of_the_same_converted_amount(db):

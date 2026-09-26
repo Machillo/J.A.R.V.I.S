@@ -177,9 +177,12 @@ class TransactionCreateRequest(BaseModel):
 class GmailCandidateReviewRequest(BaseModel):
     transaction_date: date
     description: str = Field(min_length=1, max_length=500)
+    # In the currency the movement happened in (USD for a USD purchase).
     amount: float = Field(gt=0)
     transaction_type: Literal["expense", "income", "debt_payment"]
     category: str = Field(default="general", max_length=100)
+    # The user's rate (CRC per 1 USD) when that currency is not the account's base.
+    exchange_rate: float | None = Field(default=None, gt=0, le=100000)
 
 
 class OwnTransferConfirmRequest(BaseModel):

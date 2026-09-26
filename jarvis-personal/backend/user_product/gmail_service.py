@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlencode
@@ -30,6 +31,7 @@ from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text, plain_text_from_html
 from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
+from backend.user_product.candidate_currency import native_money, transaction_amounts
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import release_cross_source_duplicates, resolve_candidate, reevaluate_workspace_candidates
 from backend.user_product.mail_sync_analytics import observe_mail_sync
@@ -369,7 +371,8 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
         rows = conn.execute(
             f"""SELECT m.id AS email_id,m.sender,m.subject,m.received_at,m.bank,m.status AS email_status,
                        m.parse_reason,c.id AS candidate_id,c.transaction_id,c.transaction_date,
-                       c.description,c.amount,c.currency,c.transaction_type,c.movement_direction,
+                       c.description,c.amount,c.currency,c.original_amount,c.original_currency,
+                       a.base_currency AS account_base_currency,c.transaction_type,c.movement_direction,
                        c.movement_kind,c.category,c.bank,c.source_account_label,
                        c.source_account_reference,c.destination_account_reference,c.counterparty,
                        c.parser_name,c.parser_version,c.extraction_method,c.confidence,
@@ -377,6 +380,7 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
                        c.source_type,c.source_provider,c.statement_document_id,
                        c.is_internal_transfer,c.related_candidate_id,c.resolution_reason
                 FROM finva_email_messages m
+                JOIN accounts a ON a.id=m.account_id
                 LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id
                 WHERE m.account_id=%s AND m.workspace_id=%s{status_filter}
                 ORDER BY COALESCE(m.received_at,m.created_at) DESC,m.id DESC
@@ -388,7 +392,8 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
     ]}
 
 
-def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any]) -> int:
+def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any], money: dict[str, Any]) -> int:
+    # `money` comes from candidate_currency.transaction_amounts: never the reviewed amount as is.
     category = normalize_category(values["category"], values["transaction_type"])
     source = "finva_statement" if candidate.get("source_type") == "statement" else "finva_gmail"
     note = (
@@ -399,14 +404,16 @@ def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[
     row = conn.execute(
         """INSERT INTO transactions(
                transaction_date,description,amount,transaction_type,category,account,source,notes,
-               user_id,workspace_id,financial_account_id,created_at
-           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) RETURNING id""",
+               user_id,workspace_id,financial_account_id,created_at,
+               original_amount,original_currency,exchange_rate
+           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s,%s,%s) RETURNING id""",
         (
-            values["transaction_date"], values["description"].strip(), values["amount"],
+            values["transaction_date"], values["description"].strip(), money["amount"],
             values["transaction_type"], category, candidate.get("bank") or "",
             source, note,
             int(candidate["legacy_user_id"]), candidate["workspace_id"],
             candidate.get("financial_account_id"),
+            money["original_amount"], money["original_currency"], money["exchange_rate"],
         ),
     ).fetchone()
     return int(row["id"])
@@ -414,6 +421,7 @@ def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[
 
 def _publish_confirmed_financial_input(
     conn, candidate: dict[str, Any], values: dict[str, Any], transaction_id: int, allowed_user_id: int,
+    money: dict[str, Any],
 ) -> None:
     """Publish the privacy-safe Phase 1 boundary in the same DB transaction.
 
@@ -429,8 +437,11 @@ def _publish_confirmed_financial_input(
     payload = {
         "transaction_id": transaction_id,
         "transaction_date": str(values["transaction_date"]),
-        "amount": float(values["amount"]),
-        "currency": str(candidate.get("currency") or "CRC"),
+        # What the transaction records: the base amount, plus the original when converted.
+        "amount": float(money["amount"]),
+        "currency": str(candidate.get("account_base_currency") or candidate.get("currency") or "CRC").upper(),
+        **({"original_amount": float(money["original_amount"]), "original_currency": money["original_currency"],
+            "exchange_rate": float(money["exchange_rate"])} if money["original_currency"] else {}),
         "transaction_type": str(values["transaction_type"]),
         "category": category,
         "financial_account_id": candidate.get("financial_account_id"),
@@ -461,7 +472,7 @@ def _publish_confirmed_financial_input(
             (
                 allowed_user_id, candidate["workspace_id"],
                 "Movimiento confirmado",
-                f"DINCR guardó {values['description'].strip()} por {float(values['amount']):,.2f} {payload['currency']}.",
+                f"DINCR guardó {values['description'].strip()} por {payload['amount']:,.2f} {payload['currency']}.",
                 str(transaction_id), f"financial-input-v1:{transaction_id}",
                 json.dumps({"event": "transaction_confirmed", "transaction_id": transaction_id}),
             ),
@@ -476,6 +487,19 @@ def _publish_confirmed_financial_input(
         conn.execute("RELEASE SAVEPOINT confirmed_input_notification")
 
 
+def _cents(value: Any) -> Decimal | None:
+    return None if value is None else Decimal(str(value)).quantize(Decimal("0.01"))
+
+
+def _corrected(key: str, value: Any, original: Any) -> bool:
+    # Amounts compare in cents; the stored date is read back as an ISO string.
+    if key == "amount":
+        return _cents(value) != _cents(original)
+    if key == "transaction_date":
+        return str(value)[:10] != str(original)[:10]
+    return value != original
+
+
 def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str, Any] | None = None) -> dict[str, Any]:
     if action not in {"accept", "reject"}:
         raise HTTPException(status_code=422, detail="Acción de revisión inválida.")
@@ -483,12 +507,13 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         candidate = conn.execute(
-            """SELECT c.*,g.legacy_user_id
+            """SELECT c.*,g.legacy_user_id,a.base_currency AS account_base_currency
                FROM finva_email_candidates c
                JOIN finva_email_messages m ON m.id=c.email_message_id
                JOIN finva_gmail_connections g ON g.id=m.connection_id
+               JOIN accounts a ON a.id=c.account_id
                WHERE c.id=%s AND c.account_id=%s AND c.workspace_id=%s
-               FOR UPDATE""",
+               FOR UPDATE OF c,m,g""",
             (candidate_id, account_id, workspace_id),
         ).fetchone()
         if not candidate:
@@ -535,30 +560,41 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             conn.commit()
             return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": None, "is_internal_transfer": True}
 
+        # The candidate is worth its native amount; a parser's converted amount is
+        # never trusted. Corrections are typed in that same currency.
+        corrections = dict(corrections or {})
+        exchange_rate = corrections.pop("exchange_rate", None)
+        native_currency, native_amount = native_money(candidate)
         values = {
             "transaction_date": candidate["transaction_date"],
             "description": candidate["description"],
-            "amount": candidate["amount"],
+            "amount": native_amount,
             "transaction_type": candidate["transaction_type"],
             "category": candidate["category"],
         }
-        if corrections:
-            values.update(corrections)
+        values.update(corrections)
+        original = {**candidate, "amount": native_amount}
         corrected_fields = sorted(
-            key for key, value in (corrections or {}).items()
-            if value != candidate.get(key)
+            key for key, value in corrections.items()
+            if _corrected(key, value, original.get(key))
         )
-        transaction_id = _create_candidate_transaction(conn, candidate, values)
-        _publish_confirmed_financial_input(conn, candidate, values, transaction_id, get_current_user_id())
+        money = transaction_amounts(native_currency, values["amount"], candidate.get("account_base_currency"), exchange_rate)
+        transaction_id = _create_candidate_transaction(conn, candidate, values, money)
+        _publish_confirmed_financial_input(conn, candidate, values, transaction_id, get_current_user_id(), money)
         category = normalize_category(values["category"], values["transaction_type"])
+        # A correction of a USD movement updates its original amount; the stored
+        # (matching-only) amount keeps its meaning.
+        from_original = native_currency != str(candidate.get("currency") or "CRC").upper()
+        candidate_amount = candidate["amount"] if from_original else values["amount"]
+        candidate_original = values["amount"] if from_original else candidate.get("original_amount")
         conn.execute(
             """UPDATE finva_email_candidates
-               SET transaction_id=%s,transaction_date=%s,description=%s,amount=%s,
+               SET transaction_id=%s,transaction_date=%s,description=%s,amount=%s,original_amount=%s,
                    transaction_type=%s,category=%s,status='confirmed',reviewed_at=NOW(),
                    corrected_fields=%s,updated_at=NOW()
                WHERE id=%s""",
-            (transaction_id, values["transaction_date"], values["description"].strip(), values["amount"],
-             values["transaction_type"], category, corrected_fields, candidate_id),
+            (transaction_id, values["transaction_date"], values["description"].strip(), candidate_amount,
+             candidate_original, values["transaction_type"], category, corrected_fields, candidate_id),
         )
         conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
         conn.commit()
