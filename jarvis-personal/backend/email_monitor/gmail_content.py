@@ -11,33 +11,40 @@ MAX_BODY_CHARS = 256_000
 MAX_PDF_ATTACHMENTS = 3
 MAX_PDF_BYTES = 10 * 1024 * 1024
 MAX_PDF_TEXT_CHARS = 200_000
-_TAG = re.compile(r"<[^>]*>")
 _SPACE = re.compile(r"\s+")
 
 
 def plain_text_from_html(raw: str | None) -> str:
-    """Visible text of a mail body, in linear time and bounded size.
+    """Visible text of a mail body, in one linear pass and bounded size.
 
-    Script and style blocks are cut with find(), not a lazy DOTALL regex: that
-    regex rescans to the end of the text for every unterminated "<script", which
-    is quadratic on hostile mail and holds the GIL for the whole call. An
-    unterminated block drops the rest of the text.
+    Tags are removed with str.find, never with a regex: a lazy DOTALL pattern
+    ("<script.*?</script>") and even "<[^>]*>" rescan the rest of the text from
+    every unterminated "<", which is quadratic on hostile mail and holds the GIL.
+    An unterminated tag or script/style block drops the rest of the text.
     """
     text = (raw or "")[:MAX_BODY_CHARS]
-    lower, kept, position = text.lower(), [], 0
-    while True:
-        starts = [i for i in (lower.find("<script", position), lower.find("<style", position)) if i >= 0]
-        if not starts:
+    lower, kept, position, length = text.lower(), [], 0, len(text)
+    while position < length:
+        start = text.find("<", position)
+        if start < 0:
             kept.append(text[position:])
             break
-        start = min(starts)
         kept.append(text[position:start])
-        closing = "</script>" if lower.startswith("<script", start) else "</style>"
-        end = lower.find(closing, start)
+        end = text.find(">", start + 1)
         if end < 0:
             break
-        position = end + len(closing)
-    return _SPACE.sub(" ", html.unescape(_TAG.sub(" ", " ".join(kept)))).strip()
+        tag = lower[start + 1:end].split(None, 1)
+        name = tag[0] if tag else ""
+        if name in ("script", "style"):
+            close = lower.find(f"</{name}", end + 1)
+            close_end = text.find(">", close + 1) if close >= 0 else -1
+            if close_end < 0:
+                break
+            position = close_end + 1
+        else:
+            position = end + 1
+        kept.append(" ")
+    return _SPACE.sub(" ", html.unescape("".join(kept))).strip()
 
 
 def collect_attachments(payload: dict[str, Any]) -> list[dict[str, Any]]:

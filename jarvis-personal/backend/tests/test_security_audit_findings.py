@@ -227,7 +227,8 @@ def test_the_ibkr_owner_is_resolved_in_one_identity_space(pg, monkeypatch):
 from backend.email_monitor import gmail_content, payroll_statement  # noqa: E402
 
 
-@pytest.mark.parametrize("hostile", ["<script " * 150_000, "<style " * 150_000, "<script>" + "x" * 900_000])
+@pytest.mark.parametrize("hostile", ["<script " * 150_000, "<style " * 150_000, "<script>" + "x" * 900_000,
+                                     "<" * 1_000_000, "<a " * 300_000, "<SCRIPT x>" * 100_000])
 def test_mail_html_is_stripped_in_bounded_time(hostile):
     """A lazy DOTALL regex rescanned the rest of the text per unterminated tag (quadratic, GIL held)."""
     started = time.process_time()
