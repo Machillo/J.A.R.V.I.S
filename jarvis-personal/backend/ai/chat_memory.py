@@ -46,7 +46,7 @@ def get_or_create_chat_session() -> int:
             INSERT INTO chat_sessions (workspace_id, status, created_at, updated_at)
             VALUES (%s, 'active', NOW(), NOW())
             """,
-            (workspace_id),
+            (workspace_id,),
         )
         conn.commit()
 
