@@ -149,14 +149,21 @@ def verify_supabase_token(access_token: str) -> dict[str, Any]:
             detail="Faltan SUPABASE_URL o SUPABASE_ANON_KEY en Render.",
         )
 
-    response = requests.get(
-        f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
-        headers={
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": f"Bearer {access_token}",
-        },
-        timeout=10,
-    )
+    try:
+        response = requests.get(
+            f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
+            headers={
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": f"Bearer {access_token}",
+            },
+            timeout=10,
+        )
+    except requests.RequestException as exc:  # timeout or unreachable: no verdict on the token
+        logger.error("Supabase Auth unreachable: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No pudimos verificar tu sesión en este momento. Intentá de nuevo.",
+        ) from None
 
     # Only Supabase's own verdict on the token (a 4xx) means the session is invalid.
     # A rate limit or an outage (429, 5xx) is not a verdict: 503 lets the app retry
