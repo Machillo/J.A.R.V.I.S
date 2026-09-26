@@ -158,10 +158,19 @@ def verify_supabase_token(access_token: str) -> dict[str, Any]:
         timeout=10,
     )
 
-    if response.status_code != 200:
+    # Only Supabase's own verdict on the token (a 4xx) means the session is invalid.
+    # A rate limit or an outage (429, 5xx) is not a verdict: 503 lets the app retry
+    # instead of signing every active user out on a 401.
+    if 400 <= response.status_code < 500 and response.status_code != 429:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de Supabase inválido o expirado.",
+        )
+    if response.status_code != 200:
+        logger.error("Supabase Auth did not verify the session status=%s", response.status_code)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No pudimos verificar tu sesión en este momento. Intentá de nuevo.",
         )
 
     payload = response.json()
