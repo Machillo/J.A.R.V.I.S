@@ -22,6 +22,7 @@ from fastapi import HTTPException
 from fastapi.responses import RedirectResponse
 
 from backend.core.database import get_connection
+from backend.email_monitor.gmail_content import plain_text_from_html
 from backend.user_product import mail_oauth
 from backend.user_product.gmail_consent import require_gmail_consent
 from backend.user_product.gmail_service import (
@@ -291,8 +292,7 @@ def _sender_allowed(value: str) -> bool:
 
 
 def _message_text(value: str) -> str:
-    clean = re.sub(r"<script.*?</script>|<style.*?</style>", " ", value or "", flags=re.I | re.S)
-    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", clean))).strip()
+    return plain_text_from_html(value)
 
 
 def _attachments(token: str, message_id: str) -> tuple[str, list[str]]:

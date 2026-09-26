@@ -27,7 +27,7 @@ from backend.email_monitor.parser import parse_financial_email
 from backend.email_monitor.parser_identity import for_account_holder
 from backend.email_monitor.popular_pdf import parse_popular_email_document
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
-from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text
+from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text, plain_text_from_html
 from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.financial_identity import discover_candidate_account
@@ -135,36 +135,54 @@ def _list_message_page(service, query: str, *, page_token: str | None, limit: in
     return items, response.get("nextPageToken")
 
 
-def bank_sender_allowed(sender: str) -> bool:
-    """Exact bank address (or subdomain of an approved bank domain) from FINVA_QUERY."""
+def _single_sender_address(sender: str) -> str | None:
+    """The one address of a From header, or None when the header is ambiguous or malformed."""
     header = (sender or "").strip()
     brackets = re.findall(r"<([^<>]*)>", header)
     if len(brackets) > 1:
-        return False
+        return None
     if brackets:
         display, _, trailing = header.partition("<")
         # A display name holding an address ("alerta@banco <x@evil>") or a second
         # recipient after the brackets is never a genuine bank notification.
         if "@" in display or trailing.split(">", 1)[-1].strip():
-            return False
+            return None
         address = brackets[0]
     else:
         address = header
     address = address.strip().lower()
-    if not re.fullmatch(r"[a-z0-9_.+\-]+@[a-z0-9.\-]+", address):
+    return address if re.fullmatch(r"[a-z0-9_.+\-]+@[a-z0-9.\-]+", address) else None
+
+
+def _sender_in(sender: str, allowed: set[str]) -> bool:
+    address = _single_sender_address(sender)
+    if not address:
         return False
     domain = address.rsplit("@", 1)[-1]
-    allowed = {item.lower() for item in re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)}
     return any(address == item or domain == item or domain.endswith("." + item) for item in allowed)
+
+
+def bank_sender_allowed(sender: str) -> bool:
+    """Exact bank address (or subdomain of an approved bank domain) from FINVA_QUERY."""
+    return _sender_in(sender, {item.lower() for item in re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)})
+
+
+# CCSS payroll orders are financial records written without review (they shape the
+# aguinaldo), so they are only read from the CCSS itself, as the Outlook path does.
+CCSS_SENDERS = frozenset({"ccss.sa.cr"})
+
+
+def ccss_sender_allowed(sender: str) -> bool:
+    return _sender_in(sender, set(CCSS_SENDERS))
 
 
 def _aguinaldo_gmail_query(as_of: date | None = None) -> str:
     """Search the complete Costa Rican aguinaldo period for CCSS payroll orders."""
     current = as_of or date.today()
     period_start = date(current.year if current.month == 12 else current.year - 1, 12, 1)
+    # Only CCSS senders: a subject clause would list (and parse) anyone's mail.
     return (
-        '(from:noreply@ccss.sa.cr OR from:ccss@ccss.sa.cr '
-        'OR subject:"Generación de Orden Patronal Digital") '
+        '(from:ccss.sa.cr) '
         f'after:{period_start:%Y/%m/%d} -in:spam -in:trash'
     )
 
@@ -755,10 +773,7 @@ def _decode_part(part: dict[str, Any]) -> str:
 
 
 def _plain_text(payload: dict[str, Any]) -> str:
-    raw = _decode_part(payload)
-    raw = re.sub(r"<script.*?</script>|<style.*?</style>", " ", raw, flags=re.I | re.S)
-    raw = re.sub(r"<[^>]+>", " ", raw)
-    return re.sub(r"\s+", " ", html.unescape(raw)).strip()
+    return plain_text_from_html(_decode_part(payload))
 
 
 def _insert_finva_candidate(
@@ -825,9 +840,15 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
     subject = headers.get("subject", "")
     sender = headers.get("from", "")
     payload = full.get("payload") or {}
-    body = _plain_text(payload) or full.get("snippet", "")
     attachments = collect_attachments(payload)
-    attachment_text, attachment_names = extract_pdf_attachment_text(service, message_id, attachments)
+    if bank_sender_allowed(sender) or ccss_sender_allowed(sender):
+        body = _plain_text(payload) or full.get("snippet", "")
+        attachment_text, attachment_names = extract_pdf_attachment_text(service, message_id, attachments)
+    else:
+        # Mail from anyone else is recorded as ignored without reading its body or
+        # attachments: no parser work for content DINCR will not use.
+        body, attachment_text = "", ""
+        attachment_names = [item.get("filename") or "" for item in attachments if item.get("filename")]
     received_at = None
     if headers.get("date"):
         try:
@@ -909,7 +930,8 @@ def _ingest_message_once(
     # The mailbox holder is this connection's own DINCR account; the email text
     # is parsed as received, never rewritten into another person's identity.
     identity = for_account_holder(str(connection.get("display_name") or ""))
-    payroll_report = parse_ccss_order_patronal(subject, sender, attachment_text or body)
+    payroll_report = (parse_ccss_order_patronal(subject, sender, attachment_text or body)
+                      if ccss_sender_allowed(sender) else None)
     financial_text = "\n".join(item for item in (body, attachment_text) if item)
     # Bank templates run only for an approved bank address. Gmail passes the raw
     # From header, whose display name an attacker controls ("alerta@banco <x@evil>").
@@ -1215,6 +1237,44 @@ def _start_watch(connection_id: int, service, suppress_errors: bool = False) -> 
             raise
 
 
+MAIL_ACCESS_ENDED = "Tu plan ya no incluye correos financieros: desconectamos este correo y borramos su autorización. Podés volver a conectarlo cuando tengas VIP."
+
+
+def end_unentitled_mail_connections(conn) -> int:
+    """End stored mail authorization for accounts that no longer have VIP.
+
+    A lapsed plan must not keep a mailbox credential that a later grant would
+    silently reuse: the token is revoked (Gmail) and deleted, and the connection
+    is disabled, so reading again needs a new consent and OAuth. What was already
+    imported stays in the account. Caller commits.
+    """
+    rows = conn.execute(
+        """SELECT id,account_id,refresh_token_secret_id,granted_scopes FROM finva_gmail_connections
+           WHERE status<>'disabled' ORDER BY id FOR UPDATE"""
+    ).fetchall() or []
+    ended = 0
+    for row in rows:
+        if _has_active_vip_access(conn, str(row["account_id"])):
+            continue
+        secret_id = str(row["refresh_token_secret_id"]) if row.get("refresh_token_secret_id") else None
+        if secret_id and GMAIL_SCOPE in (row.get("granted_scopes") or []):
+            try:
+                token = _vault_read(conn, secret_id)
+                requests.post("https://oauth2.googleapis.com/revoke", data={"token": token}, timeout=10)
+            except Exception:
+                logger.warning("Gmail token revocation failed when a plan ended")
+        conn.execute(
+            """UPDATE finva_gmail_connections
+               SET status='disabled',history_id=NULL,watch_expiration=NULL,initial_scan_page_token=NULL,
+                   last_error=%s,updated_at=NOW()
+               WHERE id=%s""",
+            (MAIL_ACCESS_ENDED, int(row["id"])),
+        )
+        _vault_delete(conn, secret_id)
+        ended += 1
+    return ended
+
+
 def gmail_maintenance(secret: str | None) -> dict[str, Any]:
     expected = os.getenv("FINVA_GMAIL_CRON_SECRET", "")
     if not expected:
@@ -1224,6 +1284,7 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
     with get_connection() as conn:
         # Abandoned OAuth flows must not keep a pending refresh token in Vault.
         mail_oauth.discard_stale_flows(conn)
+        ended = end_unentitled_mail_connections(conn)
         conn.commit()
     with get_connection() as conn:
         rows = conn.execute(
@@ -1260,7 +1321,8 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
         except Exception:
             continue
     retention = apply_gmail_retention()
-    return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect, "retention": retention}
+    return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect,
+            "ended_without_plan": ended, "retention": retention}
 
 
 def process_gmail_push(payload: dict[str, Any], token: str | None) -> dict[str, Any]:
