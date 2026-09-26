@@ -74,6 +74,7 @@ def test_bridge_issuance_rejects_non_owner_database_role(monkeypatch):
 def test_owner_bridge_rejects_client_forgery_and_respects_db_role(monkeypatch):
     uid = str(uuid4())
     monkeypatch.setattr(owner_bridge, "BRIDGE_API_KEY", "test-server-secret")
+    monkeypatch.setenv("OWNER_EMAILS", "owner@example.com")
     row = {"id": 7, "email": "owner@example.com", "supabase_user_id": uid, "role": "owner", "status": "active"}
 
     class Connection:
@@ -96,6 +97,11 @@ def test_owner_bridge_rejects_client_forgery_and_respects_db_role(monkeypatch):
         owner_bridge.authenticate_owner_bridge_token(signed + "tampered")
     assert exc.value.status_code == 401
     assert owner_bridge.authenticate_owner_bridge_token(signed)["role"] == "owner"
+    monkeypatch.setenv("OWNER_EMAILS", "")  # removed from the allowlist: the session stops working
+    with pytest.raises(HTTPException) as exc:
+        owner_bridge.authenticate_owner_bridge_token(signed)
+    assert exc.value.status_code == 403
+    monkeypatch.setenv("OWNER_EMAILS", "owner@example.com")
     row["role"] = "user"
     with pytest.raises(HTTPException) as exc:
         owner_bridge.authenticate_owner_bridge_token(signed)
