@@ -76,64 +76,12 @@ def _extract_memory_text(user_message: str) -> str:
     return text
 
 
-def ensure_memory_tables(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS memory_items (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
-            category TEXT NOT NULL DEFAULT 'other',
-            title TEXT,
-            content TEXT NOT NULL,
-            importance INTEGER NOT NULL DEFAULT 3,
-            source TEXT NOT NULL DEFAULT 'manual',
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_memory_items_user_active
-        ON memory_items(user_id, is_active)
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_memory_items_category
-        ON memory_items(category)
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_preferences (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
-            workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
-            preference_key TEXT NOT NULL,
-            preference_value JSONB NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, preference_key)
-        )
-        """
-    )
-
-    conn.execute("ALTER TABLE memory_items ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE")
-    conn.execute("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_items_workspace_active ON memory_items(workspace_id, is_active)")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_preferences_workspace_key ON user_preferences(workspace_id, preference_key)")
-
-
 def list_memory_items(category: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     limit = max(1, min(int(limit or 100), 250))
 
     with get_connection() as conn:
-        ensure_memory_tables(conn)
         if category:
             rows = conn.execute(
                 """
@@ -174,7 +122,6 @@ def search_memory_items(query: str, limit: int = 10) -> list[dict[str, Any]]:
     like_query = f"%{query.lower()}%"
 
     with get_connection() as conn:
-        ensure_memory_tables(conn)
         rows = conn.execute(
             """
             SELECT id, category, title, content, importance, source, metadata, created_at, updated_at
@@ -226,7 +173,6 @@ def create_memory_item(
     title = _clean_text(title or content[:80])
 
     with get_connection() as conn:
-        ensure_memory_tables(conn)
         existing = conn.execute(
             """
             SELECT id
@@ -285,7 +231,6 @@ def forget_memory_item(memory_id: int) -> dict[str, Any]:
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        ensure_memory_tables(conn)
         result = conn.execute(
             """
             UPDATE memory_items
@@ -302,7 +247,6 @@ def get_profile_preferences() -> dict[str, Any]:
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        ensure_memory_tables(conn)
         row = conn.execute(
             """
             SELECT preference_value
@@ -328,7 +272,6 @@ def update_profile_preferences(payload: dict[str, Any]) -> dict[str, Any]:
     merged = {**current, **clean_payload}
 
     with get_connection() as conn:
-        ensure_memory_tables(conn)
         conn.execute(
             """
             INSERT INTO user_preferences (user_id, workspace_id, preference_key, preference_value)

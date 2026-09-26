@@ -62,84 +62,6 @@ def _card_cycle_bounds(today: date | None = None, cutoff_day: int = 21) -> tuple
     return start, end
 
 
-def _ensure_receivable_tables(conn) -> None:
-    """Create/upgrade receivable tables used by manual and automatic IOU tracking.
-
-    Automatic receivables are generated from confirmed additional-card purchases
-    (for example Emily's BAC additional cards). Manual receivables can still be
-    created from the UI or chat.
-    """
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS receivables (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL DEFAULT 1,
-            person_name TEXT NOT NULL,
-            original_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-            paid_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-            pending_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'pending',
-            notes TEXT,
-            source_type TEXT NOT NULL DEFAULT 'manual',
-            source_key TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'manual'")
-    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS source_key TEXT")
-    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS notes TEXT")
-    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
-    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
-    conn.execute("ALTER TABLE receivables ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id)")
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS receivable_payments (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL DEFAULT 1,
-            receivable_id BIGINT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,
-            amount NUMERIC(14,2) NOT NULL,
-            source_transaction_id BIGINT,
-            notes TEXT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_user_status ON receivables(user_id, status)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_source_key ON receivables(workspace_id, source_key)")
-    conn.execute("ALTER TABLE receivable_payments ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_payments_receivable ON receivable_payments(user_id, receivable_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivables_workspace_status ON receivables(workspace_id, status)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_payments_workspace_receivable ON receivable_payments(workspace_id, receivable_id)")
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS receivable_entries (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL DEFAULT 1,
-            receivable_id BIGINT NOT NULL REFERENCES receivables(id) ON DELETE CASCADE,
-            entry_type TEXT NOT NULL,
-            amount NUMERIC(14,2) NOT NULL,
-            description TEXT NOT NULL DEFAULT '',
-            entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
-            source_type TEXT NOT NULL DEFAULT 'manual',
-            source_key TEXT,
-            source_transaction_id BIGINT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS cycle_start DATE")
-    conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS cycle_end DATE")
-    conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE")
-    conn.execute("ALTER TABLE receivable_entries ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_workspace_account ON receivable_entries(workspace_id, receivable_id, entry_date DESC, id DESC)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_account ON receivable_entries(user_id, receivable_id, entry_date DESC, id DESC)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_receivable_entries_active_cycle ON receivable_entries(user_id, receivable_id, is_archived, cycle_start, cycle_end)")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_receivable_entries_source_key ON receivable_entries(workspace_id, source_key) WHERE source_key IS NOT NULL")
-
-
-
 def _person_key(person_name: str) -> str:
     normalized = re.sub(r"[^a-z0-9]+", "-", str(person_name or "").strip().lower())
     return normalized.strip("-") or "persona"
@@ -286,23 +208,6 @@ def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str,
     ).fetchone()
     return dict(updated)
 
-def _ensure_card_aliases(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS card_aliases (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL DEFAULT 1,
-            card_last4 TEXT NOT NULL,
-            owner_label TEXT NOT NULL,
-            relationship TEXT,
-            is_primary BOOLEAN NOT NULL DEFAULT FALSE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-
-
 def _fetch_additional_card_totals(
     conn, workspace_id: str, cycle_start: date, cycle_end: date
 ) -> list[dict[str, Any]]:
@@ -312,7 +217,6 @@ def _fetch_additional_card_totals(
     unpaid balance remains. This prevents old payments from cancelling a new
     manual charge entered this month.
     """
-    _ensure_card_aliases(conn)
     rows = conn.execute(
         """
         WITH additional_aliases AS (
@@ -483,7 +387,6 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
 def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
     workspace_id = get_current_workspace_id()
     """Mirror only the active cycle's additional-card purchases."""
-    _ensure_receivable_tables(conn)
     _backfill_receivable_entries(conn, user_id)
     cycle_start, cycle_end = _card_cycle_bounds()
     totals = _fetch_additional_card_totals(conn, workspace_id, cycle_start, cycle_end)
@@ -835,7 +738,6 @@ def list_receivables() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     cycle_start, cycle_end = _card_cycle_bounds()
     with get_connection() as conn:
-        _ensure_receivable_tables(conn)
         _backfill_receivable_entries(conn, user_id)
         _sync_auto_additional_card_receivables(conn, user_id)
         _sync_receivable_payments_from_income(conn, user_id)
@@ -977,7 +879,6 @@ def add_receivable_entry(
     }
     final_description = clean_description or labels[clean_kind]
     with get_connection() as conn:
-        _ensure_receivable_tables(conn)
         _backfill_receivable_entries(conn, user_id)
         account = _get_or_create_person_receivable(conn, user_id, clean_name)
         entry_day = datetime.fromisoformat(safe_date).date()
@@ -1005,7 +906,6 @@ def update_receivable_entry(receivable_id: int, entry_id: int, amount: float | N
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_receivable_tables(conn)
         entry = conn.execute("SELECT * FROM receivable_entries WHERE id=%s AND receivable_id=%s AND workspace_id=%s FOR UPDATE", (entry_id, receivable_id, workspace_id)).fetchone()
         if not entry:
             return {"status": "NOT_FOUND", "message": "Movimiento no encontrado."}
@@ -1061,7 +961,6 @@ def apply_receivable_payment(
         return {"status": "ERROR", "message": "Monto inválido."}
 
     with get_connection() as conn:
-        _ensure_receivable_tables(conn)
         rec = conn.execute(
             "SELECT * FROM receivables WHERE id = %s AND workspace_id = %s FOR UPDATE",
             (receivable_id, workspace_id),

@@ -12,6 +12,7 @@ from typing import Any
 
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.schema_state import tables_exist
 from backend.finance.deterioration import get_financial_deterioration
 from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.intelligence import (
@@ -65,29 +66,7 @@ def _safe_usable_money(*, operating_surplus: float, liquidity: float, protected_
     return round(min(candidates), 2)
 
 
-def _ensure_strategy_tables(conn) -> None:
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS advisor_current_strategy (
-            workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
-            user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
-            advisor_version TEXT NOT NULL,
-            strategy_hash TEXT NOT NULL,
-            strategy JSONB NOT NULL,
-            generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS advisor_strategy_history (
-            id BIGSERIAL PRIMARY KEY,
-            workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-            user_id BIGINT NOT NULL REFERENCES allowed_users(id) ON DELETE CASCADE,
-            advisor_version TEXT NOT NULL,
-            strategy_hash TEXT NOT NULL,
-            strategy JSONB NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
+STRATEGY_TABLES = ("advisor_current_strategy", "advisor_strategy_history")
 
 
 def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
@@ -97,7 +76,9 @@ def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
     canonical = json.dumps(stable_strategy, ensure_ascii=False, sort_keys=True, default=str)
     fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     with get_connection() as conn:
-        _ensure_strategy_tables(conn)
+        # Created by migration 20260926125000; until it runs, the strategy is not kept.
+        if not tables_exist(conn, STRATEGY_TABLES):
+            return {"strategy_hash": fingerprint, "changed": False, "persisted": False}
         existing = conn.execute(
             "SELECT strategy_hash FROM advisor_current_strategy WHERE workspace_id=%s",
             (workspace_id,),
@@ -120,6 +101,7 @@ def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
                 strategy=EXCLUDED.strategy,
                 generated_at=NOW(),
                 updated_at=NOW()
+            RETURNING workspace_id
         """, (workspace_id, user_id, ADVISOR_VERSION, fingerprint, canonical))
         conn.commit()
     return {"strategy_hash": fingerprint, "changed": changed}
@@ -334,7 +316,8 @@ def build_advisor_strategy(*, persist: bool = True) -> dict[str, Any]:
 def get_strategy_history(limit: int = 20) -> list[dict[str, Any]]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        _ensure_strategy_tables(conn)
+        if not tables_exist(conn, STRATEGY_TABLES):
+            return []
         rows = conn.execute("""
             SELECT id,advisor_version,strategy_hash,strategy,created_at
             FROM advisor_strategy_history WHERE workspace_id=%s

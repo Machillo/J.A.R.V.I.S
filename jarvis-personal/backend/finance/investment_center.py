@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection, serialize_row, serialize_rows
-from backend.integrations.ibkr_readonly import ensure_ibkr_tables, flex_is_configured, sync_flex_snapshot
+from backend.integrations.ibkr_readonly import flex_is_configured, sync_flex_snapshot
 
 router = APIRouter(prefix="/finance/investment-center", tags=["finance-investments"])
 logger = logging.getLogger(__name__)
@@ -37,7 +37,6 @@ class SnapshotRequest(BaseModel):
 
 def _summary(workspace_id: str):
     with get_connection() as conn:
-        ensure_ibkr_tables(conn)
         snap = conn.execute(
             """
             SELECT * FROM investment_portfolio_snapshots
