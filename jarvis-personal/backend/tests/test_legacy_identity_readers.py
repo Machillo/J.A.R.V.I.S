@@ -42,6 +42,7 @@ REMAINING = {
     ("integrations/ibkr_readonly.py", "account_by_legacy_id"): 1,  # Owner identity
     ("integrations/ibkr_readonly.py", "read_users_table"): 1,      # Owner identity
     ("scripts/finva_personal_isolation_check.py", "read_users_table"): 1,  # operator script
+    ("scripts/set_owner_role.py", "account_by_legacy_id"): 2,  # operator script (the role lives on allowed_users)
     ("scripts/workspace_isolation_check.py", "account_by_legacy_id"): 2,   # operator script
     ("sports/service.py", "account_by_legacy_id"): 1,     # Owner identity
     ("user_product/gmail_service.py", "read_users_table"): 1,  # auth bridge (legacy users row for old FKs)

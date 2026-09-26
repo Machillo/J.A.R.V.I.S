@@ -17,6 +17,7 @@ except Exception:  # pragma: no cover - keeps backend alive if dependency is not
     webpush = None
 
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
+from backend.auth.owner_role import owner_enabled
 from backend.core.database import get_connection
 
 logger = logging.getLogger(__name__)
@@ -214,11 +215,15 @@ def send_system_push(title: str, body: str, category: str = "system", url: str =
     """Envía una alerta inmediata a todos los dispositivos owner habilitados."""
     sent = 0
     with get_connection() as conn:
-        subscriptions = conn.execute(
-            """SELECT ns.* FROM notification_subscriptions ns
-               JOIN allowed_users au ON au.id = ns.user_id
-               WHERE ns.enabled = TRUE AND au.role IN ('owner', 'admin') AND au.status = 'active'"""
-        ).fetchall()
+        subscriptions = [
+            row for row in conn.execute(
+                """SELECT ns.*, au.role AS recipient_role, au.email AS recipient_email FROM notification_subscriptions ns
+                   JOIN allowed_users au ON au.id = ns.user_id
+                   WHERE ns.enabled = TRUE AND au.role IN ('owner', 'admin') AND au.status = 'active'"""
+            ).fetchall()
+            # An Owner no longer listed in OWNER_EMAILS stops receiving Owner alerts at once.
+            if row["recipient_role"] != "owner" or owner_enabled(row["recipient_email"])
+        ]
         for subscription in subscriptions:
             ok, _ = _send_to_subscription(conn, subscription, title, body, category)
             sent += int(ok)
