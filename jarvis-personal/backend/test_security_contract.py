@@ -539,7 +539,7 @@ def test_self_deletion_drops_mail_secrets_and_revokes_google_after_commit(monkey
             if "FROM mail_oauth_flows f" in normalized:
                 return Result(rows=[{"refresh_token_secret_id": "aaaaaaaa-0000-0000-0000-000000000003",
                                      "granted_scopes": [auth_service.GMAIL_SCOPE], "decrypted_secret": "pending-google-refresh"}])
-            if normalized.startswith("DELETE FROM vault.secrets"):
+            if normalized.startswith("SELECT dincr_private.mail_secret_delete"):
                 events.append(("VAULT_DELETE", params[0]))
             if normalized.startswith("UPDATE allowed_users SET status"):
                 return Result({"id": 42})
