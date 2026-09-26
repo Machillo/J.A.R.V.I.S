@@ -6,7 +6,6 @@ import secrets
 import smtplib
 import requests
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
 from types import SimpleNamespace
 from urllib.parse import urlsplit
@@ -15,19 +14,22 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.schema_state import tables_exist
 from backend.core.feature_flags import FEATURE_DEFINITIONS, clear_feature_flag_cache
 from backend.product_ops.email_monitor_dashboard import build_email_monitor_dashboard
 
-BETA_CODE = "beta-2026-01"
 LAUNCH_PROMOTION_CODE = "launch-free-2026"
 LAUNCH_PROMOTION_END = datetime(2027, 1, 1, 6, 0, 0, tzinfo=timezone.utc)
 PRICES = {
     "basic": {"regular": 2990},
     "vip": {"regular": 4990},
 }
-PAYMENT_CODE_PATTERN = re.compile(r"\b(?:DINCR|FINVA)-[A-Z0-9]{6}\b", re.I)
-RECEIPT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
-MAX_RECEIPT_BYTES = 5 * 1024 * 1024
+# Public payments are App Store / Google Play only (store_billing.py). DINCR never
+# takes an off-store payment (no SINPE, transfers, receipts or manual orders).
+STORE_ENTITLED_STATES = ("trialing", "active", "grace_period")
+# Only real stores grant access. 'sandbox' rows come from the Owner-only QA simulator
+# and never make a paid plan usable.
+ENTITLING_STORES = ("apple", "google")
 logger = logging.getLogger(__name__)
 RELEASE_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[+-][A-Za-z0-9.-]+)?$")
 def _discord_webhook_host(webhook: str) -> str | None:
@@ -426,11 +428,6 @@ def activate_launch_promotion(plan_code: str):
         if not plan:
             raise HTTPException(404, "Plan no disponible.")
         conn.execute(
-            """UPDATE billing_orders SET status='canceled',updated_at=NOW()
-               WHERE account_id=%s AND status='payment_pending'""",
-            (account_id,),
-        )
-        conn.execute(
             """INSERT INTO account_subscriptions(
                    account_id,plan_id,status,access_source,started_at,expires_at,courtesy_note,
                    granted_by,granted_at,created_at,updated_at
@@ -454,52 +451,6 @@ def activate_launch_promotion(plan_code: str):
     }
 
 
-def _sinpe_instructions():
-    return {
-        "method": "SINPE Móvil",
-        "recipient": os.getenv("FINVA_SINPE_RECIPIENT", "").strip(),
-        "phone": os.getenv("FINVA_SINPE_PHONE", "").strip(),
-        "message": "Copiá el código y pegalo en el detalle del SINPE. Luego subí el comprobante.",
-    }
-
-
-def _public_order(order):
-    if not order:
-        return None
-    allowed = {
-        "id", "plan_code", "amount", "currency", "status", "provider", "payment_code",
-        "code_expires_at", "receipt_submitted_at", "receipt_status", "verified_at",
-        "verification_source", "created_at", "updated_at",
-    }
-    return {key: value for key, value in dict(order).items() if key in allowed}
-
-
-def _new_payment_code(conn):
-    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    for _ in range(20):
-        code = "DINCR-" + "".join(secrets.choice(alphabet) for _ in range(6))
-        if not conn.execute("SELECT 1 FROM billing_orders WHERE payment_code=%s", (code,)).fetchone():
-            return code
-    raise HTTPException(503, "No se pudo generar un código de pago. Intentá nuevamente.")
-
-
-def _as_utc(value):
-    if not value:
-        return None
-    parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
-
-
-def _valid_receipt_signature(content_type: str, content: bytes):
-    signatures = {
-        "image/jpeg": content.startswith(b"\xff\xd8\xff"),
-        "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),
-        "image/webp": content.startswith(b"RIFF") and content[8:12] == b"WEBP",
-        "application/pdf": content.startswith(b"%PDF-"),
-    }
-    return signatures.get(content_type, False)
-
-
 def ensure_schema(conn):
     """Fail fast when Product Ops migrations are missing, without runtime DDL.
 
@@ -508,9 +459,6 @@ def ensure_schema(conn):
     allowed concurrent health/event requests to deadlock in PostgreSQL.
     """
     required_tables = (
-        "finva_beta_programs",
-        "billing_orders",
-        "billing_subscriptions",
         "product_events",
         "feedback_reports",
     )
@@ -527,39 +475,30 @@ def ensure_schema(conn):
         )
 
 
-def _counts(conn):
-    rows = conn.execute("""SELECT plan_code,COUNT(*) AS used FROM billing_subscriptions
-      WHERE status='active' AND beta_code=%s GROUP BY plan_code""", (BETA_CODE,)).fetchall()
-    return {r["plan_code"]: int(r["used"]) for r in rows}
-
-
 def catalog():
-    account_id = get_current_account_id()
+    """Plans, prices and the launch promotion. Read-only: purchases happen in the stores."""
     promotion = launch_promotion_status()
-    order = None
-    subscription = None
-    try:
-        with get_connection() as conn:
-            ensure_schema(conn)
-            if promotion["active"]:
-                conn.execute("""UPDATE billing_orders SET status='canceled',updated_at=NOW()
-                  WHERE account_id=%s AND status='payment_pending'""", (account_id,))
-            order = conn.execute("""SELECT id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
-              receipt_submitted_at,receipt_status,verified_at,verification_source,created_at,updated_at FROM billing_orders
-              WHERE account_id=%s ORDER BY created_at DESC LIMIT 1""", (account_id,)).fetchone()
-            subscription = conn.execute("SELECT * FROM billing_subscriptions WHERE account_id=%s", (account_id,)).fetchone()
-            conn.commit()
-    except Exception:
-        # The plan screen should remain usable even if the optional billing
-        # state cannot be read. Keep the full exception in backend logs.
-        logger.exception("Could not load the DINCR billing state")
-    plans = []
-    for code, info in PRICES.items():
-        plans.append({"code": code, "regular_price_crc": info["regular"]})
-    return {"program": BETA_CODE, "plans": plans, "order": _public_order(order), "subscription": subscription,
-            "payment": None,
-            "promotion": promotion,
+    plans = [{"code": code, "regular_price_crc": info["regular"]} for code, info in PRICES.items()]
+    return {"plans": plans, "promotion": promotion,
             "notice": promotion["message"] if promotion["active"] else "Las compras de Basic y VIP en Google Play y App Store estarán disponibles más adelante."}
+
+
+def has_store_entitlement(conn, account_id: str, plan_code: str | None = None) -> bool:
+    """A paid plan is active only through a verified App Store / Google Play subscription.
+
+    Live means trialing until ``trial_ends_at``, or active / in grace until
+    ``current_period_end``. A grace period that extends past the period end needs
+    its own stored end from the store (tracked with the store verification work).
+    """
+    if not tables_exist(conn, ["store_subscriptions"]):
+        return False
+    return bool(conn.execute(
+        """SELECT 1 FROM store_subscriptions
+           WHERE account_id=%s AND provider = ANY(%s::text[]) AND status = ANY(%s::text[])
+             AND (%s::text IS NULL OR plan_code=%s)
+             AND COALESCE(CASE WHEN status='trialing' THEN trial_ends_at END, current_period_end, 'infinity'::timestamptz) > NOW()""",
+        (account_id, list(ENTITLING_STORES), list(STORE_ENTITLED_STATES), plan_code, plan_code),
+    ).fetchone())
 
 
 def create_checkout(plan_code: str, accepted: bool, consent_version: str):
@@ -570,21 +509,6 @@ def create_checkout(plan_code: str, accepted: bool, consent_version: str):
     # Store billing and server-side purchase verification are not implemented yet.
     # Never issue an off-store payment order for access to mobile features.
     raise HTTPException(503, "Las compras de Basic y VIP en Google Play y App Store estarán disponibles más adelante. Podés seguir con el plan Gratis.")
-
-
-def has_active_payment(conn, account_id: str, plan_code: str | None = None):
-    ensure_schema(conn)
-    params = [account_id]
-    extra = ""
-    if plan_code:
-        extra = " AND plan_code=%s"
-        params.append(plan_code)
-    return bool(conn.execute(
-        f"""SELECT 1 FROM billing_subscriptions
-            WHERE account_id=%s AND status='active'
-              AND (current_period_end IS NULL OR current_period_end>NOW()){extra}""",
-        tuple(params),
-    ).fetchone())
 
 
 def record_event(event_name, surface, success=True, duration_bucket=None, app_version=None):
@@ -888,9 +812,6 @@ def owner_dashboard():
             (LAUNCH_PROMOTION_CODE,),
         ).fetchall()
         promotional = {row["plan_code"]: int(row["used"]) for row in promotion_rows}
-        pending = conn.execute("""SELECT o.id,o.plan_code,o.amount,o.currency,o.payment_code,o.receipt_submitted_at,
-          o.receipt_status,o.created_at,a.primary_email AS email,a.display_name
-          FROM billing_orders o JOIN accounts a ON a.id=o.account_id WHERE o.status='payment_pending' ORDER BY o.created_at""").fetchall()
         events = conn.execute("""SELECT event_name,COUNT(*) AS uses,COUNT(DISTINCT account_id) AS users
           FROM product_events WHERE created_at>=NOW()-INTERVAL '30 days' GROUP BY event_name ORDER BY uses DESC LIMIT 20""").fetchall()
         tickets = conn.execute("""SELECT f.id,f.category,f.subject,f.message,f.status,f.owner_notes,
@@ -916,149 +837,12 @@ def owner_dashboard():
     return {"promotion": {**launch_promotion_status(), "plans": promotional},
             "support_email": support_email_configuration(),
             "support_channels": support_channel_configuration(),
-            "pending_orders": pending, "feature_usage_30d": events,
+            "feature_usage_30d": events,
             "tickets": [{**r, "public_id": f"DINCR-{int(r['id']):06d}"} for r in tickets],
             "release_policies": release_policies,
             "feature_flags": feature_flags,
             "feature_flag_audit": feature_flag_audit,
             "email_monitor": email_monitor}
-
-
-def submit_receipt(order_id: int, filename: str, content_type: str, content: bytes):
-    if content_type not in RECEIPT_CONTENT_TYPES:
-        raise HTTPException(415, "Subí una imagen JPG, PNG, WEBP o un PDF.")
-    if not content:
-        raise HTTPException(422, "El comprobante está vacío.")
-    if len(content) > MAX_RECEIPT_BYTES:
-        raise HTTPException(413, "El comprobante no puede superar 5 MB.")
-    if not _valid_receipt_signature(content_type, content):
-        raise HTTPException(415, "El contenido del archivo no coincide con un comprobante permitido.")
-    account_id = get_current_account_id()
-    digest = hashlib.sha256(content).hexdigest()
-    with get_connection() as conn:
-        ensure_schema(conn)
-        duplicate = conn.execute(
-            "SELECT id FROM billing_orders WHERE receipt_sha256=%s AND id<>%s LIMIT 1",
-            (digest, order_id),
-        ).fetchone()
-        if duplicate:
-            raise HTTPException(409, "Este comprobante ya fue utilizado en otra solicitud.")
-        order = conn.execute(
-            "SELECT id,status,code_expires_at FROM billing_orders WHERE id=%s AND account_id=%s FOR UPDATE",
-            (order_id, account_id),
-        ).fetchone()
-        if not order or order["status"] != "payment_pending":
-            raise HTTPException(404, "Solicitud de pago pendiente no encontrada.")
-        expires_at = _as_utc(order.get("code_expires_at"))
-        if expires_at and expires_at < datetime.now(timezone.utc):
-            conn.execute("UPDATE billing_orders SET status='expired',updated_at=NOW() WHERE id=%s", (order_id,))
-            conn.commit()
-            raise HTTPException(409, "El código venció. Creá una solicitud nueva antes de pagar.")
-        row = conn.execute("""UPDATE billing_orders SET receipt_filename=%s,receipt_content_type=%s,
-          receipt_size=%s,receipt_sha256=%s,receipt_data=%s,receipt_submitted_at=NOW(),
-          receipt_status='submitted',updated_at=NOW() WHERE id=%s
-          RETURNING id,plan_code,amount,currency,status,provider,payment_code,code_expires_at,
-            receipt_submitted_at,receipt_status,created_at,updated_at""",
-          ((filename or "comprobante")[:180], content_type, len(content), digest, content, order_id)).fetchone()
-        conn.commit()
-    return {"status": "receipt_submitted", "order": _public_order(row),
-            "message": "Comprobante recibido. DINCR verificará el depósito con la confirmación bancaria."}
-
-
-def get_receipt(order_id: int):
-    with get_connection() as conn:
-        ensure_schema(conn)
-        row = conn.execute("""SELECT receipt_filename,receipt_content_type,receipt_data
-          FROM billing_orders WHERE id=%s""", (order_id,)).fetchone()
-        conn.commit()
-    if not row or not row.get("receipt_data"):
-        raise HTTPException(404, "Esta orden no tiene comprobante.")
-    return row
-
-
-def _activate_order(conn, order, verification_source: str, bank_reference: str | None = None, payer_name: str | None = None):
-    if launch_promotion_status()["active"]:
-        raise HTTPException(409, "Basic y VIP están gratis durante la promoción; esta orden no debe cobrarse.")
-    if Decimal(str(order.get("amount") or 0)) != Decimal(str(PRICES[order["plan_code"]]["regular"])):
-        conn.execute("UPDATE billing_orders SET status='expired',updated_at=NOW() WHERE id=%s", (order["id"],))
-        raise HTTPException(409, "La orden usa un precio anterior. Creá una nueva solicitud con el precio normal.")
-    conn.execute("""UPDATE billing_orders SET status='paid',paid_at=NOW(),verified_at=NOW(),
-      verification_source=%s,bank_reference=COALESCE(%s,bank_reference),payer_name=COALESCE(%s,payer_name),
-      provider_order_id=COALESCE(%s,provider_order_id),receipt_status='verified',updated_at=NOW() WHERE id=%s""",
-      (verification_source, bank_reference, payer_name, bank_reference, order["id"]))
-    conn.execute("""INSERT INTO billing_subscriptions(account_id,workspace_id,plan_code,status,provider,beta_code,beta_ends_at,current_period_start,current_period_end,paid_price_crc,regular_price_crc)
-      VALUES(%s,%s,%s,'active','sinpe_mobile',NULL,NULL,NOW(),NOW()+INTERVAL '1 month',%s,%s)
-      ON CONFLICT(account_id) DO UPDATE SET plan_code=EXCLUDED.plan_code,status='active',provider='sinpe_mobile',beta_code=EXCLUDED.beta_code,
-      beta_ends_at=CASE WHEN billing_subscriptions.beta_code=EXCLUDED.beta_code THEN billing_subscriptions.beta_ends_at ELSE EXCLUDED.beta_ends_at END,
-      current_period_start=NOW(),current_period_end=EXCLUDED.current_period_end,
-      paid_price_crc=EXCLUDED.paid_price_crc,regular_price_crc=EXCLUDED.regular_price_crc,updated_at=NOW()
-      RETURNING account_id""",
-      (order["account_id"], order["workspace_id"], order["plan_code"], order["amount"], PRICES[order["plan_code"]]["regular"]))
-    plan = conn.execute("SELECT id FROM plans WHERE code=%s", (order["plan_code"],)).fetchone()
-    conn.execute("""INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,last_payment_at,created_at,updated_at)
-      VALUES(%s,%s,'active','self_service',NOW(),NOW(),NOW(),NOW()) ON CONFLICT(account_id) DO UPDATE SET
-      plan_id=EXCLUDED.plan_id,status='active',access_source='self_service',started_at=NOW(),last_payment_at=NOW(),updated_at=NOW()""",
-      (order["account_id"], plan["id"]))
-    conn.execute(
-      "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level=%s,updated_at=NOW() WHERE id=%s",
-      (order["plan_code"], order["account_id"]),
-    )
-
-
-def match_sinpe_payment(conn, candidate: dict):
-    """Activate a current-price order only from a parsed incoming BAC SINPE confirmation.
-
-    The bank email is the source of truth. The uploaded receipt is required as
-    user-provided evidence but never activates a plan by itself.
-    """
-    if candidate.get("transaction_type") not in {"income", "reimbursement"}:
-        return None
-    if str(candidate.get("movement_direction") or "").lower() != "in":
-        return None
-    searchable = " ".join(str(candidate.get(key) or "") for key in ("description", "notes", "raw_description"))
-    code_match = PAYMENT_CODE_PATTERN.search(searchable.upper())
-    if not code_match:
-        return None
-    configured_phone = re.sub(r"\D", "", os.getenv("FINVA_SINPE_PHONE", ""))[-8:]
-    destination_match = re.search(r"telefono destino:\s*(\d{8})", searchable, re.I)
-    if configured_phone and (
-        not destination_match or destination_match.group(1)[-8:] != configured_phone
-    ):
-        return None
-    code = code_match.group(0).upper()
-    order = conn.execute("""SELECT * FROM billing_orders WHERE payment_code=%s AND status='payment_pending'
-      AND receipt_submitted_at IS NOT NULL FOR UPDATE""", (code,)).fetchone()
-    try:
-        amount_matches = Decimal(str(order["amount"])) == Decimal(str(candidate.get("amount") or 0))
-    except (InvalidOperation, TypeError, ValueError):
-        amount_matches = False
-    if not order or not amount_matches:
-        return None
-    notes = str(candidate.get("notes") or "")
-    reference = re.search(r"referencia\s+(\d{5,})", notes, re.I)
-    payer = re.search(r"payer:\s*([^|]+)", notes, re.I)
-    _activate_order(
-        conn,
-        order,
-        "gmail_bac_sinpe",
-        reference.group(1) if reference else None,
-        payer.group(1).strip() if payer else None,
-    )
-    return {"order_id": order["id"], "plan_code": order["plan_code"], "payment_code": code}
-
-
-def resolve_test_order(order_id: int, action: str):
-    with get_connection() as conn:
-        ensure_schema(conn)
-        order = conn.execute("SELECT * FROM billing_orders WHERE id=%s FOR UPDATE", (order_id,)).fetchone()
-        if not order or order["status"] != "payment_pending":
-            raise HTTPException(404, "Orden pendiente no encontrada.")
-        if action == "reject":
-            conn.execute("UPDATE billing_orders SET status='failed',receipt_status='rejected',updated_at=NOW() WHERE id=%s", (order_id,))
-            conn.commit(); return {"status": "failed"}
-        _activate_order(conn, order, "owner_manual")
-        conn.commit()
-    return {"status": "active", "plan": order["plan_code"]}
 
 
 def update_feedback(ticket_id: int, payload):
