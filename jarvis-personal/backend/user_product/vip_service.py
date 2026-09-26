@@ -4,6 +4,8 @@ from datetime import date, timedelta
 from math import ceil
 from typing import Any
 
+from fastapi import HTTPException
+
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx
@@ -19,8 +21,14 @@ from backend.user_product.basic_service import (
 
 
 def _money_text(value: float) -> str:
-    """An amount in the account's base currency (from the authenticated identity)."""
-    currency = str(get_current_user().get("base_currency") or "CRC").upper()
+    """An amount in the account's base currency (from the authenticated identity).
+
+    Only a label: without an identity currency it keeps the previous ₡.
+    """
+    try:
+        currency = str(get_current_user().get("base_currency") or "CRC").upper()
+    except HTTPException:
+        currency = "CRC"
     if currency == "USD":
         return f"${value:,.2f}"
     return f"₡{value:,.0f}" if currency == "CRC" else f"{value:,.0f} {currency}"
