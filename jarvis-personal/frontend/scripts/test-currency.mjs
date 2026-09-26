@@ -83,6 +83,12 @@ const walk = (dir) => readdirSync(new URL(`../src/${dir}`, import.meta.url)).fla
 const premium = source("pages/PremiumStrategy.jsx");
 assert.match(premium, /baseCurrency\(\) === "CRC" \? `₡\$\{Math\.round/);
 assert.doesNotMatch(premium, /<span>₡<\/span>/);
+// CCSS payroll orders are always in colones: the aguinaldo is never shown in a USD base.
+const vip = source("products/finva/features/vip/VipScreens.jsx");
+const aguinaldo = vip.slice(vip.indexOf("function VipAguinaldo"), vip.indexOf("function VipPreferences"));
+assert.match(vip, /const ccssMoney = \(value\) => formatMoney\(value, "CRC"\)/);
+assert.doesNotMatch(aguinaldo, /money\(/, "the aguinaldo formats CCSS amounts in CRC");
+assert.equal((aguinaldo.match(/ccssMoney\(/g) || []).length, 3);
 for (const path of [...walk("users"), ...walk("products/finva")].filter((file) => file.endsWith(".jsx"))) {
   const text = source(path);
   assert.doesNotMatch(text, /currency: ?"CRC", ?currencyDisplay/, `${path} hardcodes a CRC formatter`);

@@ -21,6 +21,8 @@ const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 // Amounts are in the account's base currency (CRC or USD).
 const money = (value) => formatMoney(value);
+// CCSS payroll orders (the aguinaldo) are always in colones, whatever the base currency.
+const ccssMoney = (value) => formatMoney(value, "CRC");
 const percent = (value) => `${Math.round(Number(value) || 0)}%`;
 
 function VipHeader({ title, user, onNavigate }) {
@@ -333,13 +335,13 @@ function VipAguinaldo({ user, onNavigate }) {
   const months = report?.months || [];
   return <section className="vip-screen">
     <VipHeader title={tx("Aguinaldo", "Annual bonus")} user={user} onNavigate={onNavigate}/>
-    <Focus eyebrow={tx("ACUMULADO ESTIMADO", "ESTIMATED ACCRUED")} title={money(report?.accrued_aguinaldo)} caption={tx("Salarios oficiales del período ÷ 12", "Official salaries in the period ÷ 12")} tone="mint"/>
+    <Focus eyebrow={tx("ACUMULADO ESTIMADO", "ESTIMATED ACCRUED")} title={ccssMoney(report?.accrued_aguinaldo)} caption={tx("Salarios oficiales del período ÷ 12", "Official salaries in the period ÷ 12")} tone="mint"/>
     <Card title={tx("Datos utilizados", "Data used")}>
-      <DataRow label={tx("Salario computable", "Eligible salary")} value={money(report?.earned_salary_total)}/>
+      <DataRow label={tx("Salario computable", "Eligible salary")} value={ccssMoney(report?.earned_salary_total)}/>
       <DataRow label={tx("Última orden disponible", "Latest available order")} value={report?.period?.official_through || "—"}/>
       <DataRow label={tx("Meses pendientes", "Missing months")} value={report?.missing_months?.length || 0} tone="gold"/>
     </Card>
-    <Card title={tx("Desglose mensual", "Monthly breakdown")}>{months.map((item) => <DataRow key={item.month} label={item.month} value={item.entries ? money(item.total_earned) : tx("Pendiente", "Pending")} tone={item.entries ? "mint" : "gold"}/>)}</Card>
+    <Card title={tx("Desglose mensual", "Monthly breakdown")}>{months.map((item) => <DataRow key={item.month} label={item.month} value={item.entries ? ccssMoney(item.total_earned) : tx("Pendiente", "Pending")} tone={item.entries ? "mint" : "gold"}/>)}</Card>
     <Card tone="gold"><p>{tx("DINCR usa únicamente el salario oficial de cada Orden Patronal de la CCSS. No estima meses faltantes con movimientos bancarios.", "DINCR only uses the official salary from each CCSS payroll order. It does not estimate missing months from bank transactions.")}</p></Card>
     {error && <Card tone="danger"><p>{error}</p></Card>}
     <PrimaryButton disabled={syncing} onClick={synchronize}><RefreshCw size={18}/>{syncing ? tx("Sincronizando…", "Syncing…") : tx("Sincronizar email y recalcular", "Sync email and recalculate")}</PrimaryButton>
