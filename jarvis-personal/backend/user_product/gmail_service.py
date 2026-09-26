@@ -576,7 +576,8 @@ def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
         "response_type": "code",
         "scope": GMAIL_SCOPE,
         "access_type": "offline",
-        "include_granted_scopes": "true",
+        # No include_granted_scopes: the Gmail token carries exactly gmail.readonly,
+        # never scopes granted earlier to this client (for example Google sign-in).
         "prompt": "consent select_account",
         "state": state,
         "code_challenge": code_challenge,
@@ -623,6 +624,11 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
         logger.warning("Gmail token exchange failed status=%s", response.status_code)
         return failed("exchange_failed")
     tokens = response.json()
+    # Granular consent: the user can untick the Gmail permission and still return a
+    # code. Such a grant is never stored. It is not revoked either: revoking any token
+    # of this client revokes the user's whole grant to it, including other mailboxes'.
+    if GMAIL_SCOPE not in str(tokens.get("scope") or "").split():
+        return failed("permission_missing")
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:
         return failed("missing_refresh_token")
