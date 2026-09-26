@@ -33,6 +33,7 @@ export default function AmountCurrencyField({ form, setForm, suggestedRate = "",
 
 // "$100 · TC 505" under a stored amount that was typed in another currency.
 export function OriginalAmount({ row }) {
-  if (!row?.original_currency) return null;
+  // Only a real conversion: another currency than the base, with the user's rate.
+  if (!row?.original_currency || String(row.original_currency).toUpperCase() === baseCurrency() || !(Number(row.exchange_rate) > 0)) return null;
   return <small className="entry-original-amount">{formatMoney(row.original_amount, row.original_currency)} · {tx("TC", "Rate")} {Number(row.exchange_rate)}</small>;
 }

@@ -28,6 +28,8 @@ assert.equal(latestUserRate([
   { transaction_date: "2026-09-25" },
 ]), "507.5", "the user's own latest rate prefills the next entry");
 assert.equal(latestUserRate([]), "");
+assert.equal(latestUserRate([{ origin: "transaction", transaction_date: "2026-09-30", exchange_rate: 495 },
+  { origin: "expense", transaction_date: "2026-09-01", exchange_rate: 510 }]), "510", "a parser's rate is never the prefill");
 
 // USD account: formatting and conversion follow the base, not a hardcoded ₡.
 setBaseCurrency("USD");
@@ -64,6 +66,10 @@ const walk = (dir) => readdirSync(new URL(`../src/${dir}`, import.meta.url)).fla
   const path = `${dir}/${name}`;
   return statSync(new URL(`../src/${path}`, import.meta.url)).isDirectory() ? walk(path) : [path];
 });
+// PremiumStrategy is the VIP Users strategy screen (shared with the Owner, which stays CRC).
+const premium = source("pages/PremiumStrategy.jsx");
+assert.match(premium, /baseCurrency\(\) === "CRC" \? `₡\$\{Math\.round/);
+assert.doesNotMatch(premium, /<span>₡<\/span>/);
 for (const path of [...walk("users"), ...walk("products/finva")].filter((file) => file.endsWith(".jsx"))) {
   const text = source(path);
   assert.doesNotMatch(text, /currency: ?"CRC", ?currencyDisplay/, `${path} hardcodes a CRC formatter`);

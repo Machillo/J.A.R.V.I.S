@@ -137,7 +137,16 @@ def test_edit_back_to_the_base_currency_clears_the_original(update, as_user, mon
     sql, params = conn.write()
     assert "original_amount=%s,original_currency=%s,exchange_rate=%s" in sql
     assert params[0] == Decimal("20000.00")
-    assert params.count(None) >= 3 and params[-2:] == (7, WORKSPACE)
+    originals = params[3:6] if update == "income" else params[4:7]
+    assert originals == (None, None, None) and params[-2:] == (7, WORKSPACE)
+
+
+def test_an_older_app_editing_without_a_currency_clears_the_original(as_user, monkeypatch):
+    conn = _use(monkeypatch, RecordingConnection("CRC"), service)
+    service.update_income(7, SimpleNamespace(amount=50500, description="Freelance", category="Otros", entry_date=None))
+    assert not any(sql.startswith("SELECT base_currency") for sql, _ in conn.queries)
+    _sql, params = conn.write()
+    assert params[0] == Decimal("50500.00") and params[3:6] == (None, None, None), "the base value it showed is kept"
 
 
 def test_older_app_versions_without_a_currency_keep_working_unchanged(as_user, monkeypatch):
@@ -175,6 +184,28 @@ def test_bank_movements_cannot_be_given_another_currency(as_user, monkeypatch):
             transaction_date="2026-09-20", description="x", amount=10, transaction_type="expense",
             currency="USD", exchange_rate=500))
     assert error.value.status_code == 422
+
+
+@pytest.mark.parametrize("movement", ["transaction:9", "payroll:9"])
+def test_bank_and_payroll_edits_without_a_currency_still_work(movement, as_user, monkeypatch):
+    conn = _use(monkeypatch, RecordingConnection("CRC", {"id": 9}), free_service)
+    free_service.update_free_movement(movement, MovementUpdateRequest(
+        transaction_date="2026-09-20", description="x", amount=10, transaction_type="income" if "payroll" in movement else "expense"))
+    assert not any(sql.startswith("SELECT base_currency") for sql, _ in conn.queries)
+    assert conn.write()[1][-2:] == (9, WORKSPACE)
+
+
+def test_huge_amounts_are_refused_not_a_500():
+    with pytest.raises(HTTPException):
+        resolve_entry_amount("CRC", 10_000_000_000, "USD", 505)
+    with pytest.raises(HTTPException):
+        resolve_entry_amount("CRC", 10**13, None, None)
+
+
+def test_the_amount_uses_the_rate_exactly_as_stored():
+    values = resolve_entry_amount("CRC", 1000, "USD", 505.1234567)
+    assert values["exchange_rate"] == Decimal("505.123457")
+    assert values["amount"] == Decimal("505123.46")
 
 
 def test_history_lists_the_original_currency_for_every_source(as_user, monkeypatch):

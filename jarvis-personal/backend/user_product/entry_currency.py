@@ -17,6 +17,8 @@ from fastapi import HTTPException
 
 SUPPORTED_CURRENCIES = ("CRC", "USD")
 CENT = Decimal("0.01")
+RATE_STEP = Decimal("0.000001")  # exchange_rate NUMERIC(14, 6)
+MAX_AMOUNT = Decimal("999999999999.99")  # amount NUMERIC(14, 2)
 
 
 def account_base_currency(conn, account_id: str) -> str:
@@ -32,6 +34,8 @@ def resolve_entry_amount(base_currency: str | None, amount: float, currency: str
     currency is not CRC or USD can only record entries in their base currency.
     """
     typed = Decimal(str(amount)).quantize(CENT, ROUND_HALF_UP)
+    if typed > MAX_AMOUNT:
+        raise HTTPException(status_code=422, detail="El monto es demasiado grande.")
     if not currency:
         return {"amount": typed, "original_amount": None, "original_currency": None, "exchange_rate": None}
     base = str(base_currency or "CRC").upper()
@@ -42,9 +46,12 @@ def resolve_entry_amount(base_currency: str | None, amount: float, currency: str
         raise HTTPException(status_code=422, detail=f"Tu moneda principal es {base}: registrá el monto en {base}.")
     if exchange_rate is None or exchange_rate <= 0:
         raise HTTPException(status_code=422, detail="Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.")
-    rate = Decimal(str(exchange_rate))
+    # Computed with the rate exactly as it is stored.
+    rate = Decimal(str(exchange_rate)).quantize(RATE_STEP, ROUND_HALF_UP)
     converted = typed * rate if code == "USD" else typed / rate
     converted = converted.quantize(CENT, ROUND_HALF_UP)
     if converted <= 0:
         raise HTTPException(status_code=422, detail="El monto convertido es demasiado pequeño para registrarse.")
+    if converted > MAX_AMOUNT:
+        raise HTTPException(status_code=422, detail="El monto convertido es demasiado grande.")
     return {"amount": converted, "original_amount": typed, "original_currency": code, "exchange_rate": rate}

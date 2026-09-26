@@ -50,8 +50,11 @@ export function entryFormAmount(row) {
 }
 
 // The user's own most recent rate, to prefill the next foreign-currency entry.
+// Only manual income and expenses: bank or imported movements may carry a
+// parser's or another tool's rate, which is not the user's.
 export function latestUserRate(rows = []) {
-  const withRate = rows.filter((row) => Number(row?.exchange_rate) > 0);
+  const withRate = rows.filter((row) => Number(row?.exchange_rate) > 0
+    && (row.origin === undefined || row.origin === "salary" || row.origin === "expense"));
   withRate.sort((a, b) => String(b.transaction_date || b.entry_date || b.created_at || "")
     .localeCompare(String(a.transaction_date || a.entry_date || a.created_at || "")));
   return withRate.length ? String(Number(withRate[0].exchange_rate)) : "";
