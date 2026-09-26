@@ -8,6 +8,8 @@ on:
       - ".github/**"
       - ".claude/**"
       - "CLAUDE.md"
+      # Design-token contrast gate (test:design-tokens) reads the root DESIGN.md.
+      - "DESIGN.md"
   pull_request:
     paths:
       - "jarvis-personal/**"
@@ -15,6 +17,7 @@ on:
       - ".github/**"
       - ".claude/**"
       - "CLAUDE.md"
+      - "DESIGN.md"
 
 # Read-only token: no job writes to the repository.
 permissions:
