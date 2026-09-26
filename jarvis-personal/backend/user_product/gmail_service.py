@@ -487,7 +487,7 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
                JOIN finva_gmail_connections g ON g.id=m.connection_id
                JOIN accounts a ON a.id=c.account_id
                WHERE c.id=%s AND c.account_id=%s AND c.workspace_id=%s
-               FOR UPDATE""",
+               FOR UPDATE OF c,m,g""",
             (candidate_id, account_id, workspace_id),
         ).fetchone()
         if not candidate:

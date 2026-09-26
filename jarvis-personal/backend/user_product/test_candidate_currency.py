@@ -172,6 +172,7 @@ def test_the_account_base_currency_comes_from_the_candidates_own_account(db, sig
     select = next(query for query, _ in db.queries if query.startswith("SELECT c.*"))
     assert "JOIN accounts a ON a.id=c.account_id" in select
     assert "WHERE c.id=%s AND c.account_id=%s AND c.workspace_id=%s" in select
+    assert select.endswith("FOR UPDATE OF c,m,g"), "the account row is read, never locked"
 
 
 def test_inbox_shows_the_native_amount_and_the_account_base(monkeypatch):

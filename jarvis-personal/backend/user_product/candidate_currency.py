@@ -29,7 +29,7 @@ def native_money(candidate: dict[str, Any]) -> tuple[str, Decimal]:
     original = str(candidate.get("original_currency") or "").upper()
     if original and original != currency and candidate.get("original_amount") is not None:
         return original, Decimal(str(candidate["original_amount"])).quantize(CENT, ROUND_HALF_UP)
-    return currency, Decimal(str(candidate.get("amount") or 0)).quantize(CENT, ROUND_HALF_UP)
+    return currency, Decimal(str(candidate["amount"])).quantize(CENT, ROUND_HALF_UP)  # NOT NULL column
 
 
 def transaction_amounts(currency: str, amount: Any, base_currency: str | None, exchange_rate: float | None) -> dict[str, Any]:

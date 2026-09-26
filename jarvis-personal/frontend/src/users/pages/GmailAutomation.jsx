@@ -62,11 +62,17 @@ const money = (value, currency) => new Intl.NumberFormat(localeTag(deviceLanguag
 // A movement is worth what it was in its own currency. For a USD movement the
 // bank email or statement also carries an amount converted with a default rate
 // (or not converted at all): it is never shown as if it were real.
-const nativeMoney = (item) => item.original_currency && item.original_currency !== item.currency && item.original_amount != null
-  ? { amount: item.original_amount, currency: item.original_currency }
-  : { amount: item.amount, currency: item.currency || "CRC" };
+const upper = (code, fallback = "") => String(code || fallback).toUpperCase();
+const nativeMoney = (item) => item.original_currency && upper(item.original_currency) !== upper(item.currency, "CRC") && item.original_amount != null
+  ? { amount: item.original_amount, currency: upper(item.original_currency) }
+  : { amount: item.amount, currency: upper(item.currency, "CRC") };
+const baseOf = (item) => upper(item.account_base_currency, "CRC");
+const differs = (item) => nativeMoney(item).currency !== baseOf(item);
+// DINCR converts only between CRC and USD (a legacy base such as EUR cannot).
+const convertible = (item) => ["CRC", "USD"].includes(baseOf(item)) && ["CRC", "USD"].includes(nativeMoney(item).currency);
 // Saving it in another currency than the account's needs the user's own rate.
-const needsRate = (item) => nativeMoney(item).currency !== String(item.account_base_currency || "CRC").toUpperCase();
+const needsRate = (item) => differs(item) && convertible(item);
+const cannotConvert = (item) => differs(item) && !convertible(item);
 
 // One institution per resolved bank; unrecognised senders are grouped as "Other".
 const institutionFor = (code, name) => {
@@ -371,6 +377,7 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
           <div className="gmail-email-meta"><span>{resolveBank(item.bank)?.name || (item.bank && item.bank !== "unknown" ? item.bank : tx("Banco", "Bank"))}</span><time>{item.received_at ? new Date(item.received_at).toLocaleDateString() : ""}</time></div>
           <strong>{item.subject || item.description || tx("Movimiento bancario", "Bank transaction")}</strong>
           <small>{item.sender}</small>
+          {pending && item.candidate_id && cannotConvert(item) && <p className="gmail-resolution-note">{tx(`Este movimiento está en ${nativeMoney(item).currency} y tu moneda principal es ${baseOf(item)}: DINCR no puede convertirlo. Podés rechazarlo.`, `This transaction is in ${nativeMoney(item).currency} and your main currency is ${baseOf(item)}: DINCR can’t convert it. You can reject it.`)}</p>}
           {pending && item.candidate_id && needsRate(item) && <p className="gmail-resolution-note">{tx(`Este movimiento está en ${nativeMoney(item).currency}. Tocá Corregir e indicá el tipo de cambio que usaste para guardarlo en tu moneda principal.`, `This transaction is in ${nativeMoney(item).currency}. Tap Edit and enter the exchange rate you used to save it in your main currency.`)}</p>}
           {item.source_type === "statement" && <p className="gmail-resolution-note">{tx("Detectado en un estado de cuenta PDF. Revisalo igual que cualquier otro movimiento antes de guardarlo.", "Detected in a PDF statement. Review it like any other movement before saving it.")}</p>}
           {item.resolution_reason === "possible_cross_source_match" && <p className="gmail-resolution-note">{tx("Posible coincidencia con otro aviso bancario o estado de cuenta. DINCR la deja para tu revisión en vez de eliminarla automáticamente.", "Possible match with another bank notice or statement. DINCR leaves it for your review instead of deleting it automatically.")}</p>}
