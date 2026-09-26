@@ -1,5 +1,5 @@
 import { Building2, Check, CheckCircle2, ChevronRight, Mail, Pencil, RefreshCw, ShieldCheck, Unplug, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import {
   connectVipGmail,
@@ -21,6 +21,7 @@ import { bankBranding, resolveBank } from "../../lib/bankBranding";
 import BankLogo from "../../components/BankLogo";
 import { categoryLabel, categoryValue } from "../../lib/categories";
 import { trackEvent } from "../../lib/telemetry";
+import { createLatestOnly, createReviewGate, runCandidateReview } from "../../lib/candidateReview";
 import { MAIL_OAUTH_RESULT_EVENT, takeMailOAuthOutcome } from "../../lib/mailOAuth";
 import { mailOAuthErrorCodes } from "../../lib/analyticsContract";
 import LegalLink from "../../components/LegalLink";
@@ -97,8 +98,18 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
   const [identity, setIdentity] = useState({ items: [], summary: {} });
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [historyChoice, setHistoryChoice] = useState(null);
+  // Inline result of the last review, shown on the candidate it belongs to.
+  const [reviewNotice, setReviewNotice] = useState(null);
+  const [reviewGate] = useState(createReviewGate);
+  const [loads] = useState(createLatestOnly);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
+  // Returns the refreshed rows (null if the refresh failed). Only the latest
+  // refresh of a mounted screen writes state.
   const load = useCallback(async () => {
+    const isLatest = loads.start();
+    const current = () => mounted.current && isLatest();
     try {
       const [status, inbox, accounts, pendingInbox] = await Promise.all([
         getVipGmailStatus(), getVipGmailEmails(accountsView ? "" : filter), getVipFinancialIdentity(),
@@ -106,31 +117,48 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
       ]);
       const rows = new Map();
       for (const row of [...(pendingInbox?.items || []), ...(inbox?.items || [])]) rows.set(row.candidate_id || `email-${row.email_id}`, row);
-      setGmail(status); setEmails([...rows.values()]); setIdentity(accounts || { items: [], summary: {} });
+      const items = [...rows.values()];
+      if (!current()) return items;
+      setGmail(status); setEmails(items); setIdentity(accounts || { items: [], summary: {} });
       const proposed = await getVipOwnTransferSuggestions().catch(() => ({ items: [] }));
-      setTransferSuggestions(proposed.items || []);
+      if (current()) setTransferSuggestions(proposed.items || []);
+      return items;
     }
-    catch (err) { setError(err.message || tx("No se pudo consultar el correo.", "Couldn’t check mail.")); }
-  }, [filter, accountsView]);
+    catch (err) {
+      if (current()) setError(err.message || tx("No se pudo consultar el correo.", "Couldn’t check mail."));
+      return null;
+    }
+  }, [filter, accountsView, loads]);
 
-  const review = async (item, action, corrections = null) => {
-    setBusy(`${action}-${item.candidate_id}`); setError(""); setMessage("");
-    try {
-      if (action === "reject") await rejectVipGmailCandidate(item.candidate_id);
-      else await acceptVipGmailCandidate(item.candidate_id, corrections);
-      trackEvent("email_candidate_reviewed", {
-        decision: action === "reject" ? "rejected" : corrections ? "corrected" : "accepted",
-        source_type: "email",
-      });
-      trackEvent("transaction_candidate_reviewed", { decision: action === "reject" ? "rejected" : corrections ? "corrected" : "accepted", source_type: "email" });
+  const review = (item, action, corrections = null) => runCandidateReview({
+    gate: reviewGate, item, action,
+    send: () => (action === "reject"
+      ? rejectVipGmailCandidate(item.candidate_id)
+      : acceptVipGmailCandidate(item.candidate_id, corrections)),
+    reload: load,
+    isMounted: () => mounted.current,
+    onApplied: () => {
+      const decision = action === "reject" ? "rejected" : corrections ? "corrected" : "accepted";
+      trackEvent("email_candidate_reviewed", { decision, source_type: "email" });
+      trackEvent("transaction_candidate_reviewed", { decision, source_type: "email" });
       if (action === "reject") trackEvent("transaction_rejected", { source_type: "email" });
       else if (!item.is_internal_transfer) trackEvent("transaction_confirmed", { source_type: "email" });
-      setEditing(null);
-      setMessage(action === "reject" ? tx("Correo descartado.", "Email dismissed.") : item.is_internal_transfer ? tx("Transferencia interna confirmada sin contarla como gasto o ingreso.", "Internal transfer confirmed without counting it as income or expense.") : tx("Movimiento guardado.", "Transaction saved."));
-      await load();
-    } catch (err) { setError(err.message || tx("No se pudo revisar el correo.", "Couldn’t review the email.")); }
-    finally { setBusy(""); }
-  };
+    },
+    ui: {
+      begin: () => { setBusy(`${action}-${item.candidate_id}`); setError(""); setMessage(""); setReviewNotice(null); },
+      // The stored status is known: close the editor, and report success only if it matches the action.
+      settle: (outcome) => {
+        setEditing(null);
+        if (outcome.applied) { setError(""); setMessage(outcome.message); }
+        else { setMessage(""); setError(outcome.message); }
+      },
+      // An unknown outcome may drop the card on reload: report it at page level.
+      pageError: (text) => { setMessage(""); setError(text); },
+      // A definite failure keeps the card, so it is shown there.
+      cardError: (text) => setReviewNotice({ candidateId: item.candidate_id, message: text }),
+      end: () => setBusy(""),
+    },
+  });
 
   const confirmAccount = async (item, ownershipStatus) => {
     setBusy(`account-${item.id}`); setError(""); setMessage("");
@@ -358,7 +386,10 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
         const edit = editing?.candidate_id === item.candidate_id;
         const possibleTransfers = transferSuggestions.filter(({ first, second }) =>
           first.candidate_id === item.candidate_id || second.candidate_id === item.candidate_id);
-        return <article className="gmail-email-card" key={item.candidate_id || item.email_id}>
+        const reviewing = Boolean(item.candidate_id) && (busy === `accept-${item.candidate_id}` || busy === `reject-${item.candidate_id}`);
+        const notice = reviewNotice?.candidateId === item.candidate_id && item.candidate_id
+          ? <p className="onboarding-error gmail-review-notice" role="alert">{reviewNotice.message}</p> : null;
+        return <article className={`gmail-email-card${reviewing ? " is-reviewing" : ""}`} aria-busy={reviewing} key={item.candidate_id || item.email_id}>
           <div className="gmail-email-meta"><span>{resolveBank(item.bank)?.name || (item.bank && item.bank !== "unknown" ? item.bank : tx("Banco", "Bank"))}</span><time>{item.received_at ? new Date(item.received_at).toLocaleDateString() : ""}</time></div>
           <strong>{item.subject || item.description || tx("Movimiento bancario", "Bank transaction")}</strong>
           <small>{item.sender}</small>
@@ -368,7 +399,8 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
             <input name="description" defaultValue={item.description} required aria-label={tx("Descripción", "Description")}/>
             <div><input name="amount" type="number" step="0.01" min="0.01" defaultValue={item.amount} required aria-label={tx("Monto", "Amount")}/><input name="transaction_date" type="date" defaultValue={item.transaction_date} required aria-label={tx("Fecha", "Date")}/></div>
             <div><select name="transaction_type" defaultValue={item.transaction_type} aria-label={tx("Tipo de movimiento", "Movement type")}><option value="expense">{tx("Gasto", "Expense")}</option><option value="income">{tx("Ingreso", "Income")}</option><option value="debt_payment">{tx("Pago de deuda", "Debt payment")}</option></select><input name="category" defaultValue={categoryLabel(item.category || "general")} required aria-label={tx("Categoría", "Category")}/></div>
-            <div className="gmail-review-actions"><button type="button" onClick={() => setEditing(null)}><X size={16}/>{tx("Cancelar", "Cancel")}</button><button className="primary" disabled={Boolean(busy)}><Check size={16}/>{tx("Guardar", "Save")}</button></div>
+            <div className="gmail-review-actions"><button type="button" disabled={Boolean(reviewing)} onClick={() => setEditing(null)}><X size={16}/>{tx("Cancelar", "Cancel")}</button><button className="primary" disabled={Boolean(busy)}><Check size={16}/>{busy === `accept-${item.candidate_id}` ? tx("Guardando…", "Saving…") : tx("Guardar", "Save")}</button></div>
+            {notice}
           </form> : <>
             <div className="gmail-candidate-summary"><span><small>{tx("Descripción", "Description")}</small><b>{item.description}</b></span><span><small>{tx("Monto", "Amount")}</small><b>{money(item.amount, item.currency)}</b></span></div>
             {item.is_internal_transfer && <p className="gmail-resolution-note">{item.resolution_reason === "paired_owned_transfer" ? tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, ambos quedan revisados sin sumarse a ingresos o gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming reviews both without adding income or expense.") : tx("DINCR encontró ambas cuentas entre las que confirmaste como propias. Al aceptar, no se registrará como gasto ni ingreso.", "DINCR matched both endpoints to accounts you confirmed as yours. Accepting won’t record income or expense.")}</p>}
@@ -402,13 +434,14 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
                 </div>;
               })}
             </div>}
-            {pending ? <div className="gmail-review-actions"><button type="button" className="reject" disabled={Boolean(busy)} onClick={() => review(item, "reject")}><X size={16}/>{tx("Rechazar", "Reject")}</button>{!item.is_internal_transfer && <button type="button" disabled={Boolean(busy)} onClick={() => setEditing(item)}><Pencil size={16}/>{tx("Corregir", "Edit")}</button>}<button type="button" className="primary" disabled={Boolean(busy)} onClick={() => review(item, "accept")}><Check size={16}/>{item.is_internal_transfer ? tx("Confirmar transferencia", "Confirm transfer") : tx("Aceptar", "Accept")}</button></div> : <span className={`gmail-review-state ${item.review_status}`}>{item.review_status === "confirmed" || item.review_status === "auto_saved" ? tx("Guardado", "Saved") : item.review_status === "rejected" ? tx("Rechazado", "Rejected") : item.review_status === "duplicate" ? tx("Duplicado", "Duplicate") : item.review_status}</span>}
+            {pending ? <div className="gmail-review-actions"><button type="button" className="reject" disabled={Boolean(busy)} onClick={() => review(item, "reject")}><X size={16}/>{busy === `reject-${item.candidate_id}` ? tx("Rechazando…", "Rejecting…") : tx("Rechazar", "Reject")}</button>{!item.is_internal_transfer && <button type="button" disabled={Boolean(busy)} onClick={() => setEditing(item)}><Pencil size={16}/>{tx("Corregir", "Edit")}</button>}<button type="button" className="primary" disabled={Boolean(busy)} onClick={() => review(item, "accept")}><Check size={16}/>{busy === `accept-${item.candidate_id}` ? tx("Guardando…", "Saving…") : item.is_internal_transfer ? tx("Confirmar transferencia", "Confirm transfer") : tx("Aceptar", "Accept")}</button></div> : <span className={`gmail-review-state ${item.review_status}`}>{item.review_status === "confirmed" || item.review_status === "auto_saved" ? tx("Guardado", "Saved") : item.review_status === "rejected" ? tx("Rechazado", "Rejected") : item.review_status === "duplicate" ? tx("Duplicado", "Duplicate") : item.review_status}</span>}
+            {notice}
           </> : <p>{item.parse_reason || tx("DINCR no detectó un movimiento en este correo.", "DINCR did not detect a transaction in this email.")}</p>}
         </article>;
       })}</div>
     </section>}
-    {message && <p className="success-banner">{message}</p>}
-    {error && <p className="onboarding-error">{error}</p>}
+    {message && <p className="success-banner" role="status">{message}</p>}
+    {error && <p className="onboarding-error" role="alert">{error}</p>}
     <FinvaFormSheet open={Boolean(historyChoice)} eyebrow={historyChoice?.provider === "microsoft" ? "Outlook / Hotmail" : "Gmail"} title={tx("¿Cuánto historial querés revisar?", "How much history do you want to review?")} onClose={() => { if (busy !== "connect") setHistoryChoice(null); }}>
       <div className="mail-history-sheet">
         <div className="mail-history-options" role="radiogroup" aria-label={tx("Historial a importar", "History to import")}>
