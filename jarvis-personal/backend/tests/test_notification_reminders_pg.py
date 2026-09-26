@@ -184,3 +184,102 @@ def test_a_lost_claim_is_retried_after_its_lease(cur, monkeypatch):
     assert sent == ["lost"]
     cur.execute("SELECT title, status FROM notification_jobs ORDER BY title")
     assert cur.fetchall() == [("lost", "sent"), ("recent", "sending")]
+
+
+def test_a_failed_delivery_is_retried_after_a_pause_and_never_past_the_cap(cur, monkeypatch):
+    """Every push of a job failed: the job is not lost. It waits RETRY_AFTER_MINUTES
+    (never re-sent within the same run), is then retried, and a retry never outlives
+    MAX_DELIVERY_DELAY_HOURS. A job with no subscription at all is recorded as failed."""
+    _no_enqueue(monkeypatch)
+    now = datetime.now(timezone.utc)
+    cur.execute("INSERT INTO notification_subscriptions(workspace_id) VALUES (%s)", (WS_A,))
+    cur.execute("""INSERT INTO notification_jobs(user_id, workspace_id, title, body, category, scheduled_at)
+                   VALUES (11, %s, 'flaky', 'b', 'calendar', %s), (11, %s, 'nobody', 'b', 'calendar', %s)""",
+                (WS_A, now - timedelta(minutes=5), WS_B, now - timedelta(minutes=5)))
+    calls = []
+    outcome = {"ok": False}
+
+    def fake_send(_c, _s, title, _b, _cat):
+        calls.append(title)
+        return (True, None) if outcome["ok"] else (False, "push service 503")
+
+    monkeypatch.setattr(service, "_send_to_subscription", fake_send)
+    result = service.send_due_notifications()
+    assert (result["due_jobs"], result["retry_jobs"], result["failed_jobs"]) == (2, 1, 1)
+    assert calls == ["flaky"]  # tried once in this run, not looped on
+    cur.execute("SELECT title, status FROM notification_jobs ORDER BY title")
+    assert cur.fetchall() == [("flaky", "retry"), ("nobody", "failed")]
+
+    assert service.send_due_notifications()["due_jobs"] == 0  # still inside its pause
+    cur.execute("UPDATE notification_jobs SET updated_at = NOW() - make_interval(mins => %s) WHERE title = 'flaky'",
+                (service.RETRY_AFTER_MINUTES + 1,))
+    outcome["ok"] = True
+    assert service.send_due_notifications()["sent_jobs"] == 1
+    cur.execute("SELECT status FROM notification_jobs WHERE title = 'flaky'")
+    assert cur.fetchone() == ("sent",)
+
+    cur.execute("""INSERT INTO notification_jobs(user_id, workspace_id, title, body, category, scheduled_at, status, updated_at)
+                   VALUES (11, %s, 'too late', 'b', 'calendar', %s, 'retry', NOW() - interval '1 hour')""",
+                (WS_A, now - timedelta(hours=service.MAX_DELIVERY_DELAY_HOURS + 1)))
+    calls.clear()
+    assert service.send_due_notifications()["due_jobs"] == 0
+    assert calls == []
+
+
+def test_a_long_delivery_renews_its_claim(cur, monkeypatch):
+    """The claim is renewed after every push, so a run still sending a job to several
+    devices is never overtaken by a second run that thinks the claim was lost."""
+    _no_enqueue(monkeypatch)
+    now = datetime.now(timezone.utc)
+    cur.execute("INSERT INTO notification_subscriptions(workspace_id) VALUES (%s), (%s)", (WS_A, WS_A))
+    cur.execute("""INSERT INTO notification_jobs(user_id, workspace_id, title, body, category, scheduled_at)
+                   VALUES (11, %s, 'slow', 'b', 'calendar', %s)""", (WS_A, now - timedelta(minutes=5)))
+    rivals = []
+
+    def fake_send(_c, _s, _title, _b, _cat):
+        if not rivals:  # first device: time passes beyond the lease while pushing
+            cur.execute("UPDATE notification_jobs SET updated_at = NOW() - make_interval(mins => %s)",
+                        (service.CLAIM_LEASE_MINUTES + 1,))
+        else:  # second device: the first push renewed the claim, a rival run finds nothing
+            with database.get_connection() as rival:
+                rivals.append(service._claim_due_job(rival))
+                rival.rollback()
+            return True, None
+        rivals.append("first")
+        return True, None
+
+    monkeypatch.setattr(service, "_send_to_subscription", fake_send)
+    assert service.send_due_notifications()["sent_jobs"] == 1
+    assert rivals == ["first", None]
+
+
+def test_concurrent_runs_share_distinct_jobs_and_keep_workspaces_apart(cur, monkeypatch):
+    """Two runs work on different jobs at the same time, and a job only ever reaches
+    subscriptions of its own workspace."""
+    import threading
+    import time
+
+    _no_enqueue(monkeypatch)
+    now = datetime.now(timezone.utc)
+    cur.execute("INSERT INTO notification_subscriptions(workspace_id) VALUES (%s), (%s)", (WS_A, WS_B))
+    for i in range(10):
+        ws = WS_A if i % 2 else WS_B
+        cur.execute("""INSERT INTO notification_jobs(user_id, workspace_id, title, body, category, scheduled_at)
+                       VALUES (11, %s, %s, 'b', 'calendar', %s)""", (ws, f"{ws}:{i}", now - timedelta(minutes=5)))
+    seen, lock = [], threading.Lock()
+
+    def fake_send(_conn, subscription, title, _body, _category):
+        time.sleep(0.05)
+        with lock:
+            seen.append((threading.get_ident(), str(subscription["workspace_id"]), title))
+        return True, None
+
+    monkeypatch.setattr(service, "_send_to_subscription", fake_send)
+    runs = [threading.Thread(target=service.send_due_notifications) for _ in range(2)]
+    for run in runs:
+        run.start()
+    for run in runs:
+        run.join()
+    assert len({thread for thread, _ws, _t in seen}) == 2  # both runs did work
+    assert len(seen) == 10 and len({t for _th, _ws, t in seen}) == 10
+    assert all(title.startswith(ws + ":") for _th, ws, title in seen)

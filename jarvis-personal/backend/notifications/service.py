@@ -32,7 +32,12 @@ MAX_DELIVERY_DELAY_HOURS = 12
 # job twice, and no database transaction stays open while push services answer.
 # A claim older than this is taken as lost (a crash between sending and recording
 # the result), so the job is retried: delivery is at-least-once, never concurrent.
+# The claim is renewed after every push (each push times out long before this).
 CLAIM_LEASE_MINUTES = 10
+# A job whose subscriptions all failed is not given up: it waits this long and is
+# retried, until MAX_DELIVERY_DELAY_HOURS ends it. Only a job with no enabled
+# subscription at all is recorded as failed (there is nobody to deliver it to).
+RETRY_AFTER_MINUTES = 15
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.invalid").strip()
 
 
@@ -417,7 +422,8 @@ def _claim_due_job(conn) -> dict[str, Any] | None:
             SELECT id
             FROM notification_jobs
             WHERE (status = 'pending'
-                   OR (status = 'sending' AND updated_at < NOW() - make_interval(mins => %s)))
+                   OR (status = 'sending' AND updated_at < NOW() - make_interval(mins => %s))
+                   OR (status = 'retry' AND updated_at < NOW() - make_interval(mins => %s)))
               AND scheduled_at <= NOW()
               AND scheduled_at > NOW() - make_interval(hours => %s)
             ORDER BY scheduled_at ASC
@@ -426,13 +432,14 @@ def _claim_due_job(conn) -> dict[str, Any] | None:
         )
         RETURNING *
         """,
-        (CLAIM_LEASE_MINUTES, MAX_DELIVERY_DELAY_HOURS),
+        (CLAIM_LEASE_MINUTES, RETRY_AFTER_MINUTES, MAX_DELIVERY_DELAY_HOURS),
     ).fetchone()
 
 
-def _deliver_job(job: dict[str, Any]) -> tuple[int, list[str]]:
+def _deliver_job(job: dict[str, Any]) -> tuple[int, int, list[str]]:
     """Push one claimed job to its workspace's subscriptions. Each push runs outside any
-    open transaction; its subscription bookkeeping is committed right after it."""
+    open transaction; its subscription bookkeeping and the renewed claim are committed
+    right after it. Returns (subscriptions attempted, pushes accepted, errors)."""
     with get_connection() as conn:
         subscriptions = conn.execute(
             """
@@ -447,11 +454,15 @@ def _deliver_job(job: dict[str, Any]) -> tuple[int, list[str]]:
         errors: list[str] = []
         for subscription in subscriptions:
             ok, error = _send_to_subscription(conn, subscription, job["title"], job["body"], job["category"])
+            conn.execute(
+                "UPDATE notification_jobs SET updated_at = NOW() WHERE id = %s AND status = 'sending'",
+                (job["id"],),
+            )
             conn.commit()
             sent_to += 1 if ok else 0
             if error:
                 errors.append(error[:160])
-    return sent_to, errors
+    return len(subscriptions), sent_to, errors
 
 
 def send_due_notifications(limit: int = 50) -> dict[str, Any]:
@@ -463,7 +474,7 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
     except Exception as exc:
         queued_sports = {"status": "ERROR", "message": str(exc)}
 
-    due_jobs = sent_jobs = failed_jobs = 0
+    due_jobs = sent_jobs = failed_jobs = retry_jobs = 0
     for _ in range(limit):
         with get_connection() as conn:
             job = _claim_due_job(conn)
@@ -471,7 +482,7 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
         if not job:
             break
         due_jobs += 1
-        sent_to, errors = _deliver_job(job)
+        attempted, sent_to, errors = _deliver_job(job)
         with get_connection() as conn:
             if sent_to:
                 conn.execute(
@@ -487,12 +498,16 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
                 conn.execute(
                     """
                     UPDATE notification_jobs
-                    SET status = 'failed', last_error = %s, updated_at = NOW()
+                    SET status = %s, last_error = %s, updated_at = NOW()
                     WHERE id = %s AND status = 'sending'
                     """,
-                    (("; ".join(errors) or "No hay suscripciones activas")[:500], job["id"]),
+                    ("retry" if attempted else "failed",
+                     ("; ".join(errors) or "No hay suscripciones activas")[:500], job["id"]),
                 )
-                failed_jobs += 1
+                if attempted:
+                    retry_jobs += 1
+                else:
+                    failed_jobs += 1
             conn.commit()
 
     return {
@@ -503,4 +518,5 @@ def send_due_notifications(limit: int = 50) -> dict[str, Any]:
         "due_jobs": due_jobs,
         "sent_jobs": sent_jobs,
         "failed_jobs": failed_jobs,
+        "retry_jobs": retry_jobs,
     }
