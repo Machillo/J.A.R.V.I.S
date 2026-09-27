@@ -93,8 +93,7 @@
   padding: 22px 0 4px;
 }
 
-.unified-onboarding-intro h1,
-.unified-payment-heading h1 {
+.unified-onboarding-intro h1 {
   margin: 7px 0 9px;
   color: var(--onboarding-text);
   font-size: clamp(1.65rem, 8vw, 2rem);
@@ -103,8 +102,7 @@
   letter-spacing: -.04em;
 }
 
-.unified-onboarding-intro p,
-.unified-payment-description {
+.unified-onboarding-intro p {
   margin: 0;
   color: var(--onboarding-muted);
   font-size: .86rem;
@@ -246,8 +244,7 @@
 }
 
 .unified-plan-button,
-.unified-primary,
-.unified-native-picker-button {
+.unified-primary {
   width: 100%;
   min-height: 48px;
   padding: 0 14px;
@@ -272,26 +269,6 @@
   background: #1f1217;
 }
 
-.unified-payment-heading { display: flex; align-items: center; gap: 13px; padding: 20px 0 6px; }
-.unified-payment-heading h1 { margin-bottom: 0; }
-.unified-payment-description { margin: 10px 0 15px; }
-.unified-payment-data { display: grid; gap: 8px; }
-.unified-payment-data > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; align-items: center; padding: 11px 12px; border: 1px solid var(--onboarding-border); border-radius: 14px; background: var(--onboarding-raised); }
-.unified-payment-data span { color: var(--onboarding-muted); font-size: .68rem; }
-.unified-payment-data strong { overflow-wrap: anywhere; font-size: .95rem; }
-.unified-payment-data button { grid-column: 2; grid-row: 1 / span 2; min-height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--onboarding-border); border-radius: 11px; color: var(--onboarding-text); background: #08292b; }
-.unified-payment-code strong { color: var(--onboarding-accent); letter-spacing: .06em; }
-.unified-payment-expiry { display: block; margin: 9px 2px 13px; color: var(--onboarding-muted); font-size: .68rem; }
-.unified-receipt-upload { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 9px 14px; border: 1px dashed var(--onboarding-accent); border-radius: 14px 14px 0 0; color: #c6d2df; background: #081f24; font-weight: 700; text-align: center; overflow-wrap: anywhere; }
-.unified-native-file-input { display: block; width: 100%; min-height: 49px; padding: 6px; border: 1px solid var(--onboarding-accent); border-top: 0; border-radius: 0 0 14px 14px; color: #c6d2df; background: var(--onboarding-raised); font: inherit; font-size: .78rem; }
-.unified-native-file-input::file-selector-button { min-height: 36px; margin-right: 9px; padding: 0 12px; border: 0; border-radius: 10px; color: #031915; background: var(--onboarding-accent); font: inherit; font-weight: 750; }
-.unified-native-picker-button { border-radius: 0 0 14px 14px; }
-.unified-payment-stage > .unified-primary { margin-top: 12px; }
-.unified-payment-waiting { display: grid; justify-items: center; gap: 10px; padding: 34px 8px 18px; text-align: center; }
-.unified-payment-waiting svg { color: var(--onboarding-success); }
-.unified-payment-waiting strong { font-size: 1.15rem; }
-.unified-payment-waiting p { margin: 0; color: #c6d2df; line-height: 1.5; }
-.unified-payment-waiting small { color: var(--onboarding-muted); line-height: 1.4; }
 
 .unified-onboarding-shell :is(h1, h2, h3, p, small, strong, span, label, button) { overflow-wrap: anywhere; }
 
@@ -334,8 +311,6 @@
   .unified-plan-summary { grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; }
   .unified-plan-summary > .unified-plan-price { grid-column: 2; justify-self: start; justify-items: start; white-space: normal; }
   .unified-plan-summary > svg { grid-column: 3; grid-row: 1 / span 2; }
-  .unified-payment-data > div { grid-template-columns: 1fr; }
-  .unified-payment-data button { grid-column: 1; grid-row: auto; justify-content: center; width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

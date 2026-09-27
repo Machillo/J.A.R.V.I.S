@@ -232,13 +232,7 @@ def test_notification_cron_rejects_wrong_secret(monkeypatch):
 def test_product_operations_schema_check_never_runs_runtime_ddl():
     class Result:
         def fetchone(self):
-            return {
-                "finva_beta_programs": True,
-                "billing_orders": True,
-                "billing_subscriptions": True,
-                "product_events": True,
-                "feedback_reports": True,
-            }
+            return {"product_events": True, "feedback_reports": True}
 
     class Connection(RecordingConnection):
         def execute(self, query, params=()):
@@ -259,19 +253,13 @@ def test_product_operations_schema_check_never_runs_runtime_ddl():
 def test_product_operations_schema_check_fails_closed_when_migration_is_missing():
     class Result:
         def fetchone(self):
-            return {
-                "finva_beta_programs": True,
-                "billing_orders": False,
-                "billing_subscriptions": True,
-                "product_events": True,
-                "feedback_reports": True,
-            }
+            return {"product_events": False, "feedback_reports": True}
 
     class Connection:
         def execute(self, _query, _params=()):
             return Result()
 
-    with pytest.raises(RuntimeError, match="billing_orders"):
+    with pytest.raises(RuntimeError, match="product_events"):
         product_ops_service.ensure_schema(Connection())
 
 
@@ -288,6 +276,30 @@ def test_product_operations_migrations_close_tables_to_data_api_roles():
     ):
         assert f"ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY" in base
         assert f"REVOKE ALL PRIVILEGES ON TABLE {table_name} FROM anon, authenticated" in base
+
+
+def test_dincr_takes_no_off_store_payment():
+    """Public payments are App Store / Google Play only: no SINPE, receipts or manual orders."""
+    backend = Path(__file__).parent
+    runtime = [path for path in backend.rglob("*.py") if "test" not in path.name and "/tests/" not in str(path)]
+    forbidden = ("billing_orders", "billing_subscriptions", "finva_beta_programs", "submit_receipt",
+                 "match_sinpe_payment", "payment_code", "_sinpe_instructions", "has_active_payment")
+    offenders = [f"{path.relative_to(backend)}: {word}" for path in runtime
+                 for word in forbidden if word in path.read_text(encoding="utf-8")]
+    assert offenders == []
+    from backend.product_ops import routes
+    paths = {route.path for route in routes.router.routes}
+    assert not [path for path in paths if "/orders" in path or "receipt" in path]
+    frontend = backend.parent / "frontend" / "src"
+    client_calls = ("uploadPaymentReceipt", "resolveTestPayment", "openTestPaymentReceipt", "/billing/orders", "/owner/orders")
+    client_offenders = [f"{path.relative_to(frontend)}: {word}" for path in frontend.rglob("*.js*")
+                        for word in client_calls if word in path.read_text(encoding="utf-8")]
+    assert client_offenders == []
+
+
+def test_the_store_states_that_grant_access_agree():
+    from backend.product_ops import service, store_billing
+    assert set(service.STORE_ENTITLED_STATES) == set(store_billing.ACTIVE_STATES)
 
 
 def test_legal_schema_is_closed_to_data_api_roles():
