@@ -188,7 +188,7 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
              window["restart_scan"], window["restart_scan"], existing["id"]),
         ).fetchone()
         if existing.get("refresh_token_secret_id") and str(existing["refresh_token_secret_id"]) != secret_id:
-            _vault_delete(conn, str(existing["refresh_token_secret_id"]))
+            _vault_delete(conn, str(existing["refresh_token_secret_id"]), account_id)
     else:
         row = conn.execute(
             """INSERT INTO finva_gmail_connections(
@@ -231,7 +231,7 @@ def _refresh(connection: dict, refresh_token: str) -> str:
                 replacement = _vault_create(conn, tokens["refresh_token"], str(connection["account_id"]), "Microsoft")
                 conn.execute("UPDATE finva_gmail_connections SET refresh_token_secret_id=%s::uuid WHERE id=%s",
                              (replacement, connection["id"]))
-                _vault_delete(conn, str(connection["refresh_token_secret_id"]))
+                _vault_delete(conn, str(connection["refresh_token_secret_id"]), str(connection["account_id"]))
                 conn.commit()
     return tokens["access_token"]
 
@@ -298,7 +298,7 @@ def _run_sync_connection(connection_id: int, max_results: int = 100) -> dict:
             raise HTTPException(status_code=404, detail="Conexión de Outlook no encontrada.")
         if not _has_active_vip_access(conn, str(connection["account_id"])):
             raise HTTPException(status_code=403, detail="La lectura de correo requiere VIP.")
-        token = _vault_read(conn, str(connection["refresh_token_secret_id"]))
+        token = _vault_read(conn, str(connection["refresh_token_secret_id"]), str(connection["account_id"]))
     connection = dict(connection)
     access_token = _refresh(connection, token)
     initial = not connection.get("initial_scan_completed_at")

@@ -1,0 +1,487 @@
+{
+ "stages": [
+  {
+   "concurrency": 10,
+   "seconds": 60.8,
+   "requests": 613,
+   "rps": 10.1,
+   "p50_ms": 451.5,
+   "p95_ms": 722.3,
+   "p99_ms": 1878.8,
+   "error_rate": 0.0,
+   "errors_5xx": 0,
+   "status_4xx": 0,
+   "timeouts": 0,
+   "endpoints": {
+    "GET /user-product/vip/strategy-dashboard": {
+     "n": 14,
+     "p50_ms": 1878.8,
+     "p95_ms": 1906.5,
+     "p99_ms": 1906.5,
+     "errors": 0
+    },
+    "GET /user-product/vip/command-center": {
+     "n": 22,
+     "p50_ms": 730.9,
+     "p95_ms": 756.7,
+     "p99_ms": 758.3,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-basic": {
+     "n": 21,
+     "p50_ms": 621.3,
+     "p95_ms": 644.0,
+     "p99_ms": 658.4,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-vip": {
+     "n": 22,
+     "p50_ms": 620.7,
+     "p95_ms": 633.7,
+     "p99_ms": 635.9,
+     "errors": 0
+    },
+    "PUT /user-product/basic/budget": {
+     "n": 2,
+     "p50_ms": 594.7,
+     "p95_ms": 594.7,
+     "p99_ms": 594.7,
+     "errors": 0
+    },
+    "GET /user-product/basic/dashboard": {
+     "n": 27,
+     "p50_ms": 559.7,
+     "p95_ms": 573.1,
+     "p99_ms": 591.3,
+     "errors": 0
+    },
+    "GET /user-product/free/dashboard": {
+     "n": 23,
+     "p50_ms": 537.6,
+     "p95_ms": 553.2,
+     "p99_ms": 565.7,
+     "errors": 0
+    },
+    "GET /user-product/basic/budget": {
+     "n": 43,
+     "p50_ms": 528.0,
+     "p95_ms": 545.5,
+     "p99_ms": 552.7,
+     "errors": 0
+    },
+    "POST /user-product/finance/expenses": {
+     "n": 11,
+     "p50_ms": 512.7,
+     "p95_ms": 518.9,
+     "p99_ms": 518.9,
+     "errors": 0
+    },
+    "GET /user-product/goals": {
+     "n": 69,
+     "p50_ms": 451.1,
+     "p95_ms": 464.0,
+     "p99_ms": 479.1,
+     "errors": 0
+    },
+    "GET /user-product/finance/debts": {
+     "n": 85,
+     "p50_ms": 450.1,
+     "p95_ms": 460.6,
+     "p99_ms": 482.1,
+     "errors": 0
+    },
+    "GET /user-product/free/movements": {
+     "n": 74,
+     "p50_ms": 449.7,
+     "p95_ms": 463.6,
+     "p99_ms": 474.7,
+     "errors": 0
+    },
+    "GET /user-product/finance/summary": {
+     "n": 48,
+     "p50_ms": 449.3,
+     "p95_ms": 465.8,
+     "p99_ms": 477.1,
+     "errors": 0
+    },
+    "GET /auth/me": {
+     "n": 152,
+     "p50_ms": 402.7,
+     "p95_ms": 552.2,
+     "p99_ms": 562.4,
+     "errors": 0
+    }
+   },
+   "pg_connections_max": 12,
+   "pg_active_max": 2,
+   "pg_idle_in_tx_max": 7,
+   "backend_cpu_pct_max": 19.2,
+   "backend_rss_mb_max": 100.1
+  },
+  {
+   "concurrency": 25,
+   "seconds": 61.1,
+   "requests": 1561,
+   "rps": 25.6,
+   "p50_ms": 439.6,
+   "p95_ms": 675.4,
+   "p99_ms": 1822.8,
+   "error_rate": 0.0,
+   "errors_5xx": 0,
+   "status_4xx": 0,
+   "timeouts": 0,
+   "endpoints": {
+    "GET /user-product/vip/strategy-dashboard": {
+     "n": 40,
+     "p50_ms": 1820.7,
+     "p95_ms": 1862.7,
+     "p99_ms": 1867.8,
+     "errors": 0
+    },
+    "GET /user-product/vip/command-center": {
+     "n": 40,
+     "p50_ms": 708.7,
+     "p95_ms": 742.8,
+     "p99_ms": 797.4,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-vip": {
+     "n": 38,
+     "p50_ms": 609.5,
+     "p95_ms": 626.1,
+     "p99_ms": 632.0,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-basic": {
+     "n": 55,
+     "p50_ms": 608.7,
+     "p95_ms": 628.3,
+     "p99_ms": 632.2,
+     "errors": 0
+    },
+    "PUT /user-product/basic/budget": {
+     "n": 7,
+     "p50_ms": 567.1,
+     "p95_ms": 582.1,
+     "p99_ms": 582.1,
+     "errors": 0
+    },
+    "GET /user-product/basic/dashboard": {
+     "n": 57,
+     "p50_ms": 545.7,
+     "p95_ms": 560.1,
+     "p99_ms": 566.9,
+     "errors": 0
+    },
+    "GET /user-product/free/dashboard": {
+     "n": 110,
+     "p50_ms": 523.0,
+     "p95_ms": 537.6,
+     "p99_ms": 542.4,
+     "errors": 0
+    },
+    "GET /user-product/basic/budget": {
+     "n": 92,
+     "p50_ms": 513.7,
+     "p95_ms": 528.9,
+     "p99_ms": 540.4,
+     "errors": 0
+    },
+    "POST /user-product/finance/expenses": {
+     "n": 35,
+     "p50_ms": 494.5,
+     "p95_ms": 507.1,
+     "p99_ms": 511.5,
+     "errors": 0
+    },
+    "GET /user-product/finance/summary": {
+     "n": 125,
+     "p50_ms": 438.3,
+     "p95_ms": 456.6,
+     "p99_ms": 462.7,
+     "errors": 0
+    },
+    "GET /user-product/goals": {
+     "n": 173,
+     "p50_ms": 438.0,
+     "p95_ms": 453.0,
+     "p99_ms": 472.9,
+     "errors": 0
+    },
+    "GET /user-product/finance/debts": {
+     "n": 202,
+     "p50_ms": 437.5,
+     "p95_ms": 458.1,
+     "p99_ms": 468.4,
+     "errors": 0
+    },
+    "GET /user-product/free/movements": {
+     "n": 202,
+     "p50_ms": 437.2,
+     "p95_ms": 454.9,
+     "p99_ms": 460.1,
+     "errors": 0
+    },
+    "GET /auth/me": {
+     "n": 385,
+     "p50_ms": 390.8,
+     "p95_ms": 417.6,
+     "p99_ms": 441.6,
+     "errors": 0
+    }
+   },
+   "pg_connections_max": 24,
+   "pg_active_max": 4,
+   "pg_idle_in_tx_max": 14,
+   "backend_cpu_pct_max": 33.7,
+   "backend_rss_mb_max": 89.8
+  },
+  {
+   "concurrency": 50,
+   "seconds": 60.7,
+   "requests": 3126,
+   "rps": 51.5,
+   "p50_ms": 425.9,
+   "p95_ms": 682.5,
+   "p99_ms": 1758.9,
+   "error_rate": 0.0,
+   "errors_5xx": 0,
+   "status_4xx": 0,
+   "timeouts": 0,
+   "endpoints": {
+    "GET /user-product/vip/strategy-dashboard": {
+     "n": 99,
+     "p50_ms": 1741.1,
+     "p95_ms": 1807.0,
+     "p99_ms": 1878.4,
+     "errors": 0
+    },
+    "GET /user-product/vip/command-center": {
+     "n": 100,
+     "p50_ms": 679.6,
+     "p95_ms": 760.0,
+     "p99_ms": 844.3,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-basic": {
+     "n": 116,
+     "p50_ms": 582.3,
+     "p95_ms": 614.8,
+     "p99_ms": 706.5,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-vip": {
+     "n": 99,
+     "p50_ms": 582.1,
+     "p95_ms": 630.5,
+     "p99_ms": 716.0,
+     "errors": 0
+    },
+    "PUT /user-product/basic/budget": {
+     "n": 12,
+     "p50_ms": 549.9,
+     "p95_ms": 581.9,
+     "p99_ms": 581.9,
+     "errors": 0
+    },
+    "GET /user-product/basic/dashboard": {
+     "n": 133,
+     "p50_ms": 528.8,
+     "p95_ms": 624.7,
+     "p99_ms": 695.1,
+     "errors": 0
+    },
+    "GET /user-product/free/dashboard": {
+     "n": 193,
+     "p50_ms": 504.1,
+     "p95_ms": 567.4,
+     "p99_ms": 683.0,
+     "errors": 0
+    },
+    "GET /user-product/basic/budget": {
+     "n": 227,
+     "p50_ms": 491.0,
+     "p95_ms": 556.9,
+     "p99_ms": 629.9,
+     "errors": 0
+    },
+    "POST /user-product/finance/expenses": {
+     "n": 74,
+     "p50_ms": 473.6,
+     "p95_ms": 495.8,
+     "p99_ms": 523.2,
+     "errors": 0
+    },
+    "GET /user-product/free/movements": {
+     "n": 393,
+     "p50_ms": 422.5,
+     "p95_ms": 473.5,
+     "p99_ms": 557.4,
+     "errors": 0
+    },
+    "GET /user-product/finance/debts": {
+     "n": 397,
+     "p50_ms": 422.3,
+     "p95_ms": 482.9,
+     "p99_ms": 556.1,
+     "errors": 0
+    },
+    "GET /user-product/goals": {
+     "n": 321,
+     "p50_ms": 420.9,
+     "p95_ms": 489.4,
+     "p99_ms": 554.4,
+     "errors": 0
+    },
+    "GET /user-product/finance/summary": {
+     "n": 194,
+     "p50_ms": 420.9,
+     "p95_ms": 495.9,
+     "p99_ms": 587.5,
+     "errors": 0
+    },
+    "GET /auth/me": {
+     "n": 768,
+     "p50_ms": 375.3,
+     "p95_ms": 420.8,
+     "p99_ms": 674.5,
+     "errors": 0
+    }
+   },
+   "pg_connections_max": 41,
+   "pg_active_max": 3,
+   "pg_idle_in_tx_max": 26,
+   "backend_cpu_pct_max": 45.4,
+   "backend_rss_mb_max": 93.4
+  },
+  {
+   "concurrency": 100,
+   "seconds": 60.8,
+   "requests": 4963,
+   "rps": 81.6,
+   "p50_ms": 676.8,
+   "p95_ms": 1213.6,
+   "p99_ms": 2010.2,
+   "error_rate": 0.0,
+   "errors_5xx": 0,
+   "status_4xx": 0,
+   "timeouts": 0,
+   "endpoints": {
+    "GET /user-product/vip/strategy-dashboard": {
+     "n": 169,
+     "p50_ms": 1966.0,
+     "p95_ms": 2282.8,
+     "p99_ms": 2491.5,
+     "errors": 0
+    },
+    "GET /user-product/vip/command-center": {
+     "n": 160,
+     "p50_ms": 913.6,
+     "p95_ms": 1330.6,
+     "p99_ms": 1411.4,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-basic": {
+     "n": 170,
+     "p50_ms": 822.2,
+     "p95_ms": 1133.4,
+     "p99_ms": 1316.1,
+     "errors": 0
+    },
+    "GET /user-product/finance/strategy-vip": {
+     "n": 155,
+     "p50_ms": 816.9,
+     "p95_ms": 1156.4,
+     "p99_ms": 1332.3,
+     "errors": 0
+    },
+    "PUT /user-product/basic/budget": {
+     "n": 19,
+     "p50_ms": 772.1,
+     "p95_ms": 1113.9,
+     "p99_ms": 1113.9,
+     "errors": 0
+    },
+    "GET /user-product/basic/dashboard": {
+     "n": 200,
+     "p50_ms": 763.7,
+     "p95_ms": 1182.0,
+     "p99_ms": 1260.3,
+     "errors": 0
+    },
+    "GET /user-product/free/dashboard": {
+     "n": 295,
+     "p50_ms": 734.4,
+     "p95_ms": 1170.3,
+     "p99_ms": 1269.2,
+     "errors": 0
+    },
+    "GET /user-product/basic/budget": {
+     "n": 349,
+     "p50_ms": 730.1,
+     "p95_ms": 1150.3,
+     "p99_ms": 1278.2,
+     "errors": 0
+    },
+    "POST /user-product/finance/expenses": {
+     "n": 110,
+     "p50_ms": 705.8,
+     "p95_ms": 860.0,
+     "p99_ms": 935.5,
+     "errors": 0
+    },
+    "GET /user-product/finance/summary": {
+     "n": 306,
+     "p50_ms": 660.4,
+     "p95_ms": 1111.0,
+     "p99_ms": 1182.4,
+     "errors": 0
+    },
+    "GET /user-product/goals": {
+     "n": 493,
+     "p50_ms": 659.7,
+     "p95_ms": 1105.2,
+     "p99_ms": 1167.2,
+     "errors": 0
+    },
+    "GET /user-product/finance/debts": {
+     "n": 643,
+     "p50_ms": 659.1,
+     "p95_ms": 1100.2,
+     "p99_ms": 1165.9,
+     "errors": 0
+    },
+    "GET /user-product/free/movements": {
+     "n": 659,
+     "p50_ms": 654.9,
+     "p95_ms": 1035.6,
+     "p99_ms": 1179.2,
+     "errors": 0
+    },
+    "GET /auth/me": {
+     "n": 1235,
+     "p50_ms": 610.9,
+     "p95_ms": 898.9,
+     "p99_ms": 1241.4,
+     "errors": 0
+    }
+   },
+   "pg_connections_max": 41,
+   "pg_active_max": 4,
+   "pg_idle_in_tx_max": 36,
+   "backend_cpu_pct_max": 54.7,
+   "backend_rss_mb_max": 96.1
+  }
+ ],
+ "config": {
+  "base": "http://127.0.0.1:8790",
+  "users": 120,
+  "stages": "10,25,50,100",
+  "stage_seconds": 60,
+  "think": "1,3",
+  "db": "dincr_load",
+  "backend_pid": 86411,
+  "skip_setup": true,
+  "out": "/private/tmp/claude-501/-Users-kennethalvarado-Documents-J-A-R-V-I-S/204cdf93-bdfe-4dd0-bd6a-00b387a5fa84/scratchpad/load/int-idle16-r2.json"
+ }
+}

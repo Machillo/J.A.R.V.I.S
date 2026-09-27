@@ -74,3 +74,54 @@ Fix 3 alone is modest here (about −8% p50 at 100 users). The harness does not 
 ## Repeat before a release
 
 Follow README.md. Run the before/after on the same seeded database, and compare p50/p95 and errors at 100 users with the numbers above.
+
+# Revalidation — 2026-09-26 (after the block's merges)
+
+The same harness, settings and seeded data as above.
+
+**Code:**
+- `origin/main` `ccbd3b0`, which includes #253 and #260;
+- versus the same main with #255 (auth off the event loop, synced with #260) and #252 (connection reuse) merged locally.
+
+**Pool sizes:** `DINCR_DB_POOL_MAX_IDLE` 0 (reuse off), 8 (default) and 16.
+
+**New measurement: connection churn.** New Postgres sessions per second, sampled every 0.5 s from `pg_stat_activity`. It is the local proxy for the rate of new authenticated connections Supavisor would see. At 0 the sampler undercounts, because many sessions last less than 0.5 s.
+
+**The idle 8 and idle 16 runs were repeated.** The first attempts overlapped other work on the machine, which added isolated p99 outliers. Reports: `results/revalidation-2026-09-26-*.json`.
+
+| Run | Users | req/s | p50 | p95 | p99 | 5xx / timeouts | PG conns (idle in tx) | New conns/s | CPU | RSS |
+|---|---|---|---|---|---|---|---|---|---|---|
+| main | 10 | 2.7 | 3.6 s | 4.5 s | 4.5 s | 0 | 7 (6) | 4.6 | 12% | 90 MB |
+| main | 50 | 2.7 | 18.1 s | 21.2 s | 30.0 s | 9 | 42 (41) | 4.2 | 20% | 91 MB |
+| main | 100 | 3.2 | 30 s | 30 s | 30 s | **292 (100%)** | 2 | 3.4 | 15% | 88 MB |
+| reuse off (0) | 50 | 48.7 | 464 ms | 713 ms | 2.1 s | **205** | 38 (24) | ≥44.7 | 39% | 106 MB |
+| reuse off (0) | 100 | 68.7 | 512 ms | 1.42 s | 2.2 s | **2 817** | 38 (30) | ≥34.6 | 87% | 117 MB |
+| idle 8 | 10 | 10.1 | 453 ms | 715 ms | 1.87 s | 0 | 11 (7) | 2.1 | 17% | 92 MB |
+| idle 8 | 50 | 50.8 | 423 ms | 677 ms | 1.75 s | 0 | 40 (31) | 5.7 | 43% | 93 MB |
+| idle 8 | 100 | 80.9 | 668 ms | 1.23 s | 2.0 s | 0 | 41 (34) | 6.4 | 52% | 87 MB |
+| idle 16 | 10 | 10.1 | 452 ms | 722 ms | 1.88 s | 0 | 12 (7) | 2.0 | 19% | 100 MB |
+| idle 16 | 50 | 51.5 | 426 ms | 683 ms | 1.76 s | 0 | 41 (26) | 3.1 | 45% | 93 MB |
+| idle 16 | 100 | **81.6** | **677 ms** | **1.21 s** | **2.0 s** | **0** | 41 (36) | **2.7** | 55% | 96 MB |
+
+`GET /auth/me` p50 at 100 users:
+- main: 30 s (timeouts);
+- idle 8: 0.62 s;
+- idle 16: 0.60 s.
+
+That includes the 30 ms Auth stand-in.
+
+**Findings:**
+1. **Main is still serialized:** about 3 req/s whatever the load, and every request times out at 100 users. #255 and #252 remain release-blocking for any real concurrency.
+2. **Without reuse, the process runs out of connections.** Every DB block opens a TCP connection. At 50–100 users the machine ran out of ephemeral ports (`Errno 49`), giving 205 and then 2 817 errors. In production the same churn would hit Supavisor as one TLS handshake and one authentication per block.
+3. **Pool sizing:** 8 and 16 give the same latency and throughput. 16 halves the churn at 50–100 users (2.7–3.1/s vs 5.7–6.4/s).
+   - **Recommendation:** `DINCR_DB_POOL_MAX_IDLE=16` per worker, provided that `instances × workers × 16` stays well under the plan's Supavisor **client** connection limit.
+   - The code default stays 8.
+4. **Idle in transaction** stays high: 34–36 of 41 connections at 100 users.
+   - In Supavisor transaction mode, each open transaction pins a server connection. Effective concurrency is therefore the plan's pool size, not the 40 threads.
+   - The application role (#276) ends such sessions after 60 s.
+   - **Next steps (not in this block):** autocommit, or short transactions, for read-only blocks.
+
+**HUMAN-ONLY facts needed to finish the sizing:**
+- Render's instance count and workers per instance;
+- the Supabase plan's Supavisor pool size and max client connections;
+- the actual round trip from Render to Supavisor (the proxy assumes 10 ms).

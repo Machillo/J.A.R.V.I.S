@@ -1263,21 +1263,6 @@ def get_additional_card_report() -> dict[str, Any]:
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS card_aliases (
-                id BIGSERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                card_last4 TEXT NOT NULL,
-                owner_label TEXT NOT NULL,
-                relationship TEXT,
-                is_primary BOOLEAN NOT NULL DEFAULT FALSE,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                UNIQUE(workspace_id, card_last4)
-            )
-            """
-        )
         aliases = conn.execute(
             """
             SELECT *

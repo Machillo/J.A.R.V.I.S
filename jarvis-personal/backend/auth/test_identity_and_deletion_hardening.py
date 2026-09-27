@@ -87,7 +87,8 @@ class FakeDB:
         self.dependents = DEPENDENTS
 
     def writes(self):
-        return [(sql, params) for sql, params in self.log if sql.startswith(("UPDATE", "DELETE", "INSERT"))]
+        return [(sql, params) for sql, params in self.log
+                if sql.startswith(("UPDATE", "DELETE", "INSERT", "SELECT dincr_private.mail_secret_delete"))]
 
     def committed(self):
         return [sql for sql, _ in self.log if sql == "COMMIT"]
@@ -225,7 +226,8 @@ class FakeConnection:
             deleted = [e for e in w["events"] if e["account_id"] == params[0]]
             w["events"] = [e for e in w["events"] if e["account_id"] != params[0]]
             return [{"id": index} for index, _ in enumerate(deleted)]
-        if sql.startswith("DELETE FROM vault.secrets"):
+        if sql.startswith("SELECT dincr_private.mail_secret_delete"):
+            assert params[1] == ACCOUNT_ID  # only the caller's own tokens
             for secret_id in params[0]:
                 w["vault"].pop(secret_id, None)
             return []
@@ -328,8 +330,8 @@ def _assert_writes_scoped(db, allowed_ids=(42,), account_ids=(ACCOUNT_ID,), emai
     for sql, params in db.writes():
         if sql.startswith("INSERT"):
             continue
-        if sql.startswith("DELETE FROM vault.secrets"):
-            assert SECRET_OTHER not in params[0]
+        if sql.startswith("SELECT dincr_private.mail_secret_delete"):
+            assert SECRET_OTHER not in params[0] and params[1] == ACCOUNT_ID
             continue
         assert own & set(params), f"write not scoped to the caller: {sql}"
         assert not {7, OTHER_ACCOUNT_ID, OTHER_EMAIL, OTHER_AUTH_ID} & set(params)
@@ -594,7 +596,7 @@ def test_missing_admin_key_fails_closed_before_marking(env, monkeypatch):
 
 
 @pytest.mark.parametrize("fault", [
-    "UPDATE allowed_users SET status", "DELETE FROM vault.secrets", "DELETE FROM payroll_salary_reports", "DELETE FROM product_events",
+    "UPDATE allowed_users SET status", "SELECT dincr_private.mail_secret_delete", "DELETE FROM payroll_salary_reports", "DELETE FROM product_events",
     "DELETE FROM accounts", 'DELETE FROM "public"."memory_items"', "DELETE FROM users", "data_commit",
 ])
 def test_failure_before_the_data_commit_leaves_a_normal_active_account(env, fault):
@@ -671,7 +673,8 @@ def test_supabase_failure_leaves_no_data_and_retry_finishes(env, failure):
     assert 42 not in env.db.state["allowed_users"]
     assert AUTH_ID not in env.supabase.auth_users
     # The resumed attempt finds no account left: nothing but users/tombstone is touched.
-    assert not any(sql.startswith(("DELETE FROM accounts", "DELETE FROM vault", "UPDATE")) for sql, _ in env.db.writes())
+    assert not any(sql.startswith(("DELETE FROM accounts", "SELECT dincr_private.mail_secret_delete", "UPDATE"))
+                   for sql, _ in env.db.writes())
     _assert_other_account_untouched(env.db.state)
     _assert_writes_scoped(env.db)
 
