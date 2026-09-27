@@ -442,9 +442,9 @@ def delete_current_account() -> dict[str, str]:
                 # so they can be revoked after commit, then drop every stored
                 # mail credential inside the same transaction as the account.
                 mail_credentials = conn.execute(
-                    """SELECT c.refresh_token_secret_id, c.granted_scopes, s.decrypted_secret
+                    """SELECT c.refresh_token_secret_id, c.granted_scopes,
+                              dincr_private.mail_secret_read(c.refresh_token_secret_id, c.account_id) AS decrypted_secret
                        FROM finva_gmail_connections c
-                       LEFT JOIN vault.decrypted_secrets s ON s.id=c.refresh_token_secret_id
                        WHERE c.account_id=%s""",
                     (account_id,),
                 ).fetchall()
@@ -452,9 +452,9 @@ def delete_current_account() -> dict[str, str]:
                 flows_table = conn.execute("SELECT to_regclass('public.mail_oauth_flows') AS present").fetchone()
                 if flows_table and flows_table.get("present"):
                     mail_credentials = list(mail_credentials) + list(conn.execute(
-                        """SELECT f.pending_secret_id AS refresh_token_secret_id, f.granted_scopes, s.decrypted_secret
+                        """SELECT f.pending_secret_id AS refresh_token_secret_id, f.granted_scopes,
+                                  dincr_private.mail_secret_read(f.pending_secret_id, f.account_id) AS decrypted_secret
                            FROM mail_oauth_flows f
-                           LEFT JOIN vault.decrypted_secrets s ON s.id=f.pending_secret_id
                            WHERE f.account_id=%s AND f.pending_secret_id IS NOT NULL""",
                         (account_id,),
                     ).fetchall())
@@ -464,7 +464,7 @@ def delete_current_account() -> dict[str, str]:
                     if row.get("decrypted_secret") and GMAIL_SCOPE in (row.get("granted_scopes") or [])
                 ]
                 if secret_ids:
-                    conn.execute("DELETE FROM vault.secrets WHERE id = ANY(%s::uuid[])", (secret_ids,))
+                    conn.execute("SELECT dincr_private.mail_secret_delete(%s::uuid[], %s::uuid)", (secret_ids, account_id))
                 _log_deletion(deletion_id, stage, "COMPLETED", secrets_deleted=len(secret_ids))
 
                 stage = "ACCOUNT_DELETE"
