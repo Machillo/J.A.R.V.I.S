@@ -44,11 +44,6 @@ export const selectPlan = (plan, accept_beta_terms = false) => json("/auth/plan"
 export const getBillingCatalog = () => request("/product-ops/billing/catalog");
 export const getStoreBillingCatalog = () => request("/product-ops/billing/store/catalog");
 export const getStoreEntitlement = () => request("/product-ops/billing/store/entitlement");
-export const uploadPaymentReceipt = (orderId, file) => {
-  const body = new FormData();
-  body.append("receipt", file);
-  return request(`/product-ops/billing/orders/${orderId}/receipt`, { method: "POST", body });
-};
 export const trackProductEvent = (payload) => json("/product-ops/events", "POST", payload);
 export const getFeedback = () => request("/product-ops/feedback");
 export const createFeedback = (payload) => json("/product-ops/feedback", "POST", payload);

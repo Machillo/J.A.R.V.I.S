@@ -72,11 +72,11 @@ class Conn:
             return _rows(p for p in payments if (p["workspace_id"], p["debt_id"]) == params)
         if q.startswith("INSERT INTO debt_payments"):
             p = params
-            if not any((x["workspace_id"], x["debt_id"], x["payment_date"]) == (p[15], p[16], p[17]) for x in payments):
-                payments.append({"workspace_id": p[1], "debt_id": p[2], "principal": p[4], "payment_date": p[13], "installment_number": p[14]})
+            if not any((x["workspace_id"], x["debt_id"], x["payment_date"]) == (p[14], p[15], p[16]) for x in payments):
+                payments.append({"workspace_id": p[0], "debt_id": p[1], "principal": p[3], "payment_date": p[12], "installment_number": p[13]})
             return _rows([])
         if q.startswith("INSERT INTO transactions"):
-            txs.append({"workspace_id": params[1], "type": "debt_payment", "amount": params[4]})
+            txs.append({"workspace_id": params[0], "type": "debt_payment", "amount": params[3]})
             return _rows([])
         if q.startswith("UPDATE debts SET start_date"):
             start, first, balance, paid, last, nxt, finished, debt_id, workspace = params

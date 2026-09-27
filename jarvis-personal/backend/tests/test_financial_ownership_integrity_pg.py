@@ -25,6 +25,8 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINE = ROOT / "database/baseline/v1_identity_ownership.sql"
 FIXTURE = Path(__file__).resolve().parent / "fixtures/ownership_financial_tables.sql"
 MIGRATION = ROOT / "database/migrations/20260925140000_financial_ownership_integrity.sql"
+VAULT_STUB = Path(__file__).resolve().parent / "fixtures/vault_stub.sql"
+MAIL_SECRET_BOUNDARY = ROOT / "database/migrations/20260926149000_mail_secret_boundary.sql"
 
 WS_A = "00000000-0000-4000-8000-00000000000a"
 WS_B = "00000000-0000-4000-8000-00000000000b"
@@ -1245,11 +1247,10 @@ def test_the_real_account_deletion_runs_under_every_guard(layout_fk, monkeypatch
     conn, a3, a1 = layout_fk["conn"], _ids("a3"), _ids("a1")
     auth_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "auth:a3"))
     with conn.cursor() as cur:
-        cur.execute("CREATE SCHEMA IF NOT EXISTS vault")
-        cur.execute("CREATE TABLE IF NOT EXISTS vault.secrets (id UUID PRIMARY KEY, secret TEXT)")
-        cur.execute("CREATE OR REPLACE VIEW vault.decrypted_secrets AS SELECT id, secret AS decrypted_secret FROM vault.secrets")
+        cur.execute(VAULT_STUB.read_text(encoding="utf-8"))
         cur.execute("ALTER TABLE finva_gmail_connections ADD COLUMN IF NOT EXISTS refresh_token_secret_id UUID, "
                     "ADD COLUMN IF NOT EXISTS granted_scopes TEXT[]")
+        cur.execute(MAIL_SECRET_BOUNDARY.read_text(encoding="utf-8"))
         cur.execute("UPDATE accounts SET supabase_user_id=%s WHERE id=%s", (auth_id, a3["account"]))
         cur.execute("UPDATE allowed_users SET supabase_user_id=%s WHERE id=%s", (auth_id, a3["allowed"]))
         _debt(cur, a3["users"], a3["workspace"])
@@ -1297,11 +1298,10 @@ def _run_account_deletion(layout_fk, monkeypatch, label):
     conn, ident = layout_fk["conn"], _ids(label)
     auth_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"auth:{label}"))
     with conn.cursor() as cur:
-        cur.execute("CREATE SCHEMA IF NOT EXISTS vault")
-        cur.execute("CREATE TABLE IF NOT EXISTS vault.secrets (id UUID PRIMARY KEY, secret TEXT)")
-        cur.execute("CREATE OR REPLACE VIEW vault.decrypted_secrets AS SELECT id, secret AS decrypted_secret FROM vault.secrets")
+        cur.execute(VAULT_STUB.read_text(encoding="utf-8"))
         cur.execute("ALTER TABLE finva_gmail_connections ADD COLUMN IF NOT EXISTS refresh_token_secret_id UUID, "
                     "ADD COLUMN IF NOT EXISTS granted_scopes TEXT[]")
+        cur.execute(MAIL_SECRET_BOUNDARY.read_text(encoding="utf-8"))
         cur.execute("UPDATE accounts SET supabase_user_id=%s WHERE id=%s", (auth_id, ident["account"]))
         cur.execute("UPDATE allowed_users SET supabase_user_id=%s WHERE id=%s", (auth_id, ident["allowed"]))
     monkeypatch.setattr(database, "DATABASE_URL", layout_fk["uri"])
