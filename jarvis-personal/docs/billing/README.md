@@ -24,6 +24,8 @@ Nothing else grants a paid plan. Until server-side store verification ships, `cr
 - **Rollback:** `database/rollback/20260926120000_retire_offstore_billing_rollback.sql` recreates the three tables empty, plus a configuration row with default values.
   - **Apply it BEFORE reverting the code.** Older code reads `billing_subscriptions` on every `/auth/me` and fails without it.
   - It is not needed to revert only the code while the migration has not run.
+  - It also restores what `20260926150000_dincr_app_role` granted the runtime role on these tables (`billing_orders`: SELECT, UPDATE; `billing_subscriptions`: SELECT, INSERT, UPDATE; the `dincr_app_access` RLS policy on both). Without them the older code, running as `dincr_app`, would fail on every request. `test_retire_offstore_billing_pg.py` checks it.
+- **File-name order:** this migration sorts before `20260926150000_dincr_app_role`, but in production it is applied after it (150000 is already applied). 150000 requires these tables to exist (`APP03`), so a database rebuilt by applying every migration in name order must apply this one after 150000. Production and the documented restore path (backup plus newer migrations) are not affected.
 - **Order:** deploy the code first (it no longer reads these tables), then apply the migration with the protocol in `docs/security/migration-safety-protocol.md`. The old code reads these tables, so the migration must never run before the deploy.
 - **Guard:** `backend/test_security_contract.py::test_dincr_takes_no_off_store_payment` fails if runtime code references the retired tables or functions, or exposes an order or receipt route.
 

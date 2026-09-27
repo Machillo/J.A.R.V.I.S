@@ -181,3 +181,44 @@ def test_the_end_of_the_promotion_keeps_only_a_real_store_plan(caller, cur, stor
         subscription = saas._subscription(conn, created)
         conn.commit()
     assert subscription["plan"] == plan_after and subscription["access_notice"]["code"] == "promotion_ended"
+
+
+# The backend runs as dincr_app (20260926150000, applied in production before this
+# migration). These are exactly the privileges 150000 gave it on the retired tables.
+DINCR_APP_ON_OFFSTORE_BILLING = """
+DO $$ BEGIN CREATE ROLE dincr_app NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+GRANT SELECT, UPDATE ON TABLE public.billing_orders TO dincr_app;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.billing_subscriptions TO dincr_app;
+ALTER TABLE public.billing_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.billing_subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY dincr_app_access ON public.billing_orders AS PERMISSIVE FOR ALL TO dincr_app USING (true) WITH CHECK (true);
+CREATE POLICY dincr_app_access ON public.billing_subscriptions AS PERMISSIVE FOR ALL TO dincr_app USING (true) WITH CHECK (true);
+"""
+
+
+def test_retirement_and_rollback_under_the_dincr_app_runtime(cur):
+    """Production order: 150000 granted dincr_app these tables, then 120000 retires them.
+    The rollback must give the runtime back exactly that access (old code reads and
+    writes billing_subscriptions on every request), and nothing more."""
+    cur.execute(DINCR_APP_ON_OFFSTORE_BILLING)
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))  # grants and policies go with the tables
+    assert _present(cur) == 0
+    cur.execute(ROLLBACK.read_text(encoding="utf-8"))
+    assert _present(cur) == 3
+    account = str(uuid.uuid4())
+    cur.execute("INSERT INTO accounts VALUES (%s)", (account,))
+    cur.execute("SET ROLE dincr_app")
+    try:
+        cur.execute("INSERT INTO billing_subscriptions(account_id, plan_code, status) VALUES (%s, 'vip', 'canceled')", (account,))
+        cur.execute("SELECT count(*) FROM billing_subscriptions")
+        assert cur.fetchone()[0] == 1  # RLS policy restored: the row is visible, not silently filtered
+        cur.execute("UPDATE billing_orders SET status = 'canceled' WHERE false")
+        for forbidden in ("DELETE FROM billing_orders", "DELETE FROM billing_subscriptions", "SELECT * FROM finva_beta_programs"):
+            with pytest.raises(psycopg2.Error) as refused:
+                cur.execute(forbidden)
+            assert refused.value.pgcode == "42501", forbidden  # no more than 150000 granted
+    finally:
+        cur.execute("RESET ROLE")
+    cur.execute("DELETE FROM billing_subscriptions")
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))  # and it retires again cleanly
+    assert _present(cur) == 0

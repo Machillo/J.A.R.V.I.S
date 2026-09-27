@@ -94,12 +94,21 @@ def needed() -> dict[str, set[str]]:
     return {table: privileges for table, privileges in need.items() if table not in NOT_TABLES}
 
 
+def retired() -> set[str]:
+    """Tables a migration drops. Their grants go with them (e.g. the off-store billing
+    tables that 20260926120000 retires after 20260926150000 granted them)."""
+    pattern = re.compile(r"^\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?(\w+)", re.I | re.M)
+    return {table.lower() for path in MIGRATIONS.glob("*.sql") for table in pattern.findall(path.read_text(encoding="utf-8"))}
+
+
 def granted() -> dict[str, set[str]]:
     grants: dict[str, set[str]] = defaultdict(set)
     pattern = re.compile(r"GRANT\s+([A-Z, ]+?)\s+ON\s+TABLE\s+public\.(\w+)\s+TO\s+dincr_app\b", re.I)
     for path in sorted(MIGRATIONS.glob("*.sql")):
         for privileges, table in pattern.findall(path.read_text(encoding="utf-8")):
             grants[table.lower()].update(p.strip().upper() for p in privileges.split(","))
+    for table in retired():
+        grants.pop(table, None)
     return grants
 
 

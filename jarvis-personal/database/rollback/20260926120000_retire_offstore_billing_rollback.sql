@@ -49,4 +49,26 @@ ALTER TABLE public.billing_subscriptions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL PRIVILEGES ON TABLE public.finva_beta_programs, public.billing_orders, public.billing_subscriptions FROM anon, authenticated;
 REVOKE ALL PRIVILEGES ON SEQUENCE public.billing_orders_id_seq FROM anon, authenticated;
 
+-- The backend runs as dincr_app (20260926150000). Code older than this PR reads and
+-- writes these tables on every request, so restore exactly what 150000 granted, with
+-- its RLS policy (RLS on without a policy would silently read no rows and refuse
+-- every insert). finva_beta_programs had no grant: old code only checks it exists.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dincr_app') THEN
+        GRANT SELECT, UPDATE ON TABLE public.billing_orders TO dincr_app;
+        GRANT SELECT, INSERT, UPDATE ON TABLE public.billing_subscriptions TO dincr_app;
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'billing_orders'
+                       AND policyname = 'dincr_app_access') THEN
+            CREATE POLICY dincr_app_access ON public.billing_orders AS PERMISSIVE FOR ALL TO dincr_app
+                USING (true) WITH CHECK (true);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'billing_subscriptions'
+                       AND policyname = 'dincr_app_access') THEN
+            CREATE POLICY dincr_app_access ON public.billing_subscriptions AS PERMISSIVE FOR ALL TO dincr_app
+                USING (true) WITH CHECK (true);
+        END IF;
+    END IF;
+END $$;
+
 COMMIT;
