@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS public.store_purchases (
     -- and its version: a state from an older transaction never replaces a newer one.
     last_transaction_id TEXT NOT NULL,
     state_version BIGINT NOT NULL,
+    -- When the store signed or produced this state (Apple signedDate, Google API read):
+    -- a late retry about the same transaction never replaces a newer state of it.
+    observed_version BIGINT NOT NULL DEFAULT 0,
     last_verified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -100,21 +103,37 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
         REVOKE ALL PRIVILEGES ON SEQUENCE public.store_purchase_conflicts_id_seq FROM anon, authenticated;
     END IF;
-    -- The dedicated application role (20260926150000), when it exists. If that role is
-    -- created after this migration ran, run this migration again (it is idempotent).
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dincr_app') THEN
+    -- The runtime role (20260926150000). Without it the new tables would be unreachable
+    -- at runtime, so the migration aborts instead of skipping the grants.
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dincr_app') THEN
+        RAISE EXCEPTION 'role dincr_app is missing: apply 20260926150000 first' USING ERRCODE = 'SV002';
+    ELSE
         EXECUTE 'GRANT SELECT, INSERT ON TABLE public.store_customer_tokens TO dincr_app';
         EXECUTE 'GRANT SELECT, INSERT, UPDATE ON TABLE public.store_purchases TO dincr_app';
         EXECUTE 'GRANT SELECT, INSERT ON TABLE public.store_purchase_conflicts TO dincr_app';
         EXECUTE 'GRANT SELECT, INSERT, UPDATE ON TABLE public.store_revocations TO dincr_app';
         EXECUTE 'GRANT USAGE ON SEQUENCE public.store_purchase_conflicts_id_seq TO dincr_app';
-        FOREACH t IN ARRAY ARRAY['store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations'] LOOP
-            IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = t
-                           AND policyname = 'dincr_app_access') THEN
-                EXECUTE format('CREATE POLICY dincr_app_access ON public.%I AS PERMISSIVE FOR ALL TO dincr_app
-                                USING (true) WITH CHECK (true)', t);
-            END IF;
-        END LOOP;
+        -- One explicit policy per table (RLS is on; without it the role reads no rows).
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'store_customer_tokens'
+                       AND policyname = 'dincr_app_access') THEN
+            CREATE POLICY dincr_app_access ON public.store_customer_tokens AS PERMISSIVE FOR ALL TO dincr_app
+                USING (true) WITH CHECK (true);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'store_purchases'
+                       AND policyname = 'dincr_app_access') THEN
+            CREATE POLICY dincr_app_access ON public.store_purchases AS PERMISSIVE FOR ALL TO dincr_app
+                USING (true) WITH CHECK (true);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'store_purchase_conflicts'
+                       AND policyname = 'dincr_app_access') THEN
+            CREATE POLICY dincr_app_access ON public.store_purchase_conflicts AS PERMISSIVE FOR ALL TO dincr_app
+                USING (true) WITH CHECK (true);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'store_revocations'
+                       AND policyname = 'dincr_app_access') THEN
+            CREATE POLICY dincr_app_access ON public.store_revocations AS PERMISSIVE FOR ALL TO dincr_app
+                USING (true) WITH CHECK (true);
+        END IF;
     END IF;
 END $$;
 
@@ -128,4 +147,14 @@ COMMIT;
 --                     WHERE table_schema = 'public' AND table_name = 'store_subscriptions' AND column_name = c)
 -- UNION ALL SELECT 'row level security off on ' || relname FROM pg_class
 --   WHERE relname IN ('store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations')
---     AND NOT relrowsecurity;
+--     AND NOT relrowsecurity
+-- UNION ALL SELECT 'dincr_app cannot ' || p || ' ' || t
+--   FROM (VALUES ('store_customer_tokens', 'SELECT'), ('store_customer_tokens', 'INSERT'),
+--                ('store_purchases', 'SELECT'), ('store_purchases', 'INSERT'), ('store_purchases', 'UPDATE'),
+--                ('store_purchase_conflicts', 'SELECT'), ('store_purchase_conflicts', 'INSERT'),
+--                ('store_revocations', 'SELECT'), ('store_revocations', 'INSERT'), ('store_revocations', 'UPDATE')) g(t, p)
+--   WHERE NOT has_table_privilege('dincr_app', 'public.' || t, p)
+-- UNION ALL SELECT 'missing policy dincr_app_access on ' || t
+--   FROM unnest(ARRAY['store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations']) t
+--   WHERE NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = t
+--                     AND policyname = 'dincr_app_access' AND 'dincr_app' = ANY(roles));

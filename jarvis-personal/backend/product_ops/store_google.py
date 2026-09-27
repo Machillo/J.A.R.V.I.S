@@ -106,6 +106,7 @@ def purchase_state(purchase_token: str, subscription: dict[str, Any], *, now: da
         "purchase_key": purchase_key(purchase_token),
         "transaction_id": str(order),
         "state_version": int(now.timestamp() * 1000),  # a fresh API read is the newest state
+        "observed_version": int(now.timestamp() * 1000),
         "customer_token": str(identifiers.get("obfuscatedExternalAccountId") or "").lower() or None,
         "environment": "sandbox" if subscription.get("testPurchase") is not None else "production",
         "product_id": str(item.get("productId") or ""),

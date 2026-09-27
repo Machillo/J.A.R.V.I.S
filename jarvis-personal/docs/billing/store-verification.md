@@ -20,17 +20,17 @@ Paid plans (Basic, VIP) come only from purchases that Apple or Google confirm to
   - A state about an older store transaction never replaces a newer one:
     - Apple compares the transaction's purchase date, so a renewal or an upgrade wins even with an earlier period end;
     - Google always uses a fresh API read.
-  - Updates about the same transaction always apply.
+  - About the same transaction, the latest store statement wins (`observed_version`: Apple's `signedDate`, Google's API read time). A late Apple retry therefore cannot undo a newer grace or refund.
   - Upgraded Apple transactions (`isUpgraded`) are ignored.
   - One purchase and one account are processed at a time (transaction advisory locks).
-  - Every notification id is recorded once in `store_subscription_events`; a repeat returns `duplicate`.
+  - Every notification id is recorded once in `store_subscription_events`; a repeat returns `duplicate`. A repeated Google notification still acknowledges a live, unacknowledged purchase, so a failed acknowledgement is retried.
 - **Refunds are per transaction** (`store_revocations`, kept even when the account is deleted):
   - a refunded past renewal does not end a later paid one;
   - a refund of the current transaction ends the plan;
   - that transaction's pre-refund receipt, presented again, stays refunded;
   - a later paid renewal restores the plan;
   - Apple `REFUND_REVERSED` restores it.
-- **The client can confirm, never end.** A purchase the app presents can activate or extend a plan. Expiration, grace and refunds come only from store notifications and the lapse cron. An app re-presenting an old receipt during billing retry therefore cannot drop a paying user to Free.
+- **The client can confirm, never end.** A purchase the app presents can activate or extend a plan. Expiration and grace come only from store notifications and the lapse cron. An app re-presenting an old receipt during billing retry therefore cannot drop a paying user to Free. The one exception is a refund: a store-signed revocation applies even when the app delivers it.
 - **No fake active purchase.**
   - Unknown product ids grant nothing.
   - Sandbox / test purchases grant nothing, with two exceptions:
@@ -94,11 +94,9 @@ Nothing here is in the repository.
 - **Resubscribing from another DINCR account with the same Apple ID or Google account.** The purchase stays bound to its first account: the new account gets 409 and a conflict record, although the store charged. Support resolves it; there is no automatic transfer. Change this policy only deliberately (for example, "the token wins for a new transaction after the old one expired").
 - **App Review:** list the review account in `DINCR_STORE_SANDBOX_ACCOUNT_IDS`, and add `Sandbox` to `DINCR_APPLE_ENVIRONMENTS`, only while a review is open.
 
-## PRE-MERGE dependency
+## Entitlement reader
 
-On `main`, access to Basic and VIP features still comes from `has_active_payment`, which reads the off-store billing tables, and from the launch-promotion expiry code, which ignores stores. #257 replaces both with `has_store_entitlement`, which reads the `store_subscriptions` row this change maintains, including the grace end.
-
-**Merge #257 first.** Otherwise a store-paid Basic or VIP user gets 402, and a courtesy user who buys drops to Free when the courtesy ends.
+`has_store_entitlement` (`product_ops/service.py`) is the only reader of a store entitlement. This change only writes the `store_subscriptions` row it reads, including the grace end. The off-store billing tables are retired (`20260926152000`).
 
 ## Not in this change (follow-up)
 

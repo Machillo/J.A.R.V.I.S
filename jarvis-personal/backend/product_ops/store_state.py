@@ -137,7 +137,7 @@ def record_verified_purchase(conn, state: dict[str, Any], *, claimed_account_id:
     if state.get("customer_token") and not token_account:
         raise HTTPException(409, "La compra pertenece a otra cuenta.")
     bound = conn.execute(
-        """SELECT account_id::text AS account_id, last_transaction_id, state_version
+        """SELECT account_id::text AS account_id, last_transaction_id, state_version, observed_version
            FROM store_purchases WHERE provider=%s AND purchase_key=%s""",
         (state["provider"], state["purchase_key"]),
     ).fetchone()
@@ -156,21 +156,25 @@ def record_verified_purchase(conn, state: dict[str, Any], *, claimed_account_id:
             )
         # Nothing else changes; the caller commits this record and refuses the request.
         return {"account_id": account_id, "applied": False, "plan": None, "status": state["status"], "conflict": True}
-    if from_client and state["status"] not in LIVE:
-        # A client confirms or extends a live purchase; it never ends one.
+    if from_client and state["status"] not in LIVE and state["status"] != "revoked":
+        # A client confirms or extends a live purchase; it never ends one. A refund is
+        # the store's own signed statement, so it applies whoever delivers it.
         return {"account_id": account_id, "applied": False, "plan": None, "status": state["status"]}
 
     _lock(conn, f"store-account:{account_id}")
-    applies = (not bound or state["transaction_id"] == bound["last_transaction_id"]
-               or int(state["state_version"]) > int(bound["state_version"]))
+    # A newer transaction wins; about the same transaction, the latest store statement wins
+    # (Apple retries notifications for days, so they can arrive out of order).
+    applies = (not bound or int(state["state_version"]) > int(bound["state_version"])
+               or (state["transaction_id"] == bound["last_transaction_id"]
+                   and int(state["observed_version"]) >= int(bound["observed_version"])))
     if applies:
         pending = product_plan(state["pending_product_id"]) if state.get("pending_product_id") else None
         conn.execute(
             """INSERT INTO store_purchases(
                    provider,purchase_key,account_id,environment,product_id,plan_code,billing_period,status,auto_renew,
                    trial_ends_at,current_period_end,grace_ends_at,revoked_at,pending_product_id,
-                   last_transaction_id,state_version,last_verified_at,updated_at)
-               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
+                   last_transaction_id,state_version,observed_version,last_verified_at,updated_at)
+               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
                ON CONFLICT(provider,purchase_key) DO UPDATE SET
                    environment=EXCLUDED.environment,product_id=EXCLUDED.product_id,plan_code=EXCLUDED.plan_code,
                    billing_period=EXCLUDED.billing_period,status=EXCLUDED.status,auto_renew=EXCLUDED.auto_renew,
@@ -178,12 +182,14 @@ def record_verified_purchase(conn, state: dict[str, Any], *, claimed_account_id:
                    grace_ends_at=EXCLUDED.grace_ends_at,revoked_at=EXCLUDED.revoked_at,
                    pending_product_id=EXCLUDED.pending_product_id,last_transaction_id=EXCLUDED.last_transaction_id,
                    state_version=GREATEST(store_purchases.state_version, EXCLUDED.state_version),
+                   observed_version=EXCLUDED.observed_version,
                    last_verified_at=NOW(),updated_at=NOW()
                RETURNING purchase_key""",
             (state["provider"], state["purchase_key"], account_id, state["environment"], state["product_id"],
              plan_code, billing_period, state["status"], bool(state.get("auto_renew")), state.get("trial_ends_at"),
              state.get("current_period_end"), state.get("grace_ends_at"), state.get("revoked_at"),
-             state.get("pending_product_id") if pending else None, state["transaction_id"], int(state["state_version"])),
+             state.get("pending_product_id") if pending else None, state["transaction_id"], int(state["state_version"]),
+             int(state["observed_version"])),
         )
         if state.get("superseded_key"):
             # An upgrade/downgrade on Google Play replaces the old purchase token.

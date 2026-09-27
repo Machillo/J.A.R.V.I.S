@@ -142,8 +142,11 @@ def verify_notification(signed_payload: str, *, now: datetime | None = None) -> 
 
 
 def purchase_state(transaction: dict[str, Any], renewal: dict[str, Any] | None = None, *,
-                   now: datetime | None = None) -> dict[str, Any] | None:
+                   now: datetime | None = None, signed_at: Any = None) -> dict[str, Any] | None:
     """Map a verified transaction (+ renewal info) to DINCR's per-purchase state.
+
+    ``signed_at`` is when Apple signed the statement (a notification's signedDate);
+    it orders statements about the same transaction. Defaults to the transaction's own.
 
     None for a transaction that was replaced by an upgrade (isUpgraded): the newer
     transaction of the same subscription describes the plan.
@@ -175,6 +178,7 @@ def purchase_state(transaction: dict[str, Any], renewal: dict[str, Any] | None =
         "transaction_id": transaction_id,
         # A later purchase (renewal, upgrade) of the same subscription has a later date.
         "state_version": int(purchased),
+        "observed_version": int(signed_at or transaction.get("signedDate") or purchased),
         "customer_token": str(transaction.get("appAccountToken") or "").lower() or None,
         "environment": "sandbox" if transaction.get("environment") == "Sandbox" else "production",
         "product_id": str(transaction.get("productId") or ""),

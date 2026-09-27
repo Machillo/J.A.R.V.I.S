@@ -18,7 +18,7 @@ pgserver = pytest.importorskip("pgserver")
 psycopg2 = pytest.importorskip("psycopg2")
 
 from backend.core import database  # noqa: E402
-from backend.product_ops import store_state, store_verification  # noqa: E402
+from backend.product_ops import store_google, store_state, store_verification  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2] / "database"
 BASELINE = ROOT / "baseline" / "v1_identity_ownership.sql"
@@ -56,7 +56,7 @@ def db(tmp_path, monkeypatch):
     admin.autocommit = True
     name = f"store_{uuid.uuid4().hex[:12]}"
     with admin.cursor() as c:
-        for role in ("anon", "authenticated"):
+        for role in ("anon", "authenticated", "dincr_app"):  # the migration requires dincr_app (SV002)
             c.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,))
             if not c.fetchone():
                 c.execute(f'CREATE ROLE "{role}" NOLOGIN')
@@ -97,7 +97,7 @@ def _state(key="orig-1", *, provider="apple", product="finva.vip.monthly", statu
             "customer_token": token, "environment": "production", "product_id": product, "status": status,
             "auto_renew": status == "active", "trial_ends_at": end if status == "trialing" else None,
             "current_period_end": end, "grace_ends_at": None, "revoked_at": None, "pending_product_id": None,
-            "superseded_key": None, **extra}
+            "superseded_key": None, "observed_version": version, **extra}
 
 
 def _record(state, claimed=None, **kwargs):
@@ -288,7 +288,45 @@ def test_a_repeated_store_event_is_applied_once(db, monkeypatch):
                                       notification=True)
     again = store_verification._apply(dict(state), event_type="apple:DID_RENEW", event_id="apple-notification:n-1",
                                       notification=True)
-    assert first["status"] == "applied" and again == {"status": "duplicate"}
+    assert first["status"] == "applied" and again == {"status": "duplicate", "resolved": True}
+
+
+def test_a_late_statement_about_the_same_transaction_never_undoes_a_newer_one(db):
+    a = db["accounts"]["a"]
+    _record(_state(status="grace_period", end=NOW - timedelta(hours=1), grace_ends_at=NOW + timedelta(days=3),
+                   observed_version=2000), claimed=a)
+    late = _record(_state(status="expired", end=NOW - timedelta(hours=1), observed_version=1000))
+    assert late["applied"] is False and _plan(db["cur"], a) == "vip"
+
+
+def test_a_store_signed_refund_applies_even_when_the_app_delivers_it(db):
+    a = db["accounts"]["a"]
+    _record(_state(), claimed=a)
+    result = _record(_state(status="revoked", revoked_at=NOW), claimed=a, from_client=True)
+    assert result["applied"] is True and _plan(db["cur"], a) == "free"
+
+
+def test_a_repeated_google_notification_retries_a_failed_acknowledgement(db, monkeypatch):
+    a = db["accounts"]["a"]
+    state = _state(key="g-1", provider="google", token=_token(a), acknowledged=False)
+    calls = []
+
+    def acknowledge(token, product):
+        calls.append(token)
+        if len(calls) == 1:
+            raise store_google.GoogleVerificationError("unavailable")
+
+    push = {"message_id": "m-1", "subscriptionNotification": {"purchaseToken": "synthetic-token", "notificationType": 2}}
+    monkeypatch.setattr(store_google, "verify_push", lambda authorization: None)
+    monkeypatch.setattr(store_google, "decode_push", lambda body: push)
+    monkeypatch.setattr(store_google, "fetch_subscription", lambda token: {})
+    monkeypatch.setattr(store_google, "purchase_state", lambda token, subscription: dict(state))
+    monkeypatch.setattr(store_google, "acknowledge", acknowledge)
+    with pytest.raises(HTTPException) as pending:
+        store_verification.google_notification("Bearer synthetic", {})
+    assert pending.value.status_code == 503
+    retried = store_verification.google_notification("Bearer synthetic", {})  # Pub/Sub redelivers the same message
+    assert retried["status"] == "duplicate" and len(calls) == 2 and _plan(db["cur"], a) == "vip"
 
 
 def test_a_conflict_is_recorded_even_though_the_request_is_refused(db):

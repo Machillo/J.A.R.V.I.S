@@ -50,8 +50,12 @@ def _apply(state: dict[str, Any], *, event_type: str, event_id: str, claimed_acc
             "SELECT 1 FROM store_subscription_events WHERE provider=%s AND provider_event_id=%s",
             (state["provider"], event_id),
         ).fetchone():
+            # Resolved when the purchase is bound: a Google retry after a failed
+            # acknowledgement must still acknowledge it (Google refunds unacknowledged ones).
+            bound = conn.execute("SELECT 1 FROM store_purchases WHERE provider=%s AND purchase_key=%s",
+                                 (state["provider"], state["purchase_key"])).fetchone()
             conn.commit()
-            return {"status": "duplicate"}
+            return {"status": "duplicate", "resolved": bool(bound)}
         result = record_verified_purchase(conn, state, claimed_account_id=claimed_account_id,
                                           from_client=from_client, reversed_refund=reversed_refund)
         if result.get("conflict"):
@@ -123,7 +127,8 @@ def apple_notification(signed_payload: str) -> dict:
     try:
         notification = store_apple.verify_notification(signed_payload)
         kind = str(notification.get("notificationType") or "")
-        state = store_apple.purchase_state(notification["transaction"], notification.get("renewal")) \
+        state = store_apple.purchase_state(notification["transaction"], notification.get("renewal"),
+                                           signed_at=notification.get("signedDate")) \
             if notification.get("transaction") else None
     except (store_apple.AppleVerificationError, KeyError) as exc:
         logger.warning("Apple notification rejected reason=%s", exc)
