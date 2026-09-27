@@ -4,8 +4,10 @@ import os
 import re
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import psycopg2
 import requests
 from fastapi import HTTPException, status
 
@@ -147,19 +149,35 @@ def verify_supabase_token(access_token: str) -> dict[str, Any]:
             detail="Faltan SUPABASE_URL o SUPABASE_ANON_KEY en Render.",
         )
 
-    response = requests.get(
-        f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
-        headers={
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": f"Bearer {access_token}",
-        },
-        timeout=10,
-    )
+    try:
+        response = requests.get(
+            f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
+            headers={
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": f"Bearer {access_token}",
+            },
+            timeout=10,
+        )
+    except requests.RequestException as exc:  # timeout or unreachable: no verdict on the token
+        logger.error("Supabase Auth unreachable: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No pudimos verificar tu sesión en este momento. Intentá de nuevo.",
+        ) from None
 
-    if response.status_code != 200:
+    # Only Supabase's own verdict on the token (a 4xx) means the session is invalid.
+    # A rate limit or an outage (429, 5xx) is not a verdict: 503 lets the app retry
+    # instead of signing every active user out on a 401.
+    if 400 <= response.status_code < 500 and response.status_code != 429:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de Supabase inválido o expirado.",
+        )
+    if response.status_code != 200:
+        logger.error("Supabase Auth did not verify the session status=%s", response.status_code)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No pudimos verificar tu sesión en este momento. Intentá de nuevo.",
         )
 
     payload = response.json()
@@ -731,6 +749,35 @@ def _replace_stale_deletion_tombstone(app_user: dict[str, Any], supabase_user: d
     logger.info("Replaced a stale deletion tombstone allowed_user_id=%s", app_user["id"])
 
 
+LOGIN_REFRESH = timedelta(minutes=5)
+
+
+def _recent(value) -> bool:
+    if not value:
+        return False
+    try:
+        seen = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - seen < LOGIN_REFRESH
+
+
+def _identity_fresh(app_user: dict, account_rows: list, token_auth_id: str) -> bool:
+    """True when every identity row is already bound to this Auth user and was seen recently.
+
+    Login writes only the binding and last_login_at (never the role, see owner_role),
+    so the role plays no part in whether those writes can be skipped.
+    """
+    rows = [app_user, *account_rows]
+    return bool(account_rows) and all(
+        _auth_id(row.get("supabase_user_id")) == token_auth_id
+        and _recent(row.get("last_login_at"))
+        for row in rows
+    )
+
+
 def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool = False) -> dict[str, Any]:
     supabase_user = verify_supabase_token(access_token)
     token_auth_id = _auth_id(supabase_user["supabase_user_id"])
@@ -749,10 +796,18 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
     # Unified JARVIS: a valid Google/Supabase identity gets its own account + Personal workspace.
     # allowed_users remains only as the temporary legacy bridge required by older Personal tables.
     if not app_user:
-        with get_connection() as conn:
-            _create_personal_account(conn, supabase_user)
-            conn.commit()
+        # Two first requests of a new user can race here (authentication runs in
+        # parallel): the unique email / account keys let one win, and the other
+        # reads the winner's rows instead of failing the sign-in.
+        try:
+            with get_connection() as conn:
+                _create_personal_account(conn, supabase_user)
+                conn.commit()
+        except psycopg2.errors.UniqueViolation:
+            logger.info("First sign-in raced with a concurrent one; using the account it created")
         app_user = get_allowed_user_by_email(supabase_user["email"])
+        if not app_user:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No pudimos preparar tu cuenta. Intentá de nuevo.")
 
     with get_connection() as conn:
         # Stable identity: an existing account is bound to one Supabase user. A
@@ -760,7 +815,7 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
         # provider account) must never inherit it. Checked before status so the
         # account state is not revealed, and before any write.
         account_rows = conn.execute(
-            "SELECT supabase_user_id FROM accounts WHERE legacy_allowed_user_id=%s",
+            "SELECT supabase_user_id, role, last_login_at FROM accounts WHERE legacy_allowed_user_id=%s",
             (app_user["id"],),
         ).fetchall() or []
         stored_ids = [app_user.get("supabase_user_id")] + [row.get("supabase_user_id") for row in account_rows]
@@ -795,10 +850,16 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
         # The stored role decides; OWNER_EMAILS only gates it (backend/auth/owner_role.py).
         effective_role = owner_role.effective_role(app_user["role"], app_user["email"], account_ref=app_user["id"])
 
+        # Already bound to this Auth user and seen recently: the
+        # binding cannot change (only the same id may bind), so skip the two writes
+        # every request would otherwise make just to refresh last_login_at. They
+        # took row locks that serialized the app's parallel requests of one user.
+        fresh = _identity_fresh(app_user, account_rows, token_auth_id)
+
         # Conditional binds: a concurrent login that bound another id wins and
         # this one fails closed (the connection rolls back on the exception).
         # The role is never written here: login cannot promote or demote anyone.
-        bound = conn.execute(
+        bound = fresh or conn.execute(
             """
             UPDATE allowed_users
             SET supabase_user_id = %s,
@@ -811,7 +872,7 @@ def authenticate_access_token(access_token: str, *, allow_deletion_pending: bool
         ).fetchone()
         if not bound:
             raise _identity_rejected(app_user["id"], "concurrent_bind")
-        synced = sync_account_auth_identity(
+        synced = len(account_rows) if fresh else sync_account_auth_identity(
             conn,
             legacy_allowed_user_id=int(app_user["id"]),
             supabase_user_id=supabase_user["supabase_user_id"],

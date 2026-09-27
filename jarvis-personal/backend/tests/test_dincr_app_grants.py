@@ -32,7 +32,9 @@ COMMANDS = {
     "SELECT": re.compile(r"\b(?:FROM|JOIN)\s+" + TABLE, re.I),
 }
 UPSERT = re.compile(r"\bINSERT\s+INTO\s+" + TABLE + r"[^;]*?\bON\s+CONFLICT\b[^;]*?\bDO\s+UPDATE\b", re.I | re.S)
-LOCKING = re.compile(r"\bFOR\s+(?:NO\s+KEY\s+)?(?:UPDATE|SHARE)\b", re.I)
+LOCKING = re.compile(r"\bFOR\s+(?:NO\s+KEY\s+)?(?:KEY\s+)?(?:UPDATE|SHARE)\b(?:\s+OF\s+(\w+(?:\s*,\s*\w+)*))?", re.I)
+# FROM/JOIN <table> [AS] <alias>: a row lock with OF <alias> needs UPDATE only on that table.
+ALIASED = re.compile(r"\b(?:FROM|JOIN)\s+" + TABLE + r"(?:\s+AS)?\s+(?!ON\b|WHERE\b|JOIN\b|LEFT\b|INNER\b|USING\b)(\w+)", re.I)
 
 # Names after FROM/JOIN that are not public tables: CTEs, catalogs, schemas, functions.
 NOT_TABLES = {
@@ -83,9 +85,15 @@ def needed() -> dict[str, set[str]]:
                 need[match.group(1).lower()].add(command)
         for match in UPSERT.finditer(sql):
             need[match.group(1).lower()].add("UPDATE")
-        if LOCKING.search(sql) and re.search(r"\bSELECT\b", sql):
-            for match in COMMANDS["SELECT"].finditer(sql):
-                need[match.group(1).lower()].add("UPDATE")
+        lock = LOCKING.search(sql)
+        if lock and re.search(r"\bSELECT\b", sql):
+            if lock.group(1):  # FOR ... OF a, b: only those tables are locked
+                aliases = {alias.lower(): table.lower() for table, alias in ALIASED.findall(sql)}
+                for name in (part.strip().lower() for part in lock.group(1).split(",")):
+                    need[aliases.get(name, name)].add("UPDATE")
+            else:
+                for match in COMMANDS["SELECT"].finditer(sql):
+                    need[match.group(1).lower()].add("UPDATE")
     for (_module, command), reach in DYNAMIC_SITES.items():
         for table in reach if isinstance(reach, set) else ():
             need[table].add(command)
