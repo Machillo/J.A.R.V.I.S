@@ -11,8 +11,8 @@ pgserver = pytest.importorskip("pgserver")
 psycopg2 = pytest.importorskip("psycopg2")
 
 ROOT = Path(__file__).resolve().parents[2] / "database"
-MIGRATION = ROOT / "migrations" / "20260926120000_retire_offstore_billing.sql"
-ROLLBACK = ROOT / "rollback" / "20260926120000_retire_offstore_billing_rollback.sql"
+MIGRATION = ROOT / "migrations" / "20260926152000_retire_offstore_billing.sql"
+ROLLBACK = ROOT / "rollback" / "20260926152000_retire_offstore_billing_rollback.sql"
 CREATE_ORIGINAL = ROOT / "migrations" / "20260910_finva_beta_product_ops.sql"
 
 

@@ -96,7 +96,7 @@ def needed() -> dict[str, set[str]]:
 
 def retired() -> set[str]:
     """Tables a migration drops. Their grants go with them (e.g. the off-store billing
-    tables that 20260926120000 retires after 20260926150000 granted them)."""
+    tables that 20260926152000 retires after 20260926150000 granted them)."""
     pattern = re.compile(r"^\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?(\w+)", re.I | re.M)
     return {table.lower() for path in MIGRATIONS.glob("*.sql") for table in pattern.findall(path.read_text(encoding="utf-8"))}
 

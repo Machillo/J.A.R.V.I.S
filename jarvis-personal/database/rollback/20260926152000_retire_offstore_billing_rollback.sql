@@ -1,4 +1,4 @@
--- Rollback of 20260926120000_retire_offstore_billing.sql: recreate the retired
+-- Rollback of 20260926152000_retire_offstore_billing.sql: recreate the retired
 -- tables EMPTY (they were empty when retired) with their last schema, RLS on and
 -- closed to the Data API roles. Only needed to redeploy code older than this PR.
 -- Run under docs/security/migration-safety-protocol.md (BACKUP_VERIFIED, second reviewer).
