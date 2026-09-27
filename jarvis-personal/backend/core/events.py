@@ -14,11 +14,11 @@ def add_event(title: str, event_date: str, event_type: str = "general", descript
         cursor = conn.execute(
             """
             INSERT INTO events (
-                title, description, event_type, event_date, user_id, workspace_id, created_at
+                title, description, event_type, event_date, workspace_id, created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
-            (title, description, event_type, event_date, user_id, workspace_id),
+            (title, description, event_type, event_date, workspace_id),
         )
         conn.commit()
 

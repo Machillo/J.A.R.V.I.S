@@ -127,12 +127,12 @@ def test_refresh_rotates_the_vault_secret_and_returns_only_the_access_token(monk
     monkeypatch.setattr(mail, "get_connection", lambda: db)
     created, deleted = [], []
     monkeypatch.setattr(mail, "_vault_create", lambda _conn, token, *_a: created.append(token) or "new-vault")
-    monkeypatch.setattr(mail, "_vault_delete", lambda _conn, secret_id: deleted.append(secret_id))
+    monkeypatch.setattr(mail, "_vault_delete", lambda _conn, secret_id, account_id: deleted.append((secret_id, account_id)))
 
     token = mail._refresh({"id": 7, "account_id": "account-a", "refresh_token_secret_id": "old-vault"}, "refresh-secret")
 
     assert token == "access-secret"
-    assert created == ["rotated-secret"] and deleted == ["old-vault"]
+    assert created == ["rotated-secret"] and deleted == [("old-vault", "account-a")]
     assert db.committed and not any("rotated-secret" in str(params) for _, params in db.calls)
 
 
@@ -248,5 +248,5 @@ def test_disconnecting_outlook_deletes_the_secret_without_calling_google(monkeyp
 
     assert db.calls[0][1][:2] == ("account-a", "workspace-a")
     assert any("status='disabled'" in sql for sql, _ in db.calls)
-    assert any(sql.startswith("DELETE FROM vault.secrets") and params == ("vault",) for sql, params in db.calls)
+    assert any(sql.startswith("SELECT dincr_private.mail_secret_delete") and params[0] == "vault" for sql, params in db.calls)
     assert db.committed

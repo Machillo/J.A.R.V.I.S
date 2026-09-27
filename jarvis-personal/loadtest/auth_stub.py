@@ -41,4 +41,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # A burst of concurrent sign-ins must queue, not be refused (the default backlog is 5).
+    ThreadingHTTPServer.request_queue_size = 256
     ThreadingHTTPServer(("127.0.0.1", int(os.getenv("AUTH_STUB_PORT", "8791"))), Handler).serve_forever()
