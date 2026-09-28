@@ -238,7 +238,9 @@ class ReauditTest {
         assertEquals("ra2", store.load()?.refreshToken)
     }
 
-    @Test fun cancelledRefreshDoesNotSignOut() = runTest {
+    @Test fun cancelledCallerStillRecordsTheRotatedToken() = runTest {
+        // Supabase rotates the refresh token as soon as it answers; if the caller has gone away,
+        // the answer must still be saved, or the device keeps a spent token and is signed out later.
         val transport = GatedTransport(fresh("a-new", "ra2"))
         val store = InMemorySessionStore(sessionA)
         var signedOutCalls = 0
@@ -246,9 +248,55 @@ class ReauditTest {
         val request = async { manager.accessToken(false) }
         transport.started.await()
         request.cancel()
+        transport.release()
         try { request.await(); fail() } catch (_: kotlinx.coroutines.CancellationException) {}
-        assertEquals(sessionA, store.load())
+        assertEquals("ra2", store.load()?.refreshToken)
+        assertEquals("a-new", manager.accessToken(false))
+        assertEquals(1, transport.calls)
         assertEquals(0, signedOutCalls)
+    }
+
+    @Test fun transientRefreshAnswersKeepTheSession() = runTest {
+        for (status in listOf(302, 408, 425, 429, 500, 503)) {
+            val store = InMemorySessionStore(sessionA)
+            var signedOutCalls = 0
+            val transport = GatedTransport(HttpResponse(status, "{}")).also { it.release() }
+            val manager = SessionManager(SupabaseAuthClient("https://p.example.test", "anon", transport), store) { signedOutCalls += 1 }
+            try { manager.accessToken(false); fail("$status") } catch (_: ApiError) {}
+            assertEquals("$status must not sign out", sessionA, store.load())
+            assertEquals(0, signedOutCalls)
+        }
+        for (status in listOf(400, 401, 403)) {
+            val store = InMemorySessionStore(sessionA)
+            val transport = GatedTransport(HttpResponse(status, "{}")).also { it.release() }
+            val manager = SessionManager(SupabaseAuthClient("https://p.example.test", "anon", transport), store)
+            try { manager.accessToken(false); fail("$status") } catch (_: AuthException.SignedOut) {}
+            assertNull("$status is a rejected grant", store.load())
+        }
+    }
+
+    /** Returns [stale] on the first read (what a request saw before another refresh saved). */
+    private class StaleOnceStore(private val stale: AuthSession, current: AuthSession) : SessionStore {
+        private val real = InMemorySessionStore(current)
+        private var first = true
+        override fun load(): AuthSession? = if (first) { first = false; stale } else real.load()
+        override fun save(session: AuthSession) = real.save(session)
+        override fun clear() = real.clear()
+    }
+
+    @Test fun aStaleReadUsesTheAlreadyRotatedSession() = runTest {
+        val rotated = AuthSession("a-new", "ra2", Long.MAX_VALUE / 2, "user-a")
+        val transport = GatedTransport(fresh("never", "never")).also { it.release() }
+        val manager = SessionManager(SupabaseAuthClient("https://p.example.test", "anon", transport), StaleOnceStore(sessionA, rotated))
+        assertEquals("a-new", manager.accessToken(false))
+        assertEquals("a spent refresh token is never replayed", 0, transport.calls)
+    }
+
+    @Test fun aStaleReadOfAnotherAccountNeverGetsItsToken() = runTest {
+        val transport = GatedTransport(fresh("never", "never")).also { it.release() }
+        val manager = SessionManager(SupabaseAuthClient("https://p.example.test", "anon", transport), StaleOnceStore(sessionA, sessionB))
+        try { manager.accessToken(false); fail() } catch (_: AuthException.SessionChanged) {}
+        assertEquals(0, transport.calls)
     }
 
     @Test fun signOutClearsBeforeTheNetworkCall() = runTest {

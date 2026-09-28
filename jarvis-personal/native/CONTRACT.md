@@ -32,7 +32,7 @@ Only the Supabase **anon/publishable** key is ever configured in the apps (git-i
 | Retries | GET/HEAD only, 2 retries on 408/425/429/502/503/504 and network loss | same |
 | Writes | never retried; creates send `X-Idempotency-Key` | same |
 | 401 | one forced refresh, then the request once more | same |
-| Redirects | never followed (`RefuseRedirects`): a 3xx is an error, so no token is replayed to another URL | `followRedirects(false)`, `followSslRedirects(false)` |
+| Redirects | never followed (`RefuseRedirects` per-task delegate; wiring against a live `URLSession` needs a Mac to prove, see R3 N40): a 3xx is an error, so no token is replayed to another URL | `followRedirects(false)`, `followSslRedirects(false)` |
 | Cancelled request | `CancellationError` (never shown as "offline") | coroutine cancellation passes through |
 | Empty body | decoded as `{}` | same |
 | TLS | platform default (ATS not weakened, no cleartext) | same (no cleartext, no network security exceptions) |
@@ -45,7 +45,14 @@ Only the Supabase **anon/publishable** key is ever configured in the apps (git-i
 - A refresh result is saved only if the session that asked is still the current one. After a
   sign-out or another sign-in it is dropped (`sessionChanged`), and a rejected refresh of an old
   session never signs out the new one.
-- A caller that goes away (cancellation) never counts as a rejected refresh.
+- A caller that goes away (cancellation) never counts as a rejected refresh, and a refresh that
+  was sent is always recorded (Supabase has already rotated the token).
+- Only 400/401/403 on the token endpoint end the session; 3xx, 408, 425, 429 and 5xx are
+  transient ("offline").
+- A request that read a session just before another refresh rotated it uses the rotated session
+  instead of replaying a spent token; if another account signed in meanwhile it gets
+  `sessionChanged`, never the other account's token.
+- An identity (`/auth/me`) answer that arrives after sign-out or another sign-in is ignored.
 - Sign-out clears the device session first, then tells Supabase (best effort): no request can use
   the session while that call is in flight.
 
@@ -98,8 +105,9 @@ full-replacement `PUT` would have to invent one. The backend's own `editable` fl
   Hiding CRC decimals is visual only: the stored cents are kept and edited as they are.
 - Spoken: ungrouped digits and the unit of the currency shown.
 - Input: the user's separator preference; at most 2 decimals; at most **9 999 999 999.99**
-  (10 integer digits). Every field this input writes is `NUMERIC(12,2)`: `salaries.amount` and
-  `expenses.amount` (the backend refuses more, `entry_currency.MAX_AMOUNT`) and
+  (10 integer digits). Every field this input writes is bounded by 12,2: `salaries.amount` and
+  `expenses.amount` (the backend refuses more, `entry_currency.MAX_AMOUNT`, which holds them to
+  12,2 because their production type is not verified; `schema.sql` says 14,2) and
   `transactions.amount` (NUMERIC(12,2) in production). `original_amount` NUMERIC(14,2) and
   `exchange_rate` NUMERIC(14,6) are never written by the prototype. Zero, negatives, NaN,
   Infinity, scientific notation, non-ASCII digits and anything ambiguous (`1,000` in

@@ -52,8 +52,8 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
-      # Release is built unsigned (no signing config, no secrets) to prove it compiles and that
-      # R8 keeps what the app needs; it is never uploaded.
+      # Release is built unsigned (no signing config, no secrets) to prove it compiles and
+      # passes lint with R8; it is never uploaded. (It does not prove runtime behaviour.)
       - run: ./gradlew :core:data:test :app:assembleDebug :app:lintDebug :app:assembleRelease :app:lintRelease --console=plain
 
   # Compose flows on an emulator: the minimum (API 24, java.time through desugaring) and a

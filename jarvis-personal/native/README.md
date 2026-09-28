@@ -108,8 +108,15 @@ Android, never a WebView) returns to the prototype's own development redirect
 `com.dincr.app.nativedev://auth/callback`, so it can never receive or steal the store app's
 `com.dincr.app://auth/callback`. **External gate, not requested:** live sign-in would need that URL
 in Supabase Auth → URL Configuration → Redirect URLs. It is not in the production allowlist and
-must not be added for this prototype; without it the Supabase sign-in fails visibly (no silent
-fallback). Taking over `com.dincr.app` is a release decision that this prototype does not make.
+must not be added for this prototype. Without it, Supabase does not return to the prototype: it
+falls back to the project's Site URL, so the flow ends outside the prototype (which never falls
+back to fixtures). The authorization code is useless there, because only the prototype holds its
+PKCE verifier. Do not attempt live sign-in against production. Taking over `com.dincr.app` is a
+release decision that this prototype does not make.
+
+Android note: the platform blocks cleartext HTTP (targetSdk 36, no network security exception), so
+a Debug build pointed at `http://10.0.2.2` is accepted by `LaunchPolicy` but its requests fail as
+"offline". Use HTTPS (for example a tunnel) for a local backend.
 
 ## Known prototype limits
 

@@ -211,6 +211,26 @@ import Testing
         #expect(flag.value == false)
     }
 
+    @Test(arguments: [302, 408, 425, 429, 500, 503])
+    func transientRefreshAnswersKeepTheSession(status: Int) async {
+        let transport = HeldTransport(holding: "never-held", status: status)
+        let store = InMemorySessionStore(Self.expiredA)
+        let flag = SignedOutFlag()
+        let manager = await makeManager(transport, store, flag)
+        await #expect(throws: APIError.self) { try await manager.accessToken(forceRefresh: false) }
+        #expect(store.load() == Self.expiredA, "\(status) must not sign out")
+        #expect(flag.value == false)
+    }
+
+    @Test(arguments: [400, 401, 403])
+    func rejectedGrantSignsOut(status: Int) async {
+        let transport = HeldTransport(holding: "never-held", status: status)
+        let store = InMemorySessionStore(Self.expiredA)
+        let manager = await makeManager(transport, store)
+        await #expect(throws: AuthError.signedOut) { try await manager.accessToken(forceRefresh: false) }
+        #expect(store.load() == nil, "\(status) is a rejected grant")
+    }
+
     @Test func signOutClearsBeforeTheNetworkCall() async throws {
         let transport = HeldTransport(holding: nil, status: 204)
         let store = InMemorySessionStore(Self.liveB)

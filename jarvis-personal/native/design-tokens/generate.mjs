@@ -55,13 +55,13 @@ export function parseTokens(raw) {
     if (!colors[key.slice(5)]) throw new Error(`dark token ${key} has no light counterpart`);
   }
   const px = (value) => {
-    const number = Number(String(value).replace("px", ""));
-    if (!Number.isFinite(number)) throw new Error(`not a px value: ${value}`);
-    return number;
+    if (!/^\d+(\.\d+)?px$/.test(String(value))) throw new Error(`not a px value: ${value}`);
+    return Number(String(value).slice(0, -2));
   };
   const scale = (name) => pairs(name).map(([key, value]) => [key, px(value)]);
+  // The version is written into Swift and Kotlin string literals: semver only.
   const version = frontmatter[1].match(/^version:\s*(\S+)\s*$/m)?.[1];
-  if (!version) throw new Error("DESIGN.md frontmatter is missing version");
+  if (!version || !/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`DESIGN.md version must be MAJOR.MINOR.PATCH, got ${version}`);
   return {
     version,
     colors: light.map((key) => ({ key, light: colors[key], dark: colors[`dark-${key}`] })),

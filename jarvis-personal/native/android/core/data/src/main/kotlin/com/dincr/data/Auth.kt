@@ -8,6 +8,8 @@ import java.security.SecureRandom
 import java.util.Base64
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -98,7 +100,9 @@ class SupabaseAuthClient(
         } catch (error: IOException) {
             throw AuthException.Network()
         }
-        if (response.status >= 500) throw AuthException.Network()
+        // Only a real rejection of the grant (400/401/403, e.g. invalid_grant) ends the session.
+        // Server errors, throttling, timeouts and redirects (never followed) are transient.
+        if (response.status !in 200..299 && response.status !in REJECTED) throw AuthException.Network()
         if (response.status !in 200..299) throw AuthException.SessionRejected()
         val payload = runCatching { json.decodeFromString<Payload>(response.body) }.getOrElse { throw AuthException.SessionRejected() }
         val expiry = payload.expiresAt ?: (System.currentTimeMillis() / 1000 + (payload.expiresIn ?: 3600))
@@ -106,6 +110,9 @@ class SupabaseAuthClient(
     }
 
     companion object {
+        /** Statuses that mean the grant itself was refused. */
+        val REJECTED = setOf(400, 401, 403)
+
         /**
          * Extracts the authorization code. Fails closed, same rules as iOS: the URL must be
          * exactly our redirect (scheme, host and path; no user, port or fragment) carrying one
@@ -172,11 +179,27 @@ class SessionManager(
 
     private suspend fun refreshed(session: AuthSession): AuthSession {
         val (deferred, owner) = synchronized(lock) {
+            val stored = store.load()
+            when {
+                stored == null -> throw AuthException.SignedOut()
+                // Another refresh of this session already rotated it: use the fresh one instead of
+                // replaying a spent refresh token. Another account signed in meanwhile: stop.
+                stored.refreshToken != session.refreshToken ->
+                    if (stored.userId == session.userId && !stored.isExpired()) return stored else throw AuthException.SessionChanged()
+            }
             val running = inFlight
             if (running != null && running.first == session.refreshToken) running.second to false
             else CompletableDeferred<AuthSession>().also { inFlight = session.refreshToken to it } to true
         }
         if (!owner) return deferred.await()
+        // Once sent, the refresh must be recorded even if the caller goes away: Supabase rotates
+        // the refresh token on its side, so dropping the answer would leave a spent token here.
+        val (outcome, rejected) = withContext(NonCancellable) { finishRefresh(session, deferred) }
+        if (rejected) onSignedOut()
+        return outcome.getOrThrow()
+    }
+
+    private suspend fun finishRefresh(session: AuthSession, deferred: CompletableDeferred<AuthSession>): Pair<Result<AuthSession>, Boolean> {
         val client = auth
         val result = if (client == null) Result.success(session) else runCatching { client.refresh(session.refreshToken) }
         var rejected = false
@@ -192,20 +215,14 @@ class SessionManager(
                 },
                 onFailure = { error ->
                     when {
-                        // The refreshing caller went away: that says nothing about the session.
-                        error is CancellationException -> Result.failure(error)
-                        error is AuthException.Network -> Result.failure(ApiError.offline(AppLanguage.current()))
+                        error is AuthException.Network || error is CancellationException -> Result.failure(ApiError.offline(AppLanguage.current()))
                         !current -> Result.failure(AuthException.SessionChanged())
                         else -> { store.clear(); rejected = true; Result.failure(AuthException.SignedOut()) }
                     }
                 },
             )
         }
-        outcome.fold(
-            { deferred.complete(it) },
-            { deferred.completeExceptionally(if (it is CancellationException) ApiError.offline(AppLanguage.current()) else it) },
-        )
-        if (rejected) onSignedOut()
-        return outcome.getOrThrow()
+        outcome.fold({ deferred.complete(it) }, { deferred.completeExceptionally(it) })
+        return outcome to rejected
     }
 }

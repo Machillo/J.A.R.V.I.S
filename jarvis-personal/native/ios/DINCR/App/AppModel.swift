@@ -31,6 +31,10 @@ final class AppModel {
     private let sessions: SessionManager
     private let auth: SupabaseAuthClient?
     private var pendingPKCE: PKCE?
+    /// Changes on every sign-in and sign-out. An identity answer that arrives after the session it
+    /// was asked for is gone belongs to nobody: it never shows one account's name, formats or
+    /// gates to the next account (or after signing out).
+    private var sessionEpoch = 0
 
     init(environment: AppEnvironment = .current()) {
         self.environment = environment
@@ -94,6 +98,7 @@ final class AppModel {
             let code = try SupabaseAuthClient.authorizationCode(from: callback, redirect: AppEnvironment.authRedirect)
             let session = try await auth.exchange(code: code, verifier: pkce.verifier)
             await sessions.accept(session)
+            sessionEpoch += 1
             await loadIdentity()
         } catch {
             signInError = language.pick("No pudimos completar el acceso. Intentá nuevamente.", "We couldn’t sign you in. Please try again.")
@@ -114,15 +119,19 @@ final class AppModel {
     // MARK: Identity
 
     func loadIdentity() async {
+        let epoch = sessionEpoch
         if profile == nil { phase = .loadingIdentity }
         do {
-            apply(try await service.me())
+            let loaded = try await service.me()
+            if epoch == sessionEpoch { apply(loaded) }
         } catch AuthError.signedOut {
-            handleSignedOut()
+            if epoch == sessionEpoch { handleSignedOut() }
+        } catch AuthError.sessionChanged {
+            // The session was replaced or closed while loading; its phase is already set.
         } catch let error as APIError {
-            phase = .identityError(error.message)
+            if epoch == sessionEpoch { phase = .identityError(error.message) }
         } catch {
-            phase = .identityError(language.pick("No pudimos cargar tu cuenta.", "We couldn’t load your account."))
+            if epoch == sessionEpoch { phase = .identityError(language.pick("No pudimos cargar tu cuenta.", "We couldn’t load your account.")) }
         }
     }
 
@@ -147,6 +156,7 @@ final class AppModel {
     }
 
     private func handleSignedOut() {
+        sessionEpoch += 1
         profile = nil
         phase = .signedOut
     }

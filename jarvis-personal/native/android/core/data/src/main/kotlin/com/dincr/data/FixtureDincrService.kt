@@ -28,7 +28,7 @@ class FixtureDincrService(
         subscription = Profile.Subscription(plan = "free", status = "active"),
     )
     private val rows = if (scenario == Scenario.POPULATED) sampleMovements(today).toMutableList() else mutableListOf()
-    private var nextId = 100
+    private var nextId = 100L
     private val seenKeys = mutableSetOf<String>()
 
     override suspend fun me(): Profile = pause { profile }
@@ -106,7 +106,7 @@ class FixtureDincrService(
         fun sampleMovements(today: LocalDate): List<Movement> {
             fun day(offset: Long) = today.minusDays(offset).toString()
             fun row(id: String, offset: Long, text: String, amount: BigDecimal, type: String, category: String, editable: Boolean = true) =
-                Movement(movementId = id, sourceId = id.substringAfter(':').toInt(), origin = id.substringBefore(':'), transactionDate = day(offset),
+                Movement(movementId = id, sourceId = id.substringAfter(":").toLong(), origin = id.substringBefore(':'), transactionDate = day(offset),
                     description = text, amount = amount, transactionType = type, category = category, editable = editable)
             fun row(id: String, offset: Long, text: String, amount: Long, type: String, category: String, editable: Boolean = true) =
                 row(id, offset, text, m(amount), type, category, editable)

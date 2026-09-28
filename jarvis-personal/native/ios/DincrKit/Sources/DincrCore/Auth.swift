@@ -111,8 +111,10 @@ public struct SupabaseAuthClient: Sendable {
         let data: Data
         let response: HTTPURLResponse
         do { (data, response) = try await transport.send(request) } catch { throw AuthError.network }
+        // Only a real rejection of the grant (400/401/403, e.g. invalid_grant) ends the session.
+        // Server errors, throttling, timeouts and redirects (never followed) are transient.
         guard (200..<300).contains(response.statusCode) else {
-            throw response.statusCode >= 500 ? AuthError.network : AuthError.sessionRejected
+            throw [400, 401, 403].contains(response.statusCode) ? AuthError.sessionRejected : AuthError.network
         }
         struct Payload: Decodable {
             struct User: Decodable { let id: String }

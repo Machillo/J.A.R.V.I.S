@@ -169,6 +169,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             try {
                 val code = SupabaseAuthClient.authorizationCode(uri, AppEnvironment.AUTH_REDIRECT)
                 sessions.accept(client.exchange(code, pkce.verifier))
+                sessionEpoch += 1
                 loadIdentity()
             } catch (error: CancellationException) {
                 throw error
@@ -188,14 +189,29 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     fun retryIdentity() = viewModelScope.launch { loadIdentity() }
 
+    /**
+     * Changes on every sign-in and sign-out. An identity answer that arrives after the session it
+     * was asked for is gone belongs to nobody: it never shows one account's name, formats or
+     * gates to the next account (or after signing out).
+     */
+    private var sessionEpoch = 0
+
     suspend fun loadIdentity() {
+        val epoch = sessionEpoch
         if (_profile.value == null) _phase.value = Phase.LoadingIdentity
         try {
-            apply(service.me())
+            val profile = service.me()
+            if (epoch == sessionEpoch) apply(profile)
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: AuthException.SignedOut) {
-            signedOut()
+            if (epoch == sessionEpoch) signedOut()
+        } catch (error: AuthException.SessionChanged) {
+            // The session was replaced or closed while loading; its phase is already set.
         } catch (error: ApiError) {
-            _phase.value = Phase.IdentityError(error.message)
+            if (epoch == sessionEpoch) _phase.value = Phase.IdentityError(error.message)
+        } catch (error: Exception) {
+            if (epoch == sessionEpoch) _phase.value = Phase.IdentityError(language.pick("No pudimos cargar tu cuenta.", "We couldn’t load your account."))
         }
     }
 
@@ -216,6 +232,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun signedOut() {
+        sessionEpoch += 1
         _profile.value = null
         _phase.value = Phase.SignedOut
     }

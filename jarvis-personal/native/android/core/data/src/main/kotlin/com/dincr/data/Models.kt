@@ -102,7 +102,7 @@ enum class MovementKind { INCOME, EXPENSE }
 @Serializable
 data class Movement(
     @SerialName("movement_id") val movementId: String,
-    @SerialName("source_id") val sourceId: Int? = null,
+    @SerialName("source_id") val sourceId: Long? = null,
     val origin: String? = null,
     @SerialName("transaction_date") val transactionDate: String? = null,
     val description: String? = null,

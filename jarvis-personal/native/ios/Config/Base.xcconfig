@@ -21,7 +21,8 @@ ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
 ENABLE_PREVIEWS = YES
 CODE_SIGN_STYLE = Automatic
 
-// Backend configuration. Empty values run the app on synthetic fixture data.
+// Backend configuration. Empty values stop the app at an "unconfigured" screen (never fixtures;
+// fixture data needs a Debug build launched with -DincrFixtures).
 // Real values go in Config/Local.xcconfig (git-ignored); see Local.xcconfig.example.
 DINCR_API_URL =
 DINCR_SUPABASE_URL =

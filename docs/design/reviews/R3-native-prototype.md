@@ -107,3 +107,23 @@ are validated by the `Native apps` workflow only.
 Human/external gates unchanged: live OAuth needs `com.dincr.app.nativedev://auth/callback` in the
 Supabase redirect allowlist (**not requested, not to be added for the prototype**); iOS rendering,
 VoiceOver, Dynamic Type AX sizes and physical-device checks remain **HUMAN**.
+
+### Independent adversarial review of R3.2 (security reviewer, read-only)
+
+No blocker, no high. Findings and decisions:
+
+| # | Finding | Severity | Decision / change | Test |
+|---|---|---|---|---|
+| N46 | Android: a cancelled caller dropped a refresh answer; Supabase had already rotated the token, so the device kept a spent refresh token (later sign-out) | medium | refresh and its recording run in `NonCancellable` (iOS already used an unstructured task) | `cancelledCallerStillRecordsTheRotatedToken` |
+| N47 | iOS: `RefuseRedirects` is proven only as a delegate method, not wired through a live `URLSession` | medium | **open, needs a Mac**: a `URLProtocol` redirect test is the follow-up | — |
+| N48 | Android: `loadIdentity` did not catch the new `SessionChanged` (crash in a narrow race) | medium | caught; any other error becomes an identity error, as on iOS | code review; Android build + UI tests |
+| N49 | Any non-2xx/non-5xx refresh answer (3xx, 408, 429) signed the user out | low | only 400/401/403 end the session, both platforms | `transientRefreshAnswersKeepTheSession`, `rejectedGrantSignsOut` |
+| N50 | Android: a request that read the session before another refresh saved could replay the spent refresh token | low | inside the lock: same account already rotated → use it; another account → `sessionChanged` | `aStaleReadUsesTheAlreadyRotatedSession`, `aStaleReadOfAnotherAccountNeverGetsItsToken` |
+| N51 | A slow `/auth/me` could land after sign-out or another sign-in (name, formats, gates of the previous account) | low | session epoch in both AppModels | code review |
+| N52 | README said a sign-in without the redirect allowlisted "fails visibly"; Supabase falls back to the Site URL | low | README corrected (the code is useless without the prototype's PKCE verifier) | — |
+| N53 | Android Debug HTTP to `10.0.2.2` is accepted by the policy but blocked by the platform | low | documented (use HTTPS) | — |
+| N54 | Stale comments (`Base.xcconfig` fixtures, CI "R8 keeps what the app needs"); column type wording | low | corrected | — |
+| N55 | iOS Release configuration is never compiled in CI; the committed `gradle-wrapper.jar` relies on `setup-gradle` validation | low | open (CI follow-up) | — |
+| N56 | Token generator accepted `0x10px`, negatives and a non-semver version inside string literals | low | `^\d+(\.\d+)?px$`, semver only | `generate.test.mjs` |
+| N57 | Android `source_id` was 32-bit (`BIGSERIAL` ids above 2^31 would break decoding) | low | `Long` | build |
+| N58 | `check_public_secrets.py` sees a legacy `service_role` JWT only under the named keys | low | open hardening (decode JWT role) | — |

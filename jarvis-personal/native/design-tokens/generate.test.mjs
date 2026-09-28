@@ -36,6 +36,9 @@ test("malformed DESIGN.md fails instead of dropping tokens", () => {
   const cases = {
     "unparsable entry": edit('  tint: "#0B6E68"', "  tint: #0B6E68"),
     "unparsable scale entry": edit('  "4": "16px"', '  "4": 16px'),
+    "px value that is not a size": edit('  "4": "16px"', '  "4": "0x10px"'),
+    "negative px value": edit('  "4": "16px"', '  "4": "-16px"'),
+    "version that is not semver": design.replace(/^version:.*$/m, 'version: 2.0.0"; evil()'),
     "not #RRGGBB": edit('  tint: "#0B6E68"', '  tint: "teal"'),
     "duplicate token": edit('  tint: "#0B6E68"', '  tint: "#0B6E68"\n  tint: "#0B6E69"'),
     "missing dark counterpart": edit('  dark-tint: "#3CCFBF"\n', ""),
