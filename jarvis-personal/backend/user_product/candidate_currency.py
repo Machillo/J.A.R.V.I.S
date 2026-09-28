@@ -18,7 +18,7 @@ golden vectors so the two can never drift apart silently.
 
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from fastapi import HTTPException
@@ -30,7 +30,10 @@ MAX_AMOUNT = Decimal("999999999999.99")  # transactions.amount NUMERIC(14, 2)
 
 
 def _finite(value: Any) -> Decimal | None:
-    number = Decimal(str(value))
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
     return number if number.is_finite() else None
 
 

@@ -72,6 +72,11 @@ def test_review_request_accepts_an_optional_positive_rate():
     assert GmailCandidateReviewRequest(**base, exchange_rate=505).exchange_rate == 505
     with pytest.raises(ValueError):
         GmailCandidateReviewRequest(**base, exchange_rate=0)
+    for bad in (float("inf"), float("-inf"), float("nan")):  # JSON parsing accepts Infinity and NaN
+        with pytest.raises(ValueError):
+            GmailCandidateReviewRequest(**base, exchange_rate=bad)
+        with pytest.raises(ValueError):
+            GmailCandidateReviewRequest(**{**base, "amount": bad})
 
 
 # --------------------------------------------------------------------------- accept flow

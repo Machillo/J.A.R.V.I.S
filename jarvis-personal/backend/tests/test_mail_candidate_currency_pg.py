@@ -338,3 +338,33 @@ def test_two_concurrent_accepts_with_different_rates_save_one_transaction(pg):
     assert (str(tx["exchange_rate"]), str(tx["amount"])) in {("505.000000", "10605.00"), ("510.000000", "10710.00")}
     candidate = _one(pg, "SELECT status,transaction_id FROM finva_email_candidates WHERE id=%s", (candidate_id,))
     assert (candidate["status"], candidate["transaction_id"]) == ("confirmed", tx["id"])
+
+
+# --------------------------------------------------------------------------- invalid input past the request model
+
+INVALID_ACCEPTS = {
+    # (candidate, corrections as the service receives them, bypassing the request model)
+    "rate zero": (BAC_USD, {"amount": 21, "exchange_rate": 0}),
+    "rate negative": (BAC_USD, {"amount": 21, "exchange_rate": -505}),
+    "rate rounds to zero at NUMERIC(14,6)": ({"amount": 18500, "currency": "CRC"}, {"amount": 18500, "exchange_rate": 1e-7}),
+    "rate NaN": (BAC_USD, {"amount": 21, "exchange_rate": float("nan")}),
+    "rate Infinity": (BAC_USD, {"amount": 21, "exchange_rate": float("inf")}),
+    "amount Infinity": (BAC_USD, {"amount": float("inf"), "exchange_rate": 505}),
+    "amount beyond Decimal precision": (BAC_USD, {"amount": 1e300, "exchange_rate": 505}),
+    "amount not a number": (BAC_USD, {"amount": "abc", "exchange_rate": 505}),
+    "converted amount overflows NUMERIC(14,2)": (BAC_USD, {"amount": 999999999999.99, "exchange_rate": 505}),
+}
+
+
+@pytest.mark.parametrize("case", list(INVALID_ACCEPTS))
+def test_invalid_rates_and_amounts_are_a_controlled_422_that_leaves_no_trace(pg, case):
+    """The request model already refuses these; the conversion refuses them again, never a 500."""
+    candidate, corrections = INVALID_ACCEPTS[case]
+    if candidate is not BAC_USD:
+        with pg.cursor() as cur:  # a CRC movement on a USD account: CRC -> USD needs a rate
+            cur.execute("UPDATE accounts SET base_currency='USD' WHERE id=%s", (A["account"],))
+    candidate_id = _candidate(pg, A, **candidate)
+    with pytest.raises(HTTPException) as error:
+        _as(A, gmail_service.review_gmail_candidate, candidate_id, "accept", dict(corrections))
+    assert error.value.status_code == 422
+    _nothing_written(pg, candidate_id)

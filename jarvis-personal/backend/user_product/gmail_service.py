@@ -576,12 +576,13 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             "category": candidate["category"],
         }
         values.update(corrections)
+        # First: an invalid amount or rate is a 422 here, before anything else reads it.
+        money = transaction_amounts(native_currency, values["amount"], candidate.get("account_base_currency"), exchange_rate)
         original = {**candidate, "amount": native_amount}
         corrected_fields = sorted(
             key for key, value in corrections.items()
             if _corrected(key, value, original.get(key))
         )
-        money = transaction_amounts(native_currency, values["amount"], candidate.get("account_base_currency"), exchange_rate)
         transaction_id = _create_candidate_transaction(conn, candidate, values, money)
         _publish_confirmed_financial_input(conn, candidate, values, transaction_id, get_current_user_id(), money)
         category = normalize_category(values["category"], values["transaction_type"])
