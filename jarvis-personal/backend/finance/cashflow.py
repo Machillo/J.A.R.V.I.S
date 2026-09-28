@@ -38,13 +38,12 @@ def set_pay_schedule(
                 pay_day,
                 first_pay_date,
                 notes,
-                user_id,
                 workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
-            (pay_frequency, pay_day, first_pay_date, notes, user_id, workspace_id),
+            (pay_frequency, pay_day, first_pay_date, notes, workspace_id),
         )
 
         conn.commit()
