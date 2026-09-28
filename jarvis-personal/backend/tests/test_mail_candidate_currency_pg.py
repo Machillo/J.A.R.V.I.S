@@ -33,11 +33,12 @@ B = {"allowed": 22, "users": 32, "account": "00000000-0000-4000-8000-0000000001b
 
 SCHEMA = """
 ALTER TABLE accounts ADD COLUMN base_currency TEXT NOT NULL DEFAULT 'CRC';
+-- The production shape of transactions (gate Q0, 2026-09-28): NUMERIC(12,2) and NUMERIC(12,6).
 CREATE TABLE transactions (
     id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, transaction_date TEXT NOT NULL,
-    description TEXT NOT NULL, amount NUMERIC(14,2) NOT NULL, transaction_type TEXT NOT NULL,
+    description TEXT NOT NULL, amount NUMERIC(12,2) NOT NULL, transaction_type TEXT NOT NULL,
     category TEXT NOT NULL, account TEXT, source TEXT, notes TEXT,
-    original_amount NUMERIC(14,2), original_currency TEXT, exchange_rate NUMERIC(14,6),
+    original_amount NUMERIC(12,2), original_currency TEXT, exchange_rate NUMERIC(12,6),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), workspace_id UUID, financial_account_id BIGINT
 );
 CREATE TABLE finva_gmail_connections (
@@ -346,13 +347,13 @@ INVALID_ACCEPTS = {
     # (candidate, corrections as the service receives them, bypassing the request model)
     "rate zero": (BAC_USD, {"amount": 21, "exchange_rate": 0}),
     "rate negative": (BAC_USD, {"amount": 21, "exchange_rate": -505}),
-    "rate rounds to zero at NUMERIC(14,6)": ({"amount": 18500, "currency": "CRC"}, {"amount": 18500, "exchange_rate": 1e-7}),
+    "rate rounds to zero at 6 decimals": ({"amount": 18500, "currency": "CRC"}, {"amount": 18500, "exchange_rate": 1e-7}),
     "rate NaN": (BAC_USD, {"amount": 21, "exchange_rate": float("nan")}),
     "rate Infinity": (BAC_USD, {"amount": 21, "exchange_rate": float("inf")}),
     "amount Infinity": (BAC_USD, {"amount": float("inf"), "exchange_rate": 505}),
     "amount beyond Decimal precision": (BAC_USD, {"amount": 1e300, "exchange_rate": 505}),
     "amount not a number": (BAC_USD, {"amount": "abc", "exchange_rate": 505}),
-    "converted amount overflows NUMERIC(14,2)": (BAC_USD, {"amount": 999999999999.99, "exchange_rate": 505}),
+    "converted amount far beyond NUMERIC(12,2)": (BAC_USD, {"amount": 999999999999.99, "exchange_rate": 505}),
 }
 
 
@@ -362,6 +363,44 @@ def test_invalid_rates_and_amounts_are_a_controlled_422_that_leaves_no_trace(pg,
     candidate, corrections = INVALID_ACCEPTS[case]
     if candidate is not BAC_USD:
         with pg.cursor() as cur:  # a CRC movement on a USD account: CRC -> USD needs a rate
+            cur.execute("UPDATE accounts SET base_currency='USD' WHERE id=%s", (A["account"],))
+    candidate_id = _candidate(pg, A, **candidate)
+    with pytest.raises(HTTPException) as error:
+        _as(A, gmail_service.review_gmail_candidate, candidate_id, "accept", dict(corrections))
+    assert error.value.status_code == 422
+    _nothing_written(pg, candidate_id)
+
+
+# --------------------------------------------------------------------------- the production column limits
+
+def test_the_largest_storable_amount_and_rate_are_saved_exactly(pg):
+    """transactions is NUMERIC(12,2)/(12,6) in production: its exact maximums fit."""
+    crc = _candidate(pg, A, amount=9999999999.99)
+    _as(A, gmail_service.review_gmail_candidate, crc, "accept", _corrections(9999999999.99))
+    with pg.cursor() as cur:
+        cur.execute("UPDATE accounts SET base_currency='USD' WHERE id=%s", (A["account"],))
+    colones_on_usd = _candidate(pg, A, amount=1000000)
+    _as(A, gmail_service.review_gmail_candidate, colones_on_usd, "accept", {"amount": 1000000, "exchange_rate": "999999.999999"})
+    assert [(str(r["amount"]), r["original_amount"] and str(r["original_amount"]), r["exchange_rate"] and str(r["exchange_rate"]))
+            for r in _all(pg, "SELECT amount,original_amount,exchange_rate FROM transactions ORDER BY id")] == [
+        ("9999999999.99", None, None), ("1.00", "1000000.00", "999999.999999")]
+
+
+BEYOND_PRODUCTION = {
+    # Values that fit NUMERIC(14,x) but not production's NUMERIC(12,x): PostgreSQL would raise 22003.
+    "converted amount one conversion above NUMERIC(12,2)": ({"amount": 18500, "currency": "CRC"} | BAC_USD, {"amount": 20000000, "exchange_rate": 505}),
+    "typed amount one cent above NUMERIC(12,2)": ({"amount": 18500, "currency": "CRC"}, {"amount": 10000000000.00}),
+    "typed amount rounding above NUMERIC(12,2)": ({"amount": 18500, "currency": "CRC"}, {"amount": "9999999999.995"}),
+    "rate above NUMERIC(12,6)": ({"amount": 18500, "currency": "CRC"}, {"amount": 1000000, "exchange_rate": 1000000}),
+    "rate rounding above NUMERIC(12,6)": ({"amount": 18500, "currency": "CRC"}, {"amount": 1000000, "exchange_rate": "999999.9999995"}),
+}
+
+
+@pytest.mark.parametrize("case", list(BEYOND_PRODUCTION))
+def test_values_beyond_the_production_columns_are_a_422_before_any_insert(pg, case):
+    candidate, corrections = BEYOND_PRODUCTION[case]
+    if "rate" in case:
+        with pg.cursor() as cur:  # a CRC movement on a USD account: the rate is used
             cur.execute("UPDATE accounts SET base_currency='USD' WHERE id=%s", (A["account"],))
     candidate_id = _candidate(pg, A, **candidate)
     with pytest.raises(HTTPException) as error:

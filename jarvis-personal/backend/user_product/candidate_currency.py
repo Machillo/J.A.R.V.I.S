@@ -25,8 +25,14 @@ from fastapi import HTTPException
 
 SUPPORTED_CURRENCIES = ("CRC", "USD")
 CENT = Decimal("0.01")
-RATE_STEP = Decimal("0.000001")  # transactions.exchange_rate NUMERIC(14, 6)
-MAX_AMOUNT = Decimal("999999999999.99")  # transactions.amount NUMERIC(14, 2)
+# The production columns this writes (verified read-only, gate Q0 of 2026-09-28):
+# transactions.amount and .original_amount NUMERIC(12, 2), .exchange_rate NUMERIC(12, 6).
+# Anything outside them is refused here, never discovered by PostgreSQL (SQLSTATE 22003).
+RATE_STEP = Decimal("0.000001")  # 6 decimals
+MAX_AMOUNT = Decimal("9999999999.99")  # NUMERIC(12, 2)
+MAX_RATE = Decimal("999999.999999")  # NUMERIC(12, 6)
+# Below these, quantizing can never fail and the value may still round into range.
+_AMOUNT_CEILING, _RATE_CEILING = MAX_AMOUNT * 10, MAX_RATE * 10
 
 
 def _finite(value: Any) -> Decimal | None:
@@ -52,7 +58,7 @@ def transaction_amounts(currency: str, amount: Any, base_currency: str | None, e
     typed = _finite(amount)
     if typed is None:
         raise HTTPException(status_code=422, detail="El monto no es válido.")
-    if typed > MAX_AMOUNT:
+    if typed >= _AMOUNT_CEILING or typed.quantize(CENT, ROUND_HALF_UP) > MAX_AMOUNT:
         raise HTTPException(status_code=422, detail="El monto es demasiado grande.")
     typed = typed.quantize(CENT, ROUND_HALF_UP)
     if code == base:
@@ -61,12 +67,17 @@ def transaction_amounts(currency: str, amount: Any, base_currency: str | None, e
         raise HTTPException(status_code=422, detail=f"Este movimiento está en {code} y tu moneda principal es {base}: DINCR no puede convertirlo.")
     # Computed with the rate exactly as the transaction stores it.
     rate = None if exchange_rate is None else _finite(exchange_rate)
+    if rate is not None and rate >= _RATE_CEILING:
+        raise HTTPException(status_code=422, detail="El tipo de cambio es demasiado grande.")
     rate = None if rate is None else rate.quantize(RATE_STEP, ROUND_HALF_UP)
+    # After quantizing: a rate that rounds to 0 at 6 decimals is no rate at all.
     if rate is None or rate <= 0:
         raise HTTPException(
             status_code=422,
             detail=f"Este movimiento está en {code}. Tocá Corregir e indicá el tipo de cambio (colones por 1 dólar) para guardarlo.",
         )
+    if rate > MAX_RATE:
+        raise HTTPException(status_code=422, detail="El tipo de cambio es demasiado grande.")
     converted = (typed * rate if code == "USD" else typed / rate).quantize(CENT, ROUND_HALF_UP)
     if converted <= 0:
         raise HTTPException(status_code=422, detail="El monto convertido es demasiado pequeño para registrarse.")

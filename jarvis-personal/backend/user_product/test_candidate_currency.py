@@ -209,3 +209,39 @@ def test_saving_a_candidate_always_needs_the_converted_money():
     source = inspect.getsource(gmail_service._create_candidate_transaction) + inspect.getsource(
         gmail_service._publish_confirmed_financial_input)
     assert "money or" not in source and 'values["amount"]' not in source
+
+
+@pytest.mark.parametrize("rate", [float("nan"), float("inf"), float("-inf"), "NaN", "Infinity", "-Infinity", "abc", "", 0, -505, 1e-7])
+def test_a_rate_that_is_not_a_positive_finite_number_is_a_422(rate):
+    with pytest.raises(HTTPException) as error:
+        transaction_amounts("USD", 21, "CRC", rate)
+    assert error.value.status_code == 422
+
+
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), float("-inf"), "NaN", "Infinity", "abc", 1e300])
+def test_an_amount_that_is_not_a_finite_storable_number_is_a_422(amount):
+    for base, rate in (("USD", None), ("CRC", 505)):  # same currency and converted
+        with pytest.raises(HTTPException) as error:
+            transaction_amounts("USD", amount, base, rate)
+        assert error.value.status_code == 422
+
+
+def test_the_production_limits_hold_at_their_exact_edges():
+    """transactions: amount/original_amount NUMERIC(12,2), exchange_rate NUMERIC(12,6)."""
+    assert transaction_amounts("CRC", "9999999999.99", "CRC", None)["amount"] == Decimal("9999999999.99")
+    assert transaction_amounts("USD", "9999999999.99", "USD", None)["amount"] == Decimal("9999999999.99")
+    for amount in ("10000000000.00", "9999999999.995"):
+        with pytest.raises(HTTPException) as error:
+            transaction_amounts("CRC", amount, "CRC", None)
+        assert error.value.status_code == 422
+    assert transaction_amounts("CRC", 1000000, "USD", "999999.999999")["exchange_rate"] == Decimal("999999.999999")
+    for rate in ("1000000", "999999.9999995"):
+        with pytest.raises(HTTPException) as error:
+            transaction_amounts("CRC", 1000000, "USD", rate)
+        assert error.value.status_code == 422
+    # A normal ~500 rate and its rounding, both directions.
+    assert transaction_amounts("USD", "10.005", "CRC", "505.1234564") == {
+        "amount": Decimal("5056.29"), "original_amount": Decimal("10.01"),
+        "original_currency": "USD", "exchange_rate": Decimal("505.123456"),
+    }
+    assert transaction_amounts("CRC", 100, "USD", 505)["amount"] == Decimal("0.20")
