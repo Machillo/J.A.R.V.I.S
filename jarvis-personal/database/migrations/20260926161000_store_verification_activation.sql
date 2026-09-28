@@ -92,7 +92,18 @@ COMMIT;
 -- UNION ALL SELECT 'missing policy dincr_app_access on ' || t
 --   FROM unnest(ARRAY['store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations']) t
 --   WHERE NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = t
---                     AND policyname = 'dincr_app_access' AND roles = ARRAY['dincr_app']::name[] AND cmd = 'ALL')
+--                     AND policyname = 'dincr_app_access')
+-- UNION ALL SELECT 'wrong policy dincr_app_access on ' || tablename || ': ' || concat_ws(', ',
+--          CASE WHEN permissive IS DISTINCT FROM 'PERMISSIVE' THEN 'not permissive' END,
+--          CASE WHEN roles IS DISTINCT FROM ARRAY['dincr_app']::name[] THEN 'roles ' || roles::text END,
+--          CASE WHEN cmd IS DISTINCT FROM 'ALL' THEN 'command ' || cmd END,
+--          CASE WHEN qual IS DISTINCT FROM 'true' THEN 'USING ' || coalesce(qual, 'none') END,
+--          CASE WHEN with_check IS DISTINCT FROM 'true' THEN 'WITH CHECK ' || coalesce(with_check, 'none') END)
+--   FROM pg_policies
+--   WHERE schemaname = 'public' AND policyname = 'dincr_app_access'
+--     AND tablename IN ('store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations')
+--     AND (permissive IS DISTINCT FROM 'PERMISSIVE' OR roles IS DISTINCT FROM ARRAY['dincr_app']::name[]
+--          OR cmd IS DISTINCT FROM 'ALL' OR qual IS DISTINCT FROM 'true' OR with_check IS DISTINCT FROM 'true')
 -- UNION ALL SELECT 'unexpected policy ' || policyname || ' on ' || tablename FROM pg_policies
 --   WHERE schemaname = 'public'
 --     AND tablename IN ('store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations')

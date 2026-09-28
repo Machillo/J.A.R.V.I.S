@@ -92,6 +92,26 @@ def test_the_postflight_sees_extra_or_missing_access(activated):
     ]
 
 
+WRONG_POLICIES = {  # how dincr_app_access is re-created -> what the postflight must report
+    "AS PERMISSIVE FOR ALL TO dincr_app USING (false) WITH CHECK (true)": "USING false",
+    "AS PERMISSIVE FOR ALL TO dincr_app USING (true) WITH CHECK (false)": "WITH CHECK false",
+    "AS RESTRICTIVE FOR ALL TO dincr_app USING (true) WITH CHECK (true)": "not permissive",
+    "AS PERMISSIVE FOR SELECT TO dincr_app USING (true)": "command SELECT, WITH CHECK none",
+    "AS PERMISSIVE FOR ALL TO dincr_app, authenticated USING (true) WITH CHECK (true)": "roles {authenticated,dincr_app}",  # pg_policies lists roles by name
+}
+
+
+@pytest.mark.parametrize("definition", list(WRONG_POLICIES))
+def test_the_postflight_reports_a_dincr_app_access_policy_with_the_wrong_definition(activated, definition):
+    owner = activated["owner"]
+    owner.execute(_postflight(ACTIVATION))
+    assert owner.fetchall() == []  # the clean activation first
+    owner.execute("DROP POLICY dincr_app_access ON public.store_purchases")
+    owner.execute(f"CREATE POLICY dincr_app_access ON public.store_purchases {definition}")
+    owner.execute(_postflight(ACTIVATION))
+    assert owner.fetchall() == [(f"wrong policy dincr_app_access on store_purchases: {WRONG_POLICIES[definition]}",)]
+
+
 def test_the_activation_refuses_to_run_before_the_expand(env):
     owner = env["owner"]
     with pytest.raises(psycopg2.Error) as refused:

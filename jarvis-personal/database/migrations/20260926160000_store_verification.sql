@@ -96,19 +96,26 @@ ALTER TABLE public.store_subscriptions
     ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS environment TEXT;
 
+-- Supabase grants new public tables and sequences to its API roles by default. Each
+-- role is revoked on its own, so a missing anon never leaves authenticated with access.
 DO $$
 DECLARE
     t TEXT;
+    r TEXT;
 BEGIN
     FOREACH t IN ARRAY ARRAY['store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations'] LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
-        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-            EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.%I FROM anon, authenticated', t);
+        FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+                EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE public.%I FROM %I', t, r);
+            END IF;
+        END LOOP;
+    END LOOP;
+    FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+            EXECUTE format('REVOKE ALL PRIVILEGES ON SEQUENCE public.store_purchase_conflicts_id_seq FROM %I', r);
         END IF;
     END LOOP;
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-        REVOKE ALL PRIVILEGES ON SEQUENCE public.store_purchase_conflicts_id_seq FROM anon, authenticated;
-    END IF;
 END $$;
 
 COMMIT;
@@ -127,6 +134,10 @@ COMMIT;
 --        unnest(ARRAY['anon', 'authenticated', 'dincr_app']) r,
 --        unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p
 --   WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) AND has_table_privilege(r, 'public.' || t, p)
+-- UNION ALL SELECT r || ' has ' || p || ' on store_purchase_conflicts_id_seq'
+--   FROM unnest(ARRAY['anon', 'authenticated', 'dincr_app']) r, unnest(ARRAY['USAGE', 'SELECT', 'UPDATE']) p
+--   WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r)
+--     AND has_sequence_privilege(r, 'public.store_purchase_conflicts_id_seq', p)
 -- UNION ALL SELECT 'policy ' || policyname || ' on ' || tablename FROM pg_policies
 --   WHERE schemaname = 'public'
 --     AND tablename IN ('store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations');

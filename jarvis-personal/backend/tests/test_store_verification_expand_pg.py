@@ -15,7 +15,7 @@ import pytest
 
 from backend.core import database
 from backend.product_ops.service import has_store_entitlement
-from backend.tests.test_dincr_app_role_pg import ACC_A, GUARD_BY_ROLE, ROOT, _postflight, env  # noqa: F401
+from backend.tests.test_dincr_app_role_pg import ACC_A, GUARD_BY_ROLE, ROOT, _admin_uri, _postflight, env  # noqa: F401
 
 psycopg2 = pytest.importorskip("psycopg2")
 
@@ -96,6 +96,30 @@ def test_no_runtime_or_public_role_can_reach_the_new_tables(expanded):
     for table in TABLES:
         with pytest.raises(psycopg2.errors.InsufficientPrivilege):
             app.execute(f"SELECT 1 FROM public.{table}")
+
+
+@pytest.mark.parametrize("absent", ["anon", "authenticated"])
+def test_each_api_role_is_revoked_even_when_the_other_is_absent(before_store_verification, tmp_path, absent):
+    """No formal guarantee that both Supabase API roles exist: each is revoked on its own."""
+    owner = before_store_verification["owner"]
+    present = {"anon": "authenticated", "authenticated": "anon"}[absent]
+    hidden = f"{absent}_absent_probe"
+    admin = psycopg2.connect(_admin_uri(tmp_path / "pg"))  # the same server as the fixture's
+    admin.autocommit = True
+    try:
+        with admin.cursor() as c:  # a rename keeps the role's OID, so its grants come back intact
+            c.execute(f'ALTER ROLE "{absent}" RENAME TO "{hidden}"')
+        owner.execute(EXPAND.read_text(encoding="utf-8"))
+        owner.execute("""SELECT t, p FROM unnest(%s::text[]) t, unnest(%s::text[]) p
+                         WHERE has_table_privilege(%s, 'public.' || t, p)""", (list(TABLES), list(PRIVILEGES), present))
+        assert owner.fetchall() == []
+        owner.execute("""SELECT p FROM unnest(ARRAY['USAGE', 'SELECT', 'UPDATE']) p
+                         WHERE has_sequence_privilege(%s, 'public.store_purchase_conflicts_id_seq', p)""", (present,))
+        assert owner.fetchall() == []
+    finally:
+        with admin.cursor() as c:
+            c.execute(f'ALTER ROLE "{hidden}" RENAME TO "{absent}"')
+        admin.close()
 
 
 def test_the_postflight_holds_and_the_migration_is_idempotent(expanded):
