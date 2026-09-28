@@ -18,7 +18,8 @@ from datetime import date, timedelta
 
 from backend.auth.current_user import reset_current_user, set_current_user
 from backend.auth.saas import enrich_identity
-from backend.auth.service import OWNER_EMAILS, get_allowed_user_by_email
+from backend.auth.owner_role import owner_enabled
+from backend.auth.service import get_allowed_user_by_email
 from backend.auth.workspace_context import resolve_personal_workspace_context
 from backend.core.database import get_connection
 from backend.user_product import basic_service, service
@@ -35,7 +36,7 @@ def _identity(email: str) -> dict:
     user = get_allowed_user_by_email(email)
     if not user:
         raise SystemExit(f"No existe una cuenta para {email}. Iniciá sesión una vez en la app con esa cuenta.")
-    if email in OWNER_EMAILS or user.get("role") == "owner":
+    if owner_enabled(email) or user.get("role") == "owner":
         raise SystemExit("La cuenta demo no puede ser una cuenta owner.")
     with get_connection() as conn:
         context = resolve_personal_workspace_context(conn, int(user["id"]))

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { getFreeMonthlySummary } from "../services/jarvisApi";
-import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import { deviceLanguage, tx } from "../../lib/locale";
+import { formatMoney } from "../../lib/currency";
 import { categoryLabel } from "../../lib/categories";
 
 const language=deviceLanguage();
 const copy=(es,en)=>tx(es,en,language);
-const money=(value)=>new Intl.NumberFormat(localeTag(language),{style:"currency",currency:"CRC",currencyDisplay:"narrowSymbol",maximumFractionDigits:0}).format(Number(value)||0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value);
 const currentMonth=()=>new Date().toISOString().slice(0,7);
 
 export default function MonthlySummary({ plan = "free" }){

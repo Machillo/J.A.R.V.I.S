@@ -220,20 +220,23 @@ CREATE TABLE IF NOT EXISTS credit_card_settings (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_card_settings_user_bank_card
 ON credit_card_settings(user_id, bank, card_last4);
 
+-- Money columns as they are in production (read-only gate Q0 of PR #273, 2026-09-28):
+-- the table predates this file, and CREATE TABLE IF NOT EXISTS never changed it.
+-- The rest of this file is not verified against production (docs/security/database-audit.md).
 CREATE TABLE IF NOT EXISTS transactions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL DEFAULT 1,
     transaction_date TEXT NOT NULL,
     description TEXT NOT NULL,
-    amount NUMERIC(14, 2) NOT NULL,
+    amount NUMERIC(12, 2) NOT NULL,
     transaction_type TEXT NOT NULL,
     category TEXT NOT NULL,
     account TEXT,
     source TEXT,
     notes TEXT,
-    original_amount NUMERIC(14, 2),
+    original_amount NUMERIC(12, 2),
     original_currency TEXT,
-    exchange_rate NUMERIC(14, 6),
+    exchange_rate NUMERIC(12, 6),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

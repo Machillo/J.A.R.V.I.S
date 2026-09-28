@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { getBudget, saveBudget } from "../services/jarvisApi";
 import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import { formatMoney } from "../../lib/currency";
 import { categoryLabel } from "../../lib/categories";
 const language=deviceLanguage();
 const copy=(es,en)=>tx(es,en,language);
-const money=(v)=>new Intl.NumberFormat(localeTag(language),{style:"currency",currency:"CRC",currencyDisplay:"narrowSymbol",maximumFractionDigits:0}).format(Number(v)||0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value);
 
 export default function Budget({ plan = "basic" }){
   const [data,setData]=useState(null),[error,setError]=useState(""),[saving,setSaving]=useState(false),[editing,setEditing]=useState(false);

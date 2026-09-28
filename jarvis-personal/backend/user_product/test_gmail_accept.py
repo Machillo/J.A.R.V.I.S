@@ -157,7 +157,7 @@ def test_second_accept_is_controlled_and_does_not_duplicate(db, signed_in):
     first = gmail_service.review_gmail_candidate(81, "accept")
     second = gmail_service.review_gmail_candidate(81, "accept")
 
-    assert second == {"status": "confirmed", "candidate_id": 81, "transaction_id": first["transaction_id"]}
+    assert second == {"status": "confirmed", "candidate_id": 81, "transaction_id": first["transaction_id"], "already_reviewed": True}
     assert len(db.state["transactions"]) == 1
     assert len(db.state["events"]) == 1
 
@@ -179,7 +179,7 @@ def test_candidate_from_another_account_is_not_visible(db, signed_in):
 def test_rejected_candidate_cannot_become_a_transaction(db, signed_in):
     result = gmail_service.review_gmail_candidate(83, "accept")
 
-    assert result == {"status": "rejected", "candidate_id": 83, "transaction_id": None}
+    assert result == {"status": "rejected", "candidate_id": 83, "transaction_id": None, "already_reviewed": True}
     assert db.state["transactions"] == []
 
 
@@ -212,7 +212,9 @@ def test_legacy_users_id_is_rejected_by_allowed_users_foreign_key(db):
     candidate = db.state["candidates"][81]
     values = {key: candidate[key] for key in ("transaction_date", "description", "amount", "transaction_type", "category")}
     with pytest.raises(FakeDatabaseError) as error:
-        gmail_service._publish_confirmed_financial_input(connection, candidate, values, 5000, LEGACY_USER_ID)
+        gmail_service._publish_confirmed_financial_input(
+            connection, candidate, values, 5000, LEGACY_USER_ID, {"amount": values["amount"], "original_amount": None, "original_currency": None, "exchange_rate": None},
+        )
     assert error.value.pgcode == "23503"
 
 

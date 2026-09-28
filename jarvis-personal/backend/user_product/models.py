@@ -23,6 +23,10 @@ class IncomeCreateRequest(BaseModel):
     description: str = ""
     category: str = "salario"
     entry_date: date | None = None
+    # Currency the amount was typed in; omitted = the account's base currency.
+    # The other currency needs the user's rate (CRC per 1 USD); DINCR never invents one.
+    currency: Literal["CRC", "USD"] | None = None
+    exchange_rate: float | None = Field(default=None, gt=0, le=100000)
 
 
 class ExpenseCreateRequest(BaseModel):
@@ -30,6 +34,10 @@ class ExpenseCreateRequest(BaseModel):
     description: str = ""
     category: str = "general"
     entry_date: date | None = None
+    # Currency the amount was typed in; omitted = the account's base currency.
+    # The other currency needs the user's rate (CRC per 1 USD); DINCR never invents one.
+    currency: Literal["CRC", "USD"] | None = None
+    exchange_rate: float | None = Field(default=None, gt=0, le=100000)
 
 
 class IncomeUpdateRequest(IncomeCreateRequest):
@@ -177,9 +185,12 @@ class TransactionCreateRequest(BaseModel):
 class GmailCandidateReviewRequest(BaseModel):
     transaction_date: date
     description: str = Field(min_length=1, max_length=500)
-    amount: float = Field(gt=0)
+    # In the currency the movement happened in (USD for a USD purchase).
+    amount: float = Field(gt=0, allow_inf_nan=False)
     transaction_type: Literal["expense", "income", "debt_payment"]
     category: str = Field(default="general", max_length=100)
+    # The user's rate (CRC per 1 USD) when that currency is not the account's base.
+    exchange_rate: float | None = Field(default=None, gt=0, le=100000, allow_inf_nan=False)
 
 
 class OwnTransferConfirmRequest(BaseModel):
@@ -200,3 +211,6 @@ class MovementUpdateRequest(BaseModel):
     transaction_type: Literal["expense", "income"]
     category: str = "general"
     notes: str = ""
+    # Only manual income and expenses accept another currency.
+    currency: Literal["CRC", "USD"] | None = None
+    exchange_rate: float | None = Field(default=None, gt=0, le=100000)

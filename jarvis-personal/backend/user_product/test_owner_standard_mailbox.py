@@ -35,7 +35,7 @@ class MailboxConnection(FakeConnection):
             return self._rows(c for c in connections.values()
                               if (c["account_id"], c["workspace_id"]) == (account, workspace) and c["status"] != "disabled"
                               and (connection_id is None or c["id"] == connection_id))
-        if q.startswith("SELECT decrypted_secret FROM vault.decrypted_secrets"):
+        if q.startswith("SELECT dincr_private.mail_secret_read"):
             return self._rows([{"decrypted_secret": vault[params[0]]}] if params[0] in vault else [])
         if q.startswith("UPDATE finva_gmail_connections SET status='disabled'"):
             connections[params[0]]["status"] = "disabled"

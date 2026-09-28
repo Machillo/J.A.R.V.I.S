@@ -1,0 +1,26 @@
+// Cloudflare Worker "dincr": serves the public landing (dincr.com) as static assets.
+// Workers Builds root directory: jarvis-personal/frontend. Build command:
+// `npm ci && npm run build:landing`. Production: `npx wrangler deploy`; other
+// branches: `npx wrangler preview`. This file is the whole deployment: before it
+// existed, production relied on Wrangler's automatic configuration and every
+// non-production build failed, because `wrangler preview` needs an explicit config.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dincr",
+  "compatibility_date": "2026-09-25",
+  "assets": {
+    // Only the static landing. Never the application build (dist/), which carries
+    // the private app bundle and telemetry (landing/README.md).
+    "directory": "./landing-dist",
+    // Same as production today: /privacidad -> /privacidad/.
+    "html_handling": "auto-trailing-slash",
+    // The generated 404.html instead of an empty 404 (a multipage site, not an SPA).
+    "not_found_handling": "404-page"
+  },
+  "preview_urls": true,
+  // Required by `wrangler preview`. Empty on purpose: the landing has no code,
+  // bindings, variables or secrets, so a Preview needs nothing of its own and can
+  // reach nothing production can. Anything added at the top level later must be
+  // decided here for Previews too (Previews do not inherit production settings).
+  "previews": {}
+}
