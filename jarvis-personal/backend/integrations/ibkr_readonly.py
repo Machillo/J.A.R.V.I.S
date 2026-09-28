@@ -14,6 +14,7 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.auth.owner_role import enabled_owner_email
 from backend.core.database import get_connection, serialize_row, serialize_rows
 
 
@@ -61,79 +62,28 @@ FLEX_ALLOWED_HOSTS = {
 FLEX_PENDING_CODES = {"1018", "1019"}
 
 
-def ensure_ibkr_tables(conn) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS exchange_rates (
-            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL DEFAULT 1,
-            workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
-            rate_date DATE NOT NULL, currency TEXT NOT NULL,
-            exchange_rate NUMERIC(14,6) NOT NULL,
-            source TEXT NOT NULL DEFAULT 'manual',
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(workspace_id, rate_date, currency)
-        )
-        """
-    )
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS snapshot_at TIMESTAMPTZ")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS cash NUMERIC(18,4) NOT NULL DEFAULT 0")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS buying_power NUMERIC(18,4) NOT NULL DEFAULT 0")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS gross_position_value NUMERIC(18,4) NOT NULL DEFAULT 0")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS accrued_cash NUMERIC(18,4) NOT NULL DEFAULT 0")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS account_id_masked TEXT")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS account_mode TEXT NOT NULL DEFAULT 'manual'")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS snapshot_key TEXT")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS included_in_net_worth BOOLEAN NOT NULL DEFAULT TRUE")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS exchange_rate_crc NUMERIC(14,6)")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS market_value_crc NUMERIC(18,2)")
-    conn.execute("ALTER TABLE investment_portfolio_snapshots ADD COLUMN IF NOT EXISTS sync_method TEXT NOT NULL DEFAULT 'manual'")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_ibkr_snapshot_key ON investment_portfolio_snapshots(workspace_id, snapshot_key) WHERE snapshot_key IS NOT NULL")
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS investment_position_snapshots (
-            id BIGSERIAL PRIMARY KEY,
-            workspace_id UUID NOT NULL,
-            portfolio_snapshot_id BIGINT NOT NULL REFERENCES investment_portfolio_snapshots(id) ON DELETE CASCADE,
-            symbol TEXT NOT NULL,
-            sec_type TEXT NOT NULL,
-            currency TEXT NOT NULL,
-            exchange TEXT,
-            position NUMERIC(24,8) NOT NULL DEFAULT 0,
-            average_cost NUMERIC(18,6) NOT NULL DEFAULT 0,
-            market_price NUMERIC(18,6) NOT NULL DEFAULT 0,
-            market_value NUMERIC(18,4) NOT NULL DEFAULT 0,
-            unrealized_pnl NUMERIC(18,4) NOT NULL DEFAULT 0,
-            realized_pnl NUMERIC(18,4) NOT NULL DEFAULT 0,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_ibkr_positions_snapshot ON investment_position_snapshots(portfolio_snapshot_id)")
-
-
 def _owner_identity(conn) -> tuple[int, str]:
-    owner_email = (
-        os.getenv("OWNER_EMAIL", "").strip()
-        or next((value.strip() for value in os.getenv("OWNER_EMAILS", "").split(",") if value.strip()), "")
-    ).lower()
-    if not owner_email:
-        raise RuntimeError("OWNER_EMAIL no está configurado.")
+    # The Owner is the one account holding both keys (backend/auth/owner_role.py); a listed
+    # email alone is not enough, or a User's workspace could receive Owner snapshots.
+    owner_email = enabled_owner_email(conn)
     row = conn.execute(
         """
-        SELECT u.id AS user_id, w.id AS workspace_id
-        FROM users u
-        JOIN accounts a ON a.legacy_allowed_user_id = u.id
+        SELECT u.id AS user_id, w.id AS workspace_id, a.id AS account_id
+        FROM accounts a
+        JOIN allowed_users au ON au.id = a.legacy_allowed_user_id
+        JOIN users u ON LOWER(u.email) = LOWER(au.email)
         JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
-        WHERE LOWER(u.email) = %s
+        WHERE LOWER(au.email) = %s AND a.role = 'owner' AND au.role = 'owner'
         ORDER BY w.created_at, w.id
-        LIMIT 1
         """,
         (owner_email,),
-    ).fetchone()
-    if not row:
-        raise RuntimeError("No encontré el workspace personal del owner.")
+    ).fetchall()
+    # The account is found through its own identity (allowed_users -> accounts), never by
+    # comparing a users.id with an allowed_users.id; anything but exactly one owner account
+    # fails closed. Its oldest personal workspace is used, as before.
+    if len({str(item["account_id"]) for item in row or []}) != 1:
+        raise RuntimeError("No encontré un único owner con workspace personal.")
+    row = row[0]
     return int(row["user_id"]), str(row["workspace_id"])
 
 
@@ -334,7 +284,6 @@ def _persist_snapshot(payload: IbkrSnapshot, sync_method: str = "bridge") -> dic
     ).hexdigest()
 
     with get_connection() as conn:
-        ensure_ibkr_tables(conn)
         user_id, workspace_id = _owner_identity(conn)
         rate_row = conn.execute(
             """
@@ -438,13 +387,13 @@ def sync_flex_cron(x_jarvis_cron_secret: str | None = Header(default=None)):
         raise HTTPException(status_code=403, detail="Credencial del cron IBKR inválida.")
     try:
         return sync_flex_snapshot()
-    except RuntimeError as exc:
-        logger.exception("IBKR scheduled sync failed")
-        raise HTTPException(status_code=502, detail="No se pudo sincronizar IBKR en este momento.") from exc
+    except (RuntimeError, requests.RequestException) as exc:
+        # The Flex token travels in the request URL: never log an exception message.
+        logger.error("IBKR scheduled sync failed type=%s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="No se pudo sincronizar IBKR en este momento.") from None
 
 
 def latest_ibkr_snapshot(conn, workspace_id: str):
-    ensure_ibkr_tables(conn)
     snapshot = conn.execute(
         """
         SELECT * FROM investment_portfolio_snapshots

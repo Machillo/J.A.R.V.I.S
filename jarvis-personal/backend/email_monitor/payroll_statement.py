@@ -41,7 +41,8 @@ def parse_ccss_order_patronal(subject: str, sender: str, text: str) -> dict[str,
 
     month_name, year = row.group(1).lower(), int(row.group(2))
     employer = re.search(r"\b(\d-\d{11}-\d{3}-\d{3})\b", combined)
-    verifier = re.search(r"codigo verificador[^:]*:\s*([a-z0-9-]+)", plain, re.IGNORECASE)
+    # Bounded gap: an unbounded [^:]* rescans the rest of the text at every match start.
+    verifier = re.search(r"codigo verificador[^:\n]{0,40}:\s*([a-z0-9-]{1,64})", plain, re.IGNORECASE)
     return {
         "period_month": f"{year:04d}-{MONTHS[month_name]:02d}",
         "trans_previous_salary": _money(row.group(3)),

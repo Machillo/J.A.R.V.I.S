@@ -1476,6 +1476,24 @@ body:has(.users-app) { background: var(--f-bg); }
 .users-app .plan-dialog-confirm { border:1px solid rgba(93,214,255,.16); background:linear-gradient(145deg,#2081a3,#17677f); color:white; }
 @keyframes finva-sheet-in { from { transform:translateY(24px); opacity:.4; } to { transform:translateY(0); opacity:1; } }
 
+/* App Store / Google Play subscription (native app only). */
+.users-app .store-subscription-panel { display:grid; gap:12px; margin-bottom:14px; }
+.users-app .store-subscription-heading strong,
+.users-app .store-subscription-heading small { display:block; }
+.users-app .store-subscription-heading small,
+.users-app .store-subscription-note,
+.users-app .store-subscription-current { margin:0; color:var(--muted); font-size:.84rem; line-height:1.4; }
+.users-app .store-subscription-notice { display:flex; align-items:flex-start; gap:9px; padding:12px; border:1px solid var(--f-border); border-radius:14px; background:rgba(255,255,255,.04); font-size:.82rem; line-height:1.4; }
+.users-app .store-subscription-notice svg { flex:0 0 auto; margin-top:1px; }
+.users-app .store-subscription-notice.tone-success { border-color:rgba(93,214,160,.28); }
+.users-app .store-subscription-notice.tone-warning { border-color:rgba(255,196,94,.3); }
+.users-app .store-subscription-notice.tone-error { border-color:rgba(255,119,135,.24); background:rgba(125,36,49,.2); }
+.users-app .store-subscription-offers { list-style:none; margin:0; padding:0; display:grid; gap:9px; }
+.users-app .store-subscription-offers li { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.users-app .store-subscription-offers small { display:block; margin-top:3px; color:var(--muted); }
+.users-app .store-subscription-actions { display:flex; flex-wrap:wrap; gap:9px; }
+.users-app .store-subscription-actions button { display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 14px; border-radius:14px; font-weight:700; }
+
 @media (max-width:390px) {
   .users-app .entry-field-row { grid-template-columns:1fr; }
   .users-app .finance-page .hero p { font-size:.8rem; }
@@ -1508,3 +1526,13 @@ body:has(.users-app) { background: var(--f-bg); }
 .users-app .mail-history-option span{display:grid;gap:3px;min-width:0}
 .users-app .mail-history-option small,.users-app .mail-history-sheet p{color:var(--muted);font-size:.82rem;line-height:1.5;overflow-wrap:anywhere}
 .users-app .mail-history-sheet p{margin:0}
+.users-app .gmail-email-card.is-reviewing{opacity:.72;cursor:progress}
+.users-app .gmail-review-notice{margin:4px 0 0}
+/* [ amount ] [ CRC | USD ] on income and expense forms. */
+.users-app .entry-amount-row { display:flex; align-items:flex-end; gap:8px; }
+.users-app .entry-amount-row .entry-amount-field { flex:1; min-width:0; }
+.users-app .entry-currency-toggle { display:flex; flex:none; padding:4px; border:1px solid var(--f-border-strong); border-radius:15px; }
+.users-app .entry-currency-toggle button { min-width:48px; min-height:44px; border:0; border-radius:11px; background:transparent; color:var(--f-text-2); font-weight:800; }
+.users-app .entry-currency-toggle button.active { background:var(--accent-soft, rgba(93,214,255,.13)); color:var(--f-text, var(--text)); }
+.users-app .entry-original-amount { display:block; color:var(--f-text-2, var(--muted)); font-size:.72rem; }
+.users-app .entry-amount-cell { display:grid; justify-items:end; }

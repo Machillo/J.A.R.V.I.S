@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError as missing:  # an interpreter without requirements.txt (e.g. system Python 3.9)
+    raise RuntimeError(
+        "The DINCR backend needs Python 3.11 with jarvis-personal/requirements.txt installed "
+        f"(missing '{missing.name}'). Scripts: from jarvis-personal/ run python3.11 -m backend.scripts.<name> ..."
+    ) from None
 
 
 def load_backend_env() -> None:

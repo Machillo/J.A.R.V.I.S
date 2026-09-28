@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, CreditCard } from "lucide-react";
 import { getDebts } from "../services/jarvisApi";
-import { deviceLanguage, localeTag } from "../../lib/locale";
+import { deviceLanguage } from "../../lib/locale";
+import { formatMoney } from "../../lib/currency";
 
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style: "currency", currency: "CRC", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }).format(Number(value) || 0);
+// Amounts are in the account's base currency (CRC or USD).
+const money = (value) => formatMoney(value);
 
 // Read-only view of the user's debts inside Movimientos. It reads the same endpoint
 // and service as the Debts screen (getDebts -> GET /user-product/finance/debts), keeps

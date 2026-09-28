@@ -6,5 +6,6 @@
   "privacyEmail": "privacidad@dincr.com",
   "socialLinks": [],
   "reviews": { "enabled": false, "googlePlay": null, "appStore": null },
-  "pricesCRC": { "free": 0, "basic": 2990, "vip": 4990 }
+  "pricesCRC": { "free": 0, "basic": 2990, "vip": 4990 },
+  "minimumOS": { "android": "7.0", "ios": "15" }
 }
