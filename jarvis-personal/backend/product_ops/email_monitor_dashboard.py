@@ -13,7 +13,11 @@ def _rows(result) -> list[dict[str, Any]]:
 
 
 def build_email_monitor_dashboard(conn) -> dict[str, Any]:
-    """Owner-only operational view; never returns message bodies or financial values."""
+    """Owner-only operational view: aggregates by bank and parser, never by person.
+
+    Google Workspace data may reach a human only aggregated and anonymized (Limited
+    Use), so no row carries an account, an email, a message body or a financial value.
+    """
     messages = _rows(conn.execute(
         """SELECT COALESCE(status,'unknown') AS status,COUNT(*) AS total
              FROM finva_email_messages
@@ -21,8 +25,7 @@ def build_email_monitor_dashboard(conn) -> dict[str, Any]:
             GROUP BY COALESCE(status,'unknown') ORDER BY total DESC"""
     ))
     candidates = _rows(conn.execute(
-        """SELECT COALESCE(a.primary_email,'unknown') AS user_email,
-                  COALESCE(c.bank,'unknown') AS bank,
+        """SELECT COALESCE(c.bank,'unknown') AS bank,
                   COALESCE(c.source_type,'unknown') AS source_type,
                   COALESCE(c.parser_name,'unknown') AS parser_name,
                   COALESCE(c.parser_version,'unknown') AS parser_version,
@@ -34,9 +37,8 @@ def build_email_monitor_dashboard(conn) -> dict[str, Any]:
                   COUNT(*) FILTER (WHERE c.status='rejected') AS rejected,
                   MAX(c.updated_at) AS last_activity_at
              FROM finva_email_candidates c
-             LEFT JOIN accounts a ON a.id=c.account_id
             WHERE c.created_at>=NOW()-INTERVAL '90 days'
-            GROUP BY a.primary_email,c.bank,c.source_type,c.parser_name,c.parser_version,c.movement_kind
+            GROUP BY c.bank,c.source_type,c.parser_name,c.parser_version,c.movement_kind
             ORDER BY last_activity_at DESC LIMIT 500"""
     ))
     connections = _rows(conn.execute(
