@@ -507,3 +507,14 @@ def test_gmail_consent_without_the_read_permission_attaches_nothing(env, granted
     assert env.db.state["vault"] == {}  # and never stored
     assert connections_of(env, A) == []
     assert next(iter(env.db.state["flows"].values()))["status"] == "failed"
+
+
+@pytest.mark.parametrize("recorded", [[], ["https://www.googleapis.com/auth/gmail.metadata"]])
+def test_gmail_completion_never_attaches_a_flow_without_the_read_permission(env, recorded):
+    """Defense in depth: even an authorized flow is attached only if it recorded gmail.readonly."""
+    _, params = callback("gmail", *env.provider.authorize(start("gmail", A), "a@example.com"))
+    next(iter(env.db.state["flows"].values()))["granted_scopes"] = recorded
+    with pytest.raises(HTTPException) as refused:
+        complete(A, params)
+    assert refused.value.status_code == 409
+    assert connections_of(env, A) == []

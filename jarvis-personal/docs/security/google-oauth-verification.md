@@ -220,9 +220,9 @@ Before uploading, check:
 
 **Pre-send gates** (the reply and the Console text below are true only when all of these hold):
 1. This PR is deployed.
-2. #253 is merged and deployed: CCSS payroll orders are read only from the CCSS sender, and the aguinaldo search no longer matches a subject alone.
+2. #253 is deployed: CCSS payroll orders are read only from the CCSS sender, and the aguinaldo search no longer matches a subject alone. **Code: done** (#253 is in `main`; `_aguinaldo_gmail_query` searches `from:ccss.sa.cr` only). **MANUAL:** confirm the deployed backend includes it.
 3. The legacy Owner bodies are cleared from `email_ingested_messages` (section 5). This is a human-approved destructive update; first check `SELECT count(*) FROM email_ingested_messages WHERE raw_body IS NOT NULL OR body_text IS NOT NULL`, read-only.
-4. **Human access.** The Owner operations dashboard (`product_ops/email_monitor_dashboard.py`) lists Gmail-derived counts per user email. Limited Use allows human access for operations only on aggregated, anonymized data. Remove the per-user email from that view first; it is tracked as a follow-up.
+4. **Human access.** Limited Use allows human access for operations only on aggregated, anonymized data. **Code: done** (#259 is in `main`): the Owner operations dashboard (`product_ops/email_monitor_dashboard.py`) returns only aggregate counts by status, bank, parser and ownership status, with no account, email, body or amount. **MANUAL:** confirm the deployed backend and app include it.
 
 ## 9. CASA
 
