@@ -327,12 +327,13 @@ export function createStoreBilling({ platform, plugin, api }) {
     /** "Restaurar compras": every current store subscription goes to the backend, which decides ownership. */
     restore() {
       return exclusive(async () => {
+        // The store first: with no DINCR purchase there, nothing is asked of the
+        // backend (no customer token, no verification), as in reconcile().
         try {
-          await customerToken();
+          await knownProducts();
         } catch (error) {
-          return { outcome: error.kind, results: [] };
+          return { outcome: backendFailure(error), results: [] };
         }
-        await knownProducts();
         if (platform === "ios") {
           try {
             await plugin.restorePurchases(); // AppStore.sync(): refreshes this Apple ID's transactions
@@ -346,6 +347,13 @@ export function createStoreBilling({ platform, plugin, api }) {
           purchases = await currentPurchases();
         } catch (error) {
           return { outcome: storeFailure(error) === "store" ? "unavailable" : storeFailure(error), results: [] };
+        }
+        if (!purchases.length) return { outcome: "restored", results: [] };
+        // Store verification off (503): nothing is sent.
+        try {
+          await customerToken();
+        } catch (error) {
+          return { outcome: error.kind, results: [] };
         }
         const results = [];
         for (const purchase of purchases) results.push(await submit(purchase));

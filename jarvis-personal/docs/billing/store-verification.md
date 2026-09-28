@@ -156,7 +156,9 @@ Prices, currency and period text come from the store (`getProducts`), never from
 - iOS: `AppStore.sync()`, then every current entitlement's JWS;
 - Android: every current subscription purchase from `queryPurchases`.
 
-Each goes to the backend, which decides ownership. A 409 (the purchase belongs to another DINCR account) changes nothing on the device and shows a message without ids.
+The store is read first. With no DINCR purchase there, restore ends: it requests no customer token and calls no verification endpoint (as recovery does). Otherwise it requests the customer token. A 503 (store verification off) ends it, and no evidence is sent.
+
+Each purchase then goes to the backend, which decides ownership. A 409 (the purchase belongs to another DINCR account) changes nothing on the device and shows a message without ids.
 
 **Recovery when the store charged but DINCR did not answer** (network down, app killed, backend 5xx or 503, kill switch still off): nothing is stored on the device; the store keeps the evidence. After the store charged, any non-final answer shows "la reintentaremos", never "not available". On login and on every app resume (`App.jsx` → `recoverStorePurchases`), the app sends again this account's purchases that the backend has not answered yet:
 - Android: purchased and not acknowledged. This includes a backend answer of `acknowledgement: "pending"` and a 422, which on Google can be a temporary Play API failure;

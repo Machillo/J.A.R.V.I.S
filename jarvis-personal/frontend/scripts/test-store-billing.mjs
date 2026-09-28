@@ -453,6 +453,86 @@ assert.equal(liveStoreSubscription({ provider: "sandbox", entitlement: "vip" }),
   assert.deepEqual(store.finished, ["1000"]);
 }
 
+// ---- restore: the store first, the backend only when the store holds DINCR purchases ----
+// One ordered log across store and backend, so the sequence itself is checked.
+const traced = ({ server, store }) => {
+  const order = [];
+  const wrap = (target, name, label) => {
+    const original = target[name];
+    target[name] = async (...args) => { order.push(label); return original(...args); };
+  };
+  wrap(store.plugin, "restorePurchases", "store:sync");
+  wrap(store.plugin, "getPurchases", "store:purchases");
+  wrap(server.api, "customerToken", "backend:customer-token");
+  wrap(server.api, "verifyApple", "backend:verify");
+  wrap(server.api, "verifyGoogle", "backend:verify");
+  return order;
+};
+{
+  // A. No DINCR purchase in the store: no customer token, no verification.
+  for (const platform of ["ios", "android"]) {
+    const context = setup(platform);
+    const order = traced(context);
+    assert.deepEqual(await context.billing.restore(), { outcome: "restored", results: [] }, platform);
+    assert.deepEqual(order, platform === "ios" ? ["store:sync", "store:purchases"] : ["store:purchases"], platform);
+    assert.deepEqual(context.server.state.calls, [], `${platform}: the backend is not asked anything`);
+    assert.match(restoreMessage({ outcome: "restored", results: [] }).text, /No encontramos|didn’t find/);
+  }
+  // Also with store verification off: the store answers first, and it holds nothing.
+  const off = setup("ios", { enabled: false });
+  traced(off);
+  assert.deepEqual(await off.billing.restore(), { outcome: "restored", results: [] });
+  assert.deepEqual(off.server.state.calls, []);
+}
+{
+  // B. DINCR purchases in the store, store verification off (503): the store is read
+  // first, then the customer token is refused, and no evidence reaches the backend.
+  for (const platform of ["ios", "android"]) {
+    const context = setup(platform);
+    const { server, store, billing } = context;
+    const offer = (await billing.loadOffers())[0];
+    const key = platform === "ios" ? "verifyApple" : "verifyGoogle";
+    const verify = server.api[key];
+    server.api[key] = async () => { throw httpError(0); };
+    assert.equal((await billing.purchase(offer)).outcome, "backend"); // charged, not verified
+    server.api[key] = verify;
+    server.state.enabled = false;
+    server.state.calls.length = 0;
+    const order = traced(context);
+    const result = await billing.restore();
+    assert.deepEqual(result, { outcome: "disabled", results: [] }, platform);
+    assert.deepEqual(order, [...(platform === "ios" ? ["store:sync"] : []), "store:purchases", "backend:customer-token"], platform);
+    assert.deepEqual(server.state.calls, ["customer-token"], `${platform}: no evidence sent`);
+    if (platform === "ios") assert.deepEqual(store.finished, [], "still unfinished, so recovery can send it later");
+    else assert.equal(store.clientAcks, 0);
+    assert.match(restoreMessage(result).text, /todavía no están disponibles|aren’t available yet/);
+    // D. Android never calls the plugin's restorePurchases (it acknowledges everything).
+    if (platform === "android") assert.ok(!store.calls.some(([name]) => name === "restorePurchases"));
+  }
+}
+{
+  // C. DINCR purchases and verification on: restore verifies them, as before.
+  for (const platform of ["ios", "android"]) {
+    const context = setup(platform);
+    const { server, store, billing } = context;
+    const offer = (await billing.loadOffers()).find((o) => o.productId === IDS.vip.monthly);
+    const key = platform === "ios" ? "verifyApple" : "verifyGoogle";
+    const verify = server.api[key];
+    server.api[key] = async () => { throw httpError(0); };
+    await billing.purchase(offer);
+    server.api[key] = verify;
+    const order = traced(context);
+    const restored = await billing.restore();
+    assert.deepEqual(restored.results.map((r) => r.outcome), ["verified"], platform);
+    assert.equal(restored.profile.subscription.plan, "vip", platform);
+    // E. iOS: AppStore.sync before reading current entitlements; D. Android: neither
+    // restorePurchases nor a client acknowledgement.
+    assert.deepEqual(order, [...(platform === "ios" ? ["store:sync"] : []), "store:purchases", "backend:customer-token", "backend:verify"], platform);
+    if (platform === "ios") assert.deepEqual(store.finished, ["1000"]);
+    else assert.equal(store.clientAcks, 0);
+  }
+}
+
 // ---- static checks on the device code ---------------------------------------------
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const sources = [
