@@ -87,7 +87,8 @@ class FakeDB:
         self.dependents = DEPENDENTS
 
     def writes(self):
-        return [(sql, params) for sql, params in self.log if sql.startswith(("UPDATE", "DELETE", "INSERT"))]
+        return [(sql, params) for sql, params in self.log
+                if sql.startswith(("UPDATE", "DELETE", "INSERT", "SELECT dincr_private.mail_secret_delete"))]
 
     def committed(self):
         return [sql for sql, _ in self.log if sql == "COMMIT"]
@@ -130,8 +131,9 @@ class FakeConnection:
         accounts = w["accounts"]
         if sql.startswith("SELECT id, email, role, status, supabase_user_id"):
             return [dict(row) for row in w["allowed_users"].values() if row["email"] == params[0]]
-        if sql.startswith("SELECT supabase_user_id FROM accounts WHERE legacy_allowed_user_id"):
-            return [{"supabase_user_id": a["supabase_user_id"]} for a in accounts.values() if a["legacy_allowed_user_id"] == params[0]]
+        if sql.startswith("SELECT supabase_user_id, role, last_login_at FROM accounts WHERE legacy_allowed_user_id"):
+            return [{"supabase_user_id": a["supabase_user_id"], "role": a.get("role"), "last_login_at": a.get("last_login_at")}
+                    for a in accounts.values() if a["legacy_allowed_user_id"] == params[0]]
         if sql.startswith("UPDATE allowed_users SET supabase_user_id"):
             sid, uid, expected = params
             row = w["allowed_users"].get(uid)
@@ -225,7 +227,8 @@ class FakeConnection:
             deleted = [e for e in w["events"] if e["account_id"] == params[0]]
             w["events"] = [e for e in w["events"] if e["account_id"] != params[0]]
             return [{"id": index} for index, _ in enumerate(deleted)]
-        if sql.startswith("DELETE FROM vault.secrets"):
+        if sql.startswith("SELECT dincr_private.mail_secret_delete"):
+            assert params[1] == ACCOUNT_ID  # only the caller's own tokens
             for secret_id in params[0]:
                 w["vault"].pop(secret_id, None)
             return []
@@ -328,8 +331,8 @@ def _assert_writes_scoped(db, allowed_ids=(42,), account_ids=(ACCOUNT_ID,), emai
     for sql, params in db.writes():
         if sql.startswith("INSERT"):
             continue
-        if sql.startswith("DELETE FROM vault.secrets"):
-            assert SECRET_OTHER not in params[0]
+        if sql.startswith("SELECT dincr_private.mail_secret_delete"):
+            assert SECRET_OTHER not in params[0] and params[1] == ACCOUNT_ID
             continue
         assert own & set(params), f"write not scoped to the caller: {sql}"
         assert not {7, OTHER_ACCOUNT_ID, OTHER_EMAIL, OTHER_AUTH_ID} & set(params)
@@ -594,7 +597,7 @@ def test_missing_admin_key_fails_closed_before_marking(env, monkeypatch):
 
 
 @pytest.mark.parametrize("fault", [
-    "UPDATE allowed_users SET status", "DELETE FROM vault.secrets", "DELETE FROM payroll_salary_reports", "DELETE FROM product_events",
+    "UPDATE allowed_users SET status", "SELECT dincr_private.mail_secret_delete", "DELETE FROM payroll_salary_reports", "DELETE FROM product_events",
     "DELETE FROM accounts", 'DELETE FROM "public"."memory_items"', "DELETE FROM users", "data_commit",
 ])
 def test_failure_before_the_data_commit_leaves_a_normal_active_account(env, fault):
@@ -671,7 +674,8 @@ def test_supabase_failure_leaves_no_data_and_retry_finishes(env, failure):
     assert 42 not in env.db.state["allowed_users"]
     assert AUTH_ID not in env.supabase.auth_users
     # The resumed attempt finds no account left: nothing but users/tombstone is touched.
-    assert not any(sql.startswith(("DELETE FROM accounts", "DELETE FROM vault", "UPDATE")) for sql, _ in env.db.writes())
+    assert not any(sql.startswith(("DELETE FROM accounts", "SELECT dincr_private.mail_secret_delete", "UPDATE"))
+                   for sql, _ in env.db.writes())
     _assert_other_account_untouched(env.db.state)
     _assert_writes_scoped(env.db)
 
@@ -755,3 +759,59 @@ def test_same_id_on_a_pending_account_must_finish_via_delete(env):
     _assert_pending_409(error)
     assert not any(call[0] == "ADMIN_GET" for call in env.supabase.calls)
     assert 42 in env.db.state["allowed_users"]
+
+
+# --- Fresh identities skip the refresh writes, never the checks -------------------
+
+def _recently_seen(env, minutes=1):
+    from datetime import datetime, timedelta, timezone
+    seen = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+    env.db.state["allowed_users"][42]["last_login_at"] = seen
+    env.db.state["accounts"][ACCOUNT_ID]["last_login_at"] = seen
+
+
+def test_a_bound_recent_identity_authenticates_without_writes(env):
+    _recently_seen(env)
+    identity = _login(env)
+    assert identity["account_id"] == ACCOUNT_ID
+    assert not [sql for sql, _ in env.db.writes() if sql.startswith(("UPDATE allowed_users", "UPDATE accounts"))]
+
+
+def test_the_fresh_path_still_rejects_another_auth_identity(env):
+    _recently_seen(env)
+    with pytest.raises(HTTPException) as rejected:
+        _login(env, auth_id=OTHER_AUTH_ID)
+    assert rejected.value.status_code in {401, 403}
+
+
+def test_an_old_login_still_writes_and_no_login_changes_the_role(env, monkeypatch):
+    """Login writes only the binding and last_login_at (backend/auth/owner_role.py): being
+    listed in OWNER_EMAILS neither forces a write nor promotes anyone."""
+    _recently_seen(env)
+    monkeypatch.setenv("OWNER_EMAILS", EMAIL)
+    _login(env)
+    assert env.db.state["allowed_users"][42]["role"] == "user"
+    assert not any(sql.startswith("UPDATE allowed_users") for sql, _ in env.db.writes())
+
+    env.db.log.clear()
+    _recently_seen(env, minutes=10)
+    _login(env)
+    assert any(sql.startswith("UPDATE allowed_users") for sql, _ in env.db.writes())
+    assert env.db.state["allowed_users"][42]["role"] == "user"
+
+
+def test_a_first_sign_in_that_loses_the_race_uses_the_winners_account(env, monkeypatch):
+    """Authentication runs in parallel: two first requests of a new user both try to create it."""
+    import psycopg2
+
+    winner = env.db.state["allowed_users"].pop(42)
+    winner_account = env.db.state["accounts"].pop(ACCOUNT_ID)
+
+    def created_by_the_other_request(conn, supabase_user):
+        env.db.state["allowed_users"][42] = winner
+        env.db.state["accounts"][ACCOUNT_ID] = winner_account
+        raise psycopg2.errors.UniqueViolation()
+
+    monkeypatch.setattr(auth_service, "_create_personal_account", created_by_the_other_request)
+    identity = _login(env)
+    assert identity["account_id"] == ACCOUNT_ID

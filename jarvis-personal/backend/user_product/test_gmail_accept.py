@@ -212,7 +212,9 @@ def test_legacy_users_id_is_rejected_by_allowed_users_foreign_key(db):
     candidate = db.state["candidates"][81]
     values = {key: candidate[key] for key in ("transaction_date", "description", "amount", "transaction_type", "category")}
     with pytest.raises(FakeDatabaseError) as error:
-        gmail_service._publish_confirmed_financial_input(connection, candidate, values, 5000, LEGACY_USER_ID)
+        gmail_service._publish_confirmed_financial_input(
+            connection, candidate, values, 5000, LEGACY_USER_ID, {"amount": values["amount"], "original_amount": None, "original_currency": None, "exchange_rate": None},
+        )
     assert error.value.pgcode == "23503"
 
 

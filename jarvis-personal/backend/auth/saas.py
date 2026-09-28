@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_user_id, get_current_workspace_id
 from backend.auth.plan_lifecycle import (
-    PLAN_RANK, clear_pending, pending_change, plan_after_entitlement_end, request_plan_change, store_plan,
+    PLAN_RANK, clear_pending, pending_change, plan_after_entitlement_end, request_plan_change,
 )
 from backend.core.database import get_connection
 from backend.core.i18n import tx
@@ -84,41 +84,8 @@ def _end_expired_courtesy(conn, account_id: str):
     }
 
 
-def _expire_unpaid_subscription(conn, account_id: str):
-    """Expire a finished paid period and return the account to Free."""
-    expired = conn.execute(
-        """UPDATE billing_subscriptions
-           SET status='expired',updated_at=NOW()
-           WHERE account_id=%s AND status='active'
-             AND current_period_end IS NOT NULL AND current_period_end<=NOW()
-           RETURNING plan_code,current_period_end""",
-        (account_id,),
-    ).fetchone()
-    if not expired:
-        return None
-    free = conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
-    if not free:
-        return None
-    conn.execute(
-        """UPDATE account_subscriptions
-           SET plan_id=%s,status='active',access_source='self_service',started_at=NOW(),
-               expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()
-           WHERE account_id=%s""",
-        (free["id"], account_id),
-    )
-    return {
-        "code": "subscription_expired",
-        "title": "Tu suscripción terminó",
-        "message": "Ahora estás en el plan Gratis. Las compras de Basic y VIP estarán disponibles más adelante en las tiendas oficiales.",
-        "previous_plan": expired.get("plan_code"),
-        "expired_at": expired.get("current_period_end"),
-    }
-
-
 def _subscription(conn, account_id: str):
-    notice = _expire_unpaid_subscription(conn, account_id)
-    if notice is None:
-        notice = _end_expired_courtesy(conn, account_id)
+    notice = _end_expired_courtesy(conn, account_id)
     row = conn.execute(
         """SELECT s.id, p.code AS plan, p.name AS plan_name,
                   CASE WHEN s.access_source='courtesy' AND s.expires_at IS NOT NULL AND s.expires_at<=NOW() THEN 'expired' ELSE s.status END AS status,
@@ -279,13 +246,7 @@ def select_plan(plan_code: str, accept_beta_terms: bool = False, consent_version
         if change or plan_code != "free":
             conn.commit()
         else:
-            # Nothing left of a paid period: Free applies now, under the same row locks.
-            from backend.product_ops.service import ensure_schema
-            ensure_schema(conn)
-            conn.execute("""UPDATE billing_subscriptions SET status='canceled',cancel_at_period_end=FALSE,updated_at=NOW()
-               WHERE account_id=%s AND status IN ('active','payment_pending','past_due')""", (account_id,))
-            conn.execute("""UPDATE billing_orders SET status='canceled',updated_at=NOW()
-               WHERE account_id=%s AND status='payment_pending'""", (account_id,))
+            # Nothing left of a courtesy: Free applies now, under the same row lock.
             plan = conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
             if not plan:
                 raise HTTPException(status_code=404, detail="Plan no disponible.")
@@ -331,9 +292,9 @@ def complete_onboarding(payload):
         if subscription_plan not in PLAN_COPY:
             raise HTTPException(status_code=409, detail="Seleccioná un plan primero.")
         if subscription_plan in {"basic", "vip"} and (sub or {}).get("access_source") == "self_service":
-            from backend.product_ops.service import has_active_payment
-            if not (has_active_payment(conn, account_id, subscription_plan) or store_plan(conn, account_id) == subscription_plan):
-                raise HTTPException(status_code=402, detail="El plan se activa únicamente después de confirmar el pago.")
+            from backend.product_ops.service import has_store_entitlement
+            if not has_store_entitlement(conn, account_id, subscription_plan):
+                raise HTTPException(status_code=402, detail="El plan se activa únicamente con una suscripción de App Store o Google Play.")
         if payload.income_type == "fixed" and payload.fixed_monthly_salary is None:
             raise HTTPException(status_code=422, detail="Indicá el salario que realmente te llega al mes.")
         if payload.income_type == "hourly" and (payload.hourly_rate is None or payload.hours_per_day is None):
@@ -384,11 +345,10 @@ def require_feature(feature_code: str):
         _activate_self_service_if_ready(conn, account_id)
         subscription = _subscription(conn, account_id)
         if subscription and subscription.get("access_source") == "self_service" and subscription.get("plan") in {"basic", "vip"}:
-            from backend.product_ops.service import has_active_payment
-            if not (has_active_payment(conn, account_id, subscription.get("plan"))
-                    or store_plan(conn, account_id) == subscription.get("plan")):
+            from backend.product_ops.service import has_store_entitlement
+            if not has_store_entitlement(conn, account_id, subscription.get("plan")):
                 conn.commit()
-                raise HTTPException(status_code=402, detail="Esta función requiere un pago confirmado.")
+                raise HTTPException(status_code=402, detail="Esta función requiere una suscripción activa de App Store o Google Play.")
         conn.commit()
         row = conn.execute(
             """SELECT 1 FROM account_subscriptions s

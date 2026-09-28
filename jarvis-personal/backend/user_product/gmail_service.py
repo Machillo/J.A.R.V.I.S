@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlencode
@@ -30,6 +31,7 @@ from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text, plain_text_from_html
 from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
+from backend.user_product.candidate_currency import native_money, transaction_amounts
 from backend.user_product.financial_identity import discover_candidate_account
 from backend.user_product.candidate_resolution import release_cross_source_duplicates, resolve_candidate, reevaluate_workspace_candidates
 from backend.user_product.mail_sync_analytics import observe_mail_sync
@@ -252,29 +254,32 @@ def _financial_user_id_for_account(account_id: str) -> int:
         return int(created["id"])
 
 
+# Mail refresh tokens live in Supabase Vault. The application role has no access to
+# Vault: it goes through dincr_private functions (migration 20260926149000) that
+# only handle DINCR mail tokens labelled with the account that owns them.
 def _vault_create(conn, token: str, account_id: str, provider: str = "Gmail") -> str:
     row = conn.execute(
-        "SELECT vault.create_secret(%s, NULL, %s) AS secret_id",
-        (token, f"DINCR {provider} refresh token for account {account_id}"),
+        "SELECT dincr_private.mail_secret_create(%s, %s::uuid, %s) AS secret_id",
+        (token, account_id, provider),
     ).fetchone()
     if not row or not row.get("secret_id"):
         raise RuntimeError("No se pudo proteger la autorización de Gmail.")
     return str(row["secret_id"])
 
 
-def _vault_read(conn, secret_id: str) -> str:
+def _vault_read(conn, secret_id: str, account_id: str) -> str:
     row = conn.execute(
-        "SELECT decrypted_secret FROM vault.decrypted_secrets WHERE id=%s::uuid",
-        (secret_id,),
+        "SELECT dincr_private.mail_secret_read(%s::uuid, %s::uuid) AS decrypted_secret",
+        (secret_id, account_id),
     ).fetchone()
     if not row or not row.get("decrypted_secret"):
         raise RuntimeError("La autorización de Gmail no está disponible.")
     return str(row["decrypted_secret"])
 
 
-def _vault_delete(conn, secret_id: str | None) -> None:
+def _vault_delete(conn, secret_id: str | None, account_id: str) -> None:
     if secret_id:
-        conn.execute("DELETE FROM vault.secrets WHERE id=%s::uuid", (secret_id,))
+        conn.execute("SELECT dincr_private.mail_secret_delete(ARRAY[%s::uuid], %s::uuid)", (secret_id, account_id))
 
 
 def _credentials(refresh_token: str):
@@ -301,7 +306,7 @@ def _mark_reconnect(connection_id: int, message: str = "Google solicitó reconec
         conn.execute(
             """UPDATE finva_gmail_connections
                SET status='reauthorization_required',last_error=%s,updated_at=NOW()
-               WHERE id=%s""",
+               WHERE id=%s AND status='active'""",
             (message, connection_id),
         )
         conn.commit()
@@ -369,7 +374,8 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
         rows = conn.execute(
             f"""SELECT m.id AS email_id,m.sender,m.subject,m.received_at,m.bank,m.status AS email_status,
                        m.parse_reason,c.id AS candidate_id,c.transaction_id,c.transaction_date,
-                       c.description,c.amount,c.currency,c.transaction_type,c.movement_direction,
+                       c.description,c.amount,c.currency,c.original_amount,c.original_currency,
+                       a.base_currency AS account_base_currency,c.transaction_type,c.movement_direction,
                        c.movement_kind,c.category,c.bank,c.source_account_label,
                        c.source_account_reference,c.destination_account_reference,c.counterparty,
                        c.parser_name,c.parser_version,c.extraction_method,c.confidence,
@@ -377,6 +383,7 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
                        c.source_type,c.source_provider,c.statement_document_id,
                        c.is_internal_transfer,c.related_candidate_id,c.resolution_reason
                 FROM finva_email_messages m
+                JOIN accounts a ON a.id=m.account_id
                 LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id
                 WHERE m.account_id=%s AND m.workspace_id=%s{status_filter}
                 ORDER BY COALESCE(m.received_at,m.created_at) DESC,m.id DESC
@@ -388,7 +395,8 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
     ]}
 
 
-def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any]) -> int:
+def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any], money: dict[str, Any]) -> int:
+    # `money` comes from candidate_currency.transaction_amounts: never the reviewed amount as is.
     category = normalize_category(values["category"], values["transaction_type"])
     source = "finva_statement" if candidate.get("source_type") == "statement" else "finva_gmail"
     note = (
@@ -399,14 +407,16 @@ def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[
     row = conn.execute(
         """INSERT INTO transactions(
                transaction_date,description,amount,transaction_type,category,account,source,notes,
-               user_id,workspace_id,financial_account_id,created_at
-           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) RETURNING id""",
+               user_id,workspace_id,financial_account_id,created_at,
+               original_amount,original_currency,exchange_rate
+           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s,%s,%s) RETURNING id""",
         (
-            values["transaction_date"], values["description"].strip(), values["amount"],
+            values["transaction_date"], values["description"].strip(), money["amount"],
             values["transaction_type"], category, candidate.get("bank") or "",
             source, note,
             int(candidate["legacy_user_id"]), candidate["workspace_id"],
             candidate.get("financial_account_id"),
+            money["original_amount"], money["original_currency"], money["exchange_rate"],
         ),
     ).fetchone()
     return int(row["id"])
@@ -414,6 +424,7 @@ def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[
 
 def _publish_confirmed_financial_input(
     conn, candidate: dict[str, Any], values: dict[str, Any], transaction_id: int, allowed_user_id: int,
+    money: dict[str, Any],
 ) -> None:
     """Publish the privacy-safe Phase 1 boundary in the same DB transaction.
 
@@ -429,8 +440,11 @@ def _publish_confirmed_financial_input(
     payload = {
         "transaction_id": transaction_id,
         "transaction_date": str(values["transaction_date"]),
-        "amount": float(values["amount"]),
-        "currency": str(candidate.get("currency") or "CRC"),
+        # What the transaction records: the base amount, plus the original when converted.
+        "amount": float(money["amount"]),
+        "currency": str(candidate.get("account_base_currency") or candidate.get("currency") or "CRC").upper(),
+        **({"original_amount": float(money["original_amount"]), "original_currency": money["original_currency"],
+            "exchange_rate": float(money["exchange_rate"])} if money["original_currency"] else {}),
         "transaction_type": str(values["transaction_type"]),
         "category": category,
         "financial_account_id": candidate.get("financial_account_id"),
@@ -461,7 +475,7 @@ def _publish_confirmed_financial_input(
             (
                 allowed_user_id, candidate["workspace_id"],
                 "Movimiento confirmado",
-                f"DINCR guardó {values['description'].strip()} por {float(values['amount']):,.2f} {payload['currency']}.",
+                f"DINCR guardó {values['description'].strip()} por {payload['amount']:,.2f} {payload['currency']}.",
                 str(transaction_id), f"financial-input-v1:{transaction_id}",
                 json.dumps({"event": "transaction_confirmed", "transaction_id": transaction_id}),
             ),
@@ -476,6 +490,19 @@ def _publish_confirmed_financial_input(
         conn.execute("RELEASE SAVEPOINT confirmed_input_notification")
 
 
+def _cents(value: Any) -> Decimal | None:
+    return None if value is None else Decimal(str(value)).quantize(Decimal("0.01"))
+
+
+def _corrected(key: str, value: Any, original: Any) -> bool:
+    # Amounts compare in cents; the stored date is read back as an ISO string.
+    if key == "amount":
+        return _cents(value) != _cents(original)
+    if key == "transaction_date":
+        return str(value)[:10] != str(original)[:10]
+    return value != original
+
+
 def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str, Any] | None = None) -> dict[str, Any]:
     if action not in {"accept", "reject"}:
         raise HTTPException(status_code=422, detail="Acción de revisión inválida.")
@@ -483,12 +510,13 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         candidate = conn.execute(
-            """SELECT c.*,g.legacy_user_id
+            """SELECT c.*,g.legacy_user_id,a.base_currency AS account_base_currency
                FROM finva_email_candidates c
                JOIN finva_email_messages m ON m.id=c.email_message_id
                JOIN finva_gmail_connections g ON g.id=m.connection_id
+               JOIN accounts a ON a.id=c.account_id
                WHERE c.id=%s AND c.account_id=%s AND c.workspace_id=%s
-               FOR UPDATE""",
+               FOR UPDATE OF c,m,g""",
             (candidate_id, account_id, workspace_id),
         ).fetchone()
         if not candidate:
@@ -535,34 +563,69 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             conn.commit()
             return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": None, "is_internal_transfer": True}
 
+        # The candidate is worth its native amount; a parser's converted amount is
+        # never trusted. Corrections are typed in that same currency.
+        corrections = dict(corrections or {})
+        exchange_rate = corrections.pop("exchange_rate", None)
+        native_currency, native_amount = native_money(candidate)
         values = {
             "transaction_date": candidate["transaction_date"],
             "description": candidate["description"],
-            "amount": candidate["amount"],
+            "amount": native_amount,
             "transaction_type": candidate["transaction_type"],
             "category": candidate["category"],
         }
-        if corrections:
-            values.update(corrections)
+        values.update(corrections)
+        # First: an invalid amount or rate is a 422 here, before anything else reads it.
+        money = transaction_amounts(native_currency, values["amount"], candidate.get("account_base_currency"), exchange_rate)
+        original = {**candidate, "amount": native_amount}
         corrected_fields = sorted(
-            key for key, value in (corrections or {}).items()
-            if value != candidate.get(key)
+            key for key, value in corrections.items()
+            if _corrected(key, value, original.get(key))
         )
-        transaction_id = _create_candidate_transaction(conn, candidate, values)
-        _publish_confirmed_financial_input(conn, candidate, values, transaction_id, get_current_user_id())
+        transaction_id = _create_candidate_transaction(conn, candidate, values, money)
+        _publish_confirmed_financial_input(conn, candidate, values, transaction_id, get_current_user_id(), money)
         category = normalize_category(values["category"], values["transaction_type"])
+        # A correction of a USD movement updates its original amount; the stored
+        # (matching-only) amount keeps its meaning.
+        from_original = native_currency != str(candidate.get("currency") or "CRC").upper()
+        candidate_amount = candidate["amount"] if from_original else values["amount"]
+        candidate_original = values["amount"] if from_original else candidate.get("original_amount")
         conn.execute(
             """UPDATE finva_email_candidates
-               SET transaction_id=%s,transaction_date=%s,description=%s,amount=%s,
+               SET transaction_id=%s,transaction_date=%s,description=%s,amount=%s,original_amount=%s,
                    transaction_type=%s,category=%s,status='confirmed',reviewed_at=NOW(),
                    corrected_fields=%s,updated_at=NOW()
                WHERE id=%s""",
-            (transaction_id, values["transaction_date"], values["description"].strip(), values["amount"],
-             values["transaction_type"], category, corrected_fields, candidate_id),
+            (transaction_id, values["transaction_date"], values["description"].strip(), candidate_amount,
+             candidate_original, values["transaction_type"], category, corrected_fields, candidate_id),
         )
         conn.execute("UPDATE finva_email_messages SET status='confirmed' WHERE id=%s", (candidate["email_message_id"],))
         conn.commit()
     return {"status": "confirmed", "candidate_id": candidate_id, "transaction_id": transaction_id}
+
+
+def _google_subject(access_token: str | None, client_id: str) -> str | None:
+    """The Google account id (``sub``) of a token DINCR just received, without the openid scope.
+
+    Google's tokeninfo reports it for the access token; it is accepted only when
+    the token was issued to DINCR's own client. When Google does not return it,
+    the mailbox is identified by its canonical address instead (mail_oauth.mailbox_key).
+    """
+    if not access_token:
+        return None
+    try:
+        response = requests.post("https://oauth2.googleapis.com/tokeninfo", data={"access_token": access_token}, timeout=10)
+        info = response.json() if response.status_code == 200 else {}
+    except (requests.RequestException, ValueError):
+        return None
+    if client_id not in (info.get("aud"), info.get("azp")):
+        return None
+    subject = str(info.get("sub") or "").strip()
+    if not subject.isdigit():
+        logger.info("Gmail identity fallback: Google returned no account id; the address identifies the mailbox")
+        return None
+    return subject
 
 
 def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
@@ -576,7 +639,8 @@ def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
         "response_type": "code",
         "scope": GMAIL_SCOPE,
         "access_type": "offline",
-        "include_granted_scopes": "true",
+        # No include_granted_scopes: the Gmail token carries exactly gmail.readonly,
+        # never scopes granted earlier to this client (for example Google sign-in).
         "prompt": "consent select_account",
         "state": state,
         "code_challenge": code_challenge,
@@ -623,6 +687,11 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
         logger.warning("Gmail token exchange failed status=%s", response.status_code)
         return failed("exchange_failed")
     tokens = response.json()
+    # Granular consent: the user can untick the Gmail permission and still return a
+    # code. Such a grant is never stored. It is not revoked either: revoking any token
+    # of this client revokes the user's whole grant to it, including other mailboxes'.
+    if GMAIL_SCOPE not in str(tokens.get("scope") or "").split():
+        return failed("permission_missing")
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:
         return failed("missing_refresh_token")
@@ -634,10 +703,12 @@ def finish_gmail_connection(code: str | None, state: str | None, error: str | No
     google_email = str(profile.get("emailAddress") or "").strip().lower()
     if not google_email:
         return failed("profile_failed")
+    subject = _google_subject(tokens.get("access_token"), client_id)
 
     with get_connection() as conn:
         secret_id = _vault_create(conn, refresh_token, account_id)
-        completion = mail_oauth.authorize_flow(conn, flow["id"], secret_id=secret_id, mailbox=google_email, scopes=[GMAIL_SCOPE])
+        completion = mail_oauth.authorize_flow(conn, flow["id"], secret_id=secret_id, mailbox=google_email,
+                                               scopes=[GMAIL_SCOPE], subject=subject)
         conn.commit()
     return RedirectResponse(_return_url("authorized", flow=str(flow["id"]), completion=completion), status_code=302)
 
@@ -650,12 +721,18 @@ def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) ->
     # Recheck at completion so a downgrade after consent cannot attach a mailbox.
     if not _has_active_vip_access(conn, account_id):
         raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
-    google_email = str(flow["mailbox_address"])
+    google_email = str(flow["mailbox_address"]).strip().lower()  # display only
+    email = mail_oauth.mailbox_email("gmail", google_email)
+    key = mail_oauth.mailbox_key("gmail", google_email, flow.get("provider_subject"))
     secret_id = str(flow["pending_secret_id"])
+    mail_oauth.claim_mailbox(conn, provider="gmail", account_id=account_id, workspace_id=workspace_id,
+                             key=key, email=email, display=google_email, is_entitled=_has_active_vip_access)
     current = conn.execute(
         """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
-           WHERE account_id=%s AND workspace_id=%s AND lower(google_email)=%s FOR UPDATE""",
-        (account_id, workspace_id, google_email),
+           WHERE account_id=%s AND workspace_id=%s
+             AND (mailbox_key=%s OR mailbox_email=%s OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s))
+           ORDER BY (status<>'disabled') DESC, id LIMIT 1 FOR UPDATE""",
+        (account_id, workspace_id, key, email, google_email),
     ).fetchone()
     if current and "Mail.Read" in (current.get("granted_scopes") or []):
         raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
@@ -664,27 +741,29 @@ def _attach_gmail_connection(conn, flow: dict[str, Any], legacy_user_id: int) ->
         row = conn.execute(
             """UPDATE finva_gmail_connections SET
                legacy_user_id=%s,refresh_token_secret_id=%s::uuid,granted_scopes=%s,
+               google_email=%s,mailbox_email=%s,mailbox_key=%s,provider_subject=%s,
                status='active',last_error=NULL,history_id=NULL,watch_expiration=NULL,
                import_scope=%s,import_since=%s,
                initial_scan_page_token=CASE WHEN %s THEN NULL ELSE initial_scan_page_token END,
                initial_scan_completed_at=CASE WHEN %s THEN NULL ELSE initial_scan_completed_at END,
                connected_at=NOW(),updated_at=NOW() WHERE id=%s RETURNING id""",
-            (legacy_user_id, secret_id, [GMAIL_SCOPE], window["import_scope"], window["import_since"],
+            (legacy_user_id, secret_id, [GMAIL_SCOPE], google_email, email, key, flow.get("provider_subject"),
+             window["import_scope"], window["import_since"],
              window["restart_scan"], window["restart_scan"], current["id"]),
         ).fetchone()
     else:
         row = conn.execute(
             """INSERT INTO finva_gmail_connections(
-               account_id,workspace_id,legacy_user_id,google_email,refresh_token_secret_id,
-               granted_scopes,import_scope,import_since,status,connected_at,updated_at
-           ) VALUES(%s,%s,%s,%s,%s::uuid,%s,%s,%s,'active',NOW(),NOW())
+               account_id,workspace_id,legacy_user_id,google_email,mailbox_email,mailbox_key,provider_subject,
+               refresh_token_secret_id,granted_scopes,import_scope,import_since,status,connected_at,updated_at
+           ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s::uuid,%s,%s,%s,'active',NOW(),NOW())
            RETURNING id""",
-            (account_id, workspace_id, legacy_user_id, google_email, secret_id, [GMAIL_SCOPE],
-             window["import_scope"], window["import_since"]),
+            (account_id, workspace_id, legacy_user_id, google_email, email, key, flow.get("provider_subject"),
+             secret_id, [GMAIL_SCOPE], window["import_scope"], window["import_since"]),
         ).fetchone()
     old_secret = (current or {}).get("refresh_token_secret_id")
     if old_secret and str(old_secret) != secret_id:
-        _vault_delete(conn, str(old_secret))
+        _vault_delete(conn, str(old_secret), account_id)
     return int(row["id"])
 
 
@@ -712,7 +791,7 @@ def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
             return {"status": "disconnected"}
         if GMAIL_SCOPE in (row.get("granted_scopes") or []):
             try:
-                token = _vault_read(conn, str(row["refresh_token_secret_id"]))
+                token = _vault_read(conn, str(row["refresh_token_secret_id"]), account_id)
                 requests.post("https://oauth2.googleapis.com/revoke", params={"token": token}, timeout=10)
             except Exception:
                 # Best effort: the local secret is deleted anyway; never log the token.
@@ -724,7 +803,7 @@ def disconnect_gmail(connection_id: int | None = None) -> dict[str, str]:
                WHERE id=%s""",
             (int(row["id"]),),
         )
-        _vault_delete(conn, str(row["refresh_token_secret_id"]))
+        _vault_delete(conn, str(row["refresh_token_secret_id"]), account_id)
         conn.commit()
     return {"status": "disconnected"}
 
@@ -833,8 +912,11 @@ def _process_message(service, connection: dict[str, Any], message_id: str) -> st
 INGEST_FAILED_REASON = "No se pudo procesar este aviso. Quedó registrado y se reintenta si vuelve a aparecer en una sincronización."
 # SQLSTATE classes of conditions that pass on their own: connection (08), transaction
 # rollback such as deadlock or serialization (40), resources (53), cancel or
-# shutdown (57), lock not available (55).
+# shutdown (57), lock not available (55). Insufficient privilege (42501) is not the
+# message's fault either: a missing grant of the application role must stop the
+# sync and keep the cursor, never mark every message of a scan as failed.
 _TRANSIENT_SQLSTATE_CLASSES = frozenset({"08", "40", "53", "55", "57"})
+_TRANSIENT_SQLSTATES = frozenset({"42501"})
 
 
 def _is_transient_failure(exc: BaseException) -> bool:
@@ -843,7 +925,8 @@ def _is_transient_failure(exc: BaseException) -> bool:
 
     if isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError, DatabaseConfigError)):
         return True
-    return str(getattr(exc, "pgcode", "") or "")[:2] in _TRANSIENT_SQLSTATE_CLASSES
+    code = str(getattr(exc, "pgcode", "") or "")
+    return code[:2] in _TRANSIENT_SQLSTATE_CLASSES or code in _TRANSIENT_SQLSTATES
 
 
 def _ingest_message(
@@ -1075,7 +1158,7 @@ def _connection_with_token(connection_id: int) -> tuple[dict[str, Any], str]:
                 status_code=403,
                 detail="La automatización de Gmail está disponible únicamente en el plan VIP.",
             )
-        token = _vault_read(conn, str(row["refresh_token_secret_id"]))
+        token = _vault_read(conn, str(row["refresh_token_secret_id"]), str(row["account_id"]))
     return dict(row), token
 
 
@@ -1110,7 +1193,7 @@ def _run_sync_connection(connection_id: int, service=None, max_results: int = 10
             raise HTTPException(status_code=409, detail="La conexión de Gmail venció. Volvé a autorizarla desde DINCR.") from exc
         with get_connection() as conn:
             conn.execute(
-                "UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_error=%s,updated_at=NOW() WHERE id=%s",
+                "UPDATE finva_gmail_connections SET last_sync_at=NOW(),last_error=%s,updated_at=NOW() WHERE id=%s AND status<>'disabled'",
                 ("No se pudo completar la sincronización.", connection_id),
             )
             conn.commit()
@@ -1127,7 +1210,7 @@ def _run_sync_connection(connection_id: int, service=None, max_results: int = 10
                    initial_scan_page_token=CASE WHEN %s AND import_since IS NOT DISTINCT FROM %s::date THEN %s ELSE initial_scan_page_token END,
                    initial_scan_completed_at=CASE WHEN %s AND %s IS NULL AND import_since IS NOT DISTINCT FROM %s::date THEN NOW() ELSE initial_scan_completed_at END,
                    updated_at=NOW()
-               WHERE id=%s""",
+               WHERE id=%s AND status<>'disabled'""",
             (initial_sync, initial_sync, started_since, next_initial_page,
              initial_sync, next_initial_page, started_since, connection_id),
         )
@@ -1195,7 +1278,7 @@ def _start_watch(connection_id: int, service, suppress_errors: bool = False) -> 
         with get_connection() as conn:
             conn.execute(
                 """UPDATE finva_gmail_connections SET history_id=%s,watch_expiration=%s,
-                          last_error=NULL,updated_at=NOW() WHERE id=%s""",
+                          last_error=NULL,updated_at=NOW() WHERE id=%s AND status<>'disabled'""",
                 (str(response.get("historyId") or ""), expiration, connection_id),
             )
             conn.commit()
@@ -1226,7 +1309,7 @@ def end_unentitled_mail_connections(conn) -> int:
         secret_id = str(row["refresh_token_secret_id"]) if row.get("refresh_token_secret_id") else None
         if secret_id and GMAIL_SCOPE in (row.get("granted_scopes") or []):
             try:
-                token = _vault_read(conn, secret_id)
+                token = _vault_read(conn, secret_id, str(row["account_id"]))
                 requests.post("https://oauth2.googleapis.com/revoke", data={"token": token}, timeout=10)
             except Exception:
                 logger.warning("Gmail token revocation failed when a plan ended")
@@ -1237,7 +1320,7 @@ def end_unentitled_mail_connections(conn) -> int:
                WHERE id=%s""",
             (MAIL_ACCESS_ENDED, int(row["id"])),
         )
-        _vault_delete(conn, secret_id)
+        _vault_delete(conn, secret_id, str(row["account_id"]))
         ended += 1
     return ended
 

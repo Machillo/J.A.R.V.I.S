@@ -67,7 +67,8 @@ assert.match(users, /if \(bankId && !institutions\.some\(\(entry\) => entry\.ban
 assert.match(users, /accountsView && gmail\?\.needs_reauthorization/);
 // Amounts keep their own currency (CRC and USD are never mixed).
 assert.match(users, /currency: String\(currency \|\| ""\)\.toUpperCase\(\) === "USD" \? "USD" : "CRC"/);
-assert.match(users, /<b>\{money\(item\.amount, item\.currency\)\}<\/b>/);
+// A USD movement shows its USD amount, not the parser's converted colones (test-mail-currency.mjs).
+assert.match(users, /<b>\{money\(nativeMoney\(item\)\.amount, nativeMoney\(item\)\.currency\)\}<\/b>/);
 assert.match(read("src/products/finva/features/hubs/FinvaHubs.jsx"), /if \(plan === "vip"\) account\.splice\(1, 0,\s*item\(navigate, "accounts",/);
 
 console.log("Bank accounts checks passed.");
