@@ -487,8 +487,8 @@ def has_store_entitlement(conn, account_id: str, plan_code: str | None = None) -
     """A paid plan is active only through a verified App Store / Google Play subscription.
 
     Live means trialing until ``trial_ends_at``, or active / in grace until
-    ``current_period_end``. A grace period that extends past the period end needs
-    its own stored end from the store (tracked with the store verification work).
+    ``current_period_end``. The store verification writer (``store_state``) stores the
+    grace end in ``current_period_end`` while in grace, so this stays the only reader.
     """
     if not tables_exist(conn, ["store_subscriptions"]):
         return False

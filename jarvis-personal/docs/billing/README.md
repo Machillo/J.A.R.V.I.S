@@ -6,11 +6,11 @@
 
 - **A store subscription** in `store_subscriptions` from a real store (`apple` or `google`) while it is `trialing` (until `trial_ends_at`), `active` or `grace_period` (until `current_period_end`). See `product_ops.service.has_store_entitlement`.
   - `sandbox` rows come from the Owner-only QA simulator and **never** grant access.
-  - Known gap, tracked with the store verification work: real store grace periods run *after* `current_period_end`, so they need their own stored end.
+  - Grace periods: the store verification writer (`product_ops/store_state.py`) stores the grace end in `current_period_end` while in grace (the store's own end is kept in `grace_ends_at`); see `store-verification.md`.
 - **A courtesy** (`account_subscriptions.access_source = 'courtesy'`), such as the launch promotion, until its `expires_at`. When the promotion ends, the account keeps the plan only if a live store subscription backs it; otherwise it returns to Free.
 - **Owner** is internal and never purchasable.
 
-Nothing else grants a paid plan. Until server-side store verification ships, `create_checkout` answers 503 outside the promotion rather than issuing any other kind of order.
+Nothing else grants a paid plan. Until server-side store verification ships, `create_checkout` answers 503 outside the promotion rather than issuing any other kind of order. Store verification itself is off until `DINCR_STORE_VERIFICATION_ENABLED=1`, which is set only after its two migrations; see `store-verification.md` → Rollout.
 
 ## Retired off-store schema
 
