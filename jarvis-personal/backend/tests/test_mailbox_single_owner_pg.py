@@ -21,13 +21,14 @@ from backend.user_product import mail_oauth  # noqa: E402
 ROOT = Path(__file__).resolve().parents[2] / "database"
 MIGRATION = ROOT / "migrations" / "20260926110000_mailbox_single_owner.sql"
 ROLLBACK = ROOT / "rollback" / "20260926110000_mailbox_single_owner_rollback.sql"
+# Tokens go through the production Vault boundary (dincr_private), on a synthetic Vault.
+VAULT_STUB = Path(__file__).resolve().parent / "fixtures" / "vault_stub.sql"
+BOUNDARY = ROOT / "migrations" / "20260926149000_mail_secret_boundary.sql"
 SCHEMA = """
 DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-CREATE SCHEMA vault;
-CREATE TABLE vault.secrets (id UUID PRIMARY KEY);
 CREATE TABLE accounts (id UUID PRIMARY KEY);
-CREATE TABLE mail_oauth_flows (id UUID PRIMARY KEY, mailbox_address TEXT);
+CREATE TABLE mail_oauth_flows (id UUID PRIMARY KEY, account_id UUID, pending_secret_id UUID, mailbox_address TEXT);
 CREATE TABLE finva_gmail_connections (
     id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL, workspace_id UUID NOT NULL,
     google_email TEXT NOT NULL, refresh_token_secret_id UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -54,6 +55,8 @@ def db(tmp_path, monkeypatch):
     conn.autocommit = True
     cur = conn.cursor()
     cur.execute(SCHEMA)
+    cur.execute(VAULT_STUB.read_text(encoding="utf-8"))
+    cur.execute(BOUNDARY.read_text(encoding="utf-8"))
     monkeypatch.setattr(database, "DATABASE_URL", uri)
     yield {"cur": cur, "uri": uri}
     conn.close()
@@ -165,9 +168,10 @@ def test_a_stale_mailbox_is_taken_over_once_even_by_concurrent_claims(db):
     """Two accounts complete a real consent for a stale mailbox at once: exactly one takes it over."""
     cur = db["cur"]
     cur.execute(MIGRATION.read_text(encoding="utf-8"))
-    secret = str(uuid.uuid4())
-    cur.execute("INSERT INTO vault.secrets VALUES (%s)", (secret,))
-    stale_account, stale_id = _insert(cur, "shared@example.com", "reauthorization_required", secret=secret)
+    stale_account, stale_id = _insert(cur, "shared@example.com", "reauthorization_required")
+    # The stale token belongs to the stale account: the boundary deletes it only on that account's behalf.
+    cur.execute("SELECT dincr_private.mail_secret_create('synthetic-token', %s::uuid, 'Gmail')", (stale_account,))
+    cur.execute("UPDATE finva_gmail_connections SET refresh_token_secret_id = %s WHERE id = %s", (cur.fetchone()[0], stale_id))
     claimants = [(str(uuid.uuid4()), str(uuid.uuid4())) for _ in range(2)]
     for claimant, _workspace in claimants:
         cur.execute("INSERT INTO accounts VALUES (%s)", (claimant,))
@@ -200,6 +204,39 @@ def test_a_stale_mailbox_is_taken_over_once_even_by_concurrent_claims(db):
     assert cur.fetchone() == (0,)  # the stale token is deleted, never handed over
     cur.execute("SELECT previous_connection_id, previous_account_id::text, reason FROM mail_connection_takeovers")
     assert cur.fetchall() == [(stale_id, stale_account, "access_lost")]
+
+
+@pytest.mark.parametrize(("status", "outcome"), [("reauthorization_required", "taken_over"), ("active", "refused")])
+def test_a_backfilled_mailbox_is_found_by_address_when_the_new_consent_carries_the_provider_id(db, status, outcome):
+    """A row backfilled as 'email:...' and a new consent identified by 'google:<sub>' are the same mailbox.
+
+    The claim must match on the address as well as on the identity, on real SQL: otherwise a
+    stale legacy connection is never taken over and a live one is refused only by the index.
+    """
+    cur = db["cur"]
+    _legacy_insert(cur, "Legacy.Owner+bank@gmail.com", status=status)
+    cur.execute("INSERT INTO accounts SELECT account_id FROM finva_gmail_connections")  # as in production (FK)
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    cur.execute("SELECT id, mailbox_key FROM finva_gmail_connections")
+    legacy_id, legacy_key = cur.fetchone()
+    assert legacy_key == "email:gmail:legacyowner@gmail.com"
+    claimant, workspace = str(uuid.uuid4()), str(uuid.uuid4())
+    cur.execute("INSERT INTO accounts VALUES (%s)", (claimant,))
+    email = mail_oauth.mailbox_email("gmail", "legacyowner@googlemail.com")
+    try:
+        with database.get_connection() as conn:
+            mail_oauth.claim_mailbox(conn, provider="gmail", account_id=claimant, workspace_id=workspace,
+                                     key=mail_oauth.mailbox_key("gmail", "legacyowner@googlemail.com", "108"),
+                                     email=email, display="legacyowner@googlemail.com",
+                                     is_entitled=lambda _conn, _account: True)
+            conn.commit()
+        result = "taken_over"
+    except HTTPException as refused:
+        assert refused.status_code == 409 and refused.detail == mail_oauth.MAILBOX_UNAVAILABLE
+        result = "refused"
+    assert result == outcome
+    cur.execute("SELECT status FROM finva_gmail_connections WHERE id = %s", (legacy_id,))
+    assert cur.fetchone() == ("disabled" if outcome == "taken_over" else status,)
 
 
 def test_the_rollback_restores_the_previous_schema(db):

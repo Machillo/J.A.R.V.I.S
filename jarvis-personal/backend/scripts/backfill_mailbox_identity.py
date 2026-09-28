@@ -70,7 +70,8 @@ def _resolver(conn, *, apply: bool) -> Callable[[dict], str | None]:
         if provider is None or (provider == "microsoft" and not apply):
             return None
         try:
-            refresh_token = gmail_service._vault_read(conn, str(row["refresh_token_secret_id"]))
+            # The token is read through the Vault boundary on behalf of the account that owns it.
+            refresh_token = gmail_service._vault_read(conn, str(row["refresh_token_secret_id"]), str(row["account_id"]))
             if provider == "gmail":
                 client_id, client_secret, _ = gmail_service._google_config()
                 response = gmail_service.requests.post("https://oauth2.googleapis.com/token", data={
