@@ -1066,122 +1066,6 @@ body:has(.users-app) { background: #0b132b; }
   line-height: 1.45;
 }
 .users-app .plan-payment-notice svg { color: var(--accent); }
-.users-app .pending-payment-card {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 11px;
-  align-items: center;
-  margin-top: 12px;
-  padding: 13px;
-  border: 1px solid rgba(251,191,36,.2);
-  border-radius: 18px;
-  background: linear-gradient(145deg,rgba(52,43,20,.8),rgba(20,28,46,.94));
-}
-.users-app .pending-payment-icon {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 13px;
-  color: var(--gold);
-  background: rgba(251,191,36,.1);
-}
-.users-app .pending-payment-card strong,
-.users-app .pending-payment-card small { display:block; }
-.users-app .pending-payment-card small { margin-top:3px; color:var(--muted); font-size:.7rem; }
-.users-app .pending-payment-card button,
-.users-app .sinpe-payment-data button {
-  min-height: 38px;
-  padding: 0 11px;
-  border: 1px solid rgba(20,184,166,.22);
-  border-radius: 12px;
-  background: rgba(20,184,166,.1);
-  color: var(--text);
-  font-weight: 730;
-}
-.users-app .payment-dialog { max-height:min(90dvh,760px); overflow-y:auto; }
-.users-app .sinpe-payment-data { display:grid; gap:8px; margin:14px 0; }
-.users-app .sinpe-payment-data > div {
-  display:grid;
-  grid-template-columns:1fr auto;
-  gap:5px 10px;
-  align-items:center;
-  padding:12px 13px;
-  border:1px solid rgba(148,163,184,.14);
-  border-radius:15px;
-  background:rgba(255,255,255,.035);
-}
-.users-app .sinpe-payment-data span { color:var(--muted); font-size:.69rem; }
-.users-app .sinpe-payment-data strong { font-size:.95rem; overflow-wrap:anywhere; }
-.users-app .sinpe-payment-data button { grid-column:2; grid-row:1 / span 2; display:inline-flex; align-items:center; gap:6px; }
-.users-app .payment-code-row strong { color:var(--accent); letter-spacing:.08em; }
-.users-app .payment-expiry-note { display:block; margin:-5px 1px 13px; color:var(--muted); font-size:.68rem; }
-.users-app .receipt-upload-field {
-  position:relative;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:9px;
-  min-height:49px;
-  padding:10px 14px;
-  border:1px dashed rgba(20,184,166,.38);
-  border-radius:15px;
-  color:var(--muted-2);
-  background:rgba(20,184,166,.055);
-  font-weight:680;
-  text-align:center;
-}
-.users-app .native-receipt-input {
-  display:block;
-  width:100%;
-  min-height:49px;
-  padding:6px;
-  border:1px solid rgba(20,184,166,.38);
-  border-top:0;
-  border-radius:0 0 15px 15px;
-  background:rgba(20,184,166,.075);
-  color:var(--muted-2);
-  font:inherit;
-  font-size:.72rem;
-}
-.users-app .native-receipt-input::file-selector-button {
-  min-height:36px;
-  margin-right:8px;
-  padding:0 11px;
-  border:0;
-  border-radius:10px;
-  background:var(--primary);
-  color:#fff;
-  font:inherit;
-  font-weight:740;
-}
-.users-app .native-receipt-picker-button {
-  width:100%;
-  min-height:49px;
-  padding:0 14px;
-  border:1px solid rgba(20,184,166,.38);
-  border-top:0;
-  border-radius:0 0 15px 15px;
-  background:var(--primary);
-  color:#fff;
-  font-weight:760;
-}
-.users-app .receipt-upload-field { min-height:42px; border-radius:15px 15px 0 0; border-bottom-color:rgba(20,184,166,.18); overflow-wrap:anywhere; }
-.users-app .payment-submit-button {
-  width:100%;
-  min-height:50px;
-  margin-top:12px;
-  border:0;
-  border-radius:15px;
-  background:linear-gradient(145deg,#14b8a6,#0d9488);
-  color:white;
-  font-weight:790;
-}
-.users-app .payment-submit-button:disabled { opacity:.42; }
-.users-app .payment-waiting-state { display:grid; justify-items:center; gap:9px; padding:20px 4px 7px; text-align:center; }
-.users-app .payment-waiting-state svg { color:var(--success); }
-.users-app .payment-waiting-state p { margin:0; color:var(--muted-2); line-height:1.48; }
-.users-app .payment-waiting-state small { color:var(--muted); line-height:1.42; }
 
 /* Keep Android WebView/autofill from painting unreadable native fields. */
 .users-app:not(.native-plan--vip) input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
@@ -1233,13 +1117,6 @@ body:has(.users-app) { background: #0b132b; }
 }
 .users-app .goals-segmented button.active { background:rgba(20,184,166,.17); color:#ccfbf1; }
 .users-app .savings-plan-card progress { accent-color:#34d399; }
-
-@media (max-width:390px) {
-  .users-app .pending-payment-card { grid-template-columns:auto 1fr; }
-  .users-app .pending-payment-card > button { grid-column:1 / -1; width:100%; }
-  .users-app .sinpe-payment-data > div { grid-template-columns:1fr; }
-  .users-app .sinpe-payment-data button { grid-column:1; grid-row:auto; width:100%; justify-content:center; }
-}
 
 /* Accessibility: large Android/iOS text must never hide actions or content. */
 html:has(.users-app),
@@ -1303,13 +1180,7 @@ body:has(.users-app),
   .users-app .situation-edit { grid-column: 1 / -1; justify-content: center; width: 100%; }
 }
 
-:where(html[data-color-mode-resolved="light"]) .users-app .plan-payment-notice,
-:where(html[data-color-mode-resolved="light"]) .users-app .pending-payment-card,
-:where(html[data-color-mode-resolved="light"]) .users-app .sinpe-payment-data > div,
-:where(html[data-color-mode-resolved="light"]) .users-app .receipt-upload-field { background:#f0fdfa; color:#334155;}
-:where(html[data-color-mode-resolved="light"]) .users-app .pending-payment-card { background:linear-gradient(145deg,#fffbeb,#ffffff);}
-:where(html[data-color-mode-resolved="light"]) .users-app .pending-payment-card button,
-:where(html[data-color-mode-resolved="light"]) .users-app .sinpe-payment-data button { color:#0f172a;}
+:where(html[data-color-mode-resolved="light"]) .users-app .plan-payment-notice { background:#f0fdfa; color:#334155;}
 .users-app .gmail-privacy-note {
   display: flex;
   align-items: flex-start;

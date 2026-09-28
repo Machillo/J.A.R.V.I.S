@@ -33,10 +33,13 @@ def resolve_personal_workspace_context(conn, legacy_allowed_user_id: int) -> dic
          AND wm.account_id = a.id
         WHERE a.legacy_allowed_user_id = %s
         LIMIT 1
+        FOR SHARE OF a
         """,
         (legacy_allowed_user_id,),
     ).fetchone()
 
+    # FOR SHARE: a request authenticating while its account is being deleted waits
+    # for the deletion (which holds the row FOR UPDATE) instead of running against it.
     if not row:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -81,7 +84,6 @@ def sync_account_auth_identity(
     *,
     legacy_allowed_user_id: int,
     supabase_user_id: str,
-    effective_role: str,
 ) -> int:
     """Mantiene accounts sincronizada mientras allowed_users sigue en compatibilidad.
 
@@ -94,13 +96,12 @@ def sync_account_auth_identity(
         """
         UPDATE accounts
         SET supabase_user_id = %s::uuid,
-            role = %s,
             last_login_at = NOW(),
             updated_at = NOW()
         WHERE legacy_allowed_user_id = %s
           AND (supabase_user_id IS NULL OR supabase_user_id = %s::uuid)
         RETURNING id
         """,
-        (supabase_user_id, effective_role, legacy_allowed_user_id, supabase_user_id),
+        (supabase_user_id, legacy_allowed_user_id, supabase_user_id),
     ).fetchall()
     return len(rows or [])
