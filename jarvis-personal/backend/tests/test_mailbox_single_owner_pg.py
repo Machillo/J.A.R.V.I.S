@@ -1,0 +1,359 @@
+"""One live connection per mailbox, enforced by PostgreSQL, and the stale takeover on real rows.
+
+Skipped when the embedded server (pgserver) is not installed.
+"""
+from __future__ import annotations
+
+import os
+import threading
+import uuid
+from pathlib import Path
+
+import pytest
+from fastapi import HTTPException
+
+pgserver = pytest.importorskip("pgserver")
+psycopg2 = pytest.importorskip("psycopg2")
+
+from backend.core import database  # noqa: E402
+from backend.user_product import mail_oauth  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2] / "database"
+MIGRATION = ROOT / "migrations" / "20260926110000_mailbox_single_owner.sql"
+ROLLBACK = ROOT / "rollback" / "20260926110000_mailbox_single_owner_rollback.sql"
+# Tokens go through the production Vault boundary (dincr_private), on a synthetic Vault.
+VAULT_STUB = Path(__file__).resolve().parent / "fixtures" / "vault_stub.sql"
+BOUNDARY = ROOT / "migrations" / "20260926149000_mail_secret_boundary.sql"
+SCHEMA = """
+DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE TABLE accounts (id UUID PRIMARY KEY);
+CREATE TABLE mail_oauth_flows (id UUID PRIMARY KEY, account_id UUID, pending_secret_id UUID, mailbox_address TEXT);
+CREATE TABLE finva_gmail_connections (
+    id BIGSERIAL PRIMARY KEY, account_id UUID NOT NULL, workspace_id UUID NOT NULL,
+    google_email TEXT NOT NULL, refresh_token_secret_id UUID NOT NULL DEFAULT gen_random_uuid(),
+    granted_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'reauthorization_required', 'disabled')),
+    history_id TEXT, watch_expiration TIMESTAMPTZ, initial_scan_page_token TEXT, last_error TEXT,
+    updated_at TIMESTAMPTZ,
+    UNIQUE (workspace_id, google_email));
+CREATE UNIQUE INDEX finva_gmail_connections_account_email_key ON finva_gmail_connections(account_id, lower(google_email));
+"""
+SAMPLES = ["A.B+x@GMAIL.com", " ab.c@googlemail.com ", "First.Last@Outlook.com", "x+y@example.com", "plain"]
+
+
+@pytest.fixture
+def db(tmp_path, monkeypatch):
+    server = pgserver.get_server(str(os.environ.get("DINCR_PGSERVER_DIR") or tmp_path / "pg"), cleanup_mode="stop")
+    admin = psycopg2.connect(server.get_uri())
+    admin.autocommit = True
+    name = f"mailbox_{os.getpid()}_{abs(hash(str(tmp_path))) % 10**8}"
+    with admin.cursor() as c:
+        c.execute(f"CREATE DATABASE {name}")
+    uri = server.get_uri(name)
+    conn = psycopg2.connect(uri)
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute(SCHEMA)
+    cur.execute(VAULT_STUB.read_text(encoding="utf-8"))
+    cur.execute(BOUNDARY.read_text(encoding="utf-8"))
+    monkeypatch.setattr(database, "DATABASE_URL", uri)
+    yield {"cur": cur, "uri": uri}
+    conn.close()
+    with admin.cursor() as c:
+        c.execute(f"DROP DATABASE {name} WITH (FORCE)")
+    admin.close()
+
+
+SCOPES = {"gmail": ["https://www.googleapis.com/auth/gmail.readonly"], "microsoft": ["Mail.Read"]}
+
+
+def _legacy_insert(cur, email, status="active", provider="gmail"):
+    """A row as written by the code before this migration (no identity columns)."""
+    cur.execute("""INSERT INTO finva_gmail_connections(account_id, workspace_id, google_email, status, granted_scopes)
+                   VALUES (%s, %s, %s, %s, %s)""", (str(uuid.uuid4()), str(uuid.uuid4()), email, status, SCOPES[provider]))
+
+
+def _insert(cur, email, status="active", key=None, secret=None, provider="gmail"):
+    """A row as written by the new code."""
+    account = str(uuid.uuid4())
+    cur.execute("INSERT INTO accounts VALUES (%s)", (account,))
+    cur.execute("""INSERT INTO finva_gmail_connections(account_id, workspace_id, google_email, mailbox_email, mailbox_key,
+                   refresh_token_secret_id, status, granted_scopes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (account, str(uuid.uuid4()), email, mail_oauth.mailbox_email(provider, email),
+                 key or mail_oauth.mailbox_key(provider, email), secret or str(uuid.uuid4()), status, SCOPES[provider]))
+    return account, cur.fetchone()[0]
+
+
+def _postflight():
+    return "\n".join(line[3:] for line in MIGRATION.read_text(encoding="utf-8").split("-- Postflight (read-only)")[-1].splitlines()[1:]
+                     if line.startswith("-- "))
+
+
+def test_the_backfill_matches_the_application_rule(db):
+    cur = db["cur"]
+    for sample in SAMPLES:
+        for provider in SCOPES:
+            _legacy_insert(cur, sample, status="disabled", provider=provider)
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    cur.execute("""SELECT google_email, mailbox_email, mailbox_key, 'Mail.Read' = ANY(granted_scopes)
+                   FROM finva_gmail_connections ORDER BY id""")
+    for google_email, mailbox_email, key, microsoft in cur.fetchall():
+        provider = "microsoft" if microsoft else "gmail"
+        assert mailbox_email == mail_oauth.mailbox_email(provider, google_email)
+        assert key == mail_oauth.mailbox_key(provider, google_email) == f"email:{mailbox_email}"
+    cur.execute(_postflight())
+    assert cur.fetchall() == []
+
+
+@pytest.mark.parametrize(("first", "second"), [("shared@example.com", " Shared@Example.com"),
+                                               ("first.last@gmail.com", "FirstLast+bank@googlemail.com")])
+def test_the_migration_refuses_existing_duplicates_and_changes_nothing(db, first, second):
+    cur = db["cur"]
+    _legacy_insert(cur, first)
+    _legacy_insert(cur, second)
+    with pytest.raises(psycopg2.Error) as refused:
+        cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    assert refused.value.pgcode == "MB001"
+    cur.execute("ROLLBACK")
+    cur.execute("SELECT to_regclass('public.uq_finva_mail_connections_live_mailbox'), "
+                "count(*) FILTER (WHERE attname = 'mailbox_email') FROM pg_attribute "
+                "WHERE attrelid = 'public.finva_gmail_connections'::regclass AND NOT attisdropped")
+    assert cur.fetchone() == (None, 0)
+
+
+def test_one_live_connection_per_mailbox_and_identity(db):
+    cur = db["cur"]
+    _legacy_insert(cur, "old@example.com", status="disabled")
+    _legacy_insert(cur, "old@example.com", status="disabled")  # disconnected duplicates are allowed
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))  # idempotent
+    _insert(cur, "old@example.com", key="google:1")  # a disconnected mailbox is free again
+    for status in ("active", "reauthorization_required"):
+        with pytest.raises(psycopg2.errors.UniqueViolation):
+            _insert(cur, "OLD@example.com", status, key="google:2")  # same address
+        with pytest.raises(psycopg2.errors.UniqueViolation):
+            _insert(cur, "renamed@example.com", status, key="google:1")  # same provider account
+    _insert(cur, "old@example.com", "disabled", key="google:1")
+    _insert(cur, "old@example.com", provider="microsoft")  # the same text at another provider is another mailbox
+
+
+def test_concurrent_completions_for_one_mailbox_leave_exactly_one(db):
+    db["cur"].execute(MIGRATION.read_text(encoding="utf-8"))
+    barrier, outcomes = threading.Barrier(8), []
+
+    def attach():
+        conn = psycopg2.connect(db["uri"])
+        try:
+            barrier.wait()
+            with conn.cursor() as cur:
+                _insert(cur, "race@example.com")
+            conn.commit()
+            outcomes.append("attached")
+        except psycopg2.errors.UniqueViolation:
+            conn.rollback()
+            outcomes.append("refused")
+        finally:
+            conn.close()
+
+    threads = [threading.Thread(target=attach) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(outcomes) == ["attached"] + ["refused"] * 7
+
+
+def test_a_stale_mailbox_is_taken_over_once_even_by_concurrent_claims(db):
+    """Two accounts complete a real consent for a stale mailbox at once: exactly one takes it over."""
+    cur = db["cur"]
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    stale_account, stale_id = _insert(cur, "shared@example.com", "reauthorization_required")
+    # The stale token belongs to the stale account: the boundary deletes it only on that account's behalf.
+    cur.execute("SELECT dincr_private.mail_secret_create('synthetic-token', %s::uuid, 'Gmail')", (stale_account,))
+    cur.execute("UPDATE finva_gmail_connections SET refresh_token_secret_id = %s WHERE id = %s", (cur.fetchone()[0], stale_id))
+    claimants = [(str(uuid.uuid4()), str(uuid.uuid4())) for _ in range(2)]
+    for claimant, _workspace in claimants:
+        cur.execute("INSERT INTO accounts VALUES (%s)", (claimant,))
+    barrier, outcomes = threading.Barrier(2), []
+
+    def claim(claimant, workspace):
+        barrier.wait()
+        try:
+            with database.get_connection() as conn:
+                mail_oauth.claim_mailbox(conn, provider="gmail", account_id=claimant, workspace_id=workspace,
+                                         key="email:gmail:shared@example.com", email="gmail:shared@example.com",
+                                         display="shared@example.com", is_entitled=lambda _conn, _account: True)
+                conn.execute("""INSERT INTO finva_gmail_connections(account_id, workspace_id, google_email, mailbox_email,
+                                mailbox_key, status) VALUES (%s, %s, 'shared@example.com', 'gmail:shared@example.com',
+                                'email:gmail:shared@example.com', 'active') RETURNING id""", (claimant, workspace))
+                conn.commit()
+            outcomes.append("connected")
+        except (HTTPException, psycopg2.errors.UniqueViolation):
+            outcomes.append("refused")
+
+    threads = [threading.Thread(target=claim, args=pair) for pair in claimants]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(outcomes) == ["connected", "refused"]
+    cur.execute("SELECT status, last_error, account_id::text FROM finva_gmail_connections WHERE id = %s", (stale_id,))
+    assert cur.fetchone() == ("disabled", mail_oauth.MAILBOX_TAKEN_OVER, stale_account)
+    cur.execute("SELECT count(*) FROM vault.secrets")
+    assert cur.fetchone() == (0,)  # the stale token is deleted, never handed over
+    cur.execute("SELECT previous_connection_id, previous_account_id::text, reason FROM mail_connection_takeovers")
+    assert cur.fetchall() == [(stale_id, stale_account, "access_lost")]
+
+
+@pytest.mark.parametrize(("status", "outcome"), [("reauthorization_required", "taken_over"), ("active", "refused")])
+def test_a_backfilled_mailbox_is_found_by_address_when_the_new_consent_carries_the_provider_id(db, status, outcome):
+    """A row backfilled as 'email:...' and a new consent identified by 'google:<sub>' are the same mailbox.
+
+    The claim must match on the address as well as on the identity, on real SQL: otherwise a
+    stale legacy connection is never taken over and a live one is refused only by the index.
+    """
+    cur = db["cur"]
+    _legacy_insert(cur, "Legacy.Owner+bank@gmail.com", status=status)
+    cur.execute("INSERT INTO accounts SELECT account_id FROM finva_gmail_connections")  # as in production (FK)
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    cur.execute("SELECT id, mailbox_key FROM finva_gmail_connections")
+    legacy_id, legacy_key = cur.fetchone()
+    assert legacy_key == "email:gmail:legacyowner@gmail.com"
+    claimant, workspace = str(uuid.uuid4()), str(uuid.uuid4())
+    cur.execute("INSERT INTO accounts VALUES (%s)", (claimant,))
+    email = mail_oauth.mailbox_email("gmail", "legacyowner@googlemail.com")
+    try:
+        with database.get_connection() as conn:
+            mail_oauth.claim_mailbox(conn, provider="gmail", account_id=claimant, workspace_id=workspace,
+                                     key=mail_oauth.mailbox_key("gmail", "legacyowner@googlemail.com", "108"),
+                                     email=email, display="legacyowner@googlemail.com",
+                                     is_entitled=lambda _conn, _account: True)
+            conn.commit()
+        result = "taken_over"
+    except HTTPException as refused:
+        assert refused.status_code == 409 and refused.detail == mail_oauth.MAILBOX_UNAVAILABLE
+        result = "refused"
+    assert result == outcome
+    cur.execute("SELECT status FROM finva_gmail_connections WHERE id = %s", (legacy_id,))
+    assert cur.fetchone() == ("disabled" if outcome == "taken_over" else status,)
+
+
+def test_the_rollback_restores_the_previous_schema(db):
+    cur = db["cur"]
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    cur.execute(ROLLBACK.read_text(encoding="utf-8"))
+    cur.execute("""SELECT to_regclass('public.mail_connection_takeovers'), to_regclass('public.uq_finva_mail_connections_live_mailbox'),
+                          to_regclass('public.finva_gmail_connections_account_email_key') IS NOT NULL""")
+    assert cur.fetchone() == (None, None, True)
+
+
+# --- F2 on real SQL: an Outlook mailbox is its principal; a reported address takes nothing ---
+
+MS_TENANT = "11111111-1111-4111-8111-111111111111"
+
+
+def _ms_claim(principal, *, reported, entitled=True):
+    """Claim as a new account/workspace, the way _attach_microsoft_connection does."""
+    claimant, workspace = str(uuid.uuid4()), str(uuid.uuid4())
+    with database.get_connection() as conn:
+        conn.execute("INSERT INTO accounts VALUES (%s)", (claimant,))
+        key = mail_oauth.microsoft_identity(principal, MS_TENANT)
+        mail_oauth.claim_mailbox(conn, provider="microsoft", account_id=claimant, workspace_id=workspace,
+                                 key=key, email=key, display=reported,
+                                 reported_email=mail_oauth.mailbox_email("microsoft", reported),
+                                 is_entitled=lambda _conn, _account: entitled)
+        conn.execute("""INSERT INTO finva_gmail_connections(account_id, workspace_id, google_email, mailbox_email, mailbox_key,
+                        status, granted_scopes) VALUES (%s, %s, %s, %s, %s, 'active', ARRAY['Mail.Read'])""",
+                     (claimant, workspace, reported, key, key))
+        conn.commit()
+    return claimant
+
+
+@pytest.mark.parametrize(("status", "outcome"), [("active", "refused"), ("reauthorization_required", "coexists")])
+def test_a_legacy_outlook_row_is_never_taken_over_by_a_reported_address(db, status, outcome):
+    cur = db["cur"]
+    _legacy_insert(cur, "Legacy@Outlook.com", status=status, provider="microsoft")
+    cur.execute("INSERT INTO accounts SELECT account_id FROM finva_gmail_connections")
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    cur.execute("SELECT id, mailbox_key FROM finva_gmail_connections")
+    legacy_id, legacy_key = cur.fetchone()
+    assert legacy_key == "email:microsoft:legacy@outlook.com"
+    try:
+        _ms_claim("aaaaaaaa-0000-4000-8000-00000000000a", reported="legacy@outlook.com")
+        result = "coexists"
+    except HTTPException as refused:
+        assert refused.detail == mail_oauth.MAILBOX_UNAVAILABLE
+        result = "refused"
+    assert result == outcome
+    cur.execute("SELECT status FROM finva_gmail_connections WHERE id = %s", (legacy_id,))
+    assert cur.fetchone() == (status,)  # never taken over
+    cur.execute("SELECT count(*) FROM mail_connection_takeovers")
+    assert cur.fetchone() == (0,)
+
+
+def test_two_principals_reporting_one_address_are_two_mailboxes(db):
+    db["cur"].execute(MIGRATION.read_text(encoding="utf-8"))
+    _ms_claim("0123456789abcdef", reported="shared@outlook.com")
+    _ms_claim("aaaaaaaa-0000-4000-8000-00000000000a", reported="shared@outlook.com")  # no unique violation, no refusal
+    db["cur"].execute("SELECT count(*) FROM finva_gmail_connections WHERE status = 'active'")
+    assert db["cur"].fetchone() == (2,)
+
+
+def test_concurrent_attaches_of_one_microsoft_principal_leave_exactly_one(db):
+    db["cur"].execute(MIGRATION.read_text(encoding="utf-8"))
+    barrier, outcomes = threading.Barrier(4), []
+
+    def attach(reported):
+        barrier.wait()
+        try:
+            _ms_claim("b0b00000-0000-4000-8000-000000000b0b", reported=reported)
+            outcomes.append("attached")
+        except (HTTPException, psycopg2.errors.UniqueViolation):
+            outcomes.append("refused")
+
+    # The same principal under several reported addresses (a renamed or changed mail attribute).
+    threads = [threading.Thread(target=attach, args=(f"bob{n}@contoso.com",)) for n in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(outcomes) == ["attached"] + ["refused"] * 3
+    db["cur"].execute("SELECT count(*) FROM finva_gmail_connections WHERE status <> 'disabled'")
+    assert db["cur"].fetchone() == (1,)
+
+
+def test_the_backfill_moves_an_outlook_row_to_its_principal_and_keeps_a_gmail_address(db, monkeypatch):
+    from backend.scripts import backfill_mailbox_identity as backfill
+
+    cur = db["cur"]
+    _legacy_insert(cur, "Old@Outlook.com", provider="microsoft")
+    _legacy_insert(cur, "first.last@gmail.com", provider="gmail")
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    principal = f"microsoft:{MS_TENANT}:c0c00000-0000-4000-8000-00000000c0c0"
+    keys = {"microsoft": principal, "gmail": "google:108"}
+    monkeypatch.setattr(backfill, "_resolver", lambda conn, apply: lambda row: keys[backfill.provider_of(row)])
+    assert backfill.main(["--apply"]) == 0
+    cur.execute("SELECT mailbox_key, mailbox_email FROM finva_gmail_connections ORDER BY 'Mail.Read' = ANY(granted_scopes)")
+    assert cur.fetchall() == [("google:108", "gmail:firstlast@gmail.com"), (principal, principal)]
+
+
+@pytest.mark.parametrize(("status", "outcome"), [("active", "refused"), ("reauthorization_required", "coexists")])
+def test_an_outlook_row_without_identity_is_never_taken_over_by_a_reported_address(db, status, outcome):
+    """A row written before the identity columns (NULL mailbox_email): matched by display address only."""
+    cur = db["cur"]
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    _legacy_insert(cur, "Old@Outlook.com", status=status, provider="microsoft")  # the old code writes no identity
+    cur.execute("INSERT INTO accounts SELECT account_id FROM finva_gmail_connections")
+    cur.execute("SELECT id FROM finva_gmail_connections WHERE mailbox_email IS NULL")
+    legacy_id = cur.fetchone()[0]
+    try:
+        _ms_claim("aaaaaaaa-0000-4000-8000-00000000000a", reported="old@outlook.com")
+        result = "coexists"
+    except HTTPException:
+        result = "refused"
+    assert result == outcome
+    cur.execute("SELECT status FROM finva_gmail_connections WHERE id = %s", (legacy_id,))
+    assert cur.fetchone() == (status,)
+    cur.execute("SELECT count(*) FROM mail_connection_takeovers")
+    assert cur.fetchone() == (0,)

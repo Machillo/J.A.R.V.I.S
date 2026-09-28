@@ -8,10 +8,17 @@ const OBSERVABILITY_PATHS = new Set([
   "/product-ops/events",
   "/product-ops/health",
 ]);
+// Store purchase verification shows its own state (503 = not enabled yet), so its
+// failures are not reported as incidents. Their bodies carry store evidence.
+const STORE_VERIFICATION_PATHS = new Set([
+  "/product-ops/billing/store/customer-token",
+  "/product-ops/billing/store/apple/transactions",
+  "/product-ops/billing/store/google/purchases",
+]);
 
 async function request(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
-  const autoReport = !OBSERVABILITY_PATHS.has(path);
+  const autoReport = !OBSERVABILITY_PATHS.has(path) && !STORE_VERIFICATION_PATHS.has(path);
   let response;
   try {
     response = await recoverableFetch(`${API_URL}${path}`, options);
@@ -44,11 +51,9 @@ export const selectPlan = (plan, accept_beta_terms = false) => json("/auth/plan"
 export const getBillingCatalog = () => request("/product-ops/billing/catalog");
 export const getStoreBillingCatalog = () => request("/product-ops/billing/store/catalog");
 export const getStoreEntitlement = () => request("/product-ops/billing/store/entitlement");
-export const uploadPaymentReceipt = (orderId, file) => {
-  const body = new FormData();
-  body.append("receipt", file);
-  return request(`/product-ops/billing/orders/${orderId}/receipt`, { method: "POST", body });
-};
+export const getStoreCustomerToken = () => request("/product-ops/billing/store/customer-token", { method: "POST" });
+export const verifyAppleTransaction = (body) => json("/product-ops/billing/store/apple/transactions", "POST", body);
+export const verifyGooglePurchase = (body) => json("/product-ops/billing/store/google/purchases", "POST", body);
 export const trackProductEvent = (payload) => json("/product-ops/events", "POST", payload);
 export const getFeedback = () => request("/product-ops/feedback");
 export const createFeedback = (payload) => json("/product-ops/feedback", "POST", payload);

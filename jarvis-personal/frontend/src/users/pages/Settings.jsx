@@ -10,6 +10,8 @@ import AccountActions from "../../products/finva/components/AccountActions";
 import { confirmedPlanProfile } from "../../lib/planSelection";
 import { identifyTelemetryUser, trackEvent } from "../../lib/telemetry";
 import LegalLink from "../../components/LegalLink";
+import StoreSubscriptionPanel from "../components/StoreSubscriptionPanel";
+import { nativeStorePlatform } from "../../lib/storeBilling";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
@@ -129,6 +131,8 @@ export default function Settings({ user, onUserChange, onLogout }) {
         </div>
         <span className="plan-status-pill">{tx("Actual","Current")}</span>
       </article>
+
+      {nativeStorePlatform() && user?.role === "user" && <StoreSubscriptionPanel user={user} onUserChange={onUserChange} />}
 
       <div className="section-heading compact plan-change-heading">
         <div>

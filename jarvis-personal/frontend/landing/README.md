@@ -4,7 +4,22 @@ Run `npm run build:landing` from `frontend`. Deploy **only** `landing-dist/` as 
 
 The canonical origin in `landing/config.json` is `https://dincr.com`. Store links remain disabled until official URLs are supplied. Public contacts are `soporte@dincr.com` for general support and `privacidad@dincr.com` for data privacy. Mail delivery and forwarding must be verified in the email provider; they are not configured by this repository.
 
-Cloudflare Pages (Git integration): repository `Machillo/J.A.R.V.I.S`, production branch `main`, framework preset **None**, root directory `jarvis-personal/frontend`, build command `npm ci && npm run build:landing`, output directory `landing-dist`, no environment variables. Add the custom domain manually after reviewing the deployment; this build does not change DNS. Pages serves each route's `index.html` and the generated root `404.html` prevents SPA fallback. Never select `dist` as the output. Vercel continues to build the app separately for internal previews.
+**Cloudflare Worker `dincr` (Workers Builds, static assets).** The whole deployment is `frontend/wrangler.jsonc`:
+- assets are `landing-dist/` only;
+- `/route` redirects to `/route/`;
+- unknown paths get the generated `404.html`;
+- there is no Worker code, binding, variable or secret.
+
+Dashboard settings, which must match:
+- repository `Machillo/J.A.R.V.I.S` and production branch `main`;
+- root directory `jarvis-personal/frontend`;
+- build command `npm ci && npm run build:landing`;
+- deploy command `npx wrangler deploy`;
+- non-production branch command `npx wrangler preview`, which gives a Preview URL for each branch.
+
+`wrangler preview` requires the `previews` block. It stays empty on purpose, because a Preview of the landing needs nothing and can reach nothing. Never point `assets.directory` at `dist`. `npm run test:landing` checks this config.
+
+Vercel continues to build the app separately for internal previews.
 
 The legal pages are rendered from `src/pages/PublicInfoPage.jsx` at build time, with the version read from the same source. Prices come from `config.json` and `npm run test:landing` checks them against `backend/product_ops/service.py`. The review block is disabled until authentic, authorized data is configured.
 
