@@ -6,6 +6,7 @@ import os
 import threading
 import time
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -139,6 +140,9 @@ def test_a_discord_connection_error_never_logs_the_webhook_secret(monkeypatch, c
 
 # --- PostgreSQL ------------------------------------------------------------------
 
+VAULT_STUB = Path(__file__).resolve().parent / "fixtures/vault_stub.sql"
+MAIL_SECRET_BOUNDARY = Path(__file__).resolve().parents[2] / "database/migrations/20260926149000_mail_secret_boundary.sql"
+
 pgserver = pytest.importorskip("pgserver")
 psycopg2 = pytest.importorskip("psycopg2")
 
@@ -206,7 +210,7 @@ def test_the_ibkr_owner_is_resolved_in_one_identity_space(pg, monkeypatch):
     from backend.integrations import ibkr_readonly
 
     pg.execute("""CREATE TABLE users (id BIGINT PRIMARY KEY, email TEXT);
-                  CREATE TABLE allowed_users (id BIGINT PRIMARY KEY, email TEXT, role TEXT);
+                  CREATE TABLE allowed_users (id BIGINT PRIMARY KEY, email TEXT, role TEXT, status TEXT DEFAULT 'active');
                   CREATE TABLE accounts (id UUID PRIMARY KEY, legacy_allowed_user_id BIGINT, role TEXT);
                   CREATE TABLE workspaces (id UUID PRIMARY KEY, owner_account_id UUID, workspace_type TEXT, created_at TIMESTAMPTZ DEFAULT NOW())""")
     owner_account, other_account = str(uuid.uuid4()), str(uuid.uuid4())
@@ -216,7 +220,8 @@ def test_the_ibkr_owner_is_resolved_in_one_identity_space(pg, monkeypatch):
     pg.execute("INSERT INTO accounts VALUES (%s, 1, 'owner'), (%s, 7, 'user')", (owner_account, other_account))
     pg.execute("INSERT INTO workspaces(id, owner_account_id, workspace_type) VALUES (%s, %s, 'personal'), (%s, %s, 'personal')",
                (owner_ws, owner_account, other_ws, other_account))
-    monkeypatch.setenv("OWNER_EMAIL", "owner@example.test")
+    # The explicit Owner role (backend/auth/owner_role.py): stored role and OWNER_EMAILS.
+    monkeypatch.setenv("OWNER_EMAILS", "owner@example.test")
     with get_connection() as conn:
         user_id, workspace_id = ibkr_readonly._owner_identity(conn)
     assert workspace_id == owner_ws and user_id == 7
@@ -320,9 +325,11 @@ def test_withdrawing_mail_authorization_never_depends_on_the_plan(monkeypatch):
 def test_a_lapsed_plan_ends_the_stored_mail_authorization(pg, monkeypatch):
     from backend.core.database import get_connection
 
-    pg.execute("""CREATE SCHEMA vault; CREATE TABLE vault.secrets (id UUID PRIMARY KEY, secret TEXT);
-                  CREATE VIEW vault.decrypted_secrets AS SELECT id, secret AS decrypted_secret FROM vault.secrets;
-                  CREATE TABLE plans (id BIGSERIAL PRIMARY KEY, code TEXT);
+    # Mail tokens are reached only through the account-bound Vault boundary (20260926149000).
+    pg.execute(VAULT_STUB.read_text(encoding="utf-8"))
+    pg.execute("CREATE TABLE accounts (id UUID PRIMARY KEY)")
+    pg.execute(MAIL_SECRET_BOUNDARY.read_text(encoding="utf-8"))
+    pg.execute("""CREATE TABLE plans (id BIGSERIAL PRIMARY KEY, code TEXT);
                   INSERT INTO plans(code) VALUES ('free'), ('vip');
                   CREATE TABLE account_subscriptions (account_id UUID PRIMARY KEY, plan_id BIGINT, status TEXT,
                       access_source TEXT, expires_at TIMESTAMPTZ);
@@ -334,7 +341,9 @@ def test_a_lapsed_plan_ends_the_stored_mail_authorization(pg, monkeypatch):
     people = {}
     for name, expires in (("lapsed", "NOW() - interval '1 minute'"), ("vip", "NOW() + interval '5 days'")):
         account, secret = str(uuid.uuid4()), str(uuid.uuid4())
-        pg.execute("INSERT INTO vault.secrets VALUES (%s, %s)", (secret, f"token-{name}"))
+        pg.execute("INSERT INTO accounts VALUES (%s)", (account,))
+        pg.execute("INSERT INTO vault.secrets(id, secret, description) VALUES (%s, %s, %s)",
+                   (secret, f"token-{name}", f"DINCR Gmail refresh token for account {account}"))
         pg.execute(f"""INSERT INTO account_subscriptions SELECT %s, id, 'active', 'courtesy', {expires} FROM plans WHERE code='vip'""",
                    (account,))
         pg.execute("""INSERT INTO finva_gmail_connections(account_id, status, refresh_token_secret_id, granted_scopes)

@@ -25,13 +25,12 @@ def set_credit_card_settings(
                 name,
                 cut_day,
                 payment_day,
-                user_id,
                 workspace_id,
                 created_at
             )
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, NOW())
             """,
-            (name, cut_day, payment_day, user_id, workspace_id),
+            (name, cut_day, payment_day, workspace_id),
         )
 
         conn.commit()

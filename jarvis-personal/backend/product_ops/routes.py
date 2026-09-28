@@ -1,9 +1,8 @@
-from fastapi import APIRouter, File, Query, UploadFile
-from fastapi.responses import Response
+from fastapi import APIRouter, Query
 
 from backend.auth.current_user import require_roles
-from backend.product_ops.models import AutomaticIncidentCreate, FeatureFlagUpdate, FeedbackCreate, FeedbackResolutionUpdate, FeedbackUpdate, ProductEvent, ReleasePolicyUpdate, StoreLifecycleSimulation, TestPaymentUpdate
-from backend.product_ops.service import MAX_RECEIPT_BYTES, catalog, create_automatic_incident, create_feedback, get_receipt, list_feedback, owner_dashboard, platform_health, record_event, release_policy, resend_feedback_email, resolve_test_order, send_discord_test, submit_receipt, update_feature_flag, update_feedback, update_release_policy, update_user_feedback_resolution
+from backend.product_ops.models import AutomaticIncidentCreate, FeatureFlagUpdate, FeedbackCreate, FeedbackResolutionUpdate, FeedbackUpdate, ProductEvent, ReleasePolicyUpdate, StoreLifecycleSimulation
+from backend.product_ops.service import catalog, create_automatic_incident, create_feedback, list_feedback, owner_dashboard, platform_health, record_event, release_policy, resend_feedback_email, send_discord_test, update_feature_flag, update_feedback, update_release_policy, update_user_feedback_resolution
 from backend.core.feature_flags import user_feature_flags
 from backend.product_ops.store_billing import entitlement_state, restore_owner_access, simulate_lifecycle, store_catalog
 
@@ -52,11 +51,6 @@ def get_release_policy(
 @router.get("/feature-flags")
 def feature_flags(): return user_feature_flags()
 
-@router.post("/billing/orders/{order_id}/receipt")
-async def receipt_submit(order_id: int, receipt: UploadFile = File(...)):
-    content = await receipt.read(MAX_RECEIPT_BYTES + 1)
-    return submit_receipt(order_id, receipt.filename or "comprobante", receipt.content_type or "", content)
-
 @router.post("/feedback")
 def feedback_create(payload: FeedbackCreate): return create_feedback(payload)
 
@@ -83,23 +77,7 @@ def feature_flag_update(flag_key: str, payload: FeatureFlagUpdate):
 @router.post("/owner/support/discord/test")
 def discord_test(): require_roles("owner"); return send_discord_test()
 
-@router.post("/owner/orders/{order_id}")
-def payment(order_id: int, payload: TestPaymentUpdate): require_roles("owner"); return resolve_test_order(order_id, payload.action)
 
-@router.get("/owner/orders/{order_id}/receipt")
-def receipt_download(order_id: int):
-    require_roles("owner")
-    row = get_receipt(order_id)
-    filename = str(row.get("receipt_filename") or "comprobante").replace('"', "").replace("\r", "").replace("\n", "")
-    return Response(
-        content=row["receipt_data"],
-        media_type=row.get("receipt_content_type") or "application/octet-stream",
-        headers={
-            "Content-Disposition": f'inline; filename="{filename}"',
-            "Content-Security-Policy": "sandbox",
-            "X-Content-Type-Options": "nosniff",
-        },
-    )
 
 @router.patch("/owner/feedback/{ticket_id}")
 def feedback_update(ticket_id: int, payload: FeedbackUpdate): require_roles("owner"); return update_feedback(ticket_id, payload)
