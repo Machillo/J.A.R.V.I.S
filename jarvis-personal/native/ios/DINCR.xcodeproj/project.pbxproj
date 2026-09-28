@@ -1,0 +1,369 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		D1C0DE000000000000000002 /* DincrCore in Frameworks */ = {isa = PBXBuildFile; productRef = D1C0DE000000000000000005 /* DincrCore */; };
+		D1C0DE000000000000000003 /* DincrDesign in Frameworks */ = {isa = PBXBuildFile; productRef = D1C0DE000000000000000006 /* DincrDesign */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D1C0DE000000000000000004 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D1C0DE000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D1C0DE00000000000000001C;
+			remoteInfo = DINCR;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		D1C0DE000000000000000008 /* DINCR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DINCR.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1C0DE000000000000000009 /* DINCRUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DINCRUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1C0DE00000000000000000A /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		D1C0DE00000000000000000B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D1C0DE00000000000000000C /* DincrKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = DincrKit; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D1C0DE00000000000000001A /* DINCR */ = {isa = PBXFileSystemSynchronizedRootGroup; path = DINCR; sourceTree = "<group>"; };
+		D1C0DE00000000000000001B /* DINCRUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = DINCRUITests; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D1C0DE000000000000000014 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D1C0DE000000000000000002 /* DincrCore in Frameworks */,
+				D1C0DE000000000000000003 /* DincrDesign in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1C0DE000000000000000017 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D1C0DE00000000000000000D = {
+			isa = PBXGroup;
+			children = (
+				D1C0DE00000000000000000C /* DincrKit */,
+				D1C0DE00000000000000001A /* DINCR */,
+				D1C0DE00000000000000001B /* DINCRUITests */,
+				D1C0DE00000000000000000F /* Config */,
+				D1C0DE00000000000000000E /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D1C0DE00000000000000000E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D1C0DE000000000000000008 /* DINCR.app */,
+				D1C0DE000000000000000009 /* DINCRUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D1C0DE00000000000000000F /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				D1C0DE00000000000000000A /* Base.xcconfig */,
+				D1C0DE00000000000000000B /* Info.plist */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D1C0DE00000000000000001C /* DINCR */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1C0DE000000000000000012 /* Build configuration list for PBXNativeTarget "DINCR" */;
+			buildPhases = (
+				D1C0DE000000000000000015 /* Sources */,
+				D1C0DE000000000000000014 /* Frameworks */,
+				D1C0DE000000000000000016 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D1C0DE00000000000000001A /* DINCR */,
+			);
+			name = DINCR;
+			packageProductDependencies = (
+				D1C0DE000000000000000005 /* DincrCore */,
+				D1C0DE000000000000000006 /* DincrDesign */,
+			);
+			productName = DINCR;
+			productReference = D1C0DE000000000000000008 /* DINCR.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D1C0DE00000000000000001D /* DINCRUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1C0DE000000000000000013 /* Build configuration list for PBXNativeTarget "DINCRUITests" */;
+			buildPhases = (
+				D1C0DE000000000000000018 /* Sources */,
+				D1C0DE000000000000000017 /* Frameworks */,
+				D1C0DE000000000000000019 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D1C0DE000000000000000007 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D1C0DE00000000000000001B /* DINCRUITests */,
+			);
+			name = DINCRUITests;
+			productName = DINCRUITests;
+			productReference = D1C0DE000000000000000009 /* DINCRUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D1C0DE000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					D1C0DE00000000000000001C = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					D1C0DE00000000000000001D = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = D1C0DE00000000000000001C;
+					};
+				};
+			};
+			buildConfigurationList = D1C0DE000000000000000011 /* Build configuration list for PBXProject "DINCR" */;
+			developmentRegion = es;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				es,
+				en,
+				Base,
+			);
+			mainGroup = D1C0DE00000000000000000D;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D1C0DE000000000000000010 /* XCLocalSwiftPackageReference "DincrKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D1C0DE00000000000000000E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D1C0DE00000000000000001C /* DINCR */,
+				D1C0DE00000000000000001D /* DINCRUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D1C0DE000000000000000016 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1C0DE000000000000000019 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D1C0DE000000000000000015 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D1C0DE000000000000000018 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D1C0DE000000000000000007 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D1C0DE00000000000000001C /* DINCR */;
+			targetProxy = D1C0DE000000000000000004 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		D1C0DE00000000000000001E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D1C0DE00000000000000001F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		D1C0DE000000000000000020 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D1C0DE00000000000000000A /* Base.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+			};
+			name = Debug;
+		};
+		D1C0DE000000000000000021 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D1C0DE00000000000000000A /* Base.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+			};
+			name = Release;
+		};
+		D1C0DE000000000000000022 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dincr.app.nativedev.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = DINCR;
+			};
+			name = Debug;
+		};
+		D1C0DE000000000000000023 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dincr.app.nativedev.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = DINCR;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D1C0DE000000000000000011 /* Build configuration list for PBXProject "DINCR" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1C0DE00000000000000001E /* Debug */,
+				D1C0DE00000000000000001F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D1C0DE000000000000000012 /* Build configuration list for PBXNativeTarget "DINCR" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1C0DE000000000000000020 /* Debug */,
+				D1C0DE000000000000000021 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D1C0DE000000000000000013 /* Build configuration list for PBXNativeTarget "DINCRUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1C0DE000000000000000022 /* Debug */,
+				D1C0DE000000000000000023 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		D1C0DE000000000000000010 /* XCLocalSwiftPackageReference "DincrKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = DincrKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D1C0DE000000000000000005 /* DincrCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D1C0DE000000000000000010 /* XCLocalSwiftPackageReference "DincrKit" */;
+			productName = DincrCore;
+		};
+		D1C0DE000000000000000006 /* DincrDesign */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D1C0DE000000000000000010 /* XCLocalSwiftPackageReference "DincrKit" */;
+			productName = DincrDesign;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D1C0DE000000000000000001 /* Project object */;
+}

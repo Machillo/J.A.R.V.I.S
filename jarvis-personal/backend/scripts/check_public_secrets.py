@@ -11,12 +11,15 @@ ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_PATHS = (
     ROOT / "frontend",
     ROOT / "android",
+    ROOT / "native",
 )
 IGNORED_PARTS = {"node_modules", "dist", "build", ".gradle"}
 ASSIGNMENT = re.compile(
     r"(?i)(SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|service_role)\s*[:=]\s*['\"]?([^\s,'\"}]+)"
 )
 PLACEHOLDERS = {"", "<secret>", "your-secret", "change-me", "example", "test"}
+# Supabase's new-format server keys are recognisable by value, whatever they are assigned to.
+SECRET_KEY_VALUE = re.compile(r"\bsb_secret_[A-Za-z0-9_-]{16,}")
 
 
 def tracked_files() -> set[Path]:
@@ -38,6 +41,9 @@ def main() -> None:
             try:
                 value = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
+                continue
+            if SECRET_KEY_VALUE.search(value):
+                failures.append(str(path.relative_to(ROOT)))
                 continue
             for match in ASSIGNMENT.finditer(value):
                 secret = match.group(2).strip().lower()

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>es</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>es</string>
+		<string>en</string>
+	</array>
+	<key>DINCRApiURL</key>
+	<string>$(DINCR_API_URL)</string>
+	<key>DINCRSupabaseURL</key>
+	<string>$(DINCR_SUPABASE_URL)</string>
+	<key>DINCRSupabaseAnonKey</key>
+	<string>$(DINCR_SUPABASE_ANON_KEY)</string>
+</dict>
+</plist>

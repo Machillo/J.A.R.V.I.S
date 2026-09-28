@@ -1,0 +1,4 @@
+[{"movement_id": "salary:8", "source_id": 8, "origin": "salary", "transaction_date": "2026-09-22", "description": "Salario", "amount": 432500.0, "transaction_type": "income", "category": "Salario", "notes": "", "editable": true},
+ {"movement_id": "expense:31", "source_id": 31, "origin": "expense", "transaction_date": "2026-09-22", "description": "Súper", "amount": 18450.5, "transaction_type": "expense", "category": "Supermercado", "notes": "", "editable": true},
+ {"movement_id": "transaction:9", "source_id": 9, "origin": "transaction", "transaction_date": "2026-09-21", "description": "Aviso bancario", "amount": 25000.0, "transaction_type": "expense", "category": "Gasolina", "notes": "", "editable": false},
+ {"movement_id": "transaction:10", "source_id": 10, "origin": "transaction", "transaction_date": null, "description": "Cuota", "amount": 95000.0, "transaction_type": "expense", "category": null, "notes": "", "editable": false}]

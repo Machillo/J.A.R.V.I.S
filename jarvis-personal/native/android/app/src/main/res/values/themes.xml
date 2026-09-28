@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window background before Compose draws: DINCR bg token (light). -->
+    <style name="Theme.Dincr" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#F5F7FA</item>
+    </style>
+</resources>
