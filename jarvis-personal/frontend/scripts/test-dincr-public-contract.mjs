@@ -132,3 +132,19 @@ for (const file of ['index.html', 'precios/index.html', 'seguridad/index.html', 
   assert.doesNotMatch(pagesHtml[file], /Firebase|Crashlytics/, `${file}: no Firebase telemetry claims`);
 }
 console.log('DINCR public landing, legal, price, support and isolation contracts passed.');
+
+// The Cloudflare Worker "dincr" deploys exactly this config (wrangler.jsonc): the static
+// landing only, never the application bundle, and nothing a Preview could reach.
+{
+  const raw = await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
+  const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, '').replace(/,(\s*[}\]])/g, '$1'));
+  assert.equal(config.name, 'dincr');
+  assert.equal(config.assets?.directory, './landing-dist');
+  assert.equal(config.assets?.not_found_handling, '404-page');
+  assert.equal(config.main, undefined, 'the landing Worker has no code');
+  assert.deepEqual(config.previews, {}, 'Previews get no bindings, variables or secrets');
+  for (const key of ['vars', 'kv_namespaces', 'd1_databases', 'r2_buckets', 'services', 'secrets_store_secrets']) {
+    assert.equal(config[key], undefined, `the landing Worker needs no ${key}`);
+  }
+}
+
