@@ -22,7 +22,7 @@
 --   WHERE table_schema = 'public' AND table_name IN ('salaries', 'expenses')
 --     AND column_name IN ('original_amount', 'original_currency', 'exchange_rate');
 -- Postflight: the query at the end of this file returns zero rows.
--- Rollback (manual, human decision): database/rollback/20260926150000_income_expense_original_currency_rollback.sql
+-- Rollback (manual, human decision): database/rollback/20260928110000_income_expense_original_currency_rollback.sql
 
 BEGIN;
 

@@ -1,4 +1,4 @@
--- MANUAL rollback of 20260926150000_income_expense_original_currency.sql.
+-- MANUAL rollback of 20260928110000_income_expense_original_currency.sql.
 -- Human decision only; never run automatically.
 --
 -- Precondition: production no longer runs a backend that reads or writes these
