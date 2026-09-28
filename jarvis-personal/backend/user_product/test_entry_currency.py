@@ -19,7 +19,7 @@ from backend.user_product.models import ExpenseCreateRequest, IncomeCreateReques
 
 ACCOUNT, WORKSPACE = "account-a", "workspace-a"
 MIGRATION = (Path(__file__).resolve().parents[2] / "database" / "migrations"
-             / "20260926150000_income_expense_original_currency.sql")
+             / "20260928110000_income_expense_original_currency.sql")
 
 
 # --------------------------------------------------------------------------- conversion
@@ -240,6 +240,16 @@ def test_migration_is_additive_and_never_rewrites_rows():
     ("CRC", float("inf"), "USD", 505),
     ("CRC", 100, "USD", float("inf")),  # direct callers: the models already bound the rate
     ("CRC", 100, "USD", float("nan")),
+    ("CRC", float("-inf"), None, None),
+    ("CRC", float("nan"), None, None),
+    ("CRC", 1e300, None, None),         # beyond Decimal's context: refused before rounding
+    ("CRC", 1e300, "USD", 505),
+    ("CRC", 100, "USD", 1e30),
+    ("CRC", 100, "USD", 1e300),
+    ("CRC", "abc", "USD", 505),          # direct callers only: the models type the fields
+    ("CRC", 100, "USD", "abc"),
+    ("CRC", 100, "USD", 0.0000001),
+    ("USD", 100, "CRC", 0.0000001),
 ])
 def test_degenerate_amounts_and_rates_are_a_422_not_a_500(args):
     with pytest.raises(HTTPException) as error:
@@ -277,3 +287,29 @@ def test_the_identity_declares_which_currencies_this_backend_converts(base, expe
     identity = saas.enrich_identity({"id": 41, "account_id": ACCOUNT, "role": "user"})
     assert identity["base_currency"] == (base or "CRC")
     assert identity["entry_currencies"] == expected
+
+
+def test_tiny_rates_round_at_six_decimals_and_never_store_zero():
+    for rate in (0.0000001, 0.0000004):
+        with pytest.raises(HTTPException):
+            resolve_entry_amount("CRC", 10000000, "USD", rate)
+    for rate in (0.0000005, 0.0000009):  # round half up to 0.000001, never 0
+        assert resolve_entry_amount("CRC", 10000000, "USD", rate)["exchange_rate"] == Decimal("0.000001")
+
+
+def test_the_column_limits_hold_at_their_exact_edges():
+    """amount: NUMERIC(12,2) at most; original_amount NUMERIC(14,2); exchange_rate NUMERIC(14,6)."""
+    assert resolve_entry_amount("USD", "9999999999.99", "USD", None)["amount"] == Decimal("9999999999.99")
+    for amount in ("10000000000.00", "9999999999.995"):
+        with pytest.raises(HTTPException):
+            resolve_entry_amount("USD", amount, "USD", None)
+    assert resolve_entry_amount("USD", "999999999999.99", "CRC", 505)["original_amount"] == Decimal("999999999999.99")
+    with pytest.raises(HTTPException):
+        resolve_entry_amount("USD", "1000000000000.00", "CRC", 505)
+    with pytest.raises(HTTPException):  # fits original_amount, but converted beyond amount
+        resolve_entry_amount("CRC", "999999999999.99", "USD", 505)
+    assert resolve_entry_amount("USD", 100000000, "CRC", "99999999.999999")["exchange_rate"] == Decimal("99999999.999999")
+    for rate in ("100000000", "99999999.9999995"):
+        with pytest.raises(HTTPException):
+            resolve_entry_amount("USD", 100000000, "CRC", rate)
+

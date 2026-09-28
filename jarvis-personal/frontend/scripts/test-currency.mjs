@@ -10,6 +10,8 @@ import {
 // stored foreign entry is edited by its base amount (the older-app behavior).
 setBaseCurrency("CRC");
 assert.deepEqual(entryCurrencies(), ["CRC"], "no declaration, no other currency");
+assert.deepEqual(entryCurrencyPayload({ currency: "USD", exchange_rate: "505" }), { currency: null, exchange_rate: null },
+  "a currency the backend does not declare is never sent: the field shows, and sends, the base");
 assert.deepEqual(entryFormAmount({ amount: 50500, original_amount: 100, original_currency: "USD", exchange_rate: 505 }),
   { amount: 50500, currency: "CRC", exchange_rate: "" }, "never the typed USD figure read as colones");
 setBaseCurrency("USD", ["USD"]);
@@ -47,6 +49,10 @@ assert.deepEqual(entryCurrencies(), ["CRC", "USD"]);
 assert.match(formatMoney(12), /\$/);
 assert.doesNotMatch(formatMoney(12), /₡/);
 assert.equal(toBaseAmount(50500, "CRC", 505), 100);
+// The preview is the stored figure: exact decimals, half up (502.50 / 500 = 1.005 -> 1.01, not float's 1.00).
+assert.equal(toBaseAmount("502.50", "CRC", 500), 1.01);
+assert.equal(toBaseAmount(10.005, "CRC", 1), 10.01);
+assert.equal(toBaseAmount(21, "CRC", "505.1234564"), 0.04);
 assert.deepEqual(entryFormAmount({ amount: 20 }), { amount: 20, currency: "USD", exchange_rate: "" });
 
 // Legacy base currency: only its own currency is offered, and it is sent as null.
@@ -95,3 +101,13 @@ for (const path of [...walk("users"), ...walk("products/finva")].filter((file) =
   assert.doesNotMatch(text, /placeholder="₡0"|<b>₡<\/b>/, `${path} hardcodes the ₡ symbol`);
 }
 console.log("currency tests passed");
+
+// The aguinaldo and CCSS salaries are colones on every base.
+const premiumPage = readFileSync(new URL("../src/pages/PremiumStrategy.jsx", import.meta.url), "utf8");
+assert.match(premiumPage, /const ccssMoney = \(value\) => baseCurrency\(\) === "CRC" \? money\(value\) : formatMoney\(value, "CRC"\);/);
+for (const field of ["aguinaldo.accrued_aguinaldo", "aguinaldo.earned_salary_total", "item.total_earned"]) {
+  assert.ok(premiumPage.includes(`ccssMoney(${field})`), `${field} is formatted in colones`);
+  assert.ok(!premiumPage.includes(`{money(${field})`) && !premiumPage.includes(` money(${field})`), `${field} never in the base currency`);
+}
+console.log("currency tests passed (CCSS in colones)");
+

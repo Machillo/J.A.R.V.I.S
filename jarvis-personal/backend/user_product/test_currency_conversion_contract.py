@@ -42,6 +42,13 @@ def test_the_storage_limits_are_the_real_production_columns():
 
     assert candidate_currency.MAX_AMOUNT == Decimal("9999999999.99")
     assert candidate_currency.MAX_RATE == Decimal("999999.999999")
+    # salaries/expenses: original_amount NUMERIC(14,2), exchange_rate NUMERIC(14,6) (20260928110000);
+    # amount held to NUMERIC(12,2) until its production type is verified.
+    from backend.user_product import entry_currency
+
+    assert entry_currency.MAX_ORIGINAL == Decimal("999999999999.99")
+    assert entry_currency.MAX_RATE == Decimal("99999999.999999")
+    assert entry_currency.MAX_AMOUNT == Decimal("9999999999.99")
     assert {vector.get("target") for vector in VECTORS} == {None, "transactions", "entries"}
 
 

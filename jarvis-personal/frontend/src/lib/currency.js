@@ -35,6 +35,17 @@ export const currencySymbol = (currency = base) => formatMoney(0, currency, { ma
 
 // Base-currency amount for a typed amount, mirroring the backend: the rate is
 // always CRC per 1 USD. null while the rate is missing; nothing is guessed.
+// Exact decimal arithmetic, as the backend's Decimal: the typed amount rounded to cents,
+// the rate to 6 decimals, the result half up to cents (float rounding can differ by a cent).
+function scaled(value, decimals) {
+  const match = /^(\d+)(?:\.(\d*))?$/.exec(String(value).trim());
+  if (!match) return null;
+  const digits = (match[2] || "").padEnd(decimals + 1, "0");
+  const whole = BigInt(match[1] + digits.slice(0, decimals));
+  return Number(digits[decimals]) >= 5 ? whole + 1n : whole;  // half up
+}
+const halfUp = (numerator, denominator) => (numerator * 2n + denominator) / (denominator * 2n);
+
 export function toBaseAmount(amount, currency, rate) {
   const value = Number(amount);
   if (!Number.isFinite(value) || value <= 0) return null;
@@ -42,13 +53,19 @@ export function toBaseAmount(amount, currency, rate) {
   if (code === base) return value;
   const perUsd = Number(rate);
   if (!Number.isFinite(perUsd) || perUsd <= 0) return null;
-  return Math.round((code === "USD" ? value * perUsd : value / perUsd) * 100) / 100;
+  const cents = scaled(value.toFixed(10), 2);
+  const micros = scaled(perUsd.toFixed(10), 6);
+  if (cents === null || micros === null || micros === 0n) return null;
+  const result = code === "USD" ? halfUp(cents * micros, 1000000n) : halfUp(cents * 1000000n, micros);
+  return Number(result) / 100;
 }
 
 // Fields sent with every create and edit. null means the base currency (and
 // clears a previous foreign amount); the other currency travels with its rate.
 export function entryCurrencyPayload({ currency, exchange_rate: rate }) {
-  const code = String(currency || base).toUpperCase();
+  // The currency the field shows: one the backend no longer declares is the base.
+  const typed = String(currency || base).toUpperCase();
+  const code = entryCurrencies().includes(typed) ? typed : base;
   return code === base ? { currency: null, exchange_rate: null } : { currency: code, exchange_rate: Number(rate) };
 }
 

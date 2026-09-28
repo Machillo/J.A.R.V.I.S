@@ -1,14 +1,15 @@
-"""CRC/USD income and expenses (20260926150000) on a real PostgreSQL.
+"""CRC/USD income and expenses on a real PostgreSQL, with the schema of 20260928110000.
 
 A schema-faithful local copy, NOT a restored production copy: the identity
 baseline, the ownership fixture tables with the production columns of
-`salaries` and `expenses`, and the ownership integrity migration (its guard
-triggers sit on both tables). All identities and amounts are synthetic.
+`salaries` and `expenses`, the ownership integrity migration (its guard triggers
+sit on both tables) and the canonical original-currency migration of #280, which
+is already on main and applied in production (its own protocol is tested in
+test_income_expense_original_currency_migration_pg.py). All identities and
+amounts are synthetic.
 
-Covers the migration protocol (preflight, apply, postflight, integrity, no table
-rewrite, idempotency, lock_timeout, failure atomicity, manual rollback and
-reapply) and the services on real rows: tenancy of the base currency, create and
-edit in both directions, and concurrent edits and deletes.
+Covers the services on real rows: tenancy of the base currency, create and edit
+in both directions, and concurrent edits and deletes.
 """
 from __future__ import annotations
 
@@ -31,10 +32,8 @@ from backend.tests.test_financial_ownership_integrity_pg import (  # noqa: F401 
 psycopg2 = pytest.importorskip("psycopg2")
 
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION = ROOT / "database/migrations/20260926150000_income_expense_original_currency.sql"
-ROLLBACK = ROOT / "database/rollback/20260926150000_income_expense_original_currency_rollback.sql"
+MIGRATION = ROOT / "database/migrations/20260928110000_income_expense_original_currency.sql"
 A, B = IDENTITIES["A"], IDENTITIES["B"]
-NEW_COLUMNS = ("original_amount", "original_currency", "exchange_rate")
 
 # Production columns of the two tables that the ownership fixture does not carry
 # (database/schema.sql + 20260925130000), and the account base currency.
@@ -101,160 +100,9 @@ def _one(conn, sql, params=()):
         cur.execute(sql, params)
         return cur.fetchone()
 
-
-def _all(conn, sql, params=()):
-    with conn.cursor() as cur:
-        cur.execute(sql, params)
-        return cur.fetchall()
-
-
 def _apply(conn, path=MIGRATION):
     with conn.cursor() as cur:
         cur.execute(path.read_text(encoding="utf-8"))
-
-
-def _commented_query(marker: str) -> str:
-    """The read-only query documented in the migration's comments after `marker`."""
-    lines, grab = [], False
-    for line in MIGRATION.read_text(encoding="utf-8").splitlines():
-        if line.startswith("-- ") and marker in line:
-            grab = True
-            continue
-        if grab:
-            if not line.startswith("--   "):
-                if lines:
-                    break
-                continue  # the rest of the heading
-            lines.append(line[5:])
-    assert lines, marker
-    return "\n".join(lines).rstrip().rstrip(";")
-
-
-def _snapshot(conn) -> dict:
-    """Existing data, digested column by column as it was before the migration."""
-    state = {}
-    for table, cols in (("salaries", "id,user_id,amount,source,created_at,workspace_id,category"),
-                        ("expenses", "id,user_id,category,expense_type,description,amount,created_at,workspace_id")):
-        state[table] = _one(conn, f"SELECT count(*), sum(amount), md5(string_agg(({cols})::text, '|' ORDER BY id)) FROM {table}")
-        state[table + ":filenode"] = _one(conn, "SELECT pg_relation_filenode(%s)", (f"public.{table}",))[0]
-    return state
-
-
-def _columns(conn, table):
-    return {name: (dtype, nullable, default) for name, dtype, nullable, default in _all(conn, """
-        SELECT a.attname, format_type(a.atttypid, a.atttypmod), NOT a.attnotnull, pg_get_expr(d.adbin, d.adrelid)
-        FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
-        WHERE a.attrelid=%s::regclass AND a.attnum>0 AND NOT a.attisdropped""", (f"public.{table}",))}
-
-
-# --------------------------------------------------------------------------- migration protocol
-
-def test_preflight_apply_postflight_keep_every_existing_row_and_do_not_rewrite(db):
-    conn = db["conn"]
-    assert _all(conn, _commented_query("Preflight (read-only)")) == [], "both tables exist, none of the columns does"
-    before = _snapshot(conn)
-
-    _apply(conn)
-
-    assert _all(conn, _commented_query("Postflight (read-only)")) == []
-    assert _snapshot(conn) == before, "no row, amount or column changed and neither table was rewritten"
-    for table in ("salaries", "expenses"):
-        cols = _columns(conn, table)
-        assert cols["original_amount"] == ("numeric(14,2)", True, None)
-        assert cols["original_currency"] == ("text", True, None)
-        assert cols["exchange_rate"] == ("numeric(14,6)", True, None)
-        assert _one(conn, f"SELECT count(*) FROM {table} WHERE original_amount IS NOT NULL OR original_currency IS NOT NULL OR exchange_rate IS NOT NULL") == (0,)
-        assert _one(conn, "SELECT convalidated FROM pg_constraint WHERE conname=%s", (f"{table}_original_currency_check",)) == (True,)
-
-
-def test_reapplying_is_a_no_op(db):
-    conn = db["conn"]
-    _apply(conn)
-    before = _snapshot(conn)
-    _apply(conn)
-    assert _snapshot(conn) == before
-    assert _one(conn, "SELECT count(*) FROM pg_constraint WHERE conname LIKE '%%_original_currency_check'") == (2,)
-    assert _all(conn, _commented_query("Postflight (read-only)")) == []
-
-
-CHECK_CASES = [
-    ((None, None, None), True),
-    ((100, "USD", 505), True),
-    ((50500, "CRC", 505), True),
-    ((100, "USD", None), False),        # all-or-nothing: a CHECK that evaluates to NULL passes,
-    ((None, "USD", 505), False),        # so each column needs its own IS NOT NULL
-    ((100, None, 505), False),
-    ((None, None, 505), False),
-    ((100, "EUR", 1.1), False),         # CRC|USD only
-    ((100, "usd", 505), False),
-    ((0, "USD", 505), False),           # positive amount and rate
-    ((-1, "USD", 505), False),
-    ((100, "USD", 0), False),
-]
-
-
-def test_the_check_is_all_or_nothing_crc_usd_and_positive(db):
-    conn = db["conn"]
-    _apply(conn)
-    for table, insert in (("salaries", "INSERT INTO salaries(user_id,amount,source,workspace_id,original_amount,original_currency,exchange_rate) VALUES(%s,1,'x',%s,%s,%s,%s)"),
-                          ("expenses", "INSERT INTO expenses(user_id,category,amount,workspace_id,original_amount,original_currency,exchange_rate) VALUES(%s,'x',1,%s,%s,%s,%s)")):
-        for values, ok in CHECK_CASES:
-            params = (A["users"], A["workspace"], *values)
-            if ok:
-                _one(conn, insert + " RETURNING id", params)
-            else:
-                with pytest.raises(psycopg2.errors.CheckViolation, match=f"{table}_original_currency_check"):
-                    _one(conn, insert + " RETURNING id", params)
-
-
-def test_a_lock_it_cannot_get_within_lock_timeout_applies_nothing(db):
-    conn = db["conn"]
-    holder = _connect(db, autocommit=False)
-    try:
-        _one(holder, "SELECT count(*) FROM expenses")  # ACCESS SHARE held by an open transaction
-        started = time.monotonic()
-        with pytest.raises(psycopg2.errors.LockNotAvailable):
-            _apply(conn)
-        assert time.monotonic() - started < 30, "bounded by the migration's lock_timeout (5 s)"
-    finally:
-        holder.rollback()
-        holder.close()
-    with conn.cursor() as cur:
-        cur.execute("ROLLBACK")  # the failed script left its transaction aborted
-    for table in ("salaries", "expenses"):
-        assert not set(NEW_COLUMNS) & set(_columns(conn, table)), f"{table}: all or nothing"
-
-
-def test_a_failure_after_the_first_table_rolls_back_the_first_table_too(db):
-    conn = db["conn"]
-    # Drift: someone added one column to expenses by hand and stored a value the CHECK refuses.
-    _one(conn, "ALTER TABLE expenses ADD COLUMN original_currency TEXT; UPDATE expenses SET original_currency='EUR' WHERE id=(SELECT min(id) FROM expenses) RETURNING id")
-    assert _all(conn, _commented_query("Preflight (read-only)")) != [], "the preflight reports the drift before anything runs"
-    with pytest.raises(psycopg2.errors.CheckViolation):
-        _apply(conn)
-    with conn.cursor() as cur:
-        cur.execute("ROLLBACK")
-    assert not set(NEW_COLUMNS) & set(_columns(conn, "salaries")), "salaries was altered first and is rolled back"
-    assert set(_columns(conn, "expenses")) & set(NEW_COLUMNS) == {"original_currency"}, "only the hand-made column remains"
-
-
-def test_manual_rollback_keeps_amounts_snapshots_the_originals_and_allows_reapply(db):
-    conn = db["conn"]
-    _apply(conn)
-    _one(conn, "UPDATE salaries SET amount=50500,original_amount=100,original_currency='USD',exchange_rate=505 WHERE id=(SELECT min(id) FROM salaries WHERE workspace_id=%s) RETURNING id", (A["workspace"],))
-    before = _snapshot(conn)
-
-    _apply(conn, ROLLBACK)
-
-    for table in ("salaries", "expenses"):
-        assert not set(NEW_COLUMNS) & set(_columns(conn, table))
-    after = _snapshot(conn)
-    assert {k: v for k, v in after.items() if not k.endswith(":filenode")} == {k: v for k, v in before.items() if not k.endswith(":filenode")}
-    assert _all(conn, "SELECT source_table,original_amount,original_currency,exchange_rate FROM income_expense_original_currency_rollback_snapshot") == [
-        ("salaries", Decimal("100.00"), "USD", Decimal("505.000000"))]
-    _apply(conn, ROLLBACK)  # a second run changes nothing
-    _apply(conn)
-    assert _all(conn, _commented_query("Postflight (read-only)")) == []
 
 
 # --------------------------------------------------------------------------- services on real rows
@@ -390,3 +238,60 @@ def test_an_edit_waiting_on_a_delete_reports_not_found(app_db):
     thread.join(20)
     assert isinstance(result.get("error"), HTTPException) and result["error"].status_code == 404
     assert _one(app_db["conn"], "SELECT count(*) FROM salaries WHERE id=%s", (row_id,)) == (0,), "the edit never resurrects it"
+
+
+@pytest.mark.parametrize("ident,kind,currency,typed,rate,stored", [
+    # CRC account: CRC as typed, USD at the user's rate.
+    ("A", "income", None, 18500, None, (Decimal("18500.00"), None, None, None)),
+    ("A", "income", "USD", 100, 505, (Decimal("50500.00"), Decimal("100.00"), "USD", Decimal("505.000000"))),
+    ("A", "expense", "CRC", 18500, None, (Decimal("18500.00"), None, None, None)),
+    ("A", "expense", "USD", 21, 505, (Decimal("10605.00"), Decimal("21.00"), "USD", Decimal("505.000000"))),
+    # USD account: USD as typed, CRC divided by the same rate (CRC per 1 USD).
+    ("B", "income", "USD", 100, None, (Decimal("100.00"), None, None, None)),
+    ("B", "income", "CRC", 50500, 505, (Decimal("100.00"), Decimal("50500.00"), "CRC", Decimal("505.000000"))),
+    ("B", "expense", None, 21, None, (Decimal("21.00"), None, None, None)),
+    ("B", "expense", "CRC", 10605, 505, (Decimal("21.00"), Decimal("10605.00"), "CRC", Decimal("505.000000"))),
+])
+def test_every_account_base_and_entry_currency(app_db, ident, kind, currency, typed, rate, stored):
+    from backend.user_product.models import ExpenseCreateRequest, IncomeCreateRequest
+
+    who = IDENTITIES[ident]
+    model, create, table = ((IncomeCreateRequest, app_db["service"].create_income, "salaries") if kind == "income"
+                            else (ExpenseCreateRequest, app_db["service"].create_expense_entry, "expenses"))
+    row = _as(who, create, model(amount=typed, description="Synthetic", currency=currency, exchange_rate=rate))
+    assert _row(app_db, table, row["id"]) == (*stored, who["workspace"])
+
+
+@pytest.mark.parametrize("amount,currency,rate", [
+    (20000000, "USD", 505),        # converted beyond the amount column
+    (10000000000.00, None, None),  # one cent above the amount column, in the base currency
+])
+def test_an_entry_beyond_the_columns_is_a_422_and_writes_nothing(app_db, amount, currency, rate):
+    from fastapi import HTTPException
+
+    from backend.user_product.models import IncomeCreateRequest
+
+    before = _one(app_db["conn"], "SELECT count(*) FROM salaries")
+    with pytest.raises(HTTPException) as error:
+        _as(A, app_db["service"].create_income, IncomeCreateRequest(amount=amount, description="Synthetic", currency=currency, exchange_rate=rate))
+    assert error.value.status_code == 422
+    assert _one(app_db["conn"], "SELECT count(*) FROM salaries") == before
+
+
+
+@pytest.mark.parametrize("kind", ["salary", "expense"])
+def test_a_movement_edited_back_to_the_base_clears_its_original(app_db, kind):
+    """The movements screen's edit (free_service) clears the annotation, as the income/expense edit does."""
+    from backend.user_product.models import ExpenseCreateRequest, IncomeCreateRequest, MovementUpdateRequest
+
+    svc = app_db["service"]
+    if kind == "salary":
+        row = _as(A, svc.create_income, IncomeCreateRequest(amount=100, description="Synthetic", currency="USD", exchange_rate=505))
+        table, transaction_type, category = "salaries", "income", "Otros ingresos"
+    else:
+        row = _as(A, svc.create_expense_entry, ExpenseCreateRequest(amount=21, description="Synthetic", currency="USD", exchange_rate=505))
+        table, transaction_type, category = "expenses", "expense", "Comida"
+    assert _row(app_db, table, row["id"])[2] == "USD"
+    _as(A, app_db["free_service"].update_free_movement, f"{kind}:{row['id']}", MovementUpdateRequest(
+        transaction_date="2026-09-20", description="Synthetic", amount=18500, transaction_type=transaction_type, category=category))
+    assert _row(app_db, table, row["id"]) == (Decimal("18500.00"), None, None, None, A["workspace"])
