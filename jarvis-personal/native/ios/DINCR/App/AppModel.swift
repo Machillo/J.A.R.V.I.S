@@ -8,6 +8,8 @@ import Observation
 final class AppModel {
     enum Phase: Equatable {
         case booting
+        /// No usable backend configuration: nothing loads, and no sample data stands in for it.
+        case unconfigured(LaunchPolicy.Reason)
         case signedOut
         case loadingIdentity
         case identityError(String)
@@ -43,6 +45,11 @@ final class AppModel {
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
             self.service = FixtureDincrService(scenario: scenario)
+        case let .unconfigured(reason):
+            self.auth = nil
+            self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
+            self.service = UnconfiguredService()
+            self.phase = .unconfigured(reason)
         }
     }
 
@@ -50,6 +57,7 @@ final class AppModel {
     var moneyFormat: MoneyFormat { MoneyFormat(profile: profile) }
 
     func start() async {
+        if case .unconfigured = environment.mode { return }
         await sessions.setSignedOutHandler { [weak self] in
             Task { @MainActor in self?.handleSignedOut() }
         }
@@ -142,4 +150,17 @@ final class AppModel {
         profile = nil
         phase = .signedOut
     }
+}
+
+/// Stands in for the backend when none is configured: every call fails, so no screen can show
+/// data (real or sample) in that state.
+private struct UnconfiguredService: DincrService {
+    struct NotConfigured: Error {}
+    func me() async throws -> Profile { throw NotConfigured() }
+    func completeProfileSetup(_ setup: ProfileSetup) async throws -> Profile { throw NotConfigured() }
+    func freeDashboard() async throws -> FreeDashboard { throw NotConfigured() }
+    func movements() async throws -> [Movement] { throw NotConfigured() }
+    func create(_ kind: Movement.Kind, _ entry: EntryCreate, idempotencyKey: String) async throws { throw NotConfigured() }
+    func update(movementID: String, _ update: MovementUpdate) async throws { throw NotConfigured() }
+    func delete(movementID: String) async throws { throw NotConfigured() }
 }

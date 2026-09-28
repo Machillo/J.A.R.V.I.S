@@ -101,8 +101,14 @@ data class MoneyFormat(
 object AmountInput {
     /** Money never has more than two decimals; this also rejects "1.000" in comma_dot. */
     const val MAX_FRACTION_DIGITS = 2
-    /** Below a trillion: far above any personal amount, keeps accidental pastes out. */
-    const val MAX_INTEGER_DIGITS = 12
+    /**
+     * The largest amount any write of this app may send. Every field the input feeds is stored as
+     * NUMERIC(12,2): `salaries.amount` / `expenses.amount` (the backend refuses more,
+     * `entry_currency.MAX_AMOUNT`) and `transactions.amount` (NUMERIC(12,2) in production, where
+     * more would fail in the database). `original_amount` NUMERIC(14,2) is never written here.
+     */
+    val MAX_AMOUNT = BigDecimal("9999999999.99")
+    const val MAX_INTEGER_DIGITS = 10
 
     fun parse(text: String, separators: MoneyFormat.Separators): BigDecimal? {
         val trimmed = text.replace(" ", "")
@@ -119,6 +125,6 @@ object AmountInput {
         if (groups.size > 1 && (groups.first().length !in 1..3 || groups.drop(1).any { it.length != 3 })) return null
         if (groups.joinToString("").trimStart('0').length > MAX_INTEGER_DIGITS) return null
         val value = (groups.joinToString("") + if (fraction.isEmpty()) "" else ".$fraction").toBigDecimalOrNull() ?: return null
-        return value.takeIf { it.signum() > 0 }
+        return value.takeIf { it.signum() > 0 && it <= MAX_AMOUNT }
     }
 }

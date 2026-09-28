@@ -15,32 +15,46 @@ on:
       - "jarvis-personal/native/**"
       - ".github/workflows/native-ci.yml"
 
+# CI of the parallel native prototype only: no secrets, no signing, no deploy, no distribution.
 permissions:
   contents: read
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   tokens:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: node jarvis-personal/native/design-tokens/generate.mjs --check
+      - run: node --test jarvis-personal/native/design-tokens/generate.test.mjs
 
   android:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: jarvis-personal/native/android
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :core:data:test :app:assembleDebug :app:lintDebug --console=plain
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      # Release is built unsigned (no signing config, no secrets) to prove it compiles and that
+      # R8 keeps what the app needs; it is never uploaded.
+      - run: ./gradlew :core:data:test :app:assembleDebug :app:lintDebug :app:assembleRelease :app:lintRelease --console=plain
 
   # Compose flows on an emulator: the minimum (API 24, java.time through desugaring) and a
   # current release. Fixture data only; no backend, no account.
@@ -53,6 +67,8 @@ jobs:
         api-level: [24, 35]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -62,8 +78,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: reactivecircus/android-emulator-runner@v2
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
@@ -75,11 +91,14 @@ jobs:
 
   ios-kit:
     runs-on: macos-15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: jarvis-personal/native/ios/DincrKit
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - run: swift test
 
   # The app target (Swift 6 language mode: concurrency errors fail the build) and the XCUITest
@@ -92,6 +111,8 @@ jobs:
         working-directory: jarvis-personal/native/ios
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       # Runner images ship several Xcodes, and only some have a matching iOS simulator runtime.
       # Use the newest stable Xcode that lists a concrete iPhone simulator for this scheme.
       - name: Pick an Xcode and an iPhone simulator it supports

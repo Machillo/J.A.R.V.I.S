@@ -10,12 +10,26 @@ public protocol HTTPTransport: Sendable {
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
 }
 
+/// Refuses every HTTP redirect: the API and Supabase answer directly, so a 3xx comes back as the
+/// response (an error for the caller) and a bearer or refresh token is never replayed to
+/// another URL.
+public final class RefuseRedirects: NSObject, URLSessionTaskDelegate, Sendable {
+    public static let shared = RefuseRedirects()
+
+    public func urlSession(
+        _ session: URLSession, task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
+    ) async -> URLRequest? {
+        nil
+    }
+}
+
 public struct URLSessionTransport: HTTPTransport {
     let session: URLSession
     public init(session: URLSession = .shared) { self.session = session }
 
     public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request, delegate: RefuseRedirects.shared)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         return (data, http)
     }

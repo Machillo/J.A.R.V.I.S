@@ -102,10 +102,12 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public let category: String?
     public let notes: String?
     public let editable: Bool
-    /// Set only when the amount was typed in another currency (PR #269): `amount` is already
-    /// in the base currency and these keep what was typed. Absent on current main.
+    /// Set when the amount was typed in, or received in, another currency (#269 manual entries,
+    /// #273 mail transactions): `amount` is already in the base currency and these keep the typed
+    /// figure and the user's rate.
     public let originalAmount: Decimal?
     public let originalCurrency: String?
+    public let exchangeRate: Decimal?
 
     public var id: String { movementId }
     /// `YYYY-MM-DD` or nil when the backend has no usable date.
@@ -114,26 +116,33 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
     public init(
         movementId: String, sourceId: Int? = nil, origin: String? = nil, transactionDate: String?,
         description: String?, amount: Decimal, transactionType: Kind, category: String?,
-        notes: String? = nil, editable: Bool = true, originalAmount: Decimal? = nil, originalCurrency: String? = nil
+        notes: String? = nil, editable: Bool = true, originalAmount: Decimal? = nil, originalCurrency: String? = nil,
+        exchangeRate: Decimal? = nil
     ) {
         self.movementId = movementId; self.sourceId = sourceId; self.origin = origin
         self.transactionDate = transactionDate; self.description = description; self.amount = amount
         self.transactionType = transactionType; self.category = category; self.notes = notes
         self.editable = editable; self.originalAmount = originalAmount; self.originalCurrency = originalCurrency
+        self.exchangeRate = exchangeRate
     }
 
-    /// Whether this app may edit the row. A row typed in another currency must send its currency
-    /// and rate back on edit (PR #269), which this client does not do yet, so it stays read-only
-    /// instead of being silently turned into a base-currency amount.
-    public func isEditable(baseCurrency: String) -> Bool {
-        guard editable else { return false }
-        guard let originalCurrency else { return true }
-        return originalCurrency.uppercased() == baseCurrency.uppercased()
+    /// Whether this app may edit or delete the row. The prototype does not edit currencies (it
+    /// never sends `currency`/`exchange_rate`), and a `PUT` without them makes the backend store
+    /// the row as a plain base-currency amount: `original_amount`, `original_currency` and
+    /// `exchange_rate` would be erased by a change to the description alone. So any row carrying
+    /// any of them stays read-only, whatever its currency. A row without a date is read-only too:
+    /// the full-replacement `PUT` would have to invent one.
+    public var isEditable: Bool {
+        guard editable, originalAmount == nil, originalCurrency == nil, exchangeRate == nil, let day else { return false }
+        let characters = Array(day)
+        return characters.count == 10 && characters.indices.allSatisfy { index in
+            index == 4 || index == 7 ? characters[index] == "-" : characters[index].isASCII && characters[index].isNumber
+        }
     }
 
     enum CodingKeys: String, CodingKey {
         case movementId, sourceId, origin, transactionDate, description, amount, transactionType
-        case category, notes, editable, originalAmount, originalCurrency
+        case category, notes, editable, originalAmount, originalCurrency, exchangeRate
     }
 
     public init(from decoder: Decoder) throws {
@@ -153,6 +162,7 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
         editable = try c.decodeIfPresent(Bool.self, forKey: .editable) ?? false
         originalAmount = try c.decodeIfPresent(Decimal.self, forKey: .originalAmount)
         originalCurrency = try c.decodeIfPresent(String.self, forKey: .originalCurrency)
+        exchangeRate = try c.decodeIfPresent(Decimal.self, forKey: .exchangeRate)
     }
 }
 

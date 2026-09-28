@@ -29,19 +29,39 @@ export function parseTokens(raw) {
     if (!match) throw new Error(`DESIGN.md frontmatter is missing ${name}`);
     return match[1];
   };
-  const pairs = (text) => [...text.matchAll(/^\s{2}"?([a-z0-9-]+)"?:\s*"([^"]+)"/gm)].map((m) => [m[1], m[2]]);
-  const colors = Object.fromEntries(pairs(block("colors")));
+  // Strict: every entry of a block must parse. A line that does not would otherwise be skipped
+  // silently and its token would vanish from both apps without any error.
+  const pairs = (name) => {
+    const entries = [];
+    for (const line of block(name).split("\n")) {
+      if (!line.trim() || line.trim().startsWith("#")) continue;
+      const m = line.match(/^\s{2}"?([a-z0-9-]+)"?:\s*"([^"]+)"\s*$/);
+      if (!m) throw new Error(`DESIGN.md ${name}: entry does not parse: ${line.trim()}`);
+      if (entries.some(([key]) => key === m[1])) throw new Error(`DESIGN.md ${name}: duplicate token ${m[1]}`);
+      entries.push([m[1], m[2]]);
+    }
+    if (!entries.length) throw new Error(`DESIGN.md ${name} is empty`);
+    return entries;
+  };
+  const colors = Object.fromEntries(pairs("colors"));
+  for (const [key, value] of Object.entries(colors)) {
+    if (!/^#[0-9A-Fa-f]{6}$/.test(value)) throw new Error(`DESIGN.md color ${key} is not #RRGGBB: ${value}`);
+  }
   const light = Object.keys(colors).filter((key) => !key.startsWith("dark-"));
   for (const key of light) {
     if (!colors[`dark-${key}`]) throw new Error(`missing dark counterpart for ${key}`);
+  }
+  for (const key of Object.keys(colors).filter((key) => key.startsWith("dark-"))) {
+    if (!colors[key.slice(5)]) throw new Error(`dark token ${key} has no light counterpart`);
   }
   const px = (value) => {
     const number = Number(String(value).replace("px", ""));
     if (!Number.isFinite(number)) throw new Error(`not a px value: ${value}`);
     return number;
   };
-  const scale = (name) => pairs(block(name)).map(([key, value]) => [key, px(value)]);
-  const version = frontmatter[1].match(/^version:\s*(\S+)/m)?.[1] || "0.0.0";
+  const scale = (name) => pairs(name).map(([key, value]) => [key, px(value)]);
+  const version = frontmatter[1].match(/^version:\s*(\S+)\s*$/m)?.[1];
+  if (!version) throw new Error("DESIGN.md frontmatter is missing version");
   return {
     version,
     colors: light.map((key) => ({ key, light: colors[key], dark: colors[`dark-${key}`] })),
@@ -125,9 +145,50 @@ export function render(source) {
   return { swift: swift(tokens), kotlin: kotlin(tokens) };
 }
 
+const kinds = { DincrColor: "colors", DincrColors: "colors", DincrSpacing: "spacing", DincrRadius: "radius", DincrIconSize: "icon" };
+
+/** Qualified token references (`DincrColor.tint`, `DincrSpacing.s4`…) the apps use but DESIGN.md no longer defines. */
+export function missingReferences(tokens, sources) {
+  const defined = {
+    colors: new Set(tokens.colors.map(({ key }) => camel(key))),
+    spacing: new Set(tokens.spacing.map(([key]) => swiftName(key))),
+    radius: new Set(tokens.radius.map(([key]) => swiftName(key))),
+    icon: new Set(tokens.icon.map(([key]) => swiftName(key))),
+  };
+  const missing = new Set();
+  for (const text of sources) {
+    for (const [, type, name] of text.matchAll(/\b(DincrColors?|DincrSpacing|DincrRadius|DincrIconSize)\.([A-Za-z0-9]+)\b/g)) {
+      if (!defined[kinds[type]].has(name)) missing.add(`${type}.${name}`);
+    }
+  }
+  return [...missing].sort();
+}
+
+/** The Swift and Kotlin sources of both apps, without build output or the generated files. */
+export function appSources() {
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (["build", ".gradle", ".build", "Generated", "generated", "DerivedData"].includes(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(swift|kt)$/.test(entry.name)) files.push(fs.readFileSync(full, "utf8"));
+    }
+  };
+  [path.join(here, "../ios"), path.join(here, "../android")].filter((root) => fs.existsSync(root)).forEach(walk);
+  return files;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const rendered = render(fs.readFileSync(designPath, "utf8"));
+  const source = fs.readFileSync(designPath, "utf8");
+  const rendered = render(source);
   const check = process.argv.includes("--check");
+  // A token the apps use must still exist; otherwise the build fails later, far from the cause.
+  const missing = missingReferences(parseTokens(source), appSources());
+  if (missing.length) {
+    console.error(`DESIGN.md no longer defines tokens the apps use: ${missing.join(", ")}`);
+    process.exit(1);
+  }
   let stale = 0;
   for (const [kind, file] of Object.entries(outputs)) {
     const current = fs.existsSync(file) ? lf(fs.readFileSync(file, "utf8")) : null;

@@ -6,8 +6,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Backend configuration comes from local.properties (git-ignored). Without it the app runs on
-// synthetic fixture data, like the iOS prototype.
+// Backend configuration comes from local.properties (git-ignored). Without it the app stops at
+// an "unconfigured" screen; fixture data runs only in a debug build that asks for it
+// (`dincr.fixtures=true`, or the UI tests' launch extra). Release builds never contain a way in.
 val local = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
@@ -28,10 +29,15 @@ android {
         buildConfigField("String", "DINCR_API_URL", localValue("dincr.apiUrl"))
         buildConfigField("String", "DINCR_SUPABASE_URL", localValue("dincr.supabaseUrl"))
         buildConfigField("String", "DINCR_SUPABASE_ANON_KEY", localValue("dincr.supabaseAnonKey"))
+        buildConfigField("boolean", "DINCR_FIXTURES", "false")
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "DINCR_FIXTURES", (local.getProperty("dincr.fixtures") == "true").toString())
+        }
         release {
+            buildConfigField("boolean", "DINCR_FIXTURES", "false")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

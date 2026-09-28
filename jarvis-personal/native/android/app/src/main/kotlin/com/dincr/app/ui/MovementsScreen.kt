@@ -56,7 +56,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
 import com.dincr.app.tx
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.SearchText
@@ -91,8 +90,6 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     var pendingDelete by remember { mutableStateOf<Movement?>(null) }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val profile by model.profile.collectAsStateWithLifecycle()
-    val baseCurrency = profile?.baseCurrency ?: "CRC"
     var deleting by remember { mutableStateOf(false) }
     suspend fun load() {
         model.load(tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions.")) { model.service.movements() }
@@ -138,7 +135,7 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                     modifier = Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(top = DincrSpacing.s5, bottom = DincrSpacing.s1).semantics { heading() })
                             }
                             items(rows, key = { it.movementId }) { movement ->
-                                val editable = movement.isEditable(baseCurrency)
+                                val editable = movement.isEditable
                                 val edit = CustomAccessibilityAction(tx("Editar", "Edit")) { editing = EditorMode.Edit(movement); true }
                                 val delete = CustomAccessibilityAction(tx("Eliminar", "Delete")) { pendingDelete = movement; true }
                                 MoneyRow(

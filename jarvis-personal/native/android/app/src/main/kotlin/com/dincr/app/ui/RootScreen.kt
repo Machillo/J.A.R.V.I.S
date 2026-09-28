@@ -39,6 +39,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.Appearance
 import com.dincr.app.Phase
 import com.dincr.app.tx
+import com.dincr.data.LaunchPolicy
 import com.dincr.design.Dincr
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.generated.DincrSpacing
@@ -50,6 +51,14 @@ fun RootScreen(model: AppModel, appearance: Appearance, onAppearance: (Appearanc
         Crossfade(targetState = phase, label = "phase") { current ->
             when (current) {
                 Phase.Booting, Phase.LoadingIdentity -> BootScreen()
+                // No backend: say so and stop. There is no session to close and no sample data.
+                is Phase.Unconfigured -> GateScreen(Icons.Rounded.Warning, tx("Prototipo sin servidor configurado", "Prototype without a configured server"),
+                    when (current.reason) {
+                        LaunchPolicy.Reason.MISSING -> tx("Esta compilación no tiene la dirección del servidor ni la de inicio de sesión. Configurala en local.properties (native/README.md).", "This build has no server or sign-in address. Set them in local.properties (native/README.md).")
+                        LaunchPolicy.Reason.INSECURE_URL -> tx("Las direcciones del servidor deben usar HTTPS.", "Server addresses must use HTTPS.")
+                        LaunchPolicy.Reason.INVALID_URL -> tx("Una dirección del servidor no es válida.", "A server address is not valid.")
+                    },
+                    primary = null, onSignOut = null)
                 Phase.SignedOut -> LoginScreen(model)
                 is Phase.IdentityError -> GateScreen(Icons.Rounded.Warning, tx("No pudimos cargar tu cuenta", "We couldn’t load your account"), current.message,
                     primary = tx("Intentar de nuevo", "Try again") to { model.retryIdentity() }, onSignOut = { model.signOut() })
@@ -82,7 +91,7 @@ private fun BootScreen() {
 }
 
 @Composable
-private fun GateScreen(icon: ImageVector, title: String, message: String, primary: Pair<String, () -> Unit>?, onSignOut: () -> Unit) {
+private fun GateScreen(icon: ImageVector, title: String, message: String, primary: Pair<String, () -> Unit>?, onSignOut: (() -> Unit)?) {
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().padding(DincrSpacing.s6),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4),
@@ -93,8 +102,10 @@ private fun GateScreen(icon: ImageVector, title: String, message: String, primar
         Text(message, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text2, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 560.dp))
         Spacer(Modifier.weight(1f))
         primary?.let { (label, action) -> DincrPrimaryButton(label, action, Modifier.widthIn(max = 560.dp)) }
-        TextButton(onClick = onSignOut, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(tx("Cerrar sesión", "Sign out"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.tint)
+        onSignOut?.let { signOut ->
+            TextButton(onClick = signOut, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(tx("Cerrar sesión", "Sign out"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.tint)
+            }
         }
     }
 }

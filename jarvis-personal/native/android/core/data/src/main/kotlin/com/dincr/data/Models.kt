@@ -112,23 +112,33 @@ data class Movement(
     val notes: String? = null,
     val editable: Boolean = false,
     /**
-     * Set only when the amount was typed in another currency (PR #269): [amount] is already in
-     * the base currency and these keep what was typed. Absent on current main.
+     * Set when the amount was typed in, or received in, another currency (#269 manual entries,
+     * #273 mail transactions): [amount] is already in the base currency and these keep the
+     * typed figure and the user's rate.
      */
     @SerialName("original_amount") val originalAmount: Money? = null,
     @SerialName("original_currency") val originalCurrency: String? = null,
+    @SerialName("exchange_rate") val exchangeRate: Money? = null,
 ) {
     /**
-     * A row typed in another currency must send its currency and rate back on edit (PR #269),
-     * which this client does not do yet, so it stays read-only instead of being silently
-     * turned into a base-currency amount.
+     * Whether this app may edit or delete the row. The prototype does not edit currencies (it
+     * never sends `currency`/`exchange_rate`), and a `PUT` without them makes the backend store
+     * the row as a plain base-currency amount: `original_amount`, `original_currency` and
+     * `exchange_rate` would be erased by a change to the description alone. So any row carrying
+     * any of them stays read-only, whatever its currency. A row without a date is read-only too:
+     * the full-replacement `PUT` would have to invent one.
      */
-    fun isEditable(baseCurrency: String): Boolean =
-        editable && (originalCurrency == null || originalCurrency.equals(baseCurrency, ignoreCase = true))
+    val isEditable: Boolean
+        get() = editable && originalAmount == null && originalCurrency == null && exchangeRate == null &&
+            transactionDate?.take(10)?.let { DATE.matches(it) } == true
 
     /** The backend sends only "income" or "expense"; anything else is money leaving. */
     val kind: MovementKind get() = if (transactionType == "income") MovementKind.INCOME else MovementKind.EXPENSE
     val day: String? get() = transactionDate?.take(10)
+
+    private companion object {
+        val DATE = Regex("""\d{4}-\d{2}-\d{2}""")
+    }
 }
 
 /** Body of `POST /user-product/finance/income` | `/expenses`. */

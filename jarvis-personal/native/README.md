@@ -5,9 +5,22 @@ Native DINCR for iOS (Swift + SwiftUI) and Android (Kotlin + Jetpack Compose). T
 add/edit/delete movement, profile/appearance/sign-out. The Plan and DINCR tabs are "under
 construction" screens with their parity IDs; legal consent and plan selection route to a notice;
 Basic and VIP users see the Free overview with a notice. Most of the product (debts, goals, mail,
-billing, app lock, push, settings, support) is not started. The Capacitor app in `frontend/`
-stays the production app until the parity matrix (`docs/native/PARITY_MATRIX.md`, PR #267) is
-complete. The backend contract the apps use is in [CONTRACT.md](CONTRACT.md).
+billing, app lock, push, settings, support) is not started. The backend contract the apps use is
+in [CONTRACT.md](CONTRACT.md).
+
+## Status: a parallel prototype, not the release app
+
+- DINCR **v1.0 ships the Capacitor app**: `jarvis-personal/frontend` with its native shells
+  `frontend/ios-dincr` (iOS) and `frontend/android` (Android). This prototype never modifies them.
+- The prototype is **not** a release candidate, not a replacement for Capacitor, and not the
+  source of truth for the bundle id, the minimum OS versions or store metadata. It is never
+  distributed. A native migration is a decision for after v1.0, once parity is sufficient
+  (`docs/native/PARITY_MATRIX.md`).
+- **iOS 17 is the prototype's own deployment target** (SwiftUI APIs it uses). The releasable iOS
+  app stays on iOS 15 (`ios-dincr`), and dincr.com keeps publishing iOS 15 (`landing/config.json`
+  `minimumOS`, checked by `test:landing` against `ios-dincr`). Android `minSdk` is 24 in both.
+- Its own ids (`com.dincr.app.nativedev`, UI tests `com.dincr.app.nativedev.uitests`) and its own
+  OAuth redirect never collide with the store app's `com.dincr.app`.
 
 ## Rules
 
@@ -72,26 +85,31 @@ cd jarvis-personal/native/android && ./gradlew :app:connectedDebugAndroidTest
 
 ## Fixture mode and configuration
 
-With no backend configured, both apps run on synthetic fixture data and show a "Modo de
+Fixture (synthetic) data runs **only in a Debug build and only when asked for**, with a "Modo de
 demostración" banner. Scenarios: `populated`, `empty`, `failing`, `newUser`.
 
 - iOS launch arguments: `-DincrFixtures <scenario>` and optionally `-DincrSkipLogin`.
-- Android intent extras: `dincrFixtures=<SCENARIO>` and optionally `dincrSkipLogin=true`.
-- Both switches work only in Debug builds: a release build with a backend configured can never
-  be pointed at sample data (Android's launcher activity is exported).
+- Android intent extras: `dincrFixtures=<SCENARIO>` and optionally `dincrSkipLogin=true`, or
+  `dincr.fixtures=true` in `android/local.properties` (Debug only).
+- A Release build ignores all of them (Android's launcher activity is exported, so another app
+  could send the extras): it can never be pointed at sample data.
 
-Live backend (never committed):
+Without a backend configuration, both apps stop at a **"Prototipo sin servidor configurado"**
+screen; they never fall back to fixtures silently. Live backend (never committed):
 
 - iOS: copy `ios/Config/Local.xcconfig.example` to `ios/Config/Local.xcconfig`.
 - Android: add `dincr.apiUrl`, `dincr.supabaseUrl`, `dincr.supabaseAnonKey` to
   `android/local.properties`.
+- Both URLs must be HTTPS (plain HTTP only in Debug, only to loopback or the emulator's
+  `10.0.2.2`). Only the Supabase anon/publishable key belongs here, never a server key.
 
-OAuth (Supabase PKCE, system browser: `ASWebAuthenticationSession` on iOS, Custom Tabs on
-Android, never a WebView) returns to the prototype's own redirect
+OAuth (Supabase PKCE S256, system browser: `ASWebAuthenticationSession` on iOS, Custom Tabs on
+Android, never a WebView) returns to the prototype's own development redirect
 `com.dincr.app.nativedev://auth/callback`, so it can never receive or steal the store app's
-`com.dincr.app://auth/callback`. **External gate:** live sign-in needs that URL in Supabase Auth →
-URL Configuration → Redirect URLs; until then the apps run on fixtures. The prototype also uses
-its own app id (`com.dincr.app.nativedev`); taking over `com.dincr.app` is a release decision.
+`com.dincr.app://auth/callback`. **External gate, not requested:** live sign-in would need that URL
+in Supabase Auth → URL Configuration → Redirect URLs. It is not in the production allowlist and
+must not be added for this prototype; without it the Supabase sign-in fails visibly (no silent
+fallback). Taking over `com.dincr.app` is a release decision that this prototype does not make.
 
 ## Known prototype limits
 

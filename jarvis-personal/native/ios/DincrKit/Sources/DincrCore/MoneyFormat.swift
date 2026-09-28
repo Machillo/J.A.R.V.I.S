@@ -129,9 +129,12 @@ public enum AmountInput {
     /// Money never has more than two decimals. It also makes "1.000" (comma_dot) and "1,000"
     /// (dot_comma) invalid instead of silently meaning one.
     public static let maxFractionDigits = 2
-    /// Twelve integer digits (below a trillion) is far above any personal amount and keeps
-    /// accidental pastes out of the ledger.
-    public static let maxIntegerDigits = 12
+    /// The largest amount any write of this app may send. Every field the input feeds is stored
+    /// as NUMERIC(12,2): `salaries.amount` / `expenses.amount` (the backend refuses more,
+    /// `entry_currency.MAX_AMOUNT`) and `transactions.amount` (NUMERIC(12,2) in production, where
+    /// more would fail in the database). `original_amount` NUMERIC(14,2) is never written here.
+    public static let maxAmount = Decimal(string: "9999999999.99", locale: Locale(identifier: "en_US_POSIX"))!
+    public static let maxIntegerDigits = 10
 
     public static func parse(_ text: String, separators: MoneyFormat.Separators) -> Decimal? {
         let trimmed = text.replacingOccurrences(of: " ", with: "")
@@ -154,7 +157,7 @@ public enum AmountInput {
         let integerDigits = groups.joined().drop(while: { $0 == "0" })
         guard integerDigits.count <= maxIntegerDigits else { return nil }
         let digits = groups.joined() + (fraction.isEmpty ? "" : "." + fraction)
-        guard let value = Decimal(string: digits, locale: Locale(identifier: "en_US_POSIX")), value > 0 else { return nil }
+        guard let value = Decimal(string: digits, locale: Locale(identifier: "en_US_POSIX")), value > 0, value <= maxAmount else { return nil }
         return value
     }
 }

@@ -1,13 +1,16 @@
 import DincrCore
 import Foundation
 
-/// Build-time configuration, injected through `Config/*.xcconfig` into Info.plist.
-/// With no backend configured (or with `-DincrFixtures <scenario>`), the app runs on
-/// synthetic fixture data: previews, UI tests and screenshots never touch real accounts.
+/// Build-time configuration, injected through `Config/*.xcconfig` into Info.plist and decided by
+/// `LaunchPolicy`. Fixture data only in a Debug build launched with `-DincrFixtures <scenario>`
+/// (UI tests, screenshots, local demos): a Release build can never be pointed at sample data.
+/// Without a complete HTTPS backend configuration the app shows an "unconfigured" screen instead
+/// of silently running on fixtures.
 struct AppEnvironment {
     enum Mode {
         case live(apiURL: URL, supabaseURL: URL, anonKey: String)
         case fixtures(FixtureDincrService.Scenario)
+        case unconfigured(LaunchPolicy.Reason)
     }
 
     /// The prototype's own redirect, so it can never receive (or steal) the store app's
@@ -19,28 +22,28 @@ struct AppEnvironment {
     let mode: Mode
 
     static func current(bundle: Bundle = .main, arguments: [String] = ProcessInfo.processInfo.arguments) -> AppEnvironment {
-        // Launch-argument fixtures are a Debug (UI test) switch only: a release build with a
-        // backend configured can never be pointed at sample data.
-        if Self.allowsLaunchFixtures, let index = arguments.firstIndex(of: "-DincrFixtures") {
-            let raw = arguments.indices.contains(index + 1) ? arguments[index + 1] : "populated"
-            return AppEnvironment(mode: .fixtures(FixtureDincrService.Scenario(rawValue: raw) ?? .populated))
+        var launchFixtures: String?
+        if let index = arguments.firstIndex(of: "-DincrFixtures") {
+            launchFixtures = arguments.indices.contains(index + 1) ? arguments[index + 1] : ""
         }
-        let value = { (key: String) -> String? in
-            let text = (bundle.object(forInfoDictionaryKey: key) as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
-            return text.isEmpty || text.hasPrefix("$(") ? nil : text
+        let value = { (key: String) in bundle.object(forInfoDictionaryKey: key) as? String }
+        switch LaunchPolicy.decide(
+            debugBuild: isDebugBuild, launchFixtures: launchFixtures,
+            apiURL: value("DINCRApiURL"), supabaseURL: value("DINCRSupabaseURL"), anonKey: value("DINCRSupabaseAnonKey")
+        ) {
+        case let .live(apiURL, supabaseURL, anonKey):
+            return AppEnvironment(mode: .live(apiURL: apiURL, supabaseURL: supabaseURL, anonKey: anonKey))
+        case let .fixtures(scenario):
+            return AppEnvironment(mode: .fixtures(scenario.flatMap(FixtureDincrService.Scenario.init(rawValue:)) ?? .populated))
+        case let .unconfigured(reason):
+            return AppEnvironment(mode: .unconfigured(reason))
         }
-        guard let api = value("DINCRApiURL").flatMap(URL.init(string:)),
-              let supabase = value("DINCRSupabaseURL").flatMap(URL.init(string:)),
-              let key = value("DINCRSupabaseAnonKey") else {
-            return AppEnvironment(mode: .fixtures(.populated))
-        }
-        return AppEnvironment(mode: .live(apiURL: api, supabaseURL: supabase, anonKey: key))
     }
 
     #if DEBUG
-    static let allowsLaunchFixtures = true
+    static let isDebugBuild = true
     #else
-    static let allowsLaunchFixtures = false
+    static let isDebugBuild = false
     #endif
 
     var isFixtures: Bool {

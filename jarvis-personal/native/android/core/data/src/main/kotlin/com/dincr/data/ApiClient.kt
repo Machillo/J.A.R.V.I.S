@@ -29,10 +29,20 @@ fun interface HttpTransport {
 }
 
 class OkHttpTransport(
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .callTimeout(20, TimeUnit.SECONDS)
-        .build(),
+    private val client: OkHttpClient = defaultClient(),
 ) : HttpTransport {
+    companion object {
+        /**
+         * 20 s per call and no redirects: the API and Supabase answer directly, so a 3xx is an
+         * error, and a bearer token or refresh token is never replayed to another URL.
+         */
+        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            .callTimeout(20, TimeUnit.SECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+    }
+
     override suspend fun send(request: HttpRequest): HttpResponse = withContext(Dispatchers.IO) {
         val body = request.body?.toRequestBody("application/json".toMediaType())
             ?: if (request.method == "GET" || request.method == "HEAD") null else ByteArray(0).toRequestBody(null)

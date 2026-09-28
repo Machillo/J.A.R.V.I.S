@@ -23,14 +23,14 @@ class AuditTest {
         "1" to d("1"), "1.5" to null, "1,5" to d("1.5"), "1,000" to null, "1.000" to d("1000"),
         "1,000.50" to null, "1.000,50" to d("1000.5"), "₡1.000" to null, "$1,000.50" to null,
         " 18 450 " to d("18450"), "-5" to null, "0" to null, "0,00" to null, "" to null, "abc" to null, "NaN" to null,
-        "Infinity" to null, "1e5" to null, "999.999.999.999,99" to d("999999999999.99"),
+        "Infinity" to null, "1e5" to null, "9.999.999.999,99" to d("9999999999.99"), "999.999.999.999,99" to null,
         "1.000.000.000.000" to null, "12,345" to null,
     )
     private val commaDot = listOf(
         "1" to d("1"), "1.5" to d("1.5"), "1,5" to null, "1,000" to d("1000"), "1.000" to null,
         "1,000.50" to d("1000.5"), "1.000,50" to null, "₡1.000" to null, "$1,000.50" to null,
         " 18 450 " to d("18450"), "-5" to null, "0" to null, "0.00" to null, "" to null, "abc" to null, "NaN" to null,
-        "Infinity" to null, "1e5" to null, "999,999,999,999.99" to d("999999999999.99"),
+        "Infinity" to null, "1e5" to null, "9,999,999,999.99" to d("9999999999.99"), "999,999,999,999.99" to null,
         "1,000,000,000,000" to null, "12.345" to null,
     )
 
@@ -49,7 +49,7 @@ class AuditTest {
             Triple(MoneyFormat("CRC", MoneyFormat.Separators.COMMA_DOT), d("12345.5"), "12,345.5"),
             Triple(MoneyFormat("USD", MoneyFormat.Separators.COMMA_DOT), d("1234.56"), "1,234.56"),
             Triple(MoneyFormat("CRC", MoneyFormat.Separators.DOT_COMMA), d("1000000"), "1.000.000"),
-            Triple(MoneyFormat("USD", MoneyFormat.Separators.DOT_COMMA), d("999999999999.99"), "999.999.999.999,99"),
+            Triple(MoneyFormat("USD", MoneyFormat.Separators.DOT_COMMA), d("9999999999.99"), "9.999.999.999,99"),
         ).forEach { (format, amount, text) ->
             assertEquals(text, format.inputText(amount))
             assertEquals(0, amount.compareTo(AmountInput.parse(format.inputText(amount), format.separators)))
@@ -100,10 +100,9 @@ class AuditTest {
     }
 
     @Test fun rowsTypedInAnotherCurrencyAreReadOnlyHere() {
-        val row = json.decodeFromString<Movement>("""{"movement_id":"expense:1","amount":5200,"transaction_type":"expense","editable":true,"original_amount":10,"original_currency":"USD"}""")
-        assertFalse(row.isEditable("CRC"))
-        assertTrue(row.isEditable("usd"))
-        assertTrue(json.decodeFromString<Movement>("""{"movement_id":"expense:2","amount":1,"transaction_type":"expense","editable":true}""").isEditable("CRC"))
+        val row = json.decodeFromString<Movement>("""{"movement_id":"expense:1","transaction_date":"2026-09-01","amount":5200,"transaction_type":"expense","editable":true,"original_amount":10,"original_currency":"USD","exchange_rate":520}""")
+        assertFalse(row.isEditable)
+        assertTrue(json.decodeFromString<Movement>("""{"movement_id":"expense:2","transaction_date":"2026-09-01","amount":1,"transaction_type":"expense","editable":true}""").isEditable)
     }
 
     @Test fun dashboardIgnoresUnknownFields() {

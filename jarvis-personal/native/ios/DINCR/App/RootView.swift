@@ -11,6 +11,15 @@ struct RootView: View {
             switch model.phase {
             case .booting, .loadingIdentity:
                 BootView()
+            case .unconfigured(let reason):
+                // No backend: say so and stop. There is no session to close and no sample data.
+                GateMessageView(
+                    symbol: "exclamationmark.triangle",
+                    title: tx("Prototipo sin servidor configurado", "Prototype without a configured server"),
+                    message: Self.unconfiguredMessage(reason),
+                    primary: nil,
+                    showsSignOut: false
+                )
             case .signedOut:
                 LoginView()
             case .identityError(let message):
@@ -38,6 +47,14 @@ struct RootView: View {
         }
         .animation(DincrMotion.standard(reduceMotion), value: model.phase)
     }
+
+    static func unconfiguredMessage(_ reason: LaunchPolicy.Reason) -> String {
+        switch reason {
+        case .missing: tx("Esta compilación no tiene la dirección del servidor ni la de inicio de sesión. Configurala en Config/Local.xcconfig (native/README.md).", "This build has no server or sign-in address. Set them in Config/Local.xcconfig (native/README.md).")
+        case .insecureURL: tx("Las direcciones del servidor deben usar HTTPS.", "Server addresses must use HTTPS.")
+        case .invalidURL: tx("Una dirección del servidor no es válida.", "A server address is not valid.")
+        }
+    }
 }
 
 private struct BootView: View {
@@ -60,6 +77,7 @@ struct GateMessageView: View {
     let title: String
     let message: String
     let primary: (String, () -> Void)?
+    var showsSignOut = true
 
     var body: some View {
         VStack(spacing: DincrSpacing.s4) {
@@ -71,10 +89,12 @@ struct GateMessageView: View {
             if let primary {
                 Button(primary.0, action: primary.1).buttonStyle(.dincrPrimary)
             }
-            Button(tx("Cerrar sesión", "Sign out")) { Task { await model.signOut() } }
-                .font(DincrFont.title2)
-                .foregroundStyle(DincrColor.tint)
-                .frame(minHeight: 44)
+            if showsSignOut {
+                Button(tx("Cerrar sesión", "Sign out")) { Task { await model.signOut() } }
+                    .font(DincrFont.title2)
+                    .foregroundStyle(DincrColor.tint)
+                    .frame(minHeight: 44)
+            }
         }
         .padding(DincrSpacing.s6)
         .frame(maxWidth: 600)

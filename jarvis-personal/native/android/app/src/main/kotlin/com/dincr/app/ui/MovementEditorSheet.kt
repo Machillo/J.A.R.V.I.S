@@ -174,7 +174,7 @@ fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit
             OutlinedButton({ pickingDate = true }, Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("${tx("Fecha", "Date")}: ${dayLabel(date.toString())}") }
             saveError?.let { ErrorState(it) }
             DincrPrimaryButton(tx("Guardar", "Save"), ::save, loading = saving, modifier = Modifier.testTag("editor.save"))
-            Row { if (editing != null && editing.editable) TextButton({ onDelete(editing) }) { Text(tx("Eliminar movimiento", "Delete transaction"), color = Dincr.colors.negative) } }
+            Row { if (editing != null && editing.isEditable) TextButton({ onDelete(editing) }) { Text(tx("Eliminar movimiento", "Delete transaction"), color = Dincr.colors.negative) } }
         }
     }
 

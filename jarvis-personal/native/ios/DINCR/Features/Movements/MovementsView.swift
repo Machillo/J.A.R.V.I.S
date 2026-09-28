@@ -116,7 +116,7 @@ struct MovementsView: View {
 
     @ViewBuilder
     private func row(_ movement: Movement) -> some View {
-        let editable = movement.isEditable(baseCurrency: model.moneyFormat.currency)
+        let editable = movement.isEditable
         let content = MoneyRow(
             title: movement.description?.isEmpty == false ? movement.description! : CategoryStyle.label(movement.category),
             subtitle: [CategoryStyle.label(movement.category), editable ? nil : tx("Solo lectura", "Read only")].compactMap { $0 }.joined(separator: " · "),

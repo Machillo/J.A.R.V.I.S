@@ -11,14 +11,14 @@ import Testing
         ("1", 1), ("1.5", nil), ("1,5", Decimal(string: "1.5")!), ("1,000", nil), ("1.000", 1_000),
         ("1,000.50", nil), ("1.000,50", Decimal(string: "1000.5")!), ("₡1.000", nil), ("$1,000.50", nil),
         (" 18 450 ", 18_450), ("-5", nil), ("0", nil), ("0,00", nil), ("", nil), ("abc", nil), ("NaN", nil),
-        ("Infinity", nil), ("1e5", nil), ("999.999.999.999,99", Decimal(string: "999999999999.99")!),
+        ("Infinity", nil), ("1e5", nil), ("9.999.999.999,99", Decimal(string: "9999999999.99")!), ("999.999.999.999,99", nil),
         ("1.000.000.000.000", nil), ("12,345", nil),
     ]
     static let commaDot: [(String, Decimal?)] = [
         ("1", 1), ("1.5", Decimal(string: "1.5")!), ("1,5", nil), ("1,000", 1_000), ("1.000", nil),
         ("1,000.50", Decimal(string: "1000.5")!), ("1.000,50", nil), ("₡1.000", nil), ("$1,000.50", nil),
         (" 18 450 ", 18_450), ("-5", nil), ("0", nil), ("0.00", nil), ("", nil), ("abc", nil), ("NaN", nil),
-        ("Infinity", nil), ("1e5", nil), ("999,999,999,999.99", Decimal(string: "999999999999.99")!),
+        ("Infinity", nil), ("1e5", nil), ("9,999,999,999.99", Decimal(string: "9999999999.99")!), ("999,999,999,999.99", nil),
         ("1,000,000,000,000", nil), ("12.345", nil),
     ]
 
@@ -39,7 +39,7 @@ import Testing
         (MoneyFormat(currency: "CRC", separators: .commaDot), Decimal(string: "12345.5")!, "12,345.5"),
         (MoneyFormat(currency: "USD", separators: .commaDot), Decimal(string: "1234.56")!, "1,234.56"),
         (MoneyFormat(currency: "CRC", separators: .dotComma), Decimal(1_000_000), "1.000.000"),
-        (MoneyFormat(currency: "USD", separators: .dotComma), Decimal(string: "999999999999.99")!, "999.999.999.999,99"),
+        (MoneyFormat(currency: "USD", separators: .dotComma), Decimal(string: "9999999999.99")!, "9.999.999.999,99"),
     ])
     func inputTextRoundTripsExactly(format: MoneyFormat, amount: Decimal, text: String) {
         #expect(format.inputText(amount) == text)
@@ -91,12 +91,11 @@ import Testing
     }
 
     @Test func rowsTypedInAnotherCurrencyAreReadOnlyHere() throws {
-        let json = #"{"movement_id":"expense:1","amount":5200,"transaction_type":"expense","editable":true,"original_amount":10,"original_currency":"USD"}"#
+        let json = #"{"movement_id":"expense:1","transaction_date":"2026-09-01","amount":5200,"transaction_type":"expense","editable":true,"original_amount":10,"original_currency":"USD","exchange_rate":520}"#
         let row = try APIClient.decoder.decode(Movement.self, from: Data(json.utf8))
-        #expect(row.isEditable(baseCurrency: "CRC") == false)
-        #expect(row.isEditable(baseCurrency: "usd"))
-        let plain = #"{"movement_id":"expense:2","amount":1,"transaction_type":"expense","editable":true}"#
-        #expect(try APIClient.decoder.decode(Movement.self, from: Data(plain.utf8)).isEditable(baseCurrency: "CRC"))
+        #expect(row.isEditable == false)
+        let plain = #"{"movement_id":"expense:2","transaction_date":"2026-09-01","amount":1,"transaction_type":"expense","editable":true}"#
+        #expect(try APIClient.decoder.decode(Movement.self, from: Data(plain.utf8)).isEditable)
     }
 
     @Test func dashboardIgnoresUnknownFields() throws {

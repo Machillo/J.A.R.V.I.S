@@ -63,7 +63,7 @@ an Android emulator (API 35). iOS changes were validated by CI only (no Mac in t
 | N19 | Android double tap could submit create/profile setup twice (state set inside the launched coroutine) | important | synchronous single-flight guard + `X-Idempotency-Key` on creates (both platforms, as the Capacitor app) | unit tests: header sent, writes never retried, fixture replays the key |
 | N20 | OAuth callback accepted any URL starting with the redirect (`…/callbackX`), and shared `com.dincr.app://auth/callback` with the store app (Android chooser / collision) | important (security) | exact scheme/host/path, no fragment/userinfo/port, exactly one code; own scheme `com.dincr.app.nativedev`; redirect via a forwarding `AuthCallbackActivity` | 12 rejected-URL cases per platform; mutation (prefix match) fails |
 | N21 | Android exported launcher activity honoured the `dincrFixtures` extra in any build: another app could show DINCR with fake balances | important (security) | launch fixtures only in Debug builds (both platforms) | code review |
-| N22 | `1,000` (dot_comma) / `1.000` (comma_dot) parsed as 1; no upper bound | important (financial) | max 2 decimals, max 12 integer digits (NUMERIC(14,2)); ambiguity rejected | 21-case matrix per separator, identical on both platforms; mutation fails |
+| N22 | `1,000` (dot_comma) / `1.000` (comma_dot) parsed as 1; no upper bound | important (financial) | max 2 decimals; ambiguity rejected. The 12-digit bound chosen here was wrong (revised by N33) | 21-case matrix per separator, identical on both platforms; mutation fails |
 | N23 | Spoken amount ignored the row currency; Kotlin spoke "EUR" where iOS said "euros"; display rounding half-even vs the web's half-up | moderate | spoken currency override; same units; half away from zero | unit tests |
 | N24 | Basic/VIP users saw the Free overview with no notice; `plan_selected` null opened the app (Capacitor gates on `!plan_selected`) | moderate | notice on Home; gate on `!= true` | code review |
 | N25 | Home empty state could never show against the real backend (it always sends six zero-filled months) | moderate | empty = all months zero | fixture now mirrors the backend |
@@ -78,3 +78,32 @@ an Android emulator (API 35). iOS changes were validated by CI only (no Mac in t
 
 Rendered on Android (API 35 emulator): Login, Home light/dark, Home at font scale 2.0, Movements,
 edit sheet. iOS renders were not reviewed in this session: **HUMAN VISUAL GATE** for iOS.
+
+## Re-audit R3.2, 2026-09-28 (after syncing with main: #269, #272 and every earlier PR)
+
+C4 is a **parallel prototype**: DINCR v1.0 ships the Capacitor app (`frontend`, `frontend/ios-dincr`,
+`frontend/android`), which this PR does not touch. iOS 17 is the prototype's own target; the
+releasable app and dincr.com stay on iOS 15. Contract re-checked against the FastAPI code on main
+(`native/CONTRACT.md`). Android was built and tested locally (Windows, JDK 21 via a local-only
+toolchain override; CI uses JDK 17). **Swift was not compiled locally** (no Mac): the iOS changes
+are validated by the `Native apps` workflow only.
+
+| # | Finding | Severity | Change | Test that prevents it |
+|---|---|---|---|---|
+| N33 | The amount input accepted 12 integer digits "for NUMERIC(14,2)", but every column it writes is `amount NUMERIC(12,2)` (`salaries`/`expenses`: the backend refuses more; `transactions`: the database would fail) | high (financial) | max 9 999 999 999.99 (10 integer digits + value bound), both platforms | `ReauditTest(s).amountLimitIsTheColumnOfEveryWrite` (max, one cent over, 1e30, 1e300, NaN, Infinity, non-ASCII digits); mutations killed |
+| N34 | A row with `original_currency` equal to the base, or with only `original_amount`/`exchange_rate`, was editable; a `PUT` without `currency` erases `original_amount`/`original_currency`/`exchange_rate` of salary/expense rows (#269). Rows without a date were editable with "today" invented | high (financial) | any `original_*`/`exchange_rate` → read-only (edit and delete); no usable date → read-only; `exchange_rate` decoded | `rowsWithCurrencyDataOrNoDateAreReadOnly`; `writesNeverCarryACurrencyOrRate`; `untouchedAmountRoundTripsExactly` |
+| N35 | Session race: a refresh of session A finishing after a sign-out or another sign-in was saved over the new session; a request of B could await A's refresh and receive A's token; a rejected refresh of A signed B out | high (isolation) | refresh keyed by refresh token; result saved only if the asking session is still current (`sessionChanged` otherwise) | `signOutDuringRefreshStaysSignedOut`, `anotherSignInDuringRefreshKeepsTheNewSession`, `anotherSessionNeverAwaitsTheOldRefresh`, `rejectedRefreshOfAnOldSessionDoesNotSignOutTheNewOne` |
+| N36 | Android: cancelling the coroutine that was refreshing counted as a rejected refresh and signed the user out | medium | cancellation passes through; waiters get "offline" | `cancelledRefreshDoesNotSignOut` (iOS: `cancelledCallerDoesNotSignOut`) |
+| N37 | Sign-out cleared the device session only after the network logout | medium | clear first, then tell Supabase | `signOutClearsBeforeTheNetworkCall` |
+| N38 | Without backend configuration both apps ran on fixtures **in any build, Release included** (a sample account with invented balances) | blocker (fixtures reachable in Release) | `LaunchPolicy`: fixtures only in Debug and only when asked for; otherwise an "unconfigured" screen with no data | `releaseNeverRunsOnFixtures`, `missingConfigurationNeverFallsBackToFixtures`, `debugFixturesOnlyWhenAskedFor` |
+| N39 | API/Supabase URLs were not required to be HTTPS | medium (network) | HTTPS required; HTTP only in Debug to loopback/emulator host; no credentials/query/fragment | `backendMustBeHttps` |
+| N40 | HTTP redirects were followed (URLSession/OkHttp defaults) | medium (token replay) | redirects never followed; 3xx is an error | `transportFollowsNoRedirects` / `transportRefusesRedirects` |
+| N41 | `check_public_secrets.py` did not scan `jarvis-personal/native` and missed `sb_secret_…` keys | medium | native tree scanned; new-format secret keys detected by value | planted probes in `native/` (assignment and `sb_secret_` value) fail the script |
+| N42 | Token generator skipped malformed entries silently, defaulted the version to 0.0.0, accepted non-hex colors, duplicates and orphan dark tokens, and could not tell when a token the apps use disappeared | medium | strict parsing; `#RRGGBB`; duplicates/orphans/missing version fail; references in the apps must exist | `generate.test.mjs` (5 tests; `--check` proven not to write); 8/8 mutations killed |
+| N43 | `native-ci.yml`: 3 jobs without timeout, no concurrency, third-party actions by tag, checkout kept credentials, Release never built, generator untested | medium (CI) | timeouts on every job, concurrency (cancel on PRs), `gradle/actions` and `android-emulator-runner` pinned to commit SHAs, `persist-credentials: false`, unsigned `assembleRelease` + `lintRelease`, `node --test` for the generator. Still `contents: read`, no secrets, no signing, no deploy | workflow run on this PR |
+| N44 | `docs/native/PARITY_MATRIX.md` on main (#267, merged) lists D3/D4 as `POST /finance/income`, `PUT /finance/income/{id}`…: the real routes are `/user-product/finance/*` (create) and `PUT /user-product/free/movements/{id}` (the Movements edit used here) | low (docs debt) | documented; #267 not modified from this PR | — |
+| N45 | Backend: the `transaction` origin of `PUT /free/movements` has no application-level amount bound (NUMERIC(12,2) overflow would be a database error) | low (out of scope, backend) | reported; the prototype never sends more than 9 999 999 999.99 | — |
+
+Human/external gates unchanged: live OAuth needs `com.dincr.app.nativedev://auth/callback` in the
+Supabase redirect allowlist (**not requested, not to be added for the prototype**); iOS rendering,
+VoiceOver, Dynamic Type AX sizes and physical-device checks remain **HUMAN**.

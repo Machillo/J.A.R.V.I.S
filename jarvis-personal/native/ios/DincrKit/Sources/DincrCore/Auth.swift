@@ -131,6 +131,8 @@ public struct SupabaseAuthClient: Sendable {
 
 public enum AuthError: Error, Sendable, Equatable {
     case invalidCallback, providerRejected, sessionRejected, network, signedOut, cancelled
+    /// The request belonged to a session that was signed out or replaced while it refreshed.
+    case sessionChanged
 }
 
 /// Where the session lives between launches.
@@ -187,7 +189,8 @@ public final class InMemorySessionStore: SessionStore, @unchecked Sendable {
 public actor SessionManager: AccessTokenProvider {
     let auth: SupabaseAuthClient?
     let store: SessionStore
-    private var refreshing: Task<AuthSession, Error>?
+    /// The refresh running for one refresh token. Requests of another session never await it.
+    private var refreshing: (refreshToken: String, task: Task<AuthSession, Error>)?
     private var onSignedOut: (@Sendable () -> Void)?
 
     public init(auth: SupabaseAuthClient?, store: SessionStore) {
@@ -206,29 +209,43 @@ public actor SessionManager: AccessTokenProvider {
         return try await refreshed(from: session).accessToken
     }
 
+    /// Clears the device session first, so no later request can use it, then tells Supabase.
     public func signOut() async {
-        if let session = store.load() { await auth?.signOut(accessToken: session.accessToken) }
+        let session = store.load()
         store.clear()
+        if let session { await auth?.signOut(accessToken: session.accessToken) }
     }
 
     private func refreshed(from session: AuthSession) async throws -> AuthSession {
-        if let refreshing { return try await refreshing.value }
+        if let refreshing, refreshing.refreshToken == session.refreshToken { return try await refreshing.task.value }
         guard let auth else { return session }
-        let task = Task { try await auth.refresh(session.refreshToken) }
-        refreshing = task
-        defer { refreshing = nil }
+        // Unstructured on purpose: a caller that goes away does not cancel the refresh, so a
+        // cancellation can never look like a rejected refresh token.
+        let task = Task { try await self.completeRefresh(of: session, auth: auth) }
+        refreshing = (session.refreshToken, task)
+        return try await task.value
+    }
+
+    /// Runs on the actor after the network call, so no sign-out or sign-in can interleave with
+    /// the check: only the session that asked may change. After a sign-out or another sign-in
+    /// the result belongs to nobody and is dropped, never saved over the new session.
+    private func completeRefresh(of session: AuthSession, auth: SupabaseAuthClient) async throws -> AuthSession {
+        defer { if refreshing?.refreshToken == session.refreshToken { refreshing = nil } }
+        let fresh: AuthSession
         do {
-            let fresh = try await task.value
-            store.save(fresh)
-            return fresh
+            fresh = try await auth.refresh(session.refreshToken)
         } catch AuthError.network {
             throw APIError.offline(.current)
         } catch {
-            // The refresh token is no longer valid: the session is over on this device.
+            guard store.load()?.refreshToken == session.refreshToken else { throw AuthError.sessionChanged }
+            // The refresh token is no longer valid: this session is over on this device.
             store.clear()
             onSignedOut?()
             throw AuthError.signedOut
         }
+        guard store.load()?.refreshToken == session.refreshToken else { throw AuthError.sessionChanged }
+        store.save(fresh)
+        return fresh
     }
 }
 

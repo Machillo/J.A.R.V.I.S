@@ -7,8 +7,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -36,6 +35,8 @@ sealed class AuthException(message: String) : Exception(message) {
     class SessionRejected : AuthException("session rejected")
     class Network : AuthException("network")
     class SignedOut : AuthException("signed out")
+    /** The request belonged to a session that was signed out or replaced while it refreshed. */
+    class SessionChanged : AuthException("session changed")
 }
 
 /** PKCE pair; only the challenge leaves the device (RFC 7636, S256). */
@@ -148,12 +149,14 @@ class SessionManager(
     private val store: SessionStore,
     private val onSignedOut: () -> Unit = {},
 ) : AccessTokenProvider {
-    private val mutex = Mutex()
-    private var inFlight: CompletableDeferred<AuthSession>? = null
+    /** Guards the store and [inFlight] together; never held across a suspension. */
+    private val lock = Any()
+    /** The refresh running for one refresh token. Requests of another session never await it. */
+    private var inFlight: Pair<String, CompletableDeferred<AuthSession>>? = null
 
     val hasSession: Boolean get() = store.load() != null
 
-    fun accept(session: AuthSession) = store.save(session)
+    fun accept(session: AuthSession) = synchronized(lock) { store.save(session) }
 
     override suspend fun accessToken(forceRefresh: Boolean): String {
         val session = store.load() ?: throw AuthException.SignedOut()
@@ -161,28 +164,48 @@ class SessionManager(
         return refreshed(session).accessToken
     }
 
+    /** Clears the device session first, so no later request can use it, then tells Supabase. */
     suspend fun signOut() {
-        store.load()?.let { auth?.signOut(it.accessToken) }
-        store.clear()
+        val session = synchronized(lock) { store.load().also { store.clear() } }
+        session?.let { auth?.signOut(it.accessToken) }
     }
 
     private suspend fun refreshed(session: AuthSession): AuthSession {
-        val (deferred, owner) = mutex.withLock {
-            inFlight?.let { it to false } ?: CompletableDeferred<AuthSession>().also { inFlight = it }.let { it to true }
+        val (deferred, owner) = synchronized(lock) {
+            val running = inFlight
+            if (running != null && running.first == session.refreshToken) running.second to false
+            else CompletableDeferred<AuthSession>().also { inFlight = session.refreshToken to it } to true
         }
         if (!owner) return deferred.await()
-        val client = auth ?: return session.also { finish(deferred, Result.success(it)) }
-        val result = runCatching { client.refresh(session.refreshToken) }
-        result.onSuccess { store.save(it) }
-        result.onFailure { if (it !is AuthException.Network) { store.clear(); onSignedOut() } }
-        finish(deferred, result)
-        return result.getOrElse { error ->
-            throw if (error is AuthException.Network) ApiError.offline(AppLanguage.current()) else AuthException.SignedOut()
+        val client = auth
+        val result = if (client == null) Result.success(session) else runCatching { client.refresh(session.refreshToken) }
+        var rejected = false
+        val outcome: Result<AuthSession> = synchronized(lock) {
+            if (inFlight?.second === deferred) inFlight = null
+            // Only the session that asked may change. After a sign-out or another sign-in the
+            // result belongs to nobody: it is dropped, never saved over the new session.
+            val current = store.load()?.refreshToken == session.refreshToken
+            result.fold(
+                onSuccess = { fresh ->
+                    if (!current) Result.failure(AuthException.SessionChanged())
+                    else { store.save(fresh); Result.success(fresh) }
+                },
+                onFailure = { error ->
+                    when {
+                        // The refreshing caller went away: that says nothing about the session.
+                        error is CancellationException -> Result.failure(error)
+                        error is AuthException.Network -> Result.failure(ApiError.offline(AppLanguage.current()))
+                        !current -> Result.failure(AuthException.SessionChanged())
+                        else -> { store.clear(); rejected = true; Result.failure(AuthException.SignedOut()) }
+                    }
+                },
+            )
         }
-    }
-
-    private suspend fun finish(deferred: CompletableDeferred<AuthSession>, result: Result<AuthSession>) {
-        mutex.withLock { inFlight = null }
-        result.fold({ deferred.complete(it) }, { deferred.completeExceptionally(if (it is AuthException.Network) ApiError.offline(AppLanguage.current()) else AuthException.SignedOut()) })
+        outcome.fold(
+            { deferred.complete(it) },
+            { deferred.completeExceptionally(if (it is CancellationException) ApiError.offline(AppLanguage.current()) else it) },
+        )
+        if (rejected) onSignedOut()
+        return outcome.getOrThrow()
     }
 }

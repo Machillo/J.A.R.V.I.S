@@ -11,6 +11,7 @@ import com.dincr.data.AuthException
 import com.dincr.data.DincrService
 import com.dincr.data.FixtureDincrService
 import com.dincr.data.InMemorySessionStore
+import com.dincr.data.LaunchPolicy
 import com.dincr.data.LiveDincrService
 import com.dincr.data.MoneyFormat
 import com.dincr.data.OAuthProvider
@@ -25,30 +26,36 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Build/launch configuration. No backend configured, or the `dincrFixtures` extra in a debug
- * build (UI tests) → fixture data. MainActivity is exported, so a release build ignores the
- * extra: no other app can point DINCR at sample data.
+ * Build/launch configuration, decided by [LaunchPolicy]. Fixture data only in a debug build and
+ * only when asked for (the `dincrFixtures` extra of the UI tests, or `dincr.fixtures=true` in
+ * local.properties). MainActivity is exported, so a release build ignores every extra: no other
+ * app can point DINCR at sample data. Without a complete HTTPS backend configuration the app
+ * shows [Phase.Unconfigured] instead of silently running on fixtures.
  */
 sealed interface AppEnvironment {
     data class Live(val apiUrl: String, val supabaseUrl: String, val anonKey: String) : AppEnvironment
     data class Fixtures(val scenario: FixtureDincrService.Scenario, val skipLogin: Boolean, val latencyMs: Long = 350) : AppEnvironment
+    data class Unconfigured(val reason: LaunchPolicy.Reason) : AppEnvironment
 
     companion object {
         /** The prototype's own redirect (never the store app's com.dincr.app://auth/callback). */
         const val AUTH_REDIRECT = "com.dincr.app.nativedev://auth/callback"
 
-        fun from(intent: Intent?, allowLaunchFixtures: Boolean = BuildConfig.DEBUG): AppEnvironment {
-            intent?.takeIf { allowLaunchFixtures }?.getStringExtra("dincrFixtures")?.let { raw ->
-                val scenario = FixtureDincrService.Scenario.entries.firstOrNull { it.name.equals(raw, ignoreCase = true) }
-                    ?: FixtureDincrService.Scenario.POPULATED
-                // UI tests pass dincrLatencyMs=0: Compose's test dispatcher does not advance simulated network delays.
-                return Fixtures(scenario, intent.getBooleanExtra("dincrSkipLogin", false), intent.getLongExtra("dincrLatencyMs", 350))
+        fun from(intent: Intent?, debugBuild: Boolean = BuildConfig.DEBUG): AppEnvironment {
+            val launchFixtures = if (debugBuild) intent?.getStringExtra("dincrFixtures") else null
+            val decision = LaunchPolicy.decide(debugBuild, launchFixtures, BuildConfig.DINCR_FIXTURES,
+                BuildConfig.DINCR_API_URL, BuildConfig.DINCR_SUPABASE_URL, BuildConfig.DINCR_SUPABASE_ANON_KEY)
+            return when (decision) {
+                is LaunchPolicy.Decision.Live -> Live(decision.apiUrl, decision.supabaseUrl, decision.anonKey)
+                is LaunchPolicy.Decision.Unconfigured -> Unconfigured(decision.reason)
+                is LaunchPolicy.Decision.Fixtures -> Fixtures(
+                    FixtureDincrService.Scenario.entries.firstOrNull { it.name.equals(decision.scenario, ignoreCase = true) }
+                        ?: FixtureDincrService.Scenario.POPULATED,
+                    intent?.getBooleanExtra("dincrSkipLogin", false) ?: false,
+                    // UI tests pass dincrLatencyMs=0: Compose's test dispatcher does not advance simulated network delays.
+                    intent?.getLongExtra("dincrLatencyMs", 350) ?: 350,
+                )
             }
-            val api = BuildConfig.DINCR_API_URL
-            val supabase = BuildConfig.DINCR_SUPABASE_URL
-            val key = BuildConfig.DINCR_SUPABASE_ANON_KEY
-            return if (api.isBlank() || supabase.isBlank() || key.isBlank()) Fixtures(FixtureDincrService.Scenario.POPULATED, false)
-            else Live(api, supabase, key)
         }
     }
 }
@@ -56,6 +63,8 @@ sealed interface AppEnvironment {
 /** Gate order from CURRENT_STATE_AUDIT.md §1, same as the iOS AppModel. */
 sealed interface Phase {
     data object Booting : Phase
+    /** No usable backend configuration: nothing loads, and no sample data stands in for it. */
+    data class Unconfigured(val reason: LaunchPolicy.Reason) : Phase
     data object SignedOut : Phase
     data object LoadingIdentity : Phase
     data class IdentityError(val message: String) : Phase
@@ -116,6 +125,10 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             is AppEnvironment.Fixtures -> {
                 sessions = SessionManager(null, InMemorySessionStore())
                 service = FixtureDincrService(environment.scenario, environment.latencyMs)
+            }
+            is AppEnvironment.Unconfigured -> {
+                _phase.value = Phase.Unconfigured(environment.reason)
+                return
             }
         }
         viewModelScope.launch {
