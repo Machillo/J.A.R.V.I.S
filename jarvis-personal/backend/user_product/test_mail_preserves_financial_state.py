@@ -177,7 +177,9 @@ class LedgerConnection:
             ok = candidate and (candidate["account_id"], candidate["workspace_id"]) == (params[1], params[2])
             return self._result(one=dict(candidate) if ok else None)
         if q.startswith("INSERT INTO transactions"):
-            (tdate, description, amount, kind, category, _account, source, _notes, user_id, workspace_id, _fa) = params
+            (tdate, description, amount, kind, category, _account, source, _notes, user_id, workspace_id, _fa,
+             *_original) = params
+            amount = float(amount)
             transaction_id = 9000 + len(work["transactions"])
             work["transactions"].append({"id": transaction_id, "transaction_date": tdate, "description": description,
                                          "amount": amount, "transaction_type": kind, "source": source,
