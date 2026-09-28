@@ -8,7 +8,8 @@
     "@capacitor/filesystem",
     "@capacitor/share",
     "@aparajita/capacitor-biometric-auth",
-    "@capawesome/capacitor-file-picker"
+    "@capawesome/capacitor-file-picker",
+    "@capgo/native-purchases"
   ],
   "ios": {
     "path": "ios-dincr"

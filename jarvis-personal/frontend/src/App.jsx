@@ -19,6 +19,7 @@ import { getReleasePolicy } from "./lib/releasePolicy";
 import { detectNativePlatform } from "./ui/native/platform";
 import FinvaAppLock from "./components/FinvaAppLock";
 import { isDincrDistribution } from "./lib/appIdentity";
+import { recoverStorePurchases } from "./lib/storeBilling";
 
 
 // Owner (JARVIS) code and its chart library load only for Owner sessions, so
@@ -115,6 +116,15 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // A recovered store purchase: the plan shown is the one the backend now reports.
+  useEffect(() => {
+    const onStoreEntitlement = (event) => {
+      if (event.detail?.profile) setCurrentUser(event.detail.profile);
+    };
+    window.addEventListener("dincr:store-entitlement", onStoreEntitlement);
+    return () => window.removeEventListener("dincr:store-entitlement", onStoreEntitlement);
+  }, []);
+
   useEffect(() => {
     const isPersonal = ownerBridgeMode || currentUser?.role === "owner" || currentUser?.role === "admin";
     document.title = isPersonal ? "DINCR Owner" : "DINCR";
@@ -126,7 +136,10 @@ export default function App() {
     let cancelled = false;
     getMe()
       .then((profile) => {
-        if (!cancelled) setCurrentUser(profile);
+        if (cancelled) return;
+        setCurrentUser(profile);
+        // A store purchase charged but not verified yet (e.g. the app closed mid-way).
+        if (profile?.role === "user") recoverStorePurchases();
       })
       .catch((error) => {
         if (cancelled) return;
@@ -177,6 +190,7 @@ export default function App() {
         flushPendingOperations();
         refreshProfile();
         refreshReleasePolicy();
+        if (currentUserRef.current?.role === "user") recoverStorePurchases();
       }
     }).then((listener) => {
       nativeListener = listener;
