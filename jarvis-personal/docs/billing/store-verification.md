@@ -130,16 +130,59 @@ Steps:
 
 `has_store_entitlement` (`product_ops/service.py`) is the only reader of a store entitlement. This change only writes the `store_subscriptions` row it reads, including the grace end. The off-store billing tables are retired (`20260926152000`).
 
+## Mobile client
+
+The app (`frontend/src/lib/storeBilling/`, UI in `src/users/components/StoreSubscriptionPanel.jsx`) buys through the stores with the plugin `@capgo/native-purchases` (pinned version; StoreKit 2 on iOS, Play Billing Library 9 on Android, Swift Package Manager). It never grants a plan: the plan shown is always the backend's (`GET /auth/me`; `GET /billing/store/entitlement` only describes the store subscription).
+
+**Purchase** (Settings → "Suscribite con App Store / Google Play", native app only, `user` role only):
+0. **One store subscription at a time.** If `GET /billing/store/entitlement` shows a live App Store or Google Play subscription, the app does not open the store again. It points to "Gestionar suscripción" instead: the plugin cannot replace a Play subscription in-app, so a second purchase would be billed alongside the first. Changing plan or period is done in the store. On iOS, all four products must be in **one subscription group**.
+1. `POST /billing/store/customer-token`. A 503 here (store verification off) stops the flow **before the store opens**: nothing is charged. The token is the account's UUID, used as is.
+2. The store purchase:
+   - iOS: `Product.purchase` with `appAccountToken` = the token;
+   - Android: `launchBillingFlow` with `setObfuscatedAccountId` = the token and the base plan returned by Play (a base plan named `monthly` / `annual` is preferred). The plugin reports Android subscriptions one entry per offer, with `planIdentifier` = the product id and `identifier` = the base plan id; the regular price shown is the base plan's.
+3. The evidence goes to the backend:
+   - iOS: the transaction's `jwsRepresentation` → `POST /apple/transactions` `{signed_transaction}`;
+   - Android: the purchase token and product id → `POST /google/purchases` `{purchase_token, product_id}`.
+   Only DINCR's catalog products (`GET /billing/store/catalog`) are accepted; a malformed store result is not sent.
+4. The app reloads `/auth/me` and `/billing/store/entitlement` and shows what the backend says.
+
+Prices, currency and period text come from the store (`getProducts`), never from the backend catalog, which only maps product → plan → period.
+
+**Who finishes what** (no race between the device and the backend):
+- **Google Play:** only the backend acknowledges, after verifying (`store_verification.verify_google_purchase`). The device passes `autoAcknowledgePurchases: false` on every plugin call and never calls the plugin's `restorePurchases` on Android, because that call acknowledges every purchase. An unverified purchase therefore stays unacknowledged, and Google refunds it after 3 days, instead of charging for a plan DINCR refused.
+- **App Store:** the device finishes a transaction only after a definitive backend answer (verified, 409 or 422). Unfinished transactions stay in StoreKit's current entitlements. StoreKit's own update listener (renewals, Ask to Buy) finishes updates and triggers a recovery.
+
+**Restore** ("Restaurar compras"):
+- iOS: `AppStore.sync()`, then every current entitlement's JWS;
+- Android: every current subscription purchase from `queryPurchases`.
+
+The store is read first. With no DINCR purchase there, restore ends: it requests no customer token and calls no verification endpoint (as recovery does). Otherwise it requests the customer token. A 503 (store verification off) ends it, and no evidence is sent.
+
+Each purchase then goes to the backend, which decides ownership. A 409 (the purchase belongs to another DINCR account) changes nothing on the device and shows a message without ids.
+
+**Recovery when the store charged but DINCR did not answer** (network down, app killed, backend 5xx or 503, kill switch still off): nothing is stored on the device; the store keeps the evidence. After the store charged, any non-final answer shows "la reintentaremos", never "not available". On login and on every app resume (`App.jsx` → `recoverStorePurchases`), the app sends again this account's purchases that the backend has not answered yet:
+- Android: purchased and not acknowledged. This includes a backend answer of `acknowledgement: "pending"` and a 422, which on Google can be a temporary Play API failure;
+- iOS: current entitlements not answered in this app session. An Apple 422 (signature not verifiable) is final.
+
+With nothing bought in the store, recovery makes no backend call. In particular, it creates no customer token.
+
+Pending payments (Google pending purchase, Apple Ask to Buy) are sent once the store reports them purchased.
+
+**Never on the device:** store secrets or service accounts; logging, analytics or local storage of JWS / purchase tokens; the offline operation queue (store paths are not recoverable operations); purchases on the web (no store buttons there, the plugin is never invoked).
+
+**Kill switch:** while `DINCR_STORE_VERIFICATION_ENABLED` is off, the panel shows "Las compras desde la app todavía no están disponibles" and offers no purchase. Free, courtesy and Owner access are unaffected.
+
+**Known plugin behaviour** (not DINCR code; see the PR):
+- **Android logcat:** the Android plugin writes the purchase token (and `Purchase.toString()`) to logcat at debug/info level during a purchase. Release builds keep those logs (`minifyEnabled false`). Only adb, bug reports or privileged apps can read logcat. A leaked token cannot be claimed by another DINCR account (409), because the purchase is bound to its `obfuscatedExternalAccountId`. Removing the lines needs an R8 rule or a plugin patch (a human decision).
+- **Capacitor logging:** in debug builds, Capacitor's default logging prints plugin results.
+- **iOS finishing:** on iOS the plugin's `Transaction.updates` listener finishes updates (and transactions re-delivered at launch) before DINCR sees them. That costs no money: Apple does not refund unfinished transactions. Active subscriptions are recovered from current entitlements, and anything else from App Store Server Notifications.
+- **Calls DINCR avoids on Android:** `isBillingSupported`, `getStorefront`, `restorePurchases` and `consumePurchase` open a billing client that auto-acknowledges; the test forbids them.
+
+**Not validated:** a purchase on a device (sandbox / license tester); the iOS build, which needs the Mac (Xcode resolves the Swift package).
+
 ## Not in this change (follow-up)
 
 - The App Store Server API (`Get All Subscription Statuses`, which needs an API key) would let the server re-read Apple's state instead of relying on notifications between renewals. Google tokens are not stored, so Google state between notifications relies on RTDN and on the app re-verifying.
 
-- **The purchase UI in the mobile app:**
-  - StoreKit 2 / Play Billing via a Capacitor plugin;
-  - passing the customer token;
-  - sending the result to the verification endpoints;
-  - "Restore purchases";
-  - "Manage subscription" links.
-
-  The backend is ready for it, but no device purchase has been tested.
+- No device purchase has been tested yet (see [Mobile client](#mobile-client) → not validated).
 - Store-side price and tax configuration, and the store review submissions.
