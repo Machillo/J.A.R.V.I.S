@@ -157,12 +157,12 @@ class LedgerConnection:
                 "expense_months": len({t["transaction_date"].strftime("%Y-%m") for t in expense}),
             })
         if q.startswith("INSERT INTO account_balances"):
-            (user_id, workspace_id, account_id, name, bank, code, country, kind, last4, currency) = params
+            (workspace_id, account_id, name, bank, code, country, kind, last4, currency) = params
             existing = next((a for a in work["accounts"] if (a["workspace_id"], a["account_id"], a["institution_code"], a["account_last4"], a["currency"]) == (workspace_id, account_id, code, last4, currency)), None)
             if existing:
                 existing["signals_count"] += 1
             else:
-                existing = {"id": 300 + len(work["accounts"]), "user_id": user_id, "workspace_id": workspace_id,
+                existing = {"id": 300 + len(work["accounts"]), "user_id": None, "workspace_id": workspace_id,
                             "account_id": account_id, "account_name": name, "bank_name": bank, "institution_code": code,
                             "account_type": kind, "account_last4": last4, "currency": currency, "current_balance": 0,
                             "source": "finva_email_discovery", "include_in_net_worth": False, "is_active": True,

@@ -150,7 +150,7 @@ def test_a_message_that_cannot_be_stored_is_recorded_and_the_batch_continues(mon
     assert params[3] == "poison" and recorded[1] == ("COMMIT", ())
 
 
-@pytest.mark.parametrize("transient", ["operational", "deadlock", "lock_timeout"])
+@pytest.mark.parametrize("transient", ["operational", "deadlock", "lock_timeout", "permission"])
 def test_a_transient_failure_stops_the_batch_and_keeps_the_cursor(monkeypatch, transient):
     """A timeout, deadlock or dropped connection is not the message's fault: nothing is
     recorded as failed and the sync stops, so the same page is read again next time."""
@@ -162,8 +162,11 @@ def test_a_transient_failure_stops_the_batch_and_keeps_the_cursor(monkeypatch, t
     class _LockTimeout(Exception):
         pgcode = "55P03"
 
+    class _Permission(Exception):
+        pgcode = "42501"  # a missing grant of the application role
+
     error = {"operational": psycopg2.OperationalError("server closed the connection"),
-             "deadlock": _Deadlock(), "lock_timeout": _LockTimeout()}[transient]
+             "deadlock": _Deadlock(), "lock_timeout": _LockTimeout(), "permission": _Permission()}[transient]
 
     def ingest_once(*_args, **_kwargs):
         raise error
