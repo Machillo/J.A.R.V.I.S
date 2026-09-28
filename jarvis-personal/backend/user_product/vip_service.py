@@ -4,7 +4,9 @@ from datetime import date, timedelta
 from math import ceil
 from typing import Any
 
-from backend.auth.current_user import get_current_account_id, get_current_workspace_id
+from fastapi import HTTPException
+
+from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.user_product.income_policy import imported_income_by_month, income_baseline
@@ -16,6 +18,25 @@ from backend.user_product.basic_service import (
     _profile,
     _shift_month,
 )
+
+
+def _money_text(value: float) -> str:
+    """An amount in the account's base currency (from the authenticated identity).
+
+    Only a label: without an identity currency it keeps the previous ₡.
+    The sign goes before the symbol (-$1,234.60), as in the app's formatMoney,
+    and an amount that rounds to zero never reads as "-0".
+    """
+    try:
+        currency = str(get_current_user().get("base_currency") or "CRC").upper()
+    except HTTPException:
+        currency = "CRC"
+    decimals = 2 if currency == "USD" else 0
+    shown = round(float(value), decimals) + 0.0  # + 0.0 turns -0.0 into 0.0
+    sign, number = "-" if shown < 0 else "", f"{abs(shown):,.{decimals}f}"
+    if currency == "USD":
+        return f"{sign}${number}"
+    return f"{sign}₡{number}" if currency == "CRC" else f"{sign}{number} {currency}"
 
 
 def _money(value: Any) -> float:
@@ -182,7 +203,7 @@ def get_vip_command_center() -> dict:
 
     alerts = []
     if margin < 0:
-        alerts.append({"severity": "critical", "title": tx("Cierre mensual negativo", "Negative monthly close"), "context": tx(f"Faltan ₡{abs(margin):,.0f} para cubrir compromisos conocidos.", f"₡{abs(margin):,.0f} is missing to cover known commitments."), "action": tx("Reducí variables o aumentá ingreso antes de asumir otra obligación.", "Reduce variable spending or increase income before taking on another obligation.")})
+        alerts.append({"severity": "critical", "title": tx("Cierre mensual negativo", "Negative monthly close"), "context": tx(f"Faltan {_money_text(abs(margin))} para cubrir compromisos conocidos.", f"{_money_text(abs(margin))} is missing to cover known commitments."), "action": tx("Reducí variables o aumentá ingreso antes de asumir otra obligación.", "Reduce variable spending or increase income before taking on another obligation.")})
     if coverage < 1:
         alerts.append({"severity": "high", "title": tx("Reserva menor a un mes", "Reserve below one month"), "context": tx(f"La cobertura estimada es {coverage:.1f} meses.", f"Estimated coverage is {coverage:.1f} months."), "action": tx("Protegé el siguiente excedente en el fondo de emergencia.", "Protect the next surplus in the emergency fund.")})
     if variability > 20:
@@ -254,7 +275,7 @@ def get_vip_command_center() -> dict:
 
     return {
         "as_of": today.isoformat(),
-        "director": {"priority": priority, "headline": labels[priority], "next_action": tx(f"Asigná ₡{action_amount:,.0f} a esta prioridad.", f"Assign ₡{action_amount:,.0f} to this priority."), "data_complete": completeness >= .8},
+        "director": {"priority": priority, "headline": labels[priority], "next_action": tx(f"Asigná {_money_text(action_amount)} a esta prioridad.", f"Assign {_money_text(action_amount)} to this priority."), "data_complete": completeness >= .8},
         "score": {"value": score, "label": tx("Fuerte", "Strong") if score >= 75 else tx("En progreso", "In progress") if score >= 50 else tx("Vulnerable", "Vulnerable"), "factors": score_factors},
         "goals": goal_guidance,
         "debt_planner": {"strategies": strategies, "recommended": best},

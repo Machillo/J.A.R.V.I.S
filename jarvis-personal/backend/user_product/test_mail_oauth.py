@@ -34,7 +34,7 @@ class Clock:
 
 class FakeDb:
     def __init__(self):
-        self.state = {"flows": {}, "connections": {}, "vault": {}, "takeovers": []}
+        self.state = {"flows": {}, "connections": {}, "vault": {}, "vault_owner": {}, "takeovers": []}
         self.vip = {A["account_id"], B["account_id"]}
 
     def connect(self):
@@ -65,8 +65,8 @@ class FakeConnection:
     def execute(self, query, params=()):
         q, now = " ".join(query.split()), Clock.now
         flows, connections, vault = self.work["flows"], self.work["connections"], self.work["vault"]
-        takeovers = self.work["takeovers"]
-        if q.startswith("SELECT id,pending_secret_id FROM mail_oauth_flows"):
+        takeovers, vault_owner = self.work["takeovers"], self.work["vault_owner"]
+        if q.startswith("SELECT id,account_id,pending_secret_id FROM mail_oauth_flows"):
             return self._rows(f for f in flows.values()
                               if (f["expires_at"] <= now or f["status"] == "failed") and f["status"] != "completed"
                               and (not params or f["account_id"] == params[0]))
@@ -123,11 +123,13 @@ class FakeConnection:
             assert "completion_hash" not in q  # kept for the initiator's idempotent retry
             flows[params[0]].update(status="completed", pending_secret_id=None)
             return self._rows([])
-        if q.startswith("SELECT vault.create_secret"):
+        if q.startswith("SELECT dincr_private.mail_secret_create"):
             secret_id = str(uuid4())
             vault[secret_id] = params[0]
+            vault_owner[secret_id] = params[1]
             return self._rows([{"secret_id": secret_id}])
-        if q.startswith("DELETE FROM vault.secrets"):
+        if q.startswith("SELECT dincr_private.mail_secret_delete"):
+            assert vault_owner.get(params[0], params[1]) == params[1], "a token deleted on behalf of another account"
             vault.pop(params[0], None)
             return self._rows([])
         if q.startswith("SELECT 1 FROM account_subscriptions"):
@@ -179,7 +181,8 @@ class FakeProvider:
     """Issues codes bound to a PKCE challenge and a mailbox; redeems each code once."""
 
     def __init__(self):
-        self.codes, self.token_requests, self.subjects, self.urls = {}, [], {}, []
+        self.codes, self.token_requests, self.subjects, self.urls, self.revoked = {}, [], {}, [], []
+        self.google_scope = "https://www.googleapis.com/auth/gmail.readonly"
 
     def authorize(self, url: str, mailbox: str) -> tuple[str, str]:
         params = parse_qs(urlparse(url).query)
@@ -193,15 +196,19 @@ class FakeProvider:
             mailbox = data["access_token"].removeprefix("access-for-")
             return SimpleNamespace(status_code=200, json=lambda: {
                 "aud": GMAIL_CLIENT[0], "azp": GMAIL_CLIENT[0], "sub": self.subjects.get(mailbox, str(abs(hash(mailbox)) % 10**12))})
+        if url.endswith("/revoke"):
+            self.revoked.append(data["token"])
+            return SimpleNamespace(status_code=200, json=lambda: {})
         self.token_requests.append(dict(data))
         challenge, mailbox = self.codes.pop(data.get("code"), (None, None))
         verifier = data.get("code_verifier") or ""
         computed = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
         if not challenge or computed != challenge:
             return SimpleNamespace(status_code=400, json=lambda: {"error": "invalid_grant"})
+        scope = ("https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read" if "microsoft" in url
+                 else self.google_scope)
         return SimpleNamespace(status_code=200, json=lambda: {
-            "access_token": f"access-for-{mailbox}", "refresh_token": f"refresh-for-{mailbox}",
-            "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read"})
+            "access_token": f"access-for-{mailbox}", "refresh_token": f"refresh-for-{mailbox}", "scope": scope})
 
 
 @pytest.fixture
@@ -739,3 +746,33 @@ def test_a_rotated_outlook_token_is_never_stored_on_a_disconnected_or_taken_over
         status_code=200, raise_for_status=lambda: None, json=lambda: {"access_token": "a", "refresh_token": "rotated"}))
     ms._refresh({"id": 1, "account_id": A["account_id"], "refresh_token_secret_id": "old-secret"}, "old-token")
     assert bool(created) is stored
+
+
+def test_gmail_asks_for_exactly_the_read_only_scope(env):
+    query = parse_qs(urlparse(start("gmail", A)).query)
+    assert query["scope"] == [gmail_service.GMAIL_SCOPE]
+    assert "include_granted_scopes" not in query  # no earlier grant (e.g. sign-in) is merged into the Gmail token
+
+
+@pytest.mark.parametrize("granted", ["", "openid https://www.googleapis.com/auth/userinfo.email",
+                                     "https://www.googleapis.com/auth/gmail.metadata"])
+def test_gmail_consent_without_the_read_permission_attaches_nothing(env, granted):
+    """Google's granular consent lets the user untick Gmail and still return an authorization code."""
+    env.provider.google_scope = granted
+    status, params = callback("gmail", *env.provider.authorize(start("gmail", A), "a@example.com"))
+    assert status == "permission_missing" and "completion" not in params
+    assert env.provider.revoked == []  # never revoked: it would revoke the user's other grants to DINCR's client
+    assert env.db.state["vault"] == {}  # and never stored
+    assert connections_of(env, A) == []
+    assert next(iter(env.db.state["flows"].values()))["status"] == "failed"
+
+
+@pytest.mark.parametrize("recorded", [[], ["https://www.googleapis.com/auth/gmail.metadata"]])
+def test_gmail_completion_never_attaches_a_flow_without_the_read_permission(env, recorded):
+    """Defense in depth: even an authorized flow is attached only if it recorded gmail.readonly."""
+    _, params = callback("gmail", *env.provider.authorize(start("gmail", A), "a@example.com"))
+    next(iter(env.db.state["flows"].values()))["granted_scopes"] = recorded
+    with pytest.raises(HTTPException) as refused:
+        complete(A, params)
+    assert refused.value.status_code == 409
+    assert connections_of(env, A) == []
