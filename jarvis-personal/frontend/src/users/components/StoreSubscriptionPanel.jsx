@@ -65,12 +65,11 @@ export default function StoreSubscriptionPanel({ user, onUserChange }) {
   if (phase === "web" || user?.role !== "user") return null;
 
   const working = ["store", "verifying", "restoring"].includes(phase);
-  const currentPlan = user?.subscription?.plan || "free";
 
   const buy = async (offer) => {
     if (!billing || working) return;
     setNotice(null);
-    const result = await billing.purchase(offer, { onStage: setPhase });
+    const result = await billing.purchase(offer, { onStage: setPhase }).catch(() => ({ outcome: "store" }));
     applyResult(result);
     const plan = result?.profile?.subscription?.plan;
     setNotice(outcomeMessage(result.outcome, { plan, context: "purchase" }));
@@ -82,7 +81,7 @@ export default function StoreSubscriptionPanel({ user, onUserChange }) {
     if (!billing || working) return;
     setNotice(null);
     setPhase("restoring");
-    const result = await billing.restore();
+    const result = await billing.restore().catch(() => ({ outcome: "backend", results: [] }));
     applyResult(result);
     setNotice(restoreMessage(result, result?.profile?.subscription?.plan));
     if (result.outcome === "disabled") setOpen(false);
@@ -112,6 +111,10 @@ export default function StoreSubscriptionPanel({ user, onUserChange }) {
         <p className="store-subscription-note">{tx("Tu acceso actual es promocional. Si te suscribís, la tienda empieza a cobrar desde la compra.", "Your current access is promotional. If you subscribe, the store starts charging from the purchase.")}</p>
       )}
 
+      {storeSubscription && phase === "ready" && (
+        <p className="store-subscription-note">{tx("Para cambiar de plan o de período, usá «Gestionar suscripción» en la tienda.", "To change plan or period, use “Manage subscription” in the store.")}</p>
+      )}
+
       {phase === "loading" && <p>{tx("Cargando precios de la tienda...", "Loading store prices...")}</p>}
       {phase === "store" && <p role="status">{tx("Compra en progreso en la tienda...", "Purchase in progress in the store...")}</p>}
       {phase === "verifying" && <p role="status">{tx("Verificando tu compra con DINCR...", "Verifying your purchase with DINCR...")}</p>}
@@ -134,7 +137,7 @@ export default function StoreSubscriptionPanel({ user, onUserChange }) {
               <button
                 type="button"
                 className="change-plan-button"
-                disabled={working || (currentPlan === offer.plan && Boolean(storeSubscription))}
+                disabled={working || Boolean(storeSubscription)}
                 onClick={() => buy(offer)}
               >
                 {tx("Suscribirme", "Subscribe")}

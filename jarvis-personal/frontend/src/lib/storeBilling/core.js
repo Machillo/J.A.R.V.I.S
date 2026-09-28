@@ -58,20 +58,35 @@ export function catalogProducts(catalog) {
 }
 
 /**
+ * A store product as { productId, basePlanId, offerId, ... }. The plugin reports
+ * Android subscriptions per offer: `planIdentifier` is the Play product id and
+ * `identifier` the base plan id. On iOS `identifier` is the product id.
+ */
+export function storeProduct(platform, item) {
+  if (platform === "android") {
+    return { ...item, productId: item?.planIdentifier, basePlanId: item?.identifier, offerId: item?.offerId || null };
+  }
+  return { ...item, productId: item?.identifier, basePlanId: undefined, offerId: null };
+}
+
+/**
  * The offers to show: DINCR's catalog products that the store also returned, with
  * the store's own localized price. A store product outside the catalog is ignored;
  * a catalog product the store does not return is not offered. No backend price.
  */
-export function matchOffers(products, storeProducts) {
+export function matchOffers(products, storeProducts, platform = "ios") {
   const offers = [];
+  const items = (storeProducts || []).map((item) => storeProduct(platform, item));
   for (const product of products) {
-    const candidates = (storeProducts || []).filter((item) => item?.identifier === product.productId);
-    // Google may return one entry per base plan: prefer the one named after the period.
-    const match = candidates.find((item) => item.planIdentifier === product.period) || candidates[0];
+    const candidates = items.filter((item) => item.productId === product.productId);
+    // Google: one entry per offer. The base plan itself (no offer id) carries the
+    // regular price; a base plan named after the period is preferred.
+    const base = candidates.filter((item) => !item.offerId);
+    const match = base.find((item) => item.basePlanId === product.period) || base[0] || candidates[0];
     if (!match || typeof match.priceString !== "string" || !match.priceString) continue;
     offers.push({
       ...product,
-      planIdentifier: match.planIdentifier || undefined,
+      basePlanId: match.basePlanId || undefined,
       priceString: match.priceString,
       currencyCode: match.currencyCode || "",
       title: match.title || "",
@@ -149,7 +164,7 @@ export function createStoreBilling({ platform, plugin, api }) {
   const answered = new Set();
 
   const exclusive = async (work) => {
-    if (busy) throw new StoreBillingError("busy");
+    if (busy) return { outcome: "busy", results: [] };
     busy = true;
     try {
       return await work();
@@ -194,6 +209,8 @@ export function createStoreBilling({ platform, plugin, api }) {
   };
 
   // Send one store transaction to the backend and report what the backend decided.
+  // A purchase is marked answered (not sent again this session) only when nothing
+  // is left to do; otherwise recovery sends it again on the next resume.
   const submit = async (transaction) => {
     let evidence;
     try {
@@ -201,20 +218,26 @@ export function createStoreBilling({ platform, plugin, api }) {
     } catch (error) {
       return { outcome: error.kind || "malformed" };
     }
+    const key = `${evidence.provider}:${evidence.finishId || evidence.body.purchase_token}`;
     try {
       const result = evidence.provider === "apple" ? await api.verifyApple(evidence.body) : await api.verifyGoogle(evidence.body);
-      answered.add(`${evidence.provider}:${evidence.finishId || evidence.body.purchase_token}`);
+      // Google: the backend could not acknowledge yet; unacknowledged, Google refunds in 3 days.
+      if (!(evidence.provider === "google" && result?.acknowledgement === "pending")) answered.add(key);
       await finishApple(evidence);
       return { outcome: "verified", storeStatus: result?.store_status || "", plan: result?.plan || null };
     } catch (error) {
       const kind = backendFailure(error);
-      if (kind === "conflict" || kind === "rejected") {
-        // A definitive answer: StoreKit need not deliver it again. On Google Play it
-        // stays unacknowledged, so Google refunds a purchase DINCR refused.
-        answered.add(`${evidence.provider}:${evidence.finishId || evidence.body.purchase_token}`);
+      if (kind === "conflict" || (kind === "rejected" && evidence.provider === "apple")) {
+        // A definitive answer: StoreKit need not deliver it again. A Google purchase
+        // DINCR refused stays unacknowledged, so Google refunds it.
+        answered.add(key);
         await finishApple(evidence);
+        return { outcome: kind };
       }
-      return { outcome: kind };
+      // The store may have charged and DINCR has not decided: say so, and retry later.
+      // (503 after the store step, network, 5xx; a 422 from Google can be a temporary
+      // Play API failure.)
+      return { outcome: kind === "session" ? kind : "backend" };
     }
   };
 
@@ -245,7 +268,7 @@ export function createStoreBilling({ platform, plugin, api }) {
       } catch (error) {
         throw new StoreBillingError(storeFailure(error) === "store" ? "unavailable" : storeFailure(error), error);
       }
-      return matchOffers(products, storeProducts);
+      return matchOffers(products, storeProducts, platform);
     },
 
     /** Whether the backend accepts store purchases now (the kill switch). */
@@ -265,6 +288,15 @@ export function createStoreBilling({ platform, plugin, api }) {
     purchase(offer, { onStage = () => {} } = {}) {
       return exclusive(async () => {
         if (!offer || !productIds.has(offer.productId)) return { outcome: "unknown_product" };
+        // A live store subscription (either store) is changed in the store, never
+        // bought twice: Play has no in-app replacement here, so it would bill both.
+        let current;
+        try {
+          current = await api.entitlement();
+        } catch (error) {
+          return { outcome: backendFailure(error) };
+        }
+        if (liveStoreSubscription(current)) return { outcome: "already_subscribed" };
         let token;
         try {
           token = await customerToken();
@@ -277,7 +309,8 @@ export function createStoreBilling({ platform, plugin, api }) {
           transaction = await plugin.purchaseProduct({
             productIdentifier: offer.productId,
             productType: SUBSCRIPTIONS,
-            planIdentifier: platform === "android" ? offer.planIdentifier : undefined,
+            // Play: the base plan to buy (the plugin's "planIdentifier" option).
+            planIdentifier: platform === "android" ? offer.basePlanId : undefined,
             appAccountToken: token,
             quantity: 1,
             autoAcknowledgePurchases: false,
@@ -328,18 +361,19 @@ export function createStoreBilling({ platform, plugin, api }) {
       if (busy) return { outcome: "busy", results: [] };
       busy = true;
       try {
-        let token;
-        try {
-          token = await customerToken();
-        } catch (error) {
-          return { outcome: error.kind, results: [] };
-        }
         await knownProducts();
         let purchases;
         try {
           purchases = await currentPurchases();
         } catch {
           return { outcome: "unavailable", results: [] };
+        }
+        if (!purchases.length) return { outcome: "reconciled", results: [] };
+        let token;
+        try {
+          token = await customerToken();
+        } catch (error) {
+          return { outcome: error.kind, results: [] };
         }
         const pending = purchases.filter((purchase) => {
           if (String(purchase?.appAccountToken || "").toLowerCase() !== token) return false; // only this account's

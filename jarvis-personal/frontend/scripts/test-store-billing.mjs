@@ -77,14 +77,22 @@ function backend({ account = "acc-a", enabled = true } = {}) {
 
 // ---- simulated stores -------------------------------------------------------------
 const PRODUCTS = Object.values(IDS).flatMap((periods) => Object.entries(periods)).map(([period, id]) => ({
-  identifier: id, priceString: id.includes("vip") ? "US$4.99" : "US$2.99", currencyCode: "USD", title: id, planIdentifier: period,
+  identifier: id, priceString: id.includes("vip") ? "US$4.99" : "US$2.99", currencyCode: "USD", title: id, period,
 }));
+// iOS (StoreKit): identifier = product id.
+const APPLE_PRODUCTS = PRODUCTS.map(({ period, ...product }) => product);
+// Android subscriptions, as the plugin reports them (NativePurchasesPlugin.getProducts):
+// one entry per offer; identifier = base plan id, planIdentifier = Play product id.
+const GOOGLE_PRODUCTS = PRODUCTS.flatMap(({ identifier, period, ...product }) => [
+  { ...product, identifier: period, planIdentifier: identifier, offerId: "free-trial", priceString: "Gratis" },
+  { ...product, identifier: period, planIdentifier: identifier, offerId: null },
+]);
 
 function appleStore() {
   const store = { mode: "ok", calls: [], finished: [], owned: [], nextId: 1000 };
   const jws = (claims) => ["eyJhbGciOiJFUzI1NiJ9", Buffer.from(JSON.stringify(claims)).toString("base64url"), "c2lnbmF0dXJlLXNpZ25hdHVyZQ"].join(".");
   store.plugin = {
-    getProducts: async (options) => { store.calls.push(["getProducts", options]); return { products: [...PRODUCTS, { identifier: "someone.else.product", priceString: "US$1" }] }; },
+    getProducts: async (options) => { store.calls.push(["getProducts", options]); return { products: [...APPLE_PRODUCTS, { identifier: "someone.else.product", priceString: "US$1" }] }; },
     purchaseProduct: async (options) => {
       store.calls.push(["purchaseProduct", options]);
       if (store.mode === "cancel") throw new Error("User cancelled");
@@ -109,7 +117,7 @@ function googleStore(backendState) {
   const store = { mode: "ok", calls: [], owned: [], clientAcks: 0, nextId: 1 };
   backendState.google = new Map();
   store.plugin = {
-    getProducts: async (options) => { store.calls.push(["getProducts", options]); return { products: PRODUCTS }; },
+    getProducts: async (options) => { store.calls.push(["getProducts", options]); return { products: GOOGLE_PRODUCTS }; },
     purchaseProduct: async (options) => {
       store.calls.push(["purchaseProduct", options]);
       if (store.mode === "cancel") throw Object.assign(new Error("Purchase is not purchased"), { code: "USER_CANCELED" });
@@ -153,11 +161,20 @@ assert.deepEqual(products.map((p) => `${p.plan}/${p.period}=${p.productId}`), [
   "basic/monthly=dincr.basic.monthly", "basic/annual=dincr.basic.annual", "vip/monthly=dincr.vip.monthly", "vip/annual=dincr.vip.annual",
 ]);
 assert.deepEqual(catalogProducts({ plans: [{ code: "owner", monthly: { product_id: "x" } }, { code: "vip", monthly: { product_id: " " } }] }), [], "only Basic/VIP with an id");
-const offers = matchOffers(products, [...PRODUCTS.filter((p) => p.identifier !== IDS.vip.annual), { identifier: "foreign", priceString: "1" }]);
+const offers = matchOffers(products, [...APPLE_PRODUCTS.filter((p) => p.identifier !== IDS.vip.annual), { identifier: "foreign", priceString: "1" }], "ios");
 assert.deepEqual(offers.map((o) => o.productId), [IDS.basic.monthly, IDS.basic.annual, IDS.vip.monthly], "store-missing products are not offered, foreign ones ignored");
 assert.equal(offers[2].priceString, "US$4.99", "the price is the store's, never the backend's");
 assert.ok(!JSON.stringify(offers).includes("4990"), "no backend price reaches an offer");
-assert.equal(matchOffers(products, [{ identifier: IDS.basic.monthly, priceString: "1", planIdentifier: "promo" }, { identifier: IDS.basic.monthly, priceString: "2", planIdentifier: "monthly" }])[0].planIdentifier, "monthly");
+const googleOffers = matchOffers(products, GOOGLE_PRODUCTS, "android");
+assert.deepEqual(googleOffers.map((o) => `${o.productId}@${o.basePlanId}`), [
+  "dincr.basic.monthly@monthly", "dincr.basic.annual@annual", "dincr.vip.monthly@monthly", "dincr.vip.annual@annual",
+], "Android: product id from planIdentifier, base plan from identifier");
+assert.ok(googleOffers.every((o) => o.priceString.startsWith("US$")), "the base plan's regular price, not a trial offer's");
+assert.deepEqual(matchOffers(products, APPLE_PRODUCTS, "android"), [], "iOS-shaped entries never match on Android");
+assert.equal(matchOffers(products, [
+  { planIdentifier: IDS.basic.monthly, identifier: "legacy", priceString: "1" },
+  { planIdentifier: IDS.basic.monthly, identifier: "monthly", priceString: "2" },
+], "android")[0].basePlanId, "monthly", "a base plan named after the period is preferred");
 
 // ---- evidence and error mapping ---------------------------------------------------
 const ids = new Set(Object.values(IDS).flatMap((p) => Object.values(p)));
@@ -201,7 +218,8 @@ assert.equal(liveStoreSubscription({ provider: "sandbox", entitlement: "vip" }),
   assert.equal(result.outcome, "verified");
   const purchase = store.calls.find(([name]) => name === "purchaseProduct")[1];
   assert.equal(purchase.appAccountToken, uuid(1));
-  assert.equal(purchase.planIdentifier, "annual", "the base plan the store returned");
+  assert.equal(purchase.productIdentifier, IDS.basic.annual);
+  assert.equal(purchase.planIdentifier, "annual", "the base plan the store returned (the plugin's option name)");
   assert.ok(store.calls.every(([, options]) => !options || options.autoAcknowledgePurchases === false), "every plugin call disables auto-acknowledge");
   assert.equal(store.clientAcks, 0, "the device never acknowledges");
   assert.equal(server.state.acknowledged.size, 1, "the backend acknowledged after verifying");
@@ -256,7 +274,7 @@ assert.equal(liveStoreSubscription({ provider: "sandbox", entitlement: "vip" }),
     const key = platform === "ios" ? "verifyApple" : "verifyGoogle";
     server.api[key] = async () => { throw httpError(0); };
     const result = await billing.purchase(offer);
-    assert.equal(result.outcome, "network", platform);
+    assert.equal(result.outcome, "backend", platform);
     assert.match(outcomeMessage("network", { context: "purchase" }).text, /reintentaremos|retry/);
     if (platform === "ios") assert.deepEqual(store.finished, [], "unfinished: StoreKit keeps it for recovery");
     else assert.equal(server.state.acknowledged.size, 0, "unacknowledged: nothing contradicts the backend");
@@ -269,11 +287,24 @@ assert.equal(liveStoreSubscription({ provider: "sandbox", entitlement: "vip" }),
   }
 }
 {
-  // Kill switch off at recovery time: silent, nothing sent.
+  // Nothing bought in the store: recovery asks the backend for nothing (no token row).
   const { server, billing } = setup("ios");
+  assert.deepEqual(await billing.reconcile(), { outcome: "reconciled", results: [] });
+  assert.deepEqual(server.state.calls, []);
+}
+{
+  // Kill switch off at recovery time: silent, nothing sent.
+  const { server, store, billing } = setup("ios");
+  const offer = (await billing.loadOffers())[0];
+  const verify = server.api.verifyApple;
+  server.api.verifyApple = async () => { throw httpError(0); };
+  await billing.purchase(offer);
+  server.api.verifyApple = verify;
   server.state.enabled = false;
+  server.state.calls.length = 0;
   assert.equal((await billing.reconcile()).outcome, "disabled");
   assert.deepEqual(server.state.calls, ["customer-token"]);
+  assert.deepEqual(store.finished, []);
 }
 {
   // Restore from another DINCR account: the backend says 409; nothing changes here.
@@ -301,7 +332,7 @@ assert.equal(liveStoreSubscription({ provider: "sandbox", entitlement: "vip" }),
     const key = platform === "ios" ? "verifyApple" : "verifyGoogle";
     const verify = server.api[key];
     server.api[key] = async () => { throw httpError(0); };
-    assert.equal((await billing.purchase(offer)).outcome, "network");
+    assert.equal((await billing.purchase(offer)).outcome, "backend");
     server.api[key] = verify;
     server.state.account = "acc-b";
     const other = createStoreBilling({ platform, plugin: store.plugin, api: server.api });
@@ -316,7 +347,7 @@ assert.equal(liveStoreSubscription({ provider: "sandbox", entitlement: "vip" }),
   const offer = (await billing.loadOffers()).find((o) => o.productId === IDS.vip.monthly);
   const verifyGoogle = server.api.verifyGoogle;
   server.api.verifyGoogle = async () => { throw httpError(0); };
-  assert.equal((await billing.purchase(offer)).outcome, "network");
+  assert.equal((await billing.purchase(offer)).outcome, "backend");
   server.api.verifyGoogle = verifyGoogle;
   const restored = await billing.restore();
   assert.deepEqual(restored.results.map((r) => r.outcome), ["verified"]);
@@ -360,11 +391,66 @@ assert.equal(liveStoreSubscription({ provider: "sandbox", entitlement: "vip" }),
   store.plugin.purchaseProduct = (options) => new Promise((resolve) => { release = () => resolve(original(options)); });
   const first = billing.purchase(offer);
   await new Promise((resolve) => setTimeout(resolve, 0));
-  await assert.rejects(billing.purchase(offer), { kind: "busy" });
+  assert.equal((await billing.purchase(offer)).outcome, "busy");
+  assert.equal((await billing.restore()).outcome, "busy");
   assert.equal((await billing.reconcile()).outcome, "busy", "recovery waits for the purchase in progress");
   release();
   assert.equal((await first).outcome, "verified");
   assert.equal(store.calls.filter(([name]) => name === "purchaseProduct").length, 1);
+}
+
+{
+  // One live store subscription at a time: no second, concurrently billed purchase.
+  for (const platform of ["ios", "android"]) {
+    const { store, billing } = setup(platform);
+    const loaded = await billing.loadOffers();
+    assert.equal((await billing.purchase(loaded.find((o) => o.productId === IDS.basic.monthly))).outcome, "verified");
+    const second = await billing.purchase(loaded.find((o) => o.productId === IDS.vip.monthly));
+    assert.equal(second.outcome, "already_subscribed", platform);
+    assert.equal(store.calls.filter(([name]) => name === "purchaseProduct").length, 1, `${platform}: the store is not opened again`);
+    assert.match(outcomeMessage("already_subscribed").text, /Gestionar suscripción|Manage subscription/);
+  }
+}
+{
+  // 503 after the store charged (switched off mid-purchase / deploy): "we'll retry", not "unavailable".
+  const { server, billing } = setup("ios");
+  const offer = (await billing.loadOffers())[0];
+  const verify = server.api.verifyApple;
+  server.api.verifyApple = async () => { throw httpError(503); };
+  const result = await billing.purchase(offer);
+  assert.equal(result.outcome, "backend");
+  assert.match(outcomeMessage(result.outcome, { context: "purchase" }).text, /reintentaremos|retry/);
+  server.api.verifyApple = verify;
+  assert.deepEqual((await billing.reconcile()).results.map((r) => r.outcome), ["verified"], "still recovered");
+}
+{
+  // Google: an acknowledgement the backend could not make yet, or a 422 (possibly a
+  // temporary Play API failure), is sent again on the next resume.
+  const { server, store, billing } = setup("android");
+  const offer = (await billing.loadOffers())[0];
+  const verify = server.api.verifyGoogle;
+  server.api.verifyGoogle = async () => { throw httpError(422); };
+  assert.equal((await billing.purchase(offer)).outcome, "backend", "a Google 422 may be temporary: retry message");
+  server.api.verifyGoogle = async (body) => {
+    const result = await verify(body);
+    server.state.acknowledged.delete(body.purchase_token);
+    server.state.google.get(body.purchase_token).acknowledged = false;
+    return { ...result, acknowledgement: "pending" };
+  };
+  assert.deepEqual((await billing.reconcile()).results.map((r) => r.outcome), ["verified"]);
+  server.api.verifyGoogle = verify;
+  assert.deepEqual((await billing.reconcile()).results.map((r) => r.outcome), ["verified"], "resent until acknowledged");
+  assert.equal(server.state.acknowledged.size, 1);
+  assert.equal((await billing.reconcile()).results.length, 0, "acknowledged: done");
+  assert.equal(store.clientAcks, 0);
+}
+{
+  // Apple: a 422 (signature not verifiable) is final; the transaction is finished.
+  const { server, store, billing } = setup("ios");
+  const offer = (await billing.loadOffers())[0];
+  server.api.verifyApple = async () => { throw httpError(422); };
+  assert.equal((await billing.purchase(offer)).outcome, "rejected");
+  assert.deepEqual(store.finished, ["1000"]);
 }
 
 // ---- static checks on the device code ---------------------------------------------
@@ -378,6 +464,8 @@ for (const path of sources) {
   assert.doesNotMatch(source, /console\.|localStorage|sessionStorage|indexedDB|trackEvent|captureProductEvent|posthog/, `${path}: evidence is never logged, stored or tracked`);
   assert.doesNotMatch(source, /private_key|service_account|BEGIN (EC )?PRIVATE KEY|p8|client_secret/i, `${path}: no store secret on the device`);
   assert.doesNotMatch(source, /restorePurchases\(\)[^\n]*android|platform === "android"[^\n]*restorePurchases/, `${path}: no restorePurchases on Android`);
+  // These create a Play billing client without our options, which auto-acknowledges.
+  assert.doesNotMatch(source, /isBillingSupported|getStorefront|consumePurchase/, `${path}: no plugin call that can acknowledge on Android`);
 }
 const recoveryRule = read("src/lib/operationRecovery.js").match(/const RECOVERABLE_PATH = (\/.*\/);/)[1];
 const recoverable = new Function(`return ${recoveryRule}`)();

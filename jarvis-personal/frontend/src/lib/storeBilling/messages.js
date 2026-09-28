@@ -28,6 +28,8 @@ export function outcomeMessage(outcome, { plan, context = "purchase" } = {}) {
       return { tone: "error", text: tx("Este producto no corresponde a un plan DINCR.", "This product isn’t a DINCR plan.") };
     case "session":
       return { tone: "error", text: tx("Tu sesión venció. Iniciá sesión nuevamente.", "Your session expired. Please sign in again.") };
+    case "already_subscribed":
+      return { tone: "info", text: tx("Ya tenés una suscripción activa en la tienda. Para cambiar de plan, usá «Gestionar suscripción».", "You already have an active store subscription. To change plans, use “Manage subscription”.") };
     case "busy":
       return { tone: "info", text: tx("Ya hay una operación de la tienda en curso.", "A store operation is already in progress.") };
     case "network":

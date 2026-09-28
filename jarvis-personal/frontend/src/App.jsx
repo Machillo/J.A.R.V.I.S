@@ -119,7 +119,8 @@ export default function App() {
   // A recovered store purchase: the plan shown is the one the backend now reports.
   useEffect(() => {
     const onStoreEntitlement = (event) => {
-      if (event.detail?.profile) setCurrentUser(event.detail.profile);
+      const profile = event.detail?.profile;
+      if (profile && profile.id === currentUserRef.current?.id) setCurrentUser(profile);
     };
     window.addEventListener("dincr:store-entitlement", onStoreEntitlement);
     return () => window.removeEventListener("dincr:store-entitlement", onStoreEntitlement);
