@@ -40,7 +40,11 @@ The code now requests `gmail.readonly` alone and rejects a consent that does not
 **2. Connection.**
 - `finva_gmail_connections` holds one row per `(workspace_id, google_email)`, with its own Vault secret, sync state, watch and disconnect.
 - A mailbox (Gmail or Outlook) is live in at most one DINCR account and workspace at a time (`mail_oauth.claim_mailbox`).
-  - **Identity.** Google's account id (`sub`, from tokeninfo, only for DINCR's client) or Microsoft Graph's user `id` plus tenant, and always the canonical address (gmail.com/googlemail.com without dots or `+tag`). The address shown to the user is display only. Both have a unique index among live rows. Existing rows start with the address identity; `backend/scripts/backfill_mailbox_identity.py` upgrades them (dry run by default, aborts on ambiguity).
+  - **Identity.**
+    - **Gmail:** Google's account id (`sub`, from tokeninfo, only for DINCR's client) and always the canonical address (gmail.com/googlemail.com without dots or `+tag`), which Gmail's API reports for the mailbox itself.
+    - **Outlook:** only the Microsoft principal, `microsoft:<tenant>:<Graph user id>`. The `mail` and `userPrincipalName` attributes are display only, because a tenant administrator sets them and they prove no ownership of an address; Microsoft's guidance is to key data by `tid` + `oid`. Without a tenant and id, the connection is refused and nothing is stored.
+    - Both identity columns have a unique index among live rows. The address shown to the user is display only.
+    - Existing rows start with the address identity. `backend/scripts/backfill_mailbox_identity.py` upgrades them (dry run by default, aborts on ambiguity). An Outlook row identified only by its address is never taken over through a reported address.
   - **Refusal.** A live mailbox of an account with VIP is refused with one generic message that reveals nothing about the other account.
   - **Stale takeover.** A connection that lost provider access (`reauthorization_required`) or whose account no longer has VIP can be taken over. Only a new, real provider consent for that same mailbox does it, never an address typed by someone. In one transaction:
     - the old connection is disconnected;

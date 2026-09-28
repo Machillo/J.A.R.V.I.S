@@ -146,9 +146,16 @@ def finish_connection(code: str | None, state: str | None, error: str | None = N
             logger.warning("Outlook authorization missing Mail.Read or offline access")
             return failed("permission_missing")
         profile = _graph_get(tokens["access_token"], "/me")
+        # Display only: mail and userPrincipalName are set by the tenant and prove no
+        # ownership of the address. The mailbox is the principal (tenant + Graph id).
         address = str(profile.get("mail") or profile.get("userPrincipalName") or "").strip().lower()
         if not address or "@" not in address:
             return failed("mailbox_missing")
+        subject, tenant = _graph_identity(profile, tokens["access_token"])
+        if not mail_oauth.microsoft_identity(subject, tenant):
+            # Fail closed: without the principal DINCR cannot tell whose mailbox this is.
+            logger.warning("Outlook account identity unavailable; nothing stored")
+            return failed("mailbox_unavailable")
         _graph_get(tokens["access_token"], "/me/messages", {"$top": "1", "$select": "id"})
     except (requests.RequestException, ValueError, KeyError) as exc:
         logger.warning("Outlook mailbox validation failed error=%s status=%s", type(exc).__name__,
@@ -156,7 +163,6 @@ def finish_connection(code: str | None, state: str | None, error: str | None = N
         return failed("mailbox_unavailable")
     with get_connection() as conn:
         secret_id = _vault_create(conn, tokens["refresh_token"], account_id, "Microsoft")
-        subject, tenant = _graph_identity(profile, tokens["access_token"])
         completion = mail_oauth.authorize_flow(conn, flow["id"], secret_id=secret_id, mailbox=address,
                                                scopes=["Mail.Read"], subject=subject, tenant=tenant)
         conn.commit()
@@ -169,8 +175,8 @@ def _graph_identity(profile: dict, access_token: str) -> tuple[str | None, str |
     Work and school tokens are JWTs whose ``tid`` names the tenant (read, not
     trusted for authorization: the token came straight from Microsoft's token
     endpoint over TLS). Personal Microsoft accounts use opaque tokens and a
-    16-hex-digit id, all in the consumer tenant. Anything else stays unknown and
-    the mailbox is identified by its address instead.
+    16-hex-digit id, all in the consumer tenant. Anything else stays unknown, and
+    the connection is refused: an address is never the identity of an Outlook mailbox.
     """
     user_id = str(profile.get("id") or "").strip().lower()
     if not user_id:
@@ -194,19 +200,31 @@ def _attach_microsoft_connection(conn, flow: dict, legacy_user_id: int) -> int:
     if not _has_active_vip_access(conn, account_id):
         raise HTTPException(status_code=403, detail="Conectar un correo requiere el plan VIP activo.")
     address = str(flow["mailbox_address"]).strip().lower()  # display only
-    email = mail_oauth.mailbox_email("microsoft", address)
-    key = mail_oauth.mailbox_key("microsoft", address, flow.get("provider_subject"), flow.get("provider_tenant"))
+    # The principal is the mailbox: both unique live-mailbox columns carry it, so a
+    # reported address can neither collide with nor take over another mailbox.
+    key = mail_oauth.microsoft_identity(flow.get("provider_subject"), flow.get("provider_tenant"))
+    if not key:
+        raise HTTPException(status_code=409, detail="La autorización de Outlook no es válida. Volvé a conectarlo.")
+    email = key
     secret_id = str(flow["pending_secret_id"])
     mail_oauth.claim_mailbox(conn, provider="microsoft", account_id=account_id, workspace_id=workspace_id,
-                             key=key, email=email, display=address, is_entitled=_has_active_vip_access)
+                             key=key, email=email, display=address, is_entitled=_has_active_vip_access,
+                             reported_email=mail_oauth.mailbox_email("microsoft", address))
+    # This account/workspace's own row for the principal, or its own row with that
+    # display address (unique per workspace; e.g. one connected before the principal identity).
     existing = conn.execute(
-        """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections
+        """SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since,mailbox_key FROM finva_gmail_connections
            WHERE account_id=%s AND workspace_id=%s
-             AND (mailbox_key=%s OR mailbox_email=%s OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s))
+             AND (mailbox_key=%s OR mailbox_email=%s OR lower(btrim(google_email))=%s)
            ORDER BY (status<>'disabled') DESC, id LIMIT 1 FOR UPDATE""",
         (account_id, workspace_id, key, email, address),
     ).fetchone()
     if existing and "Mail.Read" not in (existing.get("granted_scopes") or []):
+        raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
+    if existing and str(existing.get("mailbox_key") or "").startswith("microsoft:") and existing["mailbox_key"] != key:
+        # Another Microsoft principal's row that only shares the display address: reusing
+        # it would drop that mailbox's token and carry its import window over to a mailbox
+        # whose history was never read. The user disconnects it first.
         raise HTTPException(status_code=409, detail="Ese correo ya está conectado de otra forma en DINCR.")
     window = mail_oauth.connection_import_window(dict(existing) if existing else None, flow)
     if existing:

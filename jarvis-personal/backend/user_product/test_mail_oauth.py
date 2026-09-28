@@ -6,6 +6,7 @@ provider that enforces PKCE drive the real begin -> callback -> complete code.
 import base64
 import copy
 import hashlib
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -134,21 +135,25 @@ class FakeConnection:
             return self._rows([])
         if q.startswith("SELECT 1 FROM account_subscriptions"):
             return self._rows([{"allowed": 1}] if params[0] in self.db.vip else [])
-        if q.startswith("SELECT id,account_id,status,refresh_token_secret_id FROM finva_gmail_connections WHERE status<>'disabled'"):
-            account, workspace, key, email, _display, _scope = params
+        if q.startswith("SELECT id,account_id,status,refresh_token_secret_id,mailbox_key,mailbox_email FROM finva_gmail_connections WHERE status<>'disabled'"):
+            account, workspace, key, emails, display, scope = params
             return self._rows(c for c in sorted(connections.values(), key=lambda c: c["id"])
                               if c["status"] != "disabled" and (c["account_id"], c["workspace_id"]) != (account, workspace)
-                              and (c["mailbox_key"] == key or c["mailbox_email"] == email))
+                              and (c["mailbox_key"] == key or c["mailbox_email"] in emails
+                                   or (c["mailbox_email"] is None and c["google_email"].strip().lower() == display
+                                       and scope in c["granted_scopes"])))
         if q.startswith("UPDATE finva_gmail_connections SET status='disabled',history_id=NULL,watch_expiration=NULL,initial_scan_page_token=NULL, last_error=%s"):
             connections[params[1]].update(status="disabled", last_error=params[0])
             return self._rows([])
         if q.startswith("INSERT INTO mail_connection_takeovers"):
             takeovers.append(dict(zip(("provider", "previous_connection_id", "previous_account_id", "new_account_id", "reason"), params)))
             return self._rows([])
-        if q.startswith("SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since FROM finva_gmail_connections"):
-            account, workspace, key, email, _email = params
+        if q.startswith("SELECT id,refresh_token_secret_id,granted_scopes,import_scope,import_since") and "FROM finva_gmail_connections WHERE account_id" in q:
+            account, workspace, key, email, display = params
+            by_display = "OR lower(btrim(google_email))=%s)" in " ".join(query.split())  # Outlook: own row by display address
             matches = [c for c in connections.values() if (c["account_id"], c["workspace_id"]) == (account, workspace)
-                       and (c["mailbox_key"] == key or c["mailbox_email"] == email)]
+                       and (c["mailbox_key"] == key or c["mailbox_email"] == email
+                            or ((by_display or c["mailbox_email"] is None) and c["google_email"].strip().lower() == display))]
             return self._rows(sorted(matches, key=lambda c: (c["status"] == "disabled", c["id"]))[:1])
         if q.startswith("UPDATE finva_gmail_connections SET"):
             connection = connections[params[-1]]
@@ -223,10 +228,14 @@ def env(monkeypatch):
     monkeypatch.setattr(gmail_service.requests, "post", provider.token)
     monkeypatch.setattr(gmail_service, "_credentials", lambda token: SimpleNamespace(users=lambda: SimpleNamespace(
         getProfile=lambda userId: SimpleNamespace(execute=lambda: {"emailAddress": token.removeprefix("refresh-for-")}))))
-    monkeypatch.setattr(ms, "_graph_get", lambda token, path, *_a: {
-        "mail": token.removeprefix("access-for-"),
-        "id": provider.subjects.get(token.removeprefix("access-for-"), f"{abs(hash(token)) % 16**16:016x}")}
-        if path == "/me" else {"value": []})
+    def graph_get(token, path, *_a):
+        """A personal Microsoft account per mailbox: the same mailbox signs in as the same principal."""
+        mailbox = token.removeprefix("access-for-")
+        principal = mailbox.strip().lower()
+        return ({"mail": mailbox, "id": provider.subjects.get(principal, f"{abs(hash(principal)) % 16**16:016x}")}
+                if path == "/me" else {"value": []})
+
+    monkeypatch.setattr(ms, "_graph_get", graph_get)
     monkeypatch.setattr(gmail_service, "_financial_user_id_for_account", lambda account_id: 900)
     monkeypatch.setattr(gmail_service, "_after_gmail_connected", lambda connection_id: synced.append(("gmail", connection_id)))
     monkeypatch.setattr(ms, "sync_connection", lambda connection_id, **_kwargs: synced.append(("microsoft", connection_id)))
@@ -776,3 +785,233 @@ def test_gmail_completion_never_attaches_a_flow_without_the_read_permission(env,
         complete(A, params)
     assert refused.value.status_code == 409
     assert connections_of(env, A) == []
+
+
+# --- F2: an Outlook mailbox is its Microsoft principal (tenant + Graph id), never its address ---
+
+WORK_TENANT, OTHER_TENANT = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
+
+
+def _jwt(claims: dict) -> str:
+    def encode(part):
+        return base64.urlsafe_b64encode(json.dumps(part).encode()).decode().rstrip("=")
+    return f"{encode({'alg': 'none'})}.{encode(claims)}.signature"
+
+
+@pytest.fixture
+def principals(env, monkeypatch):
+    """Microsoft principals by sign-in label: {label: {"id", "mail", "tid" (work/school) or no tid (personal)}}.
+
+    Work and school tokens are JWTs carrying ``tid``; personal tokens are opaque. Graph /me
+    returns the principal's id and whatever mail attribute its tenant set.
+    """
+    table: dict[str, dict] = {}
+    exchange = env.provider.token
+
+    def token(url, data=None, **kwargs):
+        response = exchange(url, data, **kwargs)
+        if "microsoft" not in url or response.status_code != 200:
+            return response
+        body = response.json()
+        label = body["access_token"].removeprefix("access-for-")
+        principal = table.get(label)
+        if principal and principal.get("tid"):
+            body = {**body, "access_token": _jwt({"tid": principal["tid"], "label": label})}
+        return SimpleNamespace(status_code=200, json=lambda: body)
+
+    def graph_get(access_token, path, *_a):
+        if path != "/me":
+            return {"value": []}
+        if access_token.count(".") == 2:
+            label = json.loads(base64.urlsafe_b64decode(access_token.split(".")[1] + "==")).get("label")
+        else:
+            label = access_token.removeprefix("access-for-")
+        principal = table[label]
+        return {key: principal[key] for key in ("id", "mail") if principal.get(key) is not None}
+
+    monkeypatch.setattr(gmail_service.requests, "post", token)
+    monkeypatch.setattr(ms, "_graph_get", graph_get)
+    return table
+
+
+def _outlook_row(env, user):
+    return next(c for c in env.db.state["connections"].values()
+                if c["account_id"] == user["account_id"] and "Mail.Read" in c["granted_scopes"])
+
+
+def test_f2_the_same_work_principal_reconnects_to_its_own_row(env, principals):
+    principals["alice"] = {"id": "0f0e0d0c-0000-4000-8000-00000000a11c", "mail": "alice@contoso.com", "tid": WORK_TENANT}
+    _connect(env, "microsoft", A, "alice")
+    first = _outlook_row(env, A)
+    _connect(env, "microsoft", A, "alice")
+    rows = [c for c in env.db.state["connections"].values() if c["account_id"] == A["account_id"]]
+    assert [c["id"] for c in rows] == [first["id"]] and rows[0]["status"] == "active"
+    assert rows[0]["mailbox_key"] == rows[0]["mailbox_email"] == f"microsoft:{WORK_TENANT}:0f0e0d0c-0000-4000-8000-00000000a11c"
+    assert len(env.db.state["vault"]) == 1  # the old token is replaced, not kept
+
+
+@pytest.mark.parametrize("victim_status", ["active", "reauthorization_required"])
+def test_f2_another_principal_reporting_the_same_address_takes_nothing(env, principals, victim_status):
+    """Same visible address, different principal: a different mailbox. No takeover, no refusal, no squat."""
+    principals["victim"] = {"id": "0123456789abcdef", "mail": "shared@outlook.com"}  # personal account
+    principals["attacker"] = {"id": "aaaaaaaa-0000-4000-8000-00000000000a", "mail": "shared@outlook.com", "tid": OTHER_TENANT}
+    _connect(env, "microsoft", A, "victim")
+    victim = _outlook_row(env, A)
+    victim["status"] = victim_status
+    victim_token = victim["refresh_token_secret_id"]
+    assert _connect(env, "microsoft", B, "attacker")[0] == {"status": "connected", "provider": "microsoft"}
+    assert env.db.state["connections"][victim["id"]]["status"] == victim_status  # untouched
+    assert victim_token in env.db.state["vault"] and env.db.state["takeovers"] == []
+    assert _outlook_row(env, B)["mailbox_key"] == f"microsoft:{OTHER_TENANT}:aaaaaaaa-0000-4000-8000-00000000000a"
+
+
+def test_f2_an_address_claimed_first_never_blocks_the_real_mailbox(env, principals):
+    """A tenant sets its user's mail to the victim's address and connects first: the victim still connects."""
+    principals["attacker"] = {"id": "aaaaaaaa-0000-4000-8000-00000000000a", "mail": "victim@outlook.com", "tid": OTHER_TENANT}
+    principals["victim"] = {"id": "0123456789abcdef", "mail": "victim@outlook.com"}
+    _connect(env, "microsoft", B, "attacker")
+    assert _connect(env, "microsoft", A, "victim")[0] == {"status": "connected", "provider": "microsoft"}
+    assert _outlook_row(env, B)["status"] == "active" and env.db.state["takeovers"] == []
+
+
+def test_f2_a_changed_mail_attribute_keeps_the_identity(env, principals):
+    principals["bob"] = {"id": "b0b00000-0000-4000-8000-000000000b0b", "mail": "bob@contoso.com", "tid": WORK_TENANT}
+    _connect(env, "microsoft", A, "bob")
+    row = _outlook_row(env, A)
+    key = row["mailbox_key"]
+    principals["bob"]["mail"] = "robert@contoso.com"  # the tenant renames the user's address
+    _connect(env, "microsoft", A, "bob")
+    renamed = _outlook_row(env, A)
+    assert renamed["id"] == row["id"] and renamed["mailbox_key"] == renamed["mailbox_email"] == key
+    assert renamed["google_email"] == "robert@contoso.com"  # display follows the address
+
+
+def test_f2_the_same_principal_is_refused_elsewhere_and_taken_over_only_when_stale(env, principals):
+    principals["carol"] = {"id": "c0c00000-0000-4000-8000-00000000c0c0", "mail": "carol@contoso.com", "tid": WORK_TENANT}
+    _connect(env, "microsoft", A, "carol")
+    _, params = callback("microsoft", *env.provider.authorize(start("microsoft", B), "carol"))
+    with pytest.raises(HTTPException) as refused:
+        complete(B, params)
+    assert refused.value.detail == mail_oauth.MAILBOX_UNAVAILABLE  # live, VIP: refused, generically
+    _outlook_row(env, A)["status"] = "reauthorization_required"
+    assert _connect(env, "microsoft", B, "carol")[0] == {"status": "connected", "provider": "microsoft"}
+    assert [t["reason"] for t in env.db.state["takeovers"]] == ["access_lost"]
+
+
+def test_f2_a_microsoft_gmail_address_never_becomes_a_google_identity(env, principals):
+    principals["m"] = {"id": "0123456789abcdef", "mail": "victim@gmail.com"}
+    _connect(env, "microsoft", B, "m")
+    row = _outlook_row(env, B)
+    assert row["mailbox_key"] == row["mailbox_email"] == f"microsoft:{ms.CONSUMER_TENANT}:0123456789abcdef"
+    assert not row["mailbox_key"].startswith(("google:", "gmail:", "email:"))
+
+
+def test_f2_personal_account_identity(env, principals):
+    principals["p"] = {"id": "00112233445566ff", "mail": "p@outlook.com"}  # opaque token, 16-hex id
+    _connect(env, "microsoft", A, "p")
+    row = _outlook_row(env, A)
+    assert row["mailbox_key"] == row["mailbox_email"] == f"microsoft:{ms.CONSUMER_TENANT}:00112233445566ff"
+
+
+def test_f2_work_or_school_account_identity(env, principals):
+    principals["w"] = {"id": "0d0d0d0d-0000-4000-8000-0000000000dd", "mail": "w@school.example", "tid": WORK_TENANT}
+    _connect(env, "microsoft", A, "w")
+    row = _outlook_row(env, A)
+    assert row["mailbox_key"] == row["mailbox_email"] == f"microsoft:{WORK_TENANT}:0d0d0d0d-0000-4000-8000-0000000000dd"
+    assert row["provider_subject"] == "0d0d0d0d-0000-4000-8000-0000000000dd"
+
+
+@pytest.mark.parametrize("principal", [
+    {"id": "0d0d0d0d-0000-4000-8000-0000000000dd", "mail": "w@contoso.com"},  # work id with an opaque token: no tenant
+    {"mail": "noid@contoso.com", "tid": WORK_TENANT},                           # Graph returned no id
+    {"id": "0123456789abcdef"},                                                  # no address at all
+])
+def test_f2_without_an_authoritative_identity_nothing_is_stored(env, principals, principal):
+    principals["x"] = principal
+    status, params = callback("microsoft", *env.provider.authorize(start("microsoft", A), "x"))
+    assert status in ("mailbox_unavailable", "mailbox_missing") and "completion" not in params
+    assert env.db.state["vault"] == {} and connections_of(env, A) == []
+    assert next(iter(env.db.state["flows"].values()))["status"] == "failed"
+
+
+def test_f2_an_authorized_flow_without_a_principal_is_never_attached(env, principals):
+    """A flow authorized before the principal identity (or tampered) cannot attach by address."""
+    principals["d"] = {"id": "0123456789abcdef", "mail": "d@outlook.com"}
+    _, params = callback("microsoft", *env.provider.authorize(start("microsoft", A), "d"))
+    next(iter(env.db.state["flows"].values())).update(provider_subject=None, provider_tenant=None)
+    with pytest.raises(HTTPException) as refused:
+        complete(A, params)
+    assert refused.value.status_code == 409 and connections_of(env, A) == []
+
+
+def _legacy_outlook(env, user, label, status):
+    """A connection identified by its address only (from before the principal identity)."""
+    assert _connect(env, "microsoft", user, label)[0]["status"] == "connected"
+    row = _outlook_row(env, user)
+    address = row["google_email"]
+    row.update(status=status, mailbox_key=mail_oauth.mailbox_key("microsoft", address),
+               mailbox_email=mail_oauth.mailbox_email("microsoft", address), provider_subject=None, provider_tenant=None)
+    return row
+
+
+def test_f2_a_live_legacy_outlook_row_refuses_a_principal_reporting_its_address(env, principals):
+    principals["legacy"] = {"id": "0123456789abcdef", "mail": "legacy@outlook.com"}
+    principals["new"] = {"id": "fedcba9876543210", "mail": "legacy@outlook.com"}
+    old = _legacy_outlook(env, A, "legacy", "active")
+    _, params = callback("microsoft", *env.provider.authorize(start("microsoft", B), "new"))
+    with pytest.raises(HTTPException) as refused:
+        complete(B, params)
+    assert refused.value.detail == mail_oauth.MAILBOX_UNAVAILABLE
+    assert env.db.state["connections"][old["id"]]["status"] == "active" and env.db.state["takeovers"] == []
+
+
+@pytest.mark.parametrize("stale", ["reauthorization", "plan"])
+def test_f2_a_stale_legacy_outlook_row_is_never_taken_over_by_address(env, principals, stale):
+    principals["legacy"] = {"id": "0123456789abcdef", "mail": "legacy@outlook.com"}
+    principals["new"] = {"id": "fedcba9876543210", "mail": "legacy@outlook.com"}
+    old = _legacy_outlook(env, A, "legacy", "reauthorization_required" if stale == "reauthorization" else "active")
+    old_status, old_token = old["status"], old["refresh_token_secret_id"]
+    if stale == "plan":
+        env.db.vip.discard(A["account_id"])
+    assert _connect(env, "microsoft", B, "new")[0] == {"status": "connected", "provider": "microsoft"}
+    assert env.db.state["connections"][old["id"]]["status"] == old_status  # left alone
+    assert old_token in env.db.state["vault"] and env.db.state["takeovers"] == []
+
+
+def test_f2_another_principal_never_reuses_an_own_row_it_only_shares_an_address_with(env, principals):
+    """In one workspace, P2 reporting P1's address must not drop P1's token or inherit its import window."""
+    principals["p1"] = {"id": "0123456789abcdef", "mail": "same@outlook.com"}
+    principals["p2"] = {"id": "fedcba9876543210", "mail": "same@outlook.com"}
+    _connect(env, "microsoft", A, "p1")
+    p1 = _outlook_row(env, A)
+    p1_token = p1["refresh_token_secret_id"]
+    _, params = callback("microsoft", *env.provider.authorize(start("microsoft", A), "p2"))
+    with pytest.raises(HTTPException) as refused:
+        complete(A, params)
+    assert refused.value.status_code == 409
+    assert env.db.state["connections"][p1["id"]]["mailbox_key"] == p1["mailbox_key"]
+    assert p1_token in env.db.state["vault"] and len(env.db.state["vault"]) == 1  # P2's pending token is deleted
+
+
+def test_f2_the_same_principal_upgrades_its_own_legacy_row(env, principals):
+    """An own row identified by address (before the principal identity) is reused and gets the principal."""
+    principals["own"] = {"id": "0123456789abcdef", "mail": "own@outlook.com"}
+    legacy = _legacy_outlook(env, A, "own", "active")
+    _connect(env, "microsoft", A, "own")
+    rows = [c for c in env.db.state["connections"].values() if c["account_id"] == A["account_id"]]
+    assert [c["id"] for c in rows] == [legacy["id"]]
+    assert rows[0]["mailbox_key"] == rows[0]["mailbox_email"] == f"microsoft:{ms.CONSUMER_TENANT}:0123456789abcdef"
+
+
+@pytest.mark.parametrize("token", [
+    "a.b.c.d.e",                                                  # an encrypted (JWE) token
+    _jwt({"oid": "0d0d0d0d-0000-4000-8000-0000000000dd"}),        # a JWT without tid
+    "not-a-jwt",                                                  # an opaque token
+])
+def test_f2_a_work_id_without_a_readable_tenant_has_no_identity(token):
+    assert ms._graph_identity({"id": "0d0d0d0d-0000-4000-8000-0000000000dd"}, token) == (None, None)
+
+
+def test_f2_a_personal_id_needs_no_token_claim():
+    assert ms._graph_identity({"id": "00112233445566FF"}, "opaque") == ("00112233445566ff", ms.CONSUMER_TENANT)
+    assert ms._graph_identity({}, "opaque") == (None, None)

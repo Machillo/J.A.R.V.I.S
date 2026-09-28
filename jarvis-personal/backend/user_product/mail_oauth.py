@@ -102,8 +102,21 @@ def mailbox_key(provider: str, address: str | None, subject: str | None = None, 
     return f"email:{mailbox_email(provider, address)}"
 
 
+def microsoft_identity(subject: str | None, tenant: str | None) -> str | None:
+    """A Microsoft mailbox's identity: its Graph user id within its tenant, or None when either is unknown.
+
+    DINCR reads the signed-in principal's own mailbox (/me/messages), so the principal
+    is the mailbox. Its address (mail, userPrincipalName) is display only: a tenant
+    administrator sets it, and it proves no ownership of that address. Microsoft's
+    guidance is to key data by the immutable tid + oid, never by email or UPN.
+    """
+    if subject and tenant:
+        return f"microsoft:{tenant}:{subject}"
+    return None
+
+
 def claim_mailbox(conn, *, provider: str, account_id: str, workspace_id: str, key: str, email: str, display: str,
-                  is_entitled: Callable[[Any, str], bool]) -> None:
+                  is_entitled: Callable[[Any, str], bool], reported_email: str | None = None) -> None:
     """Make a mailbox this account/workspace just proved control of available to it, or refuse.
 
     One live connection per mailbox across every DINCR account and workspace. A
@@ -117,16 +130,27 @@ def claim_mailbox(conn, *, provider: str, account_id: str, workspace_id: str, ke
     - the takeover is audited in mail_connection_takeovers (account ids only).
     Rows are locked, and the unique live-mailbox indexes close races between
     concurrent completions. The caller then attaches the mailbox.
+
+    ``reported_email`` (Microsoft) is the address identity of the address the provider
+    reports for the principal. It proves nothing, so a connection that matches only
+    through it (one identified by address, from before the principal identity) is
+    never taken over: a live one still refuses the claim, a stale one is left alone.
     """
     rows = conn.execute(
-        """SELECT id,account_id,status,refresh_token_secret_id FROM finva_gmail_connections
+        """SELECT id,account_id,status,refresh_token_secret_id,mailbox_key,mailbox_email FROM finva_gmail_connections
            WHERE status<>'disabled' AND NOT (account_id=%s AND workspace_id=%s)
-             AND (mailbox_key=%s OR mailbox_email=%s
+             AND (mailbox_key=%s OR mailbox_email = ANY(%s)
                   OR (mailbox_email IS NULL AND lower(btrim(google_email))=%s AND %s = ANY(granted_scopes)))
            ORDER BY id FOR UPDATE""",
-        (account_id, workspace_id, key, email, display, PROVIDER_SCOPES[provider]),
+        (account_id, workspace_id, key, [email, *([reported_email] if reported_email else [])], display,
+         PROVIDER_SCOPES[provider]),
     ).fetchall()
-    reasons = []
+    proven = [row for row in rows
+              if reported_email is None or row["mailbox_key"] == key or row["mailbox_email"] == email]
+    for row in rows:
+        if row not in proven and row["status"] != "reauthorization_required" and is_entitled(conn, str(row["account_id"])):
+            raise HTTPException(status_code=409, detail=MAILBOX_UNAVAILABLE)
+    rows, reasons = proven, []
     for row in rows:
         if row["status"] == "reauthorization_required":
             reasons.append("access_lost")

@@ -10,7 +10,9 @@ OAuth client settings of the environment being changed, after the migration
 For each live connection still keyed by its address ('email:...'), it asks the
 provider, with that connection's own token, for the account id: Google's ``sub``
 (tokeninfo, only for DINCR's client) or Microsoft Graph's user ``id`` plus tenant.
-Nothing else changes: no connection, message, token scope or account moves.
+An Outlook connection then carries its principal in mailbox_email too (its address
+is display only). Nothing else changes: no connection, message, token scope or
+account moves.
 
 It aborts, writing nothing, when the result is ambiguous: two connections would
 get the same identity, or an identity already belongs to another live connection.
@@ -113,10 +115,14 @@ def main(argv: list[str] | None = None) -> int:
         written = 0
         try:
             for connection_id, key in updates.items():
+                # An Outlook mailbox is its principal: both identity columns carry it
+                # (its address proves nothing). A Gmail address stays its canonical address.
                 written += len(conn.execute(
-                    """UPDATE finva_gmail_connections SET mailbox_key=%s,updated_at=NOW()
+                    """UPDATE finva_gmail_connections
+                       SET mailbox_key=%s,mailbox_email=CASE WHEN %s LIKE 'microsoft:%%' THEN %s ELSE mailbox_email END,
+                           updated_at=NOW()
                        WHERE id=%s AND status<>'disabled' AND mailbox_key LIKE 'email:%%' RETURNING id""",
-                    (key, connection_id)).fetchall())
+                    (key, key, key, connection_id)).fetchall())
         except Exception as exc:  # e.g. a unique violation: its message would name the identity
             conn.rollback()
             print(f"ABORTED, rolled back: {type(exc).__name__}")

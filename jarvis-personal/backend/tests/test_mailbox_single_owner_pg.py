@@ -246,3 +246,114 @@ def test_the_rollback_restores_the_previous_schema(db):
     cur.execute("""SELECT to_regclass('public.mail_connection_takeovers'), to_regclass('public.uq_finva_mail_connections_live_mailbox'),
                           to_regclass('public.finva_gmail_connections_account_email_key') IS NOT NULL""")
     assert cur.fetchone() == (None, None, True)
+
+
+# --- F2 on real SQL: an Outlook mailbox is its principal; a reported address takes nothing ---
+
+MS_TENANT = "11111111-1111-4111-8111-111111111111"
+
+
+def _ms_claim(principal, *, reported, entitled=True):
+    """Claim as a new account/workspace, the way _attach_microsoft_connection does."""
+    claimant, workspace = str(uuid.uuid4()), str(uuid.uuid4())
+    with database.get_connection() as conn:
+        conn.execute("INSERT INTO accounts VALUES (%s)", (claimant,))
+        key = mail_oauth.microsoft_identity(principal, MS_TENANT)
+        mail_oauth.claim_mailbox(conn, provider="microsoft", account_id=claimant, workspace_id=workspace,
+                                 key=key, email=key, display=reported,
+                                 reported_email=mail_oauth.mailbox_email("microsoft", reported),
+                                 is_entitled=lambda _conn, _account: entitled)
+        conn.execute("""INSERT INTO finva_gmail_connections(account_id, workspace_id, google_email, mailbox_email, mailbox_key,
+                        status, granted_scopes) VALUES (%s, %s, %s, %s, %s, 'active', ARRAY['Mail.Read'])""",
+                     (claimant, workspace, reported, key, key))
+        conn.commit()
+    return claimant
+
+
+@pytest.mark.parametrize(("status", "outcome"), [("active", "refused"), ("reauthorization_required", "coexists")])
+def test_a_legacy_outlook_row_is_never_taken_over_by_a_reported_address(db, status, outcome):
+    cur = db["cur"]
+    _legacy_insert(cur, "Legacy@Outlook.com", status=status, provider="microsoft")
+    cur.execute("INSERT INTO accounts SELECT account_id FROM finva_gmail_connections")
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    cur.execute("SELECT id, mailbox_key FROM finva_gmail_connections")
+    legacy_id, legacy_key = cur.fetchone()
+    assert legacy_key == "email:microsoft:legacy@outlook.com"
+    try:
+        _ms_claim("aaaaaaaa-0000-4000-8000-00000000000a", reported="legacy@outlook.com")
+        result = "coexists"
+    except HTTPException as refused:
+        assert refused.detail == mail_oauth.MAILBOX_UNAVAILABLE
+        result = "refused"
+    assert result == outcome
+    cur.execute("SELECT status FROM finva_gmail_connections WHERE id = %s", (legacy_id,))
+    assert cur.fetchone() == (status,)  # never taken over
+    cur.execute("SELECT count(*) FROM mail_connection_takeovers")
+    assert cur.fetchone() == (0,)
+
+
+def test_two_principals_reporting_one_address_are_two_mailboxes(db):
+    db["cur"].execute(MIGRATION.read_text(encoding="utf-8"))
+    _ms_claim("0123456789abcdef", reported="shared@outlook.com")
+    _ms_claim("aaaaaaaa-0000-4000-8000-00000000000a", reported="shared@outlook.com")  # no unique violation, no refusal
+    db["cur"].execute("SELECT count(*) FROM finva_gmail_connections WHERE status = 'active'")
+    assert db["cur"].fetchone() == (2,)
+
+
+def test_concurrent_attaches_of_one_microsoft_principal_leave_exactly_one(db):
+    db["cur"].execute(MIGRATION.read_text(encoding="utf-8"))
+    barrier, outcomes = threading.Barrier(4), []
+
+    def attach(reported):
+        barrier.wait()
+        try:
+            _ms_claim("b0b00000-0000-4000-8000-000000000b0b", reported=reported)
+            outcomes.append("attached")
+        except (HTTPException, psycopg2.errors.UniqueViolation):
+            outcomes.append("refused")
+
+    # The same principal under several reported addresses (a renamed or changed mail attribute).
+    threads = [threading.Thread(target=attach, args=(f"bob{n}@contoso.com",)) for n in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(outcomes) == ["attached"] + ["refused"] * 3
+    db["cur"].execute("SELECT count(*) FROM finva_gmail_connections WHERE status <> 'disabled'")
+    assert db["cur"].fetchone() == (1,)
+
+
+def test_the_backfill_moves_an_outlook_row_to_its_principal_and_keeps_a_gmail_address(db, monkeypatch):
+    from backend.scripts import backfill_mailbox_identity as backfill
+
+    cur = db["cur"]
+    _legacy_insert(cur, "Old@Outlook.com", provider="microsoft")
+    _legacy_insert(cur, "first.last@gmail.com", provider="gmail")
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    principal = f"microsoft:{MS_TENANT}:c0c00000-0000-4000-8000-00000000c0c0"
+    keys = {"microsoft": principal, "gmail": "google:108"}
+    monkeypatch.setattr(backfill, "_resolver", lambda conn, apply: lambda row: keys[backfill.provider_of(row)])
+    assert backfill.main(["--apply"]) == 0
+    cur.execute("SELECT mailbox_key, mailbox_email FROM finva_gmail_connections ORDER BY 'Mail.Read' = ANY(granted_scopes)")
+    assert cur.fetchall() == [("google:108", "gmail:firstlast@gmail.com"), (principal, principal)]
+
+
+@pytest.mark.parametrize(("status", "outcome"), [("active", "refused"), ("reauthorization_required", "coexists")])
+def test_an_outlook_row_without_identity_is_never_taken_over_by_a_reported_address(db, status, outcome):
+    """A row written before the identity columns (NULL mailbox_email): matched by display address only."""
+    cur = db["cur"]
+    cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    _legacy_insert(cur, "Old@Outlook.com", status=status, provider="microsoft")  # the old code writes no identity
+    cur.execute("INSERT INTO accounts SELECT account_id FROM finva_gmail_connections")
+    cur.execute("SELECT id FROM finva_gmail_connections WHERE mailbox_email IS NULL")
+    legacy_id = cur.fetchone()[0]
+    try:
+        _ms_claim("aaaaaaaa-0000-4000-8000-00000000000a", reported="old@outlook.com")
+        result = "coexists"
+    except HTTPException:
+        result = "refused"
+    assert result == outcome
+    cur.execute("SELECT status FROM finva_gmail_connections WHERE id = %s", (legacy_id,))
+    assert cur.fetchone() == (status,)
+    cur.execute("SELECT count(*) FROM mail_connection_takeovers")
+    assert cur.fetchone() == (0,)
