@@ -523,7 +523,10 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             raise HTTPException(status_code=404, detail="Correo financiero no encontrado.")
         candidate = dict(candidate)
         if candidate["status"] != "pending":
-            return {"status": candidate["status"], "candidate_id": candidate_id, "transaction_id": candidate.get("transaction_id")}
+            # Reviewed before (another device, a stale list, a racing tap): nothing is
+            # written, corrections included, and the answer says so.
+            return {"status": candidate["status"], "candidate_id": candidate_id, "transaction_id": candidate.get("transaction_id"),
+                    "already_reviewed": True}
         if action == "reject":
             conn.execute(
                 """UPDATE finva_email_candidates

@@ -24,7 +24,8 @@ export function createReviewGate() {
 // has. Only the stored status proves what happened.
 export function reviewOutcome(action, result, { internalTransfer = false } = {}) {
   const status = String(result?.status || "");
-  if (status !== TARGET_STATUS[action]) {
+  // Already reviewed: even the same status is not this request's doing (its corrections were not saved).
+  if (status !== TARGET_STATUS[action] || result?.already_reviewed === true) {
     const current = status === "confirmed" || status === "auto_saved"
       ? tx("ya estaba guardado", "was already saved")
       : status === "rejected" ? tx("ya estaba rechazado", "was already rejected")
@@ -96,7 +97,10 @@ export function reconcileReview(action, candidateId, rows, failure, { internalTr
   if (row.review_status === "pending") {
     return {
       applied: false,
-      message: tx("La revisión no se completó: el movimiento sigue pendiente. Podés intentarlo de nuevo.", "The review didn’t go through: the transaction is still pending. You can try again."),
+      message: tx(
+        "Todavía no pudimos confirmar la revisión: el movimiento sigue pendiente por ahora. Podés intentarlo de nuevo; si ya se había guardado, no se duplicará.",
+        "We couldn’t confirm the review yet: the transaction is still pending for now. You can try again; if it was already saved, it won’t be duplicated.",
+      ),
     };
   }
   return reviewOutcome(action, { status: row.review_status }, { internalTransfer });

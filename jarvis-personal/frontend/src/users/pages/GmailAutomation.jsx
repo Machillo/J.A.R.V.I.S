@@ -145,12 +145,16 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
     }
   }, [filter, accountsView, loads]);
 
+  // The review's refresh uses the current filter, not the one of the moment it was tapped.
+  const loadRef = useRef(load);
+  useEffect(() => { loadRef.current = load; }, [load]);
+
   const review = (item, action, corrections = null) => runCandidateReview({
     gate: reviewGate, item, action,
     send: () => (action === "reject"
       ? rejectVipGmailCandidate(item.candidate_id)
       : acceptVipGmailCandidate(item.candidate_id, corrections)),
-    reload: load,
+    reload: () => loadRef.current(),
     isMounted: () => mounted.current,
     onApplied: () => {
       const decision = action === "reject" ? "rejected" : corrections ? "corrected" : "accepted";
@@ -398,7 +402,8 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
       {!visibleEmails.length && <div className="gmail-inbox-empty"><Mail size={25}/><strong>{filter ? tx("No hay correos por revisar", "No emails to review") : tx("Todavía no hay correos financieros", "No financial emails yet")}</strong><small>{tx("Cuando DINCR detecte un movimiento bancario aparecerá acá.", "When DINCR detects a bank transaction, it will appear here.")}</small></div>}
       <div className="gmail-email-list">{visibleEmails.map((item) => {
         const pending = item.review_status === "pending";
-        const edit = editing?.candidate_id === item.candidate_id;
+        // Only a pending candidate can be edited: one reviewed meanwhile shows its stored state.
+        const edit = pending && editing?.candidate_id === item.candidate_id;
         const possibleTransfers = transferSuggestions.filter(({ first, second }) =>
           first.candidate_id === item.candidate_id || second.candidate_id === item.candidate_id);
         const reviewing = Boolean(item.candidate_id) && (busy === `accept-${item.candidate_id}` || busy === `reject-${item.candidate_id}`);

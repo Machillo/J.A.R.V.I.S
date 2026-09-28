@@ -178,6 +178,8 @@ def test_review_answers_the_stored_status(db, stored, action, answered, transact
     candidate_id = _candidate(db, stored)
     result = _review(USER_A, candidate_id, action)
     assert result["status"] == answered and result["candidate_id"] == candidate_id
+    # Only a review that ran says nothing; one answered from the stored state says so.
+    assert result.get("already_reviewed", False) is (stored != "pending")
     state = _state(db, candidate_id)
     assert state["status"] == answered
     assert state["transactions"] == transactions and state["events"] == transactions
@@ -286,3 +288,22 @@ def test_outlook_candidates_use_the_same_review(db):
     assert _review(USER_B, candidate_id, "accept")["status"] == "confirmed"
     assert _review(USER_B, candidate_id, "reject")["status"] == "confirmed"
     assert _state(db, candidate_id)["transactions"] == 1
+
+
+def test_a_stale_accept_with_corrections_changes_nothing_and_says_so(db):
+    """Another device confirmed it; this one sends a corrected amount and rate: nothing is saved."""
+    from backend.auth.current_user import reset_current_user, set_current_user
+    from backend.user_product import gmail_service
+
+    candidate_id = _candidate(db, "confirmed")
+    before = _state(db, candidate_id)
+    token = set_current_user(USER_A)
+    try:
+        result = gmail_service.review_gmail_candidate(candidate_id, "accept", {
+            "transaction_date": "2026-09-20", "description": "Corrected", "amount": 99.5,
+            "transaction_type": "expense", "category": "Servicios", "exchange_rate": 510})
+    finally:
+        reset_current_user(token)
+    assert result["status"] == "confirmed" and result["already_reviewed"] is True
+    assert _state(db, candidate_id) == before
+

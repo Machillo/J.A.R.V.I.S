@@ -20,6 +20,14 @@ gate.end();
 // Success is reported only when the stored status is the one the action produces.
 assert.equal(reviewOutcome("accept", { status: "confirmed", transaction_id: 3 }).applied, true);
 assert.equal(reviewOutcome("reject", { status: "rejected" }).applied, true);
+// Already reviewed (another device, an editor left open): the same status is not this request's
+// doing, and its corrections were not saved.
+for (const [action, stored, text] of [["accept", "confirmed", /ya estaba guardado|was already saved/], ["reject", "rejected", /ya estaba rechazado|was already rejected/]]) {
+  const outcome = reviewOutcome(action, { status: stored, already_reviewed: true });
+  assert.equal(outcome.applied, false, `${action} over an already ${stored} candidate is not reported as done`);
+  assert.match(outcome.message, text);
+  assert.doesNotMatch(outcome.message, SUCCESS);
+}
 for (const [action, stored] of [["accept", "rejected"], ["reject", "confirmed"], ["accept", "duplicate"], ["accept", undefined]]) {
   const outcome = reviewOutcome(action, stored ? { status: stored } : {});
   assert.equal(outcome.applied, false, `${action} over ${stored} is not reported as done`);
@@ -102,6 +110,16 @@ for (const actions of [["accept", "accept"], ["accept", "reject"], ["reject", "a
   assert.deepEqual(await Promise.all(runs), ["applied", ...Array(actions.length - 1).fill("dropped")]);
   assert.equal(flowGate.active, null, "the gate is free afterwards");
   assert.equal(state.applied, 1);
+}
+
+// A stale Accept answered from the stored state: no success, no analytics, the list is refreshed.
+{
+  const { state, run } = harness();
+  assert.equal(await run("accept", async () => ({ status: "confirmed", candidate_id: 7, already_reviewed: true })), "stale");
+  assert.equal(state.applied, 0, "an already-reviewed answer records no review");
+  assert.doesNotMatch(state.message, SUCCESS);
+  assert.match(state.pageError, /ya estaba guardado|was already saved/);
+  assert.equal(state.reloads, 1);
 }
 
 // The gate is released on every ending, the controls come back and a retry is possible.
@@ -212,6 +230,10 @@ const load = page.slice(page.indexOf("const load = useCallback"), page.indexOf("
 assert.match(load, /const isLatest = loads\.start\(\);/);
 assert.ok(load.indexOf("if (!current()) return items;") < load.indexOf("setEmails(items)"), "a stale refresh never writes the list");
 assert.match(page, /aria-busy=\{reviewing\}/);
+assert.match(page, /const edit = pending && editing\?\.candidate_id === item\.candidate_id;/,
+  "an editor never stays open on a candidate reviewed meanwhile");
+assert.match(review, /reload: \(\) => loadRef\.current\(\)/, "the review refreshes with the current filter");
+assert.match(page, /useEffect\(\(\) => \{ loadRef\.current = load; \}, \[load\]\);/);
 assert.match(page, /className="success-banner" role="status"/);
 assert.match(page, /className="onboarding-error" role="alert"/);
 console.log("candidate review tests passed");
