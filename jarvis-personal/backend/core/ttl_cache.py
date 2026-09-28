@@ -99,8 +99,10 @@ class TTLValue:
             load.done.set()
 
     def clear(self) -> None:
+        """Invalidate. A load already in flight still answers its own callers, but
+        it no longer owns the slot, so it cannot store a pre-invalidation value."""
         with self._lock:
-            self._value, self._loaded_at = None, None
+            self._value, self._loaded_at, self._load = None, None, None
 
     def stats(self) -> dict[str, Any]:
         with self._lock:

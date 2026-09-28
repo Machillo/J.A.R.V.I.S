@@ -260,3 +260,116 @@ def test_a_load_stuck_past_the_wait_timeout_is_replaced_and_the_cache_heals(cloc
     assert outcome["value"] == {"version": 1}
     assert hung_load.done.is_set() and cache._load is None
     assert cache.get() == {"version": 2} and loader.calls == 2
+
+
+class GatedLoader:
+    """Every call blocks on its own gate and answers what the test sets for it."""
+
+    def __init__(self, outcomes):
+        self.outcomes = list(outcomes)
+        self.calls = 0
+        self.entered = [threading.Event() for _ in self.outcomes]
+        self.gates = [threading.Event() for _ in self.outcomes]
+
+    def __call__(self):
+        index = self.calls
+        self.calls += 1
+        self.entered[index].set()
+        assert self.gates[index].wait(TIMEOUT), f"load {index + 1} was never released"
+        if isinstance(self.outcomes[index], BaseException):
+            raise self.outcomes[index]
+        return self.outcomes[index]
+
+
+def start_caller(cache):
+    outcome = {}
+
+    def call():
+        try:
+            outcome["value"] = cache.read()
+        except Exception as exc:  # noqa: BLE001 - the test inspects what the caller saw
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=call, daemon=True)
+    thread.start()
+    return thread, outcome
+
+
+def _stuck_then_replacement(clock, stuck_outcome):
+    """Load 1 hangs; past the wait timeout load 2 replaces it. Both are left in flight."""
+    loader = GatedLoader([stuck_outcome, {"version": 2}])
+    cache = TTLValue("t", 15, loader, wait_timeout=5)
+    first, first_outcome = start_caller(cache)
+    assert loader.entered[0].wait(TIMEOUT)
+    stuck = cache._load
+    clock.now += 5
+    second, second_outcome = start_caller(cache)
+    assert loader.entered[1].wait(TIMEOUT)
+    replacement = cache._load
+    assert replacement is not stuck and loader.calls == 2
+    return loader, cache, (first, first_outcome), (second, second_outcome), replacement
+
+
+@pytest.mark.parametrize("stuck_outcome", [{"version": 1}, RuntimeError("stuck load failed late")])
+def test_a_stuck_load_finishing_while_its_replacement_runs_changes_nothing(clock, stuck_outcome):
+    """Two loaders in flight at once: the stuck one ends first (success or failure). It
+    must not store its value, free the replacement's slot or touch its loaded_at; only
+    the replacement's result is kept, and the counters record exactly two loads."""
+    loader, cache, (first, first_outcome), (second, second_outcome), replacement = \
+        _stuck_then_replacement(clock, stuck_outcome)
+
+    loader.gates[0].set()
+    first.join(TIMEOUT)
+    assert not first.is_alive()
+    if isinstance(stuck_outcome, BaseException):
+        assert first_outcome["error"] is stuck_outcome
+    else:
+        assert first_outcome["value"] == ({"version": 1}, 0.0, True)  # its own caller only
+    assert cache._load is replacement  # the replacement still owns the slot
+    assert cache._value is None and cache._loaded_at is None  # nothing stored
+
+    clock.now += 1
+    loader.gates[1].set()
+    second.join(TIMEOUT)
+    assert second_outcome["value"] == ({"version": 2}, 0.0, True)
+    assert cache._value == {"version": 2} and cache._loaded_at == clock.now and cache._load is None
+    assert cache.get() == {"version": 2} and loader.calls == 2
+    failed = 1 if isinstance(stuck_outcome, BaseException) else 0
+    assert (cache.misses, cache.failures, cache.hits) == (2, failed, 1)
+
+
+def test_a_replacement_that_fails_leaves_no_value_and_the_next_call_retries(clock):
+    """The replacement fails while the stuck load is still in flight: nothing is cached,
+    the slot is freed, and the stuck load finishing later still cannot store its value."""
+    loader, cache, (first, first_outcome), (second, second_outcome), _ = \
+        _stuck_then_replacement(clock, {"version": 1})
+    loader.outcomes[1] = RuntimeError("replacement failed")
+
+    loader.gates[1].set()
+    second.join(TIMEOUT)
+    assert isinstance(second_outcome["error"], RuntimeError)
+    assert cache._load is None and cache._value is None and cache._loaded_at is None
+
+    loader.gates[0].set()
+    first.join(TIMEOUT)
+    assert first_outcome["value"][0] == {"version": 1}
+    assert cache._value is None and cache._loaded_at is None and cache._load is None
+    assert (cache.misses, cache.failures) == (2, 1)
+
+
+def test_clear_during_a_load_does_not_let_that_load_repopulate_the_cache(clock):
+    """clear() is an invalidation: a load that started before it must not store its
+    (possibly pre-invalidation) value afterwards. Its own caller still gets it."""
+    loader = GatedLoader([{"version": 1}, {"version": 2}])
+    cache = TTLValue("t", 15, loader, wait_timeout=5)
+    first, first_outcome = start_caller(cache)
+    assert loader.entered[0].wait(TIMEOUT)
+
+    cache.clear()
+    loader.gates[0].set()
+    first.join(TIMEOUT)
+    assert first_outcome["value"] == ({"version": 1}, 0.0, True)
+    assert cache._value is None and cache._loaded_at is None and cache._load is None
+
+    loader.gates[1].set()
+    assert cache.get() == {"version": 2} and loader.calls == 2
