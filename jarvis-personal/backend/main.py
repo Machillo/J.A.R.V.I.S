@@ -17,6 +17,7 @@ from backend.goals.routes import router as goals_router
 from backend.decision_engine.routes import router as decision_router
 from backend.reports.routes import router as reports_router
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
 from backend.transactions.routes import router as transactions_router
 from backend.importers.routes import router as importers_router
@@ -37,6 +38,7 @@ from backend.deployment_monitor.routes import router as deployment_monitor_route
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.posthog_events import capture_backend_event_later
 from backend.product_ops.routes import router as product_ops_router
+from backend.product_ops.store_routes import router as store_billing_router
 from backend.financial_lifecycle.routes import router as financial_lifecycle_router
 from backend.core.idempotency import (
     IDEMPOTENCY_KEY_PATTERN,
@@ -93,6 +95,11 @@ PUBLIC_PATHS = {
     "/user-product/vip/gmail/maintenance",
     "/user-product/vip/gmail/push",
     "/notifications/cron",
+    # App Store / Google Play: authenticated by Apple's signature, Google's OIDC
+    # token or the cron secret (backend/product_ops/store_verification.py).
+    "/product-ops/billing/store/apple/notifications",
+    "/product-ops/billing/store/google/notifications",
+    "/product-ops/billing/store/cron",
     "/deployment-monitor/webhook/github",
     "/deployment-monitor/webhook/vercel",
     "/deployment-monitor/webhook/render",
@@ -226,7 +233,7 @@ async def auth_middleware(request: Request, call_next):
         return response
 
     if _is_public_path(request.url.path):
-        disabled_feature = disabled_feature_for_request(request.method, request.url.path)
+        disabled_feature = await run_in_threadpool(disabled_feature_for_request, request.method, request.url.path)
         if disabled_feature:
             return JSONResponse(
                 status_code=503,
@@ -237,7 +244,17 @@ async def auth_middleware(request: Request, call_next):
                 },
                 headers={**cors_headers, "X-Request-ID": request_id},
             )
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Same redaction as authenticated paths: an escaping exception would be
+            # re-raised by Starlette and logged verbatim (URLs with tokens) by uvicorn.
+            logger.error("Unhandled API error id=%s path=%s error=%s", request_id, request.url.path, _safe_exception_summary(exc))
+            return JSONResponse(
+                status_code=500,
+                content=_internal_error_payload(request_id),
+                headers={**cors_headers, "X-Request-ID": request_id},
+            )
         response.headers["X-Request-ID"] = request_id
         return response
 
@@ -252,21 +269,28 @@ async def auth_middleware(request: Request, call_next):
 
     access_token = authorization.replace("Bearer ", "", 1).strip()
 
+    # Authentication calls Supabase over HTTP and runs database transactions: it runs
+    # in the thread pool (with this context copied), never on the event loop, so one
+    # slow or junk request cannot stall every other request of the process.
     try:
         if access_token.startswith("jarvis-owner:"):
-            user = authenticate_owner_bridge_token(access_token.removeprefix("jarvis-owner:").strip())
+            user = await run_in_threadpool(authenticate_owner_bridge_token, access_token.removeprefix("jarvis-owner:").strip())
         else:
             # auth_middleware runs before language_middleware: resolve the language here so
             # identity/deletion messages follow Accept-Language.
             with use_language(language_for_request(request.url.path, request.headers.get("accept-language"))):
                 if request.method == "DELETE" and request.url.path == "/auth/me":
                     # Only the account deletion itself may run on a deletion_pending account (retry).
-                    user = authenticate_access_token(access_token, allow_deletion_pending=True)
+                    user = await run_in_threadpool(authenticate_access_token, access_token, allow_deletion_pending=True)
                 else:
-                    user = authenticate_access_token(access_token)
+                    user = await run_in_threadpool(authenticate_access_token, access_token)
     except Exception as exc:
-        status_code = getattr(exc, "status_code", 401)
-        detail = getattr(exc, "detail", "No se pudo autenticar el usuario.")
+        # An infrastructure failure (database, network) is not an invalid session:
+        # answer 503 so the app retries instead of signing the user out on a 401.
+        if not hasattr(exc, "status_code"):
+            logger.error("Authentication failed without a verdict id=%s error=%s", request_id, _safe_exception_summary(exc))
+        status_code = getattr(exc, "status_code", 503)
+        detail = getattr(exc, "detail", "No pudimos verificar tu sesión en este momento. Intentá de nuevo.")
         return JSONResponse(
             status_code=status_code,
             content={"detail": detail},
@@ -274,7 +298,7 @@ async def auth_middleware(request: Request, call_next):
         )
 
     request.state.user = user
-    disabled_feature = disabled_feature_for_request(request.method, request.url.path, user)
+    disabled_feature = await run_in_threadpool(disabled_feature_for_request, request.method, request.url.path, user)
     if disabled_feature:
         return JSONResponse(
             status_code=503,
@@ -301,7 +325,8 @@ async def auth_middleware(request: Request, call_next):
             )
         body = await request.body()
         try:
-            reservation = reserve_operation(
+            reservation = await run_in_threadpool(
+                reserve_operation,
                 account_id=idempotency_account,
                 key=idempotency_key,
                 method=request.method,
@@ -364,7 +389,8 @@ async def auth_middleware(request: Request, call_next):
             if 200 <= response.status_code < 300 and "application/json" in response.headers.get("content-type", ""):
                 response_body = b"".join([chunk async for chunk in response.body_iterator])
                 try:
-                    complete_operation(
+                    await run_in_threadpool(
+                        complete_operation,
                         account_id=idempotency_account,
                         key=idempotency_key,
                         lease=idempotency_lease,
@@ -373,7 +399,7 @@ async def auth_middleware(request: Request, call_next):
                     )
                 except Exception:
                     logger.exception("Idempotency completion failed id=%s path=%s", request_id, request.url.path)
-                    safe_abandon_operation(account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
+                    await run_in_threadpool(safe_abandon_operation, account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
                 response_headers = dict(response.headers)
                 response_headers.pop("content-length", None)
                 response = Response(
@@ -382,12 +408,12 @@ async def auth_middleware(request: Request, call_next):
                     headers=response_headers,
                 )
             else:
-                safe_abandon_operation(account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
+                await run_in_threadpool(safe_abandon_operation, account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
         return response
 
     except Exception as exc:
         if idempotency_reserved:
-            safe_abandon_operation(account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
+            await run_in_threadpool(safe_abandon_operation, account_id=idempotency_account, key=idempotency_key, lease=idempotency_lease)
         if isinstance(exc, OperationSuperseded):
             return _superseded_response({**cors_headers, "X-Request-ID": request_id})
         error_id = request_id
@@ -426,6 +452,7 @@ app.include_router(owner_bridge_router)
 app.include_router(user_product_router)
 app.include_router(deployment_monitor_router)
 app.include_router(product_ops_router)
+app.include_router(store_billing_router)
 app.include_router(financial_lifecycle_router)
 
 class AskRequest(BaseModel):

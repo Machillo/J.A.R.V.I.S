@@ -323,7 +323,9 @@ def vip_gmail_candidate_correct(candidate_id: int, request: GmailCandidateReview
 
 @router.delete("/vip/gmail")
 def vip_gmail_disconnect(connection_id: int | None = None):
-    require_feature("gmail_automation"); return disconnect_gmail(connection_id)
+    # Withdrawing mail authorization never depends on the current plan (the
+    # privacy copy promises it at any time); disconnect_gmail is account-scoped.
+    return disconnect_gmail(connection_id)
 
 @router.post("/vip/gmail/maintenance")
 def vip_gmail_maintenance(x_finva_cron_secret: str | None = Header(default=None)):

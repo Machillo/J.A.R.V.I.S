@@ -272,7 +272,8 @@ def pay_user_debt(debt_id: int, amount: float):
         raise HTTPException(status_code=400, detail="El pago debe ser mayor que cero.")
     with get_connection() as conn:
         debt = conn.execute(
-            "SELECT id,name,remaining_amount,monthly_payment FROM debts WHERE id=%s AND workspace_id=%s",
+            # Locked: a concurrent payment waits and then reads the reduced balance.
+            "SELECT id,name,remaining_amount,monthly_payment FROM debts WHERE id=%s AND workspace_id=%s FOR UPDATE",
             (debt_id, workspace_id),
         ).fetchone()
         if not debt:
