@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
+from backend.auth.plan_lifecycle import clear_pending
 from backend.core.database import connection_pool_stats, get_connection
 from backend.core.schema_state import tables_exist
 from backend.core.feature_flags import FEATURE_DEFINITIONS, clear_feature_flag_cache
@@ -438,6 +439,7 @@ def activate_launch_promotion(plan_code: str):
                    granted_by=NULL,granted_at=NOW(),updated_at=NOW()""",
             (account_id, plan["id"], LAUNCH_PROMOTION_END, LAUNCH_PROMOTION_CODE),
         )
+        clear_pending(conn, account_id)  # an upgrade replaces a scheduled downgrade
         conn.execute(
             "UPDATE accounts SET plan_selected=TRUE,onboarding_completed=TRUE,onboarding_level=%s,updated_at=NOW() WHERE id=%s",
             (plan_code, account_id),

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
+from backend.auth.plan_lifecycle import clear_pending
 from backend.core.database import get_connection
 from backend.product_ops.posthog_events import capture_backend_event_later
 from backend.product_ops.service import record_event
@@ -112,6 +113,7 @@ def restore_owner_access():
                RETURNING account_id""",
             (account_id, vip["id"]),
         )
+        clear_pending(conn, account_id)
         conn.commit()
     return {"status": "restored", "plan": "vip", "access_source": "owner"}
 
@@ -247,6 +249,7 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
         # Store sandbox/real billing must never downgrade privileged or courtesy
         # access. Those grants are managed independently from store entitlement.
         if not protected_access:
+            clear_pending(conn, account_id)  # the store's verified state replaces a DINCR-side schedule
             if status in ACTIVE_STATES:
                 conn.execute("""INSERT INTO account_subscriptions(account_id,plan_id,status,access_source,started_at,created_at,updated_at)
                   VALUES(%s,%s,'active','self_service',NOW(),NOW(),NOW())
