@@ -23,7 +23,7 @@ def test_owner_email_dashboard_summarizes_truth_without_sensitive_content():
     connection = _Connection([
         [{"status": "processed", "total": 12}],
         [{
-            "user_email": "user@example.com", "bank": "bac", "source_type": "email",
+            "bank": "bac", "source_type": "email",
             "parser_name": "bac_card", "parser_version": "3", "movement_kind": "card_purchase",
             "pending": 2, "reviewed": 10, "accepted": 7, "corrected": 2, "rejected": 1,
         }],
@@ -42,6 +42,10 @@ def test_owner_email_dashboard_summarizes_truth_without_sensitive_content():
     assert "raw_payload" not in " ".join(connection.queries).lower()
     assert "description" not in " ".join(connection.queries).lower()
     assert len(connection.queries) == 5
+    queries = " ".join(connection.queries).lower()
+    # Limited Use: humans see Gmail-derived data only aggregated, never per person.
+    for personal in ("primary_email", "email AS", "account_id", "join accounts", "display_name"):
+        assert personal.lower() not in queries
 
 
 def test_owner_email_dashboard_handles_empty_database():

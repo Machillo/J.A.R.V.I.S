@@ -22,8 +22,8 @@ const ALLOWLIST = [
   { file: "src/lib/categories.js", pattern: /.*/, reason: "English labels for canonical categories" },
   // Stored note sent to a legacy endpoint (data, not UI).
   { file: "src/services/jarvisApi.js", pattern: /^Cuenta manual \(/, reason: "stored record note, not visible copy" },
-  // Owner-only endpoints (legacy finance input and owner billing receipts).
-  { file: "src/services/jarvisApi.js", pattern: /^(No pude leer el PDF\.|No se pudo abrir el comprobante)/, reason: "DINCR Owner-only endpoint" },
+  // Owner-only endpoint (legacy finance input).
+  { file: "src/services/jarvisApi.js", pattern: /^No pude leer el PDF\./, reason: "DINCR Owner-only endpoint" },
   // Bank proper names.
   { file: "src/pages/ProfileSetup.jsx", pattern: /^(Banco de Costa Rica|Banco Nacional|Banco Popular)$/, reason: "bank name" },
   { file: "src/lib/bankIdentity.js", pattern: /^(Banco de Costa Rica|Banco Nacional|Banco Popular)$/, reason: "bank name" },

@@ -22,6 +22,7 @@ PLAN_COPY_EN = {
     "vip": {"name": "VIP", "tagline": "A more complete strategy with information you authorize.", "features": ["Everything in Basic", "Dynamic strategy, projections, and scenarios", "With your permission, it detects financial notices in supported emails so you can review transactions and keep your accounts and debts up to date", "Annual bonus (aguinaldo) estimate if DINCR detects CCSS employer statements in a connected email"]},
 }
 PLAN_RANK = {"free": 1, "basic": 2, "vip": 3}
+OWNER_ONLY_SUBSCRIPTION_FIELDS = frozenset({"granted_by", "courtesy_note"})
 BUILTIN_FEATURE_MIN_PLAN = {
     # Core DINCR capabilities must follow the product plan even if a deployment
     # has not yet synchronized plan_features rows.
@@ -42,13 +43,13 @@ BUILTIN_FEATURE_MIN_PLAN = {
 
 
 def _restore_expired_launch_promotion(conn, account_id: str):
-    """Return an expired launch promotion to a paid plan, or to Free.
+    """Return an expired launch promotion to a store-paid plan, or to Free.
 
-    A previous paid SINPE subscription is kept in ``billing_subscriptions``
-    while the temporary courtesy is active, so promotional access never
-    destroys access the customer already purchased.
+    A store subscription (App Store / Google Play) bought while the promotion was
+    active keeps its own state in store_subscriptions, so promotional access never
+    destroys access the customer purchased.
     """
-    from backend.product_ops.service import LAUNCH_PROMOTION_CODE
+    from backend.product_ops.service import LAUNCH_PROMOTION_CODE, has_store_entitlement
 
     expired = conn.execute(
         """SELECT 1 FROM account_subscriptions
@@ -58,14 +59,7 @@ def _restore_expired_launch_promotion(conn, account_id: str):
     ).fetchone()
     if not expired:
         return None
-    paid = conn.execute(
-        """SELECT plan_code FROM billing_subscriptions
-           WHERE account_id=%s AND status='active' AND provider<>'promotion'
-             AND (current_period_end IS NULL OR current_period_end>NOW())
-           ORDER BY updated_at DESC LIMIT 1""",
-        (account_id,),
-    ).fetchone()
-    fallback_code = (paid or {}).get("plan_code") or "free"
+    fallback_code = next((code for code in ("vip", "basic") if has_store_entitlement(conn, account_id, code)), "free")
     plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (fallback_code,)).fetchone()
     if not plan:
         return None
@@ -86,41 +80,8 @@ def _restore_expired_launch_promotion(conn, account_id: str):
     }
 
 
-def _expire_unpaid_subscription(conn, account_id: str):
-    """Expire a finished paid period and return the account to Free."""
-    expired = conn.execute(
-        """UPDATE billing_subscriptions
-           SET status='expired',updated_at=NOW()
-           WHERE account_id=%s AND status='active'
-             AND current_period_end IS NOT NULL AND current_period_end<=NOW()
-           RETURNING plan_code,current_period_end""",
-        (account_id,),
-    ).fetchone()
-    if not expired:
-        return None
-    free = conn.execute("SELECT id FROM plans WHERE code='free' AND is_active=TRUE").fetchone()
-    if not free:
-        return None
-    conn.execute(
-        """UPDATE account_subscriptions
-           SET plan_id=%s,status='active',access_source='self_service',started_at=NOW(),
-               expires_at=NULL,courtesy_note=NULL,granted_by=NULL,granted_at=NULL,updated_at=NOW()
-           WHERE account_id=%s""",
-        (free["id"], account_id),
-    )
-    return {
-        "code": "subscription_expired",
-        "title": "Tu suscripción terminó",
-        "message": "Ahora estás en el plan Gratis. Las compras de Basic y VIP estarán disponibles más adelante en las tiendas oficiales.",
-        "previous_plan": expired.get("plan_code"),
-        "expired_at": expired.get("current_period_end"),
-    }
-
-
 def _subscription(conn, account_id: str):
-    notice = _expire_unpaid_subscription(conn, account_id)
-    if notice is None:
-        notice = _restore_expired_launch_promotion(conn, account_id)
+    notice = _restore_expired_launch_promotion(conn, account_id)
     row = conn.execute(
         """SELECT s.id, p.code AS plan, p.name AS plan_name,
                   CASE WHEN s.access_source='courtesy' AND s.expires_at IS NOT NULL AND s.expires_at<=NOW() THEN 'expired' ELSE s.status END AS status,
@@ -212,7 +173,10 @@ def enrich_identity(user: dict[str, Any]) -> dict[str, Any]:
         "onboarding_completed": bool((account or {}).get("onboarding_completed")),
         "onboarding_level": (account or {}).get("onboarding_level"),
         "plan_selected": bool((account or {}).get("plan_selected")),
-        "subscription": subscription,
+        # granted_by (the granting Owner's account id) and courtesy_note (the Owner's
+        # internal note) stay Owner-side; the managed-user views show them.
+        "subscription": {key: value for key, value in (subscription or {}).items()
+                         if key not in OWNER_ONLY_SUBSCRIPTION_FIELDS} if subscription else subscription,
         "legal": legal,
     }
 
@@ -268,13 +232,6 @@ def select_plan(plan_code: str, accept_beta_terms: bool = False, consent_version
         return {**result, "profile": enrich_identity(user)}
     account_id = get_current_account_id()
     with get_connection() as conn:
-        if plan_code == "free":
-            from backend.product_ops.service import ensure_schema
-            ensure_schema(conn)
-            conn.execute("""UPDATE billing_subscriptions SET status='canceled',cancel_at_period_end=FALSE,updated_at=NOW()
-               WHERE account_id=%s AND status IN ('active','payment_pending','past_due')""", (account_id,))
-            conn.execute("""UPDATE billing_orders SET status='canceled',updated_at=NOW()
-               WHERE account_id=%s AND status='payment_pending'""", (account_id,))
         plan = conn.execute("SELECT id FROM plans WHERE code=%s AND is_active=TRUE", (plan_code,)).fetchone()
         if not plan:
             raise HTTPException(status_code=404, detail="Plan no disponible.")
@@ -313,9 +270,9 @@ def complete_onboarding(payload):
         if subscription_plan not in PLAN_COPY:
             raise HTTPException(status_code=409, detail="Seleccioná un plan primero.")
         if subscription_plan in {"basic", "vip"} and (sub or {}).get("access_source") == "self_service":
-            from backend.product_ops.service import has_active_payment
-            if not has_active_payment(conn, account_id, subscription_plan):
-                raise HTTPException(status_code=402, detail="El plan se activa únicamente después de confirmar el pago.")
+            from backend.product_ops.service import has_store_entitlement
+            if not has_store_entitlement(conn, account_id, subscription_plan):
+                raise HTTPException(status_code=402, detail="El plan se activa únicamente con una suscripción de App Store o Google Play.")
         if payload.income_type == "fixed" and payload.fixed_monthly_salary is None:
             raise HTTPException(status_code=422, detail="Indicá el salario que realmente te llega al mes.")
         if payload.income_type == "hourly" and (payload.hourly_rate is None or payload.hours_per_day is None):
@@ -366,10 +323,10 @@ def require_feature(feature_code: str):
         _activate_self_service_if_ready(conn, account_id)
         subscription = _subscription(conn, account_id)
         if subscription and subscription.get("access_source") == "self_service" and subscription.get("plan") in {"basic", "vip"}:
-            from backend.product_ops.service import has_active_payment
-            if not has_active_payment(conn, account_id, subscription.get("plan")):
+            from backend.product_ops.service import has_store_entitlement
+            if not has_store_entitlement(conn, account_id, subscription.get("plan")):
                 conn.commit()
-                raise HTTPException(status_code=402, detail="Esta función requiere un pago confirmado.")
+                raise HTTPException(status_code=402, detail="Esta función requiere una suscripción activa de App Store o Google Play.")
         conn.commit()
         row = conn.execute(
             """SELECT 1 FROM account_subscriptions s

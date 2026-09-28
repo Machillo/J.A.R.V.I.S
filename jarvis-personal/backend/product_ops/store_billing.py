@@ -271,7 +271,13 @@ def apply_store_event(account_id: str, workspace_id: str | None, plan_code: str,
 
 
 def simulate_lifecycle(plan_code: str, billing_period: str, event_type: str, *, target_account_id: str | None = None, provider_event_id: str | None = None):
-    """Owner-only QA adapter. Not part of the customer purchase flow."""
+    """Owner-only QA adapter. Not part of the customer purchase flow.
+
+    Off unless DINCR_STORE_SIMULATOR=1 (QA environments only): a simulated purchase
+    is never a real one, and production plans come only from verified store purchases.
+    """
+    if os.getenv("DINCR_STORE_SIMULATOR") != "1":
+        raise HTTPException(404, "El simulador de tiendas no está habilitado.")
     actor_account_id = get_current_account_id()
     account_id = target_account_id or actor_account_id
     workspace_id = get_current_workspace_id() if not target_account_id else None
