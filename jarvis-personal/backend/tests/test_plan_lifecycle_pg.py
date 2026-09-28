@@ -19,9 +19,10 @@ psycopg2 = pytest.importorskip("psycopg2")
 from backend.auth import plan_lifecycle, saas  # noqa: E402
 from backend.core import database  # noqa: E402
 from backend.product_ops import service as billing  # noqa: E402
+from backend.tests.test_dincr_app_role_pg import env  # noqa: E402,F401  (a fixture)
 
-MIGRATION = Path(__file__).resolve().parents[2] / "database" / "migrations" / "20260926100000_plan_change_lifecycle.sql"
-ROLLBACK = Path(__file__).resolve().parents[2] / "database" / "rollback" / "20260926100000_plan_change_lifecycle_rollback.sql"
+MIGRATION = Path(__file__).resolve().parents[2] / "database" / "migrations" / "20260928120000_plan_change_lifecycle.sql"
+ROLLBACK = Path(__file__).resolve().parents[2] / "database" / "rollback" / "20260928120000_plan_change_lifecycle_rollback.sql"
 SCHEMA = """
 CREATE TABLE accounts (id UUID PRIMARY KEY, role TEXT NOT NULL DEFAULT 'user', status TEXT NOT NULL DEFAULT 'active',
     onboarding_completed BOOLEAN, onboarding_level TEXT, plan_selected BOOLEAN, updated_at TIMESTAMPTZ);
@@ -38,14 +39,6 @@ CREATE TABLE account_subscriptions (
     started_at TIMESTAMPTZ, expires_at TIMESTAMPTZ, last_payment_at TIMESTAMPTZ, courtesy_note TEXT,
     granted_by UUID, granted_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
--- Still read by main's _expire_unpaid_subscription until the off-store tables are retired.
-CREATE TABLE billing_subscriptions (
-    account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE, workspace_id UUID,
-    plan_code TEXT NOT NULL CHECK (plan_code IN ('basic','vip')),
-    status TEXT NOT NULL CHECK (status IN ('payment_pending','active','past_due','canceled','expired','refunded')),
-    provider TEXT NOT NULL DEFAULT 'sinpe_mobile', current_period_start TIMESTAMPTZ, current_period_end TIMESTAMPTZ,
-    cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-CREATE TABLE billing_orders (id BIGSERIAL PRIMARY KEY, account_id UUID, status TEXT, updated_at TIMESTAMPTZ);
 CREATE TABLE store_subscriptions (account_id UUID PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
     provider TEXT NOT NULL, plan_code TEXT NOT NULL, status TEXT NOT NULL,
     trial_ends_at TIMESTAMPTZ, current_period_end TIMESTAMPTZ);
@@ -387,3 +380,164 @@ def test_scheduling_during_onboarding_marks_the_plan_as_chosen(migrated):
     assert saas.select_plan("free")["status"] == "downgrade_scheduled"
     migrated["cur"].execute("SELECT plan_selected FROM accounts WHERE id = %s", (account,))
     assert migrated["cur"].fetchone() == (True,)
+
+
+def test_a_basic_courtesy_cancelled_to_free_keeps_basic_until_its_end(migrated, monkeypatch):
+    account = _account(migrated, plan="basic", note="owner courtesy", expires="NOW() + INTERVAL '40 days'")
+    monkeypatch.setattr(billing, "create_checkout", _no_checkout)
+    assert saas.select_plan("free")["status"] == "downgrade_scheduled"
+    assert _row(migrated, account)[0] == "basic" and _row(migrated, account)[3] == "free"
+    assert saas.require_feature("debts") is True
+    _expire(migrated, account)
+    assert _subscription(account)["plan"] == "free"
+
+
+@pytest.mark.parametrize("provider", ["apple", "google"])
+def test_the_courtesy_end_follows_an_apple_or_google_subscription(migrated, provider):
+    account = _account(migrated)
+    saas.select_plan("free")
+    _store(migrated, account, "basic", provider=provider)
+    _expire(migrated, account)
+    subscription = _subscription(account)
+    assert (subscription["plan"], subscription["access_source"], subscription["pending_plan"]) == ("basic", "self_service", None)
+
+
+def test_choosing_the_current_plan_during_a_longer_courtesy_never_re_grants_it(migrated, monkeypatch):
+    """The launch promotion would overwrite a longer Owner courtesy with its own (earlier) end."""
+    monkeypatch.setattr(billing, "launch_promotion_status", lambda: {"active": True})
+    monkeypatch.setattr(billing, "create_checkout", _no_checkout)
+    account = _account(migrated, plan="vip", note="owner courtesy", expires="NOW() + INTERVAL '400 days'")
+    before = _row(migrated, account)
+    assert saas.select_plan("vip")["status"] == "plan_kept"
+    assert _row(migrated, account) == before  # same plan, source, end, no pending
+
+
+def test_choosing_the_store_plan_again_never_turns_it_into_a_courtesy(migrated, monkeypatch):
+    monkeypatch.setattr(billing, "launch_promotion_status", lambda: {"active": True})
+    monkeypatch.setattr(billing, "create_checkout", _no_checkout)
+    account = _account(migrated, plan="basic", source="self_service", note=None, expires="NULL")
+    _store(migrated, account, "basic", provider="apple")
+    assert saas.select_plan("basic")["status"] == "plan_kept"
+    assert _row(migrated, account)[:3] == ("basic", "self_service", None)
+
+
+def test_stored_instants_are_read_as_utc():
+    naive = plan_lifecycle._as_datetime("2026-12-31T23:59:59")
+    aware = plan_lifecycle._as_datetime("2026-12-31T23:59:59Z")
+    assert naive == aware and naive.tzinfo is not None
+    assert plan_lifecycle._as_datetime(None) is None
+
+
+def test_the_application_role_writes_the_pending_columns_with_its_table_grants(env):  # noqa: F811
+    """On the production role setup: dincr_app's table grants cover the new columns, the FK is
+    checked with the owner's rights, and the CHECK binds the application too. No grant is added."""
+    owner, app = env["owner"], env["as_app"]()
+    owner.execute(MIGRATION.read_text(encoding="utf-8"))
+    owner.execute("INSERT INTO plans(id) VALUES (DEFAULT) RETURNING id")
+    plan_id = owner.fetchone()[0]
+    owner.execute("INSERT INTO account_subscriptions(workspace_id) VALUES (NULL) RETURNING id")
+    row_id = owner.fetchone()[0]
+    for column, privilege in (("pending_plan_id", "UPDATE"), ("pending_effective_at", "UPDATE"), ("pending_requested_at", "SELECT")):
+        owner.execute("SELECT has_column_privilege('dincr_app', 'public.account_subscriptions', %s, %s)", (column, privilege))
+        assert owner.fetchone() == (True,)
+    app.execute("""UPDATE account_subscriptions SET pending_plan_id=%s, pending_effective_at=NOW() + INTERVAL '1 day',
+                   pending_requested_at=NOW() WHERE id=%s""", (plan_id, row_id))
+    with pytest.raises(psycopg2.errors.CheckViolation):
+        app.execute("UPDATE account_subscriptions SET pending_effective_at=NULL WHERE id=%s", (row_id,))
+    with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+        app.execute("UPDATE account_subscriptions SET pending_plan_id=-1 WHERE id=%s", (row_id,))
+
+
+def test_a_downgrade_waits_for_a_courtesy_ending_at_the_same_time(migrated, monkeypatch):
+    """The decision reads the row under its lock: it never schedules on a courtesy that just ended."""
+    monkeypatch.setattr(billing, "create_checkout", lambda *args, **kwargs: {"status": "checkout_started"})
+    account = _account(migrated)
+    ending = psycopg2.connect(migrated["uri"])
+    with ending.cursor() as cur:  # the courtesy ends (revoke or expiry) in a transaction still open
+        cur.execute("SELECT 1 FROM account_subscriptions WHERE account_id=%s FOR UPDATE", (account,))
+        cur.execute("""UPDATE account_subscriptions SET plan_id=(SELECT id FROM plans WHERE code='free'),
+                       access_source='self_service', expires_at=NULL, courtesy_note=NULL WHERE account_id=%s""", (account,))
+    results, errors = [], []
+
+    def downgrade():
+        try:
+            results.append(saas.select_plan("basic"))
+        except Exception as exc:  # pragma: no cover - reported below
+            errors.append(exc)
+
+    thread = threading.Thread(target=downgrade)
+    thread.start()
+    for _ in range(100):  # the request is now waiting on the row
+        migrated["cur"].execute("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type='Lock' AND datname=current_database()")
+        if migrated["cur"].fetchone()[0] >= 1:
+            break
+        threading.Event().wait(0.05)
+    ending.commit()
+    ending.close()
+    thread.join(timeout=30)
+    assert errors == []
+    # It saw Free, so Basic is an upgrade through the store path: nothing is scheduled on a Free row.
+    assert results[0]["status"] == "checkout_started"
+    assert _row(migrated, account)[:2] == ("free", "self_service") and _row(migrated, account)[3:] == (None, None)
+
+
+def test_a_lower_courtesy_can_still_move_up_to_the_live_store_plan(migrated, monkeypatch):
+    """A Basic courtesy with a live VIP store plan: choosing VIP is not 'change it in the store'."""
+    monkeypatch.setattr(billing, "create_checkout", lambda *args, **kwargs: {"status": "checkout_started"})
+    account = _account(migrated, plan="basic", note="owner courtesy", expires="NOW() + INTERVAL '400 days'")
+    _store(migrated, account, "vip", provider="apple")
+    assert saas.select_plan("vip")["status"] == "checkout_started"  # main's upgrade path, as before
+    with pytest.raises(HTTPException) as refused:  # any other change stays in the store
+        saas.select_plan("free")
+    assert refused.value.status_code == 409
+
+
+def test_an_owner_row_is_never_changed_whatever_the_role(migrated, monkeypatch):
+    monkeypatch.setattr(billing, "create_checkout", _no_checkout)
+    account = _account(migrated, source="owner", note=None, expires="NULL", role="user")
+    assert saas.select_plan("free")["status"] == "plan_kept"
+    assert _row(migrated, account)[:2] == ("vip", "owner")
+
+
+def _hold_store_lock(db, account):
+    """A store verification in flight: its advisory lock is held and its purchase not yet committed."""
+    verifying = psycopg2.connect(db["uri"])
+    cur = verifying.cursor()
+    cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"store-account:{account}",))
+    cur.execute("""INSERT INTO store_subscriptions(account_id, provider, plan_code, status, current_period_end)
+                   VALUES (%s, 'google', 'vip', 'active', NOW() + INTERVAL '30 days')""", (account,))
+    return verifying
+
+
+def _wait_until_blocked(db):
+    for _ in range(100):
+        db["cur"].execute("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type='Lock' AND datname=current_database()")
+        if db["cur"].fetchone()[0] >= 1:
+            return
+        threading.Event().wait(0.05)
+    raise AssertionError("the courtesy end did not wait for the store verification")
+
+
+@pytest.mark.parametrize("ending", ["expiry", "revoke"])
+def test_a_courtesy_ending_while_a_purchase_is_verified_keeps_the_purchase(migrated, monkeypatch, ending):
+    monkeypatch.setattr(saas, "get_managed_user", lambda account_id: {"account_id": account_id})
+    account = _account(migrated)
+    if ending == "expiry":
+        _expire(migrated, account)
+    verifying = _hold_store_lock(migrated, account)
+    results, errors = [], []
+
+    def end():
+        try:
+            results.append(_subscription(account) if ending == "expiry" else saas.revoke_courtesy(account))
+        except Exception as exc:  # pragma: no cover - reported below
+            errors.append(exc)
+
+    thread = threading.Thread(target=end)
+    thread.start()
+    _wait_until_blocked(migrated)
+    verifying.commit()
+    verifying.close()
+    thread.join(timeout=30)
+    assert errors == []
+    assert _row(migrated, account)[:2] == ("vip", "self_service")  # the purchase, never Free

@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_user_id, get_current_workspace_id
 from backend.auth.plan_lifecycle import (
-    PLAN_RANK, clear_pending, pending_change, plan_after_entitlement_end, request_plan_change,
+    PLAN_RANK, clear_pending, lock_store_account, pending_change, plan_after_entitlement_end, request_plan_change,
 )
 from backend.core.database import get_connection
 from backend.core.i18n import tx
@@ -58,7 +58,9 @@ def _end_expired_courtesy(conn, account_id: str):
                AND expires_at IS NOT NULL AND expires_at<=NOW()"""
     if not conn.execute(due, (account_id,)).fetchone():
         return None
-    # Re-check under the row lock every plan change takes: two requests end it once.
+    # The store verification lock first (its order), then the row lock every plan change
+    # takes: a purchase verified at this moment is seen, and two requests end it once.
+    lock_store_account(conn, account_id)
     expired = conn.execute(due + " FOR UPDATE", (account_id,)).fetchone()
     if not expired:
         return None
@@ -241,7 +243,7 @@ def select_plan(plan_code: str, accept_beta_terms: bool = False, consent_version
         change = request_plan_change(conn, account_id, plan_code)
         if change:
             # A scheduled or kept plan is still the user's choice (onboarding included).
-            conn.execute("UPDATE accounts SET plan_selected=TRUE,updated_at=NOW() WHERE id=%s AND plan_selected IS DISTINCT FROM TRUE",
+            conn.execute("UPDATE accounts SET plan_selected=TRUE,updated_at=NOW() WHERE id=%s AND NOT COALESCE(plan_selected,FALSE)",
                          (account_id,))
         if change or plan_code != "free":
             conn.commit()
@@ -424,6 +426,7 @@ def grant_courtesy(account_id: str, plan_code: str, days: int, note: str | None 
 
 def revoke_courtesy(account_id: str):
     with get_connection() as conn:
+        lock_store_account(conn, account_id)  # same order as store verification: see a purchase in flight
         current=conn.execute("SELECT access_source FROM account_subscriptions WHERE account_id=%s FOR UPDATE",(account_id,)).fetchone()
         if not current or current["access_source"]!='courtesy': raise HTTPException(status_code=409, detail="La cuenta no tiene una cortesía activa.")
         # A courtesy never destroys access bought in a store: move to the store plan, or Free.

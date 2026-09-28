@@ -20,9 +20,16 @@
 --    WHERE to_regclass('public.' || t) IS NULL
 --   UNION ALL
 --   SELECT 'plans.id is not bigint' WHERE (SELECT format_type(atttypid, atttypmod) FROM pg_attribute
---    WHERE attrelid = 'public.plans'::regclass AND attname = 'id') <> 'bigint';
+--    WHERE attrelid = 'public.plans'::regclass AND attname = 'id') <> 'bigint'
+--   UNION ALL
+--   SELECT 'column already exists (IF NOT EXISTS would keep its type): ' || attname FROM pg_attribute
+--    WHERE attrelid = 'public.account_subscriptions'::regclass AND NOT attisdropped
+--      AND attname IN ('pending_plan_id', 'pending_effective_at', 'pending_requested_at');
+-- dincr_app (20260926150000) already has SELECT, INSERT, UPDATE on account_subscriptions:
+-- table privileges cover added columns, and the FK is checked with the owner's rights.
+-- No grant is added here.
 -- Postflight: the query at the end of this file returns zero rows.
--- Rollback: database/rollback/20260926100000_plan_change_lifecycle_rollback.sql.
+-- Rollback: database/rollback/20260928120000_plan_change_lifecycle_rollback.sql.
 
 BEGIN;
 

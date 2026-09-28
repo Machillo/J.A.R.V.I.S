@@ -1,4 +1,4 @@
--- Rollback of 20260926100000_plan_change_lifecycle.sql.
+-- Rollback of 20260928120000_plan_change_lifecycle.sql.
 --
 -- Drops the pending-change columns. Any scheduled downgrade is lost: those
 -- accounts keep their current plan until its stored end and then follow the
