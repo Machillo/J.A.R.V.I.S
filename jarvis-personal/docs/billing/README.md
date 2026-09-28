@@ -10,7 +10,7 @@
 - **A courtesy** (`account_subscriptions.access_source = 'courtesy'`), such as the launch promotion, until its `expires_at`. When the promotion ends, the account keeps the plan only if a live store subscription backs it; otherwise it returns to Free.
 - **Owner** is internal and never purchasable.
 
-Nothing else grants a paid plan. Until server-side store verification ships, `create_checkout` answers 503 outside the promotion rather than issuing any other kind of order.
+Nothing else grants a paid plan. Until server-side store verification ships, `create_checkout` answers 503 outside the promotion rather than issuing any other kind of order. Store verification itself is off until `DINCR_STORE_VERIFICATION_ENABLED=1`, which is set only after its two migrations; see `store-verification.md` → Rollout.
 
 ## Retired off-store schema
 

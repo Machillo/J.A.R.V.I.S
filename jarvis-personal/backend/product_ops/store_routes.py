@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.product_ops import store_verification
@@ -8,7 +8,10 @@ from backend.product_ops import store_verification
 # Mounted at /product-ops like the rest of product operations. The notification and
 # cron paths are listed in main.PUBLIC_PATHS: they authenticate by the store's
 # signature, Google's OIDC token or the cron secret, never by a user session.
-router = APIRouter(prefix="/product-ops/billing/store", tags=["Store billing"])
+# The kill switch is a router dependency: while DINCR_STORE_VERIFICATION_ENABLED is not
+# "1", every path answers 503 before its handler runs (no body read, no database).
+router = APIRouter(prefix="/product-ops/billing/store", tags=["Store billing"],
+                   dependencies=[Depends(store_verification.require_enabled)])
 
 
 class AppleTransaction(BaseModel):

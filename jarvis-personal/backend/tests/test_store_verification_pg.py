@@ -1,6 +1,6 @@
 """Verified store purchases -> plan, on PostgreSQL (embedded pgserver).
 
-Uses migration 20260926160000 on the identity baseline plus the production shape of
+Uses migrations 20260926160000 (expand) and 20260926161000 (activation) on the identity baseline plus the production shape of
 plans, account_subscriptions and store_subscriptions. Purchase states here are what
 store_apple / store_google return after verifying with the store. Synthetic data only.
 """
@@ -24,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[2] / "database"
 BASELINE = ROOT / "baseline" / "v1_identity_ownership.sql"
 MIGRATION = ROOT / "migrations" / "20260926160000_store_verification.sql"
 ROLLBACK = ROOT / "rollback" / "20260926160000_store_verification_rollback.sql"
+ACTIVATION = ROOT / "migrations" / "20260926161000_store_verification_activation.sql"
+ACTIVATION_ROLLBACK = ROOT / "rollback" / "20260926161000_store_verification_activation_rollback.sql"
 NOW = datetime.now(timezone.utc)
 SCHEMA = """
 CREATE TABLE plans (id BIGSERIAL PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE);
@@ -56,7 +58,7 @@ def db(tmp_path, monkeypatch):
     admin.autocommit = True
     name = f"store_{uuid.uuid4().hex[:12]}"
     with admin.cursor() as c:
-        for role in ("anon", "authenticated", "dincr_app"):  # the migration requires dincr_app (SV002)
+        for role in ("anon", "authenticated", "dincr_app"):  # the activation requires dincr_app (SV002)
             c.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,))
             if not c.fetchone():
                 c.execute(f'CREATE ROLE "{role}" NOLOGIN')
@@ -68,6 +70,7 @@ def db(tmp_path, monkeypatch):
     cur.execute(BASELINE.read_text(encoding="utf-8"))
     cur.execute(SCHEMA)
     cur.execute(MIGRATION.read_text(encoding="utf-8"))
+    cur.execute(ACTIVATION.read_text(encoding="utf-8"))
     accounts = {}
     for n, label in enumerate(("a", "b"), start=1):
         accounts[label] = str(uuid.uuid4())
@@ -75,6 +78,7 @@ def db(tmp_path, monkeypatch):
         cur.execute("INSERT INTO accounts(id,legacy_allowed_user_id,primary_email) VALUES(%s,%s,%s)", (accounts[label], n, f"{label}@example.test"))
     monkeypatch.setattr(database, "DATABASE_URL", uri)
     monkeypatch.delenv("DINCR_STORE_ACCEPT_SANDBOX", raising=False)
+    monkeypatch.setenv("DINCR_STORE_VERIFICATION_ENABLED", "1")  # the flows under test run switched on
     try:
         yield {"cur": cur, "accounts": accounts}
     finally:
@@ -340,13 +344,25 @@ def test_a_conflict_is_recorded_even_though_the_request_is_refused(db):
     assert db["cur"].fetchone() == (1,)
 
 
-def test_migration_is_idempotent_and_the_rollback_refuses_to_drop_paid_history(db):
+def _postflight(path):
+    tail = path.read_text(encoding="utf-8").split("-- Postflight (read-only)")[-1]
+    return "\n".join(line[3:] for line in tail.splitlines()[1:] if line.startswith("-- "))
+
+
+def test_migrations_are_idempotent_and_the_rollbacks_refuse_to_drop_paid_history(db):
     cur, a = db["cur"], db["accounts"]["a"]
     cur.execute(MIGRATION.read_text(encoding="utf-8"))
-    tail = MIGRATION.read_text(encoding="utf-8").split("-- Postflight (read-only)")[-1]
-    cur.execute("\n".join(line[3:] for line in tail.splitlines()[1:] if line.startswith("-- ")))
+    cur.execute(ACTIVATION.read_text(encoding="utf-8"))
+    cur.execute(_postflight(ACTIVATION))
     assert cur.fetchall() == []
     _record(_state(), claimed=a)
+    with pytest.raises(psycopg2.Error) as refused:
+        cur.execute(ROLLBACK.read_text(encoding="utf-8"))
+    assert refused.value.pgcode == "SV003"  # the activation is rolled back first
+    cur.execute("ROLLBACK")
+    cur.execute(ACTIVATION_ROLLBACK.read_text(encoding="utf-8"))
+    cur.execute(_postflight(MIGRATION))
+    assert cur.fetchall() == []  # back to the expand state; the purchase row is kept
     with pytest.raises(psycopg2.Error) as refused:
         cur.execute(ROLLBACK.read_text(encoding="utf-8"))
     assert refused.value.pgcode == "SV001"

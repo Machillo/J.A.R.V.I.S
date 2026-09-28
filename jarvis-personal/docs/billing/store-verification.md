@@ -1,8 +1,10 @@
 # App Store and Google Play purchases
 
-Paid plans (Basic, VIP) come only from purchases that Apple or Google confirm to the server. The app's word is never enough, and there is no off-store payment path. This document describes the backend implementation (`backend/product_ops/store_*.py`, migration `20260926160000_store_verification.sql`) and what humans must configure.
+Paid plans (Basic, VIP) come only from purchases that Apple or Google confirm to the server. The app's word is never enough, and there is no off-store payment path. This document describes the backend implementation (`backend/product_ops/store_*.py`; migrations `20260926160000_store_verification.sql` (expand) and `20260926161000_store_verification_activation.sql` (activation)), how it is rolled out, and what humans must configure.
 
 ## Principles
+
+- **Off until a human turns it on.** Every store verification path answers 503 unless `DINCR_STORE_VERIFICATION_ENABLED=1` (exactly `1`; unset, empty or any other value is off). The check is the router's first dependency and the first statement of every entry point, before any database access, so a deploy of this code is inert. See [Rollout](#rollout).
 
 - **Verified, never asserted.**
   - Apple purchases and notifications are JWS objects. A signature counts only when its x5c chain ends in the pinned *Apple Root CA - G3* (`store_apple.py`).
@@ -86,8 +88,38 @@ Nothing here is in the repository.
    - a Pub/Sub topic for RTDN;
    - a **push** subscription to `/product-ops/billing/store/google/notifications` **with authentication**: a push service account in `DINCR_GOOGLE_RTDN_SERVICE_ACCOUNT` and an audience in `DINCR_GOOGLE_RTDN_AUDIENCE`.
 4. **Scheduler:** call `POST /product-ops/billing/store/cron` hourly with `X-Cron-Secret: $DINCR_STORE_CRON_SECRET`.
-5. **Migration:** apply `20260926160000_store_verification.sql` before deploying the code (`apply_migration.py`, BACKUP_VERIFIED).
+5. **Migrations and the switch:** follow [Rollout](#rollout). Never set `DINCR_STORE_VERIFICATION_ENABLED` before both postflights are clean.
 6. **Existing sandbox rows:** production has simulator rows (provider `sandbox`) from QA. They never grant a plan, and the simulator is now off. Deleting them is a human decision (read-only check: `SELECT provider, status, count(*) FROM store_subscriptions GROUP BY 1, 2`).
+
+## Rollout
+
+Merging this code can deploy it at once, while production migrations are applied separately (from the Mac, with `apply_migration.py`, which only applies a file identical to `origin/main`). The main CI also forbids granting `dincr_app` a table its code does not use. So the code lands first, **switched off**, and the schema follows in two migrations:
+
+| State | What is true | Store verification |
+|---|---|---|
+| A. Before merge | old code; neither migration | does not exist |
+| B. Merged and deployed | new code; `DINCR_STORE_VERIFICATION_ENABLED` unset; neither migration | 503 on every store path, no access to the new schema; everything else unchanged |
+| C. `20260926160000` applied (expand) | four `store_*` tables and three `store_subscriptions` columns; RLS on; no privilege for `anon`, `authenticated` or `dincr_app`; no policy | still 503 |
+| D. `20260926161000` applied (activation) | `dincr_app` has exactly the privileges the code runs, the conflict-id sequence USAGE and one `dincr_app_access` policy per table | **still 503**: a migration never turns it on |
+| E. A human sets `DINCR_STORE_VERIFICATION_ENABLED=1` on every backend service | | working |
+
+Steps:
+1. Merge (the PR's PRE-MERGE GATE: the `migration-gate-acknowledged` label). Do not set the switch.
+2. Mac: backup (BACKUP_VERIFIED), then apply `20260926160000`. Its postflight must return zero rows.
+3. Mac: apply `20260926161000` (it refuses to run before 160000: `SV004`). Its postflight must return zero rows.
+4. Configure the stores and secrets (HUMAN-ONLY configuration above).
+5. Only now set `DINCR_STORE_VERIFICATION_ENABLED=1`.
+
+`test_store_verification_rollout_pg.py` walks states B to E with this code as `dincr_app`.
+
+### Failure and rollback
+- **Deployed, migrations not applied (yet or at all):** leave the switch off. Nothing else depends on the new schema.
+- **160000 fails:** it runs in one transaction and changes nothing. Leave the switch off; fix, and re-apply after a new review.
+- **161000 fails:** it changes nothing (one transaction; `SV002` / `SV004` abort before any grant). Leave the switch off. The expand state (C) is safe to keep.
+- **A postflight returns rows:** leave the switch off and investigate; do not work around it.
+- **Switched on too early (before 161000):** the store paths fail closed with "permission denied" and write nothing. Unset the switch.
+- **Turning it off after activation:** unset the switch. The data stays and nothing is read or written.
+- **Rolling back the schema:** switch off first, then `database/rollback/20260926161000_store_verification_activation_rollback.sql` (takes back the grants and policies, keeps the data; the 160000 postflight is then clean again), then, only if there is no history to keep, `database/rollback/20260926160000_store_verification_rollback.sql` (refuses with `SV003` while the activation is in place, `SV001` while any purchase, refund, conflict or token row, or any new `store_subscriptions` column value, exists).
 
 ## Decisions for a human
 

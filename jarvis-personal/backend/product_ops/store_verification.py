@@ -12,6 +12,10 @@
   for days; a temporary failure is answered 5xx so it does.
 - A cron recomputes accounts whose entitlement ended without a notification.
 Logs carry event types and counts only: never tokens, transaction ids or accounts.
+
+Kill switch: everything here is off (503) unless DINCR_STORE_VERIFICATION_ENABLED=1.
+The check runs first, before any database access, so a deploy is inert until both
+migrations (20260926160000, 20260926161000) are applied and a human turns it on.
 """
 from __future__ import annotations
 
@@ -31,6 +35,19 @@ from backend.product_ops.store_state import (
 )
 
 logger = logging.getLogger(__name__)
+
+ENABLED_ENV = "DINCR_STORE_VERIFICATION_ENABLED"
+
+
+def verification_enabled() -> bool:
+    """On only when the variable is exactly "1": unset, empty or any other value is off."""
+    return os.getenv(ENABLED_ENV) == "1"
+
+
+def require_enabled() -> None:
+    """Refuse (503) while store verification is off. Called before any database access."""
+    if not verification_enabled():
+        raise HTTPException(503, "La verificación de compras de App Store / Google Play no está activada.")
 
 
 def _record_event(conn, account_id: str | None, provider: str, event_type: str, event_id: str, plan: str | None) -> None:
@@ -80,6 +97,7 @@ def _notification(apply) -> dict:
 
 
 def my_customer_token() -> dict[str, str]:
+    require_enabled()
     account_id = get_current_account_id()
     with get_connection() as conn:
         token = customer_token(conn, account_id)
@@ -88,6 +106,7 @@ def my_customer_token() -> dict[str, str]:
 
 
 def verify_apple_transaction(signed_transaction: str) -> dict:
+    require_enabled()
     try:
         transaction = store_apple.verify_transaction(signed_transaction)
         state = store_apple.purchase_state(transaction)
@@ -102,6 +121,7 @@ def verify_apple_transaction(signed_transaction: str) -> dict:
 
 
 def verify_google_purchase(purchase_token: str, product_id: str) -> dict:
+    require_enabled()
     try:
         subscription = store_google.fetch_subscription(purchase_token)
         state = store_google.purchase_state(purchase_token, subscription)
@@ -124,6 +144,7 @@ def verify_google_purchase(purchase_token: str, product_id: str) -> dict:
 
 
 def apple_notification(signed_payload: str) -> dict:
+    require_enabled()
     try:
         notification = store_apple.verify_notification(signed_payload)
         kind = str(notification.get("notificationType") or "")
@@ -145,6 +166,7 @@ def apple_notification(signed_payload: str) -> dict:
 
 
 def google_notification(authorization: str | None, body: dict[str, Any]) -> dict:
+    require_enabled()
     try:
         store_google.verify_push(authorization)
         notification = store_google.decode_push(body)
@@ -200,6 +222,7 @@ def void_order(conn, purchase_key: str, order_id: str) -> str | None:
 
 
 def lapse_cron(secret: str | None) -> dict:
+    require_enabled()
     expected = os.getenv("DINCR_STORE_CRON_SECRET", "").strip()
     if not expected:
         raise HTTPException(503, "El cron de tiendas no está configurado.")

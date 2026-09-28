@@ -25,6 +25,12 @@ def test_the_sandbox_simulator_is_off_unless_explicitly_enabled(monkeypatch):
     assert disabled.value.status_code == 404
 
 
+@pytest.fixture(autouse=True)
+def switched_on(monkeypatch):
+    """These tests are about the checks behind the kill switch (test_store_kill_switch.py)."""
+    monkeypatch.setenv("DINCR_STORE_VERIFICATION_ENABLED", "1")
+
+
 @pytest.mark.parametrize("secret", [None, "", "wrong"])
 def test_the_lapse_cron_needs_its_secret(monkeypatch, secret):
     monkeypatch.setenv("DINCR_STORE_CRON_SECRET", "synthetic-cron-secret")

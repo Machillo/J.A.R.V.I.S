@@ -1,7 +1,8 @@
--- Verified App Store / Google Play purchases.
+-- Verified App Store / Google Play purchases: EXPAND phase (schema only).
 --
--- A paid plan comes only from a purchase the store itself confirms (Apple signed
--- JWS, Google Play Developer API); the client's word is never enough. This adds:
+-- A paid plan will come only from a purchase the store itself confirms (Apple signed
+-- JWS, Google Play Developer API); the client's word is never enough. This adds the
+-- structure only, backward compatible with the code on main, which never reads it:
 -- - store_customer_tokens: one random token per DINCR account, sent to the store as
 --   StoreKit appAccountToken / Play obfuscatedExternalAccountId, so a verified
 --   purchase names the account it was bought for;
@@ -11,15 +12,20 @@
 --   account, forever: restoring it on another account is refused and logged;
 -- - store_revocations: refunded or revoked store transactions, per transaction (a
 --   single renewal can be refunded); kept even when the account is deleted;
--- - store_subscriptions gains grace_ends_at, revoked_at and environment. It becomes
---   the account's derived entitlement: the best currently active verified purchase
---   across both stores (backend/product_ops/store_state.py).
--- The Owner sandbox simulator's rows (provider 'sandbox') never grant a plan.
+-- - store_purchase_conflicts: a purchase presented for another account, for review;
+-- - store_subscriptions gains grace_ends_at, revoked_at and environment (nullable).
 -- No existing row is changed.
--- Apply with backend/scripts/apply_migration.py (BACKUP_VERIFIED) as postgres, BEFORE
--- the code of this PR is deployed.
 --
--- Postflight: the query at the end of this file returns zero rows.
+-- Nothing is granted: RLS is on and anon, authenticated and dincr_app have no
+-- privilege on the new tables. The runtime role gets its grants and policies in the
+-- activation migration that ships with the code using these tables, so that main
+-- never grants dincr_app a table its code does not use (least privilege).
+-- Meanwhile the tables are empty; the data export does not see them (it lists only
+-- tables the role can access) and account deletion is unaffected (their foreign
+-- keys to accounts CASCADE / SET NULL, run as the table owner).
+--
+-- Apply with backend/scripts/apply_migration.py (BACKUP_VERIFIED) as postgres.
+-- Postflight: the query at the end of this file returns zero rows (before activation).
 -- Rollback: database/rollback/20260926160000_store_verification_rollback.sql.
 
 BEGIN;
@@ -103,38 +109,6 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
         REVOKE ALL PRIVILEGES ON SEQUENCE public.store_purchase_conflicts_id_seq FROM anon, authenticated;
     END IF;
-    -- The runtime role (20260926150000). Without it the new tables would be unreachable
-    -- at runtime, so the migration aborts instead of skipping the grants.
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dincr_app') THEN
-        RAISE EXCEPTION 'role dincr_app is missing: apply 20260926150000 first' USING ERRCODE = 'SV002';
-    ELSE
-        EXECUTE 'GRANT SELECT, INSERT ON TABLE public.store_customer_tokens TO dincr_app';
-        EXECUTE 'GRANT SELECT, INSERT, UPDATE ON TABLE public.store_purchases TO dincr_app';
-        EXECUTE 'GRANT SELECT, INSERT ON TABLE public.store_purchase_conflicts TO dincr_app';
-        EXECUTE 'GRANT SELECT, INSERT, UPDATE ON TABLE public.store_revocations TO dincr_app';
-        EXECUTE 'GRANT USAGE ON SEQUENCE public.store_purchase_conflicts_id_seq TO dincr_app';
-        -- One explicit policy per table (RLS is on; without it the role reads no rows).
-        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'store_customer_tokens'
-                       AND policyname = 'dincr_app_access') THEN
-            CREATE POLICY dincr_app_access ON public.store_customer_tokens AS PERMISSIVE FOR ALL TO dincr_app
-                USING (true) WITH CHECK (true);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'store_purchases'
-                       AND policyname = 'dincr_app_access') THEN
-            CREATE POLICY dincr_app_access ON public.store_purchases AS PERMISSIVE FOR ALL TO dincr_app
-                USING (true) WITH CHECK (true);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'store_purchase_conflicts'
-                       AND policyname = 'dincr_app_access') THEN
-            CREATE POLICY dincr_app_access ON public.store_purchase_conflicts AS PERMISSIVE FOR ALL TO dincr_app
-                USING (true) WITH CHECK (true);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'store_revocations'
-                       AND policyname = 'dincr_app_access') THEN
-            CREATE POLICY dincr_app_access ON public.store_revocations AS PERMISSIVE FOR ALL TO dincr_app
-                USING (true) WITH CHECK (true);
-        END IF;
-    END IF;
 END $$;
 
 COMMIT;
@@ -148,13 +122,11 @@ COMMIT;
 -- UNION ALL SELECT 'row level security off on ' || relname FROM pg_class
 --   WHERE relname IN ('store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations')
 --     AND NOT relrowsecurity
--- UNION ALL SELECT 'dincr_app cannot ' || p || ' ' || t
---   FROM (VALUES ('store_customer_tokens', 'SELECT'), ('store_customer_tokens', 'INSERT'),
---                ('store_purchases', 'SELECT'), ('store_purchases', 'INSERT'), ('store_purchases', 'UPDATE'),
---                ('store_purchase_conflicts', 'SELECT'), ('store_purchase_conflicts', 'INSERT'),
---                ('store_revocations', 'SELECT'), ('store_revocations', 'INSERT'), ('store_revocations', 'UPDATE')) g(t, p)
---   WHERE NOT has_table_privilege('dincr_app', 'public.' || t, p)
--- UNION ALL SELECT 'missing policy dincr_app_access on ' || t
---   FROM unnest(ARRAY['store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations']) t
---   WHERE NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = t
---                     AND policyname = 'dincr_app_access' AND 'dincr_app' = ANY(roles));
+-- UNION ALL SELECT r || ' has ' || p || ' on ' || t
+--   FROM unnest(ARRAY['store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations']) t,
+--        unnest(ARRAY['anon', 'authenticated', 'dincr_app']) r,
+--        unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p
+--   WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) AND has_table_privilege(r, 'public.' || t, p)
+-- UNION ALL SELECT 'policy ' || policyname || ' on ' || tablename FROM pg_policies
+--   WHERE schemaname = 'public'
+--     AND tablename IN ('store_customer_tokens', 'store_purchases', 'store_purchase_conflicts', 'store_revocations');
