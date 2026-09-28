@@ -121,6 +121,119 @@ assert.match(css, /:focus-visible/);
 assert.match(css, /@media \(min-width: 760px\)/);
 assert.match(css, /min-height: 44px/);
 assert.match(home, /href="\/style\.css\?v=[a-f0-9]{10}"/);
+assert.match(css, /@media \(forced-colors: active\)/, 'masked icons stay visible in forced colors');
+// Calm motion: no infinite animation, and animations run only under prefers-reduced-motion:
+// no-preference (everywhere else the only animation value is the reduce block's `none`).
+{
+  assert.doesNotMatch(css, /\binfinite\b/, 'no infinite animation');
+  const start = css.indexOf('@media (prefers-reduced-motion: no-preference)');
+  assert.ok(start >= 0, 'entrance motion is gated by prefers-reduced-motion: no-preference');
+  let depth = 0, end = css.indexOf('{', start);
+  for (; end < css.length; end++) { if (css[end] === '{') depth++; else if (css[end] === '}' && --depth === 0) break; }
+  const outside = css.slice(0, start) + css.slice(end + 1);
+  for (const [, value] of outside.matchAll(/animation(?:-name)?\s*:\s*([^;}]+)/g)) {
+    assert.match(value, /^none\b/, `animation outside prefers-reduced-motion: no-preference: ${value.trim()}`);
+  }
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^@]*\*, \*::before, \*::after \{[^}]*animation: none !important/, 'reduce disables every animation');
+}
+
+// Colors: every landing variable names its DESIGN.md token; text and control pairs meet WCAG AA
+// in both schemes; the values must not drift from DESIGN.md (DINCR 2.0 tokens, the only source).
+{
+  const block = source => Object.fromEntries([...source.matchAll(/--([a-z0-9-]+): (#[0-9A-Fa-f]{6}); \/\* ([a-z0-9-]+) \*\//g)].map(([, name, hex, token]) => [name, { hex, token }]));
+  const lightStart = css.indexOf('@media (prefers-color-scheme: light)');
+  assert.ok(lightStart > 0, 'the light scheme block exists');
+  const darkSource = css.slice(0, lightStart);
+  const lightSource = css.slice(lightStart, lightStart + css.slice(lightStart).search(/\n\}\r?\n/));
+  const schemes = { dark: block(darkSource), light: block(lightSource) };
+  // No literal color escapes the token check. Inside the scheme blocks, every declaration other
+  // than a token-tagged variable is free of literal colors (the shadow's rgba and the icon masks
+  // are geometry, not palette); both schemes define the same variables; the rules after the blocks
+  // use only variables, `transparent` and system colors, and never redefine a token variable.
+  const literalColor = /#[0-9A-Fa-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|(?:^|[\s,(])(?:white|black|red|green|blue|gray|grey|orange|yellow|purple|pink|silver|teal|navy|gold|aqua|lime|maroon|olive|fuchsia)(?=[\s,;)!]|$)/i;
+  for (const [scheme, source] of [['dark', darkSource], ['light', lightSource]]) {
+    for (const [, name, value] of source.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(--[a-z0-9-]+|[a-z-]+)\s*:\s*([^;{}]+);/g)) {
+      if (/^--/.test(name) && schemes[scheme][name.slice(2)] && /^#[0-9A-Fa-f]{6}$/.test(value.trim())) continue;
+      if (name === '--shadow' || name.startsWith('--icon-')) continue;
+      assert.doesNotMatch(value, literalColor, `${scheme}: ${name} uses a literal color; add a DESIGN.md token instead`);
+    }
+  }
+  assert.deepEqual(Object.keys(schemes.light).sort(), Object.keys(schemes.dark).sort(), 'light and dark define the same color variables');
+  const rules = css.slice(lightStart + lightSource.length).replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const [, name, value] of rules.matchAll(/([a-z-]+|--[a-z0-9-]+)\s*:\s*([^;{}]+)/g)) {
+    assert.doesNotMatch(value, literalColor, `rules: ${name}: ${value.trim()} uses a literal color; use a token variable`);
+  }
+  for (const name of Object.keys(schemes.dark)) {
+    assert.doesNotMatch(rules, new RegExp(`--${name}\\s*:`), `rules redefine --${name}; token variables live only in the scheme blocks`);
+  }
+  const luminance = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const layers = ['bg', 'surface', 'surface-2'];
+  const pairs = [
+    ...['text', 'text-2', 'muted', 'accent-text'].flatMap(fg => layers.map(bg => [fg, bg, 4.5])),
+    ['on-accent', 'accent', 4.5], ['on-accent', 'accent-pressed', 4.5], ['on-accent-soft', 'accent-soft', 4.5],
+    ['accent-text', 'accent-soft', 4.5], ['text', 'accent-soft', 4.5], ['vip', 'vip-soft', 4.5],
+    // Non-text (WCAG 1.4.11): ghost button and chip borders, focus ring, status dot and icons.
+    ...['field-border', 'accent-text', 'warning'].flatMap(fg => layers.map(bg => [fg, bg, 3])),
+  ];
+  // DESIGN.md is mandatory: a missing or renamed file fails here instead of skipping the check.
+  const design = (await readFile(new URL('../../../DESIGN.md', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+  const token = key => design.match(new RegExp(`^  ${key}: "(#[0-9A-Fa-f]{6})"$`, 'm'))?.[1];
+  for (const [scheme, vars] of Object.entries(schemes)) {
+    assert.ok(Object.keys(vars).length >= 19, `${scheme}: every color variable names its DESIGN.md token`);
+    for (const [fg, bg, min] of pairs) {
+      const value = ratio(vars[fg].hex, vars[bg].hex);
+      assert.ok(value >= min, `${scheme}: ${fg} on ${bg} is ${value.toFixed(2)}:1, needs ${min}:1`);
+    }
+    for (const [name, { hex, token: tokenName }] of Object.entries(vars)) {
+      const key = scheme === 'dark' ? `dark-${tokenName}` : tokenName;
+      const value = token(key);
+      assert.ok(value, `DESIGN.md defines ${key} (landing --${name})`);
+      assert.equal(hex.toUpperCase(), value.toUpperCase(), `landing --${name} (${scheme}) drifted from DESIGN.md ${key}`);
+    }
+  }
+  // The browser chrome color follows the same background tokens on every page.
+  for (const [file, html] of Object.entries(pagesHtml)) {
+    assert.ok(html.includes(`<meta name="theme-color" content="${token('dark-bg')}" media="(prefers-color-scheme: dark)">`), `${file}: dark theme-color is DESIGN.md dark-bg`);
+    assert.ok(html.includes(`<meta name="theme-color" content="${token('bg')}" media="(prefers-color-scheme: light)">`), `${file}: light theme-color is DESIGN.md bg`);
+  }
+}
+
+// Table marks: decorative icon plus real text, not role="img" on an empty span.
+assert.doesNotMatch(pagesHtml['precios/index.html'], /role="img"/);
+assert.match(pagesHtml['precios/index.html'], /<span class="sr-only">Incluido<\/span>/);
+assert.match(pagesHtml['precios/index.html'], /<span class="sr-only">No incluido<\/span>/);
+
+// Download page: the published minimum OS versions (config.json `minimumOS`) must equal what the
+// releasable native projects declare, whatever those values are: changing a minimum in a native
+// project without updating config.json fails here, and the page follows config.json. No store
+// looks available before its official URL is configured.
+{
+  const download = pagesHtml['descargar/index.html'];
+  const gradle = await readFile(new URL('../android/variables.gradle', import.meta.url), 'utf8');
+  const minSdk = Number(gradle.match(/minSdkVersion = (\d+)/)?.[1]);
+  const androidRelease = { 21: '5.0', 22: '5.1', 23: '6.0', 24: '7.0', 25: '7.1', 26: '8.0', 27: '8.1', 28: '9', 29: '10', 30: '11', 31: '12', 32: '12L', 33: '13', 34: '14', 35: '15', 36: '16' }[minSdk];
+  assert.ok(androidRelease, `Android minSdk ${minSdk} has no known release name: extend the table`);
+  assert.equal(config.minimumOS.android, androidRelease, `Android minSdk ${minSdk} is Android ${androidRelease}: update config.json minimumOS.android`);
+  assert.ok(download.includes(`Requiere Android ${androidRelease} o posterior.`), '/descargar/ states the Android minimum');
+  // ios-dincr is the releasable iOS project (test:ios-identity); a native prototype elsewhere does not count.
+  const pbxproj = await readFile(new URL('../ios-dincr/App/App.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
+  const iosTargets = [...new Set([...pbxproj.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = "?([^";\s]+)"?;/g)].map(m => m[1]))];
+  assert.equal(iosTargets.length, 1, `ios-dincr declares one deployment target (found ${iosTargets.join(', ') || 'none'})`);
+  const iosMinimum = iosTargets[0].replace(/\.0$/, '');
+  assert.equal(config.minimumOS.ios, iosMinimum, `ios-dincr targets iOS ${iosMinimum}: update config.json minimumOS.ios (release decision)`);
+  assert.ok(download.includes(`Requiere iOS ${iosMinimum} o posterior.`), '/descargar/ states the iOS minimum');
+  for (const [store, key] of [['Google Play', 'googlePlayUrl'], ['App Store', 'appStoreUrl']]) {
+    if (config[key]) continue;
+    assert.ok(download.includes(`Disponible próximamente en ${store}.`), `${store}: upcoming state is explicit`);
+    assert.ok(!Object.values(pagesHtml).some(html => html.includes(`Descargar en ${store}`)), `${store}: no download button without a URL`);
+  }
+}
+// In-app help lives in "Ayuda y soporte" ("Reportes" is the financial reports screen).
+assert.match(support, /Ayuda y soporte/);
+assert.doesNotMatch(support, /sección (de )?Reportes/);
 
 // Legal: Firebase Analytics/Crashlytics may stay in the published text only until the
 // approved Privacy v5 replaces v4 (docs/legal/privacy-v5-proposal.md). Marketing pages never mention them.
