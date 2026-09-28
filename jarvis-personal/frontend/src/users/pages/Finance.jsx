@@ -4,23 +4,26 @@ import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronDown, History, Plus, 
 import { createExpense, createIncome, deleteExpense, deleteIncome, getExpenses, getFreeMovements, getIncome, updateExpense, updateIncome } from "../services/jarvisApi";
 import { ConfirmDialog } from "../components/FinvaDialog";
 import FinvaFormSheet from "../components/FinvaFormSheet";
-import { deviceLanguage, localeTag } from "../../lib/locale";
+import { deviceLanguage } from "../../lib/locale";
 import { movementPreview } from "./movementPreview";
 import TransactionDebts from "../components/TransactionDebts";
 import { categoryLabel, categoryValue } from "../../lib/categories";
+import { baseCurrency, entryCurrencyPayload, entryFormAmount, formatMoney, latestUserRate } from "../../lib/currency";
+import AmountCurrencyField, { OriginalAmount } from "../components/AmountCurrencyField";
 const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
-const money = (value) => new Intl.NumberFormat(localeTag(language), { style:"currency", currency:"CRC",currencyDisplay:"narrowSymbol", maximumFractionDigits:0 }).format(Number(value) || 0);
+// Stored amounts and totals are in the account's base currency.
+const money = (value) => formatMoney(value);
 const today = () => new Date().toISOString().slice(0,10);
 const incomeCategories = ["Boleta de pago","Bono","Reembolso","Otros ingresos"];
 const expenseCategories = ["Vivienda","Servicios","Internet","Teléfono","Seguros","Comida","Restaurante","Transporte","Gasolina","Entretenimiento","Compras","Salud","Deporte","Servicios personales","Mascotas","Otros"];
-const incomeEmpty = () => ({ amount:"", description:"", category:categoryLabel("Salario"), entry_date:today() });
-const expenseEmpty = () => ({ amount:"", description:"", category:categoryLabel("Compras"), entry_date:today() });
+const incomeEmpty = () => ({ amount:"", currency:baseCurrency(), exchange_rate:"", description:"", category:categoryLabel("Salario"), entry_date:today() });
+const expenseEmpty = () => ({ amount:"", currency:baseCurrency(), exchange_rate:"", description:"", category:categoryLabel("Compras"), entry_date:today() });
 
-function EntryFields({ form, setForm, categories }) {
+function EntryFields({ form, setForm, categories, suggestedRate }) {
   return <>
-    <label className="entry-amount-field"><span>{tx("Monto", "Amount")}</span><div><b>₡</b><input required inputMode="decimal" type="number" min="0.01" step="0.01" placeholder="0" value={form.amount} onChange={(e) => setForm({...form,amount:e.target.value})}/></div></label>
+    <AmountCurrencyField form={form} setForm={setForm} suggestedRate={suggestedRate}/>
     <label><span>{tx("Descripción", "Description")}</span><input required placeholder={tx("¿Qué movimiento fue?", "What was this transaction?")} value={form.description} onChange={(e) => setForm({...form,description:e.target.value})}/></label>
     <div className="entry-field-row">
       <label><span><Tag size={14}/> {tx("Categoría", "Category")}</span><input list={`${categories[0]}-categories`} placeholder={tx("Categoría", "Category")} value={form.category} onChange={(e) => setForm({...form,category:e.target.value})}/><datalist id={`${categories[0]}-categories`}>{categories.map((item) => <option key={item} value={categoryLabel(item)}/>)}</datalist></label>
@@ -79,17 +82,19 @@ export default function Finance({ plan = "basic", onNavigate }) {
   useEffect(() => { load(); }, [load]);
 
   const [once, saving] = useSingleFlight();
-  const submitIncome = once(async (event) => { event.preventDefault(); if (await run(() => createIncome({...incomeForm,category:categoryValue(incomeForm.category),amount:Number(incomeForm.amount)}))) { setIncomeForm(incomeEmpty()); setEntryKind(null); load(); } });
-  const submitExpense = once(async (event) => { event.preventDefault(); if (await run(() => createExpense({...expenseForm,category:categoryValue(expenseForm.category),amount:Number(expenseForm.amount)}))) { setExpenseForm(expenseEmpty()); setEntryKind(null); load(); } });
+  const entryPayload = (form) => ({...form,category:categoryValue(form.category),amount:Number(form.amount),...entryCurrencyPayload(form)});
+  const submitIncome = once(async (event) => { event.preventDefault(); if (await run(() => createIncome(entryPayload(incomeForm)))) { setIncomeForm(incomeEmpty()); setEntryKind(null); load(); } });
+  const submitExpense = once(async (event) => { event.preventDefault(); if (await run(() => createExpense(entryPayload(expenseForm)))) { setExpenseForm(expenseEmpty()); setEntryKind(null); load(); } });
   const remove = async () => { setDeletingBusy(true); const removed=await run(() => deleting.kind === "income" ? deleteIncome(deleting.id) : deleteExpense(deleting.id)); setDeletingBusy(false); if (removed) { setDeleting(null); load(); } };
-  const saveEdit = once(async (event) => { event.preventDefault(); const payload={...editing,category:categoryValue(editing.category),amount:Number(editing.amount)}; const saved=await run(() => editing.kind === "income" ? updateIncome(editing.id,payload) : updateExpense(editing.id,payload)); if (saved) { setEditing(null); load(); } });
-  const openEdit = (kind,item) => setEditing({ kind,id:item.id,amount:item.amount,description:item.description || item.source || "",category:categoryLabel(item.category || (kind === "income" ? "Salario" : "Compras")),entry_date:item.entry_date || String(item.created_at).slice(0,10) });
+  const saveEdit = once(async (event) => { event.preventDefault(); const payload=entryPayload(editing); const saved=await run(() => editing.kind === "income" ? updateIncome(editing.id,payload) : updateExpense(editing.id,payload)); if (saved) { setEditing(null); load(); } });
+  const openEdit = (kind,item) => setEditing({ kind,id:item.id,...entryFormAmount(item),description:item.description || item.source || "",category:categoryLabel(item.category || (kind === "income" ? "Salario" : "Compras")),entry_date:item.entry_date || String(item.created_at).slice(0,10) });
   const isIncome = entryKind === "income"; const activeForm = isIncome ? incomeForm : expenseForm;
   const incomeTotal = income.reduce((sum,item)=>sum+Number(item.amount||0),0);
   const expenseTotal = expenses.reduce((sum,item)=>sum+Number(item.amount||0),0);
   const movements = movementPreview(movementRows, query, filter);
+  const suggestedRate = latestUserRate([...movementRows, ...income, ...expenses]);
 
-  const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="finva-fold-row" key={item.id}><span><strong>{item.description || categoryLabel(item.category)}</strong><small>{item.entry_date} · {categoryLabel(item.category)}</small></span><span><b className={tone}>{money(item.amount)}</b><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || categoryLabel(item.category)})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="finva-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
+  const rows = (items,kind,tone) => items.length ? items.slice(0,8).map((item) => <div className="finva-fold-row" key={item.id}><span><strong>{item.description || categoryLabel(item.category)}</strong><small>{item.entry_date} · {categoryLabel(item.category)}</small></span><span><b className={tone}>{money(item.amount)}</b><OriginalAmount row={item}/><span className="actions"><button className="finva-button finva-button-secondary" type="button" onClick={()=>openEdit(kind,item)}>{tx("Editar", "Edit")}</button><button className="finva-button finva-button-danger" type="button" onClick={()=>setDeleting({kind,id:item.id,label:item.description || categoryLabel(item.category)})}>{tx("Eliminar", "Delete")}</button></span></span></div>) : <p className="finva-empty-state">{tx("Todavía no hay movimientos en este grupo.","There are no transactions in this group yet.")}</p>;
 
   const content = compact ? <section className={`free-screen free-movements-screen ${plan !== "free" ? "basic-movements-screen" : ""}`}>
     {/* VIP has no app header, so the tab shows its own title like the other VIP pages. */}
@@ -107,13 +112,14 @@ export default function Finance({ plan = "basic", onNavigate }) {
         const Row = item.editable ? "button" : "div";
         return <Row className="free-transaction-row" type={item.editable ? "button" : undefined} key={item.movement_id} onClick={item.editable ? () => {
           if (item.origin === "salary" || item.origin === "expense") openEdit(item.origin === "salary" ? "income" : "expense", {
-            id: item.source_id, amount: item.amount, description: item.description,
+            id: item.source_id, amount: item.amount, original_amount: item.original_amount,
+            original_currency: item.original_currency, exchange_rate: item.exchange_rate, description: item.description,
             category: item.category, entry_date: String(item.transaction_date).slice(0, 10),
           });
           else onNavigate?.("transactions");
         } : undefined}>
         <span><strong>{item.description || categoryLabel(item.category) || tx("Movimiento", "Transaction")}</strong><small>{String(item.transaction_date || "").slice(0,10)} · {categoryLabel(item.category)}{!item.editable && ` · ${tx("Solo lectura", "Read only")}`}</small></span>
-        <b className={item.kind}>{item.kind === "income" ? "+" : "−"}{money(item.amount)}</b>
+        <span className="entry-amount-cell"><b className={item.kind}>{item.kind === "income" ? "+" : "−"}{money(item.amount)}</b><OriginalAmount row={item}/></span>
       </Row>;
       }) : <p className="free-empty">{tx("No hay movimientos con esos filtros.", "No transactions match those filters.")}</p>}
     </div>
@@ -138,9 +144,9 @@ export default function Finance({ plan = "basic", onNavigate }) {
 
   return <>{content}
     <FinvaFormSheet open={Boolean(entryKind)} eyebrow={tx("Nuevo movimiento", "New transaction")} title={entryKind === "choose" ? tx("¿Qué querés registrar?", "What do you want to record?") : isIncome ? tx("Agregar ingreso", "Add income") : tx("Agregar gasto", "Add expense")} onClose={()=>setEntryKind(null)}>
-      {entryKind === "choose" ? <div className="free-entry-choices"><button type="button" onClick={() => setEntryKind("income")}><ArrowDownLeft/>{tx("Ingreso", "Income")}</button><button type="button" onClick={() => setEntryKind("expense")}><ArrowUpRight/>{tx("Gasto", "Expense")}</button></div> : <form className={`form finva-sheet-form entry-form ${isIncome ? "income":"expense"}`} onSubmit={isIncome ? submitIncome:submitExpense}><EntryFields form={activeForm} setForm={isIncome ? setIncomeForm:setExpenseForm} categories={isIncome ? incomeCategories:expenseCategories}/>{isIncome && <p className="finva-form-hint">{tx("Ingresá el monto real que recibiste según tu boleta o depósito bancario.", "Enter the actual amount received according to your pay stub or bank deposit.")}</p>}<button className={`finva-button ${isIncome ? "finva-button-success":"finva-button-primary"}`}>{isIncome ? tx("Guardar ingreso", "Save income") : tx("Guardar gasto", "Save expense")}</button></form>}
+      {entryKind === "choose" ? <div className="free-entry-choices"><button type="button" onClick={() => setEntryKind("income")}><ArrowDownLeft/>{tx("Ingreso", "Income")}</button><button type="button" onClick={() => setEntryKind("expense")}><ArrowUpRight/>{tx("Gasto", "Expense")}</button></div> : <form className={`form finva-sheet-form entry-form ${isIncome ? "income":"expense"}`} onSubmit={isIncome ? submitIncome:submitExpense}><EntryFields form={activeForm} setForm={isIncome ? setIncomeForm:setExpenseForm} categories={isIncome ? incomeCategories:expenseCategories} suggestedRate={suggestedRate}/>{isIncome && <p className="finva-form-hint">{tx("Ingresá el monto real que recibiste según tu boleta o depósito bancario.", "Enter the actual amount received according to your pay stub or bank deposit.")}</p>}<button className={`finva-button ${isIncome ? "finva-button-success":"finva-button-primary"}`}>{isIncome ? tx("Guardar ingreso", "Save income") : tx("Guardar gasto", "Save expense")}</button></form>}
     </FinvaFormSheet>
-    <FinvaFormSheet open={Boolean(editing)} eyebrow={tx("Movimiento", "Transaction")} title={editing?.kind === "income" ? tx("Editar ingreso", "Edit income") : tx("Editar gasto", "Edit expense")} onClose={()=>setEditing(null)}>{editing && <form className="form finva-sheet-form entry-form" onSubmit={saveEdit}><EntryFields form={editing} setForm={setEditing} categories={editing.kind === "income" ? incomeCategories:expenseCategories}/><button className="finva-button finva-button-primary" disabled={saving}>{tx("Guardar cambios", "Save changes")}</button></form>}</FinvaFormSheet>
+    <FinvaFormSheet open={Boolean(editing)} eyebrow={tx("Movimiento", "Transaction")} title={editing?.kind === "income" ? tx("Editar ingreso", "Edit income") : tx("Editar gasto", "Edit expense")} onClose={()=>setEditing(null)}>{editing && <form className="form finva-sheet-form entry-form" onSubmit={saveEdit}><EntryFields form={editing} setForm={setEditing} categories={editing.kind === "income" ? incomeCategories:expenseCategories} suggestedRate={suggestedRate}/><button className="finva-button finva-button-primary" disabled={saving}>{tx("Guardar cambios", "Save changes")}</button></form>}</FinvaFormSheet>
     <ConfirmDialog open={Boolean(deleting)} title={tx("Eliminar movimiento", "Delete transaction")} description={deleting ? tx(`Se eliminará ${deleting.label}. Esta acción no se puede deshacer.`, `${deleting.label} will be deleted. This action cannot be undone.`):""} onConfirm={remove} onClose={()=>{if(!deletingBusy)setDeleting(null);}} busy={deletingBusy}/>
   </>;
 }
