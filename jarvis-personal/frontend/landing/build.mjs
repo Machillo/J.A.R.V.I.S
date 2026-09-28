@@ -50,9 +50,10 @@ const availability = storeLinks.length
   : `<p class="status"><span class="dot" aria-hidden="true"></span>Lanzamiento próximo en Android y iPhone. Los enlaces oficiales de descarga se publicarán aquí.</p>`;
 
 // --- Platforms: what each app offers today; the store link appears only when configured. ---
+// Minimum OS versions come from config.json; `test:landing` checks them against the native projects.
 const platforms = [
-  ['Android', 'googlePlayUrl', 'Google Play', ['Entrás con tu cuenta de Google.', 'Bloqueo con la biometría del teléfono (como la huella) o con su PIN, patrón o contraseña.', 'Requiere Android 7.0 o posterior.']],
-  ['iPhone', 'appStoreUrl', 'App Store', ['Entrás con tu cuenta de Google o de Apple.', 'Bloqueo con Face ID, Touch ID o el código del iPhone.', 'Requiere iOS 15 o posterior.']],
+  ['Android', 'googlePlayUrl', 'Google Play', ['Entrás con tu cuenta de Google.', 'Bloqueo con la biometría del teléfono (como la huella) o con su PIN, patrón o contraseña.', `Requiere Android ${escape(cfg.minimumOS.android)} o posterior.`]],
+  ['iPhone', 'appStoreUrl', 'App Store', ['Entrás con tu cuenta de Google o de Apple.', 'Bloqueo con Face ID, Touch ID o el código del iPhone.', `Requiere iOS ${escape(cfg.minimumOS.ios)} o posterior.`]],
 ].map(([name, key, store, facts]) => `<article class="platform"><h2 class="h3">${name}</h2><ul>${facts.map(f => `<li>${f}</li>`).join('')}</ul>${cfg[key] ? `<a class="button" href="${escape(cfg[key])}" rel="noopener noreferrer">Descargar en ${store}</a>` : `<p class="note">Disponible próximamente en ${store}.</p>`}</article>`).join('');
 
 // --- Plans (prices from config.json; checked against the backend by the contract test). ---

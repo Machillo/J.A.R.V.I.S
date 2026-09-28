@@ -68,3 +68,38 @@ C4). L13 **REJECTED** (unchanged rationale).
 | L20 | Claim audit | "Una sola cuenta DINCR en los dos sistemas" is only true when the same sign-in is used (a different sign-in, e.g. Apple with "Hide My Email" on iPhone and Google on Android, can produce a different account) | moderate | Accepted | "Si entrás con la misma cuenta en los dos sistemas…" | PASS |
 | L21 | Own check vs #270 | Tokens were copied by hand with no drift control | moderate | Accepted | Each CSS color names its DESIGN.md token; `test:landing` checks AA for every text/control pair and, when DESIGN.md exists, equality with the token | PASS (checked with #270's DESIGN.md present) |
 | L22 | Claim audit | "Requiere iOS 15" is true only for the current Capacitor project (deployment target 15.0); the native prototype (#279) proposes iOS 17, pending product-owner decision | important | **Accepted as guard, decision open** | `test:landing` fails if the iOS deployment target or Android `minSdk` changes without updating `/descargar/` | HUMAN release decision |
+
+## Re-audit R2.2 (2026-09-28, after syncing with main)
+
+Branch synced with `main` by a normal merge (includes the DESIGN.md design system, the Cloudflare
+landing Worker config and the later product PRs). The landing diff stays limited to `landing/`,
+the public contract test and this ledger; DESIGN.md and docs/design are not modified.
+
+| # | Source | Finding | Severity | Decision | Change | Re-audit |
+|---|--------|---------|----------|----------|--------|----------|
+| L23 | Guard audit (revises L21) | The DESIGN.md drift check was optional (`ENOENT` skipped it), so a moved or renamed DESIGN.md silently disabled token parity; and only hex values were looked at | important | Accepted | DESIGN.md is mandatory in `test:landing`. In the scheme blocks every declaration except a token-tagged `#RRGGBB` variable (and the shadow/icon-mask geometry) must be free of literal colors (hex, `rgb()`/`hsl()`/other color functions, named colors); both schemes define the same variables; rules after the blocks may use only variables, `transparent` and system colors, and may not redefine a token variable; `theme-color` equals `bg` / `dark-bg`. Limit: contrast is checked for the declared variable pairs, not for every pair the rules combine (the rendered sweep below covers that manually) | PASS; mutations killed (missing file, token drift, untagged hex or `rgb()` variable, hex/`rgb()`/`hsl()`/named color in a rule, token override in a rule, one-scheme variable, theme-color) |
+| L24 | Guard audit (revises L22) | The iOS guard asserted the literal `15.0` and the page hardcoded "iOS 15" / "Android 7.0": a legitimate change of minimum (e.g. iOS 17 from the native prototype) needed test edits, i.e. the guard froze iOS 15 | important | Accepted | `config.json` `minimumOS` is the only place the published minimums live; `/descargar/` renders it; `test:landing` requires it to equal the releasable projects (`ios-dincr` deployment target, a single value; Android `minSdk` mapped to its release name) | PASS; iOS 17 or minSdk 26 in the project *with* `minimumOS` updated passes; either side changed alone fails; mixed iOS targets fail |
+| L25 | #270 section 12 | Landing exceptions to the app motion/visual rules were not written down | moderate | Accepted | Recorded here: (1) one entrance of the illustration and the budget bar fill, a single pass, only under `prefers-reduced-motion: no-preference`; (2) 150 ms hover/press transitions and the FAQ chevron rotation; (3) the sticky header with a blurred translucent background (pre-existing). No carousel, countdown, parallax or infinite animation. `prefers-reduced-motion: reduce` disables all of them | PASS; `test:landing` now fails on `infinite`, on any animation outside the `no-preference` block and if the `reduce` block stops disabling animations |
+
+**Rendered checks (in-app browser, Chromium):** every route (`/`, `/precios/`, `/seguridad/`,
+`/privacidad/`, `/terminos/`, `/soporte/`, `/eliminar-cuenta/`, `/bancos-compatibles/`,
+`/descargar/`, `/404.html`) at 320, 360, 375, 390, 430, 768 and 1280 px, light and dark, measured
+from the DOM: no horizontal overflow, no interactive target under 44 px high (inline links in
+running text excluded), no text below its WCAG AA ratio computed from rendered colors (3,189 text
+elements and 1,089 targets per scheme). The same script, run with injected low contrast, a 26 px
+link and a 600 px block, reports all three. The `/precios/` table fits its container at 320–375 px
+with 16 px cell text and no inner scroll.
+
+**Claims re-verified against code on main:** Android `minSdk 24` (Android 7.0); `ios-dincr`
+deployment target 15.0 in all four build configurations; Google sign-in on Android, Google or Apple
+elsewhere (`Login.jsx`); app lock with device biometrics or device credential (`appLock.js`:
+`allowDeviceCredential`, `BIOMETRIC_WEAK`); no store URL configured, so no download button and an
+explicit "Disponible próximamente"; prices from `config.json` checked against the backend
+(Basic ₡2.990, VIP ₡4.990); no SINPE, ratings or review badges; Gmail described as read-only with
+user review before anything is saved.
+
+**Not verified here (human):** forced-colors rendering (Windows high contrast) and
+`prefers-reduced-motion` rendering (CSS present and checked, not emulated); physical devices.
+**Release note:** the native prototype (#279) proposes iOS 17. If it becomes the releasable
+project, `minimumOS.ios` and `/descargar/` must be revalidated before the RC; `test:landing` fails
+until they agree.

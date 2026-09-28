@@ -1,8 +1,8 @@
 /* DINCR public site. Colors are the DINCR 2.0 tokens from /DESIGN.md (the same values the
    iOS and Android apps use); the site follows the visitor's system appearance. Mobile first.
    Each color variable names its DESIGN.md token in a trailing comment (dark block = `dark-`
-   token). `npm run test:landing` checks these pairs for WCAG AA and, when DESIGN.md is present,
-   that every value still equals its token. */
+   token). `npm run test:landing` checks these pairs for WCAG AA, that every value still equals its
+   token (DESIGN.md is required), and that no rule uses a literal color. */
 :root {
   --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
   --icon-alert: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 8v4M12 16h.01'/%3E%3C/svg%3E");
