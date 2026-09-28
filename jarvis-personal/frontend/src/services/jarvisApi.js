@@ -222,39 +222,9 @@ export const revokeCourtesySubscription = (userId) => request(`/users-admin/user
 export const getPlans = () => request("/auth/plans");
 export const selectPlan = (plan, accept_beta_terms = false) => jsonRequest("/auth/plan", "POST", { plan, accept_beta_terms, consent_version: "beta-2026-01-v1" });
 export const getBillingCatalog = () => request("/product-ops/billing/catalog");
-export const uploadPaymentReceipt = (orderId, file) => {
-  const body = new FormData();
-  body.append("receipt", file);
-  return request(`/product-ops/billing/orders/${orderId}/receipt`, { method: "POST", body });
-};
 export const getProductOperations = () => request("/product-ops/owner/dashboard");
 export const updateReleasePolicy = (platform, payload) => jsonRequest(`/product-ops/owner/release-policy/${platform}`, "PATCH", payload);
 export const updateOperationalFeatureFlag = (flagKey, payload) => jsonRequest(`/product-ops/owner/feature-flags/${flagKey}`, "PATCH", payload);
-export const resolveTestPayment = (orderId, action = "confirm") => jsonRequest(`/product-ops/owner/orders/${orderId}`, "POST", { action });
-export const openTestPaymentReceipt = async (orderId) => {
-  const preview = window.open("", "_blank");
-  const bridgeToken = getOwnerBridgeToken();
-  const options = bridgeToken ? { headers: { Authorization: `Bearer jarvis-owner:${bridgeToken}` } } : {};
-  const response = bridgeToken
-    ? await fetch(`${API_URL}/product-ops/owner/orders/${orderId}/receipt`, options)
-    : await authenticatedFetch(`${API_URL}/product-ops/owner/orders/${orderId}/receipt`, options);
-  if (!response.ok) {
-    preview?.close();
-    throw new Error(`No se pudo abrir el comprobante (${response.status}).`);
-  }
-  const url = URL.createObjectURL(await response.blob());
-  if (preview) {
-    preview.opener = null;
-    preview.location.href = url;
-  } else {
-    const link = document.createElement("a");
-    link.href = url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.click();
-  }
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-};
 export const updateProductFeedback = (ticketId, payload) => jsonRequest(`/product-ops/owner/feedback/${ticketId}`, "PATCH", payload);
 export const resendProductFeedback = (ticketId) => request(`/product-ops/owner/feedback/${ticketId}/resend`, { method: "POST" });
 export const getOnboarding = () => request("/auth/onboarding");

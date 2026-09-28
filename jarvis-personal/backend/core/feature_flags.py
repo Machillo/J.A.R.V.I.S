@@ -96,30 +96,45 @@ def user_feature_flags():
     }
 
 
-def _request_flag(method: str, path: str):
+def _request_flags(method: str, path: str) -> list[str]:
+    """Every kill switch that pauses this request (a VIP write pauses with VIP and with writes)."""
     method = method.upper()
-    if path.startswith("/user-product/vip/gmail"):
-        return "gmail_automation"
+    flags = []
+    # Outlook and the shared OAuth completion (which runs the first sync) pause with Gmail.
+    if path.startswith(("/user-product/vip/gmail", "/user-product/vip/mail/", "/user-product/vip/financial-identity")):
+        flags.append("gmail_automation")
     if path.startswith("/product-ops/billing/store"):
-        return "store_billing"
-    if path.startswith("/user-product/vip/"):
-        return "vip_intelligence"
+        flags.append("store_billing")
+    if path.startswith("/user-product/vip/") and not path.startswith(("/user-product/vip/gmail", "/user-product/vip/mail/")):
+        flags.append("vip_intelligence")
     if path.startswith("/reports") or path.startswith("/user-product/basic/reports"):
-        return "advanced_reports"
+        flags.append("advanced_reports")
     if method in {"POST", "PUT", "PATCH", "DELETE"} and path.startswith((
         "/user-product/finance/", "/user-product/goals", "/user-product/savings-plans",
         "/user-product/transactions", "/user-product/free/movements",
         "/user-product/financial-situation",
+        "/user-product/basic/budget", "/user-product/basic/recurring", "/user-product/vip/salvavidas",
+        "/user-product/vip/financial-identity", "/user-product/vip/lifecycle/snapshots",
+        "/auth/onboarding",
     )):
-        return "financial_writes"
-    return None
+        flags.append("financial_writes")
+    return flags
+
+
+def _request_flag(method: str, path: str):
+    flags = _request_flags(method, path)
+    return flags[0] if flags else None
 
 
 def disabled_feature_for_request(method: str, path: str, user: dict | None = None):
     if user and user.get("role") in {"owner", "admin"}:
         return None
-    flag_key = _request_flag(method, path)
-    if not flag_key:
+    flag_keys = _request_flags(method, path)
+    if not flag_keys:
         return None
-    flag = load_feature_flags().get(flag_key) or _fallback_flags()[flag_key]
-    return None if flag["enabled"] else flag
+    flags = load_feature_flags()
+    for flag_key in flag_keys:
+        flag = flags.get(flag_key) or _fallback_flags()[flag_key]
+        if not flag["enabled"]:
+            return flag
+    return None

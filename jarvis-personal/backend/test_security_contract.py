@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
+from pydantic import ValidationError
 
 from backend import main
 from backend.core import idempotency
@@ -231,13 +232,7 @@ def test_notification_cron_rejects_wrong_secret(monkeypatch):
 def test_product_operations_schema_check_never_runs_runtime_ddl():
     class Result:
         def fetchone(self):
-            return {
-                "finva_beta_programs": True,
-                "billing_orders": True,
-                "billing_subscriptions": True,
-                "product_events": True,
-                "feedback_reports": True,
-            }
+            return {"product_events": True, "feedback_reports": True}
 
     class Connection(RecordingConnection):
         def execute(self, query, params=()):
@@ -258,19 +253,13 @@ def test_product_operations_schema_check_never_runs_runtime_ddl():
 def test_product_operations_schema_check_fails_closed_when_migration_is_missing():
     class Result:
         def fetchone(self):
-            return {
-                "finva_beta_programs": True,
-                "billing_orders": False,
-                "billing_subscriptions": True,
-                "product_events": True,
-                "feedback_reports": True,
-            }
+            return {"product_events": False, "feedback_reports": True}
 
     class Connection:
         def execute(self, _query, _params=()):
             return Result()
 
-    with pytest.raises(RuntimeError, match="billing_orders"):
+    with pytest.raises(RuntimeError, match="product_events"):
         product_ops_service.ensure_schema(Connection())
 
 
@@ -287,6 +276,30 @@ def test_product_operations_migrations_close_tables_to_data_api_roles():
     ):
         assert f"ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY" in base
         assert f"REVOKE ALL PRIVILEGES ON TABLE {table_name} FROM anon, authenticated" in base
+
+
+def test_dincr_takes_no_off_store_payment():
+    """Public payments are App Store / Google Play only: no SINPE, receipts or manual orders."""
+    backend = Path(__file__).parent
+    runtime = [path for path in backend.rglob("*.py") if "test" not in path.name and "/tests/" not in str(path)]
+    forbidden = ("billing_orders", "billing_subscriptions", "finva_beta_programs", "submit_receipt",
+                 "match_sinpe_payment", "payment_code", "_sinpe_instructions", "has_active_payment")
+    offenders = [f"{path.relative_to(backend)}: {word}" for path in runtime
+                 for word in forbidden if word in path.read_text(encoding="utf-8")]
+    assert offenders == []
+    from backend.product_ops import routes
+    paths = {route.path for route in routes.router.routes}
+    assert not [path for path in paths if "/orders" in path or "receipt" in path]
+    frontend = backend.parent / "frontend" / "src"
+    client_calls = ("uploadPaymentReceipt", "resolveTestPayment", "openTestPaymentReceipt", "/billing/orders", "/owner/orders")
+    client_offenders = [f"{path.relative_to(frontend)}: {word}" for path in frontend.rglob("*.js*")
+                        for word in client_calls if word in path.read_text(encoding="utf-8")]
+    assert client_offenders == []
+
+
+def test_the_store_states_that_grant_access_agree():
+    from backend.product_ops import service, store_billing
+    assert set(service.STORE_ENTITLED_STATES) == set(store_billing.ACTIVE_STATES)
 
 
 def test_legal_schema_is_closed_to_data_api_roles():
@@ -391,13 +404,31 @@ def test_profile_setup_normalizes_name_and_preserves_base_currency():
         display_name="  Ana   María  ",
         usage_goal="save",
         base_currency="USD",
-        enabled_currencies=["ARS", "USD", "ARS"],
+        enabled_currencies=["CRC", "USD", "CRC"],
         selected_financial_institutions=["bac", "multimoney", "bac"],
     )
 
     assert request.display_name == "Ana María"
-    assert request.enabled_currencies == ["USD", "ARS"]
+    assert request.enabled_currencies == ["USD", "CRC"]
     assert request.selected_financial_institutions == ["bac", "multimoney"]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("base_currency", "EUR"),
+    ("base_currency", "ARS"),
+    ("enabled_currencies", ["CRC", "MXN"]),
+    ("enabled_currencies", ["PAB"]),
+])
+def test_profile_setup_offers_only_crc_and_usd(field, value):
+    payload = {"display_name": "Ana", "usage_goal": "save", field: value}
+    with pytest.raises(ValidationError):
+        ProfileSetupRequest(**payload)
+
+
+def test_profile_setup_defaults_to_crc():
+    request = ProfileSetupRequest(display_name="Ana", usage_goal="save")
+    assert request.base_currency == "CRC"
+    assert request.enabled_currencies == ["CRC"]
 
 
 def test_profile_setup_migration_does_not_modify_financial_records():
@@ -539,7 +570,7 @@ def test_self_deletion_drops_mail_secrets_and_revokes_google_after_commit(monkey
             if "FROM mail_oauth_flows f" in normalized:
                 return Result(rows=[{"refresh_token_secret_id": "aaaaaaaa-0000-0000-0000-000000000003",
                                      "granted_scopes": [auth_service.GMAIL_SCOPE], "decrypted_secret": "pending-google-refresh"}])
-            if normalized.startswith("DELETE FROM vault.secrets"):
+            if normalized.startswith("SELECT dincr_private.mail_secret_delete"):
                 events.append(("VAULT_DELETE", params[0]))
             if normalized.startswith("UPDATE allowed_users SET status"):
                 return Result({"id": 42})
