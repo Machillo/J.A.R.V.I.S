@@ -130,9 +130,30 @@ def test_every_table_and_command_the_backend_uses_is_granted():
     )
 
 
+# A grant that must reach production before the code that uses it: apply_migration.py
+# only applies migrations already on main, and merging the code deploys it. Each entry
+# is exactly the privileges granted and the PR that brings the code, which must remove
+# the entry (test_a_grant_ahead_of_its_code_is_removed_once_the_code_uses_it fails then).
+GRANTED_AHEAD_OF_CODE = {
+    "mail_connection_takeovers": ({"SELECT", "INSERT"}, "#249 mail_oauth.claim_mailbox"),
+}
+
+
 def test_the_role_is_not_granted_tables_the_backend_never_uses():
-    unused = sorted(set(granted()) - set(needed()))
+    unused = sorted(set(granted()) - set(needed()) - set(GRANTED_AHEAD_OF_CODE))
     assert unused == [], f"Least privilege: remove the grants of tables the backend never uses: {unused}"
+
+
+def test_a_grant_ahead_of_its_code_is_exactly_what_is_granted():
+    grants = granted()
+    wrong = {table: sorted(grants.get(table, set())) for table, (privileges, _pr) in GRANTED_AHEAD_OF_CODE.items()
+             if grants.get(table, set()) != privileges}
+    assert wrong == {}, f"GRANTED_AHEAD_OF_CODE must match the migrations' grants exactly: {wrong}"
+
+
+def test_a_grant_ahead_of_its_code_is_removed_once_the_code_uses_it():
+    landed = sorted(set(GRANTED_AHEAD_OF_CODE) & set(needed()))
+    assert landed == [], f"The backend now uses {landed}: remove them from GRANTED_AHEAD_OF_CODE"
 
 
 def test_the_scanner_sees_what_it_guards():
