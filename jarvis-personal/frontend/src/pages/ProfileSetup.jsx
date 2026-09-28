@@ -39,12 +39,6 @@ const GOALS = [
 const CURRENCIES = [
   { code: "CRC", name: tx("Colón costarricense", "Costa Rican colón"), symbol: "₡", flag: "🇨🇷" },
   { code: "USD", name: tx("Dólar estadounidense", "US dollar"), symbol: "$", flag: "🇺🇸" },
-  { code: "ARS", name: tx("Peso argentino", "Argentine peso"), symbol: "$", flag: "🇦🇷" },
-  { code: "EUR", name: "Euro", symbol: "€", flag: "🇪🇺" },
-  { code: "MXN", name: tx("Peso mexicano", "Mexican peso"), symbol: "$", flag: "🇲🇽" },
-  { code: "COP", name: tx("Peso colombiano", "Colombian peso"), symbol: "$", flag: "🇨🇴" },
-  { code: "GTQ", name: tx("Quetzal guatemalteco", "Guatemalan quetzal"), symbol: "Q", flag: "🇬🇹" },
-  { code: "PAB", name: tx("Balboa panameño", "Panamanian balboa"), symbol: "B/.", flag: "🇵🇦" },
 ];
 
 const BANKS = [
@@ -94,14 +88,15 @@ export default function ProfileSetup({ user, onComplete }) {
   const isJarvis = user?.role === "owner" || user?.role === "admin";
   const product = "DINCR";
   const platform = Capacitor.getPlatform();
-  const initialCurrency = user?.base_currency || "CRC";
+  const supported = (code) => CURRENCIES.some((item) => item.code === code);
+  const initialCurrency = supported(user?.base_currency) ? user.base_currency : "CRC";
   const [step, setStep] = useState(0);
   const [name, setName] = useState(firstName(user));
   const [goal, setGoal] = useState(user?.usage_goal || "");
   const [baseCurrency, setBaseCurrency] = useState(initialCurrency);
   const [enabledCurrencies, setEnabledCurrencies] = useState(() => {
     const current = Array.isArray(user?.enabled_currencies) ? user.enabled_currencies : [initialCurrency];
-    return [...new Set([initialCurrency, ...current])];
+    return [...new Set([initialCurrency, ...current.filter(supported)])];
   });
   const [numberFormat, setNumberFormat] = useState(user?.number_format || "dot_comma");
   const [currencyPlacement, setCurrencyPlacement] = useState(user?.currency_placement || "before");

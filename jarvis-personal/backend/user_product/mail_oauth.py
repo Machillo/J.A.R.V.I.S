@@ -54,21 +54,22 @@ def pkce_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).decode("ascii").rstrip("=")
 
 
-def _delete_secret(conn, secret_id: Any) -> None:
+def _delete_secret(conn, secret_id: Any, account_id: Any) -> None:
+    """Delete a pending refresh token through the Vault boundary (dincr_private)."""
     if secret_id:
-        conn.execute("DELETE FROM vault.secrets WHERE id=%s::uuid", (str(secret_id),))
+        conn.execute("SELECT dincr_private.mail_secret_delete(ARRAY[%s::uuid], %s::uuid)", (str(secret_id), str(account_id)))
 
 
 def discard_stale_flows(conn, account_id: str | None = None) -> None:
     """Drop expired or failed flows and any refresh token they still hold."""
     scope, params = ("AND account_id=%s", (account_id,)) if account_id else ("", ())
     stale = conn.execute(
-        f"""SELECT id,pending_secret_id FROM mail_oauth_flows
+        f"""SELECT id,account_id,pending_secret_id FROM mail_oauth_flows
             WHERE (expires_at<=NOW() OR status='failed') AND status<>'completed' {scope}""",
         params,
     ).fetchall()
     for row in stale:
-        _delete_secret(conn, row.get("pending_secret_id"))
+        _delete_secret(conn, row.get("pending_secret_id"), row["account_id"])
     if stale:
         conn.execute("DELETE FROM mail_oauth_flows WHERE id = ANY(%s::uuid[])", ([str(row["id"]) for row in stale],))
 
@@ -204,7 +205,7 @@ def complete_flow(
             if flow["status"] == "completed":
                 logger.warning("Mail OAuth completion replay rejected: flow belongs to another account provider=%s", flow["provider"])
                 raise HTTPException(status_code=403, detail="Esta autorización de correo no pertenece a tu cuenta DINCR.")
-            _delete_secret(conn, flow["pending_secret_id"])
+            _delete_secret(conn, flow["pending_secret_id"], flow["account_id"])
             conn.execute(
                 """UPDATE mail_oauth_flows SET status='failed',pending_secret_id=NULL,completion_hash=NULL,
                           updated_at=NOW() WHERE id=%s::uuid""",
