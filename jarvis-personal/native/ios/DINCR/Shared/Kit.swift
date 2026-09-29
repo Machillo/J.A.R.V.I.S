@@ -7,13 +7,13 @@ import SwiftUI
 struct AsyncContent<Value: Equatable, Content: View>: View {
     @Environment(AppModel.self) private var model
     let fallback: String
-    let load: () async throws -> Value
+    let load: @MainActor () async throws -> Value
     @ViewBuilder let content: (Value, @escaping () -> Void) -> Content
     @State private var state: LoadState<Value> = .loading
     @State private var generation = 0
 
     init(fallback: String = tx("No pudimos cargar esta información.", "We couldn’t load this information."),
-         load: @escaping () async throws -> Value,
+         load: @escaping @MainActor () async throws -> Value,
          @ViewBuilder content: @escaping (Value, @escaping () -> Void) -> Content) {
         self.fallback = fallback; self.load = load; self.content = content
     }
@@ -203,10 +203,21 @@ enum Period {
 }
 
 enum Day {
-    static func today() -> String { MovementEditor.dayFormatter.string(from: .now) }
+    /// Local calendar day `YYYY-MM-DD` (same format as `MovementEditor.dayFormatter`, but usable from
+    /// any isolation).
+    static func formatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    static func today() -> String { formatter().string(from: .now) }
 
     static func label(_ day: String?) -> String {
-        guard let day, let date = MovementEditor.dayFormatter.date(from: String(day.prefix(10))) else { return "—" }
+        guard let day, let date = formatter().date(from: String(day.prefix(10))) else { return "—" }
         return date.formatted(.dateTime.day().month(.abbreviated).year().locale(Locale(identifier: AppLanguage.current == .spanish ? "es_CR" : "en_US")))
     }
 }
