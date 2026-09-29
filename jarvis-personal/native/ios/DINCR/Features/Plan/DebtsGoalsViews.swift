@@ -230,6 +230,13 @@ struct GoalsView: View {
     @State private var goalForm: GoalForm.Mode?
     @State private var creatingPlan = false
     @State private var notice: String?
+    @State private var confirming: PendingDelete?
+
+    struct PendingDelete: Identifiable {
+        let id = UUID()
+        let name: String
+        let run: () async throws -> Void
+    }
 
     struct Snapshot: Equatable {
         let goals: [Goal]
@@ -248,8 +255,8 @@ struct GoalsView: View {
             }) { snapshot, _ in
                 GoalsContent(snapshot: snapshot, canWrite: model.flags.isEnabled(.financialWrites), canEdit: model.planTier.rank >= PlanTier.basic.rank,
                              contribute: { action = .contribute($0) }, save: { action = .save($0) }, edit: { goalForm = .edit($0) },
-                             deleteGoal: { goal in Task { await delete { try await model.service.deleteGoal(id: goal.id) } } },
-                             deletePlan: { plan in Task { await delete { try await model.service.deleteSavingsPlan(id: plan.id) } } })
+                             deleteGoal: { goal in confirming = PendingDelete(name: goal.name ?? "") { try await model.service.deleteGoal(id: goal.id) } },
+                             deletePlan: { plan in confirming = PendingDelete(name: plan.name ?? "") { try await model.service.deleteSavingsPlan(id: plan.id) } })
             }
             .id(generation)
         }
@@ -265,6 +272,15 @@ struct GoalsView: View {
         .sheet(item: $action) { action in AmountSheet(action: action) { done($0) } }
         .sheet(item: $goalForm) { mode in GoalForm(mode: mode) { done($0) } }
         .sheet(isPresented: $creatingPlan) { SavingsPlanForm { done($0) } }
+        .confirmationDialog(tx("¿Eliminar «\(confirming?.name ?? "")»?", "Delete “\(confirming?.name ?? "")”?"),
+                            isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible) {
+            Button(tx("Eliminar", "Delete"), role: .destructive) {
+                if let pending = confirming { Task { await delete(pending.run) } }
+            }
+            Button(tx("Cancelar", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(tx("Se borra con su historial de aportes en DINCR. No se puede deshacer.", "It is removed with its contribution history in DINCR. This can’t be undone."))
+        }
     }
 
     private func done(_ message: String) {

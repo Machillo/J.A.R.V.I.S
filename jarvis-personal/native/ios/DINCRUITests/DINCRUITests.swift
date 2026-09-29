@@ -218,6 +218,7 @@ final class DINCRUITests: XCTestCase {
         let rate = app.textFields["editor.rate"]
         XCTAssertTrue(rate.waitForExistence(timeout: 2))
         XCTAssertEqual(rate.value as? String, "507,5", "prefilled with the user's own latest rate, never a market rate")
+        rate.tap()
         rate.clearAndType("")
         let amount = app.textFields["editor.amount"]
         amount.tap()

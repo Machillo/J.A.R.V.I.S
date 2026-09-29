@@ -199,6 +199,7 @@ struct RecurringView: View {
     @State private var generation = 0
     @State private var creating = false
     @State private var notice: String?
+    @State private var deleting: RecurringList.Item?
 
     var body: some View {
         ScreenScroll(title: tx("Recurrentes", "Recurring")) {
@@ -206,7 +207,7 @@ struct RecurringView: View {
             if let notice { StatusBanner(tone: .info, title: notice, message: "") }
             AsyncContent(load: { try await model.service.recurring() }) { list, _ in
                 RecurringContent(list: list, canWrite: model.flags.isEnabled(.financialWrites),
-                                 toggle: { item in Task { await toggle(item) } }, delete: { item in Task { await delete(item) } })
+                                 toggle: { item in Task { await toggle(item) } }, delete: { item in deleting = item })
             }
             .id(generation)
         }
@@ -216,6 +217,13 @@ struct RecurringView: View {
             }
         }
         .sheet(isPresented: $creating) { RecurringForm { notice = $0; generation += 1 } }
+        .confirmationDialog(tx("¿Eliminar «\(deleting?.name ?? "")»?", "Delete “\(deleting?.name ?? "")”?"),
+                            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            Button(tx("Eliminar", "Delete"), role: .destructive) { if let item = deleting { Task { await delete(item) } } }
+            Button(tx("Cancelar", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(tx("No se puede deshacer.", "This can’t be undone."))
+        }
     }
 
     private func toggle(_ item: RecurringList.Item) async {

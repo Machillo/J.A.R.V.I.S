@@ -37,11 +37,19 @@ public struct MailStatus: Decodable, Sendable, Equatable {
     public let microsoftAvailable: Bool?
     public let consent: Consent?
     public let connections: [Connection]?
+    /// How long the backend keeps review evidence and mail metadata (configurable server-side).
+    public let retention: Retention?
+
+    public struct Retention: Decodable, Sendable, Equatable {
+        public let reviewEvidenceDays: Int?
+        public let emailMetadataDays: Int?
+        public init(reviewEvidenceDays: Int?, emailMetadataDays: Int?) { self.reviewEvidenceDays = reviewEvidenceDays; self.emailMetadataDays = emailMetadataDays }
+    }
 
     public init(connected: Bool?, needsReauthorization: Bool? = false, pending: Int? = nil, microsoftAvailable: Bool? = false,
-                consent: Consent?, connections: [Connection]?) {
+                consent: Consent?, connections: [Connection]?, retention: Retention? = nil) {
         self.connected = connected; self.needsReauthorization = needsReauthorization; self.pending = pending
-        self.microsoftAvailable = microsoftAvailable; self.consent = consent; self.connections = connections
+        self.microsoftAvailable = microsoftAvailable; self.consent = consent; self.connections = connections; self.retention = retention
     }
 
     public var isConnected: Bool { connected == true }

@@ -204,9 +204,16 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as APIError {
-            if epoch == sessionEpoch { phase = .identityError(error.message, deletionPending: error.code == "account_deletion_pending") }
+            guard epoch == sessionEpoch else { return }
+            let deletionPending = error.code == "account_deletion_pending"
+            // A background refresh of a signed-in app (resume) that fails for a transient reason keeps
+            // the user where they were; only a real state change moves the gate.
+            if phase == .ready, profile != nil, !deletionPending, error.kind != .forbidden { return }
+            phase = .identityError(error.message, deletionPending: deletionPending)
         } catch {
-            if epoch == sessionEpoch { phase = .identityError(language.pick("No pudimos cargar tu cuenta.", "We couldn’t load your account."), deletionPending: false) }
+            guard epoch == sessionEpoch else { return }
+            if phase == .ready, profile != nil { return }
+            phase = .identityError(language.pick("No pudimos cargar tu cuenta.", "We couldn’t load your account."), deletionPending: false)
         }
     }
 
@@ -226,7 +233,11 @@ final class AppModel {
             phase = .ready
             if !wasReady {
                 appLock.attach(userID: profile.id)
-                Task { await refreshFlags() }
+                Task {
+                    await refreshFlags()
+                    // A mail return that arrived before the app was ready (cold start) is redeemed now.
+                    if let pending = retryMailReturn { await handleMailReturn(pending) }
+                }
             }
         }
     }
@@ -318,7 +329,11 @@ final class AppModel {
             pendingRoute = "mail"
             return
         }
-        guard phase == .ready else { retryMailReturn = mailReturn; return }
+        guard phase == .ready else {
+            // Before sign-in there is no session to bind it to; after sign-in it is retried once ready.
+            if profile != nil || phase == .loadingIdentity { retryMailReturn = mailReturn }
+            return
+        }
         let epoch = sessionEpoch
         do {
             _ = try await service.completeMailConnection(flow: flow, completion: completion)
@@ -329,6 +344,9 @@ final class AppModel {
             notice = language.pick("Tu correo quedó conectado.", "Your mail is connected.")
             pendingRoute = "mail"
         } catch let error as APIError where error.isTransient {
+            // The session may have ended while the request was in flight: a return belongs only to the
+            // session that started it, so it is never kept for the next account.
+            guard epoch == sessionEpoch else { return }
             // Offline or a server hiccup: the one-time completion stays valid for a while; retry on resume.
             retryMailReturn = mailReturn
             mailOutcome = error.message
@@ -341,6 +359,12 @@ final class AppModel {
     }
 
     func consumeMailOutcome() { mailOutcome = nil }
+
+    /// Retries a mail connection whose completion failed transiently (the outcome banner's action).
+    func retryPendingMailReturn() async {
+        if let pending = retryMailReturn { await handleMailReturn(pending) }
+    }
+    var hasPendingMailReturn: Bool { retryMailReturn != nil }
 
     private func remember(_ mailReturn: MailReturn) {
         handledMailReturns.add(mailReturn.key)

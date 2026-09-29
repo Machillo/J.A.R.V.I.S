@@ -29,6 +29,17 @@ struct DINCRApp: App {
                 // A mail OAuth return opened by the system (the authentication session delivers it
                 // directly otherwise). Sign-in callbacks only ever come through the session.
                 .onOpenURL { url in Task { await model.handleOpenURL(url) } }
+                // The app-switcher snapshot is taken while inactive: with the lock on, it shows a cover,
+                // never balances.
+                .overlay {
+                    if scenePhase != .active && model.appLock.isEnabled {
+                        ZStack {
+                            DincrColor.bg.ignoresSafeArea()
+                            Image(systemName: "lock.fill").font(.system(size: 40)).foregroundStyle(DincrColor.tint)
+                        }
+                        .accessibilityHidden(true)
+                    }
+                }
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active: Task { await model.onForeground() }

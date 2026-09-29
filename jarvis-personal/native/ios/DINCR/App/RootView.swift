@@ -46,7 +46,7 @@ struct RootView: View {
                     symbol: "arrow.down.app",
                     title: tx("Actualizá DINCR", "Update DINCR"),
                     message: policy.message(model.language) ?? tx("Esta versión ya no es compatible. Actualizá desde el App Store para continuar.", "This version is no longer supported. Update from the App Store to continue."),
-                    primary: policy.updateUrl.flatMap(URL.init(string:)).map { url in (tx("Actualizar", "Update"), { UIApplication.shared.open(url) }) },
+                    primary: Self.storeURL(policy.updateUrl).map { url in (tx("Actualizar", "Update"), { UIApplication.shared.open(url) }) },
                     showsSignOut: false
                 )
             case .ownerNotSupported:
@@ -68,6 +68,12 @@ struct RootView: View {
             }
         }
         .animation(DincrMotion.standard(reduceMotion), value: model.phase)
+    }
+
+    /// The update link from the release policy, only when it is https or the App Store.
+    static func storeURL(_ text: String?) -> URL? {
+        guard let text, let url = URL(string: text), let scheme = url.scheme?.lowercased(), ["https", "itms-apps"].contains(scheme), url.host != nil else { return nil }
+        return url
     }
 
     static func unconfiguredMessage(_ reason: LaunchPolicy.Reason) -> String {

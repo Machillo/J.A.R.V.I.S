@@ -394,7 +394,8 @@ public actor FixtureBackend: HTTPTransport {
                 : [["id": 9, "provider": "gmail", "google_email": "antes@ejemplo.test", "status": "disabled", "automatic_updates": false]]
             return ok(["status": mailConnected ? "active" : "disabled", "connected": mailConnected, "needs_reauthorization": false, "pending": pendingCount(),
                        "microsoft_available": true, "connections": connections,
-                       "consent": ["required": !mailConsentAccepted, "version": Self.mailConsentVersion, "accepted_at": mailConsentAccepted ? "2026-09-01T12:00:00Z" : NSNull()]])
+                       "consent": ["required": !mailConsentAccepted, "version": Self.mailConsentVersion, "accepted_at": mailConsentAccepted ? "2026-09-01T12:00:00Z" : NSNull()],
+                       "retention": ["review_evidence_days": 30, "email_metadata_days": 90, "canonical_history": "until_account_deletion"]])
         case ("POST", "/user-product/vip/gmail/consent"):
             guard body["accepted"] as? Bool == true else { return error(422, "Tenés que aceptar para continuar.") }
             guard body["version"] as? String == Self.mailConsentVersion else { return error(409, "La versión del consentimiento cambió.") }

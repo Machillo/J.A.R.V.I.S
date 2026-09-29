@@ -168,8 +168,15 @@ struct MovementEditor: View {
             }
             .interactiveDismissDisabled(saving || hasChanges)
             .onChange(of: kind) { _, _ in if !categories.contains(category) { category = categories[0] } }
-            .onChange(of: currency) { _, newValue in
-                // A new foreign entry starts from the user's own latest rate (editable), never a market rate.
+            .onChange(of: currency) { oldValue, newValue in
+                // Switching currency on an edit never reinterprets the typed number (US$10 is not ₡10):
+                // the amount is asked again, and the untouched stored values no longer apply.
+                if isEditing, !oldValue.isEmpty {
+                    amountText = ""
+                    rateText = ""
+                    prefilledRateText = "\u{0}"
+                }
+                // A foreign entry starts from the user's own latest rate (editable), never a market rate.
                 if newValue != base, rateText.isEmpty, let latestRate { rateText = format.inputText(latestRate) }
             }
             .onAppear(perform: prefill)

@@ -52,6 +52,10 @@ private struct MailMonitorContent: View {
             if let outcome = model.mailOutcome {
                 StatusBanner(tone: .warning, title: tx("Conexión de correo", "Mail connection"), message: outcome)
                     .accessibilityIdentifier("mail.outcome")
+                if model.hasPendingMailReturn {
+                    Button(tx("Reintentar conexión", "Retry connection")) { Task { await model.retryPendingMailReturn(); generation += 1 } }
+                        .buttonStyle(.dincrSecondary)
+                }
             }
             if let notice { StatusBanner(tone: .info, title: notice, message: "").accessibilityIdentifier("mail.notice") }
             if let errorMessage { ErrorStateView(message: errorMessage) }
@@ -75,7 +79,7 @@ private struct MailMonitorContent: View {
             ScopeSheet(provider: provider) { scope in Task { await connect(provider, scope: scope) } }
         }
         .sheet(item: $correcting) { candidate in
-            CorrectionSheet(candidate: candidate) { correction in await review(candidate, .correct(correction)) }
+            CorrectionSheet(candidate: candidate) { correction in await review(candidate, .correct(correction)) ? nil : errorMessage }
         }
         .confirmationDialog(tx("¿Desconectar \(disconnecting?.googleEmail ?? "este correo")?", "Disconnect \(disconnecting?.googleEmail ?? "this mailbox")?"),
                             isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
@@ -100,7 +104,9 @@ private struct MailMonitorContent: View {
             bullet("eye", tx("Acceso de solo lectura a Gmail (gmail.readonly): DINCR no envía, borra ni modifica correos.", "Read-only Gmail access (gmail.readonly): DINCR never sends, deletes or changes email."))
                 .accessibilityIdentifier("mail.readonly")
             bullet("checkmark.shield", tx("Nada se guarda sin tu revisión. Podés desconectar cuando quieras.", "Nothing is saved without your review. You can disconnect at any time."))
-            bullet("clock", tx("La evidencia de revisión se guarda 30 días y los datos del correo 90 días.", "Review evidence is kept 30 days and mail metadata 90 days."))
+            if let evidence = status.retention?.reviewEvidenceDays, let metadata = status.retention?.emailMetadataDays {
+                bullet("clock", tx("La evidencia de revisión se guarda \(evidence) días y los datos del correo \(metadata) días.", "Review evidence is kept \(evidence) days and mail metadata \(metadata) days."))
+            }
             HStack(spacing: DincrSpacing.s4) {
                 Link(tx("Privacidad", "Privacy"), destination: LegalLinks.privacy)
                 Link(tx("Términos", "Terms"), destination: LegalLinks.terms)
@@ -287,8 +293,11 @@ private struct MailMonitorContent: View {
     enum Review { case accept, reject, correct(CandidateCorrection) }
 
     /// Accept, correct or reject once; an already-reviewed notice says so and changes nothing.
-    private func review(_ candidate: MailCandidate, _ review: Review) async {
-        guard let id = candidate.candidateId else { return }
+    /// Returns whether it was saved (a correction sheet then closes; otherwise it shows the error).
+    @discardableResult
+    private func review(_ candidate: MailCandidate, _ review: Review) async -> Bool {
+        guard let id = candidate.candidateId else { return false }
+        var saved = false
         await perform(candidate.id, fallback: tx("No pudimos revisar el aviso.", "We couldn’t review the notice.")) {
             let result: CandidateReviewResult
             switch review {
@@ -306,8 +315,10 @@ private struct MailMonitorContent: View {
                 notice = tx("Movimiento guardado.", "Transaction saved.")
             }
             correcting = nil
+            saved = true
             generation += 1
         }
+        return saved
     }
 
     private func confirmTransfer(_ candidateID: Int, _ counterpart: Int, _ direction: String?) async {
@@ -412,7 +423,8 @@ private struct CorrectionSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let candidate: MailCandidate
-    let submit: (CandidateCorrection) async -> Void
+    /// Returns an error to show in the sheet, or nil when saved.
+    let submit: (CandidateCorrection) async -> String?
     @State private var description = ""
     @State private var amount = ""
     @State private var rate = ""
@@ -480,8 +492,8 @@ private struct CorrectionSheet: View {
             exchangeRate = parsed
         }
         saving = true; error = nil
-        await submit(CandidateCorrection(transactionDate: MovementEditor.dayFormatter.string(from: date), description: text, amount: value,
-                                         transactionType: type, category: category.isEmpty ? "general" : category, exchangeRate: exchangeRate))
+        error = await submit(CandidateCorrection(transactionDate: MovementEditor.dayFormatter.string(from: date), description: text, amount: value,
+                                                 transactionType: type, category: category.isEmpty ? "general" : category, exchangeRate: exchangeRate))
         saving = false
     }
 }

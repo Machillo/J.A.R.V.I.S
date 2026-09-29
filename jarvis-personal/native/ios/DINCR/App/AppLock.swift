@@ -14,7 +14,9 @@ final class AppLock {
     private(set) var locked = false
     private(set) var isEnabled = false
     private var userID: Int?
-    private var backgroundedAt: TimeInterval?
+    /// ContinuousClock keeps counting while the device sleeps (systemUptime does not), so a phone
+    /// locked for an hour counts as an hour away; it cannot be moved by changing the wall clock.
+    private var backgroundedAt: ContinuousClock.Instant?
     private let defaults = UserDefaults.standard
 
     private var enabledKey: String? { userID.map { "dincr.appLock.enabled.\($0)" } }
@@ -43,6 +45,12 @@ final class AppLock {
     func attach(userID: Int) {
         self.userID = userID
         isEnabled = enabledKey.map { defaults.bool(forKey: $0) } ?? false
+        // A lock that can no longer be opened (the passcode was removed) turns itself off instead of
+        // trapping the user; the device has no lock to protect it with anyway.
+        if isEnabled, availability == .unavailable {
+            isEnabled = false
+            if let enabledKey { defaults.set(false, forKey: enabledKey) }
+        }
         locked = isEnabled
     }
 
@@ -53,11 +61,13 @@ final class AppLock {
         backgroundedAt = nil
     }
 
-    func onBackground() { backgroundedAt = ProcessInfo.processInfo.systemUptime }
+    func onBackground() { backgroundedAt = ContinuousClock.now }
 
     func onForeground() {
-        if AppLockPolicy.shouldLock(enabled: isEnabled, backgroundedAt: backgroundedAt, now: ProcessInfo.processInfo.systemUptime) {
-            locked = true
+        if let backgroundedAt {
+            let away = backgroundedAt.duration(to: .now).components
+            let seconds = TimeInterval(away.seconds) + TimeInterval(away.attoseconds) / 1e18
+            if AppLockPolicy.shouldLock(enabled: isEnabled, backgroundedAt: 0, now: seconds) { locked = true }
         }
         backgroundedAt = nil
     }
