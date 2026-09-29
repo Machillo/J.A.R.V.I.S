@@ -9,6 +9,7 @@ The shared in-memory ledger returns the whole profile row whatever the query sel
 which hid the bug; the connection below only returns the columns the SQL asks for.
 All data is synthetic.
 """
+import copy
 import re
 
 import pytest
@@ -89,6 +90,7 @@ def test_unknown_target_is_not_invented(ledger):
 
 
 def test_home_stays_read_only(ledger):
-    before = ledger.state
+    # A deep copy: comparing the live dict with itself would always pass.
+    before = copy.deepcopy(ledger.state)
     _home()
     assert ledger.state == before
