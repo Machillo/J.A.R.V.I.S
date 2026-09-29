@@ -1,6 +1,7 @@
 package com.dincr.app
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,22 +9,34 @@ import com.dincr.data.ApiClient
 import com.dincr.data.ApiError
 import com.dincr.data.AppLanguage
 import com.dincr.data.AuthException
-import com.dincr.data.DincrService
-import com.dincr.data.FixtureDincrService
+import com.dincr.data.AuthSession
+import com.dincr.data.DincrApi
+import com.dincr.data.FakeBackend
+import com.dincr.data.FeatureFlags
+import com.dincr.data.HandledReturns
 import com.dincr.data.InMemorySessionStore
 import com.dincr.data.LaunchPolicy
-import com.dincr.data.LiveDincrService
+import com.dincr.data.MailReturn
 import com.dincr.data.MoneyFormat
 import com.dincr.data.OAuthProvider
+import com.dincr.data.OpsFlag
+import com.dincr.data.PlanTier
 import com.dincr.data.Pkce
+import com.dincr.data.ProductEvent
 import com.dincr.data.Profile
+import com.dincr.data.ReleasePolicy
+import com.dincr.data.ServiceHealth
 import com.dincr.data.SessionManager
 import com.dincr.data.SupabaseAuthClient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Build/launch configuration, decided by [LaunchPolicy]. Fixture data only in a debug build and
@@ -34,12 +47,15 @@ import kotlinx.coroutines.launch
  */
 sealed interface AppEnvironment {
     data class Live(val apiUrl: String, val supabaseUrl: String, val anonKey: String) : AppEnvironment
-    data class Fixtures(val scenario: FixtureDincrService.Scenario, val skipLogin: Boolean, val latencyMs: Long = 350) : AppEnvironment
+    data class Fixtures(val scenario: FakeBackend.Scenario, val plan: PlanTier, val skipLogin: Boolean, val latencyMs: Long = 350) : AppEnvironment
     data class Unconfigured(val reason: LaunchPolicy.Reason) : AppEnvironment
 
     companion object {
-        /** The prototype's own redirect (never the store app's com.dincr.app://auth/callback). */
-        const val AUTH_REDIRECT = "com.dincr.app.nativedev://auth/callback"
+        /** This identity's own redirect (`com.dincr.app://auth/callback` for the DINCR app id). */
+        val AUTH_REDIRECT: String get() = BuildConfig.AUTH_REDIRECT
+
+        /** Schemes the backend may send a finished mail connection to (FINVA_GMAIL_RETURN_URL). */
+        val MAIL_SCHEMES: Set<String> get() = if (BuildConfig.APPLICATION_ID == "com.dincr.app") setOf("com.dincr.app", "com.finva.app") else setOf(BuildConfig.APPLICATION_ID)
 
         fun from(intent: Intent?, debugBuild: Boolean = BuildConfig.DEBUG): AppEnvironment {
             val launchFixtures = if (debugBuild) intent?.getStringExtra("dincrFixtures") else null
@@ -49,8 +65,8 @@ sealed interface AppEnvironment {
                 is LaunchPolicy.Decision.Live -> Live(decision.apiUrl, decision.supabaseUrl, decision.anonKey)
                 is LaunchPolicy.Decision.Unconfigured -> Unconfigured(decision.reason)
                 is LaunchPolicy.Decision.Fixtures -> Fixtures(
-                    FixtureDincrService.Scenario.entries.firstOrNull { it.name.equals(decision.scenario, ignoreCase = true) }
-                        ?: FixtureDincrService.Scenario.POPULATED,
+                    FakeBackend.Scenario.entries.firstOrNull { it.name.equals(decision.scenario, ignoreCase = true) } ?: FakeBackend.Scenario.POPULATED,
+                    PlanTier.from(intent?.getStringExtra("dincrPlan")),
                     intent?.getBooleanExtra("dincrSkipLogin", false) ?: false,
                     // UI tests pass dincrLatencyMs=0: Compose's test dispatcher does not advance simulated network delays.
                     intent?.getLongExtra("dincrLatencyMs", 350) ?: 350,
@@ -60,17 +76,19 @@ sealed interface AppEnvironment {
     }
 }
 
-/** Gate order from CURRENT_STATE_AUDIT.md §1, same as the iOS AppModel. */
+/** Gate order of the Capacitor app (CURRENT_STATE_AUDIT.md §1), same as the iOS AppModel. */
 sealed interface Phase {
     data object Booting : Phase
     /** No usable backend configuration: nothing loads, and no sample data stands in for it. */
     data class Unconfigured(val reason: LaunchPolicy.Reason) : Phase
     data object SignedOut : Phase
     data object LoadingIdentity : Phase
-    data class IdentityError(val message: String) : Phase
+    data class IdentityError(val message: String, val deletionPending: Boolean = false) : Phase
+    data class UpdateRequired(val policy: ReleasePolicy) : Phase
     data object OwnerNotSupported : Phase
-    data class NotYetSupported(val message: String) : Phase
+    data object LegalRequired : Phase
     data object ProfileSetup : Phase
+    data object ChoosePlan : Phase
     data object Ready : Phase
 }
 
@@ -83,16 +101,42 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     val signInError: StateFlow<String?> = _signInError.asStateFlow()
     private val _signingIn = MutableStateFlow(false)
     val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
+    private val _flags = MutableStateFlow(FeatureFlags())
+    /** Operational kill switches; until loaded, every flag is at its safe default. */
+    val flags: StateFlow<FeatureFlags> = _flags.asStateFlow()
+    private val _health = MutableStateFlow<ServiceHealth?>(null)
+    val health: StateFlow<ServiceHealth?> = _health.asStateFlow()
+    private val _release = MutableStateFlow<ReleasePolicy?>(null)
+    val release: StateFlow<ReleasePolicy?> = _release.asStateFlow()
+    private val _notice = MutableStateFlow<String?>(null)
+    /** One-time message for the main screen (mail connected, plan changed…). */
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+    private val _pendingRoute = MutableStateFlow<String?>(null)
+    /** A screen the app should open next (e.g. mail after a connection returns). */
+    val pendingRoute: StateFlow<String?> = _pendingRoute.asStateFlow()
 
     lateinit var environment: AppEnvironment private set
-    lateinit var service: DincrService private set
+    lateinit var api: DincrApi private set
+    val appLock = AppLock(application)
     private var auth: SupabaseAuthClient? = null
     private lateinit var sessions: SessionManager
-    private var pendingPkce: Pkce? = null
+    private val pendingSignIn = PendingSignInStore(application)
+    private var fixturePkce: Pkce? = null
+    private val prefs = application.getSharedPreferences("dincr.preferences", Context.MODE_PRIVATE)
+    private val handledMail = HandledReturns(prefs.getString("mail_returns", "").orEmpty().split('\n').filter { it.isNotEmpty() })
     private val language get() = AppLanguage.current()
+    private var lastIdentityRefresh = 0L
+    private var flagLoop: Job? = null
 
     val isFixtures get() = environment is AppEnvironment.Fixtures
     val moneyFormat get() = MoneyFormat.from(_profile.value)
+    val plan: PlanTier get() = _profile.value?.planTier ?: PlanTier.FREE
+    val appVersion: String get() = BuildConfig.VERSION_NAME
+
+    fun isOn(flag: OpsFlag): Boolean = _flags.value.isEnabled(flag)
+    fun consumeNotice() { _notice.value = null }
+    fun consumeRoute() { _pendingRoute.value = null }
+    fun showNotice(message: String) { _notice.value = message }
 
     /**
      * Runs [block] for a screen and maps every failure to a message it can show. A rejected
@@ -106,6 +150,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         signedOut()
         Result.failure(error)
     } catch (error: ApiError) {
+        if (error.kind == ApiError.Kind.FEATURE_UNAVAILABLE) viewModelScope.launch { refreshFlags() }
         Result.failure(error)
     } catch (error: Exception) {
         Result.failure(IllegalStateException(fallback))
@@ -120,11 +165,11 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                 val client = SupabaseAuthClient(environment.supabaseUrl, environment.anonKey)
                 auth = client
                 sessions = SessionManager(client, KeystoreSessionStore(getApplication())) { viewModelScope.launch { signedOut() } }
-                service = LiveDincrService(ApiClient(environment.apiUrl, sessions))
+                api = DincrApi(ApiClient(environment.apiUrl, sessions))
             }
             is AppEnvironment.Fixtures -> {
-                sessions = SessionManager(null, InMemorySessionStore())
-                service = FixtureDincrService(environment.scenario, environment.latencyMs)
+                sessions = SessionManager(null, InMemorySessionStore(if (environment.skipLogin) FIXTURE_SESSION else null))
+                api = DincrApi(ApiClient("https://fixtures.invalid", sessions, FakeBackend(environment.scenario, environment.plan, environment.latencyMs)))
             }
             is AppEnvironment.Unconfigured -> {
                 _phase.value = Phase.Unconfigured(environment.reason)
@@ -132,38 +177,94 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            when {
-                environment is AppEnvironment.Fixtures && environment.skipLogin -> loadIdentity()
-                environment is AppEnvironment.Fixtures -> _phase.value = Phase.SignedOut
-                sessions.hasSession -> loadIdentity()
-                else -> _phase.value = Phase.SignedOut
+            checkReleasePolicy()
+            if (sessions.hasSession) loadIdentity() else _phase.value = Phase.SignedOut
+        }
+    }
+
+    // --- Lifecycle ----------------------------------------------------------------------------------
+
+    /** App came to the foreground: re-check the release policy, flags, identity (throttled), lock. */
+    fun onForeground() {
+        appLock.onForeground()
+        if (!this::environment.isInitialized || environment is AppEnvironment.Unconfigured) return
+        viewModelScope.launch {
+            checkReleasePolicy()
+            if (_phase.value is Phase.Ready) {
+                refreshFlags()
+                val now = System.currentTimeMillis()
+                if (now - lastIdentityRefresh > IDENTITY_THROTTLE_MS) { lastIdentityRefresh = now; loadIdentity() }
+            }
+        }
+        startFlagLoop()
+    }
+
+    fun onBackground() {
+        appLock.onBackground()
+        flagLoop?.cancel()
+        flagLoop = null
+    }
+
+    private fun startFlagLoop() {
+        if (flagLoop?.isActive == true) return
+        flagLoop = viewModelScope.launch {
+            while (isActive) {
+                delay(FLAG_REFRESH_MS)
+                if (_phase.value is Phase.Ready) refreshFlags()
             }
         }
     }
 
-    /** URL for the Custom Tab, or null in fixture mode. */
+    /** Fail-open, 8 s: an unreachable policy never blocks the app. */
+    private suspend fun checkReleasePolicy() {
+        val policy = withTimeoutOrNull(8_000) { runCatching { api.releasePolicy(appVersion) }.getOrNull() } ?: return
+        _release.value = policy
+        val current = _phase.value
+        if (policy.isRequired && _profile.value?.isOwner != true) _phase.value = Phase.UpdateRequired(policy)
+        else if (current is Phase.UpdateRequired) { if (_profile.value != null) apply(_profile.value!!) else _phase.value = if (sessions.hasSession) Phase.LoadingIdentity else Phase.SignedOut }
+    }
+
+    fun recheckRelease() = viewModelScope.launch { checkReleasePolicy() }
+
+    suspend fun refreshFlags() {
+        runCatching { api.featureFlags() }.onSuccess { _flags.value = it }
+        runCatching { api.health() }.onSuccess { _health.value = it }
+    }
+
+    /** Optional update dismissed for this version (stored per latest version). */
+    fun dismissOptionalUpdate() {
+        _release.value?.latestVersion?.let { prefs.edit().putString("release_dismissed", it).apply() }
+        _release.value = _release.value?.copy(status = "current")
+    }
+
+    val optionalUpdateDismissed: Boolean get() = _release.value?.latestVersion?.let { prefs.getString("release_dismissed", null) == it } ?: true
+
+    // --- Sign in ---------------------------------------------------------------------------------------
+
+    /** URL for the Custom Tab, or null in fixture mode. The verifier survives process death. */
     fun beginSignIn(provider: OAuthProvider): String? {
         _signInError.value = null
         val client = auth ?: return null
-        return Pkce.generate().also { pendingPkce = it }.let { client.authorizeUrl(provider, AppEnvironment.AUTH_REDIRECT, it) }
+        val pkce = Pkce.generate()
+        pendingSignIn.save(pkce)
+        return client.authorizeUrl(provider, AppEnvironment.AUTH_REDIRECT, pkce)
     }
 
     /** The browser could not be opened: nothing is pending any more. */
     fun signInFailed() {
-        pendingPkce = null
+        pendingSignIn.clear()
         _signInError.value = language.pick("No pudimos abrir el navegador para iniciar sesión.", "We couldn’t open the browser to sign in.")
     }
 
     fun handleCallback(uri: String) {
         val client = auth ?: return
-        val pkce = pendingPkce
+        val pkce = pendingSignIn.take()
         if (pkce == null) {
-            // No sign-in in progress (a replayed or foreign link, or the process restarted while
-            // the browser was open): nothing is exchanged. Ask for a fresh attempt.
+            // No sign-in in progress (a replayed or foreign link, or it expired): nothing is
+            // exchanged. Ask for a fresh attempt.
             _signInError.value = language.pick("No pudimos completar el acceso. Intentá nuevamente.", "We couldn’t sign you in. Please try again.")
             return
         }
-        pendingPkce = null
         viewModelScope.launch {
             _signingIn.value = true
             try {
@@ -183,11 +284,15 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     fun signInWithFixtures() = viewModelScope.launch {
         _signingIn.value = true
+        sessions.accept(FIXTURE_SESSION)
+        sessionEpoch += 1
         loadIdentity()
         _signingIn.value = false
     }
 
     fun retryIdentity() = viewModelScope.launch { loadIdentity() }
+
+    // --- Identity and gates ------------------------------------------------------------------------------
 
     /**
      * Changes on every sign-in and sign-out. An identity answer that arrives after the session it
@@ -200,7 +305,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         val epoch = sessionEpoch
         if (_profile.value == null) _phase.value = Phase.LoadingIdentity
         try {
-            val profile = service.me()
+            val profile = api.me()
             if (epoch == sessionEpoch) apply(profile)
         } catch (error: CancellationException) {
             throw error
@@ -209,22 +314,35 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         } catch (error: AuthException.SessionChanged) {
             // The session was replaced or closed while loading; its phase is already set.
         } catch (error: ApiError) {
-            if (epoch == sessionEpoch) _phase.value = Phase.IdentityError(error.message)
+            if (epoch == sessionEpoch) _phase.value = Phase.IdentityError(error.message, error.code == "account_deletion_pending")
         } catch (error: Exception) {
             if (epoch == sessionEpoch) _phase.value = Phase.IdentityError(language.pick("No pudimos cargar tu cuenta.", "We couldn’t load your account."))
         }
     }
 
+    /** Applies an identity: the Owner boundary, then legal, profile setup and plan, in that order. */
     fun apply(profile: Profile) {
+        val previous = _profile.value
         _profile.value = profile
+        lastIdentityRefresh = System.currentTimeMillis()
+        if (previous?.id != profile.id) appLock.attach(profile.id.toString())
+        profile.subscription?.accessNotice?.let { notice -> notice.message?.let { _notice.value = listOfNotNull(notice.title, it).joinToString(". ") } }
+        val release = _release.value
         _phase.value = when {
+            release?.isRequired == true && !profile.isOwner -> Phase.UpdateRequired(release)
+            // Owner boundary (CLAUDE.md §4.A): the public app never serves Owner/admin sessions.
             profile.isOwner -> Phase.OwnerNotSupported
-            profile.legal?.required == true -> Phase.NotYetSupported(language.pick("Aceptá los términos actualizados desde la app actual de DINCR.", "Accept the updated terms in the current DINCR app."))
+            profile.legal?.required == true -> Phase.LegalRequired
             profile.profileSetupCompleted != true -> Phase.ProfileSetup
-            profile.planSelected != true -> Phase.NotYetSupported(language.pick("Elegí tu plan desde la app actual de DINCR.", "Choose your plan in the current DINCR app."))
+            profile.planSelected != true -> Phase.ChoosePlan
             else -> Phase.Ready
         }
+        if (_phase.value is Phase.Ready) viewModelScope.launch { refreshFlags() }
     }
+
+    /** `DELETE /auth/me` for an account whose deletion is pending (or requested now), then sign out. */
+    suspend fun deleteAccount(): String? = load(language.pick("No pudimos eliminar tu cuenta.", "We couldn’t delete your account.")) { api.deleteAccount() }
+        .fold({ signOut(); null }, { it.message })
 
     fun signOut() = viewModelScope.launch {
         sessions.signOut()
@@ -233,10 +351,73 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     private fun signedOut() {
         sessionEpoch += 1
+        pendingSignIn.clear()
+        appLock.detach()
         _profile.value = null
+        _flags.value = FeatureFlags()
+        _notice.value = null
+        _pendingRoute.value = null
         _phase.value = Phase.SignedOut
+    }
+
+    // --- Mail connection return ------------------------------------------------------------------------
+
+    /**
+     * A mail connection came back from the browser. Parsed strictly, redeemed once (a handled
+     * ledger survives restarts) and only with the current session; the backend refuses a flow
+     * started by another account. Transient failures are retried; a definitive answer is final.
+     */
+    fun handleMailReturn(url: String) {
+        val mail = MailReturn.parse(url, AppEnvironment.MAIL_SCHEMES) ?: return
+        if (handledMail.contains(mail.key)) return
+        _pendingRoute.value = "mail"
+        if (!mail.isAuthorized) {
+            markHandled(mail.key)
+            if (mail.status != "already_processed") _notice.value = MailReturn.message(mail.status, language)
+            return
+        }
+        viewModelScope.launch {
+            var attempt = 0
+            while (true) {
+                try {
+                    api.completeMailConnection(mail.flow!!, mail.completion!!)
+                    markHandled(mail.key)
+                    _notice.value = language.pick("Tu correo quedó conectado. Revisá los avisos detectados.", "Your mail is connected. Review the detected notices.")
+                    return@launch
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: ApiError) {
+                    if (error.isTransient && attempt < 3) { attempt += 1; delay(1_000L * attempt); continue }
+                    if (!error.isTransient) markHandled(mail.key)
+                    _notice.value = if (error.kind == ApiError.Kind.FORBIDDEN) language.pick("Esa conexión pertenece a otra cuenta DINCR.", "That connection belongs to another DINCR account.") else error.message
+                    return@launch
+                } catch (error: AuthException) {
+                    _notice.value = language.pick("Iniciá sesión con la misma cuenta para terminar de conectar tu correo.", "Sign in with the same account to finish connecting your mail.")
+                    return@launch
+                }
+            }
+        }
+    }
+
+    private fun markHandled(key: String) {
+        handledMail.add(key)
+        prefs.edit().putString("mail_returns", handledMail.snapshot.joinToString("\n")).apply()
+    }
+
+    // --- Analytics (backend allow-list only; no personal data) ----------------------------------------
+
+    fun recordScreen(eventName: String, surface: String) {
+        if (eventName !in ProductEvent.ALLOWED || _phase.value !is Phase.Ready || isFixtures) return
+        viewModelScope.launch { runCatching { api.recordEvent(ProductEvent(eventName, surface, true, appVersion)) } }
+    }
+
+    private companion object {
+        const val IDENTITY_THROTTLE_MS = 15_000L
+        const val FLAG_REFRESH_MS = 60_000L
+        /** Synthetic session for fixture mode only (never sent anywhere real). */
+        val FIXTURE_SESSION = AuthSession("fixture-access", "fixture-refresh", Long.MAX_VALUE / 2, "fixture-user")
     }
 }
 
-/** Short bilingual copy helper, same contract as the web `tx(es, en)` (prototype only). */
+/** Short bilingual copy helper, same contract as the web `tx(es, en)`. */
 fun tx(spanish: String, english: String) = AppLanguage.current().pick(spanish, english)

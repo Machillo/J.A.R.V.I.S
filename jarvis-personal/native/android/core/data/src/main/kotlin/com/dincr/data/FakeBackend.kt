@@ -1,0 +1,448 @@
+package com.dincr.data
+
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.time.LocalDate
+import kotlinx.coroutines.delay
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+
+/**
+ * An in-memory DINCR backend behind the HTTP transport, for Debug demos and UI tests only
+ * (`LaunchPolicy` never selects it in a Release build). The real [ApiClient] and [DincrApi] run
+ * against it, so headers, errors and JSON are exercised exactly as against FastAPI. Every name and
+ * amount is invented; nothing here is a real person or account.
+ */
+class FakeBackend(
+    private val scenario: Scenario = Scenario.POPULATED,
+    plan: PlanTier = PlanTier.FREE,
+    private val latencyMs: Long = 0,
+    private val today: LocalDate = LocalDate.now(),
+) : HttpTransport {
+    enum class Scenario { POPULATED, EMPTY, FAILING, NEW_USER, LEGAL_REQUIRED, CHOOSE_PLAN }
+
+    private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
+    private var profile = sampleProfile(plan)
+    private val movements = mutableListOf<Movement>()
+    private val debts = mutableListOf<Debt>()
+    private val goals = mutableListOf<Goal>()
+    private val savings = mutableListOf<SavingsPlan>()
+    private val recurring = mutableListOf<RecurringItem>()
+    private var budget = listOf(BudgetItem("Comida", BigDecimal(150000)), BudgetItem("Transporte", BigDecimal(60000)))
+    private var situation: FinancialProfile? = null
+    private val candidates = mutableListOf<MailCandidate>()
+    private val tickets = mutableListOf<SupportTicket>()
+    private var mailConnected = false
+    private var nextId = 500L
+    val requests = mutableListOf<HttpRequest>()
+
+    init {
+        if (scenario == Scenario.POPULATED) seed()
+    }
+
+    override suspend fun send(request: HttpRequest): HttpResponse {
+        if (latencyMs > 0) delay(latencyMs)
+        requests += request
+        if (request.headers["Authorization"] == null && !request.url.contains("/product-ops/release-policy")) return error(401, "Falta Authorization")
+        if (scenario == Scenario.FAILING && !request.url.contains("/auth/me") && !request.url.contains("release-policy") && !request.url.contains("feature-flags")) {
+            return error(500, "Ocurrió un error interno. Intentá nuevamente.")
+        }
+        val path = request.url.substringAfter("://").substringAfter("/").let { "/" + it.substringBefore("?") }
+        val query = request.url.substringAfter("?", "").split("&").filter { it.contains("=") }.associate { it.substringBefore("=") to java.net.URLDecoder.decode(it.substringAfter("="), "UTF-8") }
+        val body = request.body?.takeIf { it.isNotBlank() }?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() }
+        // Like core/idempotency.py: the same key replays the stored answer; another body is a 409.
+        val key = request.headers["X-Idempotency-Key"]?.takeIf { request.method in setOf("POST", "PUT", "PATCH") }
+        key?.let { k -> replays[k]?.let { (storedBody, response) -> return if (storedBody == request.body) response else error(409, "La referencia de recuperación ya pertenece a otro cambio.") } }
+        val response = runCatching { route(request.method, path, query, body) }.getOrElse { error(422, "Datos inválidos: ${it.message}") }
+        if (key != null && response.status in 200..299) replays[key] = request.body to response
+        return response
+    }
+
+    private val replays = mutableMapOf<String, Pair<String?, HttpResponse>>()
+
+    private fun ok(value: String) = HttpResponse(200, value)
+    private inline fun <reified T> ok(value: T) = HttpResponse(200, json.encodeToString(value))
+    private fun error(status: Int, detail: String) = HttpResponse(status, buildJsonObject { put("detail", detail) }.toString())
+    private fun id() = ++nextId
+    private fun needs(tier: PlanTier): HttpResponse? = if (profile.planTier.rank < tier.rank) error(403, "Esta función no está incluida en tu plan.") else null
+
+    @Suppress("CyclomaticComplexMethod")
+    private fun route(method: String, path: String, query: Map<String, String>, body: JsonObject?): HttpResponse {
+        val segments = path.trim('/').split('/')
+        fun money(key: String) = body?.get(key)?.jsonPrimitive?.content?.takeIf { it != "null" }?.let(::BigDecimal)
+        fun text(key: String) = body?.get(key)?.jsonPrimitive?.content?.takeIf { it != "null" }
+        fun int(key: String) = text(key)?.toIntOrNull()
+        val idAt = { index: Int -> segments.getOrNull(index)?.toLongOrNull() ?: -1L }
+        return when {
+            // Identity
+            path == "/auth/me" && method == "GET" -> ok(profile)
+            path == "/auth/me" && method == "DELETE" -> ok("""{"status":"OK","message":"Cuenta eliminada","deletion_id":"del_demo"}""")
+            path == "/auth/me/export" -> ok("""{"format_version":1,"generated_at":"${today}T12:00:00Z","account":{"id":1},"workspaces":[],"data":{},"truncated_tables":[],"notes":[]}""")
+            path == "/auth/profile-setup" -> {
+                profile = profile.copy(displayName = text("display_name"), profileSetupCompleted = true, baseCurrency = text("base_currency") ?: "CRC",
+                    numberFormat = text("number_format"), currencyPlacement = text("currency_placement"))
+                ok(buildJsonObject { put("status", "ok"); put("profile", json.encodeToJsonElement(Profile.serializer(), profile)) }.toString())
+            }
+            path == "/auth/legal/accept" -> {
+                profile = profile.copy(legal = profile.legal?.copy(required = false))
+                ok("""{"status":"accepted","required":false,"terms_version":"2026-09-23-v3","privacy_version":"2026-09-25-v4"}""")
+            }
+            path == "/auth/plans" -> ok(PLANS)
+            path == "/auth/plan" -> {
+                val plan = text("plan") ?: "free"
+                profile = profile.copy(planSelected = true, subscription = profile.subscription?.copy(plan = plan, accessSource = if (plan == "free") "self_service" else "courtesy"))
+                ok(buildJsonObject {
+                    put("status", if (plan == "free") "ok" else "promotion_active")
+                    put("profile", json.encodeToJsonElement(Profile.serializer(), profile))
+                }.toString())
+            }
+            path == "/product-ops/billing/catalog" -> ok("""{"plans":[{"code":"basic","regular_price_crc":2990},{"code":"vip","regular_price_crc":4990}],"promotion":$PROMOTION,"notice":"Basic y VIP gratis hasta el 31 de diciembre de 2026."}""")
+            path == "/product-ops/feature-flags" -> ok(FLAGS)
+            path == "/product-ops/health" -> ok("""{"status":"operational","active_incidents":0}""")
+            path == "/product-ops/release-policy" -> ok("""{"platform":"android","current_version":"${query["version"]}","status":"current","required":false,"active":false}""")
+            path == "/product-ops/events" -> ok("""{"status":"recorded"}""")
+            path == "/product-ops/incidents" -> ok("""{"status":"recorded"}""")
+            path == "/product-ops/feedback" && method == "GET" -> ok(tickets.toList())
+            path == "/product-ops/feedback" && method == "POST" -> {
+                val ticket = SupportTicket(id(), text("category"), text("subject"), "open", null, "${today}T12:00:00Z", "DINCR-%06d".format(nextId))
+                tickets.add(0, ticket)
+                ok("""{"id":${ticket.id},"public_id":"${ticket.publicId}","email_sent":true}""")
+            }
+            segments.take(2) == listOf("product-ops", "feedback") && segments.getOrNull(3) == "resolution" -> {
+                val index = tickets.indexOfFirst { it.id == idAt(2) }
+                if (index < 0) error(404, "No encontrado") else { tickets[index] = tickets[index].copy(userResolution = text("resolution")); ok("""{"status":"ok"}""") }
+            }
+            path.startsWith("/product-ops/billing/store") -> HttpResponse(503, """{"detail":"Las compras en la tienda están en pausa.","code":"feature_temporarily_unavailable","feature":"store_billing"}""")
+
+            // Movements
+            path == "/user-product/free/dashboard" -> ok(freeDashboard())
+            path == "/user-product/free/monthly-summary" -> ok(monthlySummary(query["period"] ?: today.toString().take(7)))
+            path == "/user-product/free/movements" -> ok(movements.sortedWith(compareByDescending<Movement> { it.transactionDate }.thenByDescending { it.sourceId }))
+            (path == "/user-product/finance/income" || path == "/user-product/finance/expenses") && method == "POST" -> {
+                val income = path.endsWith("income")
+                val typed = money("amount") ?: return error(422, "Monto inválido")
+                val currency = text("currency")
+                val rate = money("exchange_rate")
+                val base = profile.baseCurrency ?: "CRC"
+                if (currency != null && currency != base && rate == null) return error(422, "Indicá el tipo de cambio (colones por 1 dólar) para registrar un monto en otra moneda.")
+                val converted = if (currency == null || currency == base) typed else convert(typed, currency, base, rate!!)
+                val origin = if (income) "salary" else "expense"
+                val sid = id()
+                movements += Movement("$origin:$sid", sid, origin, text("entry_date") ?: today.toString(), text("description"), converted,
+                    if (income) "income" else "expense", text("category"), "", true,
+                    if (currency != null && currency != base) typed else null, if (currency != null && currency != base) currency else null, if (currency != null && currency != base) rate else null)
+                ok("""{"id":$sid}""")
+            }
+            segments.take(3) == listOf("user-product", "free", "movements") && segments.size == 4 -> {
+                val movementId = java.net.URLDecoder.decode(segments[3], "UTF-8")
+                val index = movements.indexOfFirst { it.movementId == movementId }
+                if (index < 0 || !movements[index].editable) return error(404, "Movimiento no encontrado o no editable.")
+                if (method == "DELETE") { movements.removeAt(index); return ok("""{"status":"ok","movement_id":"$movementId"}""") }
+                val old = movements[index]
+                val typed = money("amount") ?: return error(422, "Monto inválido")
+                val currency = text("currency")
+                val rate = money("exchange_rate")
+                val base = profile.baseCurrency ?: "CRC"
+                val foreign = currency != null && currency != base
+                if (foreign && old.origin !in setOf("salary", "expense")) return error(422, "Este movimiento solo se puede registrar en tu moneda principal.")
+                if (foreign && rate == null) return error(422, "Indicá el tipo de cambio.")
+                movements[index] = old.copy(transactionDate = text("transaction_date"), description = text("description"), category = text("category"),
+                    amount = if (foreign) convert(typed, currency!!, base, rate!!) else typed,
+                    originalAmount = if (foreign) typed else null, originalCurrency = if (foreign) currency else null, exchangeRate = if (foreign) rate else null)
+                ok("""{"status":"ok","movement_id":"$movementId"}""")
+            }
+
+            // Debts
+            path == "/user-product/finance/debts" && method == "GET" -> ok(debts.map { it.copy(progressPercent = progress(it)) })
+            path == "/user-product/finance/debts" && method == "POST" -> {
+                val debt = Debt(id(), text("name"), text("debt_type") ?: "other", money("total_amount") ?: money("remaining_amount"), money("remaining_amount"),
+                    money("monthly_payment"), money("interest_rate"), int("term_months"), int("payment_day"), text("next_payment_date"))
+                debts += debt; ok(debt)
+            }
+            segments.take(3) == listOf("user-product", "finance", "debts") && segments.size == 4 -> {
+                needs(if (method == "PUT") PlanTier.BASIC else PlanTier.FREE)?.let { return it }
+                val index = debts.indexOfFirst { it.id == idAt(3) }
+                if (index < 0) return error(404, "Deuda no encontrada.")
+                if (method == "DELETE") { debts.removeAt(index); return ok("""{"status":"ok","id":${idAt(3)}}""") }
+                debts[index] = debts[index].copy(name = text("name"), debtType = text("debt_type"), totalAmount = money("total_amount"), remainingAmount = money("remaining_amount"),
+                    monthlyPayment = money("monthly_payment"), interestRate = money("interest_rate"), termMonths = int("term_months"), paymentDay = int("payment_day"), nextPaymentDate = text("next_payment_date"))
+                ok(debts[index])
+            }
+            segments.take(3) == listOf("user-product", "finance", "debts") && segments.getOrNull(4) == "payments" -> {
+                val index = debts.indexOfFirst { it.id == idAt(3) }
+                if (index < 0) return error(404, "Deuda no encontrada.")
+                val remaining = debts[index].remainingAmount ?: BigDecimal.ZERO
+                val paid = (money("amount") ?: BigDecimal.ZERO).min(remaining)
+                debts[index] = debts[index].copy(remainingAmount = remaining - paid)
+                ok("""{"status":"OK","debt_id":${debts[index].id},"payment_amount":$paid,"new_remaining_amount":${remaining - paid}}""")
+            }
+
+            // Goals and savings plans
+            path == "/user-product/goals" && method == "GET" -> ok(goals.toList())
+            path == "/user-product/goals" && method == "POST" -> {
+                val goal = Goal(id(), text("name"), money("target_amount"), money("current_amount") ?: BigDecimal.ZERO, text("target_date"), text("priority") ?: "medium", "active")
+                goals += goal; ok(goal)
+            }
+            segments.take(2) == listOf("user-product", "goals") && segments.size == 3 -> {
+                needs(if (method == "PUT") PlanTier.BASIC else PlanTier.FREE)?.let { return it }
+                val index = goals.indexOfFirst { it.id == idAt(2) }
+                if (index < 0) return error(404, "Meta no encontrada.")
+                if (method == "DELETE") { goals.removeAt(index); return ok("""{"status":"ok","id":${idAt(2)}}""") }
+                val target = money("target_amount")
+                goals[index] = goals[index].copy(name = text("name"), targetAmount = target, currentAmount = money("current_amount")?.let { c -> target?.let { c.min(it) } ?: c },
+                    targetDate = text("target_date"), priority = text("priority"), status = text("status") ?: goals[index].status)
+                ok(goals[index])
+            }
+            segments.take(2) == listOf("user-product", "goals") && segments.getOrNull(3) == "contributions" -> {
+                val index = goals.indexOfFirst { it.id == idAt(2) }
+                if (index < 0) return error(404, "Meta no encontrada.")
+                val goal = goals[index]
+                val target = goal.targetAmount ?: BigDecimal.ZERO
+                val current = goal.currentAmount ?: BigDecimal.ZERO
+                if (current >= target) return error(409, "La meta ya está completa.")
+                val next = (current + (money("amount") ?: BigDecimal.ZERO)).min(target)
+                goals[index] = goal.copy(currentAmount = next, status = if (next >= target) "completed" else goal.status)
+                ok(goals[index])
+            }
+            path == "/user-product/savings-plans" && method == "GET" -> ok(savings.toList())
+            path == "/user-product/savings-plans" && method == "POST" -> {
+                val plan = SavingsPlan(id(), text("name"), money("monthly_amount"), money("saved_amount") ?: BigDecimal.ZERO, text("start_date"), text("end_date"), "active")
+                savings += plan; ok(plan)
+            }
+            segments.take(2) == listOf("user-product", "savings-plans") && segments.size == 3 -> {
+                val index = savings.indexOfFirst { it.id == idAt(2) }
+                if (index < 0) return error(404, "Plan no encontrado.")
+                if (method == "DELETE") { savings.removeAt(index); return ok("""{"status":"ok","id":${idAt(2)}}""") }
+                savings[index] = savings[index].copy(name = text("name"), monthlyAmount = money("monthly_amount"), savedAmount = money("saved_amount"),
+                    startDate = text("start_date"), endDate = text("end_date"), status = text("status") ?: savings[index].status)
+                ok(savings[index])
+            }
+            segments.take(2) == listOf("user-product", "savings-plans") && segments.getOrNull(3) == "contributions" -> {
+                val index = savings.indexOfFirst { it.id == idAt(2) }
+                if (index < 0) return error(404, "Plan no encontrado.")
+                savings[index] = savings[index].copy(savedAmount = (savings[index].savedAmount ?: BigDecimal.ZERO) + (money("amount") ?: BigDecimal.ZERO))
+                ok(savings[index])
+            }
+
+            // Situation
+            path == "/user-product/financial-situation" && method == "PUT" -> {
+                situation = json.decodeFromString(FinancialProfile.serializer(), body.toString()); ok(financialSituation())
+            }
+            path == "/user-product/financial-situation" -> ok(financialSituation())
+
+            // Basic
+            path.startsWith("/user-product/basic") || path.startsWith("/user-product/finance/strategy-basic") -> needs(PlanTier.BASIC) ?: basic(method, path, segments, query, body)
+
+            // VIP
+            path.startsWith("/user-product/vip/gmail") || path.startsWith("/user-product/vip/mail") || path.startsWith("/user-product/vip/financial-identity") ->
+                needs(PlanTier.VIP) ?: mail(method, path, segments, body)
+            path.startsWith("/user-product/vip") || path.startsWith("/user-product/finance/strategy-vip") -> needs(PlanTier.VIP) ?: vip(path)
+            else -> error(404, "Not Found")
+        }
+    }
+
+    private fun basic(method: String, path: String, segments: List<String>, query: Map<String, String>, body: JsonObject?): HttpResponse {
+        fun money(key: String) = body?.get(key)?.jsonPrimitive?.content?.takeIf { it != "null" }?.let(::BigDecimal)
+        fun text(key: String) = body?.get(key)?.jsonPrimitive?.content?.takeIf { it != "null" }
+        return when {
+            path == "/user-product/basic/dashboard" -> {
+                val totals = totals(today.toString().take(7))
+                ok(BasicDashboard(today.toString().take(7), totals.first, totals.second, BigDecimal.ZERO, totals.first - totals.second,
+                    BasicDashboard.DebtProgress(debts.sumOf { it.totalAmount ?: BigDecimal.ZERO }, debts.sumOf { it.remainingAmount ?: BigDecimal.ZERO }, debts.sumOf { it.monthlyPayment ?: BigDecimal.ZERO }, 35.0),
+                    savings.sumOf { it.savedAmount ?: BigDecimal.ZERO }, GoalProgress(goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }, goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }, 40.0, goals.size)))
+            }
+            path == "/user-product/basic/budget" && method == "PUT" -> {
+                val items = body?.get("items")?.let { json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(BudgetLimit.serializer()), it) }.orEmpty()
+                if (items.map { it.category.lowercase() }.toSet().size != items.size) return error(422, "Categorías repetidas.")
+                budget = items.map { BudgetItem(it.category, it.monthlyLimit) }
+                ok(budgetView())
+            }
+            path == "/user-product/basic/budget" -> ok(budgetView())
+            path == "/user-product/basic/calendar" -> ok(FinancialCalendar(query["period"], recurring.filter { it.isActive == true }.map {
+                FinancialCalendar.Event("${query["period"] ?: today.toString().take(7)}-%02d".format((it.dueDay ?: 1).coerceIn(1, 28)), it.itemType, it.name, it.amount, "recurring")
+            } + debts.mapNotNull { d -> d.paymentDay?.let { FinancialCalendar.Event("${query["period"] ?: today.toString().take(7)}-%02d".format(it.coerceIn(1, 28)), "debt", d.name, d.monthlyPayment, "debt") } },
+                FinancialCalendar.Summary(1, recurring.filter { it.itemType == "expense" }.sumOf { it.amount ?: BigDecimal.ZERO }, recurring.size + debts.size)))
+            path == "/user-product/basic/recurring" && method == "GET" -> ok(RecurringList(recurring.toList(), recurring.filter { it.itemType == "expense" && it.isActive == true }.sumOf { it.amount ?: BigDecimal.ZERO }))
+            path == "/user-product/basic/recurring" && method == "POST" -> {
+                val item = RecurringItem(id(), text("name"), money("amount"), text("category"), text("item_type"), text("frequency"), text("due_day")?.toIntOrNull(), text("is_active")?.toBoolean() ?: true)
+                recurring += item; ok(item)
+            }
+            segments.take(3) == listOf("user-product", "basic", "recurring") && segments.size == 4 -> {
+                val index = recurring.indexOfFirst { it.id == segments[3].toLongOrNull() }
+                if (index < 0) return error(404, "No encontrado.")
+                if (method == "DELETE") { recurring.removeAt(index); return ok("""{"status":"ok"}""") }
+                recurring[index] = recurring[index].copy(name = text("name"), amount = money("amount"), category = text("category"), itemType = text("item_type"),
+                    frequency = text("frequency"), dueDay = text("due_day")?.toIntOrNull(), isActive = text("is_active")?.toBoolean())
+                ok(recurring[index])
+            }
+            path == "/user-product/basic/reports" -> {
+                val period = query["period"] ?: today.toString().take(7)
+                val (income, expenses) = totals(period)
+                ok(MonthReport(period, income, expenses, BigDecimal.ZERO, BigDecimal.ZERO, income - expenses, income - expenses, categories(period), MonthReport.Comparison(income, expenses, BigDecimal.ZERO)))
+            }
+            path == "/user-product/finance/strategy-basic" -> ok(strategy())
+            else -> error(404, "Not Found")
+        }
+    }
+
+    private fun vip(path: String): HttpResponse = when (path) {
+        "/user-product/vip/command-center" -> ok(CommandCenter(
+            today.toString(),
+            CommandCenter.Director("debt", "Tu prioridad es bajar la tarjeta", "Pagá ₡40.000 extra a la tarjeta este mes", true),
+            CommandCenter.Score(72, "Estable", listOf(CommandCenter.Factor("Ahorro de emergencia", "warning"))),
+            CommandCenter.DebtPlanner(CommandCenter.Plan("finva", "Tarjeta de ejemplo", BigDecimal(95000), 14, BigDecimal(84000))),
+            CommandCenter.SafeToSpend(BigDecimal(118000), BigDecimal(214000), BigDecimal(96000)),
+            listOf(CommandCenter.Alert("medium", "Pago de tarjeta en 5 días", "El pago mínimo vence pronto.", "Revisá la deuda")),
+            listOf(1, 3, 6).map { CommandCenter.ProjectionPoint(it, BigDecimal(200000 * it), BigDecimal(900000 - 90000 * it), BigDecimal(-700000 + 290000 * it), "medium") },
+            listOf(CommandCenter.RoadmapStep(1, "Completá tu fondo de emergencia inicial", BigDecimal(50000), "Te protege de imprevistos."),
+                CommandCenter.RoadmapStep(2, "Pagá extra a la tarjeta", BigDecimal(40000), "Tiene la tasa más alta.")),
+        ))
+        "/user-product/finance/strategy-vip" -> ok(strategy().copy(directorNote = "Priorizamos la deuda con tasa más alta."))
+        "/user-product/finance/strategy-vip/simulate" -> ok(ScenarioResult(strategy(), strategy().copy(strategicMargin = BigDecimal(260000)), ScenarioResult.Delta(BigDecimal(46000), BigDecimal(50000), BigDecimal(4000))))
+        "/user-product/vip/aguinaldo" -> if (!mailConnected) error(409, "Conectá tu correo para calcular el aguinaldo.") else ok(Aguinaldo("OK", Aguinaldo.Period("${today.year - 1}-12-01", "${today.year}-11-30"), BigDecimal(5_190_000), BigDecimal(432_500)))
+        "/user-product/vip/lifecycle/monthly-review" -> ok(MonthlyReview("BASELINE", today.toString().take(7), "Tu primer mes con DINCR", "Todavía no hay suficiente historia para comparar."))
+        "/user-product/vip/lifecycle/proactive-advisor" -> ok(ProactiveAdvisor("BASELINE", today.toString(), emptyList(), "DINCR necesita unos días de historia para avisarte de cambios."))
+        else -> error(404, "Not Found")
+    }
+
+    private fun mail(method: String, path: String, segments: List<String>, body: JsonObject?): HttpResponse {
+        fun text(key: String) = body?.get(key)?.jsonPrimitive?.content?.takeIf { it != "null" }
+        return when {
+            path == "/user-product/vip/gmail/status" -> ok(MailStatus(mailConnected, false, candidates.count { it.isPending }, true,
+                MailStatus.Consent(required = !mailConnected, version = "mail-monitor-2026-09-v2"),
+                if (mailConnected) listOf(MailStatus.Connection(1, "gmail", "ejemplo@correo.test", "active", true, "${today.year}-01-01")) else emptyList()))
+            path == "/user-product/vip/gmail/consent" -> ok("""{"status":"accepted"}""")
+            path == "/user-product/vip/gmail/connect" || path == "/user-product/vip/mail/microsoft/connect" -> ok("""{"authorization_url":"https://accounts.example.test/authorize?state=demo"}""")
+            path == "/user-product/vip/mail/oauth/complete" -> { mailConnected = true; ok("""{"status":"connected","provider":"gmail"}""") }
+            path == "/user-product/vip/gmail/sync" -> if (!mailConnected) error(404, "No hay un correo conectado.") else ok(MailSyncResult("ok", 3, candidates.count { it.isPending }, 0, 1, "year_to_date", true, 0))
+            path == "/user-product/vip/gmail" && method == "DELETE" -> { mailConnected = false; ok("""{"status":"disconnected"}""") }
+            path == "/user-product/vip/gmail/emails" -> ok(candidates.toList())
+            path == "/user-product/vip/gmail/own-transfer-suggestions" -> ok(OwnTransferSuggestions())
+            path == "/user-product/vip/financial-identity" -> ok(FinancialIdentity(listOf(FinancialIdentity.Account(1, "Cuenta de ejemplo", "Banco de ejemplo", "bac", "CRC", "1234", "pending")), FinancialIdentity.Summary(1)))
+            segments.take(4) == listOf("user-product", "vip", "financial-identity", "accounts") -> ok("""{"status":"ok"}""")
+            segments.take(4) == listOf("user-product", "vip", "gmail", "candidates") -> {
+                val id = segments.getOrNull(4)?.toLongOrNull()
+                val index = candidates.indexOfFirst { it.candidateId == id }
+                if (index < 0) return error(404, "No encontrado.")
+                val candidate = candidates[index]
+                if (!candidate.isPending) return ok(CandidateReviewResult(candidate.reviewStatus, id, null, alreadyReviewed = true))
+                val action = segments.getOrNull(5)
+                when {
+                    action == "reject" -> { candidates[index] = candidate.copy(reviewStatus = "rejected"); ok(CandidateReviewResult("rejected", id)) }
+                    action == "accept" && method == "POST" && candidate.needsRate -> error(422, "Este aviso está en otra moneda. Tocá Corregir e indicá el tipo de cambio.")
+                    action == "accept" -> {
+                        if (method == "PUT" && candidate.needsRate && text("exchange_rate") == null) return error(422, "Indicá el tipo de cambio.")
+                        candidates[index] = candidate.copy(reviewStatus = "confirmed")
+                        ok(CandidateReviewResult("confirmed", id, id() ))
+                    }
+                    else -> error(404, "Not Found")
+                }
+            }
+            else -> error(404, "Not Found")
+        }
+    }
+
+    // --- read models ----------------------------------------------------------------------------------
+
+    private fun totals(period: String): Pair<BigDecimal, BigDecimal> {
+        val rows = movements.filter { it.transactionDate?.startsWith(period) == true }
+        return rows.filter { it.kind == MovementKind.INCOME }.sumOf { it.amount } to rows.filter { it.kind == MovementKind.EXPENSE }.sumOf { it.amount }
+    }
+
+    private fun categories(period: String) = movements.filter { it.kind == MovementKind.EXPENSE && it.transactionDate?.startsWith(period) == true }
+        .groupBy { it.category ?: "Sin categoría" }.map { (category, rows) -> CategoryTotal(category, rows.sumOf { it.amount }) }.sortedByDescending { it.amount }
+
+    private fun freeDashboard(): FreeDashboard {
+        val month = today.toString().take(7)
+        val (income, expenses) = totals(month)
+        val history = (5 downTo 0).map { back ->
+            val period = today.minusMonths(back.toLong()).toString().take(7)
+            val (i, e) = totals(period)
+            MonthTotals(period, i, e, BigDecimal.ZERO, i - e)
+        }
+        return FreeDashboard(month, income, expenses, BigDecimal.ZERO, debts.sumOf { it.remainingAmount ?: BigDecimal.ZERO }, income - expenses, income - expenses,
+            categories(month).map { CategoryAmount(it.category ?: "", it.amount ?: BigDecimal.ZERO) }, history)
+    }
+
+    private fun monthlySummary(period: String): MonthlySummary {
+        val (income, expenses) = totals(period)
+        val cats = categories(period)
+        return MonthlySummary(period, income, expenses, BigDecimal.ZERO, income - expenses, cats.firstOrNull(), cats, savings.sumOf { it.savedAmount ?: BigDecimal.ZERO },
+            GoalProgress(goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }, goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }, 40.0))
+    }
+
+    private fun budgetView(): Budget {
+        val month = today.toString().take(7)
+        val spent = categories(month).associate { (it.category ?: "").lowercase() to (it.amount ?: BigDecimal.ZERO) }
+        val items = budget.map { it.copy(spent = spent[it.category.lowercase()] ?: BigDecimal.ZERO) }
+        return Budget(items, items.sumOf { it.monthlyLimit ?: BigDecimal.ZERO }, BigDecimal(420000), month)
+    }
+
+    private fun financialSituation() = FinancialSituation(situation, FinancialSituation.Observed(90, 3, BigDecimal(865000), 12),
+        FinancialSituation.DebtSummary(debts.size, debts.sumOf { it.remainingAmount ?: BigDecimal.ZERO }, debts.count { it.interestRate == null }),
+        FinancialSituation.GoalSummary(goals.size, goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }))
+
+    private fun strategy() = Strategy(
+        "tight", "debt", BigDecimal(865000), BigDecimal(420000), BigDecimal(95000), BigDecimal(214000),
+        listOf(Strategy.Allocation("emergency", "Fondo de emergencia", BigDecimal(60000)), Strategy.Allocation("debt_extra", "Extra a la tarjeta", BigDecimal(100000)), Strategy.Allocation("flex", "Libre", BigDecimal(54000))),
+        recommendation = "Destiná ₡100.000 extra a la tarjeta y ₡60.000 a tu fondo de emergencia.",
+        projection = Strategy.Projection("Tarjeta de ejemplo", 14, 31, BigDecimal(195000)),
+    )
+
+    private fun progress(debt: Debt): Double {
+        val total = debt.totalAmount ?: return 0.0
+        if (total.signum() <= 0) return 0.0
+        return BigDecimal.ONE.subtract((debt.remainingAmount ?: total).divide(total, 6, RoundingMode.HALF_UP)).multiply(BigDecimal(100)).setScale(1, RoundingMode.HALF_UP).toDouble()
+    }
+
+    private fun convert(amount: BigDecimal, currency: String, base: String, rate: BigDecimal): BigDecimal =
+        (if (currency == "USD" && base == "CRC") amount * rate else amount.divide(rate, 10, RoundingMode.HALF_UP)).setScale(2, RoundingMode.HALF_UP)
+
+    private fun seed() {
+        fun day(offset: Long) = today.minusDays(offset).toString()
+        movements += listOf(
+            Movement("salary:8", 8, "salary", day(3), "Salario quincenal", BigDecimal(432500), "income", "Salario", "", true),
+            Movement("salary:4", 4, "salary", day(18), "Salario quincenal", BigDecimal(432500), "income", "Salario", "", true),
+            Movement("expense:11", 11, "expense", day(0), "Supermercado", BigDecimal(18450), "expense", "Comida", "", true),
+            Movement("expense:10", 10, "expense", day(0), "Café", BigDecimal(2300), "expense", "Restaurante", "", true),
+            Movement("expense:12", 12, "expense", day(1), "Feria del agricultor", BigDecimal("12345.5"), "expense", "Feria", "", true),
+            Movement("transaction:9", 9, "transaction", day(1), "Aviso bancario · Gasolinera", BigDecimal(25000), "expense", "Gasolina", "", false),
+            Movement("expense:13", 13, "expense", day(2), "Suscripción en dólares", BigDecimal("5075.00"), "expense", "Entretenimiento", "", true, BigDecimal(10), "USD", BigDecimal("507.5")),
+            Movement("expense:7", 7, "expense", day(4), "Internet del hogar", BigDecimal(24900), "expense", "Internet", "", true),
+            Movement("expense:6", 6, "expense", day(6), "Farmacia", BigDecimal(9800), "expense", "Salud", "", true),
+            Movement("expense:5", 5, "expense", day(9), "Alquiler", BigDecimal(210000), "expense", "Vivienda", "", true),
+        )
+        debts += Debt(1, "Tarjeta de ejemplo", "credit_card", BigDecimal(900000), BigDecimal(585000), BigDecimal(45000), BigDecimal("36.0"), null, 15, today.plusDays(5).toString())
+        debts += Debt(2, "Préstamo de ejemplo", "loan", BigDecimal(2400000), BigDecimal(1560000), BigDecimal(50000), BigDecimal("14.5"), 48, 1, null)
+        goals += Goal(3, "Fondo de emergencia", BigDecimal(600000), BigDecimal(240000), today.plusMonths(8).toString(), "high", "active")
+        savings += SavingsPlan(4, "Vacaciones", BigDecimal(25000), BigDecimal(75000), today.minusMonths(3).withDayOfMonth(1).toString(), today.plusMonths(9).withDayOfMonth(1).toString(), "active")
+        recurring += RecurringItem(5, "Internet", BigDecimal(24900), "Internet", "expense", "monthly", 4, true)
+        candidates += MailCandidate(21, 21, null, "Banco de ejemplo", "avisos@banco.test", "Notificación de compra", "${day(1)}T10:00:00Z", "Compra en supermercado", BigDecimal(15300), "CRC",
+            accountBaseCurrency = "CRC", transactionDate = day(1), transactionType = "expense", category = "Comida", reviewStatus = "pending")
+        candidates += MailCandidate(22, 22, null, "Banco de ejemplo", "avisos@banco.test", "Compra internacional", "${day(2)}T10:00:00Z", "Tienda en línea", BigDecimal(25), "USD",
+            accountBaseCurrency = "CRC", transactionDate = day(2), transactionType = "expense", category = "Compras", reviewStatus = "pending")
+    }
+
+    private fun sampleProfile(plan: PlanTier) = Profile(
+        id = 1, email = "persona@ejemplo.test", displayName = if (scenario == Scenario.NEW_USER) null else "Persona Ejemplo", role = "user",
+        planSelected = scenario != Scenario.NEW_USER && scenario != Scenario.CHOOSE_PLAN, profileSetupCompleted = scenario != Scenario.NEW_USER,
+        baseCurrency = "CRC", numberFormat = "dot_comma", currencyPlacement = "before", entryCurrencies = listOf("CRC", "USD"), enabledCurrencies = listOf("CRC", "USD"),
+        subscription = Profile.Subscription(plan.wire, plan.name.lowercase().replaceFirstChar { it.uppercase() }, "active", if (plan == PlanTier.FREE) "self_service" else "courtesy"),
+        legal = Profile.Legal(required = scenario == Scenario.LEGAL_REQUIRED, termsVersion = "2026-09-23-v3", privacyVersion = "2026-09-25-v4"),
+    )
+
+    private companion object {
+        const val PROMOTION = """{"code":"launch-free-2026","active":true,"ends_at":"2027-01-01T06:00:00Z","message":"Basic y VIP gratis hasta el 31 de diciembre de 2026."}"""
+        val PLANS = """[{"code":"free","name":"Free","tagline":"Ordená lo esencial","features":["Ingresos y gastos","Deudas","Metas"],"regular_price_crc":0,"promotion":null},""" +
+            """{"code":"basic","name":"Basic","tagline":"Planificá tu mes","features":["Presupuesto guiado","Calendario financiero","Pagos recurrentes","Estrategia básica"],"regular_price_crc":2990,"promotion":$PROMOTION},""" +
+            """{"code":"vip","name":"VIP","tagline":"Tu director financiero","features":["Avisos bancarios del correo","Estrategia y proyecciones","Escenarios","Aguinaldo"],"regular_price_crc":4990,"promotion":$PROMOTION}]"""
+        val FLAGS = """{"flags":[""" + listOf("financial_writes", "gmail_automation", "vip_intelligence", "advanced_reports").joinToString(",") {
+            """{"flag_key":"$it","enabled":true}"""
+        } + """,{"flag_key":"store_billing","enabled":false,"disabled_message_es":"Las compras en la tienda estarán disponibles pronto."}],"cache_seconds":30}"""
+    }
+}

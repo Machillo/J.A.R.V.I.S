@@ -47,22 +47,45 @@ data class Profile(
     @SerialName("base_currency") val baseCurrency: String? = null,
     @SerialName("number_format") val numberFormat: String? = null,
     @SerialName("currency_placement") val currencyPlacement: String? = null,
+    /** Currencies this backend converts for manual entries (#269); base only when absent. */
+    @SerialName("entry_currencies") val entryCurrencies: List<String> = emptyList(),
+    @SerialName("enabled_currencies") val enabledCurrencies: List<String> = emptyList(),
+    @SerialName("usage_goal") val usageGoal: String? = null,
+    @SerialName("onboarding_completed") val onboardingCompleted: Boolean? = null,
     val subscription: Subscription? = null,
     val legal: Legal? = null,
 ) {
     @Serializable
-    data class Subscription(val plan: String? = null, val status: String? = null)
+    data class Subscription(
+        val plan: String? = null,
+        @SerialName("plan_name") val planName: String? = null,
+        /** active | pending | expired */
+        val status: String? = null,
+        /** self_service (store) | courtesy | owner */
+        @SerialName("access_source") val accessSource: String? = null,
+        @SerialName("expires_at") val expiresAt: String? = null,
+        @SerialName("pending_plan") val pendingPlan: String? = null,
+        @SerialName("pending_effective_at") val pendingEffectiveAt: String? = null,
+        @SerialName("pending_requires_payment") val pendingRequiresPayment: Boolean? = null,
+        @SerialName("access_notice") val accessNotice: AccessNotice? = null,
+    )
+
+    @Serializable
+    data class AccessNotice(val code: String? = null, val title: String? = null, val message: String? = null)
 
     @Serializable
     data class Legal(
         val required: Boolean? = null,
         @SerialName("terms_version") val termsVersion: String? = null,
         @SerialName("privacy_version") val privacyVersion: String? = null,
+        @SerialName("accepted_at") val acceptedAt: String? = null,
     )
 
     /** Owner/admin sessions are never served by the public app (Owner boundary). */
     val isOwner: Boolean get() = role == "owner" || role == "admin"
-    val plan: String get() = subscription?.plan ?: "free"
+    val plan: String get() = subscription?.plan?.lowercase() ?: "free"
+    val planTier: PlanTier get() = PlanTier.from(plan)
+    val isCourtesy: Boolean get() = subscription?.accessSource == "courtesy"
     val firstName: String?
         get() = (displayName ?: email?.substringBefore("@"))?.trim()?.split(" ")?.firstOrNull()?.takeIf { it.isNotEmpty() }
 }
@@ -132,25 +155,56 @@ data class Movement(
         get() = editable && originalAmount == null && originalCurrency == null && exchangeRate == null &&
             transactionDate?.take(10)?.let { DATE.matches(it) } == true
 
+    /** The row carries currency data (typed or received in another currency). */
+    val hasCurrencyData: Boolean get() = originalAmount != null || originalCurrency != null || exchangeRate != null
+
+    private val hasValidDate: Boolean get() = transactionDate?.take(10)?.let { DATE.matches(it) } == true
+
+    /**
+     * A manual income or expense typed in another currency can be edited safely by sending its
+     * currency and the user's own rate back (`PUT /free/movements` accepts both for `salary` /
+     * `expense`): the backend recomputes the base amount exactly as when it was created. Needs
+     * the complete original data and a currency this backend converts ([entryCurrencies]). Mail
+     * transactions and partial data stay read-only.
+     */
+    fun isCurrencyEditable(entryCurrencies: List<String>): Boolean {
+        val currency = originalCurrency?.uppercase() ?: return false
+        return editable && hasValidDate && origin in MANUAL_ORIGINS && originalAmount != null && exchangeRate != null &&
+            exchangeRate.signum() > 0 && entryCurrencies.any { it.equals(currency, ignoreCase = true) }
+    }
+
+    /** Whether this app may edit or delete the row at all. */
+    fun canEdit(entryCurrencies: List<String>): Boolean = isEditable || isCurrencyEditable(entryCurrencies)
+
+    /** Manual income/expense rows may switch to another currency on edit (the backend converts). */
+    val acceptsCurrency: Boolean get() = origin in MANUAL_ORIGINS
+
     /** The backend sends only "income" or "expense"; anything else is money leaving. */
     val kind: MovementKind get() = if (transactionType == "income") MovementKind.INCOME else MovementKind.EXPENSE
     val day: String? get() = transactionDate?.take(10)
 
-    private companion object {
-        val DATE = Regex("""\d{4}-\d{2}-\d{2}""")
+    companion object {
+        private val DATE = Regex("""\d{4}-\d{2}-\d{2}""")
+        private val MANUAL_ORIGINS = setOf("salary", "expense")
     }
 }
 
-/** Body of `POST /user-product/finance/income` | `/expenses`. */
+/**
+ * Body of `POST /user-product/finance/income` | `/expenses`. [amount] is in [currency] when one is
+ * sent (then [exchangeRate], colones per 1 dollar, typed by the user, is required); without a
+ * currency it is in the base currency. DINCR never invents a rate.
+ */
 @Serializable
 data class EntryCreate(
     val amount: Money,
     val description: String,
     val category: String,
     @SerialName("entry_date") val entryDate: String?,
+    val currency: String? = null,
+    @SerialName("exchange_rate") val exchangeRate: Money? = null,
 )
 
-/** Body of `PUT /user-product/free/movements/{id}`. */
+/** Body of `PUT /user-product/free/movements/{id}`; currency and rate as in [EntryCreate]. */
 @Serializable
 data class MovementUpdate(
     @SerialName("transaction_date") val transactionDate: String,
@@ -159,6 +213,8 @@ data class MovementUpdate(
     @SerialName("transaction_type") val transactionType: String,
     val category: String,
     val notes: String = "",
+    val currency: String? = null,
+    @SerialName("exchange_rate") val exchangeRate: Money? = null,
 )
 
 /** Body of `POST /auth/profile-setup`. */

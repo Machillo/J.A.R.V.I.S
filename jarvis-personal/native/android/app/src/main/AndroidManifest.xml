@@ -2,6 +2,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <!-- Package visibility (Android 11+): find a browser / Custom Tabs provider for sign-in and
+         mail connection, which always happen in the system browser, never in a WebView. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"
@@ -24,8 +38,7 @@
             </intent-filter>
         </activity>
         <!-- Supabase returns the OAuth code here (PKCE) and it is forwarded to MainActivity. The
-             prototype's own scheme: it never competes with the store app for
-             com.dincr.app://auth/callback. -->
+             scheme is the identity's own (`com.dincr.app` or `com.dincr.app.nativedev`). -->
         <activity
             android:name=".AuthCallbackActivity"
             android:exported="true"
@@ -36,8 +49,39 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="com.dincr.app.nativedev" android:host="auth" android:path="/callback" />
+                <data android:scheme="${authScheme}" android:host="auth" android:path="/callback" />
             </intent-filter>
         </activity>
+        <!-- The backend sends a finished mail connection (Gmail / Outlook) back here with a
+             one-time completion code; MainActivity redeems it with the session that started it. -->
+        <activity
+            android:name=".MailReturnActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${mailScheme}" android:host="gmail" android:path="/callback" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${legacyMailScheme}" android:host="gmail" android:path="/callback" />
+            </intent-filter>
+        </activity>
+        <!-- Shares the user's own data export (a JSON file in the cache) with the app they pick. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>
