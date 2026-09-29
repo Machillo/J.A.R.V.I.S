@@ -121,5 +121,10 @@ jobs:
       - run: python -m pytest -q backend
         env:
           DINCR_REQUIRE_PG_TESTS: "1"
+      # DINCR Labs: production-isolation guards (with mutation tests), synthetic data,
+      # parser fixtures and the Labs database on the same embedded PostgreSQL. See docs/labs.md.
+      - run: python -m pytest -q labs
+        env:
+          DINCR_REQUIRE_PG_TESTS: "1"
       - run: python backend/scripts/check_file_size_budget.py
       - run: python backend/scripts/check_public_secrets.py
