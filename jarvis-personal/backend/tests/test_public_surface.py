@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 
 from backend import main
 
-ANONYMOUS = {"/", "/status", "/product-ops/release-policy", "/auth/health"}
+# /health/live and /health/ready: status words only (backend/product_ops/observability_routes.py).
+ANONYMOUS = {"/", "/status", "/product-ops/release-policy", "/auth/health", "/health/live", "/health/ready"}
 # Provider redirects: the signed, single-use OAuth state is the credential.
 OAUTH_RETURNS = {"/user-product/vip/gmail/callback", "/user-product/vip/mail/microsoft/callback"}
 # Crons, webhooks and bridges: each must verify its own secret/signature.

@@ -80,8 +80,17 @@ class _IdleConnections:
         return self.open(dsn, application_name), time.monotonic(), False
 
     def open(self, dsn: str, application_name: str):
-        raw = psycopg2.connect(dsn, cursor_factory=RealDictCursor, application_name=application_name,
-                               keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3)
+        try:
+            raw = psycopg2.connect(dsn, cursor_factory=RealDictCursor, application_name=application_name,
+                                   keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3)
+        except psycopg2.Error as exc:
+            # Unreachable database or no connection slots left (Supavisor "max clients"):
+            # the request fails as before; operations hear about it once (deduplicated).
+            from backend.core import observability
+
+            observability.report("database", "connect_failed", "critical",
+                                 error_class=type(exc).__name__, error_code=getattr(exc, "pgcode", None))
+            raise
         with self._lock:
             self.stats["opened"] += 1
         return raw

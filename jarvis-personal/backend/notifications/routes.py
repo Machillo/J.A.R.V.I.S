@@ -5,6 +5,7 @@ import os
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from backend.auth.current_user import require_roles
+from backend.core import observability
 
 from backend.notifications.service import (
     get_vapid_public_key,
@@ -46,4 +47,10 @@ def notifications_cron(x_cron_secret: str | None = Header(default=None)):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="El cron de notificaciones no está configurado.")
     if not x_cron_secret or not hmac.compare_digest(x_cron_secret, expected):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cron secret inválido.")
-    return send_due_notifications()
+    try:
+        result = send_due_notifications()
+    except Exception as exc:
+        observability.heartbeat("notifications", ok=False, error_class=type(exc).__name__)
+        raise
+    observability.heartbeat("notifications", ok=True)
+    return result

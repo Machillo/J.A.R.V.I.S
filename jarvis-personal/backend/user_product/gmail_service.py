@@ -23,6 +23,7 @@ from backend.auth.current_user import (
     get_current_user_id,
     get_current_workspace_id,
 )
+from backend.core import observability
 from backend.core.database import get_connection
 from backend.email_monitor.parser import parse_financial_email
 from backend.email_monitor.parser_identity import for_account_holder
@@ -1356,6 +1357,7 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
         ).fetchall()
     completed = 0
     reconnect = 0
+    failed = 0
     for row in rows:
         connection_id = int(row["id"])
         try:
@@ -1368,12 +1370,18 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
                 _start_watch(connection_id, service, suppress_errors=True)
                 _sync_connection(connection_id, service=service, max_results=100, trigger="maintenance")
             completed += 1
-        except HTTPException as exc:
-            if exc.status_code == 409:
-                reconnect += 1
-        except Exception:
-            continue
+        except Exception as exc:
+            if isinstance(exc, HTTPException) and exc.status_code == 409:
+                reconnect += 1  # the user must reconnect: expected, not a failure
+                continue
+            failed += 1
+            observability.report("mail", "maintenance_connection_failed", "warning",
+                                 error_class=type(exc).__name__, status=getattr(exc, "status_code", None), escalate_after=5)
     retention = apply_gmail_retention()
+    # The run worked unless every connection that could sync failed.
+    syncable = len(rows) - reconnect
+    run_ok = syncable == 0 or failed < syncable
+    observability.heartbeat("gmail_maintenance", ok=run_ok, error_class=None if run_ok else "all_connections_failed")
     return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect,
             "ended_without_plan": ended, "retention": retention}
 

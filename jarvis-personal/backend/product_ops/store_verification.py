@@ -28,6 +28,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id
+from backend.core import observability
 from backend.core.database import get_connection
 from backend.product_ops import store_apple, store_google
 from backend.product_ops.store_state import (
@@ -188,6 +189,7 @@ def google_notification(authorization: str | None, body: dict[str, Any]) -> dict
         state = store_google.purchase_state(token, store_google.fetch_subscription(token))
     except store_google.GoogleVerificationError as exc:
         logger.warning("Google notification read failed reason=%s", exc)
+        observability.report("billing", "google_read_failed", "error", error_class=type(exc).__name__)
         raise HTTPException(503, "No pudimos leer la compra en Google Play.") from exc  # Pub/Sub retries
     kind = f"google:{purchase.get('notificationType')}"
     result = _notification(lambda: _apply(state, event_type=kind, event_id=f"google-notification:{notification['message_id']}",
@@ -197,6 +199,7 @@ def google_notification(authorization: str | None, body: dict[str, Any]) -> dict
             store_google.acknowledge(token, state["product_id"])
         except store_google.GoogleVerificationError as exc:
             logger.warning("Google acknowledgement failed reason=%s", exc)
+            observability.report("billing", "google_ack_failed", "error", error_class=type(exc).__name__)
             raise HTTPException(503, "Reconocimiento pendiente en Google Play.") from exc  # retried; state is idempotent
     return result
 
@@ -228,7 +231,12 @@ def lapse_cron(secret: str | None) -> dict:
         raise HTTPException(503, "El cron de tiendas no está configurado.")
     if not secret or not hmac.compare_digest(secret.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(403, "Cron secret inválido.")
-    with get_connection() as conn:
-        count = expire_lapsed(conn)
-        conn.commit()
+    try:
+        with get_connection() as conn:
+            count = expire_lapsed(conn)
+            conn.commit()
+    except Exception as exc:
+        observability.heartbeat("store_lapse", ok=False, error_class=type(exc).__name__)
+        raise
+    observability.heartbeat("store_lapse", ok=True)
     return {"status": "OK", "recomputed": count}
