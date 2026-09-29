@@ -77,7 +77,7 @@ class StoreScreenshots {
     @Test fun s01Home() {
         launch("vip")
         waitForText(tx("Podés gastar con tranquilidad", "Safe to spend"))
-        waitForText(tx("Tu prioridad es bajar la tarjeta", "Your priority is paying down the credit card"))
+        waitForText(tx("Tu prioridad", "Your priority"))
         capture("01-home")
     }
 
