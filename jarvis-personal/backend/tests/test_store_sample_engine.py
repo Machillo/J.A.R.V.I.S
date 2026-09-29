@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 
+from backend.auth.current_user import reset_current_user, set_current_user
 from backend.core.i18n import use_language
 from backend.user_product import basic_service, free_service, income_policy, service, strategy_engine, vip_service
 from backend.user_product.strategy_engine import build_basic_strategy, build_paycheck_plan, build_vip_insights, build_vip_strategy
@@ -162,15 +163,22 @@ def _engine(inputs: dict, monkeypatch) -> dict:
     monkeypatch.setattr(strategy_engine, "_goal_monthly_need", lambda goal, reference_date=None: goal_monthly_need(goal, reference_date or today))
 
     snapshot = _snapshot(inputs)
-    basic = build_basic_strategy(snapshot)
-    vip = build_vip_strategy(snapshot)
-    return {  # the same composition as service.get_strategy_basic / get_strategy_vip
-        "strategy_basic": {**basic, "next_paycheck": build_paycheck_plan(basic, snapshot.get("pay_frequency"), vip=False)},
-        "strategy_vip": {**vip, "insights": build_vip_insights(snapshot, vip), "next_paycheck": build_paycheck_plan(vip, snapshot.get("pay_frequency"), vip=True)},
-        "command_center": vip_service.get_vip_command_center(),
-        "budget": basic_service.get_guided_budget(),
-        "free_dashboard": free_service.get_free_dashboard(),
-    }
+    # The STORE identity, explicitly (money labels read the user's base currency), so no context
+    # left by another test can change the output.
+    token = set_current_user({"id": 1, "account_id": "store-account", "workspace_id": "store-workspace",
+                              "role": "user", "base_currency": inputs["profile"].get("base_currency", "CRC")})
+    try:
+        basic = build_basic_strategy(snapshot)
+        vip = build_vip_strategy(snapshot)
+        return {  # the same composition as service.get_strategy_basic / get_strategy_vip
+            "strategy_basic": {**basic, "next_paycheck": build_paycheck_plan(basic, snapshot.get("pay_frequency"), vip=False)},
+            "strategy_vip": {**vip, "insights": build_vip_insights(snapshot, vip), "next_paycheck": build_paycheck_plan(vip, snapshot.get("pay_frequency"), vip=True)},
+            "command_center": vip_service.get_vip_command_center(),
+            "budget": basic_service.get_guided_budget(),
+            "free_dashboard": free_service.get_free_dashboard(),
+        }
+    finally:
+        reset_current_user(token)
 
 
 def _plain(value):
