@@ -73,6 +73,9 @@ public struct APIClient: Sendable {
     static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
+        // Deterministic bodies: a retried submission sends the same bytes, so the backend's
+        // idempotency check replays the first answer instead of refusing a "different" body (409).
+        encoder.outputFormatting = [.sortedKeys]
         return encoder
     }()
 

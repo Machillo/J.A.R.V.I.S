@@ -279,6 +279,16 @@ import Testing
         #expect(foreign?["currency"] as? String == "USD" && (foreign?["exchange_rate"] as? NSNumber)?.intValue == 507)
     }
 
+    /// The backend's idempotency check hashes the raw body: a retried submission must send the same
+    /// bytes, so keys are sorted (JSONEncoder's default key order is not guaranteed).
+    @Test func requestBodiesAreByteStable() throws {
+        let entry = EntryCreate(amount: Decimal(string: "12345.5")!, description: "Feria", category: "Comida", entryDate: "2026-09-01", currency: "USD", exchangeRate: Decimal(string: "507.5")!)
+        let first = try APIClient.encoder.encode(entry)
+        for _ in 0..<20 { #expect(try APIClient.encoder.encode(entry) == first) }
+        let text = String(decoding: first, as: UTF8.self)
+        #expect(text.hasPrefix(#"{"amount":"#) && text.contains(#""entry_date":"2026-09-01""#))
+    }
+
     @Test func retryingAnAmountReusesItsKey() {
         var minted = 0
         var submission = AmountSubmission { minted += 1; return "op_key_\(minted)" }
