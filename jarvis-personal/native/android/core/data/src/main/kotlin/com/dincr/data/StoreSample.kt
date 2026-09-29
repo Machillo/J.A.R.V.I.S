@@ -155,8 +155,11 @@ internal class StoreSample(private val language: AppLanguage) {
                 t("El pago mínimo vence pronto.", "The minimum payment is due soon."), t("Revisá la deuda", "Review the debt"))),
             points,
             listOf(
-                CommandCenter.RoadmapStep(1, t("Completá tu fondo de emergencia inicial", "Build your starter emergency fund"), money(TO_EMERGENCY), t("Te protege de imprevistos.", "It protects you from surprises.")),
-                CommandCenter.RoadmapStep(2, t("Pagá extra a la tarjeta", "Pay extra on the credit card"), money(TO_CARD), t("Tiene la tasa más alta.", "It has the highest rate.")),
+                // Titles and details as the backend words them (ai/strategy_dashboard.py).
+                CommandCenter.RoadmapStep(1, t("Construir Salvavidas", "Build your emergency fund"), money(TO_EMERGENCY),
+                    t("La prioridad es aumentar tus meses de cobertura antes de asumir más riesgo.", "The priority is to increase your months of coverage before taking on more risk.")),
+                CommandCenter.RoadmapStep(2, t("Atacar deuda: $cardName", "Pay down debt: $cardName"), money(TO_CARD),
+                    t("El sobrante destinado a deuda se concentra primero en esta obligación.", "The surplus for debt goes to this obligation first.")),
             ),
         )
     }

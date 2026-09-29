@@ -68,8 +68,10 @@ export async function captureAndroid(argv = process.argv.slice(2)) {
   const dirty = git("status", "--porcelain", "--", "jarvis-personal/native", "jarvis-personal/store-assets/config").length > 0;
 
   if (build) {
-    const gradle = path.join(androidDir, process.platform === "win32" ? "gradlew.bat" : "gradlew");
-    execFileSync(gradle, ["installDincrDebug", "installDincrDebugAndroidTest", "-q", "--console=plain"], { cwd: androidDir, stdio: "inherit", shell: process.platform === "win32" });
+    // The repo ships only the POSIX gradlew; on Windows it runs through Git Bash.
+    const tasks = ["installDincrDebug", "installDincrDebugAndroidTest", "-q", "--console=plain"];
+    const [command, args] = process.platform === "win32" ? ["bash", ["gradlew", ...tasks]] : ["./gradlew", tasks];
+    execFileSync(command, args, { cwd: androidDir, stdio: "inherit" });
   }
 
   const devices = run("devices").split("\n").slice(1).filter((l) => /\tdevice$/.test(l));
