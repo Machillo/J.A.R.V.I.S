@@ -1,5 +1,5 @@
 {
-  "output_sha256": "4587777c41c2ff229990682bebec79cc44226a79101e25f70afe14bf71fa026c",
+  "output_sha256": "5c866d8172ea77b30459bc7736350c81c2146bd390056bfe259ff5218da8fd79",
   "mode": "final",
   "target": "google-phone",
   "store": "google",
@@ -14,11 +14,11 @@
   "caption_ratio": 0.1827,
   "capture": {
     "file": "raw/android/en/phone/08-mail.png",
-    "sha256": "f9599366f27c35ac198cd77fe442aad962803dbddf70b59ac76e8be7eefe794d",
+    "sha256": "215f09f7b94fcfb0ff6d084492301ca4f8791d9fe9e9c0fa9c3eea459dda0e0e",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-09-29T21:43:15.281Z",
+    "captured_at": "2026-09-29T21:54:42.944Z",
     "device": {
       "model": "sdk_gphone64_x86_64",
       "sdk": 35,
@@ -27,8 +27,8 @@
       "density": 420
     }
   },
-  "source_commit": "308158ba511bf3e50b8b4ac195df8319c7133180",
+  "source_commit": "d224fa22facff6b876e72d66500abe798d436010",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "308158ba511bf3e50b8b4ac195df8319c7133180",
-  "generated_at": "2026-09-29T21:44:22.852Z"
+  "pipeline_commit": "d224fa22facff6b876e72d66500abe798d436010",
+  "generated_at": "2026-09-29T21:55:48.507Z"
 }
