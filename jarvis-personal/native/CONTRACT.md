@@ -8,7 +8,7 @@ the backend builds.
 
 The native RC runs against the live backend but does not yet replace the Capacitor app in the
 stores; identity and release decisions are in [RELEASE_IDENTITY.md](RELEASE_IDENTITY.md). Android
-implements every endpoint below; iOS implements the subset marked **iOS**. No backend change was
+and iOS implement every endpoint below (iOS: except store purchases and product events). No backend change was
 needed for the RC.
 
 ## Launch configuration (both platforms, `LaunchPolicy`)
@@ -82,11 +82,11 @@ submission is retried). The plan gate in the app mirrors `BUILTIN_FEATURE_MIN_PL
 
 | Area | Endpoints | Notes |
 |---|---|---|
-| Gates **iOS** | `POST /auth/legal/accept`, `GET /auth/plans`, `GET /product-ops/billing/catalog`, `POST /auth/plan`, `DELETE /auth/me` | Legal versions come from `/auth/me.legal`; `consent_version` is the backend default `regular-2027-v1`; paid plans only while the promotion is active |
-| Operations | `GET /product-ops/feature-flags` **iOS**, `GET /product-ops/health`, `GET /product-ops/release-policy`, `POST /product-ops/events` | Unknown flags use the backend's safe defaults (writes, mail and store off); release policy fails open; events carry allow-listed screen names only |
+| Gates | `POST /auth/legal/accept`, `GET /auth/plans`, `GET /product-ops/billing/catalog`, `POST /auth/plan`, `DELETE /auth/me` | Legal versions come from `/auth/me.legal`; `consent_version` is the backend default `regular-2027-v1`; paid plans only while the promotion is active |
+| Operations | `GET /product-ops/feature-flags`, `GET /product-ops/health`, `GET /product-ops/release-policy`, `POST /product-ops/events` | Unknown flags use the backend's safe defaults (writes, mail and store off); release policy fails open; events carry allow-listed screen names only |
 | Movements | `GET /free/monthly-summary?period`, `PUT /free/movements/{id}` with `currency` + `exchange_rate` | See "Currency edits" |
-| Debts **iOS (list, payment)** | `GET/POST /finance/debts`, `PUT/DELETE /finance/debts/{id}`, `POST /finance/debts/{id}/payments` | Edit needs Basic; a payment larger than the balance is capped by the backend |
-| Goals and savings **iOS (list, contribution)** | `/goals`, `/goals/{id}`, `/goals/{id}/contributions`, `/savings-plans…` | Contribution date validated before sending |
+| Debts | `GET/POST /finance/debts`, `PUT/DELETE /finance/debts/{id}`, `POST /finance/debts/{id}/payments` | Edit needs Basic; a payment larger than the balance is capped by the backend |
+| Goals and savings | `/goals`, `/goals/{id}`, `/goals/{id}/contributions`, `/savings-plans…` | Contribution date validated before sending |
 | Situation | `GET/PUT /financial-situation` | An empty field is sent as null (unknown), never zero; observed income is never copied into a declared value |
 | Basic | `/basic/dashboard`, `/basic/budget` (GET/PUT), `/basic/calendar?period`, `/basic/recurring…`, `/basic/reports?period`, `/finance/strategy-basic` | |
 | VIP | `/vip/command-center`, `/finance/strategy-vip`, `POST /finance/strategy-vip/simulate` (read-only simulation), `/vip/aguinaldo` (409 → not applicable), `/vip/lifecycle/monthly-review`, `/vip/lifecycle/proactive-advisor` | `POST /vip/lifecycle/snapshots` is **not** called (reads do not write); `/vip/strategy-dashboard`, `/vip/debt-advisory` and `PUT /vip/salvavidas` are Owner-shaped and not used |
@@ -108,8 +108,8 @@ what the user typed and the rate they entered.
   and the stored rate, and sends `currency` + `exchange_rate` back, so the backend recomputes the
   same base amount. A new foreign entry asks for the user's rate (prefilled with the user's own
   latest rate, never a market rate). Mail rows and partial data stay read-only.
-- **iOS** never edits currencies: a row carrying any of `original_amount`, `original_currency` or
-  `exchange_rate` is read-only there.
+- **iOS** follows the same rules (`Movement.isCurrencyEditable`, `canEdit`, `acceptsCurrency`;
+  pinned by `CurrencyEditTests`).
 - Rows without a usable `YYYY-MM-DD` date are read-only on both, because the full-replacement
   `PUT` would have to invent one. The backend's own `editable` flag still applies.
 
@@ -153,13 +153,29 @@ what the user typed and the rate they entered.
 
 | Work | What the prototype does |
 |---|---|
-| #269 manual income/expense in CRC/USD | Android: create and edit in the entry currencies with the user's rate. iOS: base currency only; currency rows read-only |
+| #269 manual income/expense in CRC/USD | Both: create and edit in the entry currencies with the user's own rate |
 | #273 mail transactions in USD | Read-only (they carry `original_*`, and mail rows are not `editable` for the backend) |
-| #266 candidate review | Android: accept / correct / reject with `already_reviewed` handled. iOS: not ported |
-| #248 plan lifecycle, #284 store subscriptions | Android: plan change with the backend's answer (`plan_kept`, `downgrade_scheduled`…), Play Billing purchase verified by the backend. iOS: first plan choice only; no purchase |
+| #266 candidate review | Both: accept / correct / reject with `already_reviewed` handled |
+| #248 plan lifecycle, #284 store subscriptions | Android: plan change with the backend's answer (`plan_kept`, `downgrade_scheduled`…), Play Billing purchase verified by the backend. iOS: plan change; no App Store purchase yet |
 
 ## Not in the contract yet
 
-- iOS: editing a movement's currency.
+- iOS: App Store purchases (StoreKit) and product analytics events.
 - `X-Idempotency-Key` is not supported by the backend for PUT/DELETE or profile setup; those are
   full replacements or return 404 on repeat.
+
+## Email Monitor details (verified against the backend for the iOS port)
+
+- `GET /vip/gmail/emails?status=` answers `{status, items}` (at most 200, newest first); `status`
+  is `pending|auto_saved|confirmed|rejected|duplicate` or empty.
+- `POST /vip/gmail/sync` answers `failed_connections` as a **list of connection ids**.
+- `/vip/gmail/status.connections` includes disabled rows; the apps hide `status == "disabled"`.
+- `POST /vip/gmail/connect {import_scope: current_month|current_year, locale}`; `locale` (the app
+  language) sets Google's `hl` (#288). The backend builds the Google URL with exactly
+  `https://www.googleapis.com/auth/gmail.readonly`, PKCE and `prompt=consent select_account`.
+- The provider returns through the backend callback to the global `FINVA_GMAIL_RETURN_URL`
+  (`<scheme>://gmail/callback?gmail=<status>&flow&completion&ret`); only the session that started the
+  flow can redeem `POST /vip/mail/oauth/complete {flow, completion}` (10 min, single use).
+- Errors below 500 are `{"detail": "<Spanish text>"}` only; a notice that needs a rate or cannot be
+  converted is derived by the client from `currency`, `original_*` and `account_base_currency`
+  (base CRC when absent).

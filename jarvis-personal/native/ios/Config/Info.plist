@@ -9,6 +9,29 @@
 		<string>es</string>
 		<string>en</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.dincr.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.dincr.app</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Transitional: the backend returns mail OAuth to one global scheme
+			     (FINVA_GMAIL_RETURN_URL, default com.finva.app://gmail/callback). -->
+			<key>CFBundleURLName</key>
+			<string>com.dincr.app.legacy-mail-callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.finva.app</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>DINCR usa Face ID para proteger tu información financiera.</string>
 	<key>DINCRApiURL</key>
 	<string>$(DINCR_API_URL)</string>
 	<key>DINCRSupabaseURL</key>

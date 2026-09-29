@@ -1,6 +1,7 @@
 import DincrCore
 import DincrDesign
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
@@ -15,19 +16,38 @@ struct RootView: View {
                 // No backend: say so and stop. There is no session to close and no sample data.
                 GateMessageView(
                     symbol: "exclamationmark.triangle",
-                    title: tx("Prototipo sin servidor configurado", "Prototype without a configured server"),
+                    title: tx("App sin servidor configurado", "App without a configured server"),
                     message: Self.unconfiguredMessage(reason),
                     primary: nil,
                     showsSignOut: false
                 )
             case .signedOut:
                 LoginView()
-            case .identityError(let message):
+            case .identityError(let message, let deletionPending):
+                if deletionPending {
+                    // A6 — the account is being deleted: finish it, or sign out.
+                    GateMessageView(
+                        symbol: "trash",
+                        title: tx("Tu cuenta se está eliminando", "Your account is being deleted"),
+                        message: message,
+                        primary: (tx("Terminar eliminación", "Finish deletion"), { Task { _ = await model.deleteAccount() } })
+                    )
+                } else {
+                    GateMessageView(
+                        symbol: "exclamationmark.triangle",
+                        title: tx("No pudimos cargar tu cuenta", "We couldn’t load your account"),
+                        message: message,
+                        primary: (tx("Intentar de nuevo", "Try again"), { Task { await model.loadIdentity() } })
+                    )
+                }
+            case .updateRequired(let policy):
+                // A1 — this version is no longer supported.
                 GateMessageView(
-                    symbol: "exclamationmark.triangle",
-                    title: tx("No pudimos cargar tu cuenta", "We couldn’t load your account"),
-                    message: message,
-                    primary: (tx("Intentar de nuevo", "Try again"), { Task { await model.loadIdentity() } })
+                    symbol: "arrow.down.app",
+                    title: tx("Actualizá DINCR", "Update DINCR"),
+                    message: policy.message(model.language) ?? tx("Esta versión ya no es compatible. Actualizá desde el App Store para continuar.", "This version is no longer supported. Update from the App Store to continue."),
+                    primary: Self.storeURL(policy.updateUrl).map { url in (tx("Actualizar", "Update"), { UIApplication.shared.open(url) }) },
+                    showsSignOut: false
                 )
             case .ownerNotSupported:
                 // Owner boundary (CLAUDE.md §4.A): the public app never renders Owner features.
@@ -48,6 +68,12 @@ struct RootView: View {
             }
         }
         .animation(DincrMotion.standard(reduceMotion), value: model.phase)
+    }
+
+    /// The update link from the release policy, only when it is https or the App Store.
+    static func storeURL(_ text: String?) -> URL? {
+        guard let text, let url = URL(string: text), let scheme = url.scheme?.lowercased(), ["https", "itms-apps"].contains(scheme), url.host != nil else { return nil }
+        return url
     }
 
     static func unconfiguredMessage(_ reason: LaunchPolicy.Reason) -> String {

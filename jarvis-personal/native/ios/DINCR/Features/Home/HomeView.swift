@@ -2,7 +2,8 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY C1 — Free overview. One key figure (available this month, from the backend), the
+/// PARITY C1–C3 — the overview of each plan: Free (below), Basic (`BasicHomeView`) and VIP
+/// (`VipHomeView`, while `vip_intelligence` is on). C1 — Free overview. One key figure (available this month, from the backend), the
 /// month's income and expenses, the 6-month comparison and where the money goes. Every number
 /// is a backend value; nothing is derived here.
 struct HomeView: View {
@@ -11,6 +12,17 @@ struct HomeView: View {
     @State private var state: LoadState<FreeDashboard> = .loading
 
     var body: some View {
+        switch model.planTier {
+        case .vip where model.flags.isEnabled(.vipIntelligence):
+            VipHomeView(openMovements: openMovements)
+        case .basic, .vip:
+            BasicHomeView(openMovements: openMovements)
+        case .free:
+            freeBody
+        }
+    }
+
+    private var freeBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DincrSpacing.s4) {
                 switch state {
@@ -38,14 +50,6 @@ struct HomeView: View {
         // Presentation only: the backend always sends six months, zero-filled for new accounts.
         let empty = dashboard.categories.isEmpty && dashboard.income == 0 && dashboard.expenses == 0
             && dashboard.monthlyHistory.allSatisfy { $0.income == 0 && $0.expenses == 0 }
-
-        if model.profile?.plan != "free" {
-            // Basic and VIP dashboards (PARITY C2, C3) are not built yet; say so instead of
-            // pretending this is their whole overview.
-            StatusBanner(tone: .info, title: tx("Resumen básico", "Basic overview"),
-                         message: tx("Tu panel completo de \(PlanLabel.name(model.profile?.plan)) todavía está en la app actual de DINCR.",
-                                     "Your full \(PlanLabel.name(model.profile?.plan)) dashboard is still in the current DINCR app."))
-        }
 
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Text(tx("Disponible este mes", "Available this month")).font(DincrFont.label).foregroundStyle(DincrColor.text2)

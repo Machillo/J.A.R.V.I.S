@@ -168,10 +168,17 @@ public struct KeychainSessionStore: SessionStore {
     public func save(_ session: AuthSession) {
         guard let data = try? JSONEncoder().encode(session) else { return }
         SecItemDelete(query as CFDictionary)
+        SecItemAdd(item(data: data) as CFDictionary, nil)
+    }
+
+    /// The stored item: only readable while the device is unlocked, never synced to iCloud or
+    /// restored to another device (pinned by `IdentityGuardTests`).
+    func item(data: Data) -> [String: Any] {
         var item = query
         item[kSecValueData as String] = data
         item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        SecItemAdd(item as CFDictionary, nil)
+        item[kSecAttrSynchronizable as String] = false
+        return item
     }
 
     public func clear() { SecItemDelete(query as CFDictionary) }
