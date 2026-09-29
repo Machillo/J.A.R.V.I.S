@@ -122,7 +122,56 @@ final class DINCRUITests: XCTestCase {
         next.tap()
         XCTAssertTrue(app.buttons["Entrar a DINCR"].waitForExistence(timeout: 2))
         app.buttons["Entrar a DINCR"].tap()
+        // A11: a new account chooses its plan; paid plans wait for the stores.
+        XCTAssertTrue(app.staticTexts["Elegí tu plan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Próximamente en las tiendas"].exists)
+        app.buttons["Elegir Free"].tap()
         XCTAssertTrue(app.staticTexts["Disponible este mes"].waitForExistence(timeout: 5))
+    }
+
+    func testLegalConsentIsRequiredBeforeTheApp() {
+        let app = launch("legalRequired")
+        let accept = app.buttons["legal.accept"]
+        XCTAssertTrue(accept.waitForExistence(timeout: 5))
+        XCTAssertFalse(accept.isEnabled)
+        for id in ["legal.terms", "legal.privacy"] {
+            app.switches[id].coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(accept.isEnabled)
+        accept.tap()
+        XCTAssertTrue(app.staticTexts["Disponible este mes"].waitForExistence(timeout: 5))
+    }
+
+    func testDebtPaymentIsRecorded() {
+        let app = launch()
+        app.tabBars.buttons["Plan"].tap()
+        let pay = app.buttons["debt.pay.31"]
+        XCTAssertTrue(pay.waitForExistence(timeout: 5))
+        pay.tap()
+        let field = app.textFields["amount.field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        field.tap()
+        field.typeText("1,5,0")
+        app.buttons["amount.save"].tap()
+        // Ambiguous input is refused on the device, never guessed.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Escribí un monto")).firstMatch.waitForExistence(timeout: 2))
+        field.clearAndType("10.000")
+        app.buttons["amount.save"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["plan.notice"].waitForExistence(timeout: 5))
+    }
+
+    func testGoalContributionIsRecorded() {
+        let app = launch()
+        app.tabBars.buttons["Plan"].tap()
+        let contribute = app.buttons["goal.contribute.41"]
+        XCTAssertTrue(contribute.waitForExistence(timeout: 5))
+        contribute.tap()
+        let field = app.textFields["amount.field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        field.tap()
+        field.typeText("25.000")
+        app.buttons["amount.save"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["plan.notice"].waitForExistence(timeout: 5))
     }
 }
 
