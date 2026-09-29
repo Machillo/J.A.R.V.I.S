@@ -1,0 +1,171 @@
+{
+  "platform": "android",
+  "fixture": "STORE",
+  "fixture_date": "2026-09-28",
+  "source_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
+  "source_dirty": false,
+  "pipeline_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
+  "captured_at": "2026-09-29T21:06:20.136Z",
+  "app": {
+    "package": "com.dincr.app",
+    "flavor": "dincr",
+    "build_type": "debug",
+    "version_name": "2.0.0-rc.1",
+    "last_update": "2026-09-29 15:05:16"
+  },
+  "device": {
+    "model": "sdk_gphone64_x86_64",
+    "sdk": 35,
+    "width": 1080,
+    "height": 2400,
+    "density": 420
+  },
+  "status_bar": "demo mode: 09:41, battery 100%, Wi-Fi full, no notifications",
+  "method": "am instrument com.dincr.app.StoreScreenshots (storeScreenshots=true)",
+  "captures": [
+    {
+      "id": "01-home",
+      "locale": "es",
+      "plan": "vip",
+      "file": "raw/android/es/phone/01-home.png",
+      "sha256": "f059724a8aa988832d8aedd75c4c75fd33d89a6db35ecd3d9501e3847a9b769c",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "02-overview",
+      "locale": "es",
+      "plan": "free",
+      "file": "raw/android/es/phone/02-overview.png",
+      "sha256": "b444801ab8d81a08b3cf53c1be9eb06387e6d4c165c9fc94bf604638142a152f",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "03-movements",
+      "locale": "es",
+      "plan": "free",
+      "file": "raw/android/es/phone/03-movements.png",
+      "sha256": "67450ed2546648ce649144895d29792ce3abe3d7507196ac131a2809dcadab73",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "04-debts",
+      "locale": "es",
+      "plan": "free",
+      "file": "raw/android/es/phone/04-debts.png",
+      "sha256": "3b58b43a7baa9258acaf8438807bce8bac5787685c1ae83541f1bdb56c1f1189",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "05-goals",
+      "locale": "es",
+      "plan": "free",
+      "file": "raw/android/es/phone/05-goals.png",
+      "sha256": "45b8b8f08cb79fd4e5aa8e6f9ecc6f5d4d94db61aa61dea4b6f04720552c6176",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "06-budget",
+      "locale": "es",
+      "plan": "basic",
+      "file": "raw/android/es/phone/06-budget.png",
+      "sha256": "02de8e01b14ff955c519858a172ebaccb8b7ac57df2d1a7cc8db5bee565d8859",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "07-strategy",
+      "locale": "es",
+      "plan": "basic",
+      "file": "raw/android/es/phone/07-strategy.png",
+      "sha256": "2beac07cd5ab78a93650f9057142b9bf592ae654b9b346910cd914047964fdb8",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "08-mail",
+      "locale": "es",
+      "plan": "vip",
+      "file": "raw/android/es/phone/08-mail.png",
+      "sha256": "67b0431765710957513cd64683814e22a667b9beb733d7f394cbb0eeff42015d",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "01-home",
+      "locale": "en",
+      "plan": "vip",
+      "file": "raw/android/en/phone/01-home.png",
+      "sha256": "b07ac83e598e82cd7c16e9ff87a877f9fa5c0666946d441abdf48b08448af83b",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "02-overview",
+      "locale": "en",
+      "plan": "free",
+      "file": "raw/android/en/phone/02-overview.png",
+      "sha256": "08e7e24aa60d585a591ebe7a44f4ff5113fb8017d3c13b0bf5297f84669dc97d",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "03-movements",
+      "locale": "en",
+      "plan": "free",
+      "file": "raw/android/en/phone/03-movements.png",
+      "sha256": "56da20c6803a61dfbd9e3ed8f6d86016f36116e0d6bc0cabbb1a4c1b8ba23f39",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "04-debts",
+      "locale": "en",
+      "plan": "free",
+      "file": "raw/android/en/phone/04-debts.png",
+      "sha256": "18f5f5af39c0091ed29b1885d1bd090fcd99f8b2cf95ebac6b9a847d2f7bceb5",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "05-goals",
+      "locale": "en",
+      "plan": "free",
+      "file": "raw/android/en/phone/05-goals.png",
+      "sha256": "9cad906a159da2a22d92014c69e2151470b23881f37d2437e070c95ad76710c3",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "06-budget",
+      "locale": "en",
+      "plan": "basic",
+      "file": "raw/android/en/phone/06-budget.png",
+      "sha256": "f085253b365ebf019dd62c933e8f24f187969ff355ec6b3f7269e4b6eb27853c",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "07-strategy",
+      "locale": "en",
+      "plan": "basic",
+      "file": "raw/android/en/phone/07-strategy.png",
+      "sha256": "683470d4390c245d28efd33c482018f033eff04e04a675288137cf2ae95c8943",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "id": "08-mail",
+      "locale": "en",
+      "plan": "vip",
+      "file": "raw/android/en/phone/08-mail.png",
+      "sha256": "f9599366f27c35ac198cd77fe442aad962803dbddf70b59ac76e8be7eefe794d",
+      "width": 1080,
+      "height": 2400
+    }
+  ]
+}

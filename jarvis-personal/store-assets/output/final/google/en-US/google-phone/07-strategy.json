@@ -1,0 +1,33 @@
+{
+  "mode": "final",
+  "target": "google-phone",
+  "store": "google",
+  "platform": "android",
+  "locale": "en-US",
+  "language": "en",
+  "screen": "07-strategy",
+  "plan": "basic",
+  "width": 1440,
+  "height": 2560,
+  "alpha": false,
+  "caption_ratio": 0.1487,
+  "capture": {
+    "file": "raw/android/en/phone/07-strategy.png",
+    "sha256": "683470d4390c245d28efd33c482018f033eff04e04a675288137cf2ae95c8943",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-29T21:06:20.136Z",
+    "device": {
+      "model": "sdk_gphone64_x86_64",
+      "sdk": 35,
+      "width": 1080,
+      "height": 2400,
+      "density": 420
+    }
+  },
+  "source_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
+  "generated_at": "2026-09-29T21:15:08.485Z"
+}
