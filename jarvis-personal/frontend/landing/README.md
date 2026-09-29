@@ -27,7 +27,13 @@ Content rules, enforced by `scripts/test-dincr-public-contract.mjs`:
 - **Brand:** public brand DINCR only. The icon is `apple-touch-icon.png` / `favicon-32.png`, never the legacy "J" `favicon.svg`.
 - **Claims must match `main`:** no generative-AI marketing, invented numbers, fake reviews or partner logos, and no "Owner" plan.
 - **Store availability:** there are no placeholder store badges. While `googlePlayUrl`/`appStoreUrl` are empty, the site says the launch is upcoming.
-- **No tracking:** no JavaScript besides structured data, and no analytics on the public site.
+- **No tracking:** no JavaScript besides structured data and the language script, and no analytics on the public site.
+- **Languages (Spanish and English, same URLs):**
+  - Every page carries both versions, each in a `.l10n` block with its own `lang`. The URLs Google and the stores know (`/`, `/privacidad/`, `/terminos/`, …) do not change.
+  - The inline `#dincr-language` script picks the language before the first paint: a choice made with the visible ES | EN selector (saved in `localStorage` as `dincr:language`) wins; otherwise a browser language starting with `es` shows Spanish, and anything else shows English. Without JavaScript, English shows.
+  - It also sets `<html lang>`, the title and the description. It has no network access, stores nothing else and tracks nothing; `test:landing` enforces this.
+  - The Spanish legal text stays the one accepted in the app (`src/pages/PublicInfoPage.jsx`). Its English translation lives in `landing/legal-en.mjs`, and the build fails if that translation is of an older version than the Spanish text.
+  - `npm run test:landing-i18n` checks the language choice, the same URLs, that nothing is left untranslated, and that the English legal texts mirror the Spanish ones (sections, paragraphs, contacts, permissions).
 - **Screenshots:** the hero shows a labeled illustration with sample data until `heroScreenshot` (a real app capture, with width/height) is set in `config.json`. Needed capture: DINCR Home on a phone (Free or VIP) with synthetic data, about 600×1300 px.
 
 This is an isolated static entry within the existing frontend repository because its existing Vite root loads the private app and telemetry on `/`. It does not change Capacitor routes or the deployed app.

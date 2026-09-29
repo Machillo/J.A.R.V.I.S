@@ -47,7 +47,8 @@
     "ios:sync": "node scripts/ios-product.mjs sync",
     "ios:open": "node scripts/ios-product.mjs open",
     "build:landing": "node landing/build.mjs",
-    "test:landing": "node scripts/test-dincr-public-contract.mjs"
+    "test:landing": "node scripts/test-dincr-public-contract.mjs",
+    "test:landing-i18n": "node scripts/test-landing-i18n.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
