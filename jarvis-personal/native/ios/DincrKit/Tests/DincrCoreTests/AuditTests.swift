@@ -109,7 +109,10 @@ import Testing
         let object = APIError.from(status: 409, body: Data(#"{"detail":{"code":"account_deletion_pending","message":"Tu cuenta se está eliminando."}}"#.utf8), language: .english, requestID: nil)
         #expect(object.code == "account_deletion_pending" && object.message == "Tu cuenta se está eliminando.")
         #expect(APIError.from(status: 402, body: Data(), language: .spanish, requestID: nil).kind == .subscriptionRequired)
-        #expect(APIError.from(status: 503, body: Data(#"{"detail":"x","code":"feature_temporarily_unavailable"}"#.utf8), language: .spanish, requestID: nil).kind == .server)
+        // A kill switch is its own kind (paused feature, not an outage); a bare 503 stays a server error.
+        let paused = APIError.from(status: 503, body: Data(#"{"detail":"x","code":"feature_temporarily_unavailable"}"#.utf8), language: .spanish, requestID: nil)
+        #expect(paused.kind == .featureUnavailable && paused.message == "x" && !paused.isTransient)
+        #expect(APIError.from(status: 503, body: Data(#"{"detail":"x"}"#.utf8), language: .spanish, requestID: nil).kind == .server)
     }
 
     // MARK: Writes
