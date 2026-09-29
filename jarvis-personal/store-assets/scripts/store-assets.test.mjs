@@ -83,8 +83,8 @@ test("the saved HTML source links into the repo relatively, never through a loca
   assert.equal(portableHtml(html, out, base), '<img src="../../../../../../../jarvis-personal/store-assets/raw/android/es/phone/01-home.png">');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-out-"));
   writeImage(dir, target("google-phone"), "es-419", "01");
-  fs.writeFileSync(path.join(dir, "google/es-419/google-phone/01.html"), '<img src="file:///C:/Users/someone/x.png">');
-  assert.match(validator(dir, [target("google-phone")]).join("\n"), /01\.png: its \.html source links to a local file:\/\/ path/);
+  fs.writeFileSync(path.join(dir, "google/es-419/google-phone/01-home.html"), '<img src="file:///C:/Users/someone/x.png">');
+  assert.match(validator(dir, [target("google-phone")]).join("\n"), /01-home\.png: its \.html source links to a local file:\/\/ path/);
 });
 
 // --- screen list ---------------------------------------------------------------------------------
@@ -258,9 +258,10 @@ function writeImage(dir, tgt, locale, name, { width = tgt.width, height = tgt.he
   const folder = path.join(dir, tgt.store, locale, tgt.id);
   fs.mkdirSync(folder, { recursive: true });
   const png = alpha ? rgbaPng(width, height, [0, 0, 0, 255]) : encodeRgbPng({ width, height, pixels: Buffer.alloc(width * height * 3) });
-  fs.writeFileSync(path.join(folder, `${name}.png`), png);
   const platform = tgt.store === "apple" ? "ios" : "android";
   const screen = PHONE_SCREENS[(Number(name) - 1) % PHONE_SCREENS.length];
+  const base = Number(name) <= PHONE_SCREENS.length ? screen.id : `${screen.id}-extra`; // files are named after their screen
+  fs.writeFileSync(path.join(folder, `${base}.png`), png);
   const capture = tinyPng([Number(name), 1, 2]);
   const file = `raw/${platform}/es/phone/${screen.id}.png`;
   fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
@@ -272,7 +273,7 @@ function writeImage(dir, tgt, locale, name, { width = tgt.width, height = tgt.he
     .concat({ id: screen.id, locale: "es", plan: screen.plan, file, sha256: sha(capture) });
   fs.writeFileSync(manifestFile, JSON.stringify(manifest));
   if (!provenance) return;
-  fs.writeFileSync(path.join(folder, `${name}.json`), JSON.stringify({
+  fs.writeFileSync(path.join(folder, `${base}.json`), JSON.stringify({
     output_sha256: sha(png), mode: "final", platform, language: "es", screen: screen.id, plan: screen.plan, caption_ratio: 0.15,
     capture: { file, sha256: sha(capture), placeholder: false, fixture: "STORE" },
     source_commit: AFTER, pipeline_commit: AFTER, ...meta,
@@ -298,12 +299,12 @@ test("the validator rejects wrong sizes, alpha, a caption band over 20%, preview
   writeImage(dir, phone, "es-419", "07", { meta: { caption_ratio: 0.23 } });
   writeImage(dir, phone, "es-419", "08", { meta: { mode: "preview", capture: { placeholder: true }, source_commit: null } });
   const problems = validator(dir, [phone]).join("\n");
-  assert.match(problems, /05\.png: 1080x1920, expected 1440x2560/);
-  assert.match(problems, /06\.png: has an alpha channel/);
-  assert.match(problems, /07\.png: caption band 23\.0% > 20%/);
-  assert.match(problems, /08\.png: is a preview image/);
-  assert.match(problems, /08\.png: built from a placeholder/);
-  assert.equal(validator(dir, [phone], { allowPreview: true }).some((p) => p.includes("08.png")), false);
+  assert.match(problems, /05-goals\.png: 1080x1920, expected 1440x2560/);
+  assert.match(problems, /06-budget\.png: has an alpha channel/);
+  assert.match(problems, /07-strategy\.png: caption band 23\.0% > 20%/);
+  assert.match(problems, /08-mail\.png: is a preview image/);
+  assert.match(problems, /08-mail\.png: built from a placeholder/);
+  assert.equal(validator(dir, [phone], { allowPreview: true }).some((p) => p.includes("08-mail.png")), false);
 
   writeImage(dir, phone, "es-419", "09");
   assert.match(validator(dir, [phone]).join("\n"), /9 images, the store accepts at most 8/);
@@ -322,15 +323,15 @@ test("the validator rejects a final without provenance, from before #287, of an 
   writeImage(dir, phone, "es-419", "07", { meta: { platform: "ios" } });
   writeImage(dir, phone, "es-419", "08", { meta: { pipeline_commit: null, capture: undefined } });
   const problems = validator(dir, [phone]).join("\n");
-  assert.match(problems, /01\.png: missing provenance 01\.json/);
-  assert.match(problems, /02\.png: app commit b+ predates the native app/);
-  assert.match(problems, /03\.png: screen 99-accounts is not confirmed for android/);
-  assert.match(problems, /04\.png: captured with plan vip, the screen needs free/);
-  assert.match(problems, /05\.png: capture raw\/android\/es\/phone\/05-goals\.png changed after composing/);
-  assert.match(problems, /06\.png: no capture file and SHA-256 recorded/);
-  assert.match(problems, /07\.png: provenance platform ios, expected android/);
-  assert.match(problems, /08\.png: no pipeline commit recorded/);
-  assert.match(problems, /08\.png: fixture undefined, expected STORE/);
+  assert.match(problems, /01-home\.png: missing provenance 01-home\.json/);
+  assert.match(problems, /02-overview\.png: app commit b+ predates the native app/);
+  assert.match(problems, /03-movements\.png: screen 99-accounts is not confirmed for android/);
+  assert.match(problems, /04-debts\.png: captured with plan vip, the screen needs free/);
+  assert.match(problems, /05-goals\.png: capture raw\/android\/es\/phone\/05-goals\.png changed after composing/);
+  assert.match(problems, /06-budget\.png: no capture file and SHA-256 recorded/);
+  assert.match(problems, /07-strategy\.png: provenance platform ios, expected android/);
+  assert.match(problems, /08-mail\.png: no pipeline commit recorded/);
+  assert.match(problems, /08-mail\.png: fixture undefined, expected STORE/);
 
   // iOS: the Budget screen does not exist there, so an iPhone final of it is refused.
   const iphone = target("apple-iphone-69");
@@ -338,36 +339,50 @@ test("the validator rejects a final without provenance, from before #287, of an 
   assert.match(validator(dir, [iphone]).join("\n"), /screen 06-budget is not confirmed for ios/);
 });
 
+test("the validator checks that an image's folder and name agree with its provenance", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-out-"));
+  const phone = target("google-phone");
+  for (const n of ["01", "02", "03", "04"]) writeImage(dir, phone, "es-419", n);
+  // An English image filed under the Spanish folder, and an image renamed to another screen.
+  const meta = path.join(dir, "google/es-419/google-phone/01-home.json");
+  fs.writeFileSync(meta, JSON.stringify({ ...JSON.parse(fs.readFileSync(meta, "utf8")), language: "en" }));
+  fs.renameSync(path.join(dir, "google/es-419/google-phone/02-overview.png"), path.join(dir, "google/es-419/google-phone/05-goals.png"));
+  fs.renameSync(path.join(dir, "google/es-419/google-phone/02-overview.json"), path.join(dir, "google/es-419/google-phone/05-goals.json"));
+  const problems = validator(dir, [phone]).join("\n");
+  assert.match(problems, /01-home\.png: provenance language en, but the folder is es-419 \(es\)/);
+  assert.match(problems, /05-goals\.png: file name does not match its screen 02-overview/);
+});
+
 test("the validator re-checks the image, its capture path and the capture manifest instead of trusting the provenance", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-out-"));
   const phone = target("google-phone");
   for (const n of ["01", "02", "03", "04", "05", "06"]) writeImage(dir, phone, "es-419", n);
   // 01: the image was replaced after composing.
-  fs.writeFileSync(path.join(dir, "google/es-419/google-phone/01.png"), encodeRgbPng({ width: phone.width, height: phone.height, pixels: Buffer.alloc(phone.width * phone.height * 3, 7) }));
+  fs.writeFileSync(path.join(dir, "google/es-419/google-phone/01-home.png"), encodeRgbPng({ width: phone.width, height: phone.height, pixels: Buffer.alloc(phone.width * phone.height * 3, 7) }));
   // 02: its provenance points at another screen's capture (with that capture's real hash).
   const other = fs.readFileSync(path.join(dir, "raw/android/es/phone/03-movements.png"));
-  const meta02 = path.join(dir, "google/es-419/google-phone/02.json");
+  const meta02 = path.join(dir, "google/es-419/google-phone/02-overview.json");
   const two = JSON.parse(fs.readFileSync(meta02, "utf8"));
   fs.writeFileSync(meta02, JSON.stringify({ ...two, capture: { ...two.capture, file: "raw/android/es/phone/03-movements.png", sha256: sha(other) } }));
   // 03: a path outside raw/.
-  const meta03 = path.join(dir, "google/es-419/google-phone/03.json");
+  const meta03 = path.join(dir, "google/es-419/google-phone/03-movements.json");
   const three = JSON.parse(fs.readFileSync(meta03, "utf8"));
-  fs.writeFileSync(meta03, JSON.stringify({ ...three, capture: { ...three.capture, file: "raw/../google/es-419/google-phone/03.png" } }));
+  fs.writeFileSync(meta03, JSON.stringify({ ...three, capture: { ...three.capture, file: "raw/../google/es-419/google-phone/03-movements.png" } }));
   const problems = validator(dir, [phone]).join("\n");
-  assert.match(problems, /01\.png: the image changed after composing/);
-  assert.match(problems, /02\.png: capture raw\/android\/es\/phone\/03-movements\.png is not raw\/android\/es\/phone\/02-overview\.png/);
-  assert.match(problems, /02\.png: its capture differs from the one in the capture manifest/);
-  assert.match(problems, /03\.png: capture raw\/\.\.\/google.* is not raw\/android\/es\/phone\/03-movements\.png/);
+  assert.match(problems, /01-home\.png: the image changed after composing/);
+  assert.match(problems, /02-overview\.png: capture raw\/android\/es\/phone\/03-movements\.png is not raw\/android\/es\/phone\/02-overview\.png/);
+  assert.match(problems, /02-overview\.png: its capture differs from the one in the capture manifest/);
+  assert.match(problems, /03-movements\.png: capture raw\/\.\.\/google.* is not raw\/android\/es\/phone\/03-movements\.png/);
 
   // The capture run was dirty or --no-build: every image from it is refused.
   const manifestFile = path.join(dir, "raw/android/capture-manifest.json");
   const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
   fs.writeFileSync(manifestFile, JSON.stringify({ ...manifest, built: false }));
-  assert.match(validator(dir, [phone]).join("\n"), /04\.png: the capture run was not a clean build of its commit/);
+  assert.match(validator(dir, [phone]).join("\n"), /04-debts\.png: the capture run was not a clean build of its commit/);
   fs.writeFileSync(manifestFile, JSON.stringify({ ...manifest, source_commit: BRANCH }));
-  assert.match(validator(dir, [phone]).join("\n"), /04\.png: the capture manifest names another app commit/);
+  assert.match(validator(dir, [phone]).join("\n"), /04-debts\.png: the capture manifest names another app commit/);
   fs.rmSync(manifestFile);
-  assert.match(validator(dir, [phone]).join("\n"), /04\.png: no capture manifest/);
+  assert.match(validator(dir, [phone]).join("\n"), /04-debts\.png: no capture manifest/);
 });
 
 test("the validator refuses finals whose copy, templates or app changed after they were made", () => {
@@ -375,7 +390,7 @@ test("the validator refuses finals whose copy, templates or app changed after th
   const phone = target("google-phone");
   for (const n of ["01", "02", "03", "04"]) writeImage(dir, phone, "es-419", n);
   const copyChanged = validator(dir, [phone], { changedSince: (commit, paths) => paths.some((p) => p.endsWith("store-assets/copy")) }).join("\n");
-  assert.match(copyChanged, /01\.png: copy, templates, config or brand changed after it was composed/);
+  assert.match(copyChanged, /01-home\.png: copy, templates, config or brand changed after it was composed/);
   const appChanged = validator(dir, [phone], { changedSince: (commit, paths) => paths.includes("jarvis-personal/native") }).join("\n");
-  assert.match(appChanged, /01\.png: the app \(jarvis-personal\/native\) changed after a+: re-capture|01\.png: the app \(jarvis-personal\/native\) changed after aaaaaaaa: re-capture/);
+  assert.match(appChanged, /01-home\.png: the app \(jarvis-personal\/native\) changed after a+: re-capture|01\.png: the app \(jarvis-personal\/native\) changed after aaaaaaaa: re-capture/);
 });

@@ -87,7 +87,14 @@ export function imageProblems(dir, targetsConfig, { allowPreview = false, screen
           if (!meta.pipeline_commit) problems.push(`${label}: no pipeline commit recorded`);
           else if (changedSince(meta.pipeline_commit, COMPOSE_INPUTS)) problems.push(`${label}: copy, templates, config or brand changed after it was composed (${meta.pipeline_commit.slice(0, 8)}): re-compose`);
           if (meta.output_sha256 !== sha256(fs.readFileSync(file))) problems.push(`${label}: the image changed after composing (SHA-256 differs from its provenance)`);
-          if (!target.single) problems.push(...finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor, requireMain, changedSince));
+          if (!target.single) {
+            // The folder and file name must say what the provenance says (language and screen).
+            const language = screens.locales.find((l) => (target.store === "apple" ? l.apple : l.google) === locale)?.id;
+            if (!language) problems.push(`${label}: ${locale} is not a store locale in config/screens.json`);
+            else if (meta.language !== language) problems.push(`${label}: provenance language ${meta.language}, but the folder is ${locale} (${language})`);
+            if (name !== `${meta.screen}.png`) problems.push(`${label}: file name does not match its screen ${meta.screen}`);
+            problems.push(...finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor, requireMain, changedSince));
+          }
         }
       }
     }

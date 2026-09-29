@@ -181,11 +181,12 @@ export const APP_PATHS = ["jarvis-personal/native"];
 export const COMPOSE_INPUTS = ["jarvis-personal/store-assets/copy", "jarvis-personal/store-assets/templates",
   "jarvis-personal/store-assets/config", "DESIGN.md", "jarvis-personal/frontend/resources/icon.png"];
 
-/** True when `paths` differ between `commit` and the working tree (committed or not). */
+/** True when `paths` differ between `commit` and the working tree: committed, uncommitted or new untracked files. */
 export function gitChangedSince(commit, paths) {
   try {
     execFileSync("git", ["-C", repoRoot, "diff", "--quiet", commit, "--", ...paths], { stdio: "ignore" });
-    return false;
+    const untracked = execFileSync("git", ["-C", repoRoot, "ls-files", "--others", "--exclude-standard", "--", ...paths], { encoding: "utf8" });
+    return untracked.trim().length > 0;
   } catch {
     return true;
   }
