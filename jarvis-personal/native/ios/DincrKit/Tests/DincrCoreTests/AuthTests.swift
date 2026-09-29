@@ -29,7 +29,7 @@ import Testing
         #expect(query["redirect_to"] == Self.redirect)
     }
 
-    static let redirect = "com.dincr.app.nativedev://auth/callback"
+    static let redirect = "com.dincr.app://auth/callback"
 
     @Test func callbackAcceptsOnlyACodeOnTheExactRedirect() throws {
         #expect(try SupabaseAuthClient.authorizationCode(from: URL(string: "\(Self.redirect)?code=abc")!, redirect: Self.redirect) == "abc")
@@ -42,16 +42,16 @@ import Testing
     @Test(arguments: [
         "evil://auth/callback?code=abc",                              // other scheme
         "com.dincr.app://auth/callback?code=abc",                    // the production app's scheme
-        "com.dincr.app.nativedev://auth/callbackX?code=abc",         // look-alike path
-        "com.dincr.app.nativedev://auth/callback/x?code=abc",
-        "com.dincr.app.nativedev://evil/callback?code=abc",          // other host
-        "com.dincr.app.nativedev://user@auth/callback?code=abc",
-        "com.dincr.app.nativedev://auth:99/callback?code=abc",
-        "com.dincr.app.nativedev://auth/callback#access_token=x&refresh_token=y", // implicit-flow tokens
-        "com.dincr.app.nativedev://auth/callback?code=abc#access_token=x",
-        "com.dincr.app.nativedev://auth/callback",                    // missing code
-        "com.dincr.app.nativedev://auth/callback?code=",              // empty code
-        "com.dincr.app.nativedev://auth/callback?code=a&code=b",      // ambiguous code
+        "com.dincr.app://auth/callbackX?code=abc",         // look-alike path
+        "com.dincr.app://auth/callback/x?code=abc",
+        "com.dincr.app://evil/callback?code=abc",          // other host
+        "com.dincr.app://user@auth/callback?code=abc",
+        "com.dincr.app://auth:99/callback?code=abc",
+        "com.dincr.app://auth/callback#access_token=x&refresh_token=y", // implicit-flow tokens
+        "com.dincr.app://auth/callback?code=abc#access_token=x",
+        "com.dincr.app://auth/callback",                    // missing code
+        "com.dincr.app://auth/callback?code=",              // empty code
+        "com.dincr.app://auth/callback?code=a&code=b",      // ambiguous code
     ])
     func callbackRejectsAnythingElse(url: String) {
         #expect(throws: AuthError.invalidCallback) {

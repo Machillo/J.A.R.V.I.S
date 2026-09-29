@@ -1,0 +1,2 @@
+/* Face ID prompt (app lock). */
+"NSFaceIDUsageDescription" = "DINCR uses Face ID to protect your financial information.";
