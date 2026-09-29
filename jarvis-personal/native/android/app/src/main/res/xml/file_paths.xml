@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the data export folder in the app cache is shareable (Settings → Descargar mis datos). -->
+<paths>
+    <cache-path name="export" path="export/" />
+</paths>

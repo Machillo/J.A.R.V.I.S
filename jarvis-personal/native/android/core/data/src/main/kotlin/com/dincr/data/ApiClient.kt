@@ -74,8 +74,12 @@ class ApiClient(
     suspend inline fun <reified B, reified T> send(method: String, path: String, body: B, idempotencyKey: String? = null): T =
         decode(perform(method, path, emptyMap(), json.encodeToString(body), idempotencyKey))
 
-    suspend inline fun <reified T> send(method: String, path: String): T =
-        decode(perform(method, path, emptyMap(), null))
+    suspend inline fun <reified T> send(method: String, path: String, query: Map<String, String> = emptyMap()): T =
+        decode(perform(method, path, query, null))
+
+    /** A public endpoint (release policy): no bearer token, and no session is required. */
+    suspend inline fun <reified T> getPublic(path: String, query: Map<String, String> = emptyMap()): T =
+        decode(perform("GET", path, query, null, authenticated = false))
 
     inline fun <reified T> decode(body: String): T =
         try {
@@ -86,13 +90,13 @@ class ApiClient(
 
     val currentLanguage: AppLanguage get() = language
 
-    suspend fun perform(method: String, path: String, query: Map<String, String>, body: String?, idempotencyKey: String? = null): String {
+    suspend fun perform(method: String, path: String, query: Map<String, String>, body: String?, idempotencyKey: String? = null, authenticated: Boolean = true): String {
         val requestId = UUID.randomUUID().toString()
         val safe = method == "GET" || method == "HEAD"
         val maxRetries = if (safe) 2 else 0
         var attempt = 0
-        var refreshed = false
-        var token = tokens.accessToken(false)
+        var refreshed = !authenticated
+        var token = if (authenticated) tokens.accessToken(false) else null
         val url = baseUrl.trimEnd('/').plus(path).toHttpUrl().newBuilder()
             .apply { query.forEach { (key, value) -> addQueryParameter(key, value) } }
             .build().toString()
@@ -104,7 +108,7 @@ class ApiClient(
                 put("Accept-Language", language.tag)
                 put("X-Request-ID", requestId)
                 put("X-Retry-Attempt", attempt.toString())
-                put("Authorization", "Bearer $token")
+                if (token != null) put("Authorization", "Bearer $token")
                 if (idempotencyKey != null) put("X-Idempotency-Key", idempotencyKey)
             }
             val response = try {
@@ -118,7 +122,8 @@ class ApiClient(
                 token = tokens.accessToken(true)
                 continue
             }
-            if (response.status in RETRYABLE_STATUS && attempt < maxRetries) {
+            // A kill switch (503 feature_temporarily_unavailable) is deliberate: never retried.
+            if (response.status in RETRYABLE_STATUS && attempt < maxRetries && !isKillSwitch(response)) {
                 backoff(attempt); attempt += 1; continue
             }
             if (response.status !in 200..299) throw ApiError.from(response.status, response.body, language, requestId)
@@ -128,5 +133,8 @@ class ApiClient(
 
     companion object {
         val RETRYABLE_STATUS = setOf(408, 425, 429, 502, 503, 504)
+
+        fun isKillSwitch(response: HttpResponse) =
+            response.status == 503 && response.body.contains(ApiError.FEATURE_UNAVAILABLE_CODE)
     }
 }

@@ -128,7 +128,7 @@ public struct APIClient: Sendable {
                 token = try await tokens.accessToken(forceRefresh: true)
                 continue
             }
-            if Self.retryableStatus.contains(response.statusCode), attempt < maxRetries {
+            if Self.retryableStatus.contains(response.statusCode), attempt < maxRetries, !Self.isKillSwitch(response.statusCode, data) {
                 await backoff(attempt); attempt += 1; continue
             }
             guard (200..<300).contains(response.statusCode) else {
@@ -146,6 +146,13 @@ public struct APIClient: Sendable {
         var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query }
         return components.url!
+    }
+
+    /// A paused feature answers 503 on purpose; retrying it only delays the message.
+    static func isKillSwitch(_ status: Int, _ body: Data) -> Bool {
+        guard status == 503, let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else { return false }
+        if object["code"] as? String == APIError.featureUnavailableCode { return true }
+        return (object["detail"] as? [String: Any])?["code"] as? String == APIError.featureUnavailableCode
     }
 
     static func isTransient(_ error: URLError) -> Bool {

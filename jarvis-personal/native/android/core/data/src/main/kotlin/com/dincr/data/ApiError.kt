@@ -29,8 +29,10 @@ class ApiError(
     val code: String = "",
     override val message: String,
     val requestId: String? = null,
+    /** For [Kind.FEATURE_UNAVAILABLE]: the paused flag (`financial_writes`, `gmail_automation`…). */
+    val feature: String? = null,
 ) : Exception(message) {
-    enum class Kind { OFFLINE, TIMEOUT, SESSION_EXPIRED, SUBSCRIPTION_REQUIRED, FORBIDDEN, NOT_FOUND, VALIDATION, CLIENT, SERVER, DECODING }
+    enum class Kind { OFFLINE, TIMEOUT, SESSION_EXPIRED, SUBSCRIPTION_REQUIRED, FORBIDDEN, NOT_FOUND, VALIDATION, CLIENT, SERVER, DECODING, FEATURE_UNAVAILABLE }
 
     val isTransient: Boolean get() = kind == Kind.OFFLINE || kind == Kind.TIMEOUT || kind == Kind.SERVER
 
@@ -38,8 +40,12 @@ class ApiError(
         fun from(status: Int, body: String, language: AppLanguage, requestId: String?): ApiError {
             var detail = ""
             var code = ""
+            var feature: String? = null
             runCatching {
                 val root = Json.parseToJsonElement(body).jsonObject
+                // Kill switches answer 503 {detail, code: "feature_temporarily_unavailable", feature}.
+                root["code"]?.jsonPrimitive?.contentOrNull?.let { code = it }
+                feature = root["feature"]?.jsonPrimitive?.contentOrNull
                 when (val raw = root["detail"] ?: root["error"]) {
                     is JsonPrimitive -> detail = raw.contentOrNull.orEmpty()
                     is JsonObject -> {
@@ -51,6 +57,12 @@ class ApiError(
             }
             val shown = if (language == AppLanguage.SPANISH) detail else ""
             val t = language::pick
+            if (status == 503 && code == FEATURE_UNAVAILABLE_CODE) {
+                // The backend message is always Spanish; English sessions get fixed copy.
+                return ApiError(Kind.FEATURE_UNAVAILABLE, status, code,
+                    shown.ifEmpty { t("Esta función está en mantenimiento. Intentá más tarde.", "This feature is under maintenance. Please try later.") },
+                    requestId, feature)
+            }
             val (kind, message) = when (status) {
                 401 -> Kind.SESSION_EXPIRED to t("Tu sesión venció. Iniciá sesión nuevamente.", "Your session expired. Please sign in again.")
                 402 -> Kind.SUBSCRIPTION_REQUIRED to t("Esta función necesita una suscripción activa.", "This feature needs an active subscription.")
@@ -63,6 +75,8 @@ class ApiError(
             val finalMessage = if (code == "account_deletion_pending" && detail.isNotEmpty()) detail else message
             return ApiError(kind, status, code, finalMessage, requestId)
         }
+
+        const val FEATURE_UNAVAILABLE_CODE = "feature_temporarily_unavailable"
 
         fun offline(language: AppLanguage) = ApiError(Kind.OFFLINE, message = language.pick("Sin conexión. Revisá tu internet e intentá de nuevo.", "You’re offline. Check your connection and try again."))
         fun timeout(language: AppLanguage) = ApiError(Kind.TIMEOUT, message = language.pick("La solicitud tardó demasiado. Volvé a intentarlo.", "The request took too long. Please try again."))

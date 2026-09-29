@@ -37,8 +37,10 @@ struct RootView: View {
                     message: tx("La app pública de DINCR no muestra funciones internas. Cerrá sesión para entrar con otra cuenta.", "The public DINCR app doesn’t show internal features. Sign out to use another account."),
                     primary: nil
                 )
-            case .notYetSupported(let message):
-                GateMessageView(symbol: "hourglass", title: tx("Un paso más", "One more step"), message: message, primary: nil)
+            case .legalRequired:
+                LegalConsentView()
+            case .choosePlan:
+                PlanChooserView()
             case .profileSetup:
                 ProfileSetupView()
             case .ready:

@@ -16,16 +16,23 @@ public struct APIError: Error, Sendable, Equatable {
         case client
         case server
         case decoding
+        /// An operational kill switch is off (`503 feature_temporarily_unavailable`): the
+        /// feature is paused for everyone, so retrying now is pointless.
+        case featureUnavailable
     }
+
+    public static let featureUnavailableCode = "feature_temporarily_unavailable"
 
     public let kind: Kind
     public let status: Int
     public let code: String
     public let message: String
     public let requestID: String?
+    /// For `.featureUnavailable`: the paused flag (`financial_writes`, `gmail_automation`…).
+    public let feature: String?
 
-    public init(kind: Kind, status: Int = 0, code: String = "", message: String, requestID: String? = nil) {
-        self.kind = kind; self.status = status; self.code = code; self.message = message; self.requestID = requestID
+    public init(kind: Kind, status: Int = 0, code: String = "", message: String, requestID: String? = nil, feature: String? = nil) {
+        self.kind = kind; self.status = status; self.code = code; self.message = message; self.requestID = requestID; self.feature = feature
     }
 
     /// Whether retrying the same request later may succeed (drives the "Reintentar" affordance).
@@ -39,7 +46,11 @@ public struct APIError: Error, Sendable, Equatable {
     static func from(status: Int, body: Data, language: AppLanguage, requestID: String?) -> APIError {
         var detail = ""
         var code = ""
+        var feature: String?
         if let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+            // Kill switches answer 503 {detail, code: "feature_temporarily_unavailable", feature}.
+            if let top = object["code"] as? String { code = top }
+            feature = object["feature"] as? String
             let raw = object["detail"] ?? object["error"]
             if let text = raw as? String { detail = text }
             if let nested = raw as? [String: Any] {
@@ -49,6 +60,11 @@ public struct APIError: Error, Sendable, Equatable {
         }
         let shown = language == .spanish ? detail : ""
         let t = language.pick
+        if status == 503, code == featureUnavailableCode {
+            return APIError(kind: .featureUnavailable, status: status, code: code,
+                            message: shown.isEmpty ? t("Esta función está en mantenimiento. Intentá más tarde.", "This feature is under maintenance. Please try later.") : shown,
+                            requestID: requestID, feature: feature)
+        }
         let (kind, message): (Kind, String) = switch status {
         case 401: (.sessionExpired, t("Tu sesión venció. Iniciá sesión nuevamente.", "Your session expired. Please sign in again."))
         case 402: (.subscriptionRequired, t("Esta función necesita una suscripción activa.", "This feature needs an active subscription."))

@@ -117,14 +117,17 @@ class AuditTest {
         assertEquals("account_deletion_pending", obj.code)
         assertEquals("Tu cuenta se está eliminando.", obj.message)
         assertEquals(ApiError.Kind.SUBSCRIPTION_REQUIRED, ApiError.from(402, "", AppLanguage.SPANISH, null).kind)
-        assertEquals(ApiError.Kind.SERVER, ApiError.from(503, """{"detail":"x","code":"feature_temporarily_unavailable"}""", AppLanguage.SPANISH, null).kind)
+        val paused = ApiError.from(503, """{"detail":"x","code":"feature_temporarily_unavailable","feature":"financial_writes"}""", AppLanguage.SPANISH, null)
+        assertEquals(ApiError.Kind.FEATURE_UNAVAILABLE, paused.kind)
+        assertEquals("financial_writes", paused.feature)
+        assertEquals(ApiError.Kind.SERVER, ApiError.from(503, """{"detail":"x"}""", AppLanguage.SPANISH, null).kind)
     }
 
     @Test fun createsCarryTheIdempotencyKeyAndAreNeverRetried() = runTest {
         val requests = mutableListOf<HttpRequest>()
         val transport = HttpTransport { request -> requests += request; HttpResponse(503, "{}") }
         val client = ApiClient("https://api.example.test", { "t" }, transport, AppLanguage.SPANISH, backoff = {})
-        try { LiveDincrService(client).create(MovementKind.EXPENSE, EntryCreate(BigDecimal.ONE, "x", "Comida", null), "key-12345678"); fail() } catch (_: ApiError) {}
+        try { DincrApi(client).create(MovementKind.EXPENSE, EntryCreate(BigDecimal.ONE, "x", "Comida", null), "key-12345678"); fail() } catch (_: ApiError) {}
         assertEquals(1, requests.size)
         assertEquals("key-12345678", requests.single().headers["X-Idempotency-Key"])
         assertEquals("https://api.example.test/user-product/finance/expenses", requests.single().url)
@@ -137,8 +140,8 @@ class AuditTest {
         assertEquals(1, calls)
     }
 
-    @Test fun fixtureServiceMirrorsBackendWriteSemantics() = runTest {
-        val service = FixtureDincrService(FixtureDincrService.Scenario.EMPTY, latencyMs = 0)
+    @Test fun fakeBackendMirrorsBackendWriteSemantics() = runTest {
+        val service = DincrApi(ApiClient("https://api.example.test", { "t" }, FakeBackend(FakeBackend.Scenario.EMPTY), AppLanguage.SPANISH, backoff = {}))
         val entry = EntryCreate(BigDecimal.ONE, "x", "Comida", "2026-09-25")
         service.create(MovementKind.EXPENSE, entry, "same-key-1")
         service.create(MovementKind.EXPENSE, entry, "same-key-1")

@@ -1,26 +1,28 @@
-# DINCR native apps (prototype)
+# DINCR native apps (release candidate)
 
-Native DINCR for iOS (Swift + SwiftUI) and Android (Kotlin + Jetpack Compose). This is the
-**representative prototype** (phase C4): login, profile setup, Home (Free overview), Movements,
-add/edit/delete movement, profile/appearance/sign-out. The Plan and DINCR tabs are "under
-construction" screens with their parity IDs; legal consent and plan selection route to a notice;
-Basic and VIP users see the Free overview with a notice. Most of the product (debts, goals, mail,
-billing, app lock, push, settings, support) is not started. The backend contract the apps use is
-in [CONTRACT.md](CONTRACT.md).
+Native DINCR for Android (Kotlin + Jetpack Compose) and iOS (Swift + SwiftUI), on the same
+FastAPI contract as the Capacitor app ([CONTRACT.md](CONTRACT.md)). Feature status per platform is
+in `docs/native/PARITY_MATRIX.md`.
 
-## Status: a parallel prototype, not the release app
+- **Android** is the functional RC: sign-in, legal and plan gates, profile setup, Free/Basic/VIP
+  home, movements (CRC/USD with the user's own rate), debts, goals, savings plans, budget,
+  calendar, recurring, strategy, scenarios, VIP review/today/projections, mail monitor (connect,
+  sync, review, own transfers, accounts), financial situation, plans and store subscription,
+  app lock, export, account deletion, support, kill switches, release policy and service health.
+- **iOS** has the #279 base (sign-in, profile setup, Free home, movements) plus the legal and plan
+  gates, kill switches, debts, goals and account deletion. It is compiled and tested only in CI on
+  a macOS runner; it has never run on a device.
 
-- DINCR **v1.0 ships the Capacitor app**: `jarvis-personal/frontend` with its native shells
-  `frontend/ios-dincr` (iOS) and `frontend/android` (Android). This prototype never modifies them.
-- The prototype is **not** a release candidate, not a replacement for Capacitor, and not the
-  source of truth for the bundle id, the minimum OS versions or store metadata. It is never
-  distributed. A native migration is a decision for after v1.0, once parity is sufficient
-  (`docs/native/PARITY_MATRIX.md`).
-- **iOS 17 is the prototype's own deployment target** (SwiftUI APIs it uses). The releasable iOS
-  app stays on iOS 15 (`ios-dincr`), and dincr.com keeps publishing iOS 15 (`landing/config.json`
-  `minimumOS`, checked by `test:landing` against `ios-dincr`). Android `minSdk` is 24 in both.
-- Its own ids (`com.dincr.app.nativedev`, UI tests `com.dincr.app.nativedev.uitests`) and its own
-  OAuth redirect never collide with the store app's `com.dincr.app`.
+## Status: RC, not yet the store app
+
+- DINCR in the stores is still the **Capacitor app** (`jarvis-personal/frontend`, native shells
+  `frontend/ios-dincr` and `frontend/android`). The native apps never modify it.
+- Taking the store identity is a pending human decision: see [RELEASE_IDENTITY.md](RELEASE_IDENTITY.md)
+  (signing, versionCode, mail return URL, billing, iOS 15 vs 17, session not migrated).
+- Android has two flavors: `dincr` (`com.dincr.app`, the redirect the Capacitor app already uses)
+  and `nativedev` (`com.dincr.app.nativedev`, side-by-side, fixtures or a development project).
+- **iOS 17 is the native app's own deployment target.** The Capacitor iOS app and dincr.com stay on
+  iOS 15 until that decision is made. Android `minSdk` is 24 in both.
 
 ## Rules
 
@@ -30,7 +32,12 @@ in [CONTRACT.md](CONTRACT.md).
   `docs/native/CURRENT_STATE_AUDIT.md` §5 as backend dependencies.
 - **Same API contract as the web client**: bearer token, `Accept-Language`, stable
   `X-Request-ID`, retries only for safe methods, one token refresh on 401, 20 s timeout.
-- **Owner boundary**: an Owner/admin session sees a notice, never Owner features.
+- **Owner boundary**: an Owner/admin session sees a notice, never Owner features. Owner-shaped
+  endpoints (`/vip/strategy-dashboard`, `/vip/debt-advisory`, `PUT /vip/salvavidas`) are not used.
+- **Reads do not write.** Opening a screen never calls a write (no lifecycle snapshot POST).
+- **Money.** `BigDecimal`/`Decimal` only; every amount is positive, ≤ 2 decimals and ≤
+  9,999,999,999.99 (NUMERIC(12,2)); exchange rates are the user's own (> 0, never fetched or
+  invented); creates carry an idempotency key reused only when the same submission is retried.
 - **Design tokens come from `/DESIGN.md`.** Never edit the generated files.
 - **No real data in fixtures.** Fixture mode uses invented names and amounts.
 
@@ -74,23 +81,33 @@ cd jarvis-personal/native/ios && DEVELOPER_DIR=/Applications/Xcode.app/Contents/
 Android (JDK 17):
 
 ```bash
-cd jarvis-personal/native/android && ./gradlew :core:data:test :app:assembleDebug :app:lintDebug
+cd jarvis-personal/native/android && ./gradlew :core:data:test :app:assembleDebug :app:assembleRelease :app:lintNativedevDebug :app:lintDincrRelease
 ```
 
 Compose flows on a running emulator or device (CI runs them on API 24 and 35):
 
 ```bash
-cd jarvis-personal/native/android && ./gradlew :app:connectedDebugAndroidTest
+cd jarvis-personal/native/android && ./gradlew :app:connectedNativedevDebugAndroidTest
+```
+
+Test APK of the `dincr` identity (debug-signed, live backend; needs the Supabase values below):
+
+```bash
+cd jarvis-personal/native/android && ./gradlew :app:assembleDincrDebug
 ```
 
 ## Fixture mode and configuration
 
 Fixture (synthetic) data runs **only in a Debug build and only when asked for**, with a "Modo de
-demostración" banner. Scenarios: `populated`, `empty`, `failing`, `newUser`.
+demostración" banner. On Android it is an in-process fake backend (`FakeBackend`, an HTTP
+transport answering the real routes with invented data); on iOS `FixtureDincrService`.
+Scenarios: `populated`, `empty`, `failing`, `newUser`, legal required and plan choice.
 
-- iOS launch arguments: `-DincrFixtures <scenario>` and optionally `-DincrSkipLogin`.
-- Android intent extras: `dincrFixtures=<SCENARIO>` and optionally `dincrSkipLogin=true`, or
-  `dincr.fixtures=true` in `android/local.properties` (Debug only).
+- iOS launch arguments: `-DincrFixtures <scenario>` (`legalRequired`, `choosePlan`…),
+  optionally `-DincrSkipLogin` and `-DincrPlan basic|vip`.
+- Android intent extras: `dincrFixtures=<SCENARIO>` (`LEGAL_REQUIRED`, `CHOOSE_PLAN`…),
+  optionally `dincrSkipLogin=true` and `dincrPlan=BASIC|VIP`, or `dincr.fixtures=true` in
+  `android/local.properties` (Debug only).
 - A Release build ignores all of them (Android's launcher activity is exported, so another app
   could send the extras): it can never be pointed at sample data.
 
@@ -98,26 +115,25 @@ Without a backend configuration, both apps stop at a **"Prototipo sin servidor c
 screen; they never fall back to fixtures silently. Live backend (never committed):
 
 - iOS: copy `ios/Config/Local.xcconfig.example` to `ios/Config/Local.xcconfig`.
-- Android: add `dincr.apiUrl`, `dincr.supabaseUrl`, `dincr.supabaseAnonKey` to
-  `android/local.properties`.
+- Android: add `dincr.supabaseUrl` and `dincr.supabaseAnonKey` (and optionally `dincr.apiUrl`;
+  the `dincr` flavor defaults to the production API) to `android/local.properties`, or the
+  `DINCR_SUPABASE_URL` / `DINCR_SUPABASE_ANON_KEY` / `DINCR_API_URL` environment variables.
 - Both URLs must be HTTPS (plain HTTP only in Debug, only to loopback or the emulator's
   `10.0.2.2`). Only the Supabase anon/publishable key belongs here, never a server key.
 
 OAuth (Supabase PKCE S256, system browser: `ASWebAuthenticationSession` on iOS, Custom Tabs on
-Android, never a WebView) returns to the prototype's own development redirect
-`com.dincr.app.nativedev://auth/callback`, so it can never receive or steal the store app's
-`com.dincr.app://auth/callback`. **External gate, not requested:** live sign-in would need that URL
-in Supabase Auth → URL Configuration → Redirect URLs. It is not in the production allowlist and
-must not be added for this prototype. Without it, Supabase does not return to the prototype: it
-falls back to the project's Site URL, so the flow ends outside the prototype (which never falls
-back to fixtures). The authorization code is useless there, because only the prototype holds its
-PKCE verifier. Do not attempt live sign-in against production. Taking over `com.dincr.app` is a
-release decision that this prototype does not make.
+Android, never a WebView) returns to the identity's own redirect: `com.dincr.app://auth/callback`
+for the Android `dincr` flavor (the redirect the Capacitor app already uses), and
+`com.dincr.app.nativedev://auth/callback` for `nativedev` and iOS. The `nativedev` redirect is not
+in the production allowlist and must not be added for testing; without it, Supabase falls back to
+the Site URL and the flow ends outside the app (the authorization code is useless there, because
+only the app holds its PKCE verifier).
 
 Android note: the platform blocks cleartext HTTP (targetSdk 36, no network security exception), so
 a Debug build pointed at `http://10.0.2.2` is accepted by `LaunchPolicy` but its requests fail as
 "offline". Use HTTPS (for example a tunnel) for a local backend.
 
-## Known prototype limits
+## Known limits
 
-Tracked in `docs/native/PARITY_MATRIX.md` and `docs/design/reviews/R3-native-prototype.md`.
+Tracked in `docs/native/PARITY_MATRIX.md` (rows not `PASS`), [RELEASE_IDENTITY.md](RELEASE_IDENTITY.md)
+and `docs/design/reviews/R3-native-prototype.md`.

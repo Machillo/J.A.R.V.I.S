@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,6 +55,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.ApiError
@@ -73,16 +75,22 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.launch
 
-enum class MovementFilter { ALL, INCOME, EXPENSE }
+enum class MovementFilter { ALL, INCOME, EXPENSE, DEBT }
+
+/** Debt-related rows, the same rule as the Capacitor filter (`movementPreview.js`). */
+private val DEBT_WORDS = Regex("deud|debt|pr[eé]stamo|loan|cuota", RegexOption.IGNORE_CASE)
 
 /**
- * PARITY D1, D3–D6 (partial: no debt or category filter yet) — movements by day, search, filter,
- * add, edit, delete. The backend returns the whole history; search and the type filter only
- * narrow what is already on screen.
+ * PARITY D1–D6 — movements by day, search, filters (income, expenses, debts), add, edit, delete.
+ * The backend returns the whole history; search and filters only narrow what is on screen. Rows in
+ * another currency are edited in that currency with the user's own rate (never a rate DINCR invents).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarHostState) {
+fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarHostState, nav: Navigator) {
+    val profile by model.profile.collectAsStateWithLifecycle()
+    val entryCurrencies = profile?.entryCurrencies.orEmpty()
+    LaunchedEffect(Unit) { model.recordScreen("finance_opened", "movements") }
     var state by remember { mutableStateOf<Load<List<Movement>>>(Load.Loading) }
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(MovementFilter.ALL) }
@@ -92,7 +100,7 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     val scope = rememberCoroutineScope()
     var deleting by remember { mutableStateOf(false) }
     suspend fun load() {
-        model.load(tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions.")) { model.service.movements() }
+        model.load(tx("No pudimos cargar tus movimientos.", "We couldn’t load your transactions.")) { model.api.movements() }
             .onSuccess { state = Load.Ready(it) }
             .onFailure { if (it !is AuthException.SignedOut) state = Load.Failed(it.message.orEmpty()) }
     }
@@ -105,10 +113,16 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                     Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(top = DincrSpacing.s6), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
                         Text(tx("Movimientos", "Transactions"), style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text, modifier = Modifier.semantics { heading() })
                         OutlinedTextField(query, { query = it }, placeholder = { Text(tx("Buscar movimientos", "Search transactions")) }, leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
                             MovementFilter.entries.forEach { f ->
-                                FilterChip(filter == f, { filter = f }, label = { Text(when (f) { MovementFilter.ALL -> tx("Todos", "All"); MovementFilter.INCOME -> tx("Ingresos", "Income"); MovementFilter.EXPENSE -> tx("Gastos", "Expenses") }) })
+                                FilterChip(filter == f, { filter = f }, modifier = Modifier.heightIn(min = 48.dp), label = {
+                                    Text(when (f) { MovementFilter.ALL -> tx("Todos", "All"); MovementFilter.INCOME -> tx("Ingresos", "Income"); MovementFilter.EXPENSE -> tx("Gastos", "Expenses"); MovementFilter.DEBT -> tx("Deudas", "Debts") })
+                                })
                             }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                            TextButton({ nav.open("monthly") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Resumen del mes", "Monthly summary"), color = Dincr.colors.tint) }
+                            if (filter == MovementFilter.DEBT) TextButton({ nav.open("debts") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Gestionar deudas", "Manage debts"), color = Dincr.colors.tint) }
                         }
                     }
                 }
@@ -117,8 +131,13 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                     is Load.Failed -> item { Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) { ErrorState(s.message) { scope.launch { state = Load.Loading; load() } } } }
                     is Load.Ready -> {
                         val visible = s.value.filter {
-                            (filter == MovementFilter.ALL || (filter == MovementFilter.INCOME) == (it.kind == MovementKind.INCOME)) &&
-                                SearchText.matches(query, listOf(it.description, it.category))
+                            val kindMatches = when (filter) {
+                                MovementFilter.ALL -> true
+                                MovementFilter.INCOME -> it.kind == MovementKind.INCOME
+                                MovementFilter.EXPENSE -> it.kind == MovementKind.EXPENSE
+                                MovementFilter.DEBT -> DEBT_WORDS.containsMatchIn("${it.category.orEmpty()} ${it.description.orEmpty()}")
+                            }
+                            kindMatches && SearchText.matches(query, listOf(it.description, it.category))
                         }
                         if (visible.isEmpty()) item {
                             Column(Modifier.widthIn(max = 600.dp).padding(top = DincrSpacing.s4)) {
@@ -135,12 +154,13 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                                     modifier = Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(top = DincrSpacing.s5, bottom = DincrSpacing.s1).semantics { heading() })
                             }
                             items(rows, key = { it.movementId }) { movement ->
-                                val editable = movement.isEditable
+                                val editable = movement.canEdit(entryCurrencies)
                                 val edit = CustomAccessibilityAction(tx("Editar", "Edit")) { editing = EditorMode.Edit(movement); true }
                                 val delete = CustomAccessibilityAction(tx("Eliminar", "Delete")) { pendingDelete = movement; true }
+                                val original = originalLabel(movement, Dincr.money)
                                 MoneyRow(
                                     title = movement.description?.takeIf { it.isNotBlank() } ?: movement.category ?: tx("Movimiento", "Transaction"),
-                                    subtitle = listOfNotNull(movement.category, if (editable) null else tx("Solo lectura", "Read only")).joinToString(" · "),
+                                    subtitle = listOfNotNull(movement.category, original, if (editable) null else tx("Solo lectura", "Read only")).joinToString(" · "),
                                     amount = movement.amount, kind = movement.kind, icon = iconFor(movement), readOnly = !editable,
                                     modifier = Modifier.widthIn(max = 600.dp)
                                         .then(if (editable) Modifier.clickable { editing = EditorMode.Edit(movement) }.semantics { customActions = listOf(edit, delete) } else Modifier),
@@ -164,7 +184,7 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
     }
 
     editing?.let { mode ->
-        MovementEditorSheet(model, mode, onDismiss = { editing = null }, onSaved = { message ->
+        MovementEditorSheet(model, mode, latestRate = (state as? Load.Ready)?.value?.let(com.dincr.data.ConversionPreview::latestUserRate), onDismiss = { editing = null }, onSaved = { message ->
             editing = null
             scope.launch { load(); snackbar.showSnackbar(message) }
         }, onDelete = { pendingDelete = it; editing = null })
@@ -181,7 +201,7 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
                     if (deleting) return@TextButton
                     deleting = true
                     scope.launch {
-                        val result = model.load(tx("No pudimos eliminarlo. Intentá de nuevo.", "We couldn’t delete it. Please try again.")) { model.service.delete(movement.movementId) }
+                        val result = model.load(tx("No pudimos eliminarlo. Intentá de nuevo.", "We couldn’t delete it. Please try again.")) { model.api.delete(movement.movementId) }
                         deleting = false
                         val gone = (result.exceptionOrNull() as? ApiError)?.kind == ApiError.Kind.NOT_FOUND
                         when {
@@ -196,6 +216,14 @@ fun MovementsScreen(model: AppModel, padding: PaddingValues, snackbar: SnackbarH
             dismissButton = { TextButton({ pendingDelete = null }) { Text(tx("Cancelar", "Cancel")) } },
         )
     }
+}
+
+/** "US$10 · TC 507,5" for a row typed or received in another currency. */
+fun originalLabel(m: Movement, format: com.dincr.data.MoneyFormat): String? {
+    val currency = m.originalCurrency ?: return null
+    val amount = m.originalAmount ?: return null
+    val rate = m.exchangeRate?.let { " · " + tx("TC ", "Rate ") + format.inputText(it) }.orEmpty()
+    return format.format(amount, currencyOverride = currency) + rate
 }
 
 private fun iconFor(m: Movement): ImageVector = if (m.kind == MovementKind.INCOME) Icons.Rounded.SouthWest else when (m.category?.lowercase()) {

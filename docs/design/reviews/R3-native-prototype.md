@@ -127,3 +127,28 @@ No blocker, no high. Findings and decisions:
 | N56 | Token generator accepted `0x10px`, negatives and a non-semver version inside string literals | low | `^\d+(\.\d+)?px$`, semver only | `generate.test.mjs` |
 | N57 | Android `source_id` was 32-bit (`BIGSERIAL` ids above 2^31 would break decoding) | low | `Long` | build |
 | N58 | `check_public_secrets.py` sees a legacy `service_role` JWT only under the named keys | low | open hardening (decode JWT role) | — |
+
+## R3.3 — Native RC, 2026-09-29 (independent adversarial review, security reviewer, read-only)
+
+Scope: the RC diff (Android functional app on the live contract; iOS gates, flags, debts, goals,
+account deletion). No blocker. Verified sound: PKCE/callback/pending sign-in, session epoch,
+refresh single-flight, authoritative-only invalidation, local-first logout, Keystore/Keychain
+storage, no redirects, fixtures unreachable in Release, no secrets or `service_role`, no logging,
+allow-listed analytics, Owner boundary, reads without writes, BigDecimal/Decimal money bounds,
+user-only exchange rates, untouched currency edits preserved.
+
+| # | Finding | Severity | Decision / change | Test |
+|---|---|---|---|---|
+| N59 | Android: retrying a debt payment or a goal/savings contribution after an error minted a new idempotency key (a lost response could record the money twice) | **high** | fixed: `AmountSubmission` reuses the key while the amount is unchanged (`10000` = `10000.00`); a new amount gets a new key. iOS already did this | `retryingTheSameAmountReusesTheKeySoNothingIsRecordedTwice` (fails on the mutant that always mints a key) |
+| N60 | Android: the app lock was an overlay; sheets and dialogs (own windows) stayed visible and usable above it | medium | fixed: the lock replaces the app while locked (navigation restarts on unlock) | Compose flows; **HUMAN** on a device |
+| N61 | Android: the JSON data export stayed in the cache after sharing, sign-out and deletion | medium | fixed: removed at startup, sign-out and account deletion | code review |
+| N62 | Android: store purchase verification lived in a screen scope; `reconcile()` was never called | medium | fixed: Play Billing owned by `AppModel`, reconciled on Ready and on resume, closed in `onCleared`; the backend still verifies and acknowledges | build; **HUMAN** with a Play-signed build |
+| N63 | Taking over `com.dincr.app` abandons the Capacitor session and offline queue | medium | release gate in `native/RELEASE_IDENTITY.md` (flush the queue before replacing; users sign in again) | — |
+| N64 | Android: a foreign or malformed auth link consumed the pending PKCE verifier (sign-in DoS) | low | fixed: the link is validated before the verifier is taken | code review |
+| N65 | Android: own-transfer confirmation sent `out` only when the first side was unknown (422 dead end otherwise) | low | fixed: declares the opposite of the known side, shows it as "(deducido)", and asks for separate review when neither side is known | `ownTransferDeclaresTheOppositeOfTheKnownSide` |
+| N66 | 401 retry refreshes whichever session is current, not the one that sent the request | low | open: unreachable from the UI (screen scopes are cancelled on sign-out); follow-up to bind the refresh to the request's session | — |
+| N67 | Android lacks some iOS session-epoch guards (`refreshFlags`, screen-level `apply`) | low | open, mitigated by composition cancellation | — |
+| N68 | Exchange-rate prefill (user's latest own rate) can be stale and is not labelled | low | accepted (matches Capacitor, visible, editable, clearing makes it required); follow-up: label it with its date | `dollarExpenseAsksForTheRate` |
+| N69 | Recurring pause/activate sends `general` for a null category | low | accepted: it is the backend's own default (`RecurringItemRequest.category`) | — |
+| N70 | `FakeBackend` compiles into Release (unreachable) | low | open tidy-up: move to a debug source set | `LaunchPolicy` tests |
+| N71 | No `FLAG_SECURE`: the recents thumbnail shows balances with the lock on | low | open product decision (it also blocks screenshots) | — |

@@ -15,7 +15,7 @@ on:
       - "jarvis-personal/native/**"
       - ".github/workflows/native-ci.yml"
 
-# CI of the parallel native prototype only: no secrets, no signing, no deploy, no distribution.
+# CI of the native apps: no secrets, no signing, no deploy, no distribution.
 permissions:
   contents: read
 
@@ -52,12 +52,13 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
-      # Release is built unsigned (no signing config, no secrets) to prove it compiles and
-      # passes lint with R8; it is never uploaded. (It does not prove runtime behaviour.)
-      - run: ./gradlew :core:data:test :app:assembleDebug :app:lintDebug :app:assembleRelease :app:lintRelease --console=plain
+      # Both flavors (dincr = com.dincr.app, nativedev = side-by-side dev id). Release is built
+      # unsigned (no signing config, no secrets) to prove it compiles and passes lint with R8; it
+      # is never uploaded. Without Supabase config the app starts in its "not configured" state.
+      - run: ./gradlew :core:data:test :app:assembleDebug :app:assembleRelease :app:lintNativedevDebug :app:lintDincrRelease --console=plain
 
   # Compose flows on an emulator: the minimum (API 24, java.time through desugaring) and a
-  # current release. Fixture data only; no backend, no account.
+  # current release. In-process FakeBackend (debug only); no backend, no account.
   android-ui:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -87,7 +88,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           working-directory: jarvis-personal/native/android
-          script: ./gradlew :app:connectedDebugAndroidTest --console=plain
+          script: ./gradlew :app:connectedNativedevDebugAndroidTest --console=plain
 
   ios-kit:
     runs-on: macos-15
