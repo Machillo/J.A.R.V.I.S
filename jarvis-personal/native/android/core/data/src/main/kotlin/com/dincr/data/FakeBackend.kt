@@ -272,7 +272,8 @@ class FakeBackend(
                 budget = items.map { BudgetItem(it.category, it.monthlyLimit) }
                 ok(budgetView())
             }
-            path == "/user-product/basic/budget" -> ok(budgetView())
+            // STORE: the backend's guided budget for the sample, until the limits are edited.
+            path == "/user-product/basic/budget" -> if (store != null && budget == store.budget()) ok(store.engine("budget")) else ok(budgetView())
             path == "/user-product/basic/calendar" -> ok(FinancialCalendar(query["period"], recurring.filter { it.isActive == true }.map {
                 FinancialCalendar.Event("${query["period"] ?: today.toString().take(7)}-%02d".format((it.dueDay ?: 1).coerceIn(1, 28)), it.itemType, it.name, it.amount, "recurring")
             } + debts.mapNotNull { d -> d.paymentDay?.let { FinancialCalendar.Event("${query["period"] ?: today.toString().take(7)}-%02d".format(it.coerceIn(1, 28)), "debt", d.name, d.monthlyPayment, "debt") } },
@@ -295,13 +296,13 @@ class FakeBackend(
                 val (income, expenses) = totals(period)
                 ok(MonthReport(period, income, expenses, BigDecimal.ZERO, BigDecimal.ZERO, income - expenses, income - expenses, categories(period), MonthReport.Comparison(income, expenses, BigDecimal.ZERO)))
             }
-            path == "/user-product/finance/strategy-basic" -> ok(store?.strategy(vip = false) ?: strategy())
+            path == "/user-product/finance/strategy-basic" -> store?.let { ok(it.engine("strategy_basic")) } ?: ok(strategy())
             else -> error(404, "Not Found")
         }
     }
 
     private fun vip(path: String): HttpResponse = when (path) {
-        "/user-product/vip/command-center" -> ok(store?.commandCenter() ?: CommandCenter(
+        "/user-product/vip/command-center" -> store?.let { ok(it.engine("command_center")) } ?: ok(CommandCenter(
             today.toString(),
             CommandCenter.Director("debt", "Tu prioridad es bajar la tarjeta", "Pagá ₡40.000 extra a la tarjeta este mes", true),
             CommandCenter.Score(72, "Estable", listOf(CommandCenter.Factor("Ahorro de emergencia", "warning"))),
@@ -312,7 +313,7 @@ class FakeBackend(
             listOf(CommandCenter.RoadmapStep(1, "Completá tu fondo de emergencia inicial", BigDecimal(50000), "Te protege de imprevistos."),
                 CommandCenter.RoadmapStep(2, "Pagá extra a la tarjeta", BigDecimal(40000), "Tiene la tasa más alta.")),
         ))
-        "/user-product/finance/strategy-vip" -> ok(store?.strategy(vip = true) ?: strategy().copy(directorNote = "Priorizamos la deuda con tasa más alta."))
+        "/user-product/finance/strategy-vip" -> store?.let { ok(it.engine("strategy_vip")) } ?: ok(strategy().copy(directorNote = "Priorizamos la deuda con tasa más alta."))
         "/user-product/finance/strategy-vip/simulate" -> ok(ScenarioResult(strategy(), strategy().copy(strategicMargin = BigDecimal(260000)), ScenarioResult.Delta(BigDecimal(46000), BigDecimal(50000), BigDecimal(4000))))
         "/user-product/vip/aguinaldo" -> if (!mailConnected) error(409, "Conectá tu correo para calcular el aguinaldo.") else ok(Aguinaldo("OK", Aguinaldo.Period("${today.year - 1}-12-01", "${today.year}-11-30"), BigDecimal(5_190_000), BigDecimal(432_500)))
         "/user-product/vip/lifecycle/monthly-review" -> ok(MonthlyReview("BASELINE", today.toString().take(7), "Tu primer mes con DINCR", "Todavía no hay suficiente historia para comparar."))

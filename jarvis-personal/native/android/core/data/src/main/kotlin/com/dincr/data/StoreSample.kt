@@ -2,7 +2,8 @@ package com.dincr.data
 
 import java.math.BigDecimal
 import java.time.LocalDate
-import java.util.Locale
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 /**
  * The invented account behind the App Store / Google Play screenshots (store-assets/), served by
@@ -11,8 +12,9 @@ import java.util.Locale
  * - a fixed "today", so the images are identical on any capture day;
  * - six months of history, so the charts are full;
  * - a first name, a plan bought in the store (not a courtesy grant) and a completed situation;
- * - numbers that agree with each other (the strategy margin is income − essentials − minimums, the
- *   projections follow that split, the emergency goal equals the declared savings);
+ * - numbers that agree with each other (the emergency goal equals the declared savings, the
+ *   dashboard sums the movements); strategy, command center and budget are the real backend
+ *   engines' responses for this account ([engine]);
  * - text in the app's language, as the real backend localizes its text with Accept-Language
  *   (core/i18n.py). User-entered text (descriptions, names) is what an English- or
  *   Spanish-speaking user would type.
@@ -21,8 +23,6 @@ internal class StoreSample(private val language: AppLanguage) {
     private fun t(spanish: String, english: String) = language.pick(spanish, english)
     private fun day(dayOfMonth: Int) = TODAY.withDayOfMonth(dayOfMonth).toString()
     private fun money(value: Long) = BigDecimal(value)
-    /** Amounts inside backend sentences, formatted like the profile's number format. */
-    private fun colones(value: Long) = "₡" + String.format(Locale.US, "%,d", value).replace(",", t(".", ","))
 
     val cardName = t("Tarjeta principal", "Main card")
     val loanName = t("Préstamo del carro", "Car loan")
@@ -121,48 +121,13 @@ internal class StoreSample(private val language: AppLanguage) {
         )
     }
 
-    private val margin = MONTHLY_INCOME - ESSENTIALS - CARD_MINIMUM - LOAN_MINIMUM
-
-    fun strategy(vip: Boolean) = Strategy(
-        "tight", "debt", money(MONTHLY_INCOME), money(ESSENTIALS), money(CARD_MINIMUM + LOAN_MINIMUM), money(margin),
-        listOf(
-            Strategy.Allocation("emergency", t("Fondo de emergencia", "Emergency fund"), money(TO_EMERGENCY)),
-            Strategy.Allocation("debt_extra", t("Extra a la tarjeta", "Extra to the credit card"), money(TO_CARD)),
-            Strategy.Allocation("flex", t("Libre", "Free to spend"), money(margin - TO_EMERGENCY - TO_CARD)),
-        ),
-        recommendation = t("Destiná ${colones(TO_CARD)} extra a la tarjeta y ${colones(TO_EMERGENCY)} a tu fondo de emergencia.",
-            "Put ${colones(TO_CARD)} extra toward the credit card and ${colones(TO_EMERGENCY)} into your emergency fund."),
-        projection = Strategy.Projection(cardName, CARD_MONTHS, CARD_MONTHS_AT_MINIMUM, money(CARD_MINIMUM + TO_CARD)),
-        directorNote = if (vip) t("Priorizamos la deuda con la tasa más alta.", "We prioritize the debt with the highest rate.") else null,
-    )
-
-    fun commandCenter(): CommandCenter {
-        // Each month: the minimums plus the extra lower the debt (net of about ₡36.000 of interest);
-        // the emergency share raises the cash. Net worth = cash − debt.
-        val points = listOf(1, 3, 6).map { months ->
-            val cash = SAVED + TO_EMERGENCY * months
-            val debt = CARD_BALANCE + LOAN_BALANCE - DEBT_DOWN_PER_MONTH * months
-            CommandCenter.ProjectionPoint(months, money(cash), money(debt), money(cash - debt), "medium")
-        }
-        return CommandCenter(
-            TODAY.toString(),
-            CommandCenter.Director("debt", t("Tu prioridad es bajar la tarjeta", "Your priority is paying down the credit card"),
-                t("Pagá ${colones(TO_CARD)} extra a la tarjeta este mes", "Pay ${colones(TO_CARD)} extra on the credit card this month"), true),
-            CommandCenter.Score(72, t("Estable", "Stable"), listOf(CommandCenter.Factor(t("Ahorro de emergencia", "Emergency savings"), "warning"))),
-            CommandCenter.DebtPlanner(CommandCenter.Plan("avalanche", cardName, money(CARD_MINIMUM + TO_CARD), CARD_MONTHS, money(CARD_INTEREST))),
-            CommandCenter.SafeToSpend(money(margin - TO_EMERGENCY - TO_CARD), money(margin), money((CARD_MINIMUM + LOAN_MINIMUM) * 3 / 2)),
-            listOf(CommandCenter.Alert("medium", t("Pago de tarjeta en 5 días", "Credit card payment in 5 days"),
-                t("El pago mínimo vence pronto.", "The minimum payment is due soon."), t("Revisá la deuda", "Review the debt"))),
-            points,
-            listOf(
-                // Titles and details as the backend words them (ai/strategy_dashboard.py).
-                CommandCenter.RoadmapStep(1, t("Construir Salvavidas", "Build your emergency fund"), money(TO_EMERGENCY),
-                    t("La prioridad es aumentar tus meses de cobertura antes de asumir más riesgo.", "The priority is to increase your months of coverage before taking on more risk.")),
-                CommandCenter.RoadmapStep(2, t("Atacar deuda: $cardName", "Pay down debt: $cardName"), money(TO_CARD),
-                    t("El sobrante destinado a deuda se concentra primero en esta obligación.", "The surplus for debt goes to this obligation first.")),
-            ),
-        )
-    }
+    /**
+     * A backend response for this account exactly as the real engines computed it (strategy, VIP
+     * command center, guided budget): `engine` in store-sample.json, pinned by
+     * backend/tests/test_store_sample_engine.py. Never hand-written.
+     */
+    fun engine(name: String): String =
+        golden[language.tag]?.jsonObject?.get("engine")?.jsonObject?.get(name)?.toString() ?: error("store-sample.json has no engine.$name")
 
     companion object {
         /** The fixed "today" of the sample: the second payday of September 2026. */
@@ -176,14 +141,11 @@ internal class StoreSample(private val language: AppLanguage) {
         const val CARD_MINIMUM = 45000L
         const val LOAN_BALANCE = 1560000L
         const val LOAN_MINIMUM = 50000L
-        const val TO_EMERGENCY = 120000L
-        const val TO_CARD = 150000L
-        /** ₡585.000 at 3 % a month paying ₡195.000: 4 payments, about ₡37.600 of interest. */
-        const val CARD_MONTHS = 4
-        const val CARD_INTEREST = 37600L
-        /** The same balance paying only the ₡45.000 minimum: 17 months. */
-        const val CARD_MONTHS_AT_MINIMUM = 17
-        /** Minimums + extra (₡245.000) minus about ₡36.000 of monthly interest. */
-        const val DEBT_DOWN_PER_MONTH = 209000L
+
+        private val golden by lazy {
+            val text = StoreSample::class.java.getResourceAsStream("/store-sample.json")?.bufferedReader()?.use { it.readText() }
+                ?: error("store-sample.json is missing from the core/data resources")
+            Json.parseToJsonElement(text).jsonObject
+        }
     }
 }

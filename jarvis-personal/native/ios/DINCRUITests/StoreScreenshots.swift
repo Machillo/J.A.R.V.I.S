@@ -10,14 +10,14 @@ import XCTest
 /// really has are captured: Home, Transactions and the Plan hub (debts and goals).
 @MainActor
 final class StoreScreenshots: XCTestCase {
-    private struct Language {
-        let id: String, languages: String, locale: String
-        let pick: (String, String) -> String
+    private struct Language: Sendable {
+        let id: String, languages: String, locale: String, spanish: Bool
+        func pick(_ spanishText: String, _ englishText: String) -> String { spanish ? spanishText : englishText }
     }
 
-    private let languages = [
-        Language(id: "es", languages: "(es)", locale: "es_CR") { spanish, _ in spanish },
-        Language(id: "en", languages: "(en)", locale: "en_US") { _, english in english },
+    private static let languages = [
+        Language(id: "es", languages: "(es)", locale: "es_CR", spanish: true),
+        Language(id: "en", languages: "(en)", locale: "en_US", spanish: false),
     ]
 
     /// The output folder, or a skip when the run did not ask for store screenshots.
@@ -51,7 +51,7 @@ final class StoreScreenshots: XCTestCase {
     }
 
     func testS02Overview() throws {
-        for language in languages {
+        for language in Self.languages {
             let app = try launch(language)
             wait(app, language.pick("Disponible este mes", "Available this month"))
             wait(app, language.pick("Ingresos y gastos", "Income and expenses"))
@@ -61,7 +61,7 @@ final class StoreScreenshots: XCTestCase {
     }
 
     func testS03Movements() throws {
-        for language in languages {
+        for language in Self.languages {
             let app = try launch(language)
             wait(app, language.pick("Disponible este mes", "Available this month"))
             app.tabBars.buttons[language.pick("Movimientos", "Transactions")].tap()
@@ -72,7 +72,7 @@ final class StoreScreenshots: XCTestCase {
     }
 
     func testS04Debts() throws {
-        for language in languages {
+        for language in Self.languages {
             let app = try launch(language)
             wait(app, language.pick("Disponible este mes", "Available this month"))
             app.tabBars.buttons[language.pick("Plan", "Plan")].tap()
