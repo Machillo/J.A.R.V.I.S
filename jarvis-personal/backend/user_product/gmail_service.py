@@ -631,7 +631,7 @@ def _google_subject(access_token: str | None, client_id: str) -> str | None:
     return subject
 
 
-def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
+def begin_gmail_connection(import_scope: str | None = None, locale: str = mail_oauth.OAUTH_DEFAULT_LOCALE) -> dict[str, str]:
     require_gmail_consent()
     client_id, _, redirect_uri = _google_config()
     state, code_challenge = mail_oauth.start_flow("gmail", import_scope)
@@ -648,6 +648,9 @@ def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
         "state": state,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
+        # Display language of Google's screens (OpenID Connect `hl`, BCP 47). Without it
+        # Google guesses from the in-app browser, which keeps its own cookies apart from Safari.
+        "hl": mail_oauth.oauth_locale(locale),
     }
     return {"authorization_url": f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"}
 

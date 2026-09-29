@@ -95,7 +95,7 @@ export const updateVipSalvavidas = (payload) => json("/user-product/vip/salvavid
 export const getVipAguinaldo = () => request("/user-product/vip/aguinaldo");
 export const getVipGmailStatus = () => request("/user-product/vip/gmail/status");
 // import_scope: "current_month" | "current_year", stored server-side on the OAuth flow.
-export const connectVipGmail = (importScope) => json("/user-product/vip/gmail/connect", "POST", { import_scope: importScope });
+export const connectVipGmail = (importScope, locale) => json("/user-product/vip/gmail/connect", "POST", { import_scope: importScope, locale });
 export const connectVipMicrosoftMail = (importScope) => json("/user-product/vip/mail/microsoft/connect", "POST", { import_scope: importScope });
 export const completeVipMailConnection = (flow, completion) => json("/user-product/vip/mail/oauth/complete", "POST", { flow, completion });
 export const acceptVipGmailConsent = (version) => json("/user-product/vip/gmail/consent", "POST", { accepted: true, version });
