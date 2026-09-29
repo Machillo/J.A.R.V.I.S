@@ -335,7 +335,7 @@ public struct MailReturn: Sendable, Equatable {
               parts.host?.lowercased() == "gmail", parts.path == "/callback",
               parts.user == nil, parts.password == nil, parts.port == nil, (parts.fragment ?? "").isEmpty else { return nil }
         let items = parts.queryItems ?? []
-        for name in ["gmail", "microsoft", "flow", "completion", "ret"] where items.filter({ $0.name == name }).count > 9 { return nil }
+        for name in ["gmail", "microsoft", "flow", "completion", "ret"] where items.filter({ $0.name == name }).count > 1 { return nil }
         func single(_ name: String) -> String? { items.first { $0.name == name }.map { $0.value ?? "" } }
         let gmail = single("gmail"), microsoft = single("microsoft")
         let provider: Provider

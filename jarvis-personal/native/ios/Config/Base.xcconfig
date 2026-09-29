@@ -1,7 +1,7 @@
 // DINCR native iOS build settings: the release identity of the store app it replaces
 // (native/RELEASE_IDENTITY.md). Pinned by DincrKit IdentityGuardTests.
 // The build number stays above the Capacitor app's (36) so the native build is an update.
-PRODUCT_BUNDLE_IDENTIFIER = com.dincr.app.nativedev
+PRODUCT_BUNDLE_IDENTIFIER = com.dincr.app
 PRODUCT_NAME = DINCR
 MARKETING_VERSION = 2.0.0
 CURRENT_PROJECT_VERSION = 100
