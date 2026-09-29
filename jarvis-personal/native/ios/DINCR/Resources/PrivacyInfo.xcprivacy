@@ -21,7 +21,7 @@
 			</array>
 		</dict>
 		<dict>
-			<!-- ProcessInfo.systemUptime: time spent in the background for the app lock. -->
+			<!-- Monotonic clock (ContinuousClock) measuring time spent in the background for the app lock. -->
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>

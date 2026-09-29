@@ -297,6 +297,11 @@ private struct MailMonitorContent: View {
     @discardableResult
     private func review(_ candidate: MailCandidate, _ review: Review) async -> Bool {
         guard let id = candidate.candidateId else { return false }
+        guard busy == nil else {
+            errorMessage = tx("Esperá a que termine la acción anterior.", "Wait for the previous action to finish.")
+            return false
+        }
+        errorMessage = nil
         var saved = false
         await perform(candidate.id, fallback: tx("No pudimos revisar el aviso.", "We couldn’t review the notice.")) {
             let result: CandidateReviewResult

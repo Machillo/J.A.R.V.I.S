@@ -111,6 +111,8 @@ final class AppModel {
             await loadIdentity()
         } else {
             phase = .signedOut
+            // A mail return delivered during boot belongs to no session: drop it.
+            retryMailReturn = nil
         }
     }
 
@@ -206,13 +208,12 @@ final class AppModel {
         } catch let error as APIError {
             guard epoch == sessionEpoch else { return }
             let deletionPending = error.code == "account_deletion_pending"
-            // A background refresh of a signed-in app (resume) that fails for a transient reason keeps
-            // the user where they were; only a real state change moves the gate.
-            if phase == .ready, profile != nil, !deletionPending, error.kind != .forbidden { return }
+            // A background refresh of a signed-in app (resume) that fails for a transient reason
+            // (offline, timeout, 5xx) keeps the user where they were; any other answer moves the gate.
+            if phase == .ready, profile != nil, !deletionPending, error.isTransient { return }
             phase = .identityError(error.message, deletionPending: deletionPending)
         } catch {
             guard epoch == sessionEpoch else { return }
-            if phase == .ready, profile != nil { return }
             phase = .identityError(language.pick("No pudimos cargar tu cuenta.", "We couldn’t load your account."), deletionPending: false)
         }
     }
@@ -330,8 +331,9 @@ final class AppModel {
             return
         }
         guard phase == .ready else {
-            // Before sign-in there is no session to bind it to; after sign-in it is retried once ready.
-            if profile != nil || phase == .loadingIdentity { retryMailReturn = mailReturn }
+            // Cold start (booting, loading the identity) or a gate: kept and redeemed once ready. With no
+            // session at all it is dropped (`start()` and sign-out clear it), never kept for a later sign-in.
+            if phase != .signedOut { retryMailReturn = mailReturn }
             return
         }
         let epoch = sessionEpoch
