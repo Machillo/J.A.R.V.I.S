@@ -74,6 +74,22 @@ class FlowsTest {
     /** Rows below the fold of a lazy list exist only once scrolled to. */
     private fun rowText(text: String) = compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text)).let { compose.onNodeWithText(text) }
 
+    /**
+     * Opens a row's editor. On a slow emulator (API 24) a tap that lands while the list is still
+     * reloading or the previous sheet is animating away is dropped, so it taps again (at most 3).
+     */
+    private fun openEditor(text: String) {
+        waitForText(text)
+        repeat(3) {
+            rowText(text).performClick()
+            val opened = runCatching {
+                compose.waitUntil(5_000) { advance(); compose.onAllNodes(hasTestTag("editor.amount")).fetchSemanticsNodes().isNotEmpty() }
+            }.isSuccess
+            if (opened) return
+        }
+        waitForTag("editor.amount")
+    }
+
     private fun tab(label: String) = compose.onAllNodesWithText(label).onFirst().performClick()
 
     private fun openMovements() {
@@ -139,8 +155,7 @@ class FlowsTest {
     @Test fun editKeepsTheStoredAmountAndCategory() {
         launch()
         openMovements()
-        rowText("Feria del agricultor").performClick()
-        waitForTag("editor.amount")
+        openEditor("Feria del agricultor")
         compose.onNodeWithTag("editor.amount").assert(hasText("12.345,5"))
         val categoryField = compose.onAllNodesWithText("Feria", useUnmergedTree = true).fetchSemanticsNodes()
             .any { it.config.contains(SemanticsProperties.EditableText) }
@@ -150,8 +165,7 @@ class FlowsTest {
         compose.onNodeWithTag("editor.save").performScrollTo().performClick()
         waitForText("Feria de Zapote")
         waitForGone(tx("Editar movimiento", "Edit transaction"))
-        rowText("Feria de Zapote").performClick()
-        waitForTag("editor.amount")
+        openEditor("Feria de Zapote")
         compose.onNodeWithTag("editor.amount").assert(hasText("12.345,5"))
     }
 
@@ -159,16 +173,14 @@ class FlowsTest {
     @Test fun dollarRowKeepsItsOriginalAmountAndRate() {
         launch()
         openMovements()
-        rowText("Suscripción en dólares").performClick()
-        waitForTag("editor.amount")
+        openEditor("Suscripción en dólares")
         compose.onNodeWithTag("editor.amount").assert(hasText("10"))
         compose.onNodeWithTag("editor.rate").assert(hasText("507,5"))
         compose.onNodeWithTag("editor.description").performTextClearance()
         compose.onNodeWithTag("editor.description").performTextInput("Streaming")
         compose.onNodeWithTag("editor.save").performScrollTo().performClick()
         waitForText("Streaming")
-        rowText("Streaming").performClick()
-        waitForTag("editor.amount")
+        openEditor("Streaming")
         compose.onNodeWithTag("editor.amount").assert(hasText("10"))
         compose.onNodeWithTag("editor.rate").assert(hasText("507,5"))
     }
@@ -176,7 +188,7 @@ class FlowsTest {
     @Test fun deleteAsksAndRemovesTheRow() {
         launch()
         openMovements()
-        rowText("Feria del agricultor").performClick()
+        openEditor("Feria del agricultor")
         waitForText(tx("Eliminar movimiento", "Delete transaction"))
         compose.onNodeWithText(tx("Eliminar movimiento", "Delete transaction")).performClick()
         waitForText(tx("Esta acción no se puede deshacer.", "This can’t be undone."))
