@@ -98,7 +98,7 @@ def test_connect_routes_pass_the_choice_and_default_to_the_current_year(monkeypa
     monkeypatch.setattr(main, "disabled_feature_for_request", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(user_product_routes, "require_feature", lambda *_args, **_kwargs: None)
     received = []
-    monkeypatch.setattr(user_product_routes, "begin_gmail_connection", lambda scope: received.append(("gmail", scope)) or {"authorization_url": "x"})
+    monkeypatch.setattr(user_product_routes, "begin_gmail_connection", lambda scope, locale="en": received.append(("gmail", scope)) or {"authorization_url": "x"})
     monkeypatch.setattr(user_product_routes, "begin_microsoft_connection", lambda scope: received.append(("microsoft", scope)) or {"authorization_url": "x"})
     client, auth = TestClient(main.app), {"Authorization": "Bearer t"}
     assert client.post("/user-product/vip/gmail/connect", headers=auth).status_code == 200

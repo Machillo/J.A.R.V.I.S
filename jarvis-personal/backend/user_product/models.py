@@ -11,6 +11,9 @@ class GmailConsentRequest(BaseModel):
 class MailConnectRequest(BaseModel):
     # History to import, chosen before the provider consent.
     import_scope: Literal["current_month", "current_year"] = "current_year"
+    # Language the app shows (BCP 47), for the provider's consent screens. Normalized
+    # to en/es server-side; any other value falls back to English.
+    locale: str | None = Field(default=None, max_length=35)
 
 
 class MailConnectionCompleteRequest(BaseModel):
