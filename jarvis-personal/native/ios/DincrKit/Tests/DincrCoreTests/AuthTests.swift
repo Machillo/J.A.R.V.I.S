@@ -29,11 +29,11 @@ import Testing
         #expect(query["redirect_to"] == Self.redirect)
     }
 
-    static let redirect = "com.dincr.app://auth/callback"
+    static let redirect = AppIdentity.authRedirect
 
     @Test func callbackAcceptsOnlyACodeOnTheExactRedirect() throws {
         #expect(try SupabaseAuthClient.authorizationCode(from: URL(string: "\(Self.redirect)?code=abc")!, redirect: Self.redirect) == "abc")
-        #expect(try SupabaseAuthClient.authorizationCode(from: URL(string: "COM.DINCR.APP.NATIVEDEV://auth/callback?code=abc&state=s")!, redirect: Self.redirect) == "abc")
+        #expect(try SupabaseAuthClient.authorizationCode(from: URL(string: "COM.DINCR.APP://auth/callback?code=abc&state=s")!, redirect: Self.redirect) == "abc")
         #expect(throws: AuthError.providerRejected) {
             try SupabaseAuthClient.authorizationCode(from: URL(string: "\(Self.redirect)?error=access_denied")!, redirect: Self.redirect)
         }
@@ -41,7 +41,7 @@ import Testing
 
     @Test(arguments: [
         "evil://auth/callback?code=abc",                              // other scheme
-        "com.dincr.app://auth/callback?code=abc",                    // the production app's scheme
+        "com.dincr.app.nativedev://auth/callback?code=abc",          // the former side-by-side development scheme
         "com.dincr.app://auth/callbackX?code=abc",         // look-alike path
         "com.dincr.app://auth/callback/x?code=abc",
         "com.dincr.app://evil/callback?code=abc",          // other host
