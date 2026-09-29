@@ -151,7 +151,8 @@ public actor FixtureBackend: HTTPTransport {
         case ("POST", "/user-product/finance/debts"):
             var debt = body
             debt["id"] = nextId()
-            debt["total_amount"] = body["total_amount"] ?? body["remaining_amount"]
+            let remaining = body["remaining_amount"]
+            debt["total_amount"] = body["total_amount"] ?? remaining
             debts.append(debt)
             return ok(debt)
         // Goals and savings
@@ -462,10 +463,14 @@ public actor FixtureBackend: HTTPTransport {
             candidates[index]["review_status"] = "rejected"
             return ok(["status": "rejected", "candidate_id": candidateID, "transaction_id": NSNull()])
         case ("POST", "accept"), ("PUT", "accept"):
-            let native = (candidate["original_currency"] as? String) ?? (candidate["currency"] as? String) ?? "CRC"
+            let originalCurrency = candidate["original_currency"] as? String
+            let currency = candidate["currency"] as? String
+            let native = originalCurrency ?? currency ?? "CRC"
             let base = candidate["account_base_currency"] as? String ?? "CRC"
             if !MailCandidate.convertible.contains(native) { return error(422, "Este aviso está en una moneda que DINCR no puede convertirlo.") }
-            if native != base && (method == "POST" || decimal(body["exchange_rate"]) == nil) {
+            // Precomputed: the right side of || and ?? is an autoclosure, which must not capture JSON dictionaries.
+            let rate = decimal(body["exchange_rate"])
+            if native != base && (method == "POST" || rate == nil) {
                 return error(422, "Este movimiento está en \(native). Tocá Corregir e indicá el tipo de cambio.")
             }
             let transactionID = nextId()
@@ -474,10 +479,17 @@ public actor FixtureBackend: HTTPTransport {
             if method == "PUT" {
                 candidates[index]["description"] = body["description"]; candidates[index]["category"] = body["category"]
             }
+            let storedDate = candidate["transaction_date"] as? String ?? day(0)
+            let storedDescription = candidate["description"] as? String ?? ""
+            let storedCategory = candidate["category"] as? String ?? "general"
+            let amount = decimal(candidate["amount"]) ?? 0
+            let type = candidate["transaction_type"] as? String ?? "expense"
+            let date = body["transaction_date"] as? String ?? storedDate
+            let description = body["description"] as? String ?? storedDescription
+            let category = body["category"] as? String ?? storedCategory
             movements.append(["movement_id": "transaction:\(transactionID)", "source_id": transactionID, "origin": "transaction",
-                              "transaction_date": body["transaction_date"] ?? candidate["transaction_date"] ?? day(0),
-                              "description": body["description"] ?? candidate["description"] ?? "", "amount": candidate["amount"] ?? 0,
-                              "transaction_type": candidate["transaction_type"] ?? "expense", "category": body["category"] ?? candidate["category"] ?? "general", "editable": false])
+                              "transaction_date": date, "description": description, "amount": number(amount),
+                              "transaction_type": type, "category": category, "editable": false])
             return ok(["status": "confirmed", "candidate_id": candidateID, "transaction_id": transactionID])
         default: return error(405, "Método no permitido")
         }
@@ -494,7 +506,10 @@ public actor FixtureBackend: HTTPTransport {
 
     private func categories(_ period: String) -> [[String: Any]] {
         var byCategory: [String: Decimal] = [:]
-        for row in movements where (row["transaction_date"] as? String ?? "").hasPrefix(period) && row["transaction_type"] as? String != "income" {
+        for row in movements {
+            let inPeriod = (row["transaction_date"] as? String ?? "").hasPrefix(period)
+            let isIncome = row["transaction_type"] as? String == "income"
+            guard inPeriod, !isIncome else { continue }
             byCategory[row["category"] as? String ?? "Sin categoría", default: 0] += decimal(row["amount"]) ?? 0
         }
         return byCategory.sorted { $0.value > $1.value }.map { ["category": $0.key, "amount": number($0.value)] }
