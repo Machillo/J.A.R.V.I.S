@@ -30,6 +30,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.AmountInput
 import com.dincr.data.ApiError
+import com.dincr.data.AppLanguage
 import com.dincr.data.AuthException
 import com.dincr.data.CandidateCorrection
 import com.dincr.data.CandidateReviewResult
@@ -114,7 +115,7 @@ fun MailScreen(model: AppModel, nav: Navigator) {
                 if (status.needsReauthorization) StatusBanner(BannerTone.WARNING, tx("Volvé a conectar tu correo", "Reconnect your mail"), tx("El permiso venció o fue revocado.", "The permission expired or was revoked."))
                 DincrCard {
                     Column {
-                        status.connections.forEach { c ->
+                        status.visibleConnections.forEach { c ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(c.email ?: tx("Correo conectado", "Connected mail"), style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text)
@@ -127,7 +128,11 @@ fun MailScreen(model: AppModel, nav: Navigator) {
                             syncing = true
                             scope.launch {
                                 model.load(tx("No pudimos revisar tu correo.", "We couldn’t check your mail.")) { model.api.syncMail() }
-                                    .onSuccess { r -> model.showNotice(tx("Encontramos ${r.found ?: 0} avisos: ${r.pending ?: 0} por revisar.", "Found ${r.found ?: 0} notices: ${r.pending ?: 0} to review.")) }
+                                    .onSuccess { r ->
+                                        val found = tx("Encontramos ${r.found ?: 0} avisos: ${r.pending ?: 0} por revisar.", "Found ${r.found ?: 0} notices: ${r.pending ?: 0} to review.")
+                                        val failed = r.failedConnections.size
+                                        model.showNotice(if (failed == 0) found else found + " " + tx("No pudimos revisar $failed de tus correos; intentá de nuevo más tarde.", "We couldn’t check $failed of your mailboxes; try again later."))
+                                    }
                                     .onFailure { if (it !is AuthException.SignedOut) model.showNotice(it.message.orEmpty()) }
                                 syncing = false; data.reload()
                             }
@@ -188,7 +193,7 @@ private fun ConnectMail(model: AppModel, status: MailStatus) {
         scope.launch {
             model.load(tx("No pudimos iniciar la conexión.", "We couldn’t start the connection.")) {
                 status.consent?.takeIf { it.required }?.version?.let { model.api.acceptMailConsent(it) }
-                model.api.connectMail(provider, scopeChoice)
+                model.api.connectMail(provider, scopeChoice, AppLanguage.current())
             }.onSuccess { response ->
                 if (response.authorizationUrl.startsWith("https://")) openInBrowser(context, response.authorizationUrl)
                 else error = tx("La dirección de conexión no es segura.", "The connection address is not secure.")
@@ -219,7 +224,12 @@ private fun CandidateCard(candidate: MailCandidate, busy: Boolean, message: Stri
                 candidate.cannotConvert -> Caption(tx("Este aviso está en ${candidate.nativeCurrency}, una moneda que DINCR no convierte. Solo podés descartarlo.", "This notice is in ${candidate.nativeCurrency}, a currency DINCR doesn’t convert. You can only dismiss it."))
                 candidate.needsRate -> Caption(tx("Está en ${candidate.nativeCurrency}: tocá Corregir e indicá tu tipo de cambio.", "It’s in ${candidate.nativeCurrency}: tap Correct and enter your exchange rate."))
             }
-            candidate.resolutionReason?.let { Caption(it) }
+            when (candidate.resolutionNote) {
+                MailCandidate.ResolutionNote.POSSIBLE_MATCH -> Caption(tx("Posible coincidencia con otro aviso bancario o estado de cuenta. DINCR lo deja para tu revisión en vez de descartarlo solo.", "Possible match with another bank notice or statement. DINCR leaves it for your review instead of dismissing it on its own."))
+                MailCandidate.ResolutionNote.PAIRED_OWN_TRANSFER -> Caption(tx("Dos avisos corresponden a un traslado entre tus cuentas confirmadas. Al confirmar, no se suma a ingresos ni gastos.", "Two notices describe a transfer between your confirmed accounts. Confirming won’t add income or expense."))
+                MailCandidate.ResolutionNote.OWN_ACCOUNTS -> Caption(tx("Ambas cuentas son de las que confirmaste como tuyas. Al confirmar, no se registra como ingreso ni gasto.", "Both accounts are ones you confirmed as yours. Confirming won’t record income or expense."))
+                null -> Unit
+            }
             message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2) }
             Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
                 if (!candidate.needsRate && !candidate.cannotConvert) TextButton(onAccept, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Confirmar", "Confirm"), color = Dincr.colors.tint) }

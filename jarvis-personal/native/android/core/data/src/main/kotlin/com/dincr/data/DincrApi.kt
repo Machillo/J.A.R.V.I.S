@@ -106,15 +106,15 @@ class DincrApi(private val client: ApiClient) {
     suspend fun mailStatus(): MailStatus = client.get("/user-product/vip/gmail/status")
     suspend fun acceptMailConsent(version: String): Acknowledgement =
         client.send("POST", "/user-product/vip/gmail/consent", MailConsentRequest(true, version))
-    suspend fun connectMail(provider: MailReturn.Provider, importScope: String): MailConnectResponse =
-        client.send("POST", if (provider == MailReturn.Provider.GMAIL) "/user-product/vip/gmail/connect" else "/user-product/vip/mail/microsoft/connect", MailConnectRequest(importScope))
+    suspend fun connectMail(provider: MailReturn.Provider, importScope: String, language: AppLanguage): MailConnectResponse =
+        client.send("POST", if (provider == MailReturn.Provider.GMAIL) "/user-product/vip/gmail/connect" else "/user-product/vip/mail/microsoft/connect", MailConnectRequest(importScope, language.tag))
     suspend fun completeMailConnection(flow: String, completion: String): MailCompleteResponse =
         client.send("POST", "/user-product/vip/mail/oauth/complete", MailCompleteRequest(flow, completion))
     suspend fun syncMail(): MailSyncResult = client.send("POST", "/user-product/vip/gmail/sync")
     suspend fun disconnectMail(connectionId: Long): Acknowledgement =
         client.send("DELETE", "/user-product/vip/gmail", mapOf("connection_id" to connectionId.toString()))
     suspend fun mailCandidates(pendingOnly: Boolean): List<MailCandidate> =
-        client.get("/user-product/vip/gmail/emails", mapOf("status" to if (pendingOnly) "pending" else ""))
+        client.get<MailCandidateList>("/user-product/vip/gmail/emails", mapOf("status" to if (pendingOnly) "pending" else "")).items
     suspend fun acceptCandidate(id: Long): CandidateReviewResult = client.send("POST", "/user-product/vip/gmail/candidates/$id/accept")
     suspend fun correctCandidate(id: Long, correction: CandidateCorrection): CandidateReviewResult =
         client.send("PUT", "/user-product/vip/gmail/candidates/$id/accept", correction.checked())

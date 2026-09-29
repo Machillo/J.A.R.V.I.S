@@ -316,13 +316,17 @@ class FakeBackend(
         return when {
             path == "/user-product/vip/gmail/status" -> ok(MailStatus(mailConnected, false, candidates.count { it.isPending }, true,
                 MailStatus.Consent(required = !mailConnected, version = "mail-monitor-2026-09-v2"),
-                if (mailConnected) listOf(MailStatus.Connection(1, "gmail", "ejemplo@correo.test", "active", true, "${today.year}-01-01")) else emptyList()))
+                // Like the server, the status also lists a mailbox the user disconnected earlier.
+                if (mailConnected) listOf(MailStatus.Connection(1, "gmail", "ejemplo@correo.test", "active", true, "${today.year}-01-01"),
+                    MailStatus.Connection(2, "gmail", "anterior@correo.test", "disabled", false, "${today.year}-01-01")) else emptyList()))
             path == "/user-product/vip/gmail/consent" -> ok("""{"status":"accepted"}""")
             path == "/user-product/vip/gmail/connect" || path == "/user-product/vip/mail/microsoft/connect" -> ok("""{"authorization_url":"https://accounts.example.test/authorize?state=demo"}""")
             path == "/user-product/vip/mail/oauth/complete" -> { mailConnected = true; ok("""{"status":"connected","provider":"gmail"}""") }
-            path == "/user-product/vip/gmail/sync" -> if (!mailConnected) error(404, "No hay un correo conectado.") else ok(MailSyncResult("ok", 3, candidates.count { it.isPending }, 0, 1, "year_to_date", true, 0))
+            path == "/user-product/vip/gmail/sync" -> if (!mailConnected) error(404, "No hay un correo conectado.") else ok(
+                """{"status":"ok","connections":1,"failed_connections":[],"scan_scope":"year_to_date","initial_scan_complete":true,""" +
+                    """"found":3,"auto_saved":1,"pending":${candidates.count { it.isPending }},"payroll_reports":0,"duplicates":0}""")
             path == "/user-product/vip/gmail" && method == "DELETE" -> { mailConnected = false; ok("""{"status":"disconnected"}""") }
-            path == "/user-product/vip/gmail/emails" -> ok(candidates.toList())
+            path == "/user-product/vip/gmail/emails" -> ok(MailCandidateList("ok", candidates.toList()))
             path == "/user-product/vip/gmail/own-transfer-suggestions" -> ok(OwnTransferSuggestions())
             path == "/user-product/vip/financial-identity" -> ok(FinancialIdentity(listOf(FinancialIdentity.Account(1, "Cuenta de ejemplo", "Banco de ejemplo", "bac", "CRC", "1234", "pending")), FinancialIdentity.Summary(1)))
             segments.take(4) == listOf("user-product", "vip", "financial-identity", "accounts") -> ok("""{"status":"ok"}""")

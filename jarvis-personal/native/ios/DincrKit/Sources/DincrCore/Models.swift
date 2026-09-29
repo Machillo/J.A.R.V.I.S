@@ -12,12 +12,24 @@ public struct Profile: Decodable, Sendable, Equatable {
         public let plan: String?
         public let status: String?
         public let planName: String?
-        /// `store`, `courtesy`, `promotion`…: how the plan was granted.
+        /// `self_service` (store), `courtesy`, `owner`: how the plan was granted.
         public let accessSource: String?
+        public let expiresAt: String?
+        public let pendingPlan: String?
+        public let pendingEffectiveAt: String?
+        public let accessNotice: AccessNotice?
 
-        public init(plan: String?, status: String?, planName: String? = nil, accessSource: String? = nil) {
+        public init(plan: String?, status: String?, planName: String? = nil, accessSource: String? = nil, expiresAt: String? = nil,
+                    pendingPlan: String? = nil, pendingEffectiveAt: String? = nil, accessNotice: AccessNotice? = nil) {
             self.plan = plan; self.status = status; self.planName = planName; self.accessSource = accessSource
+            self.expiresAt = expiresAt; self.pendingPlan = pendingPlan; self.pendingEffectiveAt = pendingEffectiveAt; self.accessNotice = accessNotice
         }
+    }
+    public struct AccessNotice: Decodable, Sendable, Equatable {
+        public let code: String?
+        public let title: String?
+        public let message: String?
+        public init(code: String?, title: String?, message: String?) { self.code = code; self.title = title; self.message = message }
     }
     public struct Legal: Decodable, Sendable, Equatable {
         public let required: Bool?
@@ -42,24 +54,35 @@ public struct Profile: Decodable, Sendable, Equatable {
     public let currencyPlacement: String?
     public let subscription: Subscription?
     public let legal: Legal?
+    /// Currencies this backend converts for manual entries (#269); the base only when absent.
+    public let entryCurrencies: [String]?
 
     public init(
         id: Int, email: String? = nil, displayName: String? = nil, role: String? = "user",
         planSelected: Bool? = true, profileSetupCompleted: Bool? = true, baseCurrency: String? = "CRC",
         numberFormat: String? = "dot_comma", currencyPlacement: String? = "before",
-        subscription: Subscription? = nil, legal: Legal? = nil
+        subscription: Subscription? = nil, legal: Legal? = nil, entryCurrencies: [String]? = nil
     ) {
         self.id = id; self.email = email; self.displayName = displayName; self.role = role
         self.planSelected = planSelected; self.profileSetupCompleted = profileSetupCompleted
         self.baseCurrency = baseCurrency; self.numberFormat = numberFormat
         self.currencyPlacement = currencyPlacement; self.subscription = subscription; self.legal = legal
+        self.entryCurrencies = entryCurrencies
+    }
+
+    /// The currencies the user can type an amount in: the base first, then the other convertible one.
+    public var typingCurrencies: [String] {
+        let base = (baseCurrency ?? "CRC").uppercased()
+        let others = (entryCurrencies ?? []).map { $0.uppercased() }.filter { $0 != base }
+        return (entryCurrencies ?? []).map { $0.uppercased() }.contains(base) ? [base] + others : [base]
     }
 
     /// A copy with some fields replaced (fixtures and gates; never a financial value).
     public func with(planSelected: Bool? = nil, subscription: Subscription? = nil, legal: Legal? = nil) -> Profile {
         Profile(id: id, email: email, displayName: displayName, role: role, planSelected: planSelected ?? self.planSelected,
                 profileSetupCompleted: profileSetupCompleted, baseCurrency: baseCurrency, numberFormat: numberFormat,
-                currencyPlacement: currencyPlacement, subscription: subscription ?? self.subscription, legal: legal ?? self.legal)
+                currencyPlacement: currencyPlacement, subscription: subscription ?? self.subscription, legal: legal ?? self.legal,
+                entryCurrencies: entryCurrencies)
     }
 
     /// Owner/admin sessions are never served by the public app (Owner boundary).
@@ -92,6 +115,8 @@ public struct CategoryAmount: Decodable, Sendable, Equatable, Identifiable {
     public let category: String
     public let amount: Decimal
     public var id: String { category }
+
+    public init(category: String, amount: Decimal) { self.category = category; self.amount = amount }
 }
 
 /// `GET /user-product/free/dashboard`
@@ -155,12 +180,37 @@ public struct Movement: Decodable, Sendable, Equatable, Identifiable, Hashable {
     /// any of them stays read-only, whatever its currency. A row without a date is read-only too:
     /// the full-replacement `PUT` would have to invent one.
     public var isEditable: Bool {
-        guard editable, originalAmount == nil, originalCurrency == nil, exchangeRate == nil, let day else { return false }
+        editable && !hasCurrencyData && hasValidDate
+    }
+
+    public var hasCurrencyData: Bool { originalAmount != nil || originalCurrency != nil || exchangeRate != nil }
+
+    var hasValidDate: Bool {
+        guard let day else { return false }
         let characters = Array(day)
         return characters.count == 10 && characters.indices.allSatisfy { index in
             index == 4 || index == 7 ? characters[index] == "-" : characters[index].isASCII && characters[index].isNumber
         }
     }
+
+    static let manualOrigins: Set<String> = ["salary", "expense"]
+
+    /// A manual income or expense typed in another currency can be edited safely by sending its
+    /// currency and the user's own rate back (`PUT /free/movements` accepts both for `salary` /
+    /// `expense`): the backend recomputes the base amount exactly as when it was created. It needs
+    /// the complete original data and a currency this backend converts. Mail rows and partial data
+    /// stay read-only (Android `Movement.isCurrencyEditable`).
+    public func isCurrencyEditable(entryCurrencies: [String]) -> Bool {
+        guard let currency = originalCurrency?.uppercased(), let origin, Self.manualOrigins.contains(origin),
+              originalAmount != nil, let rate = exchangeRate, rate > 0 else { return false }
+        return editable && hasValidDate && entryCurrencies.contains { $0.uppercased() == currency }
+    }
+
+    /// Whether this app may edit or delete the row at all.
+    public func canEdit(entryCurrencies: [String]) -> Bool { isEditable || isCurrencyEditable(entryCurrencies: entryCurrencies) }
+
+    /// Manual rows may be switched to another entry currency on edit (the backend converts).
+    public var acceptsCurrency: Bool { origin.map { Self.manualOrigins.contains($0) } ?? false }
 
     enum CodingKeys: String, CodingKey {
         case movementId, sourceId, origin, transactionDate, description, amount, transactionType
@@ -195,9 +245,26 @@ public struct EntryCreate: Encodable, Sendable, Equatable {
     public let description: String
     public let category: String
     public let entryDate: String?
+    /// Only for an amount typed in another entry currency (#269): the currency and the user's own
+    /// rate (colones per 1 dollar). Absent for the base currency; the backend converts and stores.
+    public let currency: String?
+    public let exchangeRate: Decimal?
 
-    public init(amount: Decimal, description: String, category: String, entryDate: String?) {
+    public init(amount: Decimal, description: String, category: String, entryDate: String?, currency: String? = nil, exchangeRate: Decimal? = nil) {
         self.amount = amount; self.description = description; self.category = category; self.entryDate = entryDate
+        self.currency = currency; self.exchangeRate = exchangeRate
+    }
+
+    enum CodingKeys: String, CodingKey { case amount, description, category, entryDate, currency, exchangeRate }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(amount, forKey: .amount)
+        try c.encode(description, forKey: .description)
+        try c.encode(category, forKey: .category)
+        try c.encodeIfPresent(entryDate, forKey: .entryDate)
+        try c.encodeIfPresent(currency, forKey: .currency)
+        try c.encodeIfPresent(exchangeRate, forKey: .exchangeRate)
     }
 }
 
@@ -209,10 +276,30 @@ public struct MovementUpdate: Encodable, Sendable, Equatable {
     public let transactionType: String
     public let category: String
     public let notes: String
+    /// Sent back for a row typed in another currency (with the stored or retyped rate), so the backend
+    /// keeps `original_*` instead of storing a plain base-currency amount.
+    public let currency: String?
+    public let exchangeRate: Decimal?
 
-    public init(transactionDate: String, description: String, amount: Decimal, transactionType: Movement.Kind, category: String, notes: String = "") {
+    public init(transactionDate: String, description: String, amount: Decimal, transactionType: Movement.Kind, category: String, notes: String = "",
+                currency: String? = nil, exchangeRate: Decimal? = nil) {
         self.transactionDate = transactionDate; self.description = description; self.amount = amount
         self.transactionType = transactionType.rawValue; self.category = category; self.notes = notes
+        self.currency = currency; self.exchangeRate = exchangeRate
+    }
+
+    enum CodingKeys: String, CodingKey { case transactionDate, description, amount, transactionType, category, notes, currency, exchangeRate }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(transactionDate, forKey: .transactionDate)
+        try c.encode(description, forKey: .description)
+        try c.encode(amount, forKey: .amount)
+        try c.encode(transactionType, forKey: .transactionType)
+        try c.encode(category, forKey: .category)
+        try c.encode(notes, forKey: .notes)
+        try c.encodeIfPresent(currency, forKey: .currency)
+        try c.encodeIfPresent(exchangeRate, forKey: .exchangeRate)
     }
 }
 

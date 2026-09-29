@@ -128,7 +128,7 @@ import Testing
     }
 
     @Test func fixtureServiceMirrorsBackendWriteSemantics() async throws {
-        let service = FixtureDincrService(scenario: .empty, latency: .zero)
+        let service = FixtureBackend.service(FixtureBackend(scenario: .empty, latency: .zero))
         let entry = EntryCreate(amount: 1, description: "x", category: "Comida", entryDate: "2026-09-25")
         try await service.create(.expense, entry, idempotencyKey: "same-key-1")
         try await service.create(.expense, entry, idempotencyKey: "same-key-1")

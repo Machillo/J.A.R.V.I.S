@@ -17,6 +17,9 @@ data class MailStatus(
     val consent: Consent? = null,
     val connections: List<Connection> = emptyList(),
 ) {
+    /** The server also lists disconnected (`disabled`) mailboxes; the user sees only the others. */
+    val visibleConnections: List<Connection> get() = connections.filter { it.status != "disabled" }
+
     @Serializable
     data class Consent(val required: Boolean = true, val version: String? = null)
 
@@ -35,7 +38,11 @@ data class MailStatus(
 data class MailConsentRequest(val accepted: Boolean, val version: String)
 
 @Serializable
-data class MailConnectRequest(@SerialName("import_scope") val importScope: String)
+data class MailConnectRequest(
+    @SerialName("import_scope") val importScope: String,
+    /** The app language (`en`/`es`), for the provider's consent screens. */
+    val locale: String,
+)
 
 @Serializable
 data class MailConnectResponse(@SerialName("authorization_url") val authorizationUrl: String)
@@ -56,8 +63,13 @@ data class MailSyncResult(
     @SerialName("auto_saved") val autoSaved: Int? = null,
     @SerialName("scan_scope") val scanScope: String? = null,
     @SerialName("initial_scan_complete") val initialScanComplete: Boolean? = null,
-    @SerialName("failed_connections") val failedConnections: Int? = null,
+    /** Ids of the mailboxes that could not be checked (`status` is then `partial`). */
+    @SerialName("failed_connections") val failedConnections: List<Long> = emptyList(),
 )
+
+/** `GET /user-product/vip/gmail/emails`: an envelope, not a bare list. */
+@Serializable
+data class MailCandidateList(val status: String? = null, val items: List<MailCandidate> = emptyList())
 
 /** A row of `GET /user-product/vip/gmail/emails`. */
 @Serializable
@@ -96,19 +108,34 @@ data class MailCandidate(
 
     val isPending: Boolean get() = reviewStatus == "pending"
 
+    /** The account's currency; missing means CRC, as `candidate_currency.transaction_amounts` reads it. */
+    private val baseCurrency: String get() = accountBaseCurrency?.takeIf { it.isNotBlank() }?.uppercase() ?: "CRC"
+
     /** The base currency differs and both are convertible: accepting needs the user's rate. */
     val needsRate: Boolean get() {
         val native = nativeCurrency ?: return false
-        val base = accountBaseCurrency?.uppercase() ?: return false
-        return native != base && native in CONVERTIBLE && base in CONVERTIBLE
+        return native != baseCurrency && native in CONVERTIBLE && baseCurrency in CONVERTIBLE
     }
 
     /** Another currency DINCR cannot convert: the notice can only be rejected. */
     val cannotConvert: Boolean get() {
         val native = nativeCurrency ?: return false
-        val base = accountBaseCurrency?.uppercase() ?: return false
-        return native != base && !(native in CONVERTIBLE && base in CONVERTIBLE)
+        return native != baseCurrency && !(native in CONVERTIBLE && baseCurrency in CONVERTIBLE)
     }
+
+    /**
+     * What `resolution_reason` means for the user. The field is an internal code: only the reasons
+     * a pending notice can carry get a note, and any other code shows nothing.
+     */
+    val resolutionNote: ResolutionNote? get() = when {
+        resolutionReason == "possible_cross_source_match" -> ResolutionNote.POSSIBLE_MATCH
+        isInternalTransfer != true -> null
+        resolutionReason == "paired_owned_transfer" -> ResolutionNote.PAIRED_OWN_TRANSFER
+        resolutionReason == "confirmed_owned_endpoints" -> ResolutionNote.OWN_ACCOUNTS
+        else -> null
+    }
+
+    enum class ResolutionNote { POSSIBLE_MATCH, PAIRED_OWN_TRANSFER, OWN_ACCOUNTS }
 
     companion object {
         val CONVERTIBLE = setOf("CRC", "USD")

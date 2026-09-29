@@ -197,6 +197,20 @@ def test_another_workspace_cannot_review_the_candidate(db):
     assert _state(db, candidate_id)["status"] == "pending"
 
 
+def test_another_workspace_of_the_same_account_cannot_review_the_candidate(db):
+    # Tenancy is account AND workspace: a session of the same account in another workspace must
+    # not see or review the candidate (the test above changes both, so it cannot tell them apart).
+    other_workspace = "00000000-0000-4000-8000-0000000000a2"
+    with db.cursor() as cur:
+        cur.execute("INSERT INTO workspaces VALUES(%s)", (other_workspace,))
+    candidate_id = _candidate(db)
+    for action in ("accept", "reject"):
+        with pytest.raises(HTTPException) as denied:
+            _review({**USER_A, "workspace_id": other_workspace}, candidate_id, action)
+        assert denied.value.status_code == 404
+    assert _state(db, candidate_id)["status"] == "pending"
+
+
 def _waiting_on_locks(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
