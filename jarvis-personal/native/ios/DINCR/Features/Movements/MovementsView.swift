@@ -92,7 +92,7 @@ struct MovementsView: View {
             }
         }
         .sheet(item: $editor) { mode in
-            MovementEditor(mode: mode) { message in
+            MovementEditor(mode: mode, latestRate: latestRate) { message in
                 announce(message)
                 Task { await load() }
             }
@@ -116,10 +116,10 @@ struct MovementsView: View {
 
     @ViewBuilder
     private func row(_ movement: Movement) -> some View {
-        let editable = movement.isEditable
+        let editable = movement.canEdit(entryCurrencies: model.profile?.entryCurrencies ?? [])
         let content = MoneyRow(
             title: movement.description?.isEmpty == false ? movement.description! : CategoryStyle.label(movement.category),
-            subtitle: [CategoryStyle.label(movement.category), editable ? nil : tx("Solo lectura", "Read only")].compactMap { $0 }.joined(separator: " · "),
+            subtitle: [CategoryStyle.label(movement.category), originalLabel(movement), editable ? nil : tx("Solo lectura", "Read only")].compactMap { $0 }.joined(separator: " · "),
             amount: movement.amount, kind: movement.transactionType,
             symbol: CategoryStyle.symbol(for: movement.category, kind: movement.transactionType),
             isReadOnly: !editable
@@ -138,6 +138,19 @@ struct MovementsView: View {
         } else {
             content
         }
+    }
+
+    /// "US$10 × 507,5" for a row typed in another currency: the original figure and the user's rate.
+    private func originalLabel(_ movement: Movement) -> String? {
+        guard let original = movement.originalAmount, let code = movement.originalCurrency else { return nil }
+        let format = model.moneyFormat
+        let rate = movement.exchangeRate.map { " × \(format.inputText($0))" } ?? ""
+        return format.string(original, currency: code) + rate
+    }
+
+    private var latestRate: Decimal? {
+        if case .loaded(let rows) = state { return ConversionPreview.latestUserRate(rows) }
+        return nil
     }
 
     private func grouped(_ rows: [Movement]) -> [(day: String, rows: [Movement])] {

@@ -1,20 +1,58 @@
 import DincrCore
 import DincrDesign
 import SwiftUI
+import UIKit
 
-/// PARITY B1 — five sections; each owns its navigation stack.
+/// PARITY B1 — five sections; each owns its navigation stack. The app lock replaces the whole shell
+/// while locked (sheets and alerts go with it), and global notices sit above every tab.
 struct MainTabView: View {
     enum Tab: String, Hashable { case home, movements, plan, advisor, profile }
-    /// `-DincrTab <tab>` opens a given tab (screenshots and store captures on fixture data).
+
+    @Environment(AppModel.self) private var model
+    /// `-DincrTab <tab>` opens a given tab (screenshots and UI tests on fixture data).
     @State private var selection: Tab = {
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: "-DincrTab"), args.indices.contains(index + 1) else { return .home }
         return Tab(rawValue: args[index + 1]) ?? .home
     }()
+    @State private var profilePath = NavigationPath()
+    @State private var offeringLock = false
 
     var body: some View {
-        // Classic tabItem API keeps the iOS 17 baseline. The iPad sidebar style
-        // (`.sidebarAdaptable`) needs iOS 18 and waits for the baseline decision.
+        if model.appLock.locked {
+            LockScreenView()
+        } else {
+            tabs
+                .safeAreaInset(edge: .top, spacing: 0) { GlobalBanners() }
+                .overlay(alignment: .bottom) { NoticeToast() }
+                .onChange(of: model.pendingRoute) { _, route in
+                    guard route == "mail" else { return }
+                    model.pendingRoute = nil
+                    selection = .profile
+                    profilePath = NavigationPath([ProfileRoute.mail])
+                }
+                .task {
+                    // A12 — one-time offer to turn the lock on after signing in.
+                    if !model.environment.isFixtures, !model.appLock.wasOffered, model.appLock.availability != .unavailable {
+                        offeringLock = true
+                    }
+                    if model.pendingRoute == "mail" {
+                        model.pendingRoute = nil
+                        selection = .profile
+                        profilePath = NavigationPath([ProfileRoute.mail])
+                    }
+                }
+                .alert(tx("¿Proteger DINCR con bloqueo?", "Protect DINCR with a lock?"), isPresented: $offeringLock) {
+                    Button(tx("Activar", "Turn on")) { model.appLock.markOffered(); Task { _ = await model.appLock.setEnabled(true) } }
+                    Button(tx("Ahora no", "Not now"), role: .cancel) { model.appLock.markOffered() }
+                } message: {
+                    Text(tx("Pedí tu Face ID, Touch ID o código al abrir DINCR y después de 5 minutos fuera.", "Ask for Face ID, Touch ID or your passcode when opening DINCR and after 5 minutes away."))
+                }
+        }
+    }
+
+    private var tabs: some View {
+        // Classic tabItem API keeps the iOS 17 baseline.
         TabView(selection: $selection) {
             NavigationStack { HomeView(openMovements: { selection = .movements }) }
                 .tabItem { Label(tx("Hoy", "Today"), systemImage: "chart.bar.xaxis") }
@@ -25,107 +63,105 @@ struct MainTabView: View {
             NavigationStack { PlanHubView() }
                 .tabItem { Label(tx("Plan", "Plan"), systemImage: "target") }
                 .tag(Tab.plan)
-            NavigationStack { PrototypePlaceholderView(title: "DINCR", parity: "F1–F10") }
+            NavigationStack { AdvisorHubView() }
                 .tabItem { Label("DINCR", systemImage: "sparkle") }
                 .tag(Tab.advisor)
-            NavigationStack { ProfileView() }
-                .tabItem { Label(tx("Perfil", "Profile"), systemImage: "person.crop.circle") }
-                .tag(Tab.profile)
-        }
-    }
-}
-
-/// Screens outside the prototype scope. Visible and honest, never a fake feature.
-struct PrototypePlaceholderView: View {
-    let title: String
-    let parity: String
-
-    var body: some View {
-        ScrollView {
-            EmptyStateView(
-                symbol: "hammer",
-                title: tx("En construcción", "Under construction"),
-                message: tx("Esta sección llega en los módulos siguientes de la app nativa (\(parity)). Mientras tanto, usala desde la app actual de DINCR.", "This section arrives in the next native modules (\(parity)). Meanwhile, use it in the current DINCR app.")
-            ) { EmptyView() }
-            .padding(DincrSpacing.s4)
-        }
-        .dincrScreenBackground()
-        .navigationTitle(title)
-    }
-}
-
-struct ProfileView: View {
-    @Environment(AppModel.self) private var model
-    @AppStorage("dincr.appearance") private var appearance = Appearance.system.rawValue
-    @State private var confirmingSignOut = false
-    @State private var confirmingDelete = false
-    @State private var deleting = false
-    @State private var deleteError: String?
-
-    var body: some View {
-        List {
-            Section {
-                HStack(spacing: DincrSpacing.s3) {
-                    Text(String(model.profile?.firstName?.prefix(1) ?? "D"))
-                        .font(DincrFont.title2).foregroundStyle(DincrColor.onTintContainer)
-                        .frame(width: 44, height: 44).background(DincrColor.tintContainer, in: Circle())
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.profile?.displayName ?? tx("Tu cuenta", "Your account")).font(DincrFont.title2)
-                        Text(model.profile?.email ?? "").font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            NavigationStack(path: $profilePath) {
+                ProfileHubView()
+                    .navigationDestination(for: ProfileRoute.self) { route in
+                        switch route {
+                        case .mail: EmailMonitorView()
+                        }
                     }
-                    Spacer()
-                    PlanBadge(plan: model.profile?.plan ?? "free")
+            }
+            .tabItem { Label(tx("Perfil", "Profile"), systemImage: "person.crop.circle") }
+            .tag(Tab.profile)
+        }
+    }
+}
+
+enum ProfileRoute: Hashable { case mail }
+
+/// B5/B6/B7 and A1 — writes paused, subscription access notice, service health, optional update.
+private struct GlobalBanners: View {
+    @Environment(AppModel.self) private var model
+    @State private var hiddenNotice: String?
+
+    var body: some View {
+        VStack(spacing: DincrSpacing.s2) {
+            switch model.health?.status {
+            case "degraded"?:
+                StatusBanner(tone: .warning, title: tx("Servicio con demoras", "Service is slow"), message: tx("Algunas funciones pueden tardar más de lo normal.", "Some features may take longer than usual."))
+            case "major_outage"?:
+                StatusBanner(tone: .error, title: tx("Servicio interrumpido", "Service interrupted"), message: tx("Estamos trabajando para restablecer DINCR. Tus datos están a salvo.", "We’re working to restore DINCR. Your data is safe."))
+            default:
+                EmptyView()
+            }
+            if let notice = model.profile?.subscription?.accessNotice, let message = notice.message, hiddenNotice != notice.code {
+                HStack(alignment: .top) {
+                    StatusBanner(tone: .info, title: notice.title ?? tx("Tu plan", "Your plan"), message: message)
+                    Button { hiddenNotice = notice.code } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel(tx("Cerrar aviso", "Dismiss notice"))
+                        .frame(minWidth: 44, minHeight: 44)
                 }
-                .accessibilityElement(children: .combine)
             }
-            Section(tx("Plan", "Plan")) {
-                LabeledContent(tx("Plan actual", "Current plan"), value: PlanLabel.name(model.profile?.plan))
-                if model.profile?.isCourtesy == true {
-                    Text(tx("Acceso de cortesía.", "Courtesy access.")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+            if let update = model.optionalUpdate {
+                HStack(alignment: .top) {
+                    StatusBanner(tone: .info, title: tx("Hay una versión nueva", "A new version is available"),
+                                 message: update.message(model.language) ?? tx("Actualizá cuando puedas.", "Update when you can."))
+                    Button { model.dismissOptionalUpdate() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel(tx("Ahora no", "Not now"))
+                        .frame(minWidth: 44, minHeight: 44)
                 }
-            }
-            Section(tx("Apariencia", "Appearance")) {
-                Picker(tx("Tema", "Theme"), selection: $appearance) {
-                    Text(tx("Automático", "Automatic")).tag(Appearance.system.rawValue)
-                    Text(tx("Claro", "Light")).tag(Appearance.light.rawValue)
-                    Text(tx("Oscuro", "Dark")).tag(Appearance.dark.rawValue)
-                }
-            }
-            Section(tx("Legal y soporte", "Legal and support")) {
-                Link(tx("Términos y condiciones", "Terms and conditions"), destination: LegalLinks.terms)
-                Link(tx("Política de privacidad", "Privacy policy"), destination: LegalLinks.privacy)
-                Link(tx("Soporte", "Support"), destination: LegalLinks.support)
-            }
-            Section {
-                Button(tx("Cerrar sesión", "Sign out"), role: .destructive) { confirmingSignOut = true }
-            }
-            Section {
-                Button(tx("Eliminar mi cuenta", "Delete my account"), role: .destructive) { confirmingDelete = true }
-                    .disabled(deleting)
-                if let deleteError {
-                    Text(deleteError).font(DincrFont.caption).foregroundStyle(DincrColor.negative)
-                }
-            } footer: {
-                Text(tx("Se programa la eliminación de tus datos en DINCR y se cierra la sesión. No se puede deshacer.", "Your DINCR data is scheduled for deletion and you are signed out. This can’t be undone."))
             }
         }
-        .scrollContentBackground(.hidden)
+        .padding(.horizontal, DincrSpacing.s4)
+        .frame(maxWidth: 640)
+    }
+}
+
+/// A one-line app-wide confirmation (mail connected, plan saved…), dismissed after a few seconds.
+private struct NoticeToast: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let notice = model.notice {
+            Text(notice)
+                .font(DincrFont.bodySmall.weight(.semibold))
+                .foregroundStyle(DincrColor.onTint)
+                .padding(.horizontal, DincrSpacing.s4).padding(.vertical, DincrSpacing.s3)
+                .background(DincrColor.tint, in: Capsule())
+                .padding(.bottom, 64)
+                .accessibilityIdentifier("app.notice")
+                .task(id: notice) {
+                    UIAccessibility.post(notification: .announcement, argument: notice)
+                    try? await Task.sleep(for: .seconds(4))
+                    if model.notice == notice { model.notice = nil }
+                }
+        }
+    }
+}
+
+/// A13 — the app is locked: unlock, or sign out.
+private struct LockScreenView: View {
+    @Environment(AppModel.self) private var model
+    @State private var message: String?
+
+    var body: some View {
+        VStack(spacing: DincrSpacing.s4) {
+            Spacer()
+            Image(systemName: "lock.fill").font(.system(size: 40)).foregroundStyle(DincrColor.tint).accessibilityHidden(true)
+            Text(tx("DINCR está bloqueado", "DINCR is locked")).font(DincrFont.title1)
+            if let message, !message.isEmpty { Text(message).font(DincrFont.bodySmall).foregroundStyle(DincrColor.negative).multilineTextAlignment(.center) }
+            Spacer()
+            Button(tx("Desbloquear", "Unlock")) { Task { message = await model.appLock.unlock() } }.buttonStyle(.dincrPrimary)
+            Button(tx("Cerrar sesión", "Sign out")) { Task { await model.signOut() } }.foregroundStyle(DincrColor.tint).frame(minHeight: 44)
+        }
+        .padding(DincrSpacing.s6)
+        .frame(maxWidth: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .dincrScreenBackground()
-        .navigationTitle(tx("Perfil", "Profile"))
-        .confirmationDialog(tx("¿Cerrar sesión en este dispositivo?", "Sign out on this device?"), isPresented: $confirmingSignOut, titleVisibility: .visible) {
-            Button(tx("Cerrar sesión", "Sign out"), role: .destructive) { Task { await model.signOut() } }
-            Button(tx("Cancelar", "Cancel"), role: .cancel) {}
-        }
-        .confirmationDialog(tx("¿Eliminar tu cuenta de DINCR?", "Delete your DINCR account?"), isPresented: $confirmingDelete, titleVisibility: .visible) {
-            Button(tx("Eliminar cuenta", "Delete account"), role: .destructive) {
-                deleting = true; deleteError = nil
-                Task { deleteError = await model.deleteAccount(); deleting = false }
-            }
-            Button(tx("Cancelar", "Cancel"), role: .cancel) {}
-        } message: {
-            Text(tx("Tus datos se eliminan de DINCR. No se puede deshacer.", "Your data is removed from DINCR. This can’t be undone."))
-        }
+        .task { message = await model.appLock.unlock() }
     }
 }
 
