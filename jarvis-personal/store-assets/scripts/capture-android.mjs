@@ -113,7 +113,7 @@ export async function captureAndroid(argv = process.argv.slice(2)) {
         const target = path.join(root, "raw/android", locale.id, "phone", `${screen.id}.png`);
         fs.mkdirSync(path.dirname(target), { recursive: true });
         fs.writeFileSync(target, buffer);
-        records.push({ id: screen.id, locale: locale.id, plan: screen.platforms.android.plan, file: path.relative(root, target).replace(/\\/g, "/"), sha256: sha256(buffer), width: info.width, height: info.height });
+        records.push({ id: screen.id, locale: locale.id, plan: screen.plan, file: path.relative(root, target).replace(/\\/g, "/"), sha256: sha256(buffer), width: info.width, height: info.height });
       }
     }
   } finally {
