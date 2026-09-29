@@ -39,7 +39,10 @@ export const DEMO_MODE = [
   ["notifications", "-e", "visible", "false"],
 ];
 
-/** `am instrument` prints "OK (n tests)" only when every test passed and none was skipped by the opt-in. */
+/**
+ * `am instrument` passed with the expected number of tests. (Tests skipped by the opt-in are also
+ * counted in "OK (n tests)"; that case is caught by the empty output folder, checked per file.)
+ */
 export function instrumentPassed(output, expected) {
   const ok = /OK \((\d+) tests?\)/.exec(output);
   return Boolean(ok) && Number(ok[1]) === expected && !/FAILURES!!!|Process crashed|INSTRUMENTATION_FAILED/.test(output);
@@ -88,7 +91,10 @@ export async function captureAndroid(argv = process.argv.slice(2)) {
     last_update: (/lastUpdateTime=([^\n]+)/.exec(packageInfo) || [])[1]?.trim() ?? null,
   };
 
-  const saved = { autoTime: shell("settings", "get", "global", "auto_time"), timeZone: shell("getprop", "persist.sys.timezone") };
+  const saved = {
+    autoTime: shell("settings", "get", "global", "auto_time"), timeZone: shell("getprop", "persist.sys.timezone"),
+    demoAllowed: shell("settings", "get", "global", "sysui_demo_allowed"),
+  };
   const pulled = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-android-"));
   const records = [];
   try {
@@ -121,13 +127,17 @@ export async function captureAndroid(argv = process.argv.slice(2)) {
     quiet("am", "broadcast", "-a", "com.android.systemui.demo", "-e", "command", "exit");
     quiet("cmd", "locale", "set-app-locales", PACKAGE, "--locales", "''"); // back to the device language
     if (saved.timeZone) quiet("cmd", "alarm", "set-timezone", saved.timeZone);
+    if (saved.autoTime === "0") quiet("cmd", "alarm", "set-time", String(Date.now())); // manual clock: back to now
     quiet("settings", "put", "global", "auto_time", saved.autoTime === "0" ? "0" : "1");
+    quiet("settings", "put", "global", "sysui_demo_allowed", saved.demoAllowed === "1" ? "1" : "0");
     fs.rmSync(pulled, { recursive: true, force: true });
   }
 
   const manifest = {
     platform: "android", fixture: "STORE", fixture_date: FIXTURE_DATE,
     source_commit: commit, source_dirty: dirty, pipeline_commit: commit,
+    // --no-build captures whatever is installed: nothing ties it to the commit, so it is not final.
+    built: build,
     captured_at: new Date().toISOString(), app, device,
     status_bar: "demo mode: 09:41, battery 100%, Wi-Fi full, no notifications",
     method: `am instrument ${TEST_CLASS} (storeScreenshots=true)`,

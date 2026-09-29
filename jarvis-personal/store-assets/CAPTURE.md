@@ -28,12 +28,16 @@ capture its screen, language, plan, file, SHA-256 and size.
   amounts in colones (one dollar subscription). No real person, account, bank or statement.
 - Fixed date 2026-09-28 (the second payday), six months of history, a plan bought in the store
   (no "courtesy" caption), a completed financial situation.
-- The numbers agree across screens: the available figure is income − expenses of the month, the
-  strategy margin is income − essentials − minimum payments (865,000 − 420,000 − 95,000 = 350,000),
-  its split sums to the margin, the emergency goal equals the declared savings, and the debt total
-  is the sum of the debts. `StoreFixtureTest.kt` and `StoreSampleTests.swift` check this.
-- Text is in the app's language, as the backend localizes with `Accept-Language`; backend sentences
-  use the backend's own wording.
+- Nothing the backend computes is invented. The strategy (Basic and VIP), the VIP command center
+  (safe to spend, priority, alerts, roadmap, projections), the guided budget and the Free dashboard
+  are the **backend engines' own output** for this account, in each language:
+  `backend/tests/test_store_sample_engine.py` runs them on the account's data and pins the result in
+  `native/android/core/data/src/main/resources/store-sample.json`; the Android fixture serves those
+  responses as they are, and `StoreFixtureTest.kt` / `StoreSampleTests.swift` check that the
+  fixtures' dashboards and debts equal them.
+- Those outputs include the backend's current behaviour as it is (for example the VIP roadmap
+  suggests investing because the command center does not read the emergency-fund target). A
+  screenshot never corrects or embellishes it; a backend fix changes the golden file and the images.
 
 ## Android (automated; Windows, macOS or Linux)
 

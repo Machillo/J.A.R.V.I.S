@@ -48,15 +48,23 @@ The brand mark is the app icon, `frontend/resources/icon.png`.
 - the captured app commit **contains the #287 merge** (`app_baseline` in `screens.json`; anything
   older shows the Capacitor UI) and is in the checked-out history (with `--require-main`: on `origin/main`);
 - the screen is **confirmed for that platform** in `screens.json`;
-- the capture manifest comes from a **clean tree** of that commit with the **STORE** fixture, and each
-  capture's **SHA-256** still matches (captures cannot be swapped or edited afterwards);
+- the capture manifest comes from a run that **built the app from a clean tree** of that commit with
+  the **STORE** fixture, and each capture's **SHA-256** still matches it;
+- the app (`native/`) has not changed since the captured commit, and copy, templates, config and
+  brand have not changed since the image was composed (else it is stale: re-capture or re-compose);
 - the capture was taken with the **screen's plan**, and the caption carries that plan's badge;
 - the PNG is the exact size, **without alpha**, and not a preview or placeholder;
-- the provenance file exists and the `.html` source has no local `file://` path.
+- the provenance file exists, the image's own SHA-256 matches it, its capture is exactly
+  `raw/<platform>/<language>/<device>/<screen>.png` and agrees with the capture manifest, and the
+  `.html` source has no local `file://` path. The validator re-checks all of this; it does not trust
+  the provenance file alone.
 
-Provenance per image (`.json`): mode, store, platform, locale, screen, plan, size, alpha, caption
-band, capture (file, SHA-256, fixture, fixture date, capture time, device), source (app) commit,
-#287 baseline, pipeline commit, generation time.
+**Merge note.** Provenance names commits of this branch. Merge the PR with a merge commit (not a
+squash), or re-capture from `main` afterwards; otherwise `validate.mjs --require-main` cannot pass.
+
+Provenance per image (`.json`): image SHA-256, mode, store, platform, locale, screen, plan, size,
+alpha, caption band, capture (file, SHA-256, fixture, fixture date, capture time, device), source
+(app) commit, #287 baseline, pipeline commit, generation time.
 
 ## Regenerate
 
@@ -94,7 +102,12 @@ for the plan shown. Uploading to the stores is a separate, human step.
   `StoreScreenshots.swift`); a test checks they list the same screens and plans. Never add a
   screen the app does not have.
 - **Data:** the STORE fixture is `native/android/core/data/.../StoreSample.kt` and
-  `native/ios/DincrKit/Sources/DincrCore/StoreSample.swift` (same numbers; tests check they agree across screens).
+  `native/ios/DincrKit/Sources/DincrCore/StoreSample.swift`. What the backend computes from it
+  (strategy, VIP command center, guided budget, Free dashboard) is never hand-written: it lives in
+  `native/android/core/data/src/main/resources/store-sample.json`, produced by running the backend
+  engines (`backend/tests/test_store_sample_engine.py`). After changing the data:
+  `DINCR_UPDATE_STORE_GOLDEN=1 ./gradlew :core:data:test` (Android), then
+  `DINCR_UPDATE_STORE_GOLDEN=1 python -m pytest backend/tests/test_store_sample_engine.py` (from `jarvis-personal`), then re-capture.
 - **Layout:** edit `templates/*.html`. Sizes use `--u` (1/100 of the width), so one template serves
   iPhone, iPad and Play. Re-run the preview and the validator: Google's caption band must stay ≤ 20%.
 - **Sizes:** only after re-auditing the store pages, in `config/targets.json` and `REQUIREMENTS.md`.

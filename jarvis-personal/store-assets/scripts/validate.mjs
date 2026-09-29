@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pngInfo } from "./png.mjs";
-import { appCommitProblems, gitIsAncestor, loadCopy, loadScreens, loadTargets, platformOf, root } from "./compose.mjs";
+import { COMPOSE_INPUTS, appCommitProblems, deviceOf, gitChangedSince, gitIsAncestor, loadCopy, loadScreens, loadTargets, platformOf, readJson, root } from "./compose.mjs";
 
 export function copyProblems(targetsConfig, screens, copies) {
   const problems = [];
@@ -47,7 +47,7 @@ export function copyProblems(targetsConfig, screens, copies) {
   return problems;
 }
 
-export function imageProblems(dir, targetsConfig, { allowPreview = false, screens = loadScreens(), rawRoot = root, isAncestor = gitIsAncestor, requireMain = false } = {}) {
+export function imageProblems(dir, targetsConfig, { allowPreview = false, screens = loadScreens(), rawRoot = root, isAncestor = gitIsAncestor, requireMain = false, changedSince = gitChangedSince } = {}) {
   const problems = [];
   const { google } = targetsConfig.rules;
   if (!fs.existsSync(dir)) return [`no images at ${dir}`];
@@ -85,7 +85,9 @@ export function imageProblems(dir, targetsConfig, { allowPreview = false, screen
           if (meta.mode !== "final") problems.push(`${label}: is a ${meta.mode} image, not a final one`);
           if (meta.capture?.placeholder) problems.push(`${label}: built from a placeholder, not a real capture`);
           if (!meta.pipeline_commit) problems.push(`${label}: no pipeline commit recorded`);
-          if (!target.single) problems.push(...finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor, requireMain));
+          else if (changedSince(meta.pipeline_commit, COMPOSE_INPUTS)) problems.push(`${label}: copy, templates, config or brand changed after it was composed (${meta.pipeline_commit.slice(0, 8)}): re-compose`);
+          if (meta.output_sha256 !== sha256(fs.readFileSync(file))) problems.push(`${label}: the image changed after composing (SHA-256 differs from its provenance)`);
+          if (!target.single) problems.push(...finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor, requireMain, changedSince));
         }
       }
     }
@@ -94,20 +96,36 @@ export function imageProblems(dir, targetsConfig, { allowPreview = false, screen
 }
 
 /** A final screenshot must trace back to a confirmed screen and an unchanged post-#287 capture. */
-function finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor, requireMain) {
+const sha256 = (buffer) => crypto.createHash("sha256").update(buffer).digest("hex");
+
+function finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor, requireMain, changedSince) {
   const problems = [];
   const platform = platformOf(target);
+  // The capture must be this screen's, in this language, on this device class, inside raw/.
+  const expectedFile = `raw/${platform}/${meta.language}/${deviceOf(target)}/${meta.screen}.png`;
+  if (meta.capture?.file && meta.capture.file !== expectedFile) problems.push(`${label}: capture ${meta.capture.file} is not ${expectedFile}`);
+  // The capture run's own record must back it (the provenance file alone is not trusted).
+  const manifestFile = path.join(rawRoot, "raw", platform, "capture-manifest.json");
+  if (!fs.existsSync(manifestFile)) problems.push(`${label}: no capture manifest raw/${platform}/capture-manifest.json`);
+  else {
+    const manifest = readJson(manifestFile);
+    const record = (manifest.captures ?? []).find((c) => c.id === meta.screen && c.locale === meta.language && (c.device ?? "phone") === deviceOf(target));
+    if (!record) problems.push(`${label}: its capture is not in raw/${platform}/capture-manifest.json`);
+    else if (record.sha256 !== meta.capture?.sha256) problems.push(`${label}: its capture differs from the one in the capture manifest`);
+    if (manifest.source_commit !== meta.source_commit) problems.push(`${label}: the capture manifest names another app commit`);
+    if (manifest.source_dirty !== false || manifest.built !== true) problems.push(`${label}: the capture run was not a clean build of its commit`);
+  }
   if (meta.platform !== platform) problems.push(`${label}: provenance platform ${meta.platform}, expected ${platform}`);
   const screen = screens.screens.find((s) => s.id === meta.screen);
   if (!screen?.platforms?.[platform]?.confirmed) problems.push(`${label}: screen ${meta.screen} is not confirmed for ${platform}`);
   else if (meta.plan !== screen.plan) problems.push(`${label}: captured with plan ${meta.plan}, the screen needs ${screen.plan}`);
   if (!meta.source_commit) problems.push(`${label}: no source commit recorded`);
-  else problems.push(...appCommitProblems(meta.source_commit, screens, isAncestor, { requireMain }).map((p) => `${label}: ${p}`));
+  else problems.push(...appCommitProblems(meta.source_commit, screens, isAncestor, { requireMain, changedSince }).map((p) => `${label}: ${p}`));
   if (!meta.capture?.file || !meta.capture?.sha256) problems.push(`${label}: no capture file and SHA-256 recorded`);
   else {
     const raw = path.join(rawRoot, meta.capture.file);
     if (!fs.existsSync(raw)) problems.push(`${label}: capture ${meta.capture.file} not found`);
-    else if (crypto.createHash("sha256").update(fs.readFileSync(raw)).digest("hex") !== meta.capture.sha256) problems.push(`${label}: capture ${meta.capture.file} changed after composing`);
+    else if (sha256(fs.readFileSync(raw)) !== meta.capture.sha256) problems.push(`${label}: capture ${meta.capture.file} changed after composing`);
   }
   if (meta.capture?.fixture !== screens.fixture.scenario) problems.push(`${label}: fixture ${meta.capture?.fixture}, expected ${screens.fixture.scenario}`);
   return problems;

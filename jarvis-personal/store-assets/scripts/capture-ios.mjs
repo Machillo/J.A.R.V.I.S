@@ -45,7 +45,12 @@ export async function captureIos(argv = process.argv.slice(2)) {
   for (const [kind, device] of devices) {
     const name = arg(argv, `--${kind}`) ?? device.defaultName;
     const target = targets.find((t) => t.id === device.target);
-    execFileSync("xcrun", ["simctl", "boot", name], { stdio: "ignore" }); // fails if the simulator does not exist
+    try {
+      execFileSync("xcrun", ["simctl", "boot", name], { stdio: "pipe" });
+    } catch (error) {
+      // Already booted is fine; a missing simulator is not.
+      if (!/Booted/.test(String(error.stderr ?? error.message))) throw new Error(`cannot boot simulator "${name}": ${String(error.stderr ?? error.message).trim()}`);
+    }
     try {
       execFileSync("xcrun", ["simctl", "status_bar", name, "override", ...STATUS_BAR], { stdio: "inherit" });
       fs.rmSync(path.join(out, "es", kind), { recursive: true, force: true });
@@ -78,6 +83,7 @@ export async function captureIos(argv = process.argv.slice(2)) {
   const manifest = {
     platform: "ios", fixture: screens.fixture.scenario, fixture_date: screens.fixture.fixture_date,
     source_commit: commit, source_dirty: dirty, pipeline_commit: commit,
+    built: true, // xcodebuild test builds the app from this tree
     captured_at: new Date().toISOString(),
     app: { bundle_id: "com.dincr.app.nativedev", configuration: "Debug" },
     xcode: execFileSync("xcodebuild", ["-version"], { encoding: "utf8" }).trim().split("\n")[0],

@@ -176,14 +176,30 @@ export function gitIsAncestor(ancestor, descendant) {
   }
 }
 
+/** Paths whose change makes a capture stale (the app) or a composed image stale (its inputs). */
+export const APP_PATHS = ["jarvis-personal/native"];
+export const COMPOSE_INPUTS = ["jarvis-personal/store-assets/copy", "jarvis-personal/store-assets/templates",
+  "jarvis-personal/store-assets/config", "DESIGN.md", "jarvis-personal/frontend/resources/icon.png"];
+
+/** True when `paths` differ between `commit` and the working tree (committed or not). */
+export function gitChangedSince(commit, paths) {
+  try {
+    execFileSync("git", ["-C", repoRoot, "diff", "--quiet", commit, "--", ...paths], { stdio: "ignore" });
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 /**
- * Why an app commit cannot back a final image (empty = it can): built after #287 and part of the
- * reviewed history. `requireMain` (the pre-upload check, once the capture PR is merged) also
- * requires it on origin/main.
+ * Why an app commit cannot back a final image (empty = it can): built after #287, part of the
+ * reviewed history, and the app unchanged since (else the capture is stale). `requireMain` (the
+ * pre-upload check, once the capture PR is merged) also requires it on origin/main.
  */
-export function appCommitProblems(commit, screens, isAncestor = gitIsAncestor, { requireMain = false } = {}) {
+export function appCommitProblems(commit, screens, isAncestor = gitIsAncestor, { requireMain = false, changedSince = gitChangedSince } = {}) {
   if (!commit) return ["no app commit recorded"];
   const problems = [];
+  if (changedSince(commit, APP_PATHS)) problems.push(`the app (${APP_PATHS.join(", ")}) changed after ${commit.slice(0, 8)}: re-capture`);
   if (!isAncestor(commit, "HEAD")) problems.push(`app commit ${commit} is not in the checked-out history`);
   if (requireMain && !isAncestor(commit, "origin/main")) problems.push(`app commit ${commit} is not on origin/main`);
   const baseline = screens.app_baseline?.merge_commit;
@@ -195,10 +211,10 @@ export function appCommitProblems(commit, screens, isAncestor = gitIsAncestor, {
 export const rel = (file) => path.relative(root, file).split(path.sep).join("/");
 
 /** Every reason the final run must not start. Empty list = allowed. */
-export function finalGateProblems({ screens, targets, locales, rawDir, sourceCommit, isAncestor = gitIsAncestor, requireMain = false }) {
+export function finalGateProblems({ screens, targets, locales, rawDir, sourceCommit, isAncestor = gitIsAncestor, requireMain = false, changedSince = gitChangedSince }) {
   const problems = [];
   if (!sourceCommit) problems.push("--source-commit is required (the commit of the app build that was captured)");
-  else problems.push(...appCommitProblems(sourceCommit, screens, isAncestor, { requireMain }));
+  else problems.push(...appCommitProblems(sourceCommit, screens, isAncestor, { requireMain, changedSince }));
   for (const target of targets.filter((t) => !t.single)) {
     const platform = platformOf(target);
     const usable = screensFor(screens, target, true);
@@ -209,6 +225,7 @@ export function finalGateProblems({ screens, targets, locales, rawDir, sourceCom
     if (sourceCommit && manifest.source_commit !== sourceCommit) problems.push(`${rel(manifestFile)} was captured from another commit`);
     if (manifest.source_dirty !== false) problems.push(`${rel(manifestFile)}: captured from a tree with uncommitted changes (or not recorded)`);
     if (manifest.fixture !== screens.fixture.scenario) problems.push(`${rel(manifestFile)}: fixture ${manifest.fixture}, expected ${screens.fixture.scenario}`);
+    if (manifest.built !== true) problems.push(`${rel(manifestFile)}: the capture run did not build the app from the recorded commit (--no-build)`);
     for (const locale of locales) {
       for (const screen of usable) {
         const raw = rawPathFor(target, locale.id, screen.id, rawDir);
@@ -266,6 +283,10 @@ export async function compose(argv = process.argv.slice(2)) {
 
   if (final) {
     const problems = finalGateProblems({ screens, targets, locales, rawDir: args.rawDir, sourceCommit: args.sourceCommit, requireMain: args.requireMain });
+    const rawInside = path.relative(root, args.rawDir);
+    if (!rawInside || rawInside.startsWith("..") || path.isAbsolute(rawInside)) problems.push("--raw-dir must be a folder inside store-assets/ (provenance paths are relative to it)");
+    if (!pipelineCommit) problems.push("not a git checkout: the pipeline commit cannot be recorded");
+    else if (gitChangedSince(pipelineCommit, COMPOSE_INPUTS)) problems.push(`uncommitted changes in ${COMPOSE_INPUTS.join(", ")}: commit them first so the provenance names the inputs`);
     if (problems.length) {
       console.error("REFUSED: final store images cannot be generated:\n- " + problems.join("\n- "));
       process.exitCode = 2;
@@ -335,6 +356,7 @@ export async function compose(argv = process.argv.slice(2)) {
           const manifestFile = path.join(args.rawDir, platformOf(target), "capture-manifest.json");
           const manifest = !target.single && !job.placeholder && fs.existsSync(manifestFile) ? readJson(manifestFile) : null;
           const meta = {
+            output_sha256: sha256(outFile),
             mode: args.mode, target: target.id, store: target.store, platform: target.single ? null : platformOf(target),
             locale: storeLocale, language: locale.id, screen: job.id, plan: job.plan ?? null,
             width: info.width, height: info.height, alpha: info.alpha,
