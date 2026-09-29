@@ -37,7 +37,8 @@ class FakeBackend(
     private var situation: FinancialProfile? = null
     private val candidates = mutableListOf<MailCandidate>()
     private val tickets = mutableListOf<SupportTicket>()
-    private var mailConnected = false
+    /** A VIP sample account starts with a connected mailbox and notices to review. */
+    private var mailConnected = scenario == Scenario.POPULATED && plan == PlanTier.VIP
     private var nextId = 500L
     val requests = mutableListOf<HttpRequest>()
 
@@ -49,7 +50,7 @@ class FakeBackend(
         if (latencyMs > 0) delay(latencyMs)
         requests += request
         if (request.headers["Authorization"] == null && !request.url.contains("/product-ops/release-policy")) return error(401, "Falta Authorization")
-        if (scenario == Scenario.FAILING && !request.url.contains("/auth/me") && !request.url.contains("release-policy") && !request.url.contains("feature-flags")) {
+        if (scenario == Scenario.FAILING && !request.url.contains("release-policy")) {
             return error(500, "Ocurrió un error interno. Intentá nuevamente.")
         }
         val path = request.url.substringAfter("://").substringAfter("/").let { "/" + it.substringBefore("?") }

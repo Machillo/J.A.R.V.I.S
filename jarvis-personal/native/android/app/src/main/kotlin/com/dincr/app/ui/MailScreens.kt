@@ -88,11 +88,13 @@ fun MailScreen(model: AppModel, nav: Navigator) {
         scope.launch {
             val result = model.load(tx("No pudimos completar la revisión.", "We couldn’t complete the review.")) { action() }
             result.onSuccess { r ->
-                feedback = id to when {
+                // The card leaves the pending list on reload, so the outcome is announced app-wide.
+                model.showNotice(when {
                     r.alreadyReviewed == true -> tx("Este aviso ya estaba revisado; no cambió nada.", "This notice was already reviewed; nothing changed.")
                     r.status == expected -> if (expected == "rejected") tx("Aviso descartado.", "Notice dismissed.") else tx("Movimiento guardado.", "Transaction saved.")
                     else -> tx("El aviso quedó como «${r.status}».", "The notice is now “${r.status}”.")
-                }
+                })
+                feedback = null
                 correcting = null
             }.onFailure { error ->
                 if (error is AuthException.SignedOut) return@onFailure
