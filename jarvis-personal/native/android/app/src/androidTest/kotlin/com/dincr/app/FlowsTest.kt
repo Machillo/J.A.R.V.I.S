@@ -80,7 +80,7 @@ class FlowsTest {
      */
     private fun openEditor(text: String) {
         // The row may be below the fold of the lazy list (small screens): wait until scrolling to it works.
-        waitUntil("row "$text"") { runCatching { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text)) }.isSuccess }
+        waitUntil("row \"$text\"") { runCatching { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text)) }.isSuccess }
         repeat(3) {
             rowText(text).performClick()
             val opened = runCatching {
