@@ -9,7 +9,8 @@ import Foundation
 /// is answered without a second row, and a missing movement is a 404.
 public actor FixtureDincrService: DincrService {
     public enum Scenario: String, Sendable {
-        case populated, empty, failing, newUser, legalRequired, choosePlan
+        /// `store`: the account of the store screenshots (StoreSample).
+        case populated, empty, failing, newUser, legalRequired, choosePlan, store
     }
 
     private var profile: Profile
@@ -21,7 +22,8 @@ public actor FixtureDincrService: DincrService {
     private var debtRows: [Debt]
     private var goalRows: [Goal]
 
-    public init(scenario: Scenario = .populated, plan: PlanTier = .free, latency: Duration = .milliseconds(350), today: Date = .now) {
+    public init(scenario: Scenario = .populated, plan: PlanTier = .free, latency: Duration = .milliseconds(350), today: Date = .now,
+                language: AppLanguage = .current) {
         self.scenario = scenario
         self.latency = latency
         self.profile = Profile(
@@ -42,6 +44,12 @@ public actor FixtureDincrService: DincrService {
             Goal(id: 41, name: "Fondo de emergencia", targetAmount: 1_500_000, currentAmount: 380_000, targetDate: "2027-06-30", priority: "high"),
             Goal(id: 42, name: "Viaje", targetAmount: 400_000, currentAmount: 90_000),
         ] : []
+        if scenario == .store {
+            profile = StoreSample.profile(plan: plan, language: language)
+            rows = StoreSample.movements(language: language)
+            debtRows = StoreSample.debts(language: language)
+            goalRows = StoreSample.goals(language: language)
+        }
     }
 
     public func me() async throws -> Profile {
@@ -154,6 +162,7 @@ public actor FixtureDincrService: DincrService {
                                  availableAfterCommitments: 0, categories: [],
                                  monthlyHistory: months.map { MonthTotals(month: $0, income: 0, expenses: 0, debtPaid: 0, balance: 0) })
         }
+        if scenario == .store { return StoreSample.dashboard(movements: rows, debts: debtRows) }
         return Self.sampleDashboard
     }
 
