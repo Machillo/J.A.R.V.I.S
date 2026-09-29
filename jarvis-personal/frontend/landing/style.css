@@ -95,6 +95,18 @@ a:hover { text-decoration-thickness: 2px; }
 .nav-menu nav { position: absolute; right: 0; top: calc(100% + 8px); width: min(260px, 80vw); display: grid; padding: 8px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); }
 .nav-menu nav a { display: flex; align-items: center; min-height: 48px; padding: 0 12px; border-radius: 10px; }
 .nav-menu nav a:hover { background: var(--accent-soft); }
+/* Languages: every page carries a Spanish and an English block (lang="es" / lang="en").
+   The inline language script sets html[data-lang] before the first paint; without it the
+   English block shows (the fallback) and the selector, which needs the script, is hidden. */
+.l10n[lang="es"] { display: none; }
+html[data-lang="es"] .l10n[lang="es"] { display: block; }
+html[data-lang="es"] .l10n[lang="en"] { display: none; }
+.top-actions { display: flex; align-items: center; gap: 8px; }
+.lang-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+html:not([data-lang]) .lang-switch { display: none; }
+.lang-switch button { min-height: 44px; min-width: 44px; padding: 0 10px; border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 700; letter-spacing: .04em; cursor: pointer; }
+.lang-switch button:hover { color: var(--text); }
+.lang-switch button[aria-pressed="true"] { background: var(--accent-soft); color: var(--on-accent-soft); }
 @media (min-width: 760px) {
   .nav-inline { display: flex; gap: 8px; }
   .nav-inline a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; }
