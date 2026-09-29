@@ -3,6 +3,7 @@ package com.dincr.app
 import android.content.Intent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -242,6 +243,9 @@ class FlowsTest {
     @Test fun vipHomeShowsSafeToSpendAndReviewsMail() {
         launch(plan = "vip")
         waitForText(tx("Podés gastar con tranquilidad", "Safe to spend"))
+        // next_45_days_minimum is the lowest projected balance, never labelled as the commitments.
+        waitForText(tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"))
+        compose.onAllNodes(hasText(tx("Compromisos próximos 45 días", "Commitments next 45 days")), useUnmergedTree = true).assertCountEquals(0)
         tab(tx("Perfil", "Profile"))
         click(tx("Correos financieros", "Financial emails"))
         waitForText("Compra en supermercado")
