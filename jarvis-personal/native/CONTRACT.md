@@ -1,4 +1,4 @@
-# Native ↔ FastAPI contract (C4 prototype)
+# Native ↔ FastAPI contract (native RC)
 
 What the native apps send and read, checked against the FastAPI code on `main` (not against
 fixtures). iOS `DincrCore` and Android `:core:data` implement the same contract with the same
@@ -6,8 +6,10 @@ types and optionality; `AuditTests.swift`/`AuditTest.kt` and `ReauditTests.swift
 pin the same cases on both sides. Fixtures (`Tests/.../Fixtures`, `test/resources`) mirror what
 the backend builds.
 
-C4 is a **parallel prototype**. It does not replace the Capacitor app that ships as DINCR v1.0,
-and it is not the source of truth for the bundle id, the minimum OS versions or store metadata.
+The native RC runs against the live backend but does not yet replace the Capacitor app in the
+stores; identity and release decisions are in [RELEASE_IDENTITY.md](RELEASE_IDENTITY.md). Android
+implements every endpoint below; iOS implements the subset marked **iOS**. No backend change was
+needed for the RC.
 
 ## Launch configuration (both platforms, `LaunchPolicy`)
 
@@ -68,19 +70,48 @@ Only the Supabase **anon/publishable** key is ever configured in the apps (git-i
 | `PUT /user-product/free/movements/{id}` | full replacement: `transaction_date`, `description`, `amount` (>0, ≤ 9 999 999 999.99), `transaction_type` (unchanged), `category`, `notes`. Never `currency`/`exchange_rate` | `{"status","movement_id"}` | 404 (deleted elsewhere → list refreshed), 422, 503 |
 | `DELETE /user-product/free/movements/{id}` | — | `{"status","movement_id"}` | 404 (already gone → list refreshed), 422, 503 |
 
-`/free/*` serves Free, Basic and VIP (feature minimum `free`); Basic and VIP see a notice that
-their full dashboards are still in the current app. Owner/admin sessions stop at a notice.
+`/free/*` serves Free, Basic and VIP (feature minimum `free`). Owner/admin sessions stop at a
+notice.
 
-## Currency rows are read-only here (#269, #273)
+### RC endpoints (added after C4)
+
+Every write below sends only what the user typed, bounded by the money rules; creates and
+payments carry `X-Idempotency-Key` (`^[A-Za-z0-9_-]{8,80}$`, reused only when the same
+submission is retried). The plan gate in the app mirrors `BUILTIN_FEATURE_MIN_PLAN`; the backend's
+402/403 still decides.
+
+| Area | Endpoints | Notes |
+|---|---|---|
+| Gates **iOS** | `POST /auth/legal/accept`, `GET /auth/plans`, `GET /product-ops/billing/catalog`, `POST /auth/plan`, `DELETE /auth/me` | Legal versions come from `/auth/me.legal`; `consent_version` is the backend default `regular-2027-v1`; paid plans only while the promotion is active |
+| Operations | `GET /product-ops/feature-flags` **iOS**, `GET /product-ops/health`, `GET /product-ops/release-policy`, `POST /product-ops/events` | Unknown flags use the backend's safe defaults (writes, mail and store off); release policy fails open; events carry allow-listed screen names only |
+| Movements | `GET /free/monthly-summary?period`, `PUT /free/movements/{id}` with `currency` + `exchange_rate` | See "Currency edits" |
+| Debts **iOS (list, payment)** | `GET/POST /finance/debts`, `PUT/DELETE /finance/debts/{id}`, `POST /finance/debts/{id}/payments` | Edit needs Basic; a payment larger than the balance is capped by the backend |
+| Goals and savings **iOS (list, contribution)** | `/goals`, `/goals/{id}`, `/goals/{id}/contributions`, `/savings-plans…` | Contribution date validated before sending |
+| Situation | `GET/PUT /financial-situation` | An empty field is sent as null (unknown), never zero; observed income is never copied into a declared value |
+| Basic | `/basic/dashboard`, `/basic/budget` (GET/PUT), `/basic/calendar?period`, `/basic/recurring…`, `/basic/reports?period`, `/finance/strategy-basic` | |
+| VIP | `/vip/command-center`, `/finance/strategy-vip`, `POST /finance/strategy-vip/simulate` (read-only simulation), `/vip/aguinaldo` (409 → not applicable), `/vip/lifecycle/monthly-review`, `/vip/lifecycle/proactive-advisor` | `POST /vip/lifecycle/snapshots` is **not** called (reads do not write); `/vip/strategy-dashboard`, `/vip/debt-advisory` and `PUT /vip/salvavidas` are Owner-shaped and not used |
+| Mail (VIP) | `/vip/gmail/status`, `/consent`, `/connect`, `/vip/mail/microsoft/connect`, `/vip/mail/oauth/complete`, `/sync`, `/candidates` (+ accept / correct / reject), own-transfer suggestions, `/vip/financial-identity` accounts | A candidate in another currency without a usable rate asks for the user's rate; `already_reviewed` is reported, not treated as an error; the OAuth return is completed once (ledger) |
+| Store | `/product-ops/billing/store/catalog`, `/entitlement`, `/customer-token`, Google verification | The app never grants a plan; the backend verifies every purchase token |
+| Support | `GET/POST /product-ops/feedback`, resolution | |
+| Export | `GET /auth/me/export` | Shared as a file from the app cache, never logged |
+
+## Currency edits (#269, #273)
 
 The backend's `PUT /free/movements/{id}` without `currency` stores the row as a plain
 base-currency amount: for `salary`/`expense` rows it writes `original_amount`,
 `original_currency` and `exchange_rate` as NULL, so changing only the description would erase
-what the user typed and the rate they entered. The prototype never edits currencies and never
-invents a rate, so **a row carrying any of `original_amount`, `original_currency` or
-`exchange_rate` is read-only and cannot be deleted from the prototype**, whatever its currency (also when
-it equals the base). Rows without a usable `YYYY-MM-DD` date are read-only too, because the
-full-replacement `PUT` would have to invent one. The backend's own `editable` flag still applies.
+what the user typed and the rate they entered.
+
+- **Android** edits a manual (`salary`/`expense`) row typed in another currency only when its
+  data is complete (`original_amount`, `original_currency` in the account's entry currencies,
+  `exchange_rate` > 0, a valid date): the editor opens in that currency with the original amount
+  and the stored rate, and sends `currency` + `exchange_rate` back, so the backend recomputes the
+  same base amount. A new foreign entry asks for the user's rate (prefilled with the user's own
+  latest rate, never a market rate). Mail rows and partial data stay read-only.
+- **iOS** never edits currencies: a row carrying any of `original_amount`, `original_currency` or
+  `exchange_rate` is read-only there.
+- Rows without a usable `YYYY-MM-DD` date are read-only on both, because the full-replacement
+  `PUT` would have to invent one. The backend's own `editable` flag still applies.
 
 ## Error model (same on both platforms)
 
@@ -93,6 +124,7 @@ full-replacement `PUT` would have to invent one. The backend's own `editable` fl
 | 402 | subscriptionRequired | fixed copy |
 | 403 / 404 / 409 / 422 / other 4xx | forbidden / notFound / validation / client | backend `detail` string only for Spanish sessions, otherwise fixed copy; list or object `detail` never shown raw |
 | 429 | client (after GET retries) | fixed copy |
+| 503 `feature_temporarily_unavailable` | featureUnavailable (not retried) | backend message for Spanish sessions, otherwise fixed copy; the paused flag is kept |
 | 5xx | server (retry offered) | fixed copy, no backend internals |
 | undecodable body | decoding | fixed copy |
 
@@ -108,8 +140,10 @@ full-replacement `PUT` would have to invent one. The backend's own `editable` fl
   (10 integer digits). Every field this input writes is bounded by 12,2: `salaries.amount` and
   `expenses.amount` (the backend refuses more, `entry_currency.MAX_AMOUNT`, which holds them to
   12,2 because their production type is not verified; `schema.sql` says 14,2) and
-  `transactions.amount` (NUMERIC(12,2) in production). `original_amount` NUMERIC(14,2) and
-  `exchange_rate` NUMERIC(14,6) are never written by the prototype. Zero, negatives, NaN,
+  `transactions.amount` (NUMERIC(12,2) in production). Amount fields the backend does not bound
+  (debts, goals, savings plans, budget, recurring, situation) are bounded to the same maximum by
+  the client. Exchange rates: > 0, ≤ 100 000, at most 6 decimals (`exchange_rate` NUMERIC(14,6));
+  only the user's own rate is ever sent. Zero, negatives, NaN,
   Infinity, scientific notation, non-ASCII digits and anything ambiguous (`1,000` in
   `dot_comma`, `1.000` in `comma_dot`) are rejected, never guessed.
 - Edit forms prefill the stored value unrounded (`inputText`) and send it back digit for digit
@@ -119,13 +153,13 @@ full-replacement `PUT` would have to invent one. The backend's own `editable` fl
 
 | Work | What the prototype does |
 |---|---|
-| #269 manual income/expense in CRC/USD | Records in the base currency only (no `currency`/`exchange_rate`); rows with currency data are read-only |
+| #269 manual income/expense in CRC/USD | Android: create and edit in the entry currencies with the user's rate. iOS: base currency only; currency rows read-only |
 | #273 mail transactions in USD | Read-only (they carry `original_*`, and mail rows are not `editable` for the backend) |
-| #266 candidate review | Not used: candidates are neither listed nor reviewed |
-| #248 plan lifecycle, #284 store subscriptions | Reads `subscription.plan`/`status` only; no plan change, purchase or restore in the prototype |
+| #266 candidate review | Android: accept / correct / reject with `already_reviewed` handled. iOS: not ported |
+| #248 plan lifecycle, #284 store subscriptions | Android: plan change with the backend's answer (`plan_kept`, `downgrade_scheduled`…), Play Billing purchase verified by the backend. iOS: first plan choice only; no purchase |
 
 ## Not in the contract yet
 
-- Editing a movement's currency (sending `currency` + the user's `exchange_rate`).
+- iOS: editing a movement's currency.
 - `X-Idempotency-Key` is not supported by the backend for PUT/DELETE or profile setup; those are
   full replacements or return 404 on repeat.

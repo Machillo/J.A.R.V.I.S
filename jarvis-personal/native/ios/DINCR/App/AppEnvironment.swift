@@ -9,7 +9,7 @@ import Foundation
 struct AppEnvironment {
     enum Mode {
         case live(apiURL: URL, supabaseURL: URL, anonKey: String)
-        case fixtures(FixtureDincrService.Scenario)
+        case fixtures(FixtureDincrService.Scenario, PlanTier)
         case unconfigured(LaunchPolicy.Reason)
     }
 
@@ -34,7 +34,9 @@ struct AppEnvironment {
         case let .live(apiURL, supabaseURL, anonKey):
             return AppEnvironment(mode: .live(apiURL: apiURL, supabaseURL: supabaseURL, anonKey: anonKey))
         case let .fixtures(scenario):
-            return AppEnvironment(mode: .fixtures(scenario.flatMap(FixtureDincrService.Scenario.init(rawValue:)) ?? .populated))
+            // `-DincrPlan basic|vip` picks the fixture account's plan (UI tests of plan gates).
+            let plan = arguments.firstIndex(of: "-DincrPlan").flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
+            return AppEnvironment(mode: .fixtures(scenario.flatMap(FixtureDincrService.Scenario.init(rawValue:)) ?? .populated, PlanTier.from(plan)))
         case let .unconfigured(reason):
             return AppEnvironment(mode: .unconfigured(reason))
         }

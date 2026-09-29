@@ -50,7 +50,7 @@ from backend.user_product.own_transfer_review import confirm_own_transfer, list_
 from backend.user_product.trust_analytics import get_gmail_trust_analytics
 from backend.user_product.gmail_consent import accept_gmail_consent
 from backend.user_product.microsoft_mail import begin_connection as begin_microsoft_connection, finish_connection as finish_microsoft_connection
-from backend.user_product.mail_oauth import complete_mail_connection
+from backend.user_product.mail_oauth import complete_mail_connection, oauth_locale
 
 router = APIRouter(prefix="/user-product", tags=["DINCR Product"])
 
@@ -244,10 +244,12 @@ def vip_gmail_status():
     require_feature("gmail_automation"); return gmail_status()
 
 @router.post("/vip/gmail/connect")
-def vip_gmail_connect(request: MailConnectRequest | None = None):
-    # No body (older app versions) keeps the previous current-year window.
+def vip_gmail_connect(request: MailConnectRequest | None = None, accept_language: str | None = Header(default=None)):
+    # No body (older app versions) keeps the previous current-year window, and their
+    # Accept-Language (the app's own language) sets the language of Google's screens.
     require_feature("gmail_automation")
-    return begin_gmail_connection((request or MailConnectRequest()).import_scope)
+    body = request or MailConnectRequest()
+    return begin_gmail_connection(body.import_scope, locale=oauth_locale(body.locale, accept_language))
 
 @router.post("/vip/gmail/consent")
 def vip_gmail_consent(request: GmailConsentRequest):

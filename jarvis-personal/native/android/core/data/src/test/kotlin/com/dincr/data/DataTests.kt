@@ -63,8 +63,8 @@ class ContractTest {
     }
 
     @Test fun movementIdKeepsItsColon() {
-        assertEquals("expense:42", LiveDincrService.encode("expense:42"))
-        assertEquals("a%2Fb", LiveDincrService.encode("a/b"))
+        assertEquals("expense:42", DincrApi.encode("expense:42"))
+        assertEquals("a%2Fb", DincrApi.encode("a/b"))
     }
 }
 

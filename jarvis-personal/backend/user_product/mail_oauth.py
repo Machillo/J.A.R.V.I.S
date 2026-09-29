@@ -56,6 +56,26 @@ PROVIDER_SCOPES = {"gmail": "https://www.googleapis.com/auth/gmail.readonly", "m
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
+OAUTH_LOCALES = ("en", "es")
+OAUTH_DEFAULT_LOCALE = "en"
+
+
+def oauth_locale(*candidates: str | None) -> str:
+    """Language of Google's sign-in, account chooser and consent screens: ``en`` or ``es``.
+
+    Candidates in priority order: the language the app sends with the request, then
+    its ``Accept-Language``. The first non-empty one decides; any language DINCR does
+    not ship falls back to English. Only ``en``/``es`` ever leave this function, so the
+    value can never inject anything into the authorization URL.
+    """
+    for candidate in candidates:
+        tag = str(candidate or "").split(",", 1)[0].split(";", 1)[0].strip().lower().replace("_", "-")
+        if tag:
+            primary = tag.split("-", 1)[0]
+            return primary if primary in OAUTH_LOCALES else OAUTH_DEFAULT_LOCALE
+    return OAUTH_DEFAULT_LOCALE
+
+
 def _digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 

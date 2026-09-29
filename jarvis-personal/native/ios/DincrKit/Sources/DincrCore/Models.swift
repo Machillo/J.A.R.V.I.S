@@ -11,11 +11,23 @@ public struct Profile: Decodable, Sendable, Equatable {
     public struct Subscription: Decodable, Sendable, Equatable {
         public let plan: String?
         public let status: String?
+        public let planName: String?
+        /// `store`, `courtesy`, `promotion`…: how the plan was granted.
+        public let accessSource: String?
+
+        public init(plan: String?, status: String?, planName: String? = nil, accessSource: String? = nil) {
+            self.plan = plan; self.status = status; self.planName = planName; self.accessSource = accessSource
+        }
     }
     public struct Legal: Decodable, Sendable, Equatable {
         public let required: Bool?
         public let termsVersion: String?
         public let privacyVersion: String?
+        public let acceptedAt: String?
+
+        public init(required: Bool?, termsVersion: String?, privacyVersion: String?, acceptedAt: String? = nil) {
+            self.required = required; self.termsVersion = termsVersion; self.privacyVersion = privacyVersion; self.acceptedAt = acceptedAt
+        }
     }
 
     /// `allowed_users.id`: an integer, not the Supabase UUID.
@@ -43,9 +55,19 @@ public struct Profile: Decodable, Sendable, Equatable {
         self.currencyPlacement = currencyPlacement; self.subscription = subscription; self.legal = legal
     }
 
+    /// A copy with some fields replaced (fixtures and gates; never a financial value).
+    public func with(planSelected: Bool? = nil, subscription: Subscription? = nil, legal: Legal? = nil) -> Profile {
+        Profile(id: id, email: email, displayName: displayName, role: role, planSelected: planSelected ?? self.planSelected,
+                profileSetupCompleted: profileSetupCompleted, baseCurrency: baseCurrency, numberFormat: numberFormat,
+                currencyPlacement: currencyPlacement, subscription: subscription ?? self.subscription, legal: legal ?? self.legal)
+    }
+
     /// Owner/admin sessions are never served by the public app (Owner boundary).
     public var isOwner: Bool { role == "owner" || role == "admin" }
     public var plan: String { subscription?.plan ?? "free" }
+    /// What the app offers; the backend still decides every request.
+    public var planTier: PlanTier { PlanTier.from(subscription?.plan) }
+    public var isCourtesy: Bool { subscription?.accessSource == "courtesy" }
     public var firstName: String? {
         let source = displayName ?? email?.split(separator: "@").first.map(String.init)
         return source?.split(separator: " ").first.map(String.init)
