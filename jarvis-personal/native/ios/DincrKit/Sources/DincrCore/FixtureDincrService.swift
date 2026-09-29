@@ -9,7 +9,7 @@ import Foundation
 /// is answered without a second row, and a missing movement is a 404.
 public actor FixtureDincrService: DincrService {
     public enum Scenario: String, Sendable {
-        case populated, empty, failing, newUser
+        case populated, empty, failing, newUser, legalRequired, choosePlan
     }
 
     private var profile: Profile
@@ -18,17 +18,30 @@ public actor FixtureDincrService: DincrService {
     private let latency: Duration
     private var nextID = 100
     private var seenKeys: Set<String> = []
+    private var debtRows: [Debt]
+    private var goalRows: [Goal]
 
-    public init(scenario: Scenario = .populated, latency: Duration = .milliseconds(350), today: Date = .now) {
+    public init(scenario: Scenario = .populated, plan: PlanTier = .free, latency: Duration = .milliseconds(350), today: Date = .now) {
         self.scenario = scenario
         self.latency = latency
         self.profile = Profile(
             // Every field /auth/me always sends (auth/saas.py enrich_identity), same as Android.
-            id: 4201, email: "ana@example.com", displayName: "Ana Solís", role: "user", planSelected: true,
+            id: 4201, email: "ana@example.com", displayName: "Ana Solís", role: "user",
+            planSelected: scenario != .newUser && scenario != .choosePlan,
             profileSetupCompleted: scenario != .newUser, baseCurrency: "CRC", numberFormat: "dot_comma", currencyPlacement: "before",
-            subscription: .init(plan: "free", status: "active")
+            subscription: .init(plan: plan.rawValue, status: "active"),
+            legal: .init(required: scenario == .legalRequired, termsVersion: "2026-09", privacyVersion: "2026-09")
         )
-        self.rows = scenario == .populated ? Self.sampleMovements(today: today) : []
+        let populated = scenario == .populated
+        self.rows = populated ? Self.sampleMovements(today: today) : []
+        self.debtRows = populated ? [
+            Debt(id: 31, name: "Tarjeta de crédito", debtType: "credit_card", totalAmount: 600_000, remainingAmount: 420_000, monthlyPayment: 45_000, interestRate: 36, paymentDay: 15, progressPercent: 30),
+            Debt(id: 32, name: "Préstamo del carro", debtType: "loan", totalAmount: 2_400_000, remainingAmount: 820_000, monthlyPayment: 50_000, interestRate: 12, paymentDay: 1, progressPercent: 65.8),
+        ] : []
+        self.goalRows = populated ? [
+            Goal(id: 41, name: "Fondo de emergencia", targetAmount: 1_500_000, currentAmount: 380_000, targetDate: "2027-06-30", priority: "high"),
+            Goal(id: 42, name: "Viaje", targetAmount: 400_000, currentAmount: 90_000),
+        ] : []
     }
 
     public func me() async throws -> Profile {
@@ -40,11 +53,96 @@ public actor FixtureDincrService: DincrService {
         try await pause()
         profile = Profile(
             id: profile.id, email: profile.email, displayName: setup.displayName,
-            profileSetupCompleted: true, baseCurrency: setup.baseCurrency,
+            planSelected: profile.planSelected, profileSetupCompleted: true, baseCurrency: setup.baseCurrency,
             numberFormat: setup.numberFormat, currencyPlacement: setup.currencyPlacement,
-            subscription: profile.subscription
+            subscription: profile.subscription, legal: profile.legal
         )
         return profile
+    }
+
+    public func acceptLegal(_ request: LegalAcceptRequest) async throws -> LegalAcceptResult {
+        try await pause()
+        guard request.termsVersion == profile.legal?.termsVersion, request.privacyVersion == profile.legal?.privacyVersion else {
+            throw APIError(kind: .validation, status: 409, message: "Las versiones legales cambiaron.")
+        }
+        profile = profile.with(legal: .init(required: false, termsVersion: request.termsVersion, privacyVersion: request.privacyVersion, acceptedAt: "2026-09-28T12:00:00Z"))
+        return LegalAcceptResult(status: "ok", required: false)
+    }
+
+    public func plans() async throws -> [PlanOption] {
+        try await pause()
+        return [
+            PlanOption(code: "free", name: "Free", tagline: "Lo esencial para ordenar tu dinero.", features: ["Movimientos", "Deudas y metas"]),
+            PlanOption(code: "basic", name: "Basic", tagline: "Presupuesto y calendario.", features: ["Presupuesto guiado", "Calendario financiero"], regularPriceCrc: 2_900),
+            PlanOption(code: "vip", name: "VIP", tagline: "Estrategia y correo.", features: ["Estrategia VIP", "Monitor de correo"], regularPriceCrc: 5_900),
+        ]
+    }
+
+    public func billingCatalog() async throws -> BillingCatalog {
+        try await pause()
+        return BillingCatalog(plans: nil, promotion: nil, notice: nil)
+    }
+
+    public func choosePlan(_ request: PlanChangeRequest) async throws -> PlanChangeResult {
+        try await pause()
+        // Without an active promotion the backend accepts only Free here; paid plans come from a store.
+        guard request.plan == PlanTier.free.rawValue else {
+            throw APIError(kind: .subscriptionRequired, status: 402, message: "Este plan se activa desde la tienda.")
+        }
+        profile = profile.with(planSelected: true, subscription: .init(plan: request.plan, status: "active"))
+        return PlanChangeResult(status: "ok", plan: request.plan, pendingPlan: nil, effectiveAt: nil, message: nil, profile: profile)
+    }
+
+    public func featureFlags() async throws -> FeatureFlags {
+        try await pause()
+        return FeatureFlags(flags: OpsFlag.allCases.map { FeatureFlags.Flag(flagKey: $0.rawValue, enabled: true) })
+    }
+
+    public func deleteAccount() async throws {
+        try await pause()
+    }
+
+    public func debts() async throws -> [Debt] {
+        try await pause()
+        return debtRows
+    }
+
+    public func payDebt(id: Int, amount: Decimal, idempotencyKey: String) async throws -> DebtPaymentResult {
+        try await pause()
+        try WriteContract.checkAmount(amount)
+        guard let index = debtRows.firstIndex(where: { $0.id == id }) else {
+            throw APIError(kind: .notFound, status: 404, message: "Deuda no encontrada.")
+        }
+        let old = debtRows[index]
+        guard seenKeys.insert(idempotencyKey).inserted else {
+            return DebtPaymentResult(status: "ok", debtId: id, paymentAmount: amount, newRemainingAmount: old.remainingAmount)
+        }
+        // Like the backend: a payment larger than the balance is capped at the balance.
+        let remaining = max(0, (old.remainingAmount ?? 0) - amount)
+        debtRows[index] = Debt(id: old.id, name: old.name, debtType: old.debtType, totalAmount: old.totalAmount, remainingAmount: remaining,
+                               monthlyPayment: old.monthlyPayment, interestRate: old.interestRate, paymentDay: old.paymentDay,
+                               nextPaymentDate: old.nextPaymentDate, progressPercent: old.progressPercent)
+        return DebtPaymentResult(status: "ok", debtId: id, paymentAmount: min(amount, old.remainingAmount ?? amount), newRemainingAmount: remaining)
+    }
+
+    public func goals() async throws -> [Goal] {
+        try await pause()
+        return goalRows
+    }
+
+    public func contribute(goalID: Int, _ contribution: GoalContribution, idempotencyKey: String) async throws -> Goal {
+        try await pause()
+        try WriteContract.checkAmount(contribution.amount)
+        guard let index = goalRows.firstIndex(where: { $0.id == goalID }) else {
+            throw APIError(kind: .notFound, status: 404, message: "Meta no encontrada.")
+        }
+        guard seenKeys.insert(idempotencyKey).inserted else { return goalRows[index] }
+        let old = goalRows[index]
+        var current = (old.currentAmount ?? 0) + contribution.amount
+        if let target = old.targetAmount { current = min(current, target) }
+        goalRows[index] = Goal(id: old.id, name: old.name, targetAmount: old.targetAmount, currentAmount: current,
+                               targetDate: old.targetDate, priority: old.priority, status: old.status)
+        return goalRows[index]
     }
 
     public func freeDashboard() async throws -> FreeDashboard {

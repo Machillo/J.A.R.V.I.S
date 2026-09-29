@@ -30,10 +30,20 @@ def observe_mail_sync(provider: str, trigger: str, run: Callable[[], dict[str, A
     try:
         result = run()
     except BaseException as exc:
+        code = _error_code(exc)
         capture_backend_event_later("mail_sync_failed", {
-            "provider": provider, "trigger": trigger, "error_code": _error_code(exc),
+            "provider": provider, "trigger": trigger, "error_code": code,
             "duration_ms": (monotonic() - started) * 1000,
         })
+        # A user revoking access is expected (info). A provider failure for one mailbox
+        # is a warning; many in 10 minutes become an error alert (provider or DINCR down).
+        from backend.core import observability
+
+        if code == "provider_error":
+            observability.report("mail", f"{provider}_sync_failed", "warning", error_code=trigger,
+                                 error_class=type(exc).__name__, escalate_after=5)
+        else:  # the user must reconnect or refused access: expected, never escalated
+            observability.report("mail", f"{provider}_sync_needs_user", "info", error_code=f"{trigger}:{code}")
         raise
     capture_backend_event_later("mail_sync_completed", {
         "provider": provider, "trigger": trigger,

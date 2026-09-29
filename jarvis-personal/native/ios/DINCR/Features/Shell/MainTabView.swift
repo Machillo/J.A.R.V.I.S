@@ -22,7 +22,7 @@ struct MainTabView: View {
             NavigationStack { MovementsView() }
                 .tabItem { Label(tx("Movimientos", "Transactions"), systemImage: "list.bullet.rectangle") }
                 .tag(Tab.movements)
-            NavigationStack { PrototypePlaceholderView(title: tx("Plan", "Plan"), parity: "E1–E12") }
+            NavigationStack { PlanHubView() }
                 .tabItem { Label(tx("Plan", "Plan"), systemImage: "target") }
                 .tag(Tab.plan)
             NavigationStack { PrototypePlaceholderView(title: "DINCR", parity: "F1–F10") }
@@ -58,6 +58,9 @@ struct ProfileView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("dincr.appearance") private var appearance = Appearance.system.rawValue
     @State private var confirmingSignOut = false
+    @State private var confirmingDelete = false
+    @State private var deleting = false
+    @State private var deleteError: String?
 
     var body: some View {
         List {
@@ -76,6 +79,12 @@ struct ProfileView: View {
                 }
                 .accessibilityElement(children: .combine)
             }
+            Section(tx("Plan", "Plan")) {
+                LabeledContent(tx("Plan actual", "Current plan"), value: PlanLabel.name(model.profile?.plan))
+                if model.profile?.isCourtesy == true {
+                    Text(tx("Acceso de cortesía.", "Courtesy access.")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                }
+            }
             Section(tx("Apariencia", "Appearance")) {
                 Picker(tx("Tema", "Theme"), selection: $appearance) {
                     Text(tx("Automático", "Automatic")).tag(Appearance.system.rawValue)
@@ -83,8 +92,22 @@ struct ProfileView: View {
                     Text(tx("Oscuro", "Dark")).tag(Appearance.dark.rawValue)
                 }
             }
+            Section(tx("Legal y soporte", "Legal and support")) {
+                Link(tx("Términos y condiciones", "Terms and conditions"), destination: LegalLinks.terms)
+                Link(tx("Política de privacidad", "Privacy policy"), destination: LegalLinks.privacy)
+                Link(tx("Soporte", "Support"), destination: LegalLinks.support)
+            }
             Section {
                 Button(tx("Cerrar sesión", "Sign out"), role: .destructive) { confirmingSignOut = true }
+            }
+            Section {
+                Button(tx("Eliminar mi cuenta", "Delete my account"), role: .destructive) { confirmingDelete = true }
+                    .disabled(deleting)
+                if let deleteError {
+                    Text(deleteError).font(DincrFont.caption).foregroundStyle(DincrColor.negative)
+                }
+            } footer: {
+                Text(tx("Se programa la eliminación de tus datos en DINCR y se cierra la sesión. No se puede deshacer.", "Your DINCR data is scheduled for deletion and you are signed out. This can’t be undone."))
             }
         }
         .scrollContentBackground(.hidden)
@@ -93,6 +116,15 @@ struct ProfileView: View {
         .confirmationDialog(tx("¿Cerrar sesión en este dispositivo?", "Sign out on this device?"), isPresented: $confirmingSignOut, titleVisibility: .visible) {
             Button(tx("Cerrar sesión", "Sign out"), role: .destructive) { Task { await model.signOut() } }
             Button(tx("Cancelar", "Cancel"), role: .cancel) {}
+        }
+        .confirmationDialog(tx("¿Eliminar tu cuenta de DINCR?", "Delete your DINCR account?"), isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button(tx("Eliminar cuenta", "Delete account"), role: .destructive) {
+                deleting = true; deleteError = nil
+                Task { deleteError = await model.deleteAccount(); deleting = false }
+            }
+            Button(tx("Cancelar", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(tx("Tus datos se eliminan de DINCR. No se puede deshacer.", "Your data is removed from DINCR. This can’t be undone."))
         }
     }
 }

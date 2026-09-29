@@ -17,6 +17,7 @@ import {
   syncVipGmail,
 } from "../services/jarvisApi";
 import { deviceLanguage, localeTag, tx } from "../../lib/locale";
+import { getOAuthLocale } from "../../lib/oauthLocale";
 import { bankBranding, resolveBank } from "../../lib/bankBranding";
 import BankLogo from "../../components/BankLogo";
 import { categoryLabel, categoryValue } from "../../lib/categories";
@@ -257,7 +258,9 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
         if (!consentAccepted) throw new Error(tx("Debés aceptar la explicación de Email Monitor antes de conectarlo.", "You must accept the Email Monitor explanation before connecting it."));
         await acceptVipGmailConsent(gmail.consent.version);
       }
-      const response = await (provider === "microsoft" ? connectVipMicrosoftMail(scope) : connectVipGmail(scope));
+      const response = await (provider === "microsoft"
+        ? connectVipMicrosoftMail(scope)
+        : connectVipGmail(scope, getOAuthLocale({ appLanguage: deviceLanguage() })));
       setHistoryChoice(null);
       trackEvent("gmail_connection_started", { source_type: "email", provider });
       if (!response?.authorization_url) throw new Error(tx("El proveedor no devolvió una dirección de autorización.", "The provider did not return an authorization URL."));

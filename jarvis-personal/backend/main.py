@@ -3,8 +3,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import logging
 import re
-import traceback
-from pathlib import Path
+import time
 from uuid import uuid4
 
 from backend.core.brain import process_input
@@ -37,6 +36,8 @@ from backend.user_product.routes import router as user_product_router
 from backend.deployment_monitor.routes import router as deployment_monitor_router
 from backend.integrations.ibkr_readonly import router as ibkr_readonly_router
 from backend.product_ops.posthog_events import capture_backend_event_later
+from backend.core import observability as ops
+from backend.product_ops.observability_routes import router as observability_router
 from backend.product_ops.routes import router as product_ops_router
 from backend.product_ops.store_routes import router as store_billing_router
 from backend.financial_lifecycle.routes import router as financial_lifecycle_router
@@ -83,6 +84,8 @@ app.add_middleware(
 PUBLIC_PATHS = {
     "/",
     "/status",
+    "/health/live",
+    "/health/ready",
     "/product-ops/release-policy",
     "/auth/health",
     "/email-monitor/cron",
@@ -126,35 +129,9 @@ def _request_id(request: Request) -> str:
     return value
 
 
-def _safe_exception_summary(exc: BaseException) -> str:
-    """One log line that explains an unexpected error without leaking data.
-
-    Keeps exception types, Postgres error codes, schema identifiers (table,
-    constraint, column) and code locations. Exception messages are dropped on
-    purpose: driver messages can quote row values (emails, amounts, tokens).
-    """
-    parts: list[str] = []
-    seen: set[int] = set()
-    current: BaseException | None = exc
-    while current is not None and id(current) not in seen and len(parts) < 3:
-        seen.add(id(current))
-        info = [type(current).__name__]
-        pgcode = getattr(current, "pgcode", None)
-        if pgcode:
-            info.append(f"pgcode={pgcode}")
-        diag = getattr(current, "diag", None)
-        for label, attr in (("table", "table_name"), ("constraint", "constraint_name"), ("column", "column_name")):
-            value = getattr(diag, attr, None) if diag is not None else None
-            if value:
-                info.append(f"{label}={value}")
-        frames = [frame for frame in traceback.extract_tb(current.__traceback__) if "backend" in frame.filename.replace("\\", "/")]
-        if frames:
-            info.append("at " + " <- ".join(
-                f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}" for frame in reversed(frames[-6:])
-            ))
-        parts.append(" ".join(info))
-        current = current.__cause__ or current.__context__
-    return " | caused by ".join(parts)
+# One line that explains an unexpected error without leaking data (moved to core so
+# every module can log failures the same way).
+_safe_exception_summary = ops.exception_summary
 
 
 def _internal_error_payload(error_id: str) -> dict[str, str]:
@@ -171,6 +148,19 @@ def _report_server_error(request: Request, status_code: int, exc: Exception) -> 
     capture_backend_event_later("server_error", {
         "route": route, "method": request.method, "status_code": status_code, "exception_type": type(exc).__name__,
     })
+    # A deliberate 503 (feature paused, store not enabled, provider asked to retry) is a
+    # decision, not an outage: logged, never alerted. Unhandled errors alert (deduplicated).
+    if type(exc).__name__ == "ClientDisconnect":
+        # The client hung up mid-upload (mobile networks do): nothing failed on our side.
+        ops.report("api", "client_disconnected", "info", route=route or ops.normalize_route(request.url.path))
+        return
+    deliberate = isinstance(exc, HTTPException) and status_code == 503
+    # A database outage pages once through database.connect_failed/unreachable; per-route
+    # failures stay ERROR so one outage is not one CRITICAL page per endpoint.
+    ops.report("api", "server_error", "warning" if deliberate else "error",
+               route=route or ops.normalize_route(request.url.path), method=request.method, status=status_code,
+               error_class=type(exc).__name__, error_code=getattr(exc, "pgcode", None),
+               request_id=getattr(getattr(request, "state", None), "request_id", None))
 
 
 @app.exception_handler(HTTPException)
@@ -206,6 +196,18 @@ async def safe_unhandled_error_handler(request: Request, exc: Exception):
 
 
 @app.middleware("http")
+async def access_log_middleware(request: Request, call_next):
+    # Runs inside auth_middleware (registered after it), so the request ID is set and
+    # the route template is resolved. One structured line per request; slow requests
+    # are reported (deduplicated per route). Never a query string, header or body.
+    started = time.monotonic()
+    response = await call_next(request)
+    ops.access(request.scope.get("route"), request.url.path, request.method, response.status_code,
+               int((time.monotonic() - started) * 1000), getattr(request.state, "request_id", None))
+    return response
+
+
+@app.middleware("http")
 async def language_middleware(request: Request, call_next):
     # Text generated for the public DINCR app follows Accept-Language (es|en).
     token = set_language(language_for_request(request.url.path, request.headers.get("accept-language")))
@@ -233,7 +235,10 @@ async def auth_middleware(request: Request, call_next):
         return response
 
     if _is_public_path(request.url.path):
-        disabled_feature = await run_in_threadpool(disabled_feature_for_request, request.method, request.url.path)
+        # Health endpoints have no feature flag; skipping the threadpool hop keeps
+        # /health/live answering even when every worker thread is busy.
+        disabled_feature = None if request.url.path.startswith("/health/") else await run_in_threadpool(
+            disabled_feature_for_request, request.method, request.url.path)
         if disabled_feature:
             return JSONResponse(
                 status_code=503,
@@ -250,6 +255,7 @@ async def auth_middleware(request: Request, call_next):
             # Same redaction as authenticated paths: an escaping exception would be
             # re-raised by Starlette and logged verbatim (URLs with tokens) by uvicorn.
             logger.error("Unhandled API error id=%s path=%s error=%s", request_id, request.url.path, _safe_exception_summary(exc))
+            _report_server_error(request, 500, exc)
             return JSONResponse(
                 status_code=500,
                 content=_internal_error_payload(request_id),
@@ -289,6 +295,8 @@ async def auth_middleware(request: Request, call_next):
         # answer 503 so the app retries instead of signing the user out on a 401.
         if not hasattr(exc, "status_code"):
             logger.error("Authentication failed without a verdict id=%s error=%s", request_id, _safe_exception_summary(exc))
+            ops.report("auth", "verification_unavailable", "error", method=request.method, status=503,
+                       error_class=type(exc).__name__, error_code=getattr(exc, "pgcode", None), request_id=request_id)
         status_code = getattr(exc, "status_code", 503)
         detail = getattr(exc, "detail", "No pudimos verificar tu sesión en este momento. Intentá de nuevo.")
         return JSONResponse(
@@ -418,6 +426,7 @@ async def auth_middleware(request: Request, call_next):
             return _superseded_response({**cors_headers, "X-Request-ID": request_id})
         error_id = request_id
         logger.error("Unhandled API error id=%s path=%s error=%s", error_id, request.url.path, _safe_exception_summary(exc))
+        _report_server_error(request, 500, exc)
         return JSONResponse(
             status_code=500,
             content=_internal_error_payload(error_id),
@@ -454,6 +463,7 @@ app.include_router(deployment_monitor_router)
 app.include_router(product_ops_router)
 app.include_router(store_billing_router)
 app.include_router(financial_lifecycle_router)
+app.include_router(observability_router)
 
 class AskRequest(BaseModel):
     text: str
@@ -468,6 +478,7 @@ class EventRequest(BaseModel):
 
 @app.on_event("startup")
 def startup_event():
+    ops.configure_logging()
     init_database()
 
 

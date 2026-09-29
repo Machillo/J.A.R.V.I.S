@@ -23,6 +23,7 @@ from backend.auth.current_user import (
     get_current_user_id,
     get_current_workspace_id,
 )
+from backend.core import observability
 from backend.core.database import get_connection
 from backend.email_monitor.parser import parse_financial_email
 from backend.email_monitor.parser_identity import for_account_holder
@@ -631,7 +632,7 @@ def _google_subject(access_token: str | None, client_id: str) -> str | None:
     return subject
 
 
-def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
+def begin_gmail_connection(import_scope: str | None = None, locale: str = mail_oauth.OAUTH_DEFAULT_LOCALE) -> dict[str, str]:
     require_gmail_consent()
     client_id, _, redirect_uri = _google_config()
     state, code_challenge = mail_oauth.start_flow("gmail", import_scope)
@@ -648,6 +649,9 @@ def begin_gmail_connection(import_scope: str | None = None) -> dict[str, str]:
         "state": state,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
+        # Display language of Google's screens (OpenID Connect `hl`, BCP 47). Without it
+        # Google guesses from the in-app browser, which keeps its own cookies apart from Safari.
+        "hl": mail_oauth.oauth_locale(locale),
     }
     return {"authorization_url": f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"}
 
@@ -1356,6 +1360,7 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
         ).fetchall()
     completed = 0
     reconnect = 0
+    failed = 0
     for row in rows:
         connection_id = int(row["id"])
         try:
@@ -1368,12 +1373,18 @@ def gmail_maintenance(secret: str | None) -> dict[str, Any]:
                 _start_watch(connection_id, service, suppress_errors=True)
                 _sync_connection(connection_id, service=service, max_results=100, trigger="maintenance")
             completed += 1
-        except HTTPException as exc:
-            if exc.status_code == 409:
-                reconnect += 1
-        except Exception:
-            continue
+        except Exception as exc:
+            if isinstance(exc, HTTPException) and exc.status_code == 409:
+                reconnect += 1  # the user must reconnect: expected, not a failure
+                continue
+            failed += 1
+            observability.report("mail", "maintenance_connection_failed", "warning",
+                                 error_class=type(exc).__name__, status=getattr(exc, "status_code", None), escalate_after=5)
     retention = apply_gmail_retention()
+    # The run worked unless every connection that could sync failed.
+    syncable = len(rows) - reconnect
+    run_ok = syncable == 0 or failed < syncable
+    observability.heartbeat("gmail_maintenance", ok=run_ok, error_class=None if run_ok else "all_connections_failed")
     return {"status": "ok", "connections": len(rows), "completed": completed, "reconnect": reconnect,
             "ended_without_plan": ended, "retention": retention}
 

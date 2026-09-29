@@ -110,7 +110,23 @@ object AmountInput {
     val MAX_AMOUNT = BigDecimal("9999999999.99")
     const val MAX_INTEGER_DIGITS = 10
 
-    fun parse(text: String, separators: MoneyFormat.Separators): BigDecimal? {
+    /** A positive amount for a money write (income, expense, debt, goal, budget, …). */
+    fun parse(text: String, separators: MoneyFormat.Separators): BigDecimal? =
+        parseDecimal(text, separators, MAX_FRACTION_DIGITS, MAX_AMOUNT, allowZero = false)
+
+    /**
+     * A money value where zero is meaningful (saved so far, liquid savings, a budget limit of 0).
+     * Same bound as [parse]; an empty field is null (unknown), never zero.
+     */
+    fun parseZeroOrMore(text: String, separators: MoneyFormat.Separators): BigDecimal? =
+        parseDecimal(text, separators, MAX_FRACTION_DIGITS, MAX_AMOUNT, allowZero = true)
+
+    /**
+     * The shared strict parser: the user's separators, real thousands groups only, at most
+     * [fractionDigits] decimals, no sign, no exponent, no NaN/Infinity, ASCII digits only, and
+     * never above [max]. Returns null for anything else; nothing is guessed.
+     */
+    fun parseDecimal(text: String, separators: MoneyFormat.Separators, fractionDigits: Int, max: BigDecimal, allowZero: Boolean): BigDecimal? {
         val trimmed = text.replace(" ", "")
         if (trimmed.isEmpty()) return null
         val group = if (separators == MoneyFormat.Separators.DOT_COMMA) '.' else ','
@@ -120,11 +136,47 @@ object AmountInput {
         if (halves.size > 2) return null
         val integer = halves[0]
         val fraction = halves.getOrElse(1) { "" }
-        if (integer.isEmpty() || fraction.contains(group) || fraction.length > MAX_FRACTION_DIGITS) return null
+        if (integer.isEmpty() || fraction.contains(group) || fraction.length > fractionDigits) return null
         val groups = integer.split(group)
         if (groups.size > 1 && (groups.first().length !in 1..3 || groups.drop(1).any { it.length != 3 })) return null
-        if (groups.joinToString("").trimStart('0').length > MAX_INTEGER_DIGITS) return null
+        if (groups.joinToString("").trimStart('0').length > max.setScale(0, java.math.RoundingMode.DOWN).toPlainString().length) return null
         val value = (groups.joinToString("") + if (fraction.isEmpty()) "" else ".$fraction").toBigDecimalOrNull() ?: return null
-        return value.takeIf { it.signum() > 0 && it <= MAX_AMOUNT }
+        val positiveEnough = if (allowZero) value.signum() >= 0 else value.signum() > 0
+        return value.takeIf { positiveEnough && it <= max }
     }
+}
+
+/**
+ * The exchange rate the user types: colones per 1 US dollar (the backend's only direction).
+ * `(0, 100000]` with at most 6 decimals, the request limit of `/finance/income|expenses`,
+ * `/free/movements` and the mail-candidate correction. DINCR never proposes or invents a rate.
+ */
+object ExchangeRateInput {
+    val MAX_RATE = BigDecimal("100000")
+    const val FRACTION_DIGITS = 6
+
+    fun parse(text: String, separators: MoneyFormat.Separators): BigDecimal? =
+        AmountInput.parseDecimal(text, separators, FRACTION_DIGITS, MAX_RATE, allowZero = false)
+}
+
+/** Annual interest percent of a debt: `debts.interest_rate` NUMERIC(8,4), so `[0, 9999.9999]`. */
+object InterestRateInput {
+    val MAX_RATE = BigDecimal("9999.9999")
+
+    fun parse(text: String, separators: MoneyFormat.Separators): BigDecimal? =
+        AmountInput.parseDecimal(text, separators, 4, MAX_RATE, allowZero = true)
+}
+
+/** Whole numbers typed in forms (term in months, day of month): ASCII digits within a range. */
+object WholeNumberInput {
+    fun parse(text: String, range: IntRange): Int? {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || trimmed.length > 6 || !trimmed.all { it in '0'..'9' }) return null
+        return trimmed.toInt().takeIf { it in range }
+    }
+}
+
+/** Dates travel as `YYYY-MM-DD`; anything else is refused before it reaches the backend. */
+object IsoDate {
+    fun isValid(text: String?): Boolean = text != null && runCatching { java.time.LocalDate.parse(text) }.isSuccess && text.length == 10
 }

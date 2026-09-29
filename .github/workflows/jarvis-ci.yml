@@ -54,6 +54,7 @@ jobs:
       - run: npm run test:release-identity
       - run: npm run test:android-identity
       - run: npm run test:mail-oauth
+      - run: npm run test:oauth-locale
       - run: npm run test:mail-currency
       - run: npm run test:bank-accounts
       - run: npm run test:phase0j
@@ -119,6 +120,11 @@ jobs:
       - run: python -m compileall -q backend
       - run: python -c "import backend.main"
       - run: python -m pytest -q backend
+        env:
+          DINCR_REQUIRE_PG_TESTS: "1"
+      # DINCR Labs: production-isolation guards (with mutation tests), synthetic data,
+      # parser fixtures and the Labs database on the same embedded PostgreSQL. See docs/labs.md.
+      - run: python -m pytest -q labs
         env:
           DINCR_REQUIRE_PG_TESTS: "1"
       - run: python backend/scripts/check_file_size_budget.py

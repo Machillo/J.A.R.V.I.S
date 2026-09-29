@@ -62,8 +62,11 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
-import java.util.UUID
 import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dincr.data.ConversionPreview
+import com.dincr.data.ExchangeRateInput
+import com.dincr.data.IdempotencyKey
 
 sealed interface EditorMode { data object Create : EditorMode; data class Edit(val movement: Movement) : EditorMode }
 
@@ -77,12 +80,24 @@ private val incomeCategories = listOf("Salario", "Boleta de pago", "Bono", "Reem
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit, onSaved: (String) -> Unit, onDelete: (Movement) -> Unit) {
+fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit, onSaved: (String) -> Unit, onDelete: (Movement) -> Unit, latestRate: BigDecimal? = null) {
     val format = Dincr.money
+    val profile by model.profile.collectAsStateWithLifecycle()
     val editing = (mode as? EditorMode.Edit)?.movement
+    val base = (profile?.baseCurrency ?: "CRC").uppercase()
+    val entryCurrencies = profile?.entryCurrencies.orEmpty().map { it.uppercase() }
+    // Another currency is offered only when this backend converts it for the account (#269), and
+    // on edit only for manual income/expense rows (the backend refuses it for anything else).
+    val otherCurrency = entryCurrencies.firstOrNull { it != base }?.takeIf { base in entryCurrencies && (editing == null || editing.acceptsCurrency) }
+    val storedForeign = editing?.takeIf { it.isCurrencyEditable(entryCurrencies) }
     var kind by remember { mutableStateOf(editing?.kind ?: MovementKind.EXPENSE) }
-    val prefilledAmount = remember { editing?.let { format.inputText(it.amount) } ?: "" }
+    var currency by remember { mutableStateOf(storedForeign?.originalCurrency?.uppercase() ?: base) }
+    // A row typed in another currency is edited in that currency (its original amount).
+    val prefilledAmount = remember { editing?.let { storedForeign?.originalAmount?.let(format::inputText) ?: format.inputText(it.amount) } ?: "" }
     var amountText by remember { mutableStateOf(prefilledAmount) }
+    val prefilledRate = remember { (storedForeign?.exchangeRate ?: latestRate)?.let(format::inputText) ?: "" }
+    var rateText by remember { mutableStateOf(prefilledRate) }
+    var rateError by remember { mutableStateOf<String?>(null) }
     var description by remember { mutableStateOf(editing?.description.orEmpty()) }
     val storedCategory = editing?.category?.takeIf { it.isNotEmpty() }
     val baseCategories = if (kind == MovementKind.INCOME) incomeCategories else expenseCategories
@@ -103,22 +118,35 @@ fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit
 
     fun save() {
         if (saving) return
-        // Untouched on edit: send the stored value, digit for digit.
-        val amount = if (editing != null && amountText == prefilledAmount) editing.amount else AmountInput.parse(amountText, format.separators)
+        val foreign = currency != base
+        // Untouched on edit: send the stored value, digit for digit (the original amount and the
+        // user's own rate for a row in another currency, so the backend recomputes the same base).
+        val amount = when {
+            editing != null && amountText == prefilledAmount && foreign && storedForeign != null && currency == storedForeign.originalCurrency?.uppercase() -> storedForeign.originalAmount
+            editing != null && amountText == prefilledAmount && !foreign && storedForeign == null -> editing.amount
+            else -> AmountInput.parse(amountText, format.separators)
+        }
+        val rate = when {
+            !foreign -> null
+            storedForeign != null && rateText == prefilledRate && storedForeign.exchangeRate != null -> storedForeign.exchangeRate
+            else -> ExchangeRateInput.parse(rateText, format.separators)
+        }
         val example = format.format(BigDecimal(18450)).removePrefix(format.symbol).trim()
         amountError = if (amount == null) tx("Escribí un monto mayor que cero, por ejemplo $example.", "Enter an amount above zero, for example $example.") else null
+        rateError = if (foreign && rate == null) tx("Escribí cuántos colones vale 1 dólar (mayor que cero).", "Enter how many colones 1 dollar is worth (above zero).") else null
         descriptionError = if (description.isBlank()) tx("Escribí una descripción.", "Enter a description.") else null
-        if (amount == null || description.isBlank()) { haptics.performHapticFeedback(HapticFeedbackType.Reject); return }
+        if (amount == null || (foreign && rate == null) || description.isBlank()) { haptics.performHapticFeedback(HapticFeedbackType.Reject); return }
+        val sentCurrency = if (foreign) currency else null
         saving = true; saveError = null
         scope.launch {
             val result = model.load(tx("No pudimos guardar. Revisá tu conexión e intentá de nuevo.", "We couldn’t save. Check your connection and try again.")) {
                 if (editing == null) {
-                    val entry = EntryCreate(amount, description.trim(), category, date.toString())
-                    val key = submission?.takeIf { it.first == entry }?.second ?: UUID.randomUUID().toString()
+                    val entry = EntryCreate(amount, description.trim(), category, date.toString(), sentCurrency, rate)
+                    val key = submission?.takeIf { it.first == entry }?.second ?: IdempotencyKey.new()
                     submission = entry to key
-                    model.service.create(kind, entry, key)
+                    model.api.create(kind, entry, key)
                 } else {
-                    model.service.update(editing.movementId, MovementUpdate(date.toString(), description.trim(), amount, editing.transactionType ?: "expense", category, editing.notes.orEmpty()))
+                    model.api.update(editing.movementId, MovementUpdate(date.toString(), description.trim(), amount, editing.transactionType ?: "expense", category, editing.notes.orEmpty(), sentCurrency, rate))
                 }
             }
             saving = false
@@ -143,7 +171,7 @@ fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit
     ModalBottomSheet(onDismissRequest = { if (!saving) onDismiss() }, sheetState = sheet, containerColor = Dincr.colors.surface) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().navigationBarsPadding().padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s2), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
             Text(if (editing != null) tx("Editar movimiento", "Edit transaction") else tx("Nuevo movimiento", "New transaction"), style = MaterialTheme.typography.headlineSmall, color = Dincr.colors.text)
-            val errors = listOfNotNull(amountError, descriptionError)
+            val errors = listOfNotNull(amountError, rateError, descriptionError)
             if (errors.size > 1) {
                 Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
                     Text(tx("Revisá ${errors.size} campos", "Check ${errors.size} fields"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.negative)
@@ -157,10 +185,31 @@ fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit
                     }
                 }
             }
-            OutlinedTextField(amountText, { amountText = it; amountError = null }, label = { Text(tx("Monto", "Amount")) }, prefix = { Text(format.symbol) },
+            if (otherCurrency != null) {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    listOf(base, otherCurrency).forEachIndexed { i, code ->
+                        SegmentedButton(currency == code, { currency = code; amountError = null; rateError = null }, SegmentedButtonDefaults.itemShape(i, 2)) {
+                            Text(if (code == "CRC") tx("Colones", "Colones") else if (code == "USD") tx("Dólares", "Dollars") else code)
+                        }
+                    }
+                }
+            }
+            val symbol = if (currency == base) format.symbol else format.copy(currency = currency).symbol
+            OutlinedTextField(amountText, { amountText = it; amountError = null }, label = { Text(tx("Monto", "Amount")) }, prefix = { Text(symbol) },
                 textStyle = MaterialTheme.typography.headlineSmall.merge(TabularNums), singleLine = true, isError = amountError != null,
                 supportingText = amountError?.let { { Text(it) } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth().testTag("editor.amount"))
+            if (currency != base) {
+                OutlinedTextField(rateText, { rateText = it; rateError = null }, label = { Text(tx("Tipo de cambio (₡ por US\$1)", "Exchange rate (₡ per US\$1)")) },
+                    singleLine = true, isError = rateError != null,
+                    supportingText = { Text(rateError ?: tx("Usá el tipo de cambio de tu banco. DINCR no lo inventa.", "Use your bank’s rate. DINCR never makes one up.")) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth().testTag("editor.rate"))
+                val typed = AmountInput.parse(amountText, format.separators)
+                val typedRate = ExchangeRateInput.parse(rateText, format.separators)
+                ConversionPreview.baseAmount(typed, currency, base, typedRate)?.let { converted ->
+                    Text(tx("Se registra como ${format.format(converted)}", "Recorded as ${format.format(converted)}"), style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
+                }
+            }
             OutlinedTextField(description, { description = it; descriptionError = null }, label = { Text(tx("Descripción", "Description")) }, singleLine = true,
                 isError = descriptionError != null, supportingText = descriptionError?.let { { Text(it) } }, modifier = Modifier.fillMaxWidth().testTag("editor.description"))
             var expanded by remember { mutableStateOf(false) }
@@ -174,7 +223,7 @@ fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit
             OutlinedButton({ pickingDate = true }, Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("${tx("Fecha", "Date")}: ${dayLabel(date.toString())}") }
             saveError?.let { ErrorState(it) }
             DincrPrimaryButton(tx("Guardar", "Save"), ::save, loading = saving, modifier = Modifier.testTag("editor.save"))
-            Row { if (editing != null && editing.isEditable) TextButton({ onDelete(editing) }) { Text(tx("Eliminar movimiento", "Delete transaction"), color = Dincr.colors.negative) } }
+            Row { if (editing != null && editing.canEdit(entryCurrencies)) TextButton({ onDelete(editing) }) { Text(tx("Eliminar movimiento", "Delete transaction"), color = Dincr.colors.negative) } }
         }
     }
 

@@ -14,6 +14,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.auth.plan_lifecycle import clear_pending
+from backend.core import observability
 from backend.core.database import connection_pool_stats, get_connection
 from backend.core.schema_state import tables_exist
 from backend.core.feature_flags import FEATURE_DEFINITIONS, clear_feature_flag_cache
@@ -269,9 +270,11 @@ def _send_support_email(*, public_id: str, email: str, plan: str, payload) -> bo
                 "Support email authentication failed for %s. Verify the Google app password and SMTP user.",
                 public_id,
             )
+            observability.report("support", "email_auth_failed", "critical")
             return False
         except Exception:
             logger.exception("Support email delivery failed for %s using SMTP port %s", public_id, candidate_port)
+    observability.report("support", "email_delivery_failed", "error")
     return False
 
 
@@ -331,6 +334,7 @@ def _send_support_discord(*, public_id: str, plan: str, payload, severity: str =
     except Exception as exc:
         # Type only: a connection error's message carries the webhook URL (its secret).
         logger.error("Support Discord notification failed for %s host=%s error=%s", public_id, webhook_host, type(exc).__name__)
+    observability.report("support", "discord_delivery_failed", "error")
     return False
 
 

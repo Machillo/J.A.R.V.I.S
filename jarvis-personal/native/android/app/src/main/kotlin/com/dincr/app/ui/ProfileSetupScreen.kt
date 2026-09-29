@@ -156,7 +156,7 @@ fun ProfileSetupScreen(model: AppModel) {
                         scope.launch {
                             val currencies = listOf(currency) + if (alsoOther) listOf(if (currency == "CRC") "USD" else "CRC") else emptyList()
                             model.load(tx("No pudimos guardar tus preferencias. Intentá nuevamente.", "We couldn’t save your preferences. Please try again.")) {
-                                model.service.completeProfileSetup(ProfileSetup(name.trim(), goal, currency, currencies, separators.wire, placement.wire, banks.sorted()))
+                                model.api.completeProfileSetup(ProfileSetup(name.trim(), goal, currency, currencies, separators.wire, placement.wire, banks.sorted()))
                             }.onSuccess { model.apply(it) }.onFailure { if (it !is AuthException.SignedOut) error = it.message }
                             saving = false
                         }
