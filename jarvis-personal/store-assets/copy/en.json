@@ -1,15 +1,57 @@
 {
-  "$comment": "Store captions, English. Same rules as es.json: short, no calls to action, no rankings, no 'new', no user counts, testimonials or certifications. `plan_badge` marks a paid-plan feature (App Store 2.3.2).",
-  "brand": { "name": "DINCR", "tagline": "Your money, with purpose" },
-  "plan_badges": { "vip": "VIP plan", "basic": "Basic plan" },
-  "screens": {
-    "home": { "title": "Know what you have left this month", "subtitle": "Income, spending and debts in one place", "plan_badge": null },
-    "movements": { "title": "Log every transaction in seconds", "subtitle": "Colones and dollars, sorted by date", "plan_badge": null },
-    "accounts": { "title": "Your accounts, clear and current", "subtitle": "Balances you declare, never made-up numbers", "plan_badge": null },
-    "debts": { "title": "See what you owe and what to pay first", "subtitle": "One concrete next step, no alarms", "plan_badge": null },
-    "goals": { "title": "Goals with a realistic plan", "subtitle": "Track your progress month by month", "plan_badge": null },
-    "budget": { "title": "A budget that makes sense", "subtitle": "See where your money goes", "plan_badge": null },
-    "mail": { "title": "Transactions from your bank emails", "subtitle": "Read-only, with your consent. You review each one", "plan_badge": "vip" }
+  "$comment": "Store captions, English. Same rules as es.json: short, no calls to action, no rankings, no 'new', no user counts, testimonials or certifications. `plan_badge` must equal the screen's `plan` in config/screens.json (App Store 2.3.2).",
+  "brand": {
+    "name": "DINCR",
+    "tagline": "Your money, with purpose"
   },
-  "feature_graphic": { "title": "Your money, with purpose", "subtitle": "Clear personal finance for Costa Rica" }
+  "plan_badges": {
+    "vip": "VIP plan",
+    "basic": "Basic plan"
+  },
+  "screens": {
+    "home": {
+      "title": "Know what to do with your money today",
+      "subtitle": "What you can spend and what to pay first",
+      "plan_badge": "vip"
+    },
+    "overview": {
+      "title": "Know what you have left this month",
+      "subtitle": "Income, spending and debts in one place",
+      "plan_badge": null
+    },
+    "movements": {
+      "title": "Log every transaction in seconds",
+      "subtitle": "Colones and dollars, sorted by date",
+      "plan_badge": null
+    },
+    "debts": {
+      "title": "See what you owe and what you have paid",
+      "subtitle": "Payments, rates and next due date for each debt",
+      "plan_badge": null
+    },
+    "goals": {
+      "title": "Goals with a realistic plan",
+      "subtitle": "Track your progress month by month",
+      "plan_badge": null
+    },
+    "budget": {
+      "title": "A budget that makes sense",
+      "subtitle": "How much you have spent in each category",
+      "plan_badge": "basic"
+    },
+    "strategy": {
+      "title": "Split your margin with a strategy",
+      "subtitle": "How much goes to debt, savings and free spending",
+      "plan_badge": "basic"
+    },
+    "mail": {
+      "title": "Transactions from your bank emails",
+      "subtitle": "Read-only, with your consent. You review each one",
+      "plan_badge": "vip"
+    }
+  },
+  "feature_graphic": {
+    "title": "Your money, with purpose",
+    "subtitle": "Clear personal finance for Costa Rica"
+  }
 }

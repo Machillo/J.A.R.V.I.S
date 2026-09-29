@@ -1,26 +1,80 @@
 {
-  "$comment": "Candidate store screens, in store order. Every screen is a CAPTURE TARGET, not a design: the final PNG always embeds a real capture of the released native app (PR #287, not merged on 2026-09-29) running on synthetic fixture data. A screen may only be used for finals when `confirmed` is true, i.e. someone checked it exists in the merged native app and recorded how to reach it. Never invent UI to fill a slot: drop the slot instead.",
-  "release_gate": {
+  "$comment": "Store screens in store order. Every screen is a real screen of the native DINCR app (PR #287, merged into main), captured on the synthetic STORE fixture; the templates never draw UI. `plan` is the lowest plan that includes the screen: the capture runs with it and the caption must carry its badge (copy/*.json). A platform may be used for finals only where `confirmed` is true: the screen was checked in that platform's code on origin/main and how_to_reach says how to open it. Audited on 2026-09-29.",
+  "app_baseline": {
     "pr": 287,
-    "reason": "The published app is the native DINCR app from #287. Store finals must show that UI, not the older Capacitor UI.",
-    "status": "blocked"
+    "merge_commit": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+    "rule": "Final images only from captures whose source commit contains this merge (the native app). Anything older shows the Capacitor UI and is refused."
+  },
+  "store_release_gate": {
+    "status": "pending-human",
+    "reason": "The stores still ship the Capacitor app (native/RELEASE_IDENTITY.md). These images show the native app, so they may be uploaded only when Kenneth publishes the native build under the store identity. Nothing in this pipeline uploads."
   },
   "fixture": {
-    "ios_launch_arguments": ["-DincrDisableAnimations", "-DincrFixtures", "<scenario>", "-DincrSkipLogin", "-AppleLanguages", "(<lang>)", "-AppleLocale", "<locale>"],
-    "android_intent_extras": { "dincrFixtures": "<SCENARIO>", "dincrSkipLogin": true, "dincrLatencyMs": 0 },
-    "note": "These hooks exist in the native prototype on main (debug builds only). Confirm the scenario names that the #287 app exposes before capturing."
+    "scenario": "STORE",
+    "fixture_date": "2026-09-28",
+    "android": "Debug build, intent extras dincrFixtures=STORE, dincrPlan=<plan>, dincrSkipLogin=true, dincrLatencyMs=0 (native/android/core/data/.../StoreSample.kt). Captured by scripts/capture-android.mjs through the opt-in test app/src/androidTest/.../StoreScreenshots.kt.",
+    "ios": "Debug build, launch arguments -DincrFixtures store -DincrPlan free -DincrSkipLogin (native/ios/DincrKit/.../StoreSample.swift). Captured by the opt-in XCUITest DINCRUITests/StoreScreenshots.swift on a Mac (CAPTURE.md, MAC REQUIRED)."
   },
   "locales": [
     { "id": "es", "apple": "es-MX", "google": "es-419", "ios_locale": "es_CR", "android_locale": "es-CR" },
     { "id": "en", "apple": "en-US", "google": "en-US", "ios_locale": "en_US", "android_locale": "en-US" }
   ],
   "screens": [
-    { "id": "01-home", "area": "Dashboard / overview", "copy_key": "home", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
-    { "id": "02-movements", "area": "Movements", "copy_key": "movements", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
-    { "id": "03-accounts", "area": "Accounts", "copy_key": "accounts", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
-    { "id": "04-debts", "area": "Debts", "copy_key": "debts", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
-    { "id": "05-goals", "area": "Goals", "copy_key": "goals", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
-    { "id": "06-budget", "area": "Budget", "copy_key": "budget", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
-    { "id": "07-mail", "area": "Email Monitor (mail import review)", "copy_key": "mail", "status": "pending-#287", "confirmed": false, "how_to_reach": null, "note": "Only if the released app ships the mail review. Use a fixture mailbox such as ana.demo@example.com; never a real address or real mail content." }
+    {
+      "id": "01-home", "area": "Home (VIP: safe to spend, priority, action plan)", "copy_key": "home", "plan": "vip",
+      "platforms": {
+        "android": { "available": true, "confirmed": true, "how_to_reach": "Hoy/Today tab with a VIP account" },
+        "ios": { "available": false, "confirmed": false, "reason": "iOS shows the Free overview for every plan, with a 'Resumen básico' banner for paid plans (HomeView.swift)" }
+      }
+    },
+    {
+      "id": "02-overview", "area": "Month overview (available, income vs expenses, categories)", "copy_key": "overview", "plan": "free",
+      "platforms": {
+        "android": { "available": true, "confirmed": true, "how_to_reach": "Hoy/Today tab with a Free account" },
+        "ios": { "available": true, "confirmed": true, "how_to_reach": "Hoy/Today tab with a Free account (-DincrPlan free)" }
+      }
+    },
+    {
+      "id": "03-movements", "area": "Transactions", "copy_key": "movements", "plan": "free",
+      "platforms": {
+        "android": { "available": true, "confirmed": true, "how_to_reach": "Movimientos/Transactions tab" },
+        "ios": { "available": true, "confirmed": true, "how_to_reach": "Movimientos/Transactions tab" }
+      }
+    },
+    {
+      "id": "04-debts", "area": "Debts", "copy_key": "debts", "plan": "free",
+      "platforms": {
+        "android": { "available": true, "confirmed": true, "how_to_reach": "Plan tab > Deudas/Debts" },
+        "ios": { "available": true, "confirmed": true, "how_to_reach": "Plan tab (debts first, goals below)" }
+      }
+    },
+    {
+      "id": "05-goals", "area": "Goals and savings", "copy_key": "goals", "plan": "free",
+      "platforms": {
+        "android": { "available": true, "confirmed": true, "how_to_reach": "Plan tab > Metas y ahorros/Goals and savings" },
+        "ios": { "available": false, "confirmed": false, "reason": "No separate goals screen: goals are listed under the debts in the Plan tab (04-debts)" }
+      }
+    },
+    {
+      "id": "06-budget", "area": "Budget", "copy_key": "budget", "plan": "basic",
+      "platforms": {
+        "android": { "available": true, "confirmed": true, "how_to_reach": "Plan tab > Presupuesto/Budget with a Basic account" },
+        "ios": { "available": false, "confirmed": false, "reason": "Not in the iOS app yet (native/RELEASE_IDENTITY.md)" }
+      }
+    },
+    {
+      "id": "07-strategy", "area": "Strategy (monthly margin split)", "copy_key": "strategy", "plan": "basic",
+      "platforms": {
+        "android": { "available": true, "confirmed": true, "how_to_reach": "DINCR tab > Estrategia/Strategy with a Basic account" },
+        "ios": { "available": false, "confirmed": false, "reason": "The iOS DINCR tab is an 'under construction' screen: never captured" }
+      }
+    },
+    {
+      "id": "08-mail", "area": "Financial emails (bank notices to review)", "copy_key": "mail", "plan": "vip",
+      "platforms": {
+        "android": { "available": true, "confirmed": true, "how_to_reach": "Perfil/Profile > Correos financieros/Financial emails with a VIP account (fixture mailbox ana.demo@example.com)" },
+        "ios": { "available": false, "confirmed": false, "reason": "Not in the iOS app yet (native/RELEASE_IDENTITY.md)" }
+      }
+    }
   ]
 }

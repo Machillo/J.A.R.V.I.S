@@ -6,9 +6,12 @@
 //
 // preview  Layout proofs. A missing capture becomes a neutral placeholder panel that says so,
 //          and every image carries a "PREVIEW" watermark: never uploadable.
-// final    Store images. Refuses unless the release gate in config/screens.json is open, every
-//          screen used is `confirmed`, its capture exists under raw/, and the capture manifest's
-//          commit is on origin/main. It never draws UI: the only UI is the real capture.
+// final    Store images. Refuses unless --source-commit contains the #287 merge
+//          (config/screens.json app_baseline: older builds show the Capacitor UI) and is in the
+//          checked-out history (on origin/main too with --require-main), every
+//          screen used is `confirmed` for that platform, and each capture exists under raw/ with
+//          the SHA-256 the capture manifest recorded for a clean tree of that commit and the
+//          STORE fixture. It never draws UI: the only UI is the real capture.
 //
 // Rendering: headless Chromium (Chrome or Edge, found automatically or via DINCR_BROWSER) at
 // the exact target size; the PNG is then flattened to opaque RGB (stores reject alpha).
@@ -29,9 +32,20 @@ export const loadTargets = () => readJson(path.join(root, "config/targets.json")
 export const loadScreens = () => readJson(path.join(root, "config/screens.json"));
 export const loadCopy = (lang) => readJson(path.join(root, `copy/${lang}.json`));
 
+export const platformOf = (target) => (target.store === "apple" ? "ios" : "android");
+
+/**
+ * The screens a target shows, in store order. Final: only screens confirmed on that platform.
+ * Preview: every screen the platform has (a missing capture becomes a labelled placeholder).
+ */
+export function screensFor(screens, target, final) {
+  const platform = platformOf(target);
+  return screens.screens.filter((s) => (final ? s.platforms?.[platform]?.confirmed === true : s.platforms?.[platform]?.available === true));
+}
+
 /** Where the capture of one screen lives: raw/<platform>/<locale>/<device>/<screen>.png */
 export function rawPathFor(target, locale, screenId, rawDir = path.join(root, "raw")) {
-  const platform = target.store === "apple" ? "ios" : "android";
+  const platform = platformOf(target);
   const device = target.id === "apple-ipad-13" ? "tablet" : "phone";
   return path.join(rawDir, platform, locale, device, `${screenId}.png`);
 }
@@ -119,33 +133,57 @@ function writeOpaquePng(renderedFile, outFile, background) {
 
 const sha256 = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 
-function gitIsOnMain(commit) {
+/** git merge-base --is-ancestor: true when `ancestor` is contained in `descendant`. */
+export function gitIsAncestor(ancestor, descendant) {
   try {
-    execFileSync("git", ["-C", repoRoot, "merge-base", "--is-ancestor", commit, "origin/main"], { stdio: "ignore" });
+    execFileSync("git", ["-C", repoRoot, "merge-base", "--is-ancestor", ancestor, descendant], { stdio: "ignore" });
     return true;
   } catch {
     return false;
   }
 }
 
-/** Every reason the final run must not start. Empty list = allowed. */
-export function finalGateProblems({ screens, targets, locales, rawDir, sourceCommit, isOnMain = gitIsOnMain }) {
+/**
+ * Why an app commit cannot back a final image (empty = it can): built after #287 and part of the
+ * reviewed history. `requireMain` (the pre-upload check, once the capture PR is merged) also
+ * requires it on origin/main.
+ */
+export function appCommitProblems(commit, screens, isAncestor = gitIsAncestor, { requireMain = false } = {}) {
+  if (!commit) return ["no app commit recorded"];
   const problems = [];
-  if (screens.release_gate?.status !== "released") {
-    problems.push(`release gate closed: PR #${screens.release_gate?.pr} (${screens.release_gate?.reason})`);
-  }
+  if (!isAncestor(commit, "HEAD")) problems.push(`app commit ${commit} is not in the checked-out history`);
+  if (requireMain && !isAncestor(commit, "origin/main")) problems.push(`app commit ${commit} is not on origin/main`);
+  const baseline = screens.app_baseline?.merge_commit;
+  if (!baseline) problems.push("config/screens.json has no app_baseline.merge_commit");
+  else if (!isAncestor(baseline, commit)) problems.push(`app commit ${commit} predates the native app (PR #${screens.app_baseline.pr}, ${baseline.slice(0, 8)}): it shows the Capacitor UI`);
+  return problems;
+}
+
+export const rel = (file) => path.relative(root, file).split(path.sep).join("/");
+
+/** Every reason the final run must not start. Empty list = allowed. */
+export function finalGateProblems({ screens, targets, locales, rawDir, sourceCommit, isAncestor = gitIsAncestor, requireMain = false }) {
+  const problems = [];
   if (!sourceCommit) problems.push("--source-commit is required (the commit of the app build that was captured)");
-  else if (!isOnMain(sourceCommit)) problems.push(`source commit ${sourceCommit} is not on origin/main`);
-  const usable = screens.screens.filter((screen) => screen.confirmed);
-  if (!usable.length) problems.push("no screen is confirmed in config/screens.json");
+  else problems.push(...appCommitProblems(sourceCommit, screens, isAncestor, { requireMain }));
   for (const target of targets.filter((t) => !t.single)) {
+    const platform = platformOf(target);
+    const usable = screensFor(screens, target, true);
+    if (!usable.length) { problems.push(`${target.id}: no screen is confirmed for ${platform} in config/screens.json`); continue; }
+    const manifestFile = path.join(rawDir, platform, "capture-manifest.json");
+    if (!fs.existsSync(manifestFile)) { problems.push(`missing capture manifest ${rel(manifestFile)}`); continue; }
+    const manifest = readJson(manifestFile);
+    if (sourceCommit && manifest.source_commit !== sourceCommit) problems.push(`${rel(manifestFile)} was captured from another commit`);
+    if (manifest.source_dirty !== false) problems.push(`${rel(manifestFile)}: captured from a tree with uncommitted changes (or not recorded)`);
+    if (manifest.fixture !== screens.fixture.scenario) problems.push(`${rel(manifestFile)}: fixture ${manifest.fixture}, expected ${screens.fixture.scenario}`);
     for (const locale of locales) {
-      const manifest = path.join(rawDir, target.store === "apple" ? "ios" : "android", "capture-manifest.json");
-      if (!fs.existsSync(manifest)) problems.push(`missing capture manifest ${path.relative(root, manifest)}`);
-      else if (sourceCommit && readJson(manifest).source_commit !== sourceCommit) problems.push(`${path.relative(root, manifest)} was captured from another commit`);
       for (const screen of usable) {
         const raw = rawPathFor(target, locale.id, screen.id, rawDir);
-        if (!fs.existsSync(raw)) problems.push(`missing capture ${path.relative(root, raw)}`);
+        if (!fs.existsSync(raw)) { problems.push(`missing capture ${rel(raw)}`); continue; }
+        const record = (manifest.captures ?? []).find((c) => c.id === screen.id && c.locale === locale.id);
+        if (!record) problems.push(`${rel(raw)} is not in ${rel(manifestFile)}`);
+        else if (record.sha256 !== sha256(raw)) problems.push(`${rel(raw)} changed after capture (SHA-256 differs from the manifest)`);
+        else if (record.plan !== screen.plan) problems.push(`${rel(raw)} was captured with plan ${record.plan}, the screen needs ${screen.plan}`);
       }
     }
   }
@@ -166,7 +204,7 @@ function placeholderHtml(width, height, colors, label) {
 const PLACEHOLDER_SIZE = { "apple-iphone-69": [1206, 2622], "apple-ipad-13": [2064, 2752], "google-phone": [1080, 2400] };
 
 function parseArgs(argv) {
-  const args = { mode: "preview", targets: null, locales: null, rawDir: path.join(root, "raw"), outDir: null, sourceCommit: null };
+  const args = { mode: "preview", targets: null, locales: null, rawDir: path.join(root, "raw"), outDir: null, sourceCommit: null, requireMain: argv.includes("--require-main") };
   for (let i = 0; i < argv.length; i += 1) {
     const [flag, value] = [argv[i], argv[i + 1]];
     if (flag === "--mode") args.mode = value;
@@ -188,11 +226,13 @@ export async function compose(argv = process.argv.slice(2)) {
   const targetsConfig = loadTargets();
   const screens = loadScreens();
   const targets = targetsConfig.targets.filter((t) => !args.targets || args.targets.includes(t.id));
+  let pipelineCommit = null;
+  try { pipelineCommit = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], { encoding: "utf8" }).trim(); } catch { /* not a checkout */ }
   const locales = screens.locales.filter((l) => !args.locales || args.locales.includes(l.id));
   const final = args.mode === "final";
 
   if (final) {
-    const problems = finalGateProblems({ screens, targets, locales, rawDir: args.rawDir, sourceCommit: args.sourceCommit });
+    const problems = finalGateProblems({ screens, targets, locales, rawDir: args.rawDir, sourceCommit: args.sourceCommit, requireMain: args.requireMain });
     if (problems.length) {
       console.error("REFUSED: final store images cannot be generated:\n- " + problems.join("\n- "));
       process.exitCode = 2;
@@ -221,7 +261,7 @@ export async function compose(argv = process.argv.slice(2)) {
 
         const jobs = target.single
           ? [{ id: "feature-graphic", html: fill(featureTemplate, { ...common, ...copy.feature_graphic }), source: null }]
-          : screens.screens.filter((s) => (final ? s.confirmed : true)).slice(0, target.max_count).map((screen) => {
+          : screensFor(screens, target, final).slice(0, target.max_count).map((screen) => {
             const text = copy.screens[screen.copy_key];
             if (!text) throw new Error(`copy/${locale.id}.json has no caption for ${screen.copy_key}`);
             let source = rawPathFor(target, locale.id, screen.id, args.rawDir);
@@ -230,7 +270,7 @@ export async function compose(argv = process.argv.slice(2)) {
               if (final) throw new Error(`missing capture ${source}`);
               placeholder = true;
               const [w, h] = PLACEHOLDER_SIZE[target.id];
-              const label = locale.id === "es" ? `Captura real de "${screen.area}" · POST-#287` : `Real capture of "${screen.area}" · POST-#287`;
+              const label = locale.id === "es" ? `Falta la captura real de "${screen.area}"` : `Missing the real capture of "${screen.area}"`;
               const phHtml = path.join(work, `ph-${target.id}-${locale.id}-${screen.id}.html`);
               fs.writeFileSync(phHtml, placeholderHtml(w, h, colors, label));
               source = path.join(work, `ph-${target.id}-${locale.id}-${screen.id}.png`);
@@ -241,10 +281,11 @@ export async function compose(argv = process.argv.slice(2)) {
             const html = fill(screenTemplate, {
               ...common, layout, frame_class: target.template === "apple" ? "device" : "card",
               title: text.title, subtitle: text.subtitle,
-              badge: text.plan_badge ? copy.plan_badges[text.plan_badge] : "",
+              // The badge follows the screen's plan (config/screens.json); validate.mjs checks the copy agrees.
+              badge: screen.plan && screen.plan !== "free" ? copy.plan_badges[screen.plan] : "",
               screenshot: pathToFileURL(source).href,
             });
-            return { id: screen.id, html, source, placeholder };
+            return { id: screen.id, plan: screen.plan, html, source, placeholder };
           });
 
         for (const job of jobs) {
@@ -258,12 +299,22 @@ export async function compose(argv = process.argv.slice(2)) {
           if (info.width !== target.width || info.height !== target.height) {
             throw new Error(`${outFile} rendered ${info.width}x${info.height}, expected ${target.width}x${target.height}`);
           }
+          const manifestFile = path.join(args.rawDir, platformOf(target), "capture-manifest.json");
+          const manifest = !target.single && !job.placeholder && fs.existsSync(manifestFile) ? readJson(manifestFile) : null;
           const meta = {
-            mode: args.mode, target: target.id, store: target.store, locale: storeLocale, screen: job.id,
+            mode: args.mode, target: target.id, store: target.store, platform: target.single ? null : platformOf(target),
+            locale: storeLocale, language: locale.id, screen: job.id, plan: job.plan ?? null,
             width: info.width, height: info.height, alpha: info.alpha,
             caption_ratio: target.single ? null : measured.captionRatio,
-            capture: job.source ? { file: path.relative(root, job.source).replace(/\\/g, "/"), sha256: sha256(job.source), placeholder: Boolean(job.placeholder) } : null,
+            capture: job.source ? {
+              file: job.placeholder ? null : rel(job.source), sha256: sha256(job.source), placeholder: Boolean(job.placeholder),
+              fixture: manifest?.fixture ?? null, fixture_date: manifest?.fixture_date ?? null,
+              captured_at: manifest?.captured_at ?? null, device: manifest?.device ?? null,
+            } : null,
             source_commit: final ? args.sourceCommit : null,
+            app_baseline: final ? screens.app_baseline.merge_commit : null,
+            pipeline_commit: pipelineCommit,
+            generated_at: new Date().toISOString(),
           };
           fs.writeFileSync(outFile.replace(/\.png$/, ".json"), `${JSON.stringify(meta, null, 2)}\n`);
           fs.copyFileSync(htmlFile, outFile.replace(/\.png$/, ".html")); // the exact editable source of this image

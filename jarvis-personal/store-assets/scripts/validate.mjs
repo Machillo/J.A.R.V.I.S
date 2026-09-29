@@ -3,16 +3,20 @@
 //
 //   node jarvis-personal/store-assets/scripts/validate.mjs                 # output/final (upload set)
 //   node jarvis-personal/store-assets/scripts/validate.mjs --dir output/preview --allow-preview
+//   node jarvis-personal/store-assets/scripts/validate.mjs --require-main  # before uploading: app commit on origin/main
 //
 // Checks, per store and locale: count within limits, exact pixel size, PNG without alpha,
 // Google's side/ratio limits and the <= 20% caption band, banned promotional phrases in the
-// copy, and provenance: an upload set must contain only `final` images built from real
-// captures (no placeholder) of a commit on main. Exit code 1 on any problem.
+// copy, plan badges that match each screen's plan, and provenance. An upload set may contain
+// only `final` images, each with its .json provenance, built from a real capture (no
+// placeholder) whose SHA-256 still matches raw/, of a screen confirmed for that platform, from
+// an app commit on main that contains the #287 native app. Exit code 1 on any problem.
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pngInfo } from "./png.mjs";
-import { loadCopy, loadScreens, loadTargets, root } from "./compose.mjs";
+import { appCommitProblems, gitIsAncestor, loadCopy, loadScreens, loadTargets, platformOf, root } from "./compose.mjs";
 
 export function copyProblems(targetsConfig, screens, copies) {
   const problems = [];
@@ -24,6 +28,8 @@ export function copyProblems(targetsConfig, screens, copies) {
       if (!text?.title) { problems.push(`copy/${lang}.json: no title for ${screen.copy_key}`); continue; }
       texts.push(text.title, text.subtitle);
       if (text.plan_badge && !copy.plan_badges[text.plan_badge]) problems.push(`copy/${lang}.json: unknown plan badge ${text.plan_badge}`);
+      const expectedBadge = screen.plan && screen.plan !== "free" ? screen.plan : null;
+      if ((text.plan_badge ?? null) !== expectedBadge) problems.push(`copy/${lang}.json: ${screen.copy_key} badge is ${text.plan_badge ?? "none"}, the screen needs ${expectedBadge ?? "none"} (plan ${screen.plan})`);
       if (text.title.length > 48) problems.push(`copy/${lang}.json: ${screen.copy_key} title is ${text.title.length} chars (max 48)`);
       if (text.subtitle && text.subtitle.length > 60) problems.push(`copy/${lang}.json: ${screen.copy_key} subtitle is ${text.subtitle.length} chars (max 60)`);
     }
@@ -40,7 +46,7 @@ export function copyProblems(targetsConfig, screens, copies) {
   return problems;
 }
 
-export function imageProblems(dir, targetsConfig, { allowPreview = false } = {}) {
+export function imageProblems(dir, targetsConfig, { allowPreview = false, screens = loadScreens(), rawRoot = root, isAncestor = gitIsAncestor, requireMain = false } = {}) {
   const problems = [];
   const { google } = targetsConfig.rules;
   if (!fs.existsSync(dir)) return [`no images at ${dir}`];
@@ -75,11 +81,32 @@ export function imageProblems(dir, targetsConfig, { allowPreview = false } = {})
         if (!allowPreview) {
           if (meta.mode !== "final") problems.push(`${label}: is a ${meta.mode} image, not a final one`);
           if (meta.capture?.placeholder) problems.push(`${label}: built from a placeholder, not a real capture`);
-          if (!target.single && !meta.source_commit) problems.push(`${label}: no source commit recorded`);
+          if (!meta.pipeline_commit) problems.push(`${label}: no pipeline commit recorded`);
+          if (!target.single) problems.push(...finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor, requireMain));
         }
       }
     }
   }
+  return problems;
+}
+
+/** A final screenshot must trace back to a confirmed screen and an unchanged post-#287 capture. */
+function finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor, requireMain) {
+  const problems = [];
+  const platform = platformOf(target);
+  if (meta.platform !== platform) problems.push(`${label}: provenance platform ${meta.platform}, expected ${platform}`);
+  const screen = screens.screens.find((s) => s.id === meta.screen);
+  if (!screen?.platforms?.[platform]?.confirmed) problems.push(`${label}: screen ${meta.screen} is not confirmed for ${platform}`);
+  else if (meta.plan !== screen.plan) problems.push(`${label}: captured with plan ${meta.plan}, the screen needs ${screen.plan}`);
+  if (!meta.source_commit) problems.push(`${label}: no source commit recorded`);
+  else problems.push(...appCommitProblems(meta.source_commit, screens, isAncestor, { requireMain }).map((p) => `${label}: ${p}`));
+  if (!meta.capture?.file || !meta.capture?.sha256) problems.push(`${label}: no capture file and SHA-256 recorded`);
+  else {
+    const raw = path.join(rawRoot, meta.capture.file);
+    if (!fs.existsSync(raw)) problems.push(`${label}: capture ${meta.capture.file} not found`);
+    else if (crypto.createHash("sha256").update(fs.readFileSync(raw)).digest("hex") !== meta.capture.sha256) problems.push(`${label}: capture ${meta.capture.file} changed after composing`);
+  }
+  if (meta.capture?.fixture !== screens.fixture.scenario) problems.push(`${label}: fixture ${meta.capture?.fixture}, expected ${screens.fixture.scenario}`);
   return problems;
 }
 
@@ -88,10 +115,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const dirIndex = argv.indexOf("--dir");
   const dir = path.resolve(root, dirIndex >= 0 ? argv[dirIndex + 1] : "output/final");
   const allowPreview = argv.includes("--allow-preview");
+  const requireMain = argv.includes("--require-main");
   const targetsConfig = loadTargets();
   const screens = loadScreens();
   const copies = Object.fromEntries(screens.locales.map((l) => [l.id, loadCopy(l.id)]));
-  const problems = [...copyProblems(targetsConfig, screens, copies), ...imageProblems(dir, targetsConfig, { allowPreview })];
+  const problems = [...copyProblems(targetsConfig, screens, copies), ...imageProblems(dir, targetsConfig, { allowPreview, requireMain })];
   if (problems.length) {
     console.error(`${problems.length} problem(s):\n- ${problems.join("\n- ")}`);
     process.exit(1);
