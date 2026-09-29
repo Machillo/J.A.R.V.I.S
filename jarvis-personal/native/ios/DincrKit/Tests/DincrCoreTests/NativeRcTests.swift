@@ -142,7 +142,7 @@ import Testing
     // MARK: Fixture semantics (Debug-only stand-in; mirrors backend write semantics)
 
     @Test func fixtureDebtPaymentIsIdempotentAndCapped() async throws {
-        let fixture = FixtureDincrService(scenario: .populated, latency: .zero)
+        let fixture = FixtureBackend.service(FixtureBackend(scenario: .populated, latency: .zero))
         let debt = try #require(try await fixture.debts().first)
         let first = try await fixture.payDebt(id: debt.id, amount: 1_000, idempotencyKey: "op_same_key")
         let replay = try await fixture.payDebt(id: debt.id, amount: 1_000, idempotencyKey: "op_same_key")
@@ -153,7 +153,7 @@ import Testing
     }
 
     @Test func fixturePaidPlanWithoutPromotionIsRefused() async throws {
-        let fixture = FixtureDincrService(scenario: .choosePlan, latency: .zero)
+        let fixture = FixtureBackend.service(FixtureBackend(scenario: .choosePlan, latency: .zero))
         #expect(try await fixture.me().planSelected == false)
         await #expect(throws: APIError.self) { _ = try await fixture.choosePlan(PlanChangeRequest(plan: "vip")) }
         let result = try await fixture.choosePlan(PlanChangeRequest(plan: "free"))

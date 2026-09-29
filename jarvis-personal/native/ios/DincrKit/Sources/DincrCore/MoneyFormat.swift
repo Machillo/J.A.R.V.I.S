@@ -136,7 +136,12 @@ public enum AmountInput {
     public static let maxAmount = Decimal(string: "9999999999.99", locale: Locale(identifier: "en_US_POSIX"))!
     public static let maxIntegerDigits = 10
 
-    public static func parse(_ text: String, separators: MoneyFormat.Separators) -> Decimal? {
+    public static func parse(_ text: String, separators: MoneyFormat.Separators) -> Decimal? { parse(text, separators: separators, allowZero: false) }
+
+    /// Like `parse`, but zero is a valid answer (an optional balance or an amount already saved).
+    public static func parseZeroOrMore(_ text: String, separators: MoneyFormat.Separators) -> Decimal? { parse(text, separators: separators, allowZero: true) }
+
+    static func parse(_ text: String, separators: MoneyFormat.Separators, allowZero: Bool) -> Decimal? {
         let trimmed = text.replacingOccurrences(of: " ", with: "")
         guard !trimmed.isEmpty else { return nil }
         let grouping: Character = separators == .dotComma ? "." : ","
@@ -157,7 +162,70 @@ public enum AmountInput {
         let integerDigits = groups.joined().drop(while: { $0 == "0" })
         guard integerDigits.count <= maxIntegerDigits else { return nil }
         let digits = groups.joined() + (fraction.isEmpty ? "" : "." + fraction)
-        guard let value = Decimal(string: digits, locale: Locale(identifier: "en_US_POSIX")), value > 0, value <= maxAmount else { return nil }
+        guard let value = Decimal(string: digits, locale: Locale(identifier: "en_US_POSIX")), allowZero ? value >= 0 : value > 0, value <= maxAmount else { return nil }
         return value
+    }
+}
+
+/// Parses an exchange rate typed by the user (colones per 1 dollar), in their separators: > 0,
+/// <= 100 000 and at most 6 decimals. DINCR never looks rates up; this is always the user's own.
+public enum RateInput {
+    public static let maxRate = Decimal(100_000)
+    public static let maxFractionDigits = 6
+
+    public static func parse(_ text: String, separators: MoneyFormat.Separators) -> Decimal? {
+        let trimmed = text.replacingOccurrences(of: " ", with: "")
+        guard !trimmed.isEmpty else { return nil }
+        let grouping: Character = separators == .dotComma ? "." : ","
+        let decimal: Character = separators == .dotComma ? "," : "."
+        guard trimmed.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == grouping || $0 == decimal) }) else { return nil }
+        let halves = trimmed.split(separator: decimal, omittingEmptySubsequences: false)
+        guard halves.count <= 2, !halves[0].isEmpty else { return nil }
+        let fraction = halves.count == 2 ? halves[1] : ""
+        guard !fraction.contains(grouping), fraction.count <= maxFractionDigits else { return nil }
+        let groups = halves[0].split(separator: grouping, omittingEmptySubsequences: false)
+        if groups.count > 1 {
+            guard let first = groups.first, (1...3).contains(first.count), groups.dropFirst().allSatisfy({ $0.count == 3 }) else { return nil }
+        }
+        let digits = groups.joined() + (fraction.isEmpty ? "" : "." + fraction)
+        guard let value = Decimal(string: digits, locale: Locale(identifier: "en_US_POSIX")), value > 0, value <= maxRate else { return nil }
+        return value
+    }
+}
+
+/// The base-currency amount the backend will store for an amount typed in another currency, for a
+/// preview only (the backend computes and stores the real value). Same arithmetic as
+/// `entry_currency.resolve_entry_amount`: amount to cents, rate to 6 decimals, dollars to colones
+/// multiply, colones to dollars divide, half-up to cents.
+public enum ConversionPreview {
+    public static func baseAmount(typed: Decimal?, currency: String, base: String, rate: Decimal?) -> Decimal? {
+        guard let typed, let rate, rate > 0 else { return nil }
+        let code = currency.uppercased(), baseCode = base.uppercased()
+        let amount = round(typed, 2)
+        if code == baseCode { return amount }
+        let r = round(rate, 6)
+        guard r > 0 else { return nil }
+        let converted: Decimal
+        switch (code, baseCode) {
+        case ("USD", "CRC"): converted = amount * r
+        case ("CRC", "USD"): converted = amount / r
+        default: return nil
+        }
+        let result = round(converted, 2)
+        return result > 0 ? result : nil
+    }
+
+    /// The rate the user typed most recently on a manual entry, to prefill the next one (editable).
+    /// Never a market rate: DINCR does not look rates up.
+    public static func latestUserRate(_ movements: [Movement]) -> Decimal? {
+        movements.filter { ($0.origin == "salary" || $0.origin == "expense") && ($0.exchangeRate ?? 0) > 0 }
+            .max { ($0.transactionDate ?? "", $0.sourceId ?? 0) < ($1.transactionDate ?? "", $1.sourceId ?? 0) }?.exchangeRate
+    }
+
+    static func round(_ value: Decimal, _ places: Int) -> Decimal {
+        var copy = value
+        var result = Decimal()
+        NSDecimalRound(&result, &copy, places, .plain)
+        return result
     }
 }

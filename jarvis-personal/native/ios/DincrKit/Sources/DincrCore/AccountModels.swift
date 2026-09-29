@@ -135,3 +135,71 @@ public struct FeatureFlags: Decodable, Sendable, Equatable {
         return language == .spanish ? entry.disabledMessageEs : entry.disabledMessageEn
     }
 }
+
+/// `GET /product-ops/health`.
+public struct ServiceHealth: Decodable, Sendable, Equatable {
+    public let status: String?
+    public let activeIncidents: Int?
+    public init(status: String?, activeIncidents: Int? = 0) { self.status = status; self.activeIncidents = activeIncidents }
+}
+
+/// `GET /product-ops/release-policy?platform=ios&version=` (fail-open).
+public struct ReleasePolicy: Decodable, Sendable, Equatable {
+    public let status: String?
+    public let required: Bool?
+    public let active: Bool?
+    public let latestVersion: String?
+    public let updateUrl: String?
+    public let messageEs: String?
+    public let messageEn: String?
+
+    public init(status: String?, required: Bool?, active: Bool?, latestVersion: String? = nil, updateUrl: String? = nil, messageEs: String? = nil, messageEn: String? = nil) {
+        self.status = status; self.required = required; self.active = active; self.latestVersion = latestVersion
+        self.updateUrl = updateUrl; self.messageEs = messageEs; self.messageEn = messageEn
+    }
+
+    public var isRequired: Bool { active == true && (required == true || status == "required") }
+    public var isOptional: Bool { active == true && !isRequired && status == "optional" }
+    public func message(_ language: AppLanguage) -> String? { language == .spanish ? messageEs : messageEn }
+}
+
+/// A support ticket (`GET /product-ops/feedback`).
+public struct SupportTicket: Decodable, Sendable, Equatable, Identifiable {
+    public let id: Int
+    public let category: String?
+    public let subject: String?
+    public let status: String?
+    public let userResolution: String?
+    public let createdAt: String?
+    public let publicId: String?
+
+    public init(id: Int, category: String?, subject: String?, status: String?, userResolution: String? = nil, createdAt: String? = nil, publicId: String? = nil) {
+        self.id = id; self.category = category; self.subject = subject; self.status = status
+        self.userResolution = userResolution; self.createdAt = createdAt; self.publicId = publicId
+    }
+}
+
+/// `POST /product-ops/feedback`.
+public struct SupportRequest: Encodable, Sendable, Equatable {
+    public static let categories = ["error", "improvement", "payment", "account", "other"]
+    public let category: String
+    public let subject: String
+    public let message: String
+    public let appVersion: String?
+    public let screen: String?
+
+    public init(category: String, subject: String, message: String, appVersion: String?, screen: String? = "support") {
+        self.category = category; self.subject = subject; self.message = message; self.appVersion = appVersion; self.screen = screen
+    }
+}
+
+public struct SupportCreated: Decodable, Sendable, Equatable {
+    public let id: Int?
+    public let publicId: String?
+    public init(id: Int?, publicId: String?) { self.id = id; self.publicId = publicId }
+}
+
+public struct ResolutionRequest: Encodable, Sendable, Equatable {
+    public let resolution: String
+    public init(resolved: Bool) { self.resolution = resolved ? "resolved" : "not_resolved" }
+}
