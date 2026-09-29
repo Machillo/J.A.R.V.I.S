@@ -7,7 +7,9 @@ const out = new URL('../landing-dist/', import.meta.url);
 const routes = ['', 'precios', 'seguridad', 'privacidad', 'terminos', 'soporte', 'eliminar-cuenta', 'bancos-compatibles', 'descargar'];
 for (const route of routes) {
   const html = await readFile(new URL(`${route ? route + '/' : ''}index.html`, out), 'utf8');
-  assert.match(html, /<html lang="es-CR">/);
+  // Spanish and English at the same URL (test:landing-i18n checks the language switch).
+  assert.match(html, /<html lang="en" data-title-es="[^"]+" data-description-es="[^"]+" data-title-en="[^"]+" data-description-en="[^"]+">/);
+  assert.ok(html.includes('<div class="l10n" lang="es">') && html.includes('<div class="l10n" lang="en">'), `${route}: both languages`);
   assert.match(html, /<h1[ >]/);
   assert.ok(html.includes(`https://dincr.com/${route ? route + '/' : ''}`));
   assert.doesNotMatch(html, /J\.A\.R\.V\.I\.S\.|JARVIS|₡5\.990|5,990|precio candidato/i);
@@ -49,6 +51,7 @@ const pageFiles = [...routes.map(route => `${route ? route + '/' : ''}index.html
 const pagesHtml = Object.fromEntries(await Promise.all(pageFiles.map(async file => [file, await readFile(new URL(file, out), 'utf8')])));
 const builtFiles = new Set(listing.map(entry => entry.replaceAll('\\', '/')));
 const home = pagesHtml['index.html'];
+let languageScript;
 const text = html => html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
 for (const [file, html] of Object.entries(pagesHtml)) {
@@ -64,14 +67,20 @@ for (const [file, html] of Object.entries(pagesHtml)) {
   assert.match(html, /<meta name="twitter:card" content="summary">/, `${file}: social card`);
   assert.match(html, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png">/, `${file}: app icon`);
   if (file !== '404.html') assert.match(html, /<meta property="og:image" content="https:\/\/dincr\.com\/og-image\.png">/, `${file}: og image`);
-  // Accessibility basics.
-  assert.equal((html.match(/<h1[ >]/g) || []).length, 1, `${file}: exactly one h1`);
-  let previous = 1;
-  for (const [, level] of html.matchAll(/<h([1-6])[ >]/g)) {
-    assert.ok(Number(level) <= previous + 1, `${file}: heading level jumps to h${level}`);
-    previous = Number(level);
+  // Accessibility basics, per language block (only one block is shown at a time).
+  const blocks = [...html.matchAll(/<div class="l10n" lang="(es|en)">([\s\S]*?)(?=<div class="l10n" lang="|<\/body>)/g)];
+  assert.deepEqual(blocks.map(([, lang]) => lang), ['es', 'en'], `${file}: one Spanish and one English block`);
+  for (const [, lang, block] of blocks) {
+    assert.equal((block.match(/<h1[ >]/g) || []).length, 1, `${file} (${lang}): exactly one h1`);
+    let previous = 1;
+    for (const [, level] of block.matchAll(/<h([1-6])[ >]/g)) {
+      assert.ok(Number(level) <= previous + 1, `${file} (${lang}): heading level jumps to h${level}`);
+      previous = Number(level);
+    }
+    const skip = lang === 'es' ? 'contenido' : 'content';
+    assert.match(block, new RegExp(`^<a class="skip" href="#${skip}">`), `${file} (${lang}): skip link first`);
+    assert.ok(block.includes(`<main id="${skip}">`), `${file} (${lang}): skip link target`);
   }
-  assert.match(html, /<a class="skip" href="#contenido">/, `${file}: skip link`);
   for (const [img] of html.matchAll(/<img\b[^>]*>/g)) assert.match(img, /\balt="[^"]*"/, `${file}: img without alt`);
   for (const [img] of html.matchAll(/<img\b[^>]*>/g)) assert.match(img, /\bwidth="\d+" height="\d+"/, `${file}: img without dimensions (layout shift)`);
   // Links: internal targets exist, mail only to the official addresses, no dead store links.
@@ -87,8 +96,15 @@ for (const [file, html] of Object.entries(pagesHtml)) {
     } else assert.fail(`${file}: unexpected link ${href}`);
   }
   assert.doesNotMatch(html, /play\.google\.com|apps\.apple\.com|button disabled|Próximamente<\/span>/, `${file}: no placeholder store badges`);
-  // No JavaScript beyond structured data, no analytics on the public site.
-  assert.doesNotMatch(html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, ''), /<script/i, `${file}: scripts on the public site`);
+  // No JavaScript beyond structured data and the language script, no analytics on the public site.
+  const languageScripts = [...html.matchAll(/<script id="dincr-language">([\s\S]*?)<\/script>/g)].map(([, code]) => code);
+  assert.equal(languageScripts.length, 1, `${file}: one language script`);
+  languageScript ??= languageScripts[0];
+  assert.equal(languageScripts[0], languageScript, `${file}: the same language script on every page`);
+  assert.doesNotMatch(languageScripts[0], /fetch|XMLHttpRequest|sendBeacon|WebSocket|EventSource|import|src=|https?:|\/\/|cookie|eval|sessionStorage|indexedDB|innerHTML|location/i, `${file}: the language script only picks a language`);
+  assert.doesNotMatch(languageScripts[0], /\bFunction\(|\bnew Function\b|setTimeout\(["'`]/, `${file}: no code built from strings`);
+  assert.deepEqual([...languageScripts[0].matchAll(/localStorage\.(\w+)\(K/g)].map(([, call]) => call).sort(), ['getItem', 'setItem'], `${file}: only the language choice is stored`);
+  assert.doesNotMatch(html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '').replace(/<script id="dincr-language">[\s\S]*?<\/script>/, ''), /<script/i, `${file}: scripts on the public site`);
   assert.doesNotMatch(html, /posthog-js|i\.posthog\.com|googletagmanager|google-analytics\.com|gtag\(/i, `${file}: tracking on the public site`);
 }
 
