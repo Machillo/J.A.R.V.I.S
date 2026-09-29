@@ -13,6 +13,7 @@ Regenerate after changing StoreSample.kt or an engine (from jarvis-personal):
 """
 from __future__ import annotations
 
+import datetime as datetime_module
 import json
 import os
 import re
@@ -21,14 +22,24 @@ from datetime import date
 from pathlib import Path
 
 from backend.core.i18n import use_language
-from backend.user_product import basic_service, free_service, service, vip_service
+from backend.user_product import basic_service, free_service, income_policy, service, strategy_engine, vip_service
 from backend.user_product.strategy_engine import build_basic_strategy, build_paycheck_plan, build_vip_insights, build_vip_strategy
 
 GOLDEN = Path(__file__).resolve().parents[2] / "native/android/core/data/src/main/resources/store-sample.json"
 
 
+class _FixtureDate(date):
+    """`date` with the fixture's today. Every date the harness hands the services is one of these, so
+    their `isinstance(x, date)` checks (date = this class while patched) see what production sees."""
+    current: date = date.min
+
+    @classmethod
+    def today(cls):
+        return cls(cls.current.year, cls.current.month, cls.current.day)
+
+
 def _day(value):
-    return date.fromisoformat(value) if isinstance(value, str) else value
+    return _FixtureDate.fromisoformat(value) if isinstance(value, str) else value
 
 
 class _Rows:
@@ -78,10 +89,12 @@ class _StoreConnection:
         if "FROM finva_recurring_items" in sql:
             return _Rows([dict(r) for r in self.inputs["recurring"]])
         if "regexp_replace" in sql:  # recurring merchants detected in the last months
+            # The query reads the `transactions` table only (imported/bank rows); manual entries live in
+            # `salaries`/`expenses` (origin salary/expense), so they are never part of it.
             since = params[1]
             merchants: dict[str, list] = {}
             for m in self.movements:
-                if m["transaction_type"] == "expense" and m["date"] >= since and m.get("description"):
+                if m.get("origin") == "transaction" and m["transaction_type"] == "expense" and m["date"] >= since and m.get("description"):
                     merchant = re.sub(r"[^a-z0-9]+", " ", m["description"].lower())[:60]
                     merchants.setdefault(merchant, []).append(m)
             rows = []
@@ -96,7 +109,8 @@ class _StoreConnection:
         if "FROM finva_email_candidates" in sql:
             return _Rows([{"status": "pending", "total": self.inputs["pending_notices"]}])
         if "FROM finva_budget_items" in sql:
-            return _Rows([{"category": b["category"], "monthly_limit": b["monthly_limit"], "is_system": False} for b in self.inputs["budget_items"]])
+            rows = [{"category": b["category"], "monthly_limit": b["monthly_limit"], "is_system": False} for b in self.inputs["budget_items"]]
+            return _Rows(sorted(rows, key=lambda r: (not r["is_system"], r["category"])))  # ORDER BY is_system DESC, category
         if "GROUP BY category" in sql:  # this month's spending per category (guided budget, Free dashboard)
             start, end = params[1], params[2]
             categories = sorted({m["category"] for m in self.movements if m["transaction_type"] == "expense" and start <= m["date"] < end})
@@ -127,26 +141,25 @@ def _snapshot(inputs: dict) -> dict:
 
 
 def _engine(inputs: dict, monkeypatch) -> dict:
-    today = date.fromisoformat(inputs["today"])
-
-    class _Today(date):
-        @classmethod
-        def today(cls):
-            return today
-
+    today = _day(inputs["today"])
+    monkeypatch.setattr(_FixtureDate, "current", today)
     connection = _StoreConnection(inputs)
 
     @contextmanager
     def _connect():
         yield connection
 
-    for module in (vip_service, basic_service, free_service):
-        monkeypatch.setattr(module, "date", _Today)
-        monkeypatch.setattr(module, "get_connection", _connect)
+    for module in (vip_service, basic_service, free_service, income_policy):
+        monkeypatch.setattr(module, "date", _FixtureDate)
+        monkeypatch.setattr(module, "get_connection", _connect, raising=False)
         monkeypatch.setattr(module, "get_current_account_id", lambda: "store-account", raising=False)
-        monkeypatch.setattr(module, "get_current_workspace_id", lambda: "store-workspace")
+        monkeypatch.setattr(module, "get_current_workspace_id", lambda: "store-workspace", raising=False)
         monkeypatch.setattr(module, "_basic_tables_ready", lambda conn, *tables: True, raising=False)
     monkeypatch.setattr(vip_service, "_table_exists", lambda conn, table: table == "finva_email_candidates")
+    # strategy_engine reads the clock inside _goal_monthly_need (a local `from datetime import date`):
+    # give it the fixture's today, or the golden would change with the month it runs in.
+    goal_monthly_need = strategy_engine._goal_monthly_need
+    monkeypatch.setattr(strategy_engine, "_goal_monthly_need", lambda goal, reference_date=None: goal_monthly_need(goal, reference_date or today))
 
     snapshot = _snapshot(inputs)
     basic = build_basic_strategy(snapshot)
@@ -177,6 +190,30 @@ def test_store_screenshots_show_the_backend_engines_output(monkeypatch):
         return
     for language, engine in computed.items():
         assert golden[language].get("engine") == engine, f"store-sample.json ({language}) differs from the backend engines: regenerate it"
+
+
+def test_the_harness_uses_the_fixture_date_everywhere(monkeypatch):
+    """The emergency goal (target 2027-05-28, ₡360,000 to go) is 8 months from the fixture's
+    2026-09-28 on any machine date: the date checks and the clock reads all see the fixture date."""
+    golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
+
+    class _November(date):  # the machine's clock in another month
+        @classmethod
+        def today(cls):
+            return cls(2026, 11, 15)
+
+    monkeypatch.setattr(datetime_module, "date", _November)  # what `from datetime import date` inside a function gets
+    with use_language("es"):
+        engine = _plain(_engine(golden["es"]["inputs"], monkeypatch))
+    assert engine == golden["es"]["engine"], "the engines' output depends on the machine's date"
+    goal = engine["command_center"]["goals"][0]
+    assert (goal["months_left"], goal["monthly_required"], goal["viable"]) == (8, 45000.0, True)
+    assert engine["strategy_vip"]["insights"]["goal_guidance"][0]["monthly_needed"] == 45000.0
+    assert engine["command_center"]["recurring"]["detected"] == []  # manual entries are not bank transactions
+    # A new clock read in these engines must be routed to the fixture date before the golden is trusted.
+    assert Path(strategy_engine.__file__).read_text(encoding="utf-8").count("date.today()") == 1
+    for module in (vip_service, basic_service, free_service, income_policy):
+        assert "datetime.now()" not in Path(module.__file__).read_text(encoding="utf-8"), module.__name__
 
 
 def test_store_sample_numbers_agree():

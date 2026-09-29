@@ -955,9 +955,9 @@
             "target_date": "2027-05-28",
             "priority": "high",
             "remaining": 360000.0,
-            "months_left": null,
-            "monthly_required": null,
-            "viable": false,
+            "months_left": 8,
+            "monthly_required": 45000.0,
+            "viable": true,
             "alternative_months": 2
           }
         ],
@@ -1018,12 +1018,6 @@
             "title": "Movimientos por revisar",
             "context": "Hay 2 movimientos importados sin confirmar.",
             "action": "Revisalos antes de confiar en el cierre mensual."
-          },
-          {
-            "severity": "medium",
-            "title": "Recurrente con variación",
-            "context": "supermercado cambió más de 10% entre cobros.",
-            "action": "Confirmá si fue un aumento, consumo variable o cargo incorrecto."
           }
         ],
         "calendar": [
@@ -1098,64 +1092,7 @@
               "is_active": true
             }
           ],
-          "detected": [
-            {
-              "merchant": "alquiler",
-              "average_amount": 210000.0,
-              "minimum_amount": 210000.0,
-              "maximum_amount": 210000.0,
-              "months_seen": 6
-            },
-            {
-              "merchant": "supermercado",
-              "average_amount": 107793.75,
-              "minimum_amount": 38900.0,
-              "maximum_amount": 151800.0,
-              "months_seen": 6
-            },
-            {
-              "merchant": "gasolina",
-              "average_amount": 52342.86,
-              "minimum_amount": 25000.0,
-              "maximum_amount": 66100.0,
-              "months_seen": 6
-            },
-            {
-              "merchant": "luz agua e internet",
-              "average_amount": 57980.0,
-              "minimum_amount": 56500.0,
-              "maximum_amount": 59800.0,
-              "months_seen": 5
-            },
-            {
-              "merchant": "cine",
-              "average_amount": 22966.67,
-              "minimum_amount": 19500.0,
-              "maximum_amount": 27400.0,
-              "months_seen": 3
-            },
-            {
-              "merchant": "farmacia",
-              "average_amount": 13533.33,
-              "minimum_amount": 9800.0,
-              "maximum_amount": 18000.0,
-              "months_seen": 3
-            },
-            {
-              "merchant": "ropa",
-              "average_amount": 38600.0,
-              "minimum_amount": 36000.0,
-              "maximum_amount": 41200.0,
-              "months_seen": 2
-            },
-            {
-              "merchant": "restaurante",
-              "average_amount": 31150.0,
-              "minimum_amount": 28400.0,
-              "maximum_amount": 33900.0,
-              "months_seen": 2
-            }
-          ],
+          "detected": [],
           "monthly_expenses": 24900.0,
           "annual_expenses": 298800.0
         },
@@ -1282,7 +1219,7 @@
           {
             "order": 2,
             "title": "Financiar Fondo de emergencia",
-            "amount": 350000.0,
+            "amount": 45000.0,
             "why": "Alinea el aporte con fecha y prioridad."
           },
           {
@@ -1313,18 +1250,11 @@
             "remaining": 12350.0
           },
           {
-            "category": "Transporte",
-            "monthly_limit": 70000,
+            "category": "Entretenimiento",
+            "monthly_limit": 30000,
             "is_system": false,
-            "spent": 55000.0,
-            "remaining": 15000.0
-          },
-          {
-            "category": "Servicios",
-            "monthly_limit": 60000,
-            "is_system": false,
-            "spent": 56700.0,
-            "remaining": 3300.0
+            "spent": 5075.0,
+            "remaining": 24925.0
           },
           {
             "category": "Restaurantes",
@@ -1334,11 +1264,18 @@
             "remaining": 14200.0
           },
           {
-            "category": "Entretenimiento",
-            "monthly_limit": 30000,
+            "category": "Servicios",
+            "monthly_limit": 60000,
             "is_system": false,
-            "spent": 5075.0,
-            "remaining": 24925.0
+            "spent": 56700.0,
+            "remaining": 3300.0
+          },
+          {
+            "category": "Transporte",
+            "monthly_limit": 70000,
+            "is_system": false,
+            "spent": 55000.0,
+            "remaining": 15000.0
           }
         ],
         "total_budgeted": 335000.0
@@ -2383,9 +2320,9 @@
             "target_date": "2027-05-28",
             "priority": "high",
             "remaining": 360000.0,
-            "months_left": null,
-            "monthly_required": null,
-            "viable": false,
+            "months_left": 8,
+            "monthly_required": 45000.0,
+            "viable": true,
             "alternative_months": 2
           }
         ],
@@ -2446,12 +2383,6 @@
             "title": "Transactions to review",
             "context": "There are 2 unconfirmed imported transactions.",
             "action": "Review them before relying on the monthly close."
-          },
-          {
-            "severity": "medium",
-            "title": "Recurring charge changed",
-            "context": "groceries changed more than 10% between charges.",
-            "action": "Confirm whether it was a price increase, variable usage, or an incorrect charge."
           }
         ],
         "calendar": [
@@ -2526,64 +2457,7 @@
               "is_active": true
             }
           ],
-          "detected": [
-            {
-              "merchant": "rent",
-              "average_amount": 210000.0,
-              "minimum_amount": 210000.0,
-              "maximum_amount": 210000.0,
-              "months_seen": 6
-            },
-            {
-              "merchant": "groceries",
-              "average_amount": 107793.75,
-              "minimum_amount": 38900.0,
-              "maximum_amount": 151800.0,
-              "months_seen": 6
-            },
-            {
-              "merchant": "gas",
-              "average_amount": 52342.86,
-              "minimum_amount": 25000.0,
-              "maximum_amount": 66100.0,
-              "months_seen": 6
-            },
-            {
-              "merchant": "power water and internet",
-              "average_amount": 57980.0,
-              "minimum_amount": 56500.0,
-              "maximum_amount": 59800.0,
-              "months_seen": 5
-            },
-            {
-              "merchant": "movies",
-              "average_amount": 22966.67,
-              "minimum_amount": 19500.0,
-              "maximum_amount": 27400.0,
-              "months_seen": 3
-            },
-            {
-              "merchant": "pharmacy",
-              "average_amount": 13533.33,
-              "minimum_amount": 9800.0,
-              "maximum_amount": 18000.0,
-              "months_seen": 3
-            },
-            {
-              "merchant": "clothes",
-              "average_amount": 38600.0,
-              "minimum_amount": 36000.0,
-              "maximum_amount": 41200.0,
-              "months_seen": 2
-            },
-            {
-              "merchant": "restaurant",
-              "average_amount": 31150.0,
-              "minimum_amount": 28400.0,
-              "maximum_amount": 33900.0,
-              "months_seen": 2
-            }
-          ],
+          "detected": [],
           "monthly_expenses": 24900.0,
           "annual_expenses": 298800.0
         },
@@ -2710,7 +2584,7 @@
           {
             "order": 2,
             "title": "Fund Emergency fund",
-            "amount": 350000.0,
+            "amount": 45000.0,
             "why": "It aligns the contribution with its date and priority."
           },
           {
@@ -2734,11 +2608,25 @@
         "is_proposal": false,
         "items": [
           {
+            "category": "Entertainment",
+            "monthly_limit": 30000,
+            "is_system": false,
+            "spent": 5075.0,
+            "remaining": 24925.0
+          },
+          {
             "category": "Food",
             "monthly_limit": 150000,
             "is_system": false,
             "spent": 137650.0,
             "remaining": 12350.0
+          },
+          {
+            "category": "Restaurants",
+            "monthly_limit": 25000,
+            "is_system": false,
+            "spent": 10800.0,
+            "remaining": 14200.0
           },
           {
             "category": "Transportation",
@@ -2753,20 +2641,6 @@
             "is_system": false,
             "spent": 56700.0,
             "remaining": 3300.0
-          },
-          {
-            "category": "Restaurants",
-            "monthly_limit": 25000,
-            "is_system": false,
-            "spent": 10800.0,
-            "remaining": 14200.0
-          },
-          {
-            "category": "Entertainment",
-            "monthly_limit": 30000,
-            "is_system": false,
-            "spent": 5075.0,
-            "remaining": 24925.0
           }
         ],
         "total_budgeted": 335000.0
