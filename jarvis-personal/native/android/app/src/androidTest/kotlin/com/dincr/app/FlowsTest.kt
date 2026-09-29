@@ -22,6 +22,7 @@ import androidx.compose.ui.test.printToLog
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -245,6 +246,12 @@ class FlowsTest {
         tab(tx("Perfil", "Profile"))
         click(tx("Correos financieros", "Financial emails"))
         waitForText("Compra en supermercado")
+        // A mailbox the user disconnected earlier (status "disabled") is not listed.
+        waitForText("ejemplo@correo.test")
+        assertTrue(compose.onAllNodes(hasText("anterior@correo.test"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        // The sync answer's failed_connections is a list of ids; an empty one is a plain success.
+        click(tx("Buscar avisos nuevos", "Check for new notices"))
+        waitForText(tx("Encontramos 3 avisos", "Found 3 notices"), substring = true)
         click(tx("Confirmar", "Confirm"))
         waitForText(tx("Movimiento guardado.", "Transaction saved."))
         // The dollar notice cannot be confirmed as is: it needs the user's rate.
