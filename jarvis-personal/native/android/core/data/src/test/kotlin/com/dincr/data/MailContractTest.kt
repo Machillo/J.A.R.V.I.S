@@ -52,4 +52,53 @@ class MailContractTest {
         val ok = serving("""{"status":"ok","connections":1,"failed_connections":[],"found":0,"pending":0}""").syncMail()
         assertEquals(emptyList<Long>(), ok.failedConnections)
     }
+
+    @Test fun disabledConnectionsAreHidden() {
+        val status = json.decodeFromString<MailStatus>(
+            """{"connected":true,"connections":[{"id":1,"google_email":"a@correo.test","status":"active"},
+                {"id":2,"google_email":"b@correo.test","status":"disabled"},{"id":3,"google_email":"c@correo.test","status":"error"}]}""")
+        assertEquals(listOf(1L, 3L), status.visibleConnections.map { it.id })
+    }
+
+    /** `MailConnectRequest`: the app language travels with the history scope. */
+    @Test fun connectBodySendsTheAppLanguage() {
+        for ((language, tag) in listOf(AppLanguage.SPANISH to "es", AppLanguage.ENGLISH to "en")) {
+            val body = json.parseToJsonElement(json.encodeToString(MailConnectRequest.serializer(), MailConnectRequest("current_month", language.tag))).jsonObject
+            assertEquals("current_month", body["import_scope"]?.jsonPrimitive?.content)
+            assertEquals(tag, body["locale"]?.jsonPrimitive?.content)
+        }
+    }
+
+    /** `candidate_currency.transaction_amounts`: a missing base currency is CRC. */
+    @Test fun aMissingBaseCurrencyIsColones() {
+        val usd = MailCandidate(candidateId = 1, amount = BigDecimal("25"), currency = "USD", accountBaseCurrency = null, reviewStatus = "pending")
+        assertTrue(usd.needsRate)
+        assertFalse(usd.cannotConvert)
+        val crc = MailCandidate(candidateId = 2, amount = BigDecimal("100"), currency = "CRC", accountBaseCurrency = null, reviewStatus = "pending")
+        assertFalse(crc.needsRate)
+        assertFalse(crc.cannotConvert)
+        val euro = MailCandidate(candidateId = 3, amount = BigDecimal("40"), currency = "EUR", accountBaseCurrency = null, reviewStatus = "pending")
+        assertTrue(euro.cannotConvert)
+    }
+
+    /** Raw `resolution_reason` codes never reach the user; only the known ones become a note. */
+    @Test fun resolutionReasonsMapToNotesNotCodes() {
+        fun note(reason: String?, internal: Boolean? = null) = MailCandidate(candidateId = 1, resolutionReason = reason, isInternalTransfer = internal).resolutionNote
+        assertEquals(MailCandidate.ResolutionNote.POSSIBLE_MATCH, note("possible_cross_source_match"))
+        assertEquals(MailCandidate.ResolutionNote.PAIRED_OWN_TRANSFER, note("paired_owned_transfer", true))
+        assertEquals(MailCandidate.ResolutionNote.OWN_ACCOUNTS, note("confirmed_owned_endpoints", true))
+        assertNull(note("same_semantic_movement"))
+        assertNull(note("legacy_owner_import"))
+        assertNull(note(null))
+    }
+
+    /** The fake answers with the server's shapes, so the app's own flows exercise the real decoders. */
+    @Test fun fakeBackendAnswersWithTheServerShapes() = runTest {
+        val api = DincrApi(ApiClient("https://fixtures.invalid", { "t" }, FakeBackend(FakeBackend.Scenario.POPULATED, PlanTier.VIP), AppLanguage.SPANISH, backoff = {}))
+        assertTrue(api.mailCandidates(pendingOnly = true).isNotEmpty())
+        assertTrue(api.syncMail().failedConnections.isEmpty())
+        val status = api.mailStatus()
+        assertTrue("the fake keeps a disabled row, as the server does", status.connections.any { it.status == "disabled" })
+        assertTrue(status.visibleConnections.none { it.status == "disabled" })
+    }
 }
