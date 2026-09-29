@@ -76,7 +76,7 @@ FORBIDDEN_EXACT = frozenset({
 FORBIDDEN_PREFIXES = (
     "SUPABASE_", "VITE_SUPABASE_", "VITE_API_URL", "VITE_NATIVE_API_URL", "VITE_POSTHOG",
     "OWNER_", "JARVIS_OWN", "JARVIS_CARD_ALIASES", "JARVIS_RECEIVABLE", "JARVIS_USERS_API", "JARVIS_ADMIN",
-    "GMAIL_", "FINVA_GMAIL_", "MICROSOFT_", "FINVA_SINPE_", "FINVA_ISOLATION", "PERSONAL_ISOLATION",
+    "GMAIL_", "FINVA_GMAIL_", "MICROSOFT_", "FINVA_MICROSOFT_", "FINVA_SINPE_", "FINVA_ISOLATION", "PERSONAL_ISOLATION",
     "DINCR_STORE_", "DINCR_GOOGLE_", "FINVA_BILLING_", "SUPPORT_SMTP_", "SUPPORT_DISCORD_", "SUPPORT_EMAIL",
     "POSTHOG_", "VAPID_", "IBKR_", "RENDER", "VERCEL", "CF_", "CLOUDFLARE_", "OPENAI_", "ANTHROPIC_", "GEMINI",
     "GOOGLE_APPLICATION_CREDENTIALS", "AWS_", "AZURE_",
@@ -125,6 +125,27 @@ def production_markers_in(text: str) -> list[str]:
     return [marker for marker in PRODUCTION_MARKERS if marker in lowered]
 
 
+# Query keys a Labs URL may carry. Everything else is refused: `user`/`dbname`
+# replace the URL's own login and database, `service`/`passfile`/`options` can
+# redirect or reconfigure the connection.
+ALLOWED_QUERY_KEYS = frozenset({"host", "hostaddr", "port", "sslmode", "connect_timeout", "application_name"})
+
+
+def _netloc_hosts(netloc: str) -> tuple[str, list[str]]:
+    """(user, hosts) of a URL netloc the way libpq reads it: hosts split on ',' first, then the port removed."""
+    user, _, hostlist = netloc.rpartition("@")
+    hosts = []
+    for item in hostlist.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if item.startswith("["):  # [IPv6]:port
+            hosts.append(item[1:item.index("]")] if "]" in item else item)
+        else:
+            hosts.append(item.split(":", 1)[0])
+    return unquote(user.split(":", 1)[0]), hosts
+
+
 def check_database_url(dsn: str) -> str:
     """Return the DSN if it is a local Labs database; raise LabsRefused otherwise."""
     if not dsn or not dsn.strip():
@@ -133,23 +154,25 @@ def check_database_url(dsn: str) -> str:
     if markers:
         raise LabsRefused(f"the database URL names hosted infrastructure ({', '.join(markers)}); Labs is local only")
     parts = urlsplit(dsn.strip())
-    # A local port forwarded to a hosted pooler (ssh -L, a proxy) looks like 127.0.0.1;
-    # the pooler's login name gives it away: postgres.<project ref>.
-    if re.fullmatch(r"postgres\.[a-z0-9]{15,}", unquote(parts.username or "")):
-        raise LabsRefused("the database user is a hosted pooler login (a tunnel to hosted Postgres?); Labs is local only")
     if parts.scheme not in {"postgresql", "postgres"}:
         raise LabsRefused("the Labs database URL must be a postgresql:// URL")
-    query = parse_qs(parts.query)
-    hosts = [h for h in (parts.hostname or "").split(",") if h] + query.get("host", []) + query.get("hostaddr", [])
+    user, hosts = _netloc_hosts(parts.netloc)
+    # A local port forwarded to a hosted pooler (ssh -L, a proxy) looks like 127.0.0.1;
+    # the pooler's login name gives it away: postgres.<project ref>.
+    if re.fullmatch(r"postgres\.[a-z0-9]{15,}", user):
+        raise LabsRefused("the database user is a hosted pooler login (a tunnel to hosted Postgres?); Labs is local only")
+    query = parse_qs(parts.query, keep_blank_values=True)
+    unexpected = sorted(set(query) - ALLOWED_QUERY_KEYS)
+    if unexpected:
+        raise LabsRefused(f"the Labs database URL may not set {', '.join(unexpected)} (it can redirect or reconfigure the connection)")
+    for value in query.get("host", []) + query.get("hostaddr", []):
+        hosts += [h for h in value.split(",") if h]
     if not hosts:
         raise LabsRefused("the Labs database URL must name a local host (127.0.0.1, localhost or a socket directory)")
     for host in hosts:
         host = unquote(host)
         if not (_is_loopback(host) or _is_local_socket_dir(host)):
             raise LabsRefused("the Labs database host is not local; Labs never connects to a remote database")
-    for option in ("service", "passfile", "sslrootcert"):
-        if option in query:
-            raise LabsRefused(f"the Labs database URL may not use '{option}' (it can redirect the connection)")
     name = unquote(parts.path.lstrip("/"))
     if not name.startswith(LABS_DB_PREFIX):
         raise LabsRefused(f"the Labs database name must start with '{LABS_DB_PREFIX}'")
@@ -169,7 +192,10 @@ def check_environment(environ: Mapping[str, str] | None = None) -> str:
     backend_dsn = environ.get("DATABASE_URL", "")
     if backend_dsn and backend_dsn.strip() != dsn.strip():
         raise LabsRefused("DATABASE_URL is set and differs from the Labs database; unset it in the Labs shell")
-    for name in ("PGHOST", "PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGPASSFILE", "PGDATABASE"):
-        if environ.get(name):
-            raise LabsRefused(f"{name} is set; libpq could redirect Labs connections. Unset it in the Labs shell")
+    libpq = sorted(name for name in environ if name.upper().startswith("PG"))
+    if libpq:
+        raise LabsRefused(f"{', '.join(libpq)} set; libpq could redirect or reconfigure Labs connections. Unset them")
+    proxies = sorted(name for name in environ if name.upper().endswith("_PROXY") and name.upper() != "NO_PROXY")
+    if proxies:
+        raise LabsRefused(f"{', '.join(proxies)} set; a proxy would carry Labs traffic off this machine. Unset them")
     return check_database_url(dsn)

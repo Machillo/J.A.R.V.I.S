@@ -105,3 +105,48 @@ def test_netguard_address_check_is_loopback_only():
     for host in ("10.0.0.1", "192.168.1.1", "203.0.113.10", "example.com", "0.0.0.0", "", None):
         with pytest.raises(netguard.NetworkBlocked):
             netguard._check_address((host, 443))
+
+
+def test_raw_sockets_and_proxies_cannot_leave_the_machine(labs_dsn):
+    result = run_child("""
+        import json, socket, urllib.request
+        from labs import runtime
+        runtime.activate()
+        out = {}
+        for name, call in {
+            "connect": lambda s: s.connect(("203.0.113.10", 443)),
+            "connect_ex": lambda s: s.connect_ex(("203.0.113.10", 443)),
+        }.items():
+            s = socket.socket()
+            try:
+                call(s); out[name] = "sent"
+            except ConnectionError as exc:
+                out[name] = type(exc).__name__
+            finally:
+                s.close()
+        u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            u.sendto(b"x", ("203.0.113.10", 53)); out["sendto"] = "sent"
+        except ConnectionError as exc:
+            out["sendto"] = type(exc).__name__
+        u.close()
+        import requests
+        out["urllib_proxies"] = urllib.request.getproxies()
+        out["requests_proxies"] = requests.utils.get_environ_proxies("https://oauth2.googleapis.com/token")
+        print(json.dumps(out))
+    """, labs_dsn)
+    assert result["connect"] == result["connect_ex"] == result["sendto"] == "NetworkBlocked"
+    assert result["urllib_proxies"] == {} and result["requests_proxies"] == {}
+
+
+def test_a_proxy_in_the_labs_environment_is_refused():
+    result = run_child("""
+        import json, sys
+        from labs import runtime, guard
+        try:
+            runtime.activate(); out = {"refused": False}
+        except guard.LabsRefused:
+            out = {"refused": True}
+        print(json.dumps(out))
+    """, LOCAL, extra_env={"HTTPS_PROXY": "http://127.0.0.1:8888"})
+    assert result == {"refused": True}

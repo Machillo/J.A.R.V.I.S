@@ -44,9 +44,11 @@ folder to destroy the lab completely.
 
 ## Isolation: how Labs refuses production
 
-`python -m labs` starts a **launcher** that never imports the backend. It starts
-the local database and re-runs Labs in a **child process with an environment
-built from scratch**: an allowlist of operating-system variables, `DINCR_ENV=labs`
+`python -m labs` starts a **launcher** that never imports the backend. It drops
+every `PG*` and proxy variable from its own environment before any database
+connection (libpq would otherwise let `PGHOSTADDR` redirect even a local URL),
+checks that the server it reached is local, starts the local database and
+re-runs Labs in a **child process with an environment built from scratch**: an allowlist of operating-system variables, `DINCR_ENV=labs`
 and the local Labs database URL. Credentials in your shell or in `backend/.env`
 never reach it. The child then activates Labs (`labs/runtime.py`), in this order:
 
@@ -58,20 +60,27 @@ never reach it. The child then activates Labs (`labs/runtime.py`), in this order
    Microsoft, store billing, SMTP, Discord, push, analytics, AI keys, Render…),
    by family prefix (`SUPABASE_`, `OWNER_`, `JARVIS_OWN…`, `GMAIL_`, `DINCR_STORE_`, …)
    and by pattern (`SECRET`, `TOKEN`, `PASSWORD`, `API_KEY`, `WEBHOOK`, …). Empty
-   values count. Only names are reported, never values. `PGHOST`/`PGSERVICE`/…
-   are refused too (libpq could redirect connections), and `DATABASE_URL` must
-   equal the Labs URL.
-3. **Local database only**: the URL's hosts (including `host=`/`hostaddr=` in the
-   query and multi-host lists) must be loopback or a local socket directory; the
-   database name must start with `dincr_labs`; `service`/`passfile`/`sslrootcert`
-   are refused; hosting domains and the product domain are refused; a hosted
-   pooler login (`postgres.<project-ref>`) on a local port — a tunnel — is refused.
-4. **Network guard** (`labs/netguard.py`): every socket connect, `sendto` and name
-   lookup outside loopback raises `NetworkBlocked`. This covers `requests`,
-   `httpx`, `smtplib`, Google/Microsoft clients, store verification, Discord and
-   push alike.
-5. **Tunnel check**: the database behind the URL must be empty or carry the Labs
-   marker row. A production database (tables, no marker) reached through a local
+   values count. Only names are reported, never values. Every `PG*` variable
+   and every `*_PROXY` variable is refused too, and `DATABASE_URL` must equal the
+   Labs URL.
+3. **Local database only**: hosts are read the way libpq reads them (split on
+   `,` first, then the port), including `host=`/`hostaddr=` in the query; every
+   one must be loopback or a local socket directory. Only a small allowlist of
+   query keys is accepted (`user=`, `dbname=`, `service=`, `options=`,
+   `passfile=`… are refused: they replace or redirect the connection). The
+   database name must start with `dincr_labs`; hosting domains and the product
+   domain are refused; a hosted pooler login (`postgres.<project-ref>`) on a local
+   port — a tunnel — is refused. After connecting, Labs checks on the server that
+   `current_database()` is a Labs database and `inet_server_addr()` is loopback
+   (or a socket).
+4. **Network guard** (`labs/netguard.py`): every socket connect, `sendto`,
+   `sendmsg` and name lookup outside loopback raises `NetworkBlocked`, and proxies
+   are disabled — environment variables and the operating system's proxy settings
+   (Windows registry, macOS) — so a proxy on a loopback port cannot carry traffic
+   out. This covers `requests`, `httpx`, `smtplib`, Google/Microsoft clients, store
+   verification, Discord and push alike.
+5. **Tunnel check**: the database behind the URL must be empty (no table, view,
+   function, type or extra schema) or carry the Labs marker row. A production database (tables, no marker) reached through a local
    port forward is refused *before* the backend is imported. There is no switch
    to skip this.
 6. **`backend/.env` disabled**: `import backend` normally loads `backend/.env`
@@ -240,6 +249,25 @@ change, human review and merge).
 - No secrets committed under `labs/` (tested).
 - Table names in Labs SQL come from code constants, never from input; values are
   always parameters. The playground reads a local file only when marked synthetic.
+
+## Residual risks (known, accepted for v1)
+
+- **Windows asyncio proactor** connects below `socket.connect`; a numeric-IP
+  asyncio connection would bypass the network guard. The backend makes no asyncio
+  network calls today; revisit if it starts to.
+- **pgserver on Windows** listens on `127.0.0.1` with trust authentication while
+  Labs runs: another local account on the same machine could connect. Only matters
+  on shared machines; the server stops when the launcher exits.
+- **`parse --file`** trusts the `"synthetic": true` flag: it is a policy speed bump,
+  not a detector of real emails. Never paste a real email.
+- **Deploy artifact**: whether `jarvis-personal/labs/` is included in the Render
+  deploy is a console setting not visible in the repository. It is inert there
+  (nothing imports it, and it refuses to run without `DINCR_ENV=labs`, a local
+  database and the child launcher), but excluding it is cleaner (human check).
+- The adversarial review found no path from Labs to production; the findings it
+  raised (libpq `PG*` redirection in the launcher, multi-host parsing with ports,
+  `user=`/`dbname=` query keys, loopback system proxies, narrow "empty" check) are
+  fixed and each has a test or a mutant.
 
 ## CI
 

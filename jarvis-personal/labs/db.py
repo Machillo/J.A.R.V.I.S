@@ -27,6 +27,27 @@ SCHEMA_FILES = (
 )
 
 
+def scrub_connection_environment() -> None:
+    """libpq fills what a URL leaves out from PG* variables (PGHOSTADDR even beats a local host).
+    The launcher and the tests run with the caller's shell: drop those and any proxy first."""
+    for name in list(os.environ):
+        upper = name.upper()
+        if upper.startswith("PG") or (upper.endswith("_PROXY") and upper != "NO_PROXY"):
+            del os.environ[name]
+
+
+def _assert_local_server(conn) -> None:
+    """After connecting: the server itself must be a local Labs database (a tunnel shows here)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT current_database() AS db, host(inet_server_addr()) AS addr")
+        row = cur.fetchone()
+    name, addr = (row["db"], row["addr"]) if isinstance(row, dict) else row
+    if not str(name).startswith(guard.LABS_DB_PREFIX) and name != "postgres":
+        raise guard.LabsRefused("the connected database is not a Labs database")
+    if addr is not None and not guard._is_loopback(str(addr)):
+        raise guard.LabsRefused("the connected server's address is not loopback; Labs is local only")
+
+
 def _with_database(uri: str, name: str) -> str:
     parts = urlsplit(uri)
     return urlunsplit((parts.scheme, parts.netloc, f"/{name}", parts.query, parts.fragment))
@@ -35,6 +56,8 @@ def _with_database(uri: str, name: str) -> str:
 def start_server(data_dir: Path | None = None, cleanup_mode: str | None = "stop"):
     """Start (or reuse) the local embedded server. Called by the launcher, never by the backend."""
     import pgserver
+
+    scrub_connection_environment()
 
     data_dir = Path(data_dir or LABS_HOME / "pg")
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -55,9 +78,11 @@ def ensure_database(admin_uri: str, name: str = DEFAULT_DB) -> str:
     if not name.startswith(guard.LABS_DB_PREFIX) or not name.replace("_", "").isalnum():
         raise guard.LabsRefused(f"invalid Labs database name {name!r}")
     dsn = guard.check_database_url(_with_database(admin_uri, name))
+    scrub_connection_environment()
     admin = psycopg2.connect(admin_uri)
     admin.autocommit = True
     try:
+        _assert_local_server(admin)
         with admin.cursor() as cur:
             cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (name,))
             if not cur.fetchone():
@@ -71,7 +96,16 @@ def _connect(dsn: str):
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
-    return psycopg2.connect(guard.check_database_url(dsn), cursor_factory=RealDictCursor)
+    conn = psycopg2.connect(guard.check_database_url(dsn), cursor_factory=RealDictCursor)
+    try:
+        _assert_local_server(conn)
+        if not str(conn.get_dsn_parameters().get("dbname", "")).startswith(guard.LABS_DB_PREFIX):
+            raise guard.LabsRefused("the connected database is not a Labs database")
+        conn.rollback()  # end the check's transaction; callers choose their own mode
+    except Exception:
+        conn.close()
+        raise
+    return conn
 
 
 def has_marker(conn) -> bool:
@@ -79,15 +113,25 @@ def has_marker(conn) -> bool:
         cur.execute("SELECT to_regclass(%s) AS t", (f"public.{MARKER_TABLE}",))
         if not cur.fetchone()["t"]:
             return False
-        cur.execute(f"SELECT value FROM {MARKER_TABLE} WHERE id=1")
+        cur.execute(f"SELECT value FROM public.{MARKER_TABLE} WHERE id=1")
         row = cur.fetchone()
         return bool(row and row["value"] == MARKER_VALUE)
 
 
 def _is_empty(conn) -> bool:
+    """No user object at all: no relation, type or function in any non-system schema, and no extra schema."""
     with conn.cursor() as cur:
-        cur.execute("SELECT count(*) AS n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
-                    "WHERE n.nspname='public' AND c.relkind IN ('r','p')")
+        cur.execute(r"""SELECT
+            (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+              WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\_%')
+          + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+              WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\_%')
+          + (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace
+              WHERE t.typrelid = 0 AND t.typelem = 0
+                AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\_%')
+          + (SELECT count(*) FROM pg_namespace n
+              WHERE n.nspname NOT IN ('pg_catalog','information_schema','public') AND n.nspname NOT LIKE 'pg\_%')
+          AS n""")
         return cur.fetchone()["n"] == 0
 
 
@@ -135,9 +179,9 @@ def reset(dsn: str) -> None:
                     cur.execute(f'CREATE ROLE "{role}" NOLOGIN')
             for path in SCHEMA_FILES:
                 cur.execute(path.read_text(encoding="utf-8"))
-            cur.execute(f"CREATE TABLE {MARKER_TABLE} (id INT PRIMARY KEY CHECK (id=1), value TEXT NOT NULL, "
+            cur.execute(f"CREATE TABLE public.{MARKER_TABLE} (id INT PRIMARY KEY CHECK (id=1), value TEXT NOT NULL, "
                         "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())")
-            cur.execute(f"INSERT INTO {MARKER_TABLE}(id,value) VALUES(1,%s)", (MARKER_VALUE,))
+            cur.execute(f"INSERT INTO public.{MARKER_TABLE}(id,value) VALUES(1,%s)", (MARKER_VALUE,))
     finally:
         conn.close()
 

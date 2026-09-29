@@ -198,3 +198,43 @@ def test_removing_the_marker_check_would_destroy_a_foreign_database(admin_uri):
         print(json.dumps({"reset": "done"}))
     """, dsn)
     assert result == {"reset": "done"}  # so test_reset_refuses_a_database_labs_did_not_create is what protects it
+
+
+def test_reset_and_connections_check_the_marker_themselves(labs_dsn):
+    """Activation passed on an empty database; objects appear later without the marker: every operation refuses."""
+    result = run_child("""
+        import json, psycopg2
+        from labs import runtime, db, guard
+        dsn = runtime.activate()
+        raw = psycopg2.connect(dsn); raw.autocommit = True
+        raw.cursor().execute("CREATE TABLE someone_elses(id int)")
+        raw.close()
+        out = {}
+        for name, call in {"reset": lambda: db.reset(dsn), "connect": lambda: db.connect_labs()}.items():
+            try:
+                call(); out[name] = "done"
+            except guard.LabsRefused:
+                out[name] = "refused"
+        print(json.dumps(out))
+    """, labs_dsn)
+    assert result == {"reset": "refused", "connect": "refused"}
+
+
+def test_a_non_table_object_makes_a_database_non_empty(admin_uri):
+    import psycopg2
+
+    dsn = db.ensure_database(admin_uri, f"dincr_labs_fn{uuid.uuid4().hex[:8]}")
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = True
+    conn.cursor().execute("CREATE TYPE precious_kind AS ENUM ('a')")
+    conn.close()
+    result = run_child("""
+        import json
+        from labs import runtime, guard
+        try:
+            runtime.activate(); out = {"activate": "done"}
+        except guard.LabsRefused:
+            out = {"activate": "refused"}
+        print(json.dumps(out))
+    """, dsn)
+    assert result == {"activate": "refused"}

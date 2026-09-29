@@ -8,6 +8,8 @@ import pytest
 
 from labs import db
 
+db.scrub_connection_environment()  # the test process must not inherit PG*/proxy settings either
+
 
 @pytest.fixture(scope="session")
 def admin_uri(tmp_path_factory):

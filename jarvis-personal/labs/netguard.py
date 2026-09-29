@@ -7,8 +7,11 @@ lookups and the store/Gmail/Discord clients alike. Only loopback addresses and
 local socket paths are allowed: the Labs database runs on this machine.
 
 psycopg2 connects from C (libpq), below this guard; that path is covered by
-``labs.guard.check_database_url`` (local host only) and by the Labs DSN being
-the only database the backend is given.
+``labs.guard.check_database_url`` (local hosts only, no redirecting options),
+no PG* variable reaching the process, and ``labs.db`` checking after connecting
+that the server's address is loopback. Proxies are disabled (environment and the
+operating system's settings). Known gap: the Windows asyncio proactor connects
+below socket.connect; the backend makes no asyncio network calls today.
 """
 from __future__ import annotations
 
@@ -44,14 +47,35 @@ def _check_address(address) -> None:
         raise NetworkBlocked(f"Labs blocks outbound network to {host!r}; only loopback is allowed")
 
 
+def _disable_proxies() -> None:
+    """No proxy, ever: a system proxy on loopback (Windows registry, macOS settings) would carry
+    traffic off the machine through an allowed local port."""
+    import os
+    import urllib.request
+
+    def no_proxies(*_args, **_kwargs):
+        return {}
+
+    for name in ("getproxies", "getproxies_environment", "getproxies_registry", "getproxies_macosx_sysconf"):
+        if hasattr(urllib.request, name):
+            setattr(urllib.request, name, no_proxies)
+    for name in list(os.environ):
+        if name.upper().endswith("_PROXY") and name.upper() != "NO_PROXY":
+            del os.environ[name]
+    os.environ["NO_PROXY"] = "*"
+    os.environ["no_proxy"] = "*"
+
+
 def install() -> None:
-    """Idempotently restrict this process to loopback networking."""
+    """Idempotently restrict this process to loopback networking, without proxies."""
     if _ORIGINAL:
         return
+    _disable_proxies()
     _ORIGINAL["getaddrinfo"] = socket.getaddrinfo
     _ORIGINAL["connect"] = socket.socket.connect
     _ORIGINAL["connect_ex"] = socket.socket.connect_ex
     _ORIGINAL["sendto"] = socket.socket.sendto
+    _ORIGINAL["sendmsg"] = getattr(socket.socket, "sendmsg", None)
     _ORIGINAL["gethostbyname"] = socket.gethostbyname
     _ORIGINAL["gethostbyname_ex"] = socket.gethostbyname_ex
     _ORIGINAL["create_connection"] = socket.create_connection
@@ -83,6 +107,12 @@ def install() -> None:
         _check_address(args[-1])
         return _ORIGINAL["sendto"](self, data, *args)
 
+    def sendmsg(self, buffers, ancdata=(), flags=0, address=None):
+        if address is not None:
+            _check_address(address)
+            return _ORIGINAL["sendmsg"](self, buffers, ancdata, flags, address)
+        return _ORIGINAL["sendmsg"](self, buffers, ancdata, flags)
+
     def create_connection(address, *args, **kwargs):
         _check_address(address)
         return _ORIGINAL["create_connection"](address, *args, **kwargs)
@@ -93,6 +123,8 @@ def install() -> None:
     socket.socket.connect = connect
     socket.socket.connect_ex = connect_ex
     socket.socket.sendto = sendto
+    if _ORIGINAL["sendmsg"] is not None:
+        socket.socket.sendmsg = sendmsg
     socket.create_connection = create_connection
 
 

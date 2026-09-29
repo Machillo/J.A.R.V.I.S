@@ -4,7 +4,7 @@ DINCR has no generative-AI runtime for user data (CLAUDE.md §4.E). Labs may
 explore ideas only on synthetic data and only through this interface. Adding a
 real provider needs, before any code: explicit authorization, a known cost, a
 privacy review, and secrets kept outside the repository. ``provider()`` refuses
-every name except the fake, and labs/tests/test_ai_lab.py fails if an AI SDK or
+every name except the fake, and labs/tests/test_isolation.py fails if an AI SDK or
 provider endpoint appears anywhere under labs/.
 """
 from __future__ import annotations
