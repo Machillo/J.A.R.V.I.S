@@ -1,0 +1,83 @@
+name: Uptime
+
+# The backend cannot report its own death: this external probe checks /health/ready
+# every 10 minutes and posts to Discord only on a change (DOWN, RECOVERED) plus one
+# reminder per hour while down. Inactive until both are configured by the Owner:
+#   - repository variable DINCR_UPTIME_URL  (e.g. https://<backend host>, no path)
+#   - repository secret   OPS_UPTIME_DISCORD_WEBHOOK_URL  (a Discord webhook)
+# The response body is never posted: only the HTTP status and the check name.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BASE_URL: ${{ vars.DINCR_UPTIME_URL }}
+      WEBHOOK: ${{ secrets.OPS_UPTIME_DISCORD_WEBHOOK_URL }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Probe /health/ready
+        id: probe
+        run: |
+          if [ -z "$BASE_URL" ]; then
+            echo "::notice::Uptime probe not configured (set the DINCR_UPTIME_URL variable)."
+            echo "state=unconfigured" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          status=000
+          # Three tries 20 s apart: one slow cold start or network blip is not an outage.
+          for attempt in 1 2 3; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "${BASE_URL%/}/health/ready" || true)
+            [ "$status" = "200" ] && break
+            [ "$attempt" -lt 3 ] && sleep 20
+          done
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" = "200" ]; then echo "state=up" >> "$GITHUB_OUTPUT"; else echo "state=down" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Compare with previous runs and alert on change
+        if: steps.probe.outputs.state == 'up' || steps.probe.outputs.state == 'down'
+        env:
+          STATE: ${{ steps.probe.outputs.state }}
+          STATUS: ${{ steps.probe.outputs.status }}
+        run: |
+          # Conclusions of previous runs, newest first (failure = was down). Cancelled or
+          # skipped runs say nothing about the backend, so they are left out. 100 runs
+          # (about 16 hours) keep the hourly reminder going through a long outage.
+          if ! history=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow uptime.yml --status completed --limit 100 \
+                         --json conclusion --jq '[.[].conclusion | select(. == "success" or . == "failure")] | join(" ")'); then
+            echo "::warning::Run history unavailable: no alert this time (avoids repeating DOWN every run)."
+            [ "$STATE" = "up" ]; exit
+          fi
+          previous=$(echo "$history" | awk '{print $1}')
+          down_streak=0
+          for conclusion in $history; do [ "$conclusion" = "failure" ] && down_streak=$((down_streak+1)) || break; done
+          message=""
+          if [ "$STATE" = "down" ] && [ "$previous" != "failure" ]; then
+            message="**DINCR UPTIME · CRITICAL · DOWN**\n\`\`\`\nCheck: /health/ready\nHTTP: $STATUS (000 = no response)\nDesde: $(date -u '+%Y-%m-%d %H:%M UTC')\n\`\`\`"
+          elif [ "$STATE" = "down" ] && [ $(( (down_streak + 1) % 6 )) -eq 0 ]; then
+            message="**DINCR UPTIME · CRITICAL · SIGUE CAÍDO**\n\`\`\`\nCheck: /health/ready\nHTTP: $STATUS\nChequeos fallidos seguidos: $((down_streak + 1))\n\`\`\`"
+          elif [ "$STATE" = "up" ] && [ "$previous" = "failure" ]; then
+            message="**DINCR UPTIME · RECOVERED**\n\`\`\`\nCheck: /health/ready\nHTTP: 200\nChequeos fallidos antes: $down_streak\n\`\`\`"
+          fi
+          if [ -n "$message" ]; then
+            if [ -z "$WEBHOOK" ]; then
+              echo "::warning::State changed but OPS_UPTIME_DISCORD_WEBHOOK_URL is not set."
+            else
+              payload=$(printf '{"content":"%s","allowed_mentions":{"parse":[]}}' "$message")
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK" || true)
+              echo "Discord delivery status: $code"
+            fi
+          fi
+          # Fail the run while down: the run history is the state (and a red run is visible).
+          [ "$STATE" = "up" ]

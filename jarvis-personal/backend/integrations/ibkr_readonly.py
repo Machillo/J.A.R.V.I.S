@@ -15,6 +15,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.auth.owner_role import enabled_owner_email
+from backend.core import observability
 from backend.core.database import get_connection, serialize_row, serialize_rows
 
 
@@ -386,11 +387,14 @@ def sync_flex_cron(x_jarvis_cron_secret: str | None = Header(default=None)):
     if not x_jarvis_cron_secret or not hmac.compare_digest(x_jarvis_cron_secret, expected):
         raise HTTPException(status_code=403, detail="Credencial del cron IBKR inválida.")
     try:
-        return sync_flex_snapshot()
+        result = sync_flex_snapshot()
     except (RuntimeError, requests.RequestException) as exc:
         # The Flex token travels in the request URL: never log an exception message.
         logger.error("IBKR scheduled sync failed type=%s", type(exc).__name__)
+        observability.heartbeat("ibkr_flex", ok=False, error_class=type(exc).__name__)
         raise HTTPException(status_code=502, detail="No se pudo sincronizar IBKR en este momento.") from None
+    observability.heartbeat("ibkr_flex", ok=True)
+    return result
 
 
 def latest_ibkr_snapshot(conn, workspace_id: str):

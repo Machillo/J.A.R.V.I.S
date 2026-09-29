@@ -11,6 +11,7 @@ import psycopg2
 import requests
 from fastapi import HTTPException, status
 
+from backend.core import observability
 from backend.core.database import get_connection
 from backend.core.i18n import tx
 from backend.auth.workspace_context import resolve_personal_workspace_context, sync_account_auth_identity
@@ -550,7 +551,9 @@ def delete_current_account() -> dict[str, str]:
         ) from exc
     except Exception as exc:
         _log_deletion(deletion_id, stage, "FAILED", **_deletion_error_metadata(exc))
-        logger.exception("Account deletion failed deletion_id=%s stage=%s", deletion_id, stage)
+        # Summary only (types, pgcode, frames): a traceback message can quote row values.
+        logger.error("Account deletion failed deletion_id=%s stage=%s error=%s", deletion_id, stage, observability.exception_summary(exc))
+        observability.report("account_deletion", "stage_failed", "error", error_code=stage, error_class=type(exc).__name__)
         raise HTTPException(
             status_code=500,
             detail={
@@ -588,6 +591,7 @@ def delete_current_account() -> dict[str, str]:
         auth_error = type(exc).__name__
     if auth_error:
         _log_deletion(deletion_id, stage, "FAILED", error_type=auth_error, http_status=auth_status)
+        observability.report("account_deletion", "stage_failed", "error", error_code=stage, error_class=auth_error, status=auth_status)
         # 409 (not 5xx): the generic 5xx handler would drop the code the app needs.
         raise HTTPException(
             status_code=409,
@@ -613,6 +617,7 @@ def delete_current_account() -> dict[str, str]:
         # sign-up with this email. Logged as an error so operations can clean it up.
         _log_deletion(deletion_id, stage, "FAILED", **_deletion_error_metadata(exc))
         logger.error("Deletion tombstone left behind deletion_id=%s", deletion_id)
+        observability.report("account_deletion", "tombstone_left", "warning", error_code=stage, error_class=type(exc).__name__)
 
     stage = "DONE"
     _log_deletion(deletion_id, stage, "COMPLETED")

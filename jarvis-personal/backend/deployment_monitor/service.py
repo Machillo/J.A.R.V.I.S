@@ -89,6 +89,9 @@ def save_event(provider: str, payload: dict[str, Any]) -> dict[str, Any]:
         ).fetchone()
         conn.commit()
     if event["status"] == "failure":
+        from backend.core import observability
+
+        observability.report("deploy", f"{event['provider']}_failed", "error", error_code=str(event.get("service_name") or "")[:40])
         sha = str(event.get("commit_sha") or "")[:7]
         send_system_push("Falló un despliegue", f"{event['service_name']} · {sha or 'sin commit'} · {event['summary']}", "deployment", "/settings")
     return row

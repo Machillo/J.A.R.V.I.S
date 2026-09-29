@@ -63,6 +63,7 @@ def test_every_setting_the_backend_reads_for_an_external_service_is_forbidden():
         "FINVA_VIP_MONTHLY_PRODUCT_ID", "FINVA_APPLE_BUNDLE_ID", "FINVA_GOOGLE_PACKAGE_NAME",
         "JARVIS_OWNER_BRIDGE_TOKEN_TTL_SECONDS",
         "PARSER_DISCOVERY_ENABLED",
+        "DINCR_ENVIRONMENT", "OPS_ALERT_MIN_SEVERITY",  # an alert label and a threshold (the switch is forbidden)
         "IGNORED_EMAIL", "MISSING_KEY",  # status constants in env-reading modules, not settings
     }
     unguarded = sorted(n for n in names - harmless if not guard.forbidden_settings({n: "x"}))
