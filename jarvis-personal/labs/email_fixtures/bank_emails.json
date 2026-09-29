@@ -1,0 +1,169 @@
+{
+  "synthetic": true,
+  "notice": "Invented messages in the formats DINCR's parsers already support (see backend/email_monitor/test_parser_battery.py). No real person, account, card, merchant or reference. Card digits are 0000.",
+  "received_at": "2026-09-22T16:15:00Z",
+  "cases": [
+    {
+      "name": "bac_purchase_crc",
+      "description": "BAC card purchase in colones",
+      "subject": "Notificación de transacción SUPERMERCADO EJEMPLO",
+      "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+      "body": "Hola PERSONA SINTETICA:\nA continuación le detallamos la transacción realizada:\nComercio:\nSUPERMERCADO EJEMPLO\nCiudad y país:\nSAN JOSE, Costa Rica\nFecha:\nSep 22, 2026, 10:15\nVISA\n************0000\nAutorización:\n000000\nReferencia:\n000000000001\nTipo de Transacción:\nCOMPRA\nMonto:\nCRC 15.000,00",
+      "expected": {
+        "email_kind": "movement",
+        "bank": "bac",
+        "transaction_type": "expense",
+        "amount": "15000.0",
+        "original_amount": null,
+        "original_currency": null,
+        "transaction_date": "2026-09-22",
+        "description": "SUPERMERCADO EJEMPLO"
+      }
+    },
+    {
+      "name": "bac_purchase_usd",
+      "description": "BAC card purchase in dollars (parser converts at its matching-only default rate)",
+      "subject": "Notificación de transacción HOSTING EJEMPLO",
+      "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+      "body": "Hola PERSONA SINTETICA:\nA continuación le detallamos la transacción realizada:\nComercio:\nHOSTING EJEMPLO\nCiudad y país:\nSAN JOSE, Costa Rica\nFecha:\nSep 22, 2026, 10:15\nVISA\n************0000\nAutorización:\n000000\nReferencia:\n000000000001\nTipo de Transacción:\nCOMPRA\nMonto:\nUSD 21.00",
+      "expected": {
+        "email_kind": "movement",
+        "bank": "bac",
+        "transaction_type": "expense",
+        "amount": "10395.0",
+        "original_amount": "21.0",
+        "original_currency": "USD",
+        "transaction_date": "2026-09-22",
+        "description": "HOSTING EJEMPLO"
+      }
+    },
+    {
+      "name": "bac_refund_income",
+      "description": "BAC refund: money in",
+      "subject": "Notificación de transacción",
+      "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+      "body": "Hola PERSONA SINTETICA:\nA continuación le detallamos la transacción realizada:\nComercio:\nSUPERMERCADO EJEMPLO\nCiudad y país:\nSAN JOSE, Costa Rica\nFecha:\nSep 22, 2026, 10:15\nVISA\n************0000\nAutorización:\n000000\nReferencia:\n000000000002\nTipo de Transacción:\nDEVOLUCION\nMonto:\nCRC 15.000,00",
+      "expected": {
+        "email_kind": "movement",
+        "bank": "bac",
+        "transaction_type": "income",
+        "amount": "15000.0",
+        "original_amount": null,
+        "original_currency": null,
+        "transaction_date": "2026-09-22",
+        "description": "SUPERMERCADO EJEMPLO"
+      }
+    },
+    {
+      "name": "bac_strange_merchant",
+      "description": "Merchant with accents and symbols",
+      "subject": "Notificación de transacción",
+      "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+      "body": "Hola PERSONA SINTETICA:\nA continuación le detallamos la transacción realizada:\nComercio:\nCAFÉ Ñ&<>'\" DEMO #42\nCiudad y país:\nSAN JOSE, Costa Rica\nFecha:\nSep 22, 2026, 10:15\nVISA\n************0000\nAutorización:\n000000\nReferencia:\n000000000001\nTipo de Transacción:\nCOMPRA\nMonto:\nCRC 1.234,56",
+      "expected": {
+        "email_kind": "movement",
+        "bank": "bac",
+        "transaction_type": "expense",
+        "amount": "1234.56",
+        "original_amount": null,
+        "original_currency": null,
+        "transaction_date": "2026-09-22",
+        "description": "CAFÉ Ñ&<>'\" DEMO #42"
+      }
+    },
+    {
+      "name": "bac_limit_amount",
+      "description": "Large amount near the candidate limit",
+      "subject": "Notificación de transacción",
+      "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+      "body": "Hola PERSONA SINTETICA:\nA continuación le detallamos la transacción realizada:\nComercio:\nSUPERMERCADO EJEMPLO\nCiudad y país:\nSAN JOSE, Costa Rica\nFecha:\nSep 22, 2026, 10:15\nVISA\n************0000\nAutorización:\n000000\nReferencia:\n000000000001\nTipo de Transacción:\nCOMPRA\nMonto:\nCRC 999.999.999,99",
+      "expected": {
+        "email_kind": "ignored",
+        "bank": "bac",
+        "transaction_type": "ignored"
+      }
+    },
+    {
+      "name": "bac_duplicate",
+      "description": "Same movement as bac_purchase_crc (dedupe key must match)",
+      "subject": "Notificación de transacción SUPERMERCADO EJEMPLO",
+      "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+      "body": "Hola PERSONA SINTETICA:\nA continuación le detallamos la transacción realizada:\nComercio:\nSUPERMERCADO EJEMPLO\nCiudad y país:\nSAN JOSE, Costa Rica\nFecha:\nSep 22, 2026, 10:15\nVISA\n************0000\nAutorización:\n000000\nReferencia:\n000000000001\nTipo de Transacción:\nCOMPRA\nMonto:\nCRC 15.000,00",
+      "expected": {
+        "email_kind": "movement",
+        "bank": "bac",
+        "transaction_type": "expense",
+        "amount": "15000.0",
+        "original_amount": null,
+        "original_currency": null,
+        "transaction_date": "2026-09-22",
+        "description": "SUPERMERCADO EJEMPLO"
+      }
+    },
+    {
+      "name": "multimoney_credit",
+      "description": "MultiMoney incoming transfer",
+      "subject": "Notificación de transferencia",
+      "sender": "MultiMoney <multimoneycr@multimoney.com>",
+      "body": "MultiMoney\nSe aplico un credito en tiempo real\nMonto: CRC 10.000\nFecha: 22/09/2026\nReferencia: 000000001\nConcepto: traslado",
+      "expected": {
+        "email_kind": "movement",
+        "bank": "multimoney",
+        "transaction_type": "income",
+        "amount": "10000.0",
+        "original_amount": null,
+        "original_currency": null,
+        "transaction_date": "2026-09-22",
+        "description": "traslado"
+      }
+    },
+    {
+      "name": "bac_rejected",
+      "description": "Rejected transaction: never a movement",
+      "subject": "Transacción rechazada",
+      "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+      "body": "Hola PERSONA SINTETICA:\nA continuación le detallamos la transacción realizada:\nComercio:\nSUPERMERCADO EJEMPLO\nCiudad y país:\nSAN JOSE, Costa Rica\nFecha:\nSep 22, 2026, 10:15\nVISA\n************0000\nAutorización:\n000000\nReferencia:\n000000000001\nTipo de Transacción:\nCOMPRA\nMonto:\nCRC 15.000\nLa transacción fue rechazada",
+      "expected": {
+        "email_kind": "ignored",
+        "bank": "bac",
+        "transaction_type": "ignored"
+      }
+    },
+    {
+      "name": "irrelevant_security",
+      "description": "Security notice: not financial",
+      "subject": "Tu sesión se inició",
+      "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+      "body": "Tu sesión se inició en BAC. Si no fuiste vos, llamanos.",
+      "expected": {
+        "email_kind": "ignored",
+        "bank": "bac",
+        "transaction_type": "ignored"
+      }
+    },
+    {
+      "name": "unknown_bank",
+      "description": "Bank without a parser: ignored, never guessed",
+      "subject": "Aviso BN",
+      "sender": "avisos@bncr.fi.cr",
+      "body": "Banco Nacional le informa compra por CRC 5.000",
+      "expected": {
+        "email_kind": "ignored",
+        "bank": "unknown",
+        "transaction_type": "ignored"
+      }
+    },
+    {
+      "name": "broken_format",
+      "description": "BAC template without an amount",
+      "subject": "Notificación de transacción",
+      "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
+      "body": "Hola PERSONA SINTETICA:\nComercio:\nTIENDA LABS\nFecha:\nSep 22, 2026, 10:15\nTipo de Transacción:\nCOMPRA\nMonto:\n",
+      "expected": {
+        "email_kind": "ignored",
+        "bank": "bac",
+        "transaction_type": "ignored"
+      }
+    }
+  ]
+}
