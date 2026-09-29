@@ -1,0 +1,15 @@
+{
+  "$comment": "Store captions, Spanish (voseo, PRODUCT.md). Short: a caption must fit in the caption band (<= 20% of the image for Google Play). No calls to action, no rankings, no 'nuevo', no user counts, testimonials or certifications (none exist). `plan_badge` marks a feature that needs a paid plan (App Store 2.3.2); confirm each plan against the released app.",
+  "brand": { "name": "DINCR", "tagline": "Tu dinero, con propósito" },
+  "plan_badges": { "vip": "Plan VIP", "basic": "Plan Basic" },
+  "screens": {
+    "home": { "title": "Sabé cuánto tenés disponible este mes", "subtitle": "Ingresos, gastos y deudas en un solo lugar", "plan_badge": null },
+    "movements": { "title": "Registrá cada movimiento en segundos", "subtitle": "Colones y dólares, ordenados por fecha", "plan_badge": null },
+    "accounts": { "title": "Tus cuentas, claras y al día", "subtitle": "Saldos declarados por vos, sin inventar números", "plan_badge": null },
+    "debts": { "title": "Mirá lo que debés y qué pagar primero", "subtitle": "Un siguiente paso concreto, sin alarmas", "plan_badge": null },
+    "goals": { "title": "Metas con un plan realista", "subtitle": "Seguí tu avance mes a mes", "plan_badge": null },
+    "budget": { "title": "Un presupuesto que se entiende", "subtitle": "Sabé en qué se va el dinero", "plan_badge": null },
+    "mail": { "title": "Movimientos desde tus correos del banco", "subtitle": "Solo lectura, con tu permiso. Vos revisás cada uno", "plan_badge": "vip" }
+  },
+  "feature_graphic": { "title": "Tu dinero, con propósito", "subtitle": "Finanzas personales claras para Costa Rica" }
+}

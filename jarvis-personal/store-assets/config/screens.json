@@ -1,0 +1,26 @@
+{
+  "$comment": "Candidate store screens, in store order. Every screen is a CAPTURE TARGET, not a design: the final PNG always embeds a real capture of the released native app (PR #287, not merged on 2026-09-29) running on synthetic fixture data. A screen may only be used for finals when `confirmed` is true, i.e. someone checked it exists in the merged native app and recorded how to reach it. Never invent UI to fill a slot: drop the slot instead.",
+  "release_gate": {
+    "pr": 287,
+    "reason": "The published app is the native DINCR app from #287. Store finals must show that UI, not the older Capacitor UI.",
+    "status": "blocked"
+  },
+  "fixture": {
+    "ios_launch_arguments": ["-DincrDisableAnimations", "-DincrFixtures", "<scenario>", "-DincrSkipLogin", "-AppleLanguages", "(<lang>)", "-AppleLocale", "<locale>"],
+    "android_intent_extras": { "dincrFixtures": "<SCENARIO>", "dincrSkipLogin": true, "dincrLatencyMs": 0 },
+    "note": "These hooks exist in the native prototype on main (debug builds only). Confirm the scenario names that the #287 app exposes before capturing."
+  },
+  "locales": [
+    { "id": "es", "apple": "es-MX", "google": "es-419", "ios_locale": "es_CR", "android_locale": "es-CR" },
+    { "id": "en", "apple": "en-US", "google": "en-US", "ios_locale": "en_US", "android_locale": "en-US" }
+  ],
+  "screens": [
+    { "id": "01-home", "area": "Dashboard / overview", "copy_key": "home", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
+    { "id": "02-movements", "area": "Movements", "copy_key": "movements", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
+    { "id": "03-accounts", "area": "Accounts", "copy_key": "accounts", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
+    { "id": "04-debts", "area": "Debts", "copy_key": "debts", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
+    { "id": "05-goals", "area": "Goals", "copy_key": "goals", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
+    { "id": "06-budget", "area": "Budget", "copy_key": "budget", "status": "pending-#287", "confirmed": false, "how_to_reach": null },
+    { "id": "07-mail", "area": "Email Monitor (mail import review)", "copy_key": "mail", "status": "pending-#287", "confirmed": false, "how_to_reach": null, "note": "Only if the released app ships the mail review. Use a fixture mailbox such as ana.demo@example.com; never a real address or real mail content." }
+  ]
+}
