@@ -1,4 +1,5 @@
 {
+  "output_sha256": "39a8b28dc7c563716e4abfaed75e529881fcbe74b401315d4344e36689332905",
   "mode": "final",
   "target": "google-phone",
   "store": "google",
@@ -13,11 +14,11 @@
   "caption_ratio": 0.1487,
   "capture": {
     "file": "raw/android/en/phone/06-budget.png",
-    "sha256": "f085253b365ebf019dd62c933e8f24f187969ff355ec6b3f7269e4b6eb27853c",
+    "sha256": "e8f0a3eaa1eda5913dbbe75a35db3c645c5f4dcd608a33a31feccc3e46a3a52d",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-09-29T21:06:20.136Z",
+    "captured_at": "2026-09-29T21:43:15.281Z",
     "device": {
       "model": "sdk_gphone64_x86_64",
       "sdk": 35,
@@ -26,8 +27,8 @@
       "density": 420
     }
   },
-  "source_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
+  "source_commit": "308158ba511bf3e50b8b4ac195df8319c7133180",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
-  "generated_at": "2026-09-29T21:15:04.852Z"
+  "pipeline_commit": "308158ba511bf3e50b8b4ac195df8319c7133180",
+  "generated_at": "2026-09-29T21:44:16.045Z"
 }

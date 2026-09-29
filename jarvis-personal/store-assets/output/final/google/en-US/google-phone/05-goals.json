@@ -1,4 +1,5 @@
 {
+  "output_sha256": "658a6f54de7467fdc773b3129e0eb6e631491abac92b2d571ce004c80d4c1e1f",
   "mode": "final",
   "target": "google-phone",
   "store": "google",
@@ -13,11 +14,11 @@
   "caption_ratio": 0.1101,
   "capture": {
     "file": "raw/android/en/phone/05-goals.png",
-    "sha256": "9cad906a159da2a22d92014c69e2151470b23881f37d2437e070c95ad76710c3",
+    "sha256": "f287e7380644cc5d6eb6f051c7fde6140501586581169fc03e8b5c504806c981",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-09-29T21:06:20.136Z",
+    "captured_at": "2026-09-29T21:43:15.281Z",
     "device": {
       "model": "sdk_gphone64_x86_64",
       "sdk": 35,
@@ -26,8 +27,8 @@
       "density": 420
     }
   },
-  "source_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
+  "source_commit": "308158ba511bf3e50b8b4ac195df8319c7133180",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
-  "generated_at": "2026-09-29T21:15:01.298Z"
+  "pipeline_commit": "308158ba511bf3e50b8b4ac195df8319c7133180",
+  "generated_at": "2026-09-29T21:44:12.560Z"
 }

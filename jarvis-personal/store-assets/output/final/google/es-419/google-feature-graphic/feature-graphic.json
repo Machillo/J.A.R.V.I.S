@@ -1,4 +1,5 @@
 {
+  "output_sha256": "62ffa1cffc4aed44ae5c7adc4be41368e4ba384f3d602446ec1a80bcb3f60f9a",
   "mode": "final",
   "target": "google-feature-graphic",
   "store": "google",
@@ -12,8 +13,8 @@
   "alpha": false,
   "caption_ratio": null,
   "capture": null,
-  "source_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
+  "source_commit": "308158ba511bf3e50b8b4ac195df8319c7133180",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "b3e42b4de485b053437c8ec4fdd3fc64480e1667",
-  "generated_at": "2026-09-29T21:14:43.496Z"
+  "pipeline_commit": "308158ba511bf3e50b8b4ac195df8319c7133180",
+  "generated_at": "2026-09-29T21:43:55.310Z"
 }
