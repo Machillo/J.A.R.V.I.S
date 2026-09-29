@@ -136,15 +136,13 @@ fun GoalsScreen(model: AppModel, nav: Navigator) {
     contributeGoal?.let { goal ->
         AmountDialog(tx("Aportar a «${goal.name.orEmpty()}»", "Contribute to “${goal.name.orEmpty()}”"),
             tx("Faltan ${Dincr.money.format(((goal.targetAmount ?: BigDecimal.ZERO) - (goal.currentAmount ?: BigDecimal.ZERO)).max(BigDecimal.ZERO))}. Un aporte mayor se ajusta a la meta.", "${Dincr.money.format(((goal.targetAmount ?: BigDecimal.ZERO) - (goal.currentAmount ?: BigDecimal.ZERO)).max(BigDecimal.ZERO))} to go. A larger amount is capped at the goal."),
-            tx("Aportar", "Contribute"), onDismiss = { contributeGoal = null }) { amount ->
-            val key = IdempotencyKey.new()
+            tx("Aportar", "Contribute"), onDismiss = { contributeGoal = null }) { amount, key ->
             model.load(tx("No pudimos registrar el aporte.", "We couldn’t record the contribution.")) { model.api.contributeToGoal(goal.id, GoalContribution(amount, LocalDate.now().toString()), key) }
                 .fold({ contributeGoal = null; data.reload(); model.showNotice(tx("Aporte registrado", "Contribution recorded")); null }, { if (it is AuthException.SignedOut) null else it.message })
         }
     }
     contributePlan?.let { plan ->
-        AmountDialog(tx("Aportar a «${plan.name.orEmpty()}»", "Contribute to “${plan.name.orEmpty()}”"), null, tx("Aportar", "Contribute"), onDismiss = { contributePlan = null }) { amount ->
-            val key = IdempotencyKey.new()
+        AmountDialog(tx("Aportar a «${plan.name.orEmpty()}»", "Contribute to “${plan.name.orEmpty()}”"), null, tx("Aportar", "Contribute"), onDismiss = { contributePlan = null }) { amount, key ->
             model.load(tx("No pudimos registrar el aporte.", "We couldn’t record the contribution.")) { model.api.contributeToSavingsPlan(plan.id, SavingsContribution(amount, LocalDate.now().toString()), key) }
                 .fold({ contributePlan = null; data.reload(); model.showNotice(tx("Aporte registrado", "Contribution recorded")); null }, { if (it is AuthException.SignedOut) null else it.message })
         }

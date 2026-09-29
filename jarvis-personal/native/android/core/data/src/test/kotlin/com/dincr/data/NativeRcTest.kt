@@ -293,4 +293,24 @@ class NativeRcTest {
         val cleared = api.movements().first { it.movementId == row.movementId }
         assertNull("a base-currency edit clears the original data, as the backend does", cleared.originalCurrency)
     }
+
+    @Test fun retryingTheSameAmountReusesTheKeySoNothingIsRecordedTwice() {
+        var minted = 0
+        val submission = AmountSubmission { "op_key_" + (++minted) }
+        val first = submission.keyFor(d("50000"))
+        assertEquals("a retry after a lost response must reuse the key", first, submission.keyFor(d("50000.00")))
+        val changed = submission.keyFor(d("40000"))
+        assertTrue("a different amount is a new submission", changed != first)
+        assertEquals(changed, submission.keyFor(d("40000")))
+        assertEquals(2, minted)
+    }
+
+    @Test fun ownTransferDeclaresTheOppositeOfTheKnownSide() {
+        assertEquals("out", OwnTransferRequest.unknownDirection("unknown", "in"))
+        assertEquals("in", OwnTransferRequest.unknownDirection("unknown", "out"))
+        assertEquals("out", OwnTransferRequest.unknownDirection("in", null))
+        assertEquals("in", OwnTransferRequest.unknownDirection("out", "unknown"))
+        assertNull("nothing to declare when both are known", OwnTransferRequest.unknownDirection("in", "out"))
+        assertEquals(OwnTransferRequest.CANNOT_INFER, OwnTransferRequest.unknownDirection("unknown", null))
+    }
 }

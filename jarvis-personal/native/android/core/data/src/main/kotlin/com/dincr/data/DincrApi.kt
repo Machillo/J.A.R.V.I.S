@@ -147,3 +147,18 @@ data class Acknowledgement(val status: String? = null)
 object IdempotencyKey {
     fun new(): String = "op_" + UUID.randomUUID().toString().replace("-", "")
 }
+
+/**
+ * The key of one amount submission (debt payment, contribution). Retrying the same amount after a
+ * failure — including a timeout where the server did record it — reuses the key, so the backend
+ * answers from the first request instead of recording the money twice. A different amount is a
+ * new submission with a new key. `10000` and `10000.00` are the same amount.
+ */
+class AmountSubmission(private val newKey: () -> String = IdempotencyKey::new) {
+    private var last: Pair<java.math.BigDecimal, String>? = null
+
+    fun keyFor(amount: java.math.BigDecimal): String {
+        last?.let { (previous, key) -> if (previous.compareTo(amount) == 0) return key }
+        return newKey().also { last = amount to it }
+    }
+}

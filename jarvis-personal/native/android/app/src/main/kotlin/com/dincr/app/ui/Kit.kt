@@ -311,13 +311,15 @@ fun ConfirmDialog(title: String, message: String, confirm: String, destructive: 
 }
 
 /**
- * Asks for one amount (payment, contribution). [submit] gets the parsed value and returns an
- * error message or null; the dialog stays single-flight while it runs.
+ * Asks for one amount (payment, contribution). [submit] gets the parsed value and its idempotency
+ * key and returns an error message or null; the dialog stays single-flight while it runs. Retrying
+ * the same amount after an error reuses the key (no double payment on a lost response).
  */
 @Composable
-fun AmountDialog(title: String, message: String?, confirm: String, onDismiss: () -> Unit, submit: suspend (BigDecimal) -> String?) {
+fun AmountDialog(title: String, message: String?, confirm: String, onDismiss: () -> Unit, submit: suspend (BigDecimal, String) -> String?) {
     val separators = Dincr.money.separators
     val example = amountExample()
+    val submission = remember { com.dincr.data.AmountSubmission() }
     var text by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -336,7 +338,8 @@ fun AmountDialog(title: String, message: String?, confirm: String, onDismiss: ()
                 val amount = com.dincr.data.AmountInput.parse(text, separators)
                 if (amount == null) { error = tx("Escribí un monto mayor que cero, por ejemplo $example.", "Enter an amount above zero, for example $example."); return@TextButton }
                 busy = true
-                scope.launch { error = submit(amount); busy = false }
+                val key = submission.keyFor(amount)
+                scope.launch { error = submit(amount, key); busy = false }
             }) { Text(confirm) }
         },
         dismissButton = { TextButton(onDismiss, enabled = !busy) { Text(tx("Cancelar", "Cancel")) } },
