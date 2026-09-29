@@ -183,4 +183,25 @@ data class OwnTransferRequest(
     @SerialName("counterpart_id") val counterpartId: Long,
     @SerialName("confirm_owned_accounts") val confirmOwnedAccounts: Boolean = true,
     @SerialName("unknown_direction") val unknownDirection: String? = null,
-)
+) {
+    companion object {
+        /**
+         * The direction to declare for the notice whose direction is unknown: a transfer between
+         * the user's own accounts leaves one and enters the other, so it is the opposite of the
+         * known side (shown to the user before confirming). Null when both are known (nothing to
+         * declare); [CANNOT_INFER] when neither side is known — the pair must be reviewed apart.
+         */
+        fun unknownDirection(first: String?, second: String?): String? {
+            val a = first.takeIf { it == "in" || it == "out" }
+            val b = second.takeIf { it == "in" || it == "out" }
+            return when {
+                a != null && b != null -> null
+                a != null -> if (a == "in") "out" else "in"
+                b != null -> if (b == "in") "out" else "in"
+                else -> CANNOT_INFER
+            }
+        }
+
+        const val CANNOT_INFER = "?"
+    }
+}

@@ -79,10 +79,11 @@ fun RootScreen(model: AppModel, appearance: Appearance, onAppearance: (Appearanc
                 Phase.LegalRequired -> LegalConsentScreen(model)
                 Phase.ProfileSetup -> ProfileSetupScreen(model)
                 Phase.ChoosePlan -> PlanChooserScreen(model)
-                Phase.Ready -> MainScaffold(model, appearance, onAppearance)
+                // The lock replaces the app instead of covering it: sheets and dialogs are windows
+                // of their own and would stay visible and usable above an overlay.
+                Phase.Ready -> if (locked) LockScreen(model) else MainScaffold(model, appearance, onAppearance)
             }
         }
-        if (phase is Phase.Ready && locked) LockScreen(model)
     }
 }
 

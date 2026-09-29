@@ -271,17 +271,29 @@ private fun OwnTransfers(model: AppModel, items: List<OwnTransferSuggestions.Pai
     items.forEach { pair ->
         val first = pair.first ?: return@forEach
         val second = pair.second ?: return@forEach
+        val declared = OwnTransferRequest.unknownDirection(first.direction, second.direction)
         DincrCard {
             Column {
                 Caption(tx("Estos dos avisos parecen el mismo dinero moviéndose entre cuentas tuyas.", "These two notices look like the same money moving between your accounts."))
-                listOf(first, second).forEach { side -> AmountLine("${side.bank.orEmpty()} · ${dateLabel(side.date)} · ${if (side.direction == "in") tx("entra", "in") else if (side.direction == "out") tx("sale", "out") else "?"}", side.amount, currency = side.currency) }
+                listOf(first, second).forEach { side ->
+                    val known = side.direction == "in" || side.direction == "out"
+                    // A notice without a direction is shown with the one it will be saved with.
+                    val direction = if (known) side.direction else declared?.takeIf { it != OwnTransferRequest.CANNOT_INFER }
+                    val label = when (direction) { "in" -> tx("entra", "in"); "out" -> tx("sale", "out"); else -> "?" } +
+                        if (!known && direction != null) tx(" (deducido)", " (inferred)") else ""
+                    AmountLine("${side.bank.orEmpty()} · ${dateLabel(side.date)} · $label", side.amount, currency = side.currency)
+                }
+                if (declared == OwnTransferRequest.CANNOT_INFER) {
+                    Caption(tx("No sabemos en qué dirección se movió el dinero. Revisá estos avisos por separado.", "We don’t know which way the money moved. Review these notices separately."))
+                    return@Column
+                }
                 TextButton(enabled = !busy, onClick = {
                     val id = first.candidateId ?: return@TextButton
                     val counterpart = second.candidateId ?: return@TextButton
                     busy = true
                     scope.launch {
                         model.load(tx("No pudimos confirmarlo.", "We couldn’t confirm it.")) {
-                            model.api.confirmOwnTransfer(id, OwnTransferRequest(counterpart, true, if (first.direction == "unknown") "out" else null))
+                            model.api.confirmOwnTransfer(id, OwnTransferRequest(counterpart, true, declared))
                         }.onFailure { if (it !is AuthException.SignedOut) model.showNotice(it.message.orEmpty()) }
                         busy = false; onDone()
                     }

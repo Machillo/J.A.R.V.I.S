@@ -238,7 +238,7 @@ fun SettingsScreen(model: AppModel, nav: Navigator, appearance: Appearance, onAp
                         model.load(tx("No pudimos preparar tus datos.", "We couldn’t prepare your data.")) {
                             val json = model.api.exportData().toString()
                             withContext(Dispatchers.IO) {
-                                val dir = File(context.cacheDir, "export").apply { mkdirs() }
+                                val dir = File(context.cacheDir, com.dincr.app.EXPORT_DIR).apply { mkdirs() }
                                 File(dir, "dincr-datos.json").apply { writeText(json) }
                             }
                         }.onSuccess { file ->
@@ -365,7 +365,7 @@ private fun StoreSubscriptionPanel(model: AppModel) {
         }
         return
     }
-    val billing = remember { StoreBilling(context, model.api, scope) { model.showNotice(it) } }
+    val billing = model.storeBilling()
     val offers = rememberLoad(model) { billing.offers() }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }

@@ -92,6 +92,9 @@ sealed interface Phase {
     data object Ready : Phase
 }
 
+/** Cache folder of the data export (also declared in res/xml/file_paths.xml). */
+const val EXPORT_DIR = "export"
+
 class AppModel(application: Application) : AndroidViewModel(application) {
     private val _phase = MutableStateFlow<Phase>(Phase.Booting)
     val phase: StateFlow<Phase> = _phase.asStateFlow()
@@ -123,6 +126,11 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     private val pendingSignIn = PendingSignInStore(application)
     private var fixturePkce: Pkce? = null
     private val prefs = application.getSharedPreferences("dincr.preferences", Context.MODE_PRIVATE)
+
+    init {
+        // A data export left over from an earlier session (or a crash) is removed at startup.
+        clearExports()
+    }
     private val handledMail = HandledReturns(prefs.getString("mail_returns", "").orEmpty().split('\n').filter { it.isNotEmpty() })
     private val language get() = AppLanguage.current()
     private var lastIdentityRefresh = 0L
@@ -134,6 +142,28 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     val appVersion: String get() = BuildConfig.VERSION_NAME
 
     fun isOn(flag: OpsFlag): Boolean = _flags.value.isEnabled(flag)
+
+    private var store: StoreBilling? = null
+
+    /**
+     * G3 — Play Billing lives as long as this model, not a screen: a purchase verification is never
+     * cancelled by leaving the plans screen, and the client is closed with the model.
+     */
+    fun storeBilling(): StoreBilling = store ?: StoreBilling(getApplication(), api, viewModelScope) { showNotice(it) }.also { store = it }
+
+    /**
+     * Sends purchases Google Play has and the backend never confirmed (a pending payment that
+     * completed later, or a purchase interrupted by process death) for verification. Only the
+     * backend acknowledges and grants a plan.
+     */
+    private fun reconcileStore() {
+        if (_phase.value is Phase.Ready && !isFixtures && isOn(OpsFlag.STORE_BILLING)) storeBilling().reconcile()
+    }
+
+    override fun onCleared() {
+        store?.close()
+        super.onCleared()
+    }
     fun consumeNotice() { _notice.value = null }
     fun consumeRoute() { _pendingRoute.value = null }
     fun showNotice(message: String) { _notice.value = message }
@@ -192,6 +222,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             checkReleasePolicy()
             if (_phase.value is Phase.Ready) {
                 refreshFlags()
+                reconcileStore()
                 val now = System.currentTimeMillis()
                 if (now - lastIdentityRefresh > IDENTITY_THROTTLE_MS) { lastIdentityRefresh = now; loadIdentity() }
             }
@@ -258,8 +289,11 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     fun handleCallback(uri: String) {
         val client = auth ?: return
-        val pkce = pendingSignIn.take()
-        if (pkce == null) {
+        // Validate the link before consuming the pending verifier: a foreign or malformed link must
+        // not cancel a sign-in that is still in progress.
+        val code = runCatching { SupabaseAuthClient.authorizationCode(uri, AppEnvironment.AUTH_REDIRECT) }.getOrNull()
+        val pkce = if (code != null) pendingSignIn.take() else null
+        if (code == null || pkce == null) {
             // No sign-in in progress (a replayed or foreign link, or it expired): nothing is
             // exchanged. Ask for a fresh attempt.
             _signInError.value = language.pick("No pudimos completar el acceso. Intentá nuevamente.", "We couldn’t sign you in. Please try again.")
@@ -268,7 +302,6 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _signingIn.value = true
             try {
-                val code = SupabaseAuthClient.authorizationCode(uri, AppEnvironment.AUTH_REDIRECT)
                 sessions.accept(client.exchange(code, pkce.verifier))
                 sessionEpoch += 1
                 loadIdentity()
@@ -337,7 +370,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             profile.planSelected != true -> Phase.ChoosePlan
             else -> Phase.Ready
         }
-        if (_phase.value is Phase.Ready) viewModelScope.launch { refreshFlags() }
+        if (_phase.value is Phase.Ready) viewModelScope.launch { refreshFlags(); reconcileStore() }
     }
 
     /** `DELETE /auth/me` for an account whose deletion is pending (or requested now), then sign out. */
@@ -349,7 +382,17 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         signedOut()
     }
 
+    /**
+     * G8 — the JSON export is shared from the app cache; no copy outlives the session that made it
+     * (startup, sign-out and account deletion remove it).
+     */
+    fun clearExports() {
+        val dir = java.io.File(getApplication<Application>().cacheDir, EXPORT_DIR)
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { dir.deleteRecursively() }
+    }
+
     private fun signedOut() {
+        clearExports()
         sessionEpoch += 1
         pendingSignIn.clear()
         appLock.detach()
