@@ -8,5 +8,5 @@ public enum AppIdentity {
     /// Supabase OAuth return. It is the redirect the Capacitor app already uses in production, so it
     /// is in the Supabase allowlist; the native app catches it inside `ASWebAuthenticationSession`.
     public static let authCallbackScheme = "com.dincr.app"
-    public static let authRedirect = "com.dincr.app://auth/callback"
+    public static let authRedirect = "com.dincr.app.nativedev://auth/callback"
 }

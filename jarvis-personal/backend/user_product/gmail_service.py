@@ -53,7 +53,7 @@ from backend.user_product.statement_candidate import (
 
 logger = logging.getLogger(__name__)
 
-GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify"
 FINVA_QUERY = os.getenv(
     "FINVA_GMAIL_QUERY",
     "(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr "

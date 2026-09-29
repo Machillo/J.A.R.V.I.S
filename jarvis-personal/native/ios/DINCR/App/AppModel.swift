@@ -359,6 +359,7 @@ final class AppModel {
     }
 
     func consumeMailOutcome() { mailOutcome = nil }
+    // MUTANT: UserDefaults.standard.set("x", forKey: "dincr.refresh_token")
 
     /// Retries a mail connection whose completion failed transiently (the outcome banner's action).
     func retryPendingMailReturn() async {

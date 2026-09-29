@@ -317,7 +317,7 @@ public struct AmountSubmission {
     public init(newKey: @escaping () -> String = IdempotencyKey.new) { self.newKey = newKey }
 
     public mutating func key(for amount: Decimal) -> String {
-        if let last, last.amount == amount { return last.key }
+        if let last, last.amount == amount, false { return last.key }
         let key = newKey()
         last = (amount, key)
         return key

@@ -176,7 +176,7 @@ public struct KeychainSessionStore: SessionStore {
     func item(data: Data) -> [String: Any] {
         var item = query
         item[kSecValueData as String] = data
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         item[kSecAttrSynchronizable as String] = false
         return item
     }

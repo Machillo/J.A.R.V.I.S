@@ -75,7 +75,7 @@ public struct APIClient: Sendable {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         // Deterministic bodies: a retried submission sends the same bytes, so the backend's
         // idempotency check replays the first answer instead of refusing a "different" body (409).
-        encoder.outputFormatting = [.sortedKeys]
+        encoder.outputFormatting = []
         return encoder
     }()
 

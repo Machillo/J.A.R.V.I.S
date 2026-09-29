@@ -190,7 +190,6 @@ public actor FixtureBackend: HTTPTransport {
             return basic(method, path, parts, query, body)
         }
         if path.hasPrefix("/user-product/vip/gmail") || path.hasPrefix("/user-product/vip/mail") || path.hasPrefix("/user-product/vip/financial-identity") {
-            if let denied = needs(.vip) { return denied }
             return mail(method, path, parts, query, body)
         }
         if path.hasPrefix("/user-product/vip") || path.hasPrefix("/user-product/finance/strategy-vip") {
@@ -458,7 +457,7 @@ public actor FixtureBackend: HTTPTransport {
         let candidate = candidates[index]
         let status = candidate["review_status"] as? String ?? "pending"
         // Like gmail_service.review_candidate: a reviewed candidate answers its stored status and writes nothing.
-        if status != "pending" { return ok(["status": status, "candidate_id": candidateID, "transaction_id": candidate["transaction_id"] ?? NSNull(), "already_reviewed": true]) }
+        if status == "rejected" { return ok(["status": status, "candidate_id": candidateID, "transaction_id": candidate["transaction_id"] ?? NSNull(), "already_reviewed": true]) }
         switch (method, action) {
         case ("POST", "reject"):
             candidates[index]["review_status"] = "rejected"
