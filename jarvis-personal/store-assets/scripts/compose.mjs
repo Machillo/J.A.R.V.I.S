@@ -109,6 +109,37 @@ export function render(browser, htmlFile, outFile, width, height) {
   }
 }
 
+/** Rewrites file:// links into the repository as paths relative to the saved HTML, so no local path is committed. */
+export function portableHtml(html, outFile, base = repoRoot) {
+  const prefix = pathToFileURL(base).href.replace(/\/?$/, "/");
+  const relative = `${path.relative(path.dirname(outFile), base).split(path.sep).join("/")}/`;
+  return html.split(prefix).join(relative);
+}
+
+function differingBytes(a, b) {
+  if (a.length !== b.length) return "size";
+  let count = 0;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) count += 1;
+  return String(count);
+}
+
+/**
+ * Headless Chromium occasionally paints a frame with an unpainted tile (a white block at an edge).
+ * Render until two consecutive renders are pixel-identical, so a glitch never reaches the output.
+ */
+export function renderStable(browser, htmlFile, outFile, width, height, attempts = 6, draw = render) {
+  let previous = null;
+  const diffs = [];
+  for (let i = 0; i < attempts; i += 1) {
+    const measured = draw(browser, htmlFile, outFile, width, height);
+    const pixels = decodePng(fs.readFileSync(outFile)).pixels;
+    if (previous && Buffer.compare(previous, pixels) === 0) return measured;
+    if (previous) diffs.push(differingBytes(previous, pixels));
+    previous = Buffer.from(pixels);
+  }
+  throw new Error(`${htmlFile} did not render the same way twice in ${attempts} attempts (differing bytes: ${diffs.join(", ")})`);
+}
+
 // Injected into every page: measures the caption band and whether the capture image loaded.
 const MEASURE = `<script>
   addEventListener("load", () => {
@@ -292,7 +323,7 @@ export async function compose(argv = process.argv.slice(2)) {
           const htmlFile = path.join(work, `${target.id}-${locale.id}-${job.id}.html`);
           fs.writeFileSync(htmlFile, job.html.replace("</body>", `${MEASURE}</body>`));
           const rendered = path.join(work, `${target.id}-${locale.id}-${job.id}.rgba.png`);
-          const measured = render(browser, htmlFile, rendered, target.width, target.height);
+          const measured = renderStable(browser, htmlFile, rendered, target.width, target.height);
           if (!measured.screenshotLoaded) throw new Error(`capture did not load in ${htmlFile}`);
           const outFile = path.join(outDir, `${job.id}.png`);
           const info = writeOpaquePng(rendered, outFile, background);
@@ -317,7 +348,8 @@ export async function compose(argv = process.argv.slice(2)) {
             generated_at: new Date().toISOString(),
           };
           fs.writeFileSync(outFile.replace(/\.png$/, ".json"), `${JSON.stringify(meta, null, 2)}\n`);
-          fs.copyFileSync(htmlFile, outFile.replace(/\.png$/, ".html")); // the exact editable source of this image
+          // The exact editable source of this image, with repo-relative links (no local paths).
+          fs.writeFileSync(outFile.replace(/\.png$/, ".html"), portableHtml(fs.readFileSync(htmlFile, "utf8"), outFile));
           written.push(outFile);
           console.log(`${final ? "final" : "preview"} ${path.relative(root, outFile)} ${info.width}x${info.height}`);
         }

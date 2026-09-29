@@ -4,6 +4,7 @@
 //   node jarvis-personal/store-assets/scripts/validate.mjs                 # output/final (upload set)
 //   node jarvis-personal/store-assets/scripts/validate.mjs --dir output/preview --allow-preview
 //   node jarvis-personal/store-assets/scripts/validate.mjs --require-main  # before uploading: app commit on origin/main
+//   node jarvis-personal/store-assets/scripts/validate.mjs --targets google-phone,google-feature-graphic
 //
 // Checks, per store and locale: count within limits, exact pixel size, PNG without alpha,
 // Google's side/ratio limits and the <= 20% caption band, banned promotional phrases in the
@@ -71,6 +72,8 @@ export function imageProblems(dir, targetsConfig, { allowPreview = false, screen
           if (short < google.min_side || long > google.max_side) problems.push(`${label}: sides must be ${google.min_side}-${google.max_side} px`);
           if (long / short > google.max_ratio) problems.push(`${label}: long side more than ${google.max_ratio}x the short side`);
         }
+        const htmlFile = file.replace(/\.png$/, ".html");
+        if (fs.existsSync(htmlFile) && /file:\/\//i.test(fs.readFileSync(htmlFile, "utf8"))) problems.push(`${label}: its .html source links to a local file:// path`);
         const metaFile = file.replace(/\.png$/, ".json");
         if (!fs.existsSync(metaFile)) { problems.push(`${label}: missing provenance ${path.basename(metaFile)}`); continue; }
         const meta = JSON.parse(fs.readFileSync(metaFile, "utf8"));
@@ -116,7 +119,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const dir = path.resolve(root, dirIndex >= 0 ? argv[dirIndex + 1] : "output/final");
   const allowPreview = argv.includes("--allow-preview");
   const requireMain = argv.includes("--require-main");
-  const targetsConfig = loadTargets();
+  const all = loadTargets();
+  const targetsIndex = argv.indexOf("--targets");
+  const only = targetsIndex >= 0 ? argv[targetsIndex + 1].split(",") : null;
+  const targetsConfig = { ...all, targets: all.targets.filter((t) => !only || only.includes(t.id)) };
   const screens = loadScreens();
   const copies = Object.fromEntries(screens.locales.map((l) => [l.id, loadCopy(l.id)]));
   const problems = [...copyProblems(targetsConfig, screens, copies), ...imageProblems(dir, targetsConfig, { allowPreview, requireMain })];

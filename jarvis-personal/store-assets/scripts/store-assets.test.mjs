@@ -8,7 +8,8 @@ import path from "node:path";
 import test from "node:test";
 import zlib from "node:zlib";
 import { DEMO_MODE, instrumentPassed } from "./capture-android.mjs";
-import { appCommitProblems, fill, finalGateProblems, loadCopy, loadScreens, loadTargets, root, screensFor } from "./compose.mjs";
+import { appCommitProblems, fill, finalGateProblems, loadCopy, loadScreens, loadTargets, portableHtml, renderStable, root, screensFor } from "./compose.mjs";
+import { pathToFileURL } from "node:url";
 import { decodePng, encodeRgbPng, flattenToRgb, pngInfo } from "./png.mjs";
 import { copyProblems, imageProblems } from "./validate.mjs";
 
@@ -65,6 +66,26 @@ test("copy is escaped into templates and a missing placeholder fails loudly", ()
   assert.throws(() => fill("{{title}} {{subtitle}}", { title: "a" }), /subtitle/);
 });
 
+test("a render is kept only when two consecutive renders are identical (no paint glitches)", () => {
+  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "dincr-render-")), "r.png");
+  const drawing = (frames) => { let n = 0; return () => { fs.writeFileSync(out, tinyPng(frames[n++])); return { frame: n }; }; };
+  // A clean frame, a glitched one, then the clean frame twice: accepted on the 4th render.
+  assert.deepEqual(renderStable(null, "x.html", out, 1, 1, 4, drawing([[1, 1, 1], [255, 255, 255], [1, 1, 1], [1, 1, 1]])), { frame: 4 });
+  assert.deepEqual([...decodePng(fs.readFileSync(out)).pixels], [1, 1, 1]);
+  assert.throws(() => renderStable(null, "x.html", out, 1, 1, 4, drawing([[1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 4, 4]])), /did not render the same way twice/);
+});
+
+test("the saved HTML source links into the repo relatively, never through a local path", () => {
+  const base = path.resolve("/work/repo");
+  const out = path.join(base, "jarvis-personal/store-assets/output/final/google/es-419/google-phone/01-home.png");
+  const html = `<img src="${pathToFileURL(path.join(base, "jarvis-personal/store-assets/raw/android/es/phone/01-home.png")).href}">`;
+  assert.equal(portableHtml(html, out, base), '<img src="../../../../../../../jarvis-personal/store-assets/raw/android/es/phone/01-home.png">');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-out-"));
+  writeImage(dir, target("google-phone"), "es-419", "01");
+  fs.writeFileSync(path.join(dir, "google/es-419/google-phone/01.html"), '<img src="file:///C:/Users/someone/x.png">');
+  assert.match(validator(dir, [target("google-phone")]).join("\n"), /01\.png: its \.html source links to a local file:\/\/ path/);
+});
+
 // --- screen list ---------------------------------------------------------------------------------
 
 test("the screen list only confirms screens the native apps have, with how to reach them", () => {
@@ -84,6 +105,10 @@ test("the screen list only confirms screens the native apps have, with how to re
       }
     }
   }
+  // Finals use only confirmed screens; previews show every available one (as labelled placeholders).
+  const pending = { ...screens, screens: [{ id: "x", plan: "free", platforms: { android: { available: true, confirmed: false, reason: "not checked" } } }] };
+  assert.deepEqual(screensFor(pending, target("google-phone"), true), []);
+  assert.equal(screensFor(pending, target("google-phone"), false).length, 1);
   // Google Play takes at most 8; iOS only has Home, Transactions and the Plan hub today.
   assert.ok(screensFor(screens, target("google-phone"), true).length <= 8);
   assert.deepEqual(screensFor(screens, target("apple-iphone-69"), true).map((s) => s.id), ["02-overview", "03-movements", "04-debts"]);
