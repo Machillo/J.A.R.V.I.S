@@ -23,7 +23,7 @@
       "required": true,
       "min_count": 1,
       "max_count": 10,
-      "note": "If the released app becomes iPhone-only (TARGETED_DEVICE_FAMILY = 1), drop this target. Decision belongs to the native release (POST-#287)."
+      "note": "The native and Capacitor iOS projects declare TARGETED_DEVICE_FAMILY = 1,2. Drop this target only if Kenneth decides the app is iPhone-only (TARGETED_DEVICE_FAMILY = 1)."
     },
     {
       "id": "google-phone",

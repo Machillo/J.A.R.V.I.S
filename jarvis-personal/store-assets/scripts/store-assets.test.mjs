@@ -8,6 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import zlib from "node:zlib";
 import { DEMO_MODE, instrumentPassed } from "./capture-android.mjs";
+import { DEVICES, STATUS_BAR } from "./capture-ios.mjs";
 import { appCommitProblems, fill, finalGateProblems, loadCopy, loadScreens, loadTargets, portableHtml, renderStable, root, screensFor } from "./compose.mjs";
 import { pathToFileURL } from "node:url";
 import { decodePng, encodeRgbPng, flattenToRgb, pngInfo } from "./png.mjs";
@@ -131,6 +132,14 @@ test("the capture tests navigate to exactly the confirmed screens, each with the
   assert.match(swift, /XCTSkipIf\(dir\.isEmpty/);
 });
 
+test("the iOS capture run uses simulators of the exact App Store sizes and a clean status bar", () => {
+  assert.equal(DEVICES.phone.target, "apple-iphone-69");
+  assert.equal(DEVICES.tablet.target, "apple-ipad-13");
+  const bar = STATUS_BAR.join(" ");
+  assert.match(bar, /--time 9:41/);
+  assert.match(bar, /--batteryLevel 100/);
+});
+
 test("the Android capture run cleans the status bar and requires every test to pass", () => {
   const commands = DEMO_MODE.map((c) => c.join(" "));
   assert.ok(commands.includes("network -e mobile hide"));
@@ -190,6 +199,13 @@ test("the final run refuses unconfirmed platforms, dirty or foreign manifests an
   assert.ok(gate(rawTree({ record: { sha256: "0".repeat(64) } })).some((p) => p.includes("changed after capture")));
   assert.ok(gate(rawTree({ record: { plan: "vip" } })).some((p) => p.includes("captured with plan vip")));
   assert.ok(gate(rawTree({ manifest: { captures: [] } })).some((p) => p.includes("is not in")));
+  // A tablet record never stands in for the phone capture of the same screen.
+  const tabletOnly = rawTree();
+  const manifestFile = path.join(tabletOnly, "android", "capture-manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+  manifest.captures = manifest.captures.map((c) => ({ ...c, device: "tablet" }));
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+  assert.ok(gate(tabletOnly).some((p) => p.includes("is not in")));
   const missing = rawTree();
   fs.rmSync(path.join(missing, "android", "capture-manifest.json"));
   assert.ok(gate(missing).some((p) => p.includes("missing capture manifest")));

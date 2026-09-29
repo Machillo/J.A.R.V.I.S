@@ -43,10 +43,12 @@ export function screensFor(screens, target, final) {
   return screens.screens.filter((s) => (final ? s.platforms?.[platform]?.confirmed === true : s.platforms?.[platform]?.available === true));
 }
 
+export const deviceOf = (target) => (target.id === "apple-ipad-13" ? "tablet" : "phone");
+
 /** Where the capture of one screen lives: raw/<platform>/<locale>/<device>/<screen>.png */
 export function rawPathFor(target, locale, screenId, rawDir = path.join(root, "raw")) {
   const platform = platformOf(target);
-  const device = target.id === "apple-ipad-13" ? "tablet" : "phone";
+  const device = deviceOf(target);
   return path.join(rawDir, platform, locale, device, `${screenId}.png`);
 }
 
@@ -211,7 +213,7 @@ export function finalGateProblems({ screens, targets, locales, rawDir, sourceCom
       for (const screen of usable) {
         const raw = rawPathFor(target, locale.id, screen.id, rawDir);
         if (!fs.existsSync(raw)) { problems.push(`missing capture ${rel(raw)}`); continue; }
-        const record = (manifest.captures ?? []).find((c) => c.id === screen.id && c.locale === locale.id);
+        const record = (manifest.captures ?? []).find((c) => c.id === screen.id && c.locale === locale.id && (c.device ?? "phone") === deviceOf(target));
         if (!record) problems.push(`${rel(raw)} is not in ${rel(manifestFile)}`);
         else if (record.sha256 !== sha256(raw)) problems.push(`${rel(raw)} changed after capture (SHA-256 differs from the manifest)`);
         else if (record.plan !== screen.plan) problems.push(`${rel(raw)} was captured with plan ${record.plan}, the screen needs ${screen.plan}`);

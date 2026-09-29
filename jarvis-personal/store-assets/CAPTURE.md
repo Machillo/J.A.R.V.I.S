@@ -1,56 +1,109 @@
-# Capturing the raw screens (POST-#287)
+# Capturing the raw screens
 
-**Blocked until PR #287 (native DINCR app) is merged.** The store must show the UI that is
-published. That UI is the native app, not the older Capacitor UI. Until then, do not capture or
-approve finals. Nothing in this pipeline copies or depends on #287's unmerged code.
+The store shows the **native DINCR app** (PR #287, merged into `main`). Captures are never taken
+from the older Capacitor UI, never mocked, and never edited: `compose.mjs` refuses a capture from
+before #287 or one whose SHA-256 no longer matches its manifest.
 
 ## Contract (what `compose.mjs --mode final` expects)
 
 ```
 store-assets/raw/
-  ios/capture-manifest.json           { "source_commit": "<sha on origin/main>", "app_version": "...", "fixture_scenario": "...", "captured_at": "..." }
-  ios/<es|en>/phone/<screen-id>.png    iPhone 6.9" simulator capture (e.g. iPhone 17 Pro Max), status bar cleaned
-  ios/<es|en>/tablet/<screen-id>.png   iPad 13" simulator capture (only while the app supports iPad)
-  android/capture-manifest.json
-  android/<es|en>/phone/<screen-id>.png  emulator capture, 1080 px wide or more
+  android/capture-manifest.json            written by scripts/capture-android.mjs
+  android/<es|en>/phone/<screen-id>.png    emulator capture (1080x2400 on the reference emulator)
+  ios/capture-manifest.json                written by scripts/capture-ios.mjs (MAC REQUIRED)
+  ios/<es|en>/phone/<screen-id>.png        iPhone 6.9" simulator, 1320x2868
+  ios/<es|en>/tablet/<screen-id>.png       iPad 13" simulator, 2064x2752 (while the app supports iPad)
 ```
 
-Screen ids come from `config/screens.json`. A screen can be used only after it is marked
-`"confirmed": true`, with `how_to_reach` filled in, **after** checking that it exists in the
-merged native app. If the app does not have a screen (for example Accounts), delete that entry;
-never mock it. When the capture set is ready, set `release_gate.status` to `"released"`.
+Each manifest records: platform, fixture (`STORE`), fixture date, source commit, whether the tree
+was clean, pipeline commit, capture time, app/build, device or simulators, status bar, and per
+capture its screen, language, plan, file, SHA-256 and size.
 
-## Data rules
+## Data: the STORE fixture
 
-- Fixture mode only: iOS launch arguments `-DincrFixtures <scenario> -DincrSkipLogin`, Android
-  extras `dincrFixtures`/`dincrSkipLogin`. These hooks exist in the native prototype on main and are
-  **debug-only**. Confirm the scenario names in the merged app.
-- Every name, amount, account and mailbox is invented. A demo mailbox is `ana.demo@example.com`.
-- Before approving, look at every capture for anything real: names, emails, card digits, amounts copied from real statements.
-- Status bars must be clean: full battery and signal, no carrier or notifications (Google policy). On iOS use
-  `xcrun simctl status_bar <device> override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3`.
-  On Android enable demo mode (`adb shell settings put global sysui_demo_allowed 1`, then the `com.android.systemui.demo` broadcasts).
+- Debug builds only (the launch policy refuses fixtures in release). Android extras
+  `dincrFixtures=STORE`, `dincrPlan=<plan>`, `dincrSkipLogin=true`, `dincrLatencyMs=0`; iOS arguments
+  `-DincrFixtures store -DincrPlan free -DincrSkipLogin`.
+- Invented person "Ana", mailbox `ana.demo@example.com`, a fictional "Mi banco / My bank" sender,
+  amounts in colones (one dollar subscription). No real person, account, bank or statement.
+- Fixed date 2026-09-28 (the second payday), six months of history, a plan bought in the store
+  (no "courtesy" caption), a completed financial situation.
+- The numbers agree across screens: the available figure is income − expenses of the month, the
+  strategy margin is income − essentials − minimum payments (865,000 − 420,000 − 95,000 = 350,000),
+  its split sums to the margin, the emergency goal equals the declared savings, and the debt total
+  is the sum of the debts. `StoreFixtureTest.kt` and `StoreSampleTests.swift` check this.
+- Text is in the app's language, as the backend localizes with `Accept-Language`; backend sentences
+  use the backend's own wording.
 
-## iOS (Mac with Xcode)
+## Android (automated; Windows, macOS or Linux)
 
-1. Build the merged app in Debug and boot an iPhone 6.9" and an iPad 13" simulator.
-2. Add a screenshot UI test in the native project (a separate PR, after #287). For each confirmed screen it should:
-   - launch with the fixture arguments above and `-AppleLanguages (es)` / `(en)` plus the matching `-AppleLocale`;
-   - navigate there with the same accessibility identifiers the existing UI tests use;
-   - attach `XCUIScreen.main.screenshot()` with the screen id as its name.
-3. Run the test with `xcodebuild test -scheme DINCR -destination 'platform=iOS Simulator,name=<device>' -resultBundlePath out.xcresult`.
-4. Export the attachments (Xcode 16 or later) with `xcrun xcresulttool export attachments --path out.xcresult --output-path <dir>`, then copy them into the layout above.
+Requirements: an emulator running (reference: Pixel 7 profile, API 35, 1080×2400, 420 dpi, Google
+Play image), `adb`, JDK 17 in `JAVA_HOME`.
 
-## Android (Windows or Mac)
+```bash
+node jarvis-personal/store-assets/scripts/capture-android.mjs
+```
 
-1. Build the merged app's debug APK and start an emulator (phone, 1080×2400 or larger). Enable demo mode for the status bar.
-2. For each confirmed screen:
-   - launch with `adb shell am start -n com.dincr.app.<flavor>/.MainActivity --es dincrFixtures <SCENARIO> --ez dincrSkipLogin true --el dincrLatencyMs 0`;
-   - set the locale;
-   - navigate there (instrumentation test or `adb shell input`);
-   - capture it with `adb exec-out screencap -p > raw/android/<lang>/phone/<screen-id>.png`.
+It builds and installs the `dincr` Debug app and its test APK, then:
 
-   An instrumentation test in the native project (after #287) is preferred for repeatability.
+1. sets the device clock to 2026-09-28 09:41 (Costa Rica) so "Hoy/Ayer" labels match the data;
+2. enables demo mode: 09:41, battery 100%, Wi-Fi full, no mobile type, no notifications;
+3. for `es-CR` and `en-US` (per-app language) runs the opt-in test
+   `app/src/androidTest/kotlin/com/dincr/app/StoreScreenshots.kt` (`storeScreenshots=true`), which
+   launches the app with each screen's plan, navigates like a user, waits for the loaded content and
+   saves the screen; any failed or skipped test aborts the run;
+4. pulls the files into `raw/android/<es|en>/phone/`, checks their size and writes the manifest;
+5. restores the device (automatic time as it was, demo mode off, app language reset).
 
-Write each `capture-manifest.json` with the commit the build came from. `compose.mjs --mode final`
-refuses captures made from a commit that is not on `origin/main`.
+Capture from a committed tree: a dirty `native/` or `store-assets/config/` is recorded and refused for finals.
+
+## iOS — MAC REQUIRED
+
+Not possible from Windows. On a Mac with Xcode 16 or later and an iOS 17+ simulator runtime, from
+the repository root on this branch (or `main` after merge):
+
+```bash
+xcrun simctl list devices available | grep -E "iPhone 17 Pro Max|iPad Pro 13-inch"
+node jarvis-personal/store-assets/scripts/capture-ios.mjs --phone "iPhone 17 Pro Max" --tablet "iPad Pro 13-inch (M4)"
+```
+
+| Item | Value |
+|---|---|
+| Simulators | iPhone 17 Pro Max (6.9", captures 1320×2868) and iPad Pro 13-inch (M4) (2064×2752). Any simulator with exactly those screen sizes works; the script refuses other sizes |
+| Fixture | `-DincrFixtures store -DincrPlan free -DincrSkipLogin`, languages `(es)`/`es_CR` and `(en)`/`en_US` |
+| Test | `DINCRUITests/StoreScreenshots.swift`, opt-in through `TEST_RUNNER_DINCR_STORE_SHOTS_DIR` (the script sets it) |
+| Screens and navigation | `02-overview`: Hoy/Today tab · `03-movements`: Movimientos/Transactions tab · `04-debts`: Plan tab (debts, then goals) |
+| Expected result | 12 PNGs: `raw/ios/<es\|en>/<phone\|tablet>/<02-overview\|03-movements\|04-debts>.png`, plus `raw/ios/capture-manifest.json`; status bar 9:41, full Wi-Fi and battery |
+| Not captured on iOS | Home VIP, goals as a separate screen, budget, strategy, mail: the iOS app does not have them yet (`screens.json` gives the reason for each). The DINCR tab is an "under construction" screen and is never captured |
+
+Equivalent manual command (what the script runs per device):
+
+```bash
+cd jarvis-personal/native/ios
+xcrun simctl boot "iPhone 17 Pro Max"
+xcrun simctl status_bar "iPhone 17 Pro Max" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+TEST_RUNNER_DINCR_STORE_SHOTS_DIR="$(pwd)/../../store-assets/raw/ios" TEST_RUNNER_DINCR_STORE_DEVICE=phone \
+  xcodebuild test -project DINCR.xcodeproj -scheme DINCR -destination "platform=iOS Simulator,name=iPhone 17 Pro Max" \
+  -only-testing:DINCRUITests/StoreScreenshots CODE_SIGNING_ALLOWED=NO
+```
+
+Follow-up, on the same Mac (fonts: render the Apple set on one machine):
+
+```bash
+node jarvis-personal/store-assets/scripts/compose.mjs --mode final --targets apple-iphone-69,apple-ipad-13 --source-commit <source_commit from raw/ios/capture-manifest.json>
+node jarvis-personal/store-assets/scripts/validate.mjs --targets apple-iphone-69,apple-ipad-13
+```
+
+Then look at every image, commit `raw/ios/` and `output/final/apple/` by name, and push to the PR.
+
+Notes:
+
+- The iOS simulator uses the Mac's clock, so the transactions list shows dates ("28 de
+  septiembre") instead of "Hoy/Ayer" unless the Mac's date is 2026-09-28. Both are true to the data.
+- iPad: the app declares iPhone and iPad (`TARGETED_DEVICE_FAMILY = 1,2`), so App Store Connect
+  requires 13" iPad screenshots. Making the app iPhone-only is Kenneth's release decision; only
+  then use `--no-tablet` and drop the `apple-ipad-13` target (`REQUIREMENTS.md`).
+- The native iOS app is a partial prototype today (`native/RELEASE_IDENTITY.md`): 3 screenshots
+  meet Apple's minimum of 1 but show a small part of the product.
+- `capture-ios.mjs` and `StoreScreenshots.swift` have not run yet (no Mac here). CI compiles the UI
+  test target when its iOS job finds a simulator; treat the first Mac run as their test.
