@@ -339,6 +339,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     fun sendToJarvis(text: String) = viewModelScope.launch { jarvisChat.submit(text) }
     fun confirmJarvisChange() = viewModelScope.launch { jarvisChat.confirm() }
     fun cancelJarvisChange() = viewModelScope.launch { jarvisChat.cancel() }
+    fun jarvisItIsTheAnswer() = viewModelScope.launch { jarvisChat.itIsTheAnswer() }
+    fun jarvisAnotherRequest() = viewModelScope.launch { jarvisChat.anotherRequest() }
     fun retryJarvisMessage(id: Long) = viewModelScope.launch { jarvisChat.retry(id) }
 
     // --- Identity and gates ------------------------------------------------------------------------------

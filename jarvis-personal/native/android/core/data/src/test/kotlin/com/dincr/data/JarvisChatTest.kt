@@ -70,6 +70,21 @@ class JarvisChatTest {
         }
     }
 
+    @Test fun aClarificationIsRecognized() {
+        val reply = read("""{"message":"Tenés una pregunta pendiente: ¿Cómo se llama la meta? ¿\"Fondo de emergencia\" es la respuesta o querés hacer otra consulta?",
+            "intent":"pending_action","action_type":"create_goal","status":"PENDING","pending":true,"data":{"current_field":"clarify","held_message":"Fondo de emergencia"}}""")!!
+        assertTrue(reply.awaitsClarification)
+        assertFalse(reply.awaitsConfirmation)
+    }
+
+    @Test fun aKeptChangeStillOffersConfirmar() {
+        // "Es otra consulta" answers the other request; the kept change (waiting for "sí") rides along.
+        val kept = read("""{"message":"Análisis…","status":"OK","pending":true,"data":{"status":"OK"},"pending_action":{"action_type":"create_fixed_expense","current_field":"confirm"}}""")!!
+        assertTrue(kept.awaitsConfirmation)
+        assertFalse(kept.awaitsClarification)
+        assertFalse(read("""{"message":"Análisis…","status":"OK","pending":true,"pending_action":{"current_field":"name"}}""")!!.awaitsConfirmation)
+    }
+
     @Test fun anAnswerWithoutAMessageIsNotAReply() {
         listOf("{}", """{"message":"   "}""", """{"message":null,"status":"OK"}""", "[]", """"texto"""", """{"message":5}""").forEach { assertNull(it, read(it)) }
     }
@@ -162,6 +177,39 @@ class JarvisChatTest {
         assertEquals("no", replies.sent.last())
     }
 
+    @Test fun aClarificationIsAnsweredWithItsTwoChoices() = runTest {
+        val replies = ManualReplies()
+        val chat = JarvisChatSession(replies::send)
+        // Nothing is being asked: the choices send nothing.
+        chat.itIsTheAnswer()
+        chat.anotherRequest()
+        assertTrue(replies.sent.isEmpty())
+
+        val ask = launch { chat.submit("Fondo de emergencia") }
+        runCurrent()
+        replies.answer(JarvisChatReply("¿Es la respuesta o querés hacer otra consulta?", pending = true, awaitsClarification = true))
+        ask.join()
+        assertTrue(chat.state.value.awaitingClarification)
+        assertFalse(chat.state.value.awaitingConfirmation)
+
+        val answer = launch { chat.itIsTheAnswer() }
+        runCurrent()
+        assertFalse(chat.state.value.awaitingClarification)  // answered: the choices go away
+        replies.answer(JarvisChatReply("¿Cuál es el monto objetivo de la meta?", pending = true))
+        answer.join()
+        assertEquals(listOf("Fondo de emergencia", "es la respuesta"), replies.sent)
+
+        val again = launch { chat.submit("Fondo de emergencia") }
+        runCurrent()
+        replies.answer(JarvisChatReply("¿Es la respuesta?", pending = true, awaitsClarification = true))
+        again.join()
+        val other = launch { chat.anotherRequest() }
+        runCurrent()
+        replies.answer(JarvisChatReply("Análisis…"))
+        other.join()
+        assertEquals("es otra consulta", replies.sent.last())
+    }
+
     @Test fun resetForgetsTheConversationAndLateAnswers() = runTest {
         // Sign-out or another identity: nothing of the previous conversation survives.
         val replies = ManualReplies()
@@ -196,6 +244,12 @@ class JarvisChatTest {
             assertEquals(ApiError.Kind.FORBIDDEN, error.kind)
         }
         assertEquals(ApiError.Kind.DECODING, (runCatching { owner.jarvisChat("respuesta rara") }.exceptionOrNull() as ApiError).kind)
+
+        // The scripted pending question: an ambiguous answer is asked about, "es otra consulta" keeps it.
+        val goal = fixture()
+        assertFalse(goal.jarvisChat("quiero crear una meta").awaitsClarification)
+        assertTrue(goal.jarvisChat("Fondo de emergencia").awaitsClarification)
+        assertTrue("Tenés una pregunta pendiente" in goal.jarvisChat("es otra consulta").message)
         assertEquals(ApiError.Kind.SERVER, (runCatching { owner.jarvisChat("falla") }.exceptionOrNull() as ApiError).kind)
     }
 }

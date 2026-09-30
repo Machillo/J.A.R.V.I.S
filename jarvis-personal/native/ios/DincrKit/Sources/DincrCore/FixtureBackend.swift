@@ -46,6 +46,9 @@ public actor FixtureBackend: HTTPTransport {
     private var replays: [String: (body: Data?, status: Int, response: Data)] = [:]
     /// The change the scripted JARVIS chat waits a "sí" / "no" for.
     private var jarvisPending = false
+    /// The scripted pending question (a goal's name), and whether it is asking about "Fondo de emergencia".
+    private var jarvisAsksGoalName = false
+    private var jarvisClarifying = false
     public private(set) var requests: [URLRequest] = []
 
     /// The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
@@ -642,6 +645,30 @@ public actor FixtureBackend: HTTPTransport {
         guard ["owner", "admin"].contains(profile["role"] as? String ?? "") else { return error(403, "No tienes permisos para realizar esta acción.") }
         let text = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         if text.contains("falla") { return error(500, "Error interno.") }
+        if jarvisClarifying {
+            jarvisClarifying = false
+            if text == "es la respuesta" {
+                jarvisAsksGoalName = false
+                return ok(["message": "¿Cuál es el monto objetivo de la meta?", "intent": "pending_action", "action_type": "create_goal",
+                           "status": "PENDING", "pending": true, "data": ["current_field": "target_amount"]])
+            }
+            if text == "es otra consulta" {
+                return ok(["message": "Señor, este es su análisis financiero.\n\nTenés una pregunta pendiente: ¿Cómo se llama la meta? Podés responderla o decir «cancelar».",
+                           "intent": "financial_engine", "status": "OK", "pending": true, "data": ["status": "OK"],
+                           "pending_action": ["action_type": "create_goal", "current_field": "name"]])
+            }
+        }
+        if text == "quiero crear una meta" {
+            jarvisAsksGoalName = true
+            return ok(["message": "¿Cómo se llama la meta?", "intent": "create_goal", "action_type": "create_goal", "status": "PENDING", "pending": true,
+                       "data": ["current_field": "name"]])
+        }
+        if jarvisAsksGoalName, text == "fondo de emergencia" {
+            jarvisClarifying = true
+            return ok(["message": "Tenés una pregunta pendiente: ¿Cómo se llama la meta? ¿\"Fondo de emergencia\" es la respuesta o querés hacer otra consulta?",
+                       "intent": "pending_action", "action_type": "create_goal", "status": "PENDING", "pending": true,
+                       "data": ["current_field": "clarify", "held_message": "Fondo de emergencia"]])
+        }
         if text.contains("respuesta rara") { return ok(["unexpected": true]) }
         if jarvisPending, ["sí", "si", "no"].contains(text) {
             jarvisPending = false

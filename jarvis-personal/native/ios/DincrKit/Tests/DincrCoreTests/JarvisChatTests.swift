@@ -41,6 +41,25 @@ import Testing
         }
     }
 
+    @Test func aClarificationIsRecognized() throws {
+        let json = #"""
+        {"message":"Tenés una pregunta pendiente: ¿Cómo se llama la meta? ¿\"Fondo de emergencia\" es la respuesta o querés hacer otra consulta?",
+         "intent":"pending_action","action_type":"create_goal","status":"PENDING","pending":true,
+         "data":{"current_field":"clarify","held_message":"Fondo de emergencia"}}
+        """#
+        let reply = try APIClient.decoder.decode(JarvisChatReply.self, from: Data(json.utf8))
+        #expect(reply.awaitsClarification && !reply.awaitsConfirmation)
+    }
+
+    @Test func aKeptChangeStillOffersConfirmar() throws {
+        // "Es otra consulta" answers the other request; the kept change (waiting for "sí") rides along.
+        let json = #"{"message":"Análisis… Tenés pendiente confirmar este gasto fijo.","status":"OK","pending":true,"data":{"status":"OK"},"pending_action":{"action_type":"create_fixed_expense","current_field":"confirm"}}"#
+        let reply = try APIClient.decoder.decode(JarvisChatReply.self, from: Data(json.utf8))
+        #expect(reply.awaitsConfirmation && !reply.awaitsClarification)
+        let question = #"{"message":"Análisis…","status":"OK","pending":true,"pending_action":{"current_field":"name"}}"#
+        #expect(try !APIClient.decoder.decode(JarvisChatReply.self, from: Data(question.utf8)).awaitsConfirmation)
+    }
+
     @Test func anAnswerWithoutAMessageIsAnError() {
         for json in [#"{}"#, #"{"message":"   "}"#, #"{"message":null,"status":"OK"}"#, #"[]"#] {
             #expect(throws: (any Error).self, "\(json)") { try APIClient.decoder.decode(JarvisChatReply.self, from: Data(json.utf8)) }
@@ -134,6 +153,38 @@ import Testing
         #expect(await replies.sent.last == "no")
     }
 
+    @MainActor @Test func aClarificationIsAnsweredWithItsTwoChoices() async throws {
+        let replies = ManualReplies()
+        let chat = JarvisChatSession { try await replies.send($0) }
+        // Nothing is being asked: the choices send nothing.
+        await chat.itIsTheAnswer()
+        await chat.anotherRequest()
+        #expect(await replies.sent.isEmpty)
+
+        let ask = Task { await chat.submit("Fondo de emergencia") }
+        try await waitUntil { await replies.waiting == 1 }
+        await replies.answer(.success(JarvisChatReply(message: "¿Es la respuesta o querés hacer otra consulta?", pending: true, awaitsClarification: true)))
+        await ask.value
+        #expect(chat.awaitingClarification && !chat.awaitingConfirmation)
+
+        let answer = Task { await chat.itIsTheAnswer() }
+        try await waitUntil { await replies.waiting == 1 }
+        #expect(!chat.awaitingClarification)  // answered: the choices go away
+        await replies.answer(.success(JarvisChatReply(message: "¿Cuál es el monto objetivo de la meta?", pending: true)))
+        await answer.value
+        #expect(await replies.sent == ["Fondo de emergencia", "es la respuesta"])
+
+        let again = Task { await chat.submit("Fondo de emergencia") }
+        try await waitUntil { await replies.waiting == 1 }
+        await replies.answer(.success(JarvisChatReply(message: "¿Es la respuesta?", pending: true, awaitsClarification: true)))
+        await again.value
+        let other = Task { await chat.anotherRequest() }
+        try await waitUntil { await replies.waiting == 1 }
+        await replies.answer(.success(JarvisChatReply(message: "Análisis…")))
+        await other.value
+        #expect(await replies.sent.last == "es otra consulta")
+    }
+
     @MainActor @Test func resetForgetsTheConversationAndLateAnswers() async throws {
         // Sign-out or another identity: nothing of the previous conversation survives.
         let replies = ManualReplies()
@@ -169,6 +220,12 @@ import Testing
             await #expect(throws: APIError.self) { try await user.jarvisChat("hola") }
         }
         await #expect(throws: APIError.self) { try await owner.jarvisChat("respuesta rara") }
+
+        // The scripted pending question: an ambiguous answer is asked about, "es otra consulta" keeps it.
+        let goal = FixtureBackend.service(FixtureBackend(role: .owner, latency: .zero))
+        #expect(try await !goal.jarvisChat("quiero crear una meta").awaitsClarification)
+        #expect(try await goal.jarvisChat("Fondo de emergencia").awaitsClarification)
+        #expect(try await goal.jarvisChat("es otra consulta").message.contains("Tenés una pregunta pendiente"))
         await #expect(throws: APIError.self) { try await owner.jarvisChat("falla") }
     }
 }

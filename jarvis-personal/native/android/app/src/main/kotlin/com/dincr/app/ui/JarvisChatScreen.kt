@@ -81,7 +81,7 @@ fun JarvisChatScreen(model: AppModel, nav: Navigator) {
             draft = ""
         }
     }
-    LaunchedEffect(chat.messages.size, chat.sending, chat.awaitingConfirmation) {
+    LaunchedEffect(chat.messages.size, chat.sending, chat.awaitingConfirmation, chat.awaitingClarification) {
         val last = list.layoutInfo.totalItemsCount - 1
         if (last >= 0) list.animateScrollToItem(last)
     }
@@ -114,6 +114,15 @@ fun JarvisChatScreen(model: AppModel, nav: Navigator) {
                         Text(tx("Cancelar", "Cancel"), color = Dincr.colors.tint)
                     }
                     DincrPrimaryButton(tx("Confirmar", "Confirm"), { model.confirmJarvisChange() }, Modifier.weight(1f).testTag("jarvis.chat.confirm"))
+                }
+            }
+            // The backend could not tell whether the last message answers its question or is another request.
+            if (chat.awaitingClarification) item {
+                Row(Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s3)) {
+                    OutlinedButton({ model.jarvisAnotherRequest() }, Modifier.weight(1f).heightIn(min = 52.dp).testTag("jarvis.chat.clarify.other")) {
+                        Text(tx("Es otra consulta", "It’s another question"), color = Dincr.colors.tint)
+                    }
+                    DincrPrimaryButton(tx("Es la respuesta", "It’s the answer"), { model.jarvisItIsTheAnswer() }, Modifier.weight(1f).testTag("jarvis.chat.clarify.answer"))
                 }
             }
         }

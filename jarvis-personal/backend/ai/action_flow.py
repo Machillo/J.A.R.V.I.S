@@ -187,6 +187,13 @@ ACTION_CONFIG = {
 
 # Payload keys that drive the save but are not shown to the user.
 HIDDEN_FIELDS = {"fixed_expense_id"}
+# A pending action whose question got a message the router also reads as another request: JARVIS
+# asks which one it is. current_field becomes CLARIFY_FIELD; the message and the field it was asked
+# for wait in payload[CLARIFY_KEY]. The Owner answers with one of these phrases (native buttons).
+CLARIFY_FIELD = "clarify"
+CLARIFY_KEY = "_clarify"
+CLARIFY_ANSWER = "es la respuesta"
+CLARIFY_OTHER = "es otra consulta"
 # Payroll/bonus messages the chat used to save at once keep their historical reply once confirmed.
 DIRECT_MARK = "_direct"
 
@@ -577,6 +584,43 @@ def _saved_message(action_type: str, payload: dict[str, Any], result: Any) -> st
         event_label = labels.get(payload.get("event_type"), payload.get("event_type"))
         return f"Señor, {event_label} registrado: {payload['hours']} horas. Ingreso proyectado actualizado: ₡{blueprint.get('monthly_income', 0):,.0f}. Sobrante proyectado: ₡{blueprint.get('estimated_extra_cash', 0):,.0f}.".replace(",", ".")
     return "Listo. Guardé la información."
+
+
+def pending_prompt(action: dict[str, Any]) -> str:
+    """What the pending action is waiting for, in words ("¿Cómo se llama la meta?")."""
+    config = ACTION_CONFIG.get(action.get("action_type"))
+    if not config:
+        return "Tenés una acción pendiente."
+    field = action.get("current_field")
+    if field in (None, "confirm") or not action.get("missing_fields"):
+        return f"Tenés pendiente confirmar {config.get('article', 'esta')} {config['label']}."
+    question = config["questions"].get(field) or f"¿Cuál es el valor de {FIELD_LABELS.get(field, field)}?"
+    return f"Tenés una pregunta pendiente: {question}"
+
+
+def hold_for_clarification(action: dict[str, Any], user_message: str) -> dict[str, Any]:
+    """Keeps the pending action as it is and asks whether the message answers it or is another request."""
+    prompt = pending_prompt(action)
+    payload = dict(action.get("payload") or {})
+    payload[CLARIFY_KEY] = {"message": user_message, "field": action.get("current_field")}
+    update_pending_action(action["id"], payload, action.get("missing_fields") or [], CLARIFY_FIELD)
+    return {
+        "message": f"{prompt} ¿\"{user_message.strip()}\" es la respuesta o querés hacer otra consulta?",
+        "status": "PENDING",
+        "pending": True,
+        "action_type": action.get("action_type"),
+        "data": {"current_field": CLARIFY_FIELD, "held_message": user_message},
+    }
+
+
+def release_clarification(action: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Puts the pending action back on the field it was asking for; returns the held message."""
+    payload = dict(action.get("payload") or {})
+    held = payload.pop(CLARIFY_KEY, None) or {}
+    field = held.get("field")
+    missing = action.get("missing_fields") or []
+    update_pending_action(action["id"], payload, missing, field)
+    return str(held.get("message") or ""), {**action, "payload": payload, "current_field": field}
 
 
 def start_action(action_type: str, user_message: str, prefill_payload: dict[str, Any] | None = None) -> dict[str, Any]:

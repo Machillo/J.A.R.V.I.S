@@ -13,7 +13,9 @@ public struct JarvisChatRequest: Encodable, Sendable, Equatable {
 /// required, the rest is read defensively and anything else is ignored. A change the chat
 /// understood (a payroll event, a bonus, an event, a memory, a fixed expense…) comes back with
 /// `pending: true` and `data.current_field == "confirm"`: it is saved only if the Owner answers
-/// "sí" (`awaitsConfirmation`). Android twin: `JarvisChat.kt`.
+/// "sí" (`awaitsConfirmation`). A message that could answer a pending question but is also another
+/// request comes back with `data.current_field == "clarify"` (`awaitsClarification`): the backend
+/// decides that; the app only offers the two answers. Android twin: `JarvisChat.kt`.
 public struct JarvisChatReply: Decodable, Sendable, Equatable {
     public let message: String
     public let intent: String?
@@ -22,14 +24,16 @@ public struct JarvisChatReply: Decodable, Sendable, Equatable {
     public let actionType: String?
     /// JARVIS showed what it will save and waits for "sí" / "no".
     public let awaitsConfirmation: Bool
+    /// JARVIS asks whether the last message answers its pending question or is another request.
+    public let awaitsClarification: Bool
 
     public init(message: String, intent: String? = nil, status: String? = nil, pending: Bool = false,
-                actionType: String? = nil, awaitsConfirmation: Bool = false) {
+                actionType: String? = nil, awaitsConfirmation: Bool = false, awaitsClarification: Bool = false) {
         self.message = message; self.intent = intent; self.status = status; self.pending = pending
-        self.actionType = actionType; self.awaitsConfirmation = awaitsConfirmation
+        self.actionType = actionType; self.awaitsConfirmation = awaitsConfirmation; self.awaitsClarification = awaitsClarification
     }
 
-    enum CodingKeys: String, CodingKey { case message, intent, status, pending, actionType, data }
+    enum CodingKeys: String, CodingKey { case message, intent, status, pending, actionType, data, pendingAction }
     enum DataKeys: String, CodingKey { case currentField }
 
     public init(from decoder: Decoder) throws {
@@ -45,7 +49,11 @@ public struct JarvisChatReply: Decodable, Sendable, Equatable {
         actionType = try? container.decodeIfPresent(String.self, forKey: .actionType)
         let data = try? container.nestedContainer(keyedBy: DataKeys.self, forKey: .data)
         let field = data.flatMap { try? $0.decodeIfPresent(String.self, forKey: .currentField) }
-        awaitsConfirmation = pending && field == "confirm"
+        // After "es otra consulta" the answer belongs to the other request; the kept action rides along.
+        let kept = try? container.nestedContainer(keyedBy: DataKeys.self, forKey: .pendingAction)
+        let keptField = kept.flatMap { try? $0.decodeIfPresent(String.self, forKey: .currentField) }
+        awaitsConfirmation = pending && (field == "confirm" || keptField == "confirm")
+        awaitsClarification = pending && field == "clarify"
     }
 }
 
@@ -65,11 +73,16 @@ public final class JarvisChatSession {
         public var delivery: Delivery
         /// For a JARVIS message: it shows a change and waits for "sí" / "no".
         public var awaitsConfirmation: Bool
+        /// For a JARVIS message: it asks whether the last message answers its question or is another request.
+        public var awaitsClarification: Bool = false
     }
 
     /// The answers to a pending change (backend `action_flow.YES_WORDS` / `NO_WORDS`).
     public static let confirmWord = "sí"
     public static let cancelWord = "no"
+    /// The answers to a clarification (backend `action_flow.CLARIFY_ANSWER` / `CLARIFY_OTHER`).
+    public static let itIsTheAnswerWords = "es la respuesta"
+    public static let anotherRequestWords = "es otra consulta"
     /// The oldest messages leave the list past this many (the session only).
     public static let historyLimit = 60
 
@@ -90,6 +103,11 @@ public final class JarvisChatSession {
         !isSending && messages.last?.author == .jarvis && messages.last?.awaitsConfirmation == true
     }
 
+    /// JARVIS's last message asks "¿es la respuesta o es otra consulta?" and nothing is on its way.
+    public var awaitingClarification: Bool {
+        !isSending && messages.last?.author == .jarvis && messages.last?.awaitsClarification == true
+    }
+
     /// Whether a failed message can be sent again (only the latest one: messages stay in order).
     public func canRetry(_ message: Message) -> Bool {
         guard !isSending, case .failed = message.delivery else { return false }
@@ -108,6 +126,10 @@ public final class JarvisChatSession {
 
     public func confirm() async { if awaitingConfirmation { await submit(Self.confirmWord) } }
     public func cancel() async { if awaitingConfirmation { await submit(Self.cancelWord) } }
+    /// The held message answers the pending question.
+    public func itIsTheAnswer() async { if awaitingClarification { await submit(Self.itIsTheAnswerWords) } }
+    /// The held message is another request; the pending question stays.
+    public func anotherRequest() async { if awaitingClarification { await submit(Self.anotherRequestWords) } }
 
     public func retry(_ id: Int) async {
         guard let message = messages.first(where: { $0.id == id }), canRetry(message) else { return }
@@ -126,7 +148,10 @@ public final class JarvisChatSession {
         let session = generation
         isSending = true
         // Any question JARVIS asked is answered (or set aside) by this message.
-        for index in messages.indices where messages[index].awaitsConfirmation { messages[index].awaitsConfirmation = false }
+        for index in messages.indices where messages[index].awaitsConfirmation || messages[index].awaitsClarification {
+            messages[index].awaitsConfirmation = false
+            messages[index].awaitsClarification = false
+        }
         let outcome: Result<JarvisChatReply, Error>
         do { outcome = .success(try await send(text)) } catch { outcome = .failure(error) }
         guard session == generation else { return }
@@ -134,7 +159,8 @@ public final class JarvisChatSession {
         switch outcome {
         case .success(let reply):
             update(id) { $0.delivery = .sent }
-            append(.jarvis, reply.message, delivery: .sent, awaitsConfirmation: reply.awaitsConfirmation)
+            append(.jarvis, reply.message, delivery: .sent, awaitsConfirmation: reply.awaitsConfirmation,
+                   awaitsClarification: reply.awaitsClarification)
         case .failure(let error):
             let text = (error as? APIError)?.message
                 ?? AppLanguage.current.pick("No pudimos enviar el mensaje. Intentá de nuevo.", "We couldn’t send the message. Please try again.")
@@ -143,10 +169,12 @@ public final class JarvisChatSession {
     }
 
     @discardableResult
-    private func append(_ author: Message.Author, _ text: String, delivery: Message.Delivery, awaitsConfirmation: Bool = false) -> Int {
+    private func append(_ author: Message.Author, _ text: String, delivery: Message.Delivery, awaitsConfirmation: Bool = false,
+                        awaitsClarification: Bool = false) -> Int {
         let id = nextID
         nextID += 1
-        messages.append(Message(id: id, author: author, text: text, delivery: delivery, awaitsConfirmation: awaitsConfirmation))
+        messages.append(Message(id: id, author: author, text: text, delivery: delivery, awaitsConfirmation: awaitsConfirmation,
+                                awaitsClarification: awaitsClarification))
         if messages.count > Self.historyLimit { messages.removeFirst(messages.count - Self.historyLimit) }
         return id
     }

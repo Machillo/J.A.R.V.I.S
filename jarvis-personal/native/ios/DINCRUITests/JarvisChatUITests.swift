@@ -64,6 +64,33 @@ final class JarvisChatUITests: XCTestCase {
         XCTAssertFalse(element("jarvis.chat.confirm", in: app).exists)
     }
 
+    func testAnAmbiguousAnswerIsAskedAboutAndTheAnswerContinues() {
+        let app = launchOwnerChat()
+        openChat(app)
+        send("quiero crear una meta", in: app)
+        XCTAssertTrue(bubble("¿Cómo se llama la meta?", in: app).waitForExistence(timeout: 10))
+        send("Fondo de emergencia", in: app)
+        let answer = element("jarvis.chat.clarify.answer", in: app)
+        XCTAssertTrue(answer.waitForExistence(timeout: 10))
+        XCTAssertTrue(element("jarvis.chat.clarify.other", in: app).exists)
+        answer.tap()
+        XCTAssertTrue(bubble("¿Cuál es el monto objetivo de la meta?", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("jarvis.chat.clarify.answer", in: app).exists)
+    }
+
+    func testAnotherQuestionKeepsThePendingOne() {
+        let app = launchOwnerChat()
+        openChat(app)
+        send("quiero crear una meta", in: app)
+        XCTAssertTrue(bubble("¿Cómo se llama la meta?", in: app).waitForExistence(timeout: 10))
+        send("Fondo de emergencia", in: app)
+        let other = element("jarvis.chat.clarify.other", in: app)
+        XCTAssertTrue(other.waitForExistence(timeout: 10))
+        other.tap()
+        XCTAssertTrue(bubble("Señor, este es su análisis financiero.", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(bubble("Tenés una pregunta pendiente", in: app).exists)
+    }
+
     func testCancelSavesNothing() {
         let app = launchOwnerChat()
         openChat(app)

@@ -27,6 +27,7 @@ struct JarvisChatView: View {
                     }
                     if chat.isSending { thinking }
                     if chat.awaitingConfirmation { confirmation }
+                    if chat.awaitingClarification { clarification }
                     Color.clear.frame(height: 1).id(Self.bottom)
                 }
                 .padding(.horizontal, DincrSpacing.s4)
@@ -37,6 +38,7 @@ struct JarvisChatView: View {
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: chat.messages.count) { scroll(proxy) }
             .onChange(of: chat.isSending) { scroll(proxy) }
+            .onChange(of: chat.awaitingClarification) { scroll(proxy) }
             .onAppear { proxy.scrollTo(Self.bottom, anchor: .bottom) }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
@@ -84,6 +86,20 @@ struct JarvisChatView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(tx("¿Guardar este cambio?", "Save this change?"))
+    }
+
+    /// The backend could not tell whether the last message answers its question or is another request.
+    private var clarification: some View {
+        HStack(spacing: DincrSpacing.s3) {
+            Button(tx("Es otra consulta", "It’s another question")) { Task { await chat.anotherRequest() } }
+                .buttonStyle(.dincrSecondary)
+                .accessibilityIdentifier("jarvis.chat.clarify.other")
+            Button(tx("Es la respuesta", "It’s the answer")) { Task { await chat.itIsTheAnswer() } }
+                .buttonStyle(.dincrPrimary)
+                .accessibilityIdentifier("jarvis.chat.clarify.answer")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(tx("¿Es la respuesta o es otra consulta?", "Is it the answer or another question?"))
     }
 
     private var composer: some View {

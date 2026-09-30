@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from backend.ai import action_flow, jarvis_engine
+from backend.ai import action_flow, chat_memory, jarvis_engine
 from backend.ai import strategy_dashboard
 from backend.finance import fixed_expenses
 from backend.finance import service as finance_service
@@ -23,6 +23,7 @@ def chat(monkeypatch):
     state = {"pending": None, "writes": []}
 
     def create_pending_action(action_type, payload, missing, current_field):
+        chat_memory.ensure_new_action_allowed()  # the real guard: a kept pending action is never replaced
         state["pending"] = {"id": 1, "action_type": action_type, "payload": dict(payload),
                             "missing_fields": list(missing), "current_field": current_field}
         return dict(state["pending"])

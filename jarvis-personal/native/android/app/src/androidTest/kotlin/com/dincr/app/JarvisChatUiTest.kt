@@ -95,6 +95,31 @@ class JarvisChatUiTest {
         assertTrue(!tagged("jarvis.chat.confirm"))
     }
 
+    @Test fun anAmbiguousAnswerIsAskedAboutAndTheAnswerContinues() {
+        launchOwner()
+        openChat()
+        send("quiero crear una meta")
+        waitUntil("the question") { present("¿Cómo se llama la meta?") }
+        send("Fondo de emergencia")
+        waitUntil("the clarification") { tagged("jarvis.chat.clarify.answer") }
+        assertTrue(tagged("jarvis.chat.clarify.other"))
+        compose.onNodeWithTag("jarvis.chat.clarify.answer").performClick()
+        waitUntil("the next question") { present("¿Cuál es el monto objetivo de la meta?") }
+        assertTrue(!tagged("jarvis.chat.clarify.answer"))
+    }
+
+    @Test fun anotherQuestionKeepsThePendingOne() {
+        launchOwner()
+        openChat()
+        send("quiero crear una meta")
+        waitUntil("the question") { present("¿Cómo se llama la meta?") }
+        send("Fondo de emergencia")
+        waitUntil("the clarification") { tagged("jarvis.chat.clarify.other") }
+        compose.onNodeWithTag("jarvis.chat.clarify.other").performClick()
+        waitUntil("the other answer") { present("Señor, este es su análisis financiero.", substring = true) }
+        assertTrue(present("Tenés una pregunta pendiente", substring = true))
+    }
+
     @Test fun cancelSavesNothing() {
         launchOwner()
         openChat()

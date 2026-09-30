@@ -3,9 +3,19 @@ from __future__ import annotations
 import logging
 import re
 
-from backend.ai.action_flow import DIRECT_MARK, continue_pending_action, start_action
-from backend.ai.chat_memory import finish_pending_action, get_pending_action
-from backend.ai.intent_router import ACTION_TYPES, detect_intent, is_pending_interrupt
+from backend.ai.action_flow import (
+    CLARIFY_ANSWER,
+    CLARIFY_FIELD,
+    CLARIFY_OTHER,
+    DIRECT_MARK,
+    continue_pending_action,
+    hold_for_clarification,
+    pending_prompt,
+    release_clarification,
+    start_action,
+)
+from backend.ai.chat_memory import PendingActionKept, get_pending_action, keep_pending_action
+from backend.ai.intent_router import ACTION_TYPES, YES_NO_WORDS, detect_intent, normalize_message
 from backend.ai.memory_service import memory_content_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
 from backend.integrations.internet_search import internet_search
@@ -270,10 +280,64 @@ def _confirm_first(action_type: str, user_message: str, payload: dict, *, intent
     return response
 
 
+def _pending_response(result: dict) -> dict:
+    return {
+        "message": result["message"],
+        "intent": "pending_action",
+        "action_type": result.get("action_type"),
+        "status": result.get("status", "OK"),
+        "pending": result.get("pending", False),
+        "data": result.get("data"),
+    }
+
+
+def _is_ambiguous(intent_result: dict, user_message: str) -> bool:
+    """A message waiting to fill a pending field that the router also reads as its own request
+    ("Fondo de emergencia", "septiembre", "estrategia"): JARVIS cannot know which one was meant."""
+    if normalize_message(user_message) in YES_NO_WORDS:
+        return False
+    return intent_result.get("intent") not in {"general", "unknown"}
+
+
+def _resolve_clarification(action: dict, user_message: str) -> dict:
+    """The Owner said whether the held message answers the pending action or is another request."""
+    held, restored = release_clarification(action)
+    choice = normalize_message(user_message)
+    if choice == CLARIFY_ANSWER:
+        # The held text, exactly as written, answers the field; the historical flow continues.
+        result = continue_pending_action(held)
+        return _pending_response(result) if result else _process(held, None)
+    if choice == CLARIFY_OTHER:
+        # Answered as a normal request; the pending action stays exactly where it was.
+        with keep_pending_action():
+            try:
+                response = dict(_process(held, None))
+            except PendingActionKept:
+                response = {
+                    "message": "Señor, primero terminemos o cancelemos lo pendiente antes de registrar algo nuevo.",
+                    "intent": "pending_action",
+                    "status": "BLOCKED",
+                    "pending": False,
+                    "data": None,
+                }
+        response["message"] = f"{response.get('message') or ''}\n\n{pending_prompt(restored)} Podés responderla o decir «cancelar»."
+        response["pending"] = True
+        response["pending_action"] = {"action_type": restored.get("action_type"), "current_field": restored.get("current_field")}
+        return response
+    # Anything else: the question is set aside and the message goes against the pending action as usual.
+    return _process(user_message, restored)
+
+
 def process_message(user_message: str):
+    pending_action = get_pending_action()
+    if pending_action and pending_action.get("current_field") == CLARIFY_FIELD:
+        return _resolve_clarification(pending_action, user_message)
+    return _process(user_message, pending_action)
+
+
+def _process(user_message: str, pending_action: dict | None):
     # Decisiones personales claras (compras/viajes) se resuelven primero con su
     # flujo local, antes de clasificar la intención, para evitar respuestas genéricas.
-    pending_action = get_pending_action()
     if pending_action and str(pending_action.get("action_type") or "").startswith("decision_"):
         pending_result = handle_decision_pending_action(pending_action, user_message)
         if pending_result:
@@ -293,21 +357,14 @@ def process_message(user_message: str):
         if strategy_request else detect_intent(user_message)
     )
 
-    # Si hay una acción pendiente, primero verificamos si el usuario está cambiando de tema.
-    # Esto evita que "busca Chimborazo" termine guardado como categoría o gasto.
-    if pending_action and is_pending_interrupt(intent_result, user_message):
-        finish_pending_action(pending_action["id"], "cancelled")
-    elif pending_action:
+    # Con una acción pendiente, un mensaje que el router también lee como otro pedido no se
+    # guarda como el dato ni cancela la acción: JARVIS pregunta cuál de los dos es.
+    if pending_action and _is_ambiguous(intent_result, user_message):
+        return _pending_response(hold_for_clarification(pending_action, user_message))
+    if pending_action:
         pending_result = continue_pending_action(user_message)
         if pending_result:
-            return {
-                "message": pending_result["message"],
-                "intent": "pending_action",
-                "action_type": pending_result.get("action_type"),
-                "status": pending_result.get("status", "OK"),
-                "pending": pending_result.get("pending", False),
-                "data": pending_result.get("data"),
-            }
+            return _pending_response(pending_result)
 
     # Strategy requests always use the same live engine as both strategy screens.
     # The owner chat must not ask a model to generate or override the plan.

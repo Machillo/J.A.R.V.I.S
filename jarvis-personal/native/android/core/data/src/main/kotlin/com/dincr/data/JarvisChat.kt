@@ -21,7 +21,9 @@ data class JarvisChatRequest(val message: String)
  * required, the rest is read defensively and anything else is ignored. A change the chat
  * understood (a payroll event, a bonus, an event, a memory, a fixed expense…) comes back with
  * `pending: true` and `data.current_field == "confirm"`: it is saved only if the Owner answers "sí"
- * ([awaitsConfirmation]). iOS twin: `JarvisChat.swift`.
+ * ([awaitsConfirmation]). A message that could answer a pending question but is also another request
+ * comes back with `data.current_field == "clarify"` ([awaitsClarification]): the backend decides that;
+ * the app only offers the two answers. iOS twin: `JarvisChat.swift`.
  */
 data class JarvisChatReply(
     val message: String,
@@ -31,6 +33,8 @@ data class JarvisChatReply(
     val actionType: String? = null,
     /** JARVIS showed what it will save and waits for "sí" / "no". */
     val awaitsConfirmation: Boolean = false,
+    /** JARVIS asks whether the last message answers its pending question or is another request. */
+    val awaitsClarification: Boolean = false,
 ) {
     companion object {
         /** The reply in [element], or null when it has no message to show (an unexpected answer). */
@@ -40,7 +44,11 @@ data class JarvisChatReply(
             val message = text(body, "message")?.takeIf { it.isNotBlank() } ?: return null
             val pending = (body["pending"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: false
             val field = text(body["data"] as? JsonObject, "current_field")
-            return JarvisChatReply(message, text(body, "intent"), text(body, "status"), pending, text(body, "action_type"), pending && field == "confirm")
+            // After "es otra consulta" the answer belongs to the other request; the kept action rides along.
+            val keptField = text(body["pending_action"] as? JsonObject, "current_field")
+            return JarvisChatReply(message, text(body, "intent"), text(body, "status"), pending, text(body, "action_type"),
+                awaitsConfirmation = pending && (field == "confirm" || keptField == "confirm"),
+                awaitsClarification = pending && field == "clarify")
         }
     }
 }
@@ -62,12 +70,19 @@ class JarvisChatSession(
         data class Failed(val reason: String) : Delivery
     }
 
-    data class Message(val id: Long, val author: Author, val text: String, val delivery: Delivery, val awaitsConfirmation: Boolean = false)
+    data class Message(
+        val id: Long, val author: Author, val text: String, val delivery: Delivery,
+        val awaitsConfirmation: Boolean = false, val awaitsClarification: Boolean = false,
+    )
 
     data class State(val messages: List<Message> = emptyList(), val sending: Boolean = false) {
         /** JARVIS's last message waits for "sí" / "no" and nothing is on its way. */
         val awaitingConfirmation: Boolean
             get() = !sending && messages.lastOrNull()?.let { it.author == Author.JARVIS && it.awaitsConfirmation } == true
+
+        /** JARVIS's last message asks "¿es la respuesta o es otra consulta?" and nothing is on its way. */
+        val awaitingClarification: Boolean
+            get() = !sending && messages.lastOrNull()?.let { it.author == Author.JARVIS && it.awaitsClarification } == true
 
         /** Whether a failed message can be sent again (only the latest one: messages stay in order). */
         fun canRetry(message: Message) = !sending && message.delivery is Delivery.Failed && messages.lastOrNull()?.id == message.id
@@ -90,6 +105,10 @@ class JarvisChatSession(
 
     suspend fun confirm() { if (_state.value.awaitingConfirmation) submit(CONFIRM_WORD) }
     suspend fun cancel() { if (_state.value.awaitingConfirmation) submit(CANCEL_WORD) }
+    /** The held message answers the pending question. */
+    suspend fun itIsTheAnswer() { if (_state.value.awaitingClarification) submit(ANSWER_WORDS) }
+    /** The held message is another request; the pending question stays. */
+    suspend fun anotherRequest() { if (_state.value.awaitingClarification) submit(ANOTHER_REQUEST_WORDS) }
 
     suspend fun retry(id: Long) {
         val message = _state.value.messages.firstOrNull { it.id == id } ?: return
@@ -107,14 +126,18 @@ class JarvisChatSession(
     private suspend fun deliver(id: Long, text: String) {
         val session = generation
         // Any question JARVIS asked is answered (or set aside) by this message.
-        _state.update { state -> state.copy(sending = true, messages = state.messages.map { if (it.awaitsConfirmation) it.copy(awaitsConfirmation = false) else it }) }
+        _state.update { state ->
+            state.copy(sending = true, messages = state.messages.map {
+                if (it.awaitsConfirmation || it.awaitsClarification) it.copy(awaitsConfirmation = false, awaitsClarification = false) else it
+            })
+        }
         val outcome = runCatching { send(text) }
         if (session != generation) return
         _state.update { it.copy(sending = false) }
         outcome.fold(
             onSuccess = { reply ->
                 change(id) { it.copy(delivery = Delivery.Sent) }
-                append(Author.JARVIS, reply.message, Delivery.Sent, reply.awaitsConfirmation)
+                append(Author.JARVIS, reply.message, Delivery.Sent, reply.awaitsConfirmation, reply.awaitsClarification)
             },
             onFailure = { error ->
                 if (error is kotlinx.coroutines.CancellationException) throw error
@@ -125,9 +148,11 @@ class JarvisChatSession(
         )
     }
 
-    private fun append(author: Author, text: String, delivery: Delivery, awaitsConfirmation: Boolean = false): Long {
+    private fun append(author: Author, text: String, delivery: Delivery, awaitsConfirmation: Boolean = false, awaitsClarification: Boolean = false): Long {
         val id = nextId++
-        _state.update { state -> state.copy(messages = (state.messages + Message(id, author, text, delivery, awaitsConfirmation)).takeLast(HISTORY_LIMIT)) }
+        _state.update { state ->
+            state.copy(messages = (state.messages + Message(id, author, text, delivery, awaitsConfirmation, awaitsClarification)).takeLast(HISTORY_LIMIT))
+        }
         return id
     }
 
@@ -139,6 +164,9 @@ class JarvisChatSession(
         /** The answers to a pending change (backend `action_flow.YES_WORDS` / `NO_WORDS`). */
         const val CONFIRM_WORD = "sí"
         const val CANCEL_WORD = "no"
+        /** The answers to a clarification (backend `action_flow.CLARIFY_ANSWER` / `CLARIFY_OTHER`). */
+        const val ANSWER_WORDS = "es la respuesta"
+        const val ANOTHER_REQUEST_WORDS = "es otra consulta"
         /** The oldest messages leave the list past this many (the session only). */
         const val HISTORY_LIMIT = 60
     }

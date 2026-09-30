@@ -83,6 +83,9 @@ class FakeBackend(
     private val replays = mutableMapOf<String, Pair<String?, HttpResponse>>()
     /** The change the scripted JARVIS chat waits a "sí" / "no" for. */
     private var jarvisPending = false
+    /** The scripted pending question (a goal's name), and whether it is asking about "Fondo de emergencia". */
+    private var jarvisAsksGoalName = false
+    private var jarvisClarifying = false
 
     /**
      * A scripted stand-in for the JARVIS engine (fixtures only, never real answers): "horas extra" /
@@ -93,6 +96,24 @@ class FakeBackend(
         if (profile.role != "owner" && profile.role != "admin") return error(403, "No tienes permisos para realizar esta acción.")
         val text = message.lowercase().trim()
         if ("falla" in text) return error(500, "Error interno.")
+        if (jarvisClarifying) {
+            jarvisClarifying = false
+            if (text == "es la respuesta") {
+                jarvisAsksGoalName = false
+                return ok("""{"message":"¿Cuál es el monto objetivo de la meta?","intent":"pending_action","action_type":"create_goal","status":"PENDING","pending":true,"data":{"current_field":"target_amount"}}""")
+            }
+            if (text == "es otra consulta") {
+                return ok("""{"message":"Señor, este es su análisis financiero.\n\nTenés una pregunta pendiente: ¿Cómo se llama la meta? Podés responderla o decir «cancelar».","intent":"financial_engine","status":"OK","pending":true,"data":{"status":"OK"},"pending_action":{"action_type":"create_goal","current_field":"name"}}""")
+            }
+        }
+        if (text == "quiero crear una meta") {
+            jarvisAsksGoalName = true
+            return ok("""{"message":"¿Cómo se llama la meta?","intent":"create_goal","action_type":"create_goal","status":"PENDING","pending":true,"data":{"current_field":"name"}}""")
+        }
+        if (jarvisAsksGoalName && text == "fondo de emergencia") {
+            jarvisClarifying = true
+            return ok("""{"message":"Tenés una pregunta pendiente: ¿Cómo se llama la meta? ¿\"Fondo de emergencia\" es la respuesta o querés hacer otra consulta?","intent":"pending_action","action_type":"create_goal","status":"PENDING","pending":true,"data":{"current_field":"clarify","held_message":"Fondo de emergencia"}}""")
+        }
         if ("respuesta rara" in text) return ok("""{"unexpected":true}""")
         if (jarvisPending && text in setOf("sí", "si", "no")) {
             jarvisPending = false
