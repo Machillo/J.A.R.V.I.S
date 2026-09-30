@@ -28,6 +28,12 @@ final class JarvisChatUITests: XCTestCase {
         XCTAssertTrue(element("jarvis.chat.input", in: app).waitForExistence(timeout: 5))
     }
 
+    /// A chat bubble. Its accessibility label names the speaker ("Vos: …" / "JARVIS: …"), so it is
+    /// matched by content, never by the exact label.
+    private func bubble(_ text: String, in app: XCUIApplication) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    }
+
     private func send(_ text: String, in app: XCUIApplication) {
         let input = element("jarvis.chat.input", in: app)
         input.tap()
@@ -40,8 +46,8 @@ final class JarvisChatUITests: XCTestCase {
         openChat(app)
         XCTAssertTrue(element("jarvis.chat.empty", in: app).exists)
         send("¿Cuál es mi deuda más alta?", in: app)
-        XCTAssertTrue(app.staticTexts["¿Cuál es mi deuda más alta?"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Señor, esto es una respuesta de ejemplo."].waitForExistence(timeout: 10))
+        XCTAssertTrue(bubble("¿Cuál es mi deuda más alta?", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(bubble("Señor, esto es una respuesta de ejemplo.", in: app).waitForExistence(timeout: 10))
         XCTAssertFalse(element("jarvis.chat.confirm", in: app).exists, "a plain answer asks for nothing")
     }
 
@@ -52,9 +58,9 @@ final class JarvisChatUITests: XCTestCase {
         let confirm = element("jarvis.chat.confirm", in: app)
         XCTAssertTrue(confirm.waitForExistence(timeout: 10))
         XCTAssertTrue(element("jarvis.chat.cancel", in: app).exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "₡9,000.00")).firstMatch.exists, "the amount is shown before saving")
+        XCTAssertTrue(bubble("₡9,000.00", in: app).exists, "the amount is shown before saving")
         confirm.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Señor, OT registrado")).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(bubble("Señor, OT registrado", in: app).waitForExistence(timeout: 10))
         XCTAssertFalse(element("jarvis.chat.confirm", in: app).exists)
     }
 
@@ -65,7 +71,7 @@ final class JarvisChatUITests: XCTestCase {
         let cancel = element("jarvis.chat.cancel", in: app)
         XCTAssertTrue(cancel.waitForExistence(timeout: 10))
         cancel.tap()
-        XCTAssertTrue(app.staticTexts["Listo, cancelé el registro. No guardé nada."].waitForExistence(timeout: 10))
+        XCTAssertTrue(bubble("Listo, cancelé el registro. No guardé nada.", in: app).waitForExistence(timeout: 10))
     }
 
     func testAFailedMessageOffersRetry() {
@@ -77,7 +83,7 @@ final class JarvisChatUITests: XCTestCase {
         XCTAssertTrue(element("jarvis.chat.failed", in: app).exists)
         // The chat stays usable: another message goes through.
         send("hola", in: app)
-        XCTAssertTrue(app.staticTexts["Señor, esto es una respuesta de ejemplo."].waitForExistence(timeout: 10))
+        XCTAssertTrue(bubble("Señor, esto es una respuesta de ejemplo.", in: app).waitForExistence(timeout: 10))
     }
 
     func testAnUnexpectedAnswerDoesNotCrash() {
@@ -95,7 +101,7 @@ final class JarvisChatUITests: XCTestCase {
         google.tap()
         openChat(app)
         send("hola", in: app)
-        XCTAssertTrue(app.staticTexts["Señor, esto es una respuesta de ejemplo."].waitForExistence(timeout: 10))
+        XCTAssertTrue(bubble("Señor, esto es una respuesta de ejemplo.", in: app).waitForExistence(timeout: 10))
         // Back to the Profile hub (chat → JARVIS → Profile), sign out and in again: the chat starts empty.
         for _ in 0..<2 { app.navigationBars.buttons.element(boundBy: 0).tap() }
         let signOut = element("profile.signOut", in: app)
@@ -112,6 +118,6 @@ final class JarvisChatUITests: XCTestCase {
         google.tap()
         openChat(app)
         XCTAssertTrue(element("jarvis.chat.empty", in: app).exists)
-        XCTAssertFalse(app.staticTexts["hola"].exists)
+        XCTAssertFalse(bubble("hola", in: app).exists)
     }
 }
