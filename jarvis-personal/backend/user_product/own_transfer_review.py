@@ -1,4 +1,10 @@
-"""Review opposite bank notices without assuming their references are identical."""
+"""Review opposite bank notices of one transfer between the user's own accounts.
+
+A SINPE transfer carries the same 25-digit reference in both banks' notices,
+so an identical reference is strong evidence and two different references rule
+the pair out. Without references the pair is only a suggestion; the user always
+confirms, and amounts are compared in the movement's own currency.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +17,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.user_product.candidate_resolution import different_sinpe_references
 
 
 def _direction(item: dict[str, Any]) -> str:
@@ -29,6 +36,23 @@ def _time(item: dict[str, Any]) -> datetime | None:
         return None
 
 
+def _native(item: dict[str, Any]) -> tuple[str, Decimal]:
+    """Amount in the currency the movement happened in (a USD transfer is never CRC)."""
+    original = str(item.get("original_currency") or "").upper()
+    currency = str(item.get("currency") or "CRC").upper()
+    if original and original != currency and item.get("original_amount") is not None:
+        return original, Decimal(str(item["original_amount"]))
+    return currency, Decimal(str(item["amount"]))
+
+
+def _reference(item: dict[str, Any]) -> str:
+    return re.sub(r"[^a-zA-Z0-9]", "", str(item.get("external_reference") or "")).lower()
+
+
+def _shared_reference(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    return bool(_reference(first)) and _reference(first) == _reference(second)
+
+
 def _eligible(first: dict[str, Any], second: dict[str, Any], unknown_direction: str | None = None) -> bool:
     """Suggest only opposite, equal-value transfer notices; never auto-approve."""
     if first["id"] == second["id"] or first.get("email_message_id") == second.get("email_message_id"):
@@ -38,12 +62,13 @@ def _eligible(first: dict[str, Any], second: dict[str, Any], unknown_direction: 
            for row in (first, second)):
         return False
     try:
-        if Decimal(str(first["amount"])) != Decimal(str(second["amount"])) or Decimal(str(first["amount"])) <= 0:
-            return False
+        first_money, second_money = _native(first), _native(second)
     except (ValueError, TypeError, InvalidOperation):
         return False
-    if (first.get("currency") or "CRC") != (second.get("currency") or "CRC"):
+    if first_money != second_money or first_money[1] <= 0:
         return False
+    if different_sinpe_references(first.get("external_reference"), second.get("external_reference")):
+        return False  # two SINPE references: two different transfers
     try:
         first_day = date.fromisoformat(str(first["transaction_date"])[:10])
         second_day = date.fromisoformat(str(second["transaction_date"])[:10])
@@ -65,7 +90,6 @@ def _eligible(first: dict[str, Any], second: dict[str, Any], unknown_direction: 
 
 
 def _preview(item: dict[str, Any]) -> dict[str, Any]:
-    # A reference is evidence within a bank, not a cross-bank join key.
     reference = re.sub(r"[^a-zA-Z0-9]", "", str(item.get("external_reference") or ""))
     return {
         "candidate_id": int(item["id"]), "bank": item.get("bank"),
@@ -81,6 +105,7 @@ def list_own_transfer_suggestions() -> dict[str, Any]:
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT id,email_message_id,bank,transaction_date,transaction_time,amount,currency,
+                      original_amount,original_currency,
                       movement_kind,movement_direction,external_reference,transaction_id,status,
                       is_internal_transfer
                FROM finva_email_candidates
@@ -94,7 +119,10 @@ def list_own_transfer_suggestions() -> dict[str, Any]:
     for index, candidate in enumerate(candidates):
         for other in candidates[index + 1:]:
             if _eligible(candidate, other):
-                suggestions.append({"first": _preview(candidate), "second": _preview(other)})
+                suggestions.append({"first": _preview(candidate), "second": _preview(other),
+                                    "shared_reference": _shared_reference(candidate, other)})
+    # Pairs proven by the same bank reference first.
+    suggestions.sort(key=lambda item: not item["shared_reference"])
     return {"items": suggestions[:100]}
 
 
@@ -105,7 +133,8 @@ def confirm_own_transfer(first_id: int, second_id: int, unknown_direction: str |
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT id,email_message_id,account_id,workspace_id,bank,transaction_date,transaction_time,
-                      amount,currency,movement_kind,movement_direction,external_reference,
+                      amount,currency,original_amount,original_currency,
+                      movement_kind,movement_direction,external_reference,
                       transaction_id,status,is_internal_transfer
                FROM finva_email_candidates
                WHERE account_id=%s AND workspace_id=%s AND id IN (%s,%s)

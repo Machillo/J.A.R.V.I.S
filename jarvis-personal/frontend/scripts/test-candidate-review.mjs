@@ -234,6 +234,14 @@ assert.match(page, /const edit = pending && editing\?\.candidate_id === item\.ca
   "an editor never stays open on a candidate reviewed meanwhile");
 assert.match(review, /reload: \(\) => loadRef\.current\(\)/, "the review refreshes with the current filter");
 assert.match(page, /useEffect\(\(\) => \{ loadRef\.current = load; \}, \[load\]\);/);
+// Correct keeps a transfer a transfer: the type select starts on the candidate's own type,
+// offers "transfer", and the submitted type is the select's value (never rewritten).
+const typeSelect = page.slice(page.indexOf('<select name="transaction_type"'), page.indexOf("</select>", page.indexOf('<select name="transaction_type"')));
+assert.match(typeSelect, /defaultValue=\{item\.transaction_type\}/);
+for (const type of ["expense", "income", "debt_payment", "transfer"]) {
+  assert.match(typeSelect, new RegExp(`<option value="${type}">`), `Correct offers ${type}`);
+}
+assert.match(page, /transaction_type: form\.get\("transaction_type"\)/);
 assert.match(page, /className="success-banner" role="status"/);
 assert.match(page, /className="onboarding-error" role="alert"/);
 console.log("candidate review tests passed");

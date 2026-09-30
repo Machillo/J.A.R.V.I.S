@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
+from backend.email_monitor.movement_taxonomy import CARD_KINDS
 
 
 def _last4(value: Any) -> str:
@@ -37,7 +38,7 @@ def _account_signal(candidate: dict[str, Any]) -> dict[str, str] | None:
         "institution_country": str(candidate.get("institution_country") or "CR").upper(),
         "account_last4": last4,
         "account_name": label or f"{_institution_label(institution)} •••• {last4}",
-        "account_type": "credit_card" if candidate.get("movement_kind") == "card_purchase" or "tarjeta" in label.lower() else "checking",
+        "account_type": "credit_card" if candidate.get("movement_kind") in CARD_KINDS or "tarjeta" in label.lower() else "checking",
         "currency": str(candidate.get("currency") or "CRC").upper(),
     }
 

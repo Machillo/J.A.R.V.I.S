@@ -90,7 +90,7 @@ internal fun CandidateCorrection.checked(): CandidateCorrection = apply {
     Contract.text(category, 100)
     Contract.money(amount, allowZero = false)
     Contract.rate(exchangeRate)
-    if (transactionType !in setOf("expense", "income", "debt_payment")) Contract.fail("El tipo no es válido.", "The type is not valid.")
+    if (transactionType !in setOf("expense", "income", "debt_payment", "transfer")) Contract.fail("El tipo no es válido.", "The type is not valid.")
 }
 
 val GOAL_PRIORITIES = listOf("low", "medium", "high", "critical")

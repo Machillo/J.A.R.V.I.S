@@ -39,14 +39,14 @@
     },
     {
       "name": "bac_refund_income",
-      "description": "BAC refund: money in",
+      "description": "BAC refund: money back to the card, a transfer in (never ordinary income)",
       "subject": "Notificación de transacción",
       "sender": "BAC Credomatic <notificacion@notificacionesbaccr.com>",
       "body": "Hola PERSONA SINTETICA:\nA continuación le detallamos la transacción realizada:\nComercio:\nSUPERMERCADO EJEMPLO\nCiudad y país:\nSAN JOSE, Costa Rica\nFecha:\nSep 22, 2026, 10:15\nVISA\n************0000\nAutorización:\n000000\nReferencia:\n000000000002\nTipo de Transacción:\nDEVOLUCION\nMonto:\nCRC 15.000,00",
       "expected": {
         "email_kind": "movement",
         "bank": "bac",
-        "transaction_type": "income",
+        "transaction_type": "transfer",
         "amount": "15000.0",
         "original_amount": null,
         "original_currency": null,
@@ -102,14 +102,14 @@
     },
     {
       "name": "multimoney_credit",
-      "description": "MultiMoney incoming transfer",
+      "description": "MultiMoney incoming transfer: stays a transfer until the user says it is income",
       "subject": "Notificación de transferencia",
       "sender": "MultiMoney <multimoneycr@multimoney.com>",
       "body": "MultiMoney\nSe aplico un credito en tiempo real\nMonto: CRC 10.000\nFecha: 22/09/2026\nReferencia: 000000001\nConcepto: traslado",
       "expected": {
         "email_kind": "movement",
         "bank": "multimoney",
-        "transaction_type": "income",
+        "transaction_type": "transfer",
         "amount": "10000.0",
         "original_amount": null,
         "original_currency": null,

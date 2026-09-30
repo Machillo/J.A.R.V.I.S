@@ -104,9 +104,12 @@ def test_bac_purchase_without_decimals_end_to_end():
 
 
 @pytest.mark.parametrize("kind", ["DEVOLUCION", "REVERSION"])
-def test_bac_refunds_are_income(kind):
+def test_bac_refunds_are_card_credits_not_ordinary_income(kind):
     parsed = p.parse_financial_email("Notificación de transacción", BAC, bac_purchase("CRC 15.000,00", kind), "2026-09-22T16:15:00Z")
-    assert parsed["transaction_type"] == "income"
+    assert parsed["transaction_type"] == "transfer"
+    assert parsed["movement_direction"] == "in"
+    assert parsed["movement_kind"] == "refund"
+    assert parsed["financial_effect"] == "refund"
     assert parsed["amount"] == 15_000
 
 
@@ -129,7 +132,9 @@ def test_multimoney_credit_without_decimals():
         "2026-09-22T10:00:00Z",
     )
     assert parsed["amount"] == 10_000
-    assert parsed["transaction_type"] == "income"
+    # A credit notice does not prove income: it stays an inbound transfer for review.
+    assert parsed["transaction_type"] == "transfer"
+    assert parsed["movement_direction"] == "in"
 
 
 def test_unknown_bank_is_ignored_not_guessed():

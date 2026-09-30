@@ -248,7 +248,7 @@ private fun CorrectionSheet(candidate: MailCandidate, saving: Boolean, onDismiss
     var amount by remember { mutableStateOf(candidate.nativeAmount?.let(format::inputText).orEmpty()) }
     var description by remember { mutableStateOf(candidate.description ?: candidate.subject.orEmpty()) }
     var category by remember { mutableStateOf(candidate.category ?: "") }
-    var type by remember { mutableStateOf(candidate.transactionType?.takeIf { it in setOf("expense", "income", "debt_payment") } ?: "expense") }
+    var type by remember { mutableStateOf(candidate.transactionType?.takeIf { it in setOf("expense", "income", "debt_payment", "transfer") } ?: "expense") }
     var date by remember { mutableStateOf(candidate.transactionDate?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() } ?: LocalDate.now()) }
     var rate by remember { mutableStateOf("") }
     var errors by remember { mutableStateOf(mapOf<String, String>()) }
@@ -267,7 +267,8 @@ private fun CorrectionSheet(candidate: MailCandidate, saving: Boolean, onDismiss
             supporting = tx("El de tu banco. DINCR no lo inventa.", "Your bank’s. DINCR never makes one up."))
         FormField(tx("Descripción", "Description"), description, { description = it }, errors["description"])
         FormField(tx("Categoría", "Category"), category, { category = it }, errors["category"])
-        ChoiceChips(listOf("expense" to tx("Gasto", "Expense"), "income" to tx("Ingreso", "Income"), "debt_payment" to tx("Pago de deuda", "Debt payment")), type, { type = it }, tx("Tipo", "Type"))
+        ChoiceChips(listOf("expense" to tx("Gasto", "Expense"), "income" to tx("Ingreso", "Income"), "debt_payment" to tx("Pago de deuda", "Debt payment"),
+            "transfer" to tx("Transferencia", "Transfer")), type, { type = it }, tx("Tipo", "Type"))
         DateField(tx("Fecha", "Date"), date, { it?.let { date = it } })
     }
 }
