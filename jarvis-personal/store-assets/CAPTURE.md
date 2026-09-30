@@ -35,9 +35,9 @@ capture its screen, language, plan, file, SHA-256 and size.
   `native/android/core/data/src/main/resources/store-sample.json`; the Android fixture serves those
   responses as they are, and `StoreFixtureTest.kt` / `StoreSampleTests.swift` check that the
   fixtures' dashboards and debts equal them.
-- Those outputs include the backend's current behaviour as it is (for example the VIP roadmap
-  suggests investing because the command center does not read the emergency-fund target). A
-  screenshot never corrects or embellishes it; a backend fix changes the golden file and the images.
+- Those outputs include the backend's current behaviour as it is. A screenshot never corrects or
+  embellishes it; a backend fix changes the golden file and the images (for example #295: the VIP
+  command center now reads the emergency-fund target, so the priority and roadmap changed).
 
 ## Android (automated; Windows, macOS or Linux)
 

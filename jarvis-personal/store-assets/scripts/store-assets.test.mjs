@@ -354,6 +354,26 @@ test("the validator rejects a final without provenance, from before #287, of an 
   assert.match(validator(dir, [iphone]).join("\n"), /screen 99-accounts is not confirmed for ios/);
 });
 
+test("the validator re-checks the capture manifest's plan and the iOS baseline (#294), not only compose", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-out-"));
+  const phone = target("google-phone");
+  for (const n of ["01", "02", "03", "04"]) writeImage(dir, phone, "es-419", n);
+  // The capture run recorded another plan for 02-overview than the one the image claims.
+  const manifestFile = path.join(dir, "raw/android/capture-manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+  manifest.captures.find((c) => c.id === "02-overview").plan = "vip";
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+  assert.match(validator(dir, [phone]).join("\n"), /02-overview\.png: the capture manifest records plan vip, the provenance free/);
+
+  // AFTER contains #287 but not #294 in the fake history: an iPhone final from it is refused.
+  const iphone = target("apple-iphone-69");
+  writeImage(dir, iphone, "es-MX", "01", { meta: { platform: "ios" } });
+  assert.match(validator(dir, [iphone]).join("\n"), /01-home\.png: app commit predates the ios store screens \(PR #294\)/);
+  const ios = screens.platform_baselines.ios.merge_commit;
+  const withIos = (a, d) => (a === ios && d === AFTER) || isAncestor(a, d);
+  assert.ok(!validator(dir, [iphone], { isAncestor: withIos }).some((p) => p.includes("predates the ios store screens")));
+});
+
 test("the validator checks that an image's folder and name agree with its provenance", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-out-"));
   const phone = target("google-phone");

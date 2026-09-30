@@ -85,7 +85,7 @@ export async function captureIos(argv = process.argv.slice(2)) {
     source_commit: commit, source_dirty: dirty, pipeline_commit: commit,
     built: true, // xcodebuild test builds the app from this tree
     captured_at: new Date().toISOString(),
-    app: { bundle_id: "com.dincr.app.nativedev", configuration: "Debug" },
+    app: { bundle_id: "com.dincr.app", configuration: "Debug" }, // native/ios/Config/Base.xcconfig (since #294)
     xcode: execFileSync("xcodebuild", ["-version"], { encoding: "utf8" }).trim().split("\n")[0],
     simulators, status_bar: "simctl override: 9:41, Wi-Fi, full signal and battery",
     method: "xcodebuild test -only-testing:DINCRUITests/StoreScreenshots",

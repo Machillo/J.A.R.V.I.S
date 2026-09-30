@@ -24,7 +24,6 @@ from pathlib import Path
 from backend.auth.current_user import reset_current_user, set_current_user
 from backend.core.i18n import use_language
 from backend.user_product import basic_service, free_service, income_policy, service, strategy_engine, vip_service
-from backend.user_product.strategy_engine import build_basic_strategy, build_paycheck_plan, build_vip_insights, build_vip_strategy
 
 GOLDEN = Path(__file__).resolve().parents[2] / "native/android/core/data/src/main/resources/store-sample.json"
 # The iOS app bundles a byte copy (DincrKit resource): written with the Android file, checked equal.
@@ -57,15 +56,38 @@ class _Rows:
 
 
 class _StoreConnection:
-    """Answers the queries of vip_service.get_vip_command_center and basic_service.get_guided_budget."""
+    """Answers the queries of the strategy service, the VIP command center, the guided budget and the Free dashboard."""
 
     def __init__(self, inputs: dict):
         self.inputs = inputs
         self.movements = [{**m, "date": _day(m["transaction_date"])} for m in inputs["movements"]]
 
     def _columns(self, sql: str) -> list[str]:
-        select = re.search(r"SELECT(.*?)FROM", sql, re.S).group(1)
+        select = re.sub(r"\([^()]*\)", "", re.search(r"SELECT(.*?)FROM", sql, re.S).group(1))  # NULLIF(a,0) AS a -> a
         return [part.strip().split()[-1] for part in select.split(",")]
+
+    FILTERS = {  # the WHERE conditions the harness applies to debts/goals rows; any other one is refused
+        "workspace_id=%s": lambda row: True,  # the one STORE workspace
+        "remaining_amount>0": lambda row: float(row["remaining_amount"]) > 0,
+        "status='active'": lambda row: row.get("status", "active") == "active",
+        "target_date IS NOT NULL": lambda row: row["target_date"] is not None,
+    }
+
+    def _select(self, sql: str, rows: list[dict]) -> _Rows:
+        """The query's WHERE, then its ORDER BY (Postgres sorts `priority` as text), then the SELECTed columns."""
+        where = re.search(r"WHERE (.*?)(?:ORDER BY|$)", sql, re.S).group(1)
+        for condition in (part.strip() for part in where.split(" AND ")):
+            if condition not in self.FILTERS:
+                raise AssertionError(f"unexpected condition in the STORE harness: {condition}")
+            rows = [row for row in rows if self.FILTERS[condition](row)]
+        order = re.search(r"ORDER BY (.*)$", sql, re.S)
+        for key in reversed([part.strip() for part in order.group(1).split(",")] if order else []):
+            column = key.split()[0]
+            if "NULLS LAST" in key:
+                rows = sorted(rows, key=lambda r: (r[column] is None, r[column] or date.min))
+            else:
+                rows = sorted(rows, key=lambda r: r[column])
+        return _Rows([{column: row.get(column) for column in self._columns(sql)} for row in rows])
 
     def _sum(self, kind: str, start: date, end: date, category: str | None = None) -> float:
         return round(sum(float(m["amount"]) for m in self.movements
@@ -80,10 +102,10 @@ class _StoreConnection:
         if "SUM(monthly_payment)" in sql:
             return _Rows([{"total": sum(float(d["monthly_payment"]) for d in self.inputs["debts"])}])
         if "FROM debts" in sql:
-            return _Rows([{**d, "interest_rate": d.get("interest_rate") or None, "next_payment_date": _day(d.get("next_payment_date"))} for d in self.inputs["debts"]])
+            return self._select(sql, [{**d, "interest_rate": d.get("interest_rate") or None, "next_payment_date": _day(d.get("next_payment_date"))}
+                                      for d in self.inputs["debts"]])
         if "FROM financial_goals" in sql:
-            return _Rows([{"id": g["id"], "name": g["name"], "target_amount": g["target_amount"], "current_amount": g["current_amount"],
-                           "target_date": _day(g.get("target_date")), "priority": g.get("priority")} for g in self.inputs["goals"]])
+            return self._select(sql, [{**g, "target_date": _day(g.get("target_date"))} for g in self.inputs["goals"]])
         if "AS debt_paid" in sql:  # _ledger_totals(conn, workspace, start, end)
             start, end = params[1], params[2]
             return _Rows([{"income": self._sum("income", start, end), "expenses": self._sum("expense", start, end), "debt_paid": 0}])
@@ -124,25 +146,6 @@ class _StoreConnection:
         raise AssertionError(f"unexpected query in the STORE harness: {sql[:80]}")
 
 
-def _snapshot(inputs: dict) -> dict:
-    """What service._strategy_snapshot reads for this account."""
-    profile = inputs["profile"]
-    order = {"high": 0, "medium": 1, "low": 2}
-    return {
-        "monthly_income_estimate": service._monthly_income_estimate(profile),
-        "essential_monthly_expenses": profile.get("essential_monthly_expenses"),
-        "liquid_savings": profile.get("liquid_savings"),
-        "emergency_fund_target": profile.get("emergency_fund_target"),
-        "strategy_preference": None, "discretionary_monthly_minimum": None,
-        "pay_frequency": profile.get("pay_frequency"), "payday_note": None,
-        "debts": [{"id": d["id"], "name": d["name"], "remaining_amount": d["remaining_amount"], "monthly_payment": d["monthly_payment"],
-                   "interest_rate": d.get("interest_rate") or None, "payment_day": d.get("payment_day")} for d in inputs["debts"]],
-        "goals": sorted(({"id": g["id"], "name": g["name"], "target_amount": g["target_amount"], "current_amount": g["current_amount"],
-                          "target_date": _day(g.get("target_date")), "priority": g.get("priority")} for g in inputs["goals"]),
-                        key=lambda g: (order.get(g["priority"], 9), g["target_date"] or date.max, g["id"])),
-    }
-
-
 def _engine(inputs: dict, monkeypatch) -> dict:
     today = _day(inputs["today"])
     monkeypatch.setattr(_FixtureDate, "current", today)
@@ -152,7 +155,7 @@ def _engine(inputs: dict, monkeypatch) -> dict:
     def _connect():
         yield connection
 
-    for module in (vip_service, basic_service, free_service, income_policy):
+    for module in (service, vip_service, basic_service, free_service, income_policy):
         monkeypatch.setattr(module, "date", _FixtureDate)
         monkeypatch.setattr(module, "get_connection", _connect, raising=False)
         monkeypatch.setattr(module, "get_current_account_id", lambda: "store-account", raising=False)
@@ -164,17 +167,16 @@ def _engine(inputs: dict, monkeypatch) -> dict:
     goal_monthly_need = strategy_engine._goal_monthly_need
     monkeypatch.setattr(strategy_engine, "_goal_monthly_need", lambda goal, reference_date=None: goal_monthly_need(goal, reference_date or today))
 
-    snapshot = _snapshot(inputs)
+    # The plan gate is not what this test pins (the fixtures gate by plan: FakeBackend/FixtureBackend).
+    monkeypatch.setattr(service, "require_feature", lambda feature: None)
     # The STORE identity, explicitly (money labels read the user's base currency), so no context
     # left by another test can change the output.
     token = set_current_user({"id": 1, "account_id": "store-account", "workspace_id": "store-workspace",
                               "role": "user", "base_currency": inputs["profile"].get("base_currency", "CRC")})
     try:
-        basic = build_basic_strategy(snapshot)
-        vip = build_vip_strategy(snapshot)
-        return {  # the same composition as service.get_strategy_basic / get_strategy_vip
-            "strategy_basic": {**basic, "next_paycheck": build_paycheck_plan(basic, snapshot.get("pay_frequency"), vip=False)},
-            "strategy_vip": {**vip, "insights": build_vip_insights(snapshot, vip), "next_paycheck": build_paycheck_plan(vip, snapshot.get("pay_frequency"), vip=True)},
+        return {  # the production entry points, through the fake connection
+            "strategy_basic": service.get_strategy_basic(),
+            "strategy_vip": service.get_strategy_vip(),
             "command_center": vip_service.get_vip_command_center(),
             "budget": basic_service.get_guided_budget(),
             "free_dashboard": free_service.get_free_dashboard(),
@@ -225,7 +227,7 @@ def test_the_harness_uses_the_fixture_date_everywhere(monkeypatch):
     assert engine["command_center"]["recurring"]["detected"] == []  # manual entries are not bank transactions
     # A new clock read in these engines must be routed to the fixture date before the golden is trusted.
     assert Path(strategy_engine.__file__).read_text(encoding="utf-8").count("date.today()") == 1
-    for module in (vip_service, basic_service, free_service, income_policy):
+    for module in (service, vip_service, basic_service, free_service, income_policy):
         assert "datetime.now()" not in Path(module.__file__).read_text(encoding="utf-8"), module.__name__
 
 

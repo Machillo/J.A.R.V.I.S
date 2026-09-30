@@ -119,6 +119,7 @@ function finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor,
     const record = (manifest.captures ?? []).find((c) => c.id === meta.screen && c.locale === meta.language && (c.device ?? "phone") === deviceOf(target));
     if (!record) problems.push(`${label}: its capture is not in raw/${platform}/capture-manifest.json`);
     else if (record.sha256 !== meta.capture?.sha256) problems.push(`${label}: its capture differs from the one in the capture manifest`);
+    else if (record.plan !== meta.plan) problems.push(`${label}: the capture manifest records plan ${record.plan}, the provenance ${meta.plan}`);
     if (manifest.source_commit !== meta.source_commit) problems.push(`${label}: the capture manifest names another app commit`);
     if (manifest.source_dirty !== false || manifest.built !== true) problems.push(`${label}: the capture run was not a clean build of its commit`);
   }
@@ -127,7 +128,12 @@ function finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor,
   if (!screen?.platforms?.[platform]?.confirmed) problems.push(`${label}: screen ${meta.screen} is not confirmed for ${platform}`);
   else if (meta.plan !== screen.plan) problems.push(`${label}: captured with plan ${meta.plan}, the screen needs ${screen.plan}`);
   if (!meta.source_commit) problems.push(`${label}: no source commit recorded`);
-  else problems.push(...appCommitProblems(meta.source_commit, screens, isAncestor, { requireMain, changedSince }).map((p) => `${label}: ${p}`));
+  else {
+    problems.push(...appCommitProblems(meta.source_commit, screens, isAncestor, { requireMain, changedSince }).map((p) => `${label}: ${p}`));
+    // The same per-platform baseline as compose.mjs (iOS: #294), re-checked here.
+    const own = screens.platform_baselines?.[platform];
+    if (own?.merge_commit && !isAncestor(own.merge_commit, meta.source_commit)) problems.push(`${label}: app commit predates the ${platform} store screens (PR #${own.pr})`);
+  }
   if (!meta.capture?.file || !meta.capture?.sha256) problems.push(`${label}: no capture file and SHA-256 recorded`);
   else {
     const raw = path.join(rawRoot, meta.capture.file);
