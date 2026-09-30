@@ -218,6 +218,11 @@ export function finalGateProblems({ screens, targets, locales, rawDir, sourceCom
   else problems.push(...appCommitProblems(sourceCommit, screens, isAncestor, { requireMain, changedSince }));
   for (const target of targets.filter((t) => !t.single)) {
     const platform = platformOf(target);
+    // A platform's screens became real at its own merge (iOS: #294); older captures show a prototype.
+    const own = screens.platform_baselines?.[platform];
+    if (sourceCommit && own?.merge_commit && !isAncestor(own.merge_commit, sourceCommit)) {
+      problems.push(`${target.id}: app commit ${sourceCommit.slice(0, 8)} predates the ${platform} store screens (PR #${own.pr}, ${own.merge_commit.slice(0, 8)})`);
+    }
     const usable = screensFor(screens, target, true);
     if (!usable.length) { problems.push(`${target.id}: no screen is confirmed for ${platform} in config/screens.json`); continue; }
     const manifestFile = path.join(rawDir, platform, "capture-manifest.json");

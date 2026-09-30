@@ -110,9 +110,12 @@ test("the screen list only confirms screens the native apps have, with how to re
   const pending = { ...screens, screens: [{ id: "x", plan: "free", platforms: { android: { available: true, confirmed: false, reason: "not checked" } } }] };
   assert.deepEqual(screensFor(pending, target("google-phone"), true), []);
   assert.equal(screensFor(pending, target("google-phone"), false).length, 1);
-  // Google Play takes at most 8; iOS only has Home, Transactions and the Plan hub today.
+  // Google Play takes at most 8. Since #294 the iOS app has every store screen (Home VIP, budget,
+  // strategy, Email Monitor included), with the same ids and plans as Android.
   assert.ok(screensFor(screens, target("google-phone"), true).length <= 8);
-  assert.deepEqual(screensFor(screens, target("apple-iphone-69"), true).map((s) => s.id), ["02-overview", "03-movements", "04-debts"]);
+  const ids8 = ["01-home", "02-overview", "03-movements", "04-debts", "05-goals", "06-budget", "07-strategy", "08-mail"];
+  assert.deepEqual(screensFor(screens, target("apple-iphone-69"), true).map((s) => s.id), ids8);
+  assert.deepEqual(screensFor(screens, target("google-phone"), true).map((s) => s.id), ids8);
 });
 
 test("the capture tests navigate to exactly the confirmed screens, each with the screen's plan", () => {
@@ -124,11 +127,10 @@ test("the capture tests navigate to exactly the confirmed screens, each with the
   assert.match(kotlin, /"dincrFixtures", "STORE"/);
 
   const swift = fs.readFileSync(path.join(root, "../native/ios/DINCRUITests/StoreScreenshots.swift"), "utf8");
-  const ios = [...swift.matchAll(/capture\("([\w-]+)"/g)].map(([, id]) => id);
-  assert.deepEqual(ios, screensFor(screens, target("apple-iphone-69"), true).map((s) => s.id));
+  const ios = [...swift.matchAll(/shoot\("([\w-]+)", plan: "(\w+)"\)/g)].map(([, id, plan]) => ({ id, plan }));
+  assert.deepEqual(ios, screensFor(screens, target("apple-iphone-69"), true).map((s) => ({ id: s.id, plan: s.plan })));
   assert.match(swift, /"-DincrFixtures", "store"/);
-  assert.match(swift, /"-DincrPlan", "free"/); // every iOS screen is a Free screen
-  assert.ok(screensFor(screens, target("apple-iphone-69"), true).every((s) => s.plan === "free"));
+  assert.match(swift, /"-DincrPlan", plan/); // each iOS screen runs with its own plan
   assert.match(swift, /XCTSkipIf\(dir\.isEmpty/);
 });
 
@@ -176,6 +178,18 @@ test("the final run accepts a clean post-#287 capture that matches its manifest"
   assert.deepEqual(gate(rawTree()), []);
 });
 
+test("iOS finals need an app commit that contains #294 (before it the iOS app was a prototype)", () => {
+  const ios = screens.platform_baselines.ios;
+  assert.equal(ios.pr, 294);
+  assert.equal(screens.platform_baselines.android.merge_commit, BASELINE);
+  const iphone = { targets: [target("apple-iphone-69")], screens };
+  // AFTER contains #287 but not #294 in the fake history: refused for iOS, not for Android.
+  assert.ok(gate(rawTree(), AFTER, iphone).some((p) => p.includes("predates the ios store screens (PR #294")));
+  assert.ok(!gate(rawTree(), AFTER).some((p) => p.includes("predates the android store screens")));
+  const withIos = (a, d) => (a === ios.merge_commit && d === AFTER) || isAncestor(a, d);
+  assert.ok(!gate(rawTree(), AFTER, { ...iphone, isAncestor: withIos }).some((p) => p.includes("predates the ios store screens")));
+});
+
 test("the final run refuses a capture from before #287 (Capacitor UI), off main, or without a commit", () => {
   const rawDir = rawTree({ manifest: { source_commit: BEFORE } });
   assert.ok(gate(rawDir, BEFORE).some((p) => p.includes("predates the native app")));
@@ -191,7 +205,8 @@ test("the final run refuses a capture from before #287 (Capacitor UI), off main,
 });
 
 test("the final run refuses unconfirmed platforms, dirty or foreign manifests and changed captures", () => {
-  assert.ok(gate(rawTree(), AFTER, { targets: [target("apple-iphone-69")], screens: { ...oneScreen, screens: [screens.screens[0]] } })
+  const iosUnconfirmed = { ...screens.screens[0], platforms: { ...screens.screens[0].platforms, ios: { available: false, confirmed: false, reason: "not checked" } } };
+  assert.ok(gate(rawTree(), AFTER, { targets: [target("apple-iphone-69")], screens: { ...oneScreen, screens: [iosUnconfirmed] } })
     .some((p) => p.includes("no screen is confirmed for ios")));
   assert.ok(gate(rawTree({ manifest: { source_dirty: true } })).some((p) => p.includes("uncommitted changes")));
   assert.ok(gate(rawTree({ manifest: { fixture: "POPULATED" } })).some((p) => p.includes("fixture POPULATED")));
@@ -333,10 +348,10 @@ test("the validator rejects a final without provenance, from before #287, of an 
   assert.match(problems, /08-mail\.png: no pipeline commit recorded/);
   assert.match(problems, /08-mail\.png: fixture undefined, expected STORE/);
 
-  // iOS: the Budget screen does not exist there, so an iPhone final of it is refused.
+  // iOS: a screen the app does not have is refused for an iPhone final.
   const iphone = target("apple-iphone-69");
-  writeImage(dir, iphone, "es-MX", "01", { meta: { platform: "ios", screen: "06-budget", plan: "basic" } });
-  assert.match(validator(dir, [iphone]).join("\n"), /screen 06-budget is not confirmed for ios/);
+  writeImage(dir, iphone, "es-MX", "01", { meta: { platform: "ios", screen: "99-accounts", plan: "vip" } });
+  assert.match(validator(dir, [iphone]).join("\n"), /screen 99-accounts is not confirmed for ios/);
 });
 
 test("the validator checks that an image's folder and name agree with its provenance", () => {

@@ -15,11 +15,11 @@ Sources:
 | iPhone | **6.9"** portrait 1260×2736, 1290×2796 or **1320×2868** is required when the app runs on iPhone. 6.5", 6.3", 6.1", 5.5" and 4.7" are scaled down from it when not supplied | `apple-iphone-69` at **1320×2868** |
 | iPad | **13"** portrait 2064×2752 or 2048×2732 is **required if the app runs on iPad**. 11", 12.9", 10.5" and 9.7" are scaled from it | `apple-ipad-13` at **2064×2752** (see iPad note) |
 | Format | `.png`, `.jpg` or `.jpeg`; **no alpha channel or transparency** | Opaque 24-bit PNG (RGB, no tRNS), enforced by `png.mjs` and `validate.mjs` |
-| Count | 1 to 10 per localization | 3 screens: what the native iOS app has today (overview, transactions, Plan) |
+| Count | 1 to 10 per localization | 8 screens, the same as Google Play (the native iOS app has them since #294) |
 | Device frames | Allowed | Generic rounded frame, no real device model or trademark |
-| Paid features | Content shown that needs a purchase must say so (App Review 2.3.2) | Every screen carries its plan's badge (`screens.json` `plan`, checked by `validate.mjs`). The iOS screens are all Free today |
+| Paid features | Content shown that needs a purchase must say so (App Review 2.3.2) | Every screen carries its plan's badge (`screens.json` `plan`, checked by `validate.mjs`); each capture runs with that plan |
 
-**iPad note (re-checked on `main` after #287).** Both the native app
+**iPad note (re-checked on `main` after #294).** Both the native app
 (`native/ios/Config/Base.xcconfig` and the project) and the Capacitor project declare
 `TARGETED_DEVICE_FAMILY = 1,2` (iPhone and iPad), so App Store Connect requires 13" iPad
 screenshots and the pipeline keeps the `apple-ipad-13` target. Nothing was changed. Making the app

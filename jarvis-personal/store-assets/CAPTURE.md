@@ -74,11 +74,11 @@ node jarvis-personal/store-assets/scripts/capture-ios.mjs --phone "iPhone 17 Pro
 | Item | Value |
 |---|---|
 | Simulators | iPhone 17 Pro Max (6.9", captures 1320×2868) and iPad Pro 13-inch (M4) (2064×2752). Any simulator with exactly those screen sizes works; the script refuses other sizes |
-| Fixture | `-DincrFixtures store -DincrPlan free -DincrSkipLogin`, languages `(es)`/`es_CR` and `(en)`/`en_US` |
+| Fixture | `-DincrFixtures store -DincrPlan <screen plan> -DincrSkipLogin` (FixtureBackend `.store`: the bundled `store-sample.json`, the backend engines' output), languages `(es)`/`es_CR` and `(en)`/`en_US` |
 | Test | `DINCRUITests/StoreScreenshots.swift`, opt-in through `TEST_RUNNER_DINCR_STORE_SHOTS_DIR` (the script sets it) |
-| Screens and navigation | `02-overview`: Hoy/Today tab · `03-movements`: Movimientos/Transactions tab · `04-debts`: Plan tab (debts, then goals) |
-| Expected result | 12 PNGs: `raw/ios/<es\|en>/<phone\|tablet>/<02-overview\|03-movements\|04-debts>.png`, plus `raw/ios/capture-manifest.json`; status bar 9:41, full Wi-Fi and battery |
-| Not captured on iOS | Home VIP, goals as a separate screen, budget, strategy, mail: the iOS app does not have them yet (`screens.json` gives the reason for each). The DINCR tab is an "under construction" screen and is never captured |
+| Screens and navigation (since #294, the same 8 as Android) | `01-home` (VIP): Hoy/Today · `02-overview` (Free): Hoy/Today · `03-movements`: Movimientos/Transactions · `04-debts`: Plan > Deudas (`plan.debts`) · `05-goals`: Plan > Metas y ahorro (`plan.goals`) · `06-budget` (Basic): Plan > Presupuesto (`plan.budget`) · `07-strategy` (Basic): DINCR > Tu estrategia (`advisor.strategy`) · `08-mail` (VIP): Perfil > Monitor de correo (`profile.mail`) |
+| Expected result | 32 PNGs: `raw/ios/<es\|en>/<phone\|tablet>/<01-home … 08-mail>.png`, plus `raw/ios/capture-manifest.json`; status bar 9:41, full Wi-Fi and battery |
+| Baseline | The capture commit must contain #294 (`screens.json` `platform_baselines.ios`); the final gate refuses older builds, which show the iOS prototype |
 
 Equivalent manual command (what the script runs per device):
 
@@ -107,7 +107,8 @@ Notes:
 - iPad: the app declares iPhone and iPad (`TARGETED_DEVICE_FAMILY = 1,2`), so App Store Connect
   requires 13" iPad screenshots. Making the app iPhone-only is Kenneth's release decision; only
   then use `--no-tablet` and drop the `apple-ipad-13` target (`REQUIREMENTS.md`).
-- The native iOS app is a partial prototype today (`native/RELEASE_IDENTITY.md`): 3 screenshots
-  meet Apple's minimum of 1 but show a small part of the product.
-- `capture-ios.mjs` and `StoreScreenshots.swift` have not run yet (no Mac here). CI compiles the UI
-  test target when its iOS job finds a simulator; treat the first Mac run as their test.
+- Since #294 the native iOS app has every store screen, with the identity `com.dincr.app`. The
+  store release gates are in `native/RELEASE_IDENTITY.md` (the stores still ship Capacitor).
+- `capture-ios.mjs` and `StoreScreenshots.swift` have not run on a simulator yet (no Mac here). CI
+  compiles the UI test target and runs it without `DINCR_STORE_SHOTS_DIR` (skipped); treat the
+  first Mac run as their test.

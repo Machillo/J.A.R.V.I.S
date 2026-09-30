@@ -10,7 +10,7 @@ or publishes anything.**
 | Set | State |
 |---|---|
 | Google Play, ES (`es-419`) and EN (`en-US`) | **Final**: 8 phone screenshots per language (1440×2560) + feature graphic (1024×500), from Android captures. `output/final/google/` |
-| App Store, iPhone 6.9" and iPad 13" | **MAC REQUIRED**: not captured. The iOS app has 3 store-ready screens today (overview, transactions, Plan). See `CAPTURE.md` |
+| App Store, iPhone 6.9" and iPad 13" | **MAC REQUIRED**: not captured yet. Since #294 the iOS app has the same 8 store screens as Android, and the capture test navigates them (`StoreScreenshots.swift`). See `CAPTURE.md` |
 
 **Human gate before uploading (not a screenshot decision):** the stores still ship the Capacitor
 app. These images show the native app, so they may be uploaded only when the native build takes the
@@ -101,11 +101,13 @@ for the plan shown. Uploading to the stores is a separate, human step.
 - **Screens:** edit `config/screens.json` **and** the capture tests (`StoreScreenshots.kt`,
   `StoreScreenshots.swift`); a test checks they list the same screens and plans. Never add a
   screen the app does not have.
-- **Data:** the STORE fixture is `native/android/core/data/.../StoreSample.kt` and
-  `native/ios/DincrKit/Sources/DincrCore/StoreSample.swift`. What the backend computes from it
-  (strategy, VIP command center, guided budget, Free dashboard) is never hand-written: it lives in
-  `native/android/core/data/src/main/resources/store-sample.json`, produced by running the backend
-  engines (`backend/tests/test_store_sample_engine.py`). After changing the data:
+- **Data:** the STORE fixture is `native/android/core/data/.../StoreSample.kt`; iOS reads the same
+  account from `store-sample.json` (`native/ios/DincrKit/Sources/DincrCore/StoreSample.swift`,
+  served by `FixtureBackend` `.store`). What the backend computes from it (strategy, VIP command
+  center, guided budget, Free dashboard) is never hand-written: it lives in
+  `native/android/core/data/src/main/resources/store-sample.json` and its byte copy
+  `native/ios/DincrKit/Sources/DincrCore/Resources/store-sample.json`, both written and checked by
+  the backend engines (`backend/tests/test_store_sample_engine.py`). After changing the data:
   `DINCR_UPDATE_STORE_GOLDEN=1 ./gradlew :core:data:test` (Android), then
   `DINCR_UPDATE_STORE_GOLDEN=1 python -m pytest backend/tests/test_store_sample_engine.py` (from `jarvis-personal`), then re-capture.
 - **Layout:** edit `templates/*.html`. Sizes use `--u` (1/100 of the width), so one template serves

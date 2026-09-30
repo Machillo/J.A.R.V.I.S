@@ -1,5 +1,5 @@
 {
-  "$comment": "Store screens in store order. Every screen is a real screen of the native DINCR app (PR #287, merged into main), captured on the synthetic STORE fixture; the templates never draw UI. `plan` is the lowest plan that includes the screen: the capture runs with it and the caption must carry its badge (copy/*.json). A platform may be used for finals only where `confirmed` is true: the screen was checked in that platform's code on origin/main and how_to_reach says how to open it. Audited on 2026-09-29.",
+  "$comment": "Store screens in store order. Every screen is a real screen of the native DINCR app, captured on the synthetic STORE fixture; the templates never draw UI. `plan` is the lowest plan that includes the screen: the capture runs with it and the caption must carry its badge (copy/*.json). A platform may be used for finals only where `confirmed` is true: the screen was checked in that platform's code on origin/main and how_to_reach says how to open it. Audited on 2026-09-30 against origin/main 31b0310b (Android: #287, #292, #293; iOS: #294).",
   "app_baseline": {
     "pr": 287,
     "merge_commit": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
@@ -13,68 +13,180 @@
     "scenario": "STORE",
     "fixture_date": "2026-09-28",
     "android": "Debug build, intent extras dincrFixtures=STORE, dincrPlan=<plan>, dincrSkipLogin=true, dincrLatencyMs=0 (native/android/core/data/.../StoreSample.kt). Captured by scripts/capture-android.mjs through the opt-in test app/src/androidTest/.../StoreScreenshots.kt.",
-    "ios": "Debug build, launch arguments -DincrFixtures store -DincrPlan free -DincrSkipLogin (native/ios/DincrKit/.../StoreSample.swift). Captured by the opt-in XCUITest DINCRUITests/StoreScreenshots.swift on a Mac (CAPTURE.md, MAC REQUIRED)."
+    "ios": "Debug build, launch arguments -DincrFixtures store -DincrPlan <plan> -DincrSkipLogin (FixtureBackend .store, native/ios/DincrKit/.../StoreSample.swift reading the bundled store-sample.json). Captured by the opt-in XCUITest DINCRUITests/StoreScreenshots.swift on a Mac (CAPTURE.md, MAC REQUIRED)."
   },
   "locales": [
-    { "id": "es", "apple": "es-MX", "google": "es-419", "ios_locale": "es_CR", "android_locale": "es-CR" },
-    { "id": "en", "apple": "en-US", "google": "en-US", "ios_locale": "en_US", "android_locale": "en-US" }
+    {
+      "id": "es",
+      "apple": "es-MX",
+      "google": "es-419",
+      "ios_locale": "es_CR",
+      "android_locale": "es-CR"
+    },
+    {
+      "id": "en",
+      "apple": "en-US",
+      "google": "en-US",
+      "ios_locale": "en_US",
+      "android_locale": "en-US"
+    }
   ],
   "screens": [
     {
-      "id": "01-home", "area": "Home (VIP: safe to spend, priority, action plan)", "copy_key": "home", "plan": "vip",
+      "id": "01-home",
+      "area": "Home (VIP: safe to spend, priority, action plan)",
+      "copy_key": "home",
+      "plan": "vip",
       "platforms": {
-        "android": { "available": true, "confirmed": true, "how_to_reach": "Hoy/Today tab with a VIP account" },
-        "ios": { "available": false, "confirmed": false, "reason": "iOS shows the Free overview for every plan, with a 'Resumen básico' banner for paid plans (HomeView.swift)" }
+        "android": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Hoy/Today tab with a VIP account"
+        },
+        "ios": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Hoy/Today tab with a VIP account (command center: safe to spend, priority, roadmap)"
+        }
       }
     },
     {
-      "id": "02-overview", "area": "Month overview (available, income vs expenses, categories)", "copy_key": "overview", "plan": "free",
+      "id": "02-overview",
+      "area": "Month overview (available, income vs expenses, categories)",
+      "copy_key": "overview",
+      "plan": "free",
       "platforms": {
-        "android": { "available": true, "confirmed": true, "how_to_reach": "Hoy/Today tab with a Free account" },
-        "ios": { "available": true, "confirmed": true, "how_to_reach": "Hoy/Today tab with a Free account (-DincrPlan free)" }
+        "android": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Hoy/Today tab with a Free account"
+        },
+        "ios": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Hoy/Today tab with a Free account"
+        }
       }
     },
     {
-      "id": "03-movements", "area": "Transactions", "copy_key": "movements", "plan": "free",
+      "id": "03-movements",
+      "area": "Transactions",
+      "copy_key": "movements",
+      "plan": "free",
       "platforms": {
-        "android": { "available": true, "confirmed": true, "how_to_reach": "Movimientos/Transactions tab" },
-        "ios": { "available": true, "confirmed": true, "how_to_reach": "Movimientos/Transactions tab" }
+        "android": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Movimientos/Transactions tab"
+        },
+        "ios": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Movimientos/Transactions tab"
+        }
       }
     },
     {
-      "id": "04-debts", "area": "Debts", "copy_key": "debts", "plan": "free",
+      "id": "04-debts",
+      "area": "Debts",
+      "copy_key": "debts",
+      "plan": "free",
       "platforms": {
-        "android": { "available": true, "confirmed": true, "how_to_reach": "Plan tab > Deudas/Debts" },
-        "ios": { "available": true, "confirmed": true, "how_to_reach": "Plan tab (debts first, goals below)" }
+        "android": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Plan tab > Deudas/Debts"
+        },
+        "ios": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Plan tab > Deudas/Debts (plan.debts)"
+        }
       }
     },
     {
-      "id": "05-goals", "area": "Goals and savings", "copy_key": "goals", "plan": "free",
+      "id": "05-goals",
+      "area": "Goals and savings",
+      "copy_key": "goals",
+      "plan": "free",
       "platforms": {
-        "android": { "available": true, "confirmed": true, "how_to_reach": "Plan tab > Metas y ahorros/Goals and savings" },
-        "ios": { "available": false, "confirmed": false, "reason": "No separate goals screen: goals are listed under the debts in the Plan tab (04-debts)" }
+        "android": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Plan tab > Metas y ahorros/Goals and savings"
+        },
+        "ios": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Plan tab > Metas y ahorro/Goals and savings (plan.goals)"
+        }
       }
     },
     {
-      "id": "06-budget", "area": "Budget", "copy_key": "budget", "plan": "basic",
+      "id": "06-budget",
+      "area": "Budget",
+      "copy_key": "budget",
+      "plan": "basic",
       "platforms": {
-        "android": { "available": true, "confirmed": true, "how_to_reach": "Plan tab > Presupuesto/Budget with a Basic account" },
-        "ios": { "available": false, "confirmed": false, "reason": "Not in the iOS app yet (native/RELEASE_IDENTITY.md)" }
+        "android": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Plan tab > Presupuesto/Budget with a Basic account"
+        },
+        "ios": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Plan tab > Presupuesto/Budget with a Basic account (plan.budget)"
+        }
       }
     },
     {
-      "id": "07-strategy", "area": "Strategy (monthly margin split)", "copy_key": "strategy", "plan": "basic",
+      "id": "07-strategy",
+      "area": "Strategy (monthly margin split)",
+      "copy_key": "strategy",
+      "plan": "basic",
       "platforms": {
-        "android": { "available": true, "confirmed": true, "how_to_reach": "DINCR tab > Estrategia/Strategy with a Basic account" },
-        "ios": { "available": false, "confirmed": false, "reason": "The iOS DINCR tab is an 'under construction' screen: never captured" }
+        "android": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "DINCR tab > Estrategia/Strategy with a Basic account"
+        },
+        "ios": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "DINCR tab > Tu estrategia/Your strategy with a Basic account (advisor.strategy)"
+        }
       }
     },
     {
-      "id": "08-mail", "area": "Financial emails (bank notices to review)", "copy_key": "mail", "plan": "vip",
+      "id": "08-mail",
+      "area": "Financial emails (bank notices to review)",
+      "copy_key": "mail",
+      "plan": "vip",
       "platforms": {
-        "android": { "available": true, "confirmed": true, "how_to_reach": "Perfil/Profile > Correos financieros/Financial emails with a VIP account (fixture mailbox ana.demo@example.com)" },
-        "ios": { "available": false, "confirmed": false, "reason": "Not in the iOS app yet (native/RELEASE_IDENTITY.md)" }
+        "android": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Perfil/Profile > Correos financieros/Financial emails with a VIP account (fixture mailbox ana.demo@example.com)"
+        },
+        "ios": {
+          "available": true,
+          "confirmed": true,
+          "how_to_reach": "Perfil/Profile > Monitor de correo/Email Monitor with a VIP account (profile.mail; fixture mailbox ana.demo@example.com)"
+        }
       }
     }
-  ]
+  ],
+  "platform_baselines": {
+    "$comment": "Per platform, the change that made the store screens real on that platform. A final capture of the platform must contain it.",
+    "android": {
+      "pr": 287,
+      "merge_commit": "828751940623a06546f4cfb4a4b0f91ca41ff69e"
+    },
+    "ios": {
+      "pr": 294,
+      "merge_commit": "5c139af2dcdf49a05c257e7fa4950dce5769e941",
+      "reason": "Before #294 the iOS app was a prototype (Free overview for every plan, no budget, strategy or Email Monitor)."
+    }
+  }
 }
