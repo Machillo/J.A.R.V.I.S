@@ -85,15 +85,36 @@ public struct Profile: Decodable, Sendable, Equatable {
                 entryCurrencies: entryCurrencies)
     }
 
-    /// Owner/admin sessions are never served by the public app (Owner boundary).
-    public var isOwner: Bool { role == "owner" || role == "admin" }
+    /// The Owner uses the public app like any account: its own data, at least VIP (the backend grants
+    /// Owner every product feature), and no internal screen (the public app has none).
+    public var isOwner: Bool { role == "owner" }
+    /// Admin sessions are not served by the public app (Owner boundary).
+    public var usesInternalAppOnly: Bool { role == "admin" }
+    /// The Owner account is never deleted from the public app (DELETE /auth/me would remove it).
+    public var canDeleteAccountInApp: Bool { !isOwner }
     public var plan: String { subscription?.plan ?? "free" }
-    /// What the app offers; the backend still decides every request.
-    public var planTier: PlanTier { PlanTier.from(subscription?.plan) }
+    /// What the app offers; the backend still decides every request. Only the server's role
+    /// elevates Owner: a plan code alone never does.
+    public var planTier: PlanTier { isOwner ? .vip : PlanTier.from(subscription?.plan) }
     public var isCourtesy: Bool { subscription?.accessSource == "courtesy" }
     public var firstName: String? {
         let source = displayName ?? email?.split(separator: "@").first.map(String.init)
         return source?.split(separator: " ").first.map(String.init)
+    }
+}
+
+/// Where a signed-in identity lands in the public app, in order: the Owner boundary, legal, profile
+/// setup, plan. The server decides role and plan; this only routes (Android: `IdentityGate.of`).
+public enum IdentityGate: Equatable, Sendable {
+    case internalOnly, legalRequired, profileSetup, choosePlan, ready
+
+    public static func of(_ profile: Profile) -> IdentityGate {
+        if profile.usesInternalAppOnly { return .internalOnly }
+        if profile.legal?.required == true { return .legalRequired }
+        if profile.profileSetupCompleted != true { return .profileSetup }
+        // Owner's plan is granted by the backend, never chosen (POST /auth/plan ignores Owner).
+        if profile.planSelected != true && !profile.isOwner { return .choosePlan }
+        return .ready
     }
 }
 

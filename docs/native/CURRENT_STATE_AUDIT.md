@@ -24,7 +24,7 @@ unless noted.
 | 2 | Signed out | no Supabase session | `Login` | Google on both platforms; **Sign in with Apple on iOS only** (guideline 4.8) |
 | 3 | Identity error | `/auth/me` fails | Error screen: retry, open support, log out; **"Terminar eliminación"** when error code is `account_deletion_pending` (calls `DELETE /auth/me` then local sign-out) | |
 | 4 | Loading identity | `/auth/me` pending | Boot screen | |
-| 5 | Owner/admin role | `role ∈ {owner, admin}` | Owner app — **out of scope, never shipped in native Users apps** | Native apps must fail safe: an Owner session shows a "use the Owner app" notice, never Owner features |
+| 5 | Owner/admin role | `role ∈ {owner, admin}` | Owner app — **out of scope, never shipped in native Users apps** | Native apps never render Owner/internal features. An Owner session uses the public app at VIP level with its own data (the backend grants Owner every feature); an admin session shows a "use the Owner app" notice |
 | 6 | Legal consent | `legal.required` | `LegalConsent` (two checkboxes, both required; `POST` accept with `terms_version`/`privacy_version`) | Log out available |
 | 7 | Profile setup | `!profile_setup_completed` | `ProfileSetup` 4 steps: name → goal → currency & number format → institutions | Saved once at the end (`POST /auth/profile-setup`) |
 | 8 | Plan selection | `!plan_selected` | `FinvaWelcomeStory` (5 slides, skippable, shown once per account, local flag) → `FinvaOnboarding` plan cards | `GET /auth/plans`, `GET /product-ops/billing/catalog`; paid plans only selectable while `promotion.active`; plan confirmed via `confirmedPlanProfile` (response profile or fresh `/auth/me`) |

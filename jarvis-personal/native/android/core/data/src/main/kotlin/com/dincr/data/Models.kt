@@ -81,13 +81,40 @@ data class Profile(
         @SerialName("accepted_at") val acceptedAt: String? = null,
     )
 
-    /** Owner/admin sessions are never served by the public app (Owner boundary). */
-    val isOwner: Boolean get() = role == "owner" || role == "admin"
+    /**
+     * The Owner uses the public app like any account: its own data, at least VIP (the backend grants
+     * Owner every product feature), and no internal screen (the public app has none).
+     */
+    val isOwner: Boolean get() = role == "owner"
+    /** Admin sessions are not served by the public app (Owner boundary). */
+    val usesInternalAppOnly: Boolean get() = role == "admin"
+    /** The Owner account is never deleted from the public app (DELETE /auth/me would remove it). */
+    val canDeleteAccountInApp: Boolean get() = !isOwner
     val plan: String get() = subscription?.plan?.lowercase() ?: "free"
-    val planTier: PlanTier get() = PlanTier.from(plan)
+    /** What the app offers; the backend still decides every request. Only the server's role elevates Owner. */
+    val planTier: PlanTier get() = if (isOwner) PlanTier.VIP else PlanTier.from(plan)
     val isCourtesy: Boolean get() = subscription?.accessSource == "courtesy"
     val firstName: String?
         get() = (displayName ?: email?.substringBefore("@"))?.trim()?.split(" ")?.firstOrNull()?.takeIf { it.isNotEmpty() }
+}
+
+/**
+ * Where a signed-in identity lands in the public app, in order: the Owner boundary, legal, profile
+ * setup, plan. The server decides role and plan; this only routes (iOS: `IdentityGate.of`).
+ */
+enum class IdentityGate {
+    INTERNAL_ONLY, LEGAL_REQUIRED, PROFILE_SETUP, CHOOSE_PLAN, READY;
+
+    companion object {
+        fun of(profile: Profile): IdentityGate = when {
+            profile.usesInternalAppOnly -> INTERNAL_ONLY
+            profile.legal?.required == true -> LEGAL_REQUIRED
+            profile.profileSetupCompleted != true -> PROFILE_SETUP
+            // Owner's plan is granted by the backend, never chosen (POST /auth/plan ignores Owner).
+            profile.planSelected != true && !profile.isOwner -> CHOOSE_PLAN
+            else -> READY
+        }
+    }
 }
 
 @Serializable
