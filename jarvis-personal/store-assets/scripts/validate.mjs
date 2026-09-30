@@ -129,7 +129,7 @@ function finalCaptureProblems(label, meta, target, screens, rawRoot, isAncestor,
   else if (meta.plan !== screen.plan) problems.push(`${label}: captured with plan ${meta.plan}, the screen needs ${screen.plan}`);
   if (!meta.source_commit) problems.push(`${label}: no source commit recorded`);
   else {
-    problems.push(...appCommitProblems(meta.source_commit, screens, isAncestor, { requireMain, changedSince }).map((p) => `${label}: ${p}`));
+    problems.push(...appCommitProblems(meta.source_commit, screens, isAncestor, { requireMain, changedSince, platform }).map((p) => `${label}: ${p}`));
     // The same per-platform baseline as compose.mjs (iOS: #294), re-checked here.
     const own = screens.platform_baselines?.[platform];
     if (own?.merge_commit && !isAncestor(own.merge_commit, meta.source_commit)) problems.push(`${label}: app commit predates the ${platform} store screens (PR #${own.pr})`);

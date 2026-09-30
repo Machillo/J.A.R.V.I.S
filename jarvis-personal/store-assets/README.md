@@ -50,8 +50,10 @@ The brand mark is the app icon, `frontend/resources/icon.png`.
 - the screen is **confirmed for that platform** in `screens.json`;
 - the capture manifest comes from a run that **built the app from a clean tree** of that commit with
   the **STORE** fixture, and each capture's **SHA-256** still matches it;
-- the app (`native/`) has not changed since the captured commit, and copy, templates, config and
-  brand have not changed since the image was composed (else it is stale: re-capture or re-compose);
+- the captured platform's app has not changed since the captured commit: `native/` except the other
+  platform's tree (a Google image goes stale with `native/android/**` or shared native code such as
+  `design-tokens/`, never with `native/ios/**`, and the reverse for Apple); and copy, templates, config
+  and brand have not changed since the image was composed (else it is stale: re-capture or re-compose);
 - the capture was taken with the **screen's plan**, and the caption carries that plan's badge;
 - the PNG is the exact size, **without alpha**, and not a preview or placeholder;
 - the provenance file exists, the image's own SHA-256 matches it, its capture is exactly

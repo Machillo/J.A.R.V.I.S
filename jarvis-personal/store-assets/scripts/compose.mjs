@@ -176,16 +176,27 @@ export function gitIsAncestor(ancestor, descendant) {
   }
 }
 
-/** Paths whose change makes a capture stale (the app) or a composed image stale (its inputs). */
-export const APP_PATHS = ["jarvis-personal/native"];
+/**
+ * Per platform, the paths whose change makes its captures stale: its own app tree (the app, its
+ * bundled STORE fixture and its capture test) and the shared native code (design tokens generated
+ * into both apps, the contract), never the other platform's tree. An unknown platform gets the whole
+ * native tree. COMPOSE_INPUTS: the paths whose change makes a composed image stale.
+ */
+const NATIVE = "jarvis-personal/native";
+export const APP_PATHS = {
+  android: [NATIVE, `:(exclude)${NATIVE}/ios`],
+  ios: [NATIVE, `:(exclude)${NATIVE}/android`],
+};
+export const appPathsFor = (platform) => APP_PATHS[platform] ?? [NATIVE];
+const describePaths = (paths) => paths.map((p) => p.replace(/^:\(exclude\)/, "not ")).join(", ");
 export const COMPOSE_INPUTS = ["jarvis-personal/store-assets/copy", "jarvis-personal/store-assets/templates",
   "jarvis-personal/store-assets/config", "DESIGN.md", "jarvis-personal/frontend/resources/icon.png"];
 
-/** True when `paths` differ between `commit` and the working tree: committed, uncommitted or new untracked files. */
-export function gitChangedSince(commit, paths) {
+/** True when `paths` (git pathspecs) differ between `commit` and the working tree: committed, uncommitted or new untracked files. */
+export function gitChangedSince(commit, paths, repo = repoRoot) {
   try {
-    execFileSync("git", ["-C", repoRoot, "diff", "--quiet", commit, "--", ...paths], { stdio: "ignore" });
-    const untracked = execFileSync("git", ["-C", repoRoot, "ls-files", "--others", "--exclude-standard", "--", ...paths], { encoding: "utf8" });
+    execFileSync("git", ["-C", repo, "diff", "--quiet", commit, "--", ...paths], { stdio: "ignore" });
+    const untracked = execFileSync("git", ["-C", repo, "ls-files", "--others", "--exclude-standard", "--", ...paths], { encoding: "utf8" });
     return untracked.trim().length > 0;
   } catch {
     return true;
@@ -194,13 +205,14 @@ export function gitChangedSince(commit, paths) {
 
 /**
  * Why an app commit cannot back a final image (empty = it can): built after #287, part of the
- * reviewed history, and the app unchanged since (else the capture is stale). `requireMain` (the
- * pre-upload check, once the capture PR is merged) also requires it on origin/main.
+ * reviewed history, and the captured platform's app unchanged since (else the capture is stale).
+ * `requireMain` (the pre-upload check, once the capture PR is merged) also requires it on origin/main.
  */
-export function appCommitProblems(commit, screens, isAncestor = gitIsAncestor, { requireMain = false, changedSince = gitChangedSince } = {}) {
+export function appCommitProblems(commit, screens, isAncestor = gitIsAncestor, { requireMain = false, changedSince = gitChangedSince, platform } = {}) {
   if (!commit) return ["no app commit recorded"];
   const problems = [];
-  if (changedSince(commit, APP_PATHS)) problems.push(`the app (${APP_PATHS.join(", ")}) changed after ${commit.slice(0, 8)}: re-capture`);
+  const paths = appPathsFor(platform);
+  if (changedSince(commit, paths)) problems.push(`the app (${describePaths(paths)}) changed after ${commit.slice(0, 8)}: re-capture`);
   if (!isAncestor(commit, "HEAD")) problems.push(`app commit ${commit} is not in the checked-out history`);
   if (requireMain && !isAncestor(commit, "origin/main")) problems.push(`app commit ${commit} is not on origin/main`);
   const baseline = screens.app_baseline?.merge_commit;
@@ -215,7 +227,12 @@ export const rel = (file) => path.relative(root, file).split(path.sep).join("/")
 export function finalGateProblems({ screens, targets, locales, rawDir, sourceCommit, isAncestor = gitIsAncestor, requireMain = false, changedSince = gitChangedSince }) {
   const problems = [];
   if (!sourceCommit) problems.push("--source-commit is required (the commit of the app build that was captured)");
-  else problems.push(...appCommitProblems(sourceCommit, screens, isAncestor, { requireMain, changedSince }));
+  else {
+    // Judged per platform of the requested targets (a problem shared by several is reported once).
+    const platforms = [...new Set(targets.map(platformOf))];
+    const found = platforms.flatMap((platform) => appCommitProblems(sourceCommit, screens, isAncestor, { requireMain, changedSince, platform }));
+    problems.push(...new Set(found));
+  }
   for (const target of targets.filter((t) => !t.single)) {
     const platform = platformOf(target);
     // A platform's screens became real at its own merge (iOS: #294); older captures show a prototype.

@@ -1,6 +1,7 @@
 // Tests for the store-asset pipeline (no browser, emulator or simulator needed).
 //   node --test jarvis-personal/store-assets/scripts/store-assets.test.mjs
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -9,7 +10,7 @@ import test from "node:test";
 import zlib from "node:zlib";
 import { DEMO_MODE, instrumentPassed } from "./capture-android.mjs";
 import { DEVICES, STATUS_BAR } from "./capture-ios.mjs";
-import { appCommitProblems, fill, finalGateProblems, loadCopy, loadScreens, loadTargets, portableHtml, renderStable, root, screensFor } from "./compose.mjs";
+import { appCommitProblems, fill, finalGateProblems, gitChangedSince, loadCopy, loadScreens, loadTargets, portableHtml, renderStable, root, screensFor } from "./compose.mjs";
 import { pathToFileURL } from "node:url";
 import { decodePng, encodeRgbPng, flattenToRgb, pngInfo } from "./png.mjs";
 import { copyProblems, imageProblems } from "./validate.mjs";
@@ -427,5 +428,80 @@ test("the validator refuses finals whose copy, templates or app changed after th
   const copyChanged = validator(dir, [phone], { changedSince: (commit, paths) => paths.some((p) => p.endsWith("store-assets/copy")) }).join("\n");
   assert.match(copyChanged, /01-home\.png: copy, templates, config or brand changed after it was composed/);
   const appChanged = validator(dir, [phone], { changedSince: (commit, paths) => paths.includes("jarvis-personal/native") }).join("\n");
-  assert.match(appChanged, /01-home\.png: the app \(jarvis-personal\/native\) changed after a+: re-capture|01\.png: the app \(jarvis-personal\/native\) changed after aaaaaaaa: re-capture/);
+  assert.match(appChanged, /01-home\.png: the app \(jarvis-personal\/native, not jarvis-personal\/native\/ios\) changed after a+: re-capture|01\.png: the app \(jarvis-personal\/native, not jarvis-personal\/native\/ios\) changed after aaaaaaaa: re-capture/);
+});
+
+/** A throwaway git repository with the native layout, committed as the captured app. */
+function nativeRepo() {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-native-"));
+  const git = (...args) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" }).trim();
+  const write = (file, text) => {
+    fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    fs.writeFileSync(path.join(repo, file), text);
+  };
+  for (const file of Object.values(NATIVE_FILES)) write(file, "captured");
+  git("init", "-q");
+  git("add", ".");
+  git("-c", "user.email=store@example.invalid", "-c", "user.name=store", "commit", "-qm", "captured app");
+  const captured = git("rev-parse", "HEAD");
+  return {
+    changedSince: (_commit, paths) => gitChangedSince(captured, paths, repo),
+    change: (file) => write(file, "changed"),
+    reset: () => { git("reset", "-q", "--hard", captured); git("clean", "-qfd"); },
+  };
+}
+
+const NATIVE_FILES = {
+  androidApp: "jarvis-personal/native/android/app/src/main/kotlin/com/dincr/app/Home.kt",
+  androidTest: "jarvis-personal/native/android/app/src/androidTest/kotlin/com/dincr/app/StoreScreenshots.kt",
+  androidFixture: "jarvis-personal/native/android/core/data/src/main/resources/store-sample.json",
+  iosApp: "jarvis-personal/native/ios/DINCR/Features/Home/HomeView.swift",
+  iosUiTest: "jarvis-personal/native/ios/DINCRUITests/StoreScreenshots.swift",
+  iosFixture: "jarvis-personal/native/ios/DincrKit/Sources/DincrCore/Resources/store-sample.json",
+  sharedTokens: "jarvis-personal/native/design-tokens/generate.mjs",
+};
+
+test("a capture goes stale only through changes that can alter that platform's captures", () => {
+  const native = nativeRepo();
+  const stale = (platform) => appCommitProblems(AFTER, screens, isAncestor, { platform, changedSince: native.changedSince })
+    .some((p) => p.includes("changed after"));
+  const cases = [
+    // [what changed, android captures stale, iOS captures stale]
+    [NATIVE_FILES.androidApp, true, false], // 1. Android product code: Google stale, Apple still valid
+    [NATIVE_FILES.iosApp, false, true], // 2. iOS product code: Apple stale, Google still valid
+    [NATIVE_FILES.iosUiTest, false, true], // 3. iOS UI test (it drives the iOS captures): Google still valid
+    [NATIVE_FILES.androidTest, true, false], // 4. Android test (it drives the Android captures): Apple still valid
+    [NATIVE_FILES.sharedTokens, true, true], // 5. shared native code (tokens generated into both apps): both stale
+    [NATIVE_FILES.androidFixture, true, false], // each platform's bundled STORE fixture is its own
+    [NATIVE_FILES.iosFixture, false, true],
+    ["jarvis-personal/native/android/app/src/main/kotlin/com/dincr/app/New.kt", true, false], // a new, untracked file counts
+  ];
+  assert.equal(stale("android"), false, "nothing changed yet");
+  assert.equal(stale("ios"), false, "nothing changed yet");
+  for (const [file, android, ios] of cases) {
+    native.change(file);
+    assert.equal(stale("android"), android, `${file}: Google captures stale should be ${android}`);
+    assert.equal(stale("ios"), ios, `${file}: Apple captures stale should be ${ios}`);
+    native.reset();
+  }
+  // No platform (an unknown caller): any native change is stale, as before.
+  native.change(NATIVE_FILES.iosUiTest);
+  assert.equal(stale(undefined), true);
+});
+
+test("the final gate and the validator judge each platform's captures by its own paths", () => {
+  const native = nativeRepo();
+  native.change(NATIVE_FILES.iosUiTest);
+  // Google finals and a Google final run survive an iOS-only change...
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dincr-out-"));
+  const phone = target("google-phone");
+  for (const n of ["01", "02", "03", "04"]) writeImage(dir, phone, "es-419", n);
+  assert.deepEqual(validator(dir, [phone], { changedSince: native.changedSince }).filter((p) => p.includes("changed after")), []);
+  assert.deepEqual(gate(rawTree(), AFTER, { changedSince: native.changedSince }), []);
+  // ...while an Apple final run from the same commit is refused.
+  assert.ok(appCommitProblems(AFTER, screens, isAncestor, { platform: "ios", changedSince: native.changedSince }).some((p) => p.includes("changed after")));
+  native.reset();
+  native.change(NATIVE_FILES.androidApp);
+  assert.ok(validator(dir, [phone], { changedSince: native.changedSince }).some((p) => p.includes("changed after")));
+  assert.ok(gate(rawTree(), AFTER, { changedSince: native.changedSince }).some((p) => p.includes("changed after")));
 });
