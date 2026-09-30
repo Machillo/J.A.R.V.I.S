@@ -1,0 +1,28 @@
+{
+  "output_sha256": "72fada1cf82fa89fc2c1d61068178c21a8d2f65eb1d3eed8c649787939e38922",
+  "mode": "final",
+  "target": "apple-iphone-69",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "08-mail",
+  "plan": "vip",
+  "width": 1320,
+  "height": 2868,
+  "alpha": false,
+  "caption_ratio": 0.1692,
+  "capture": {
+    "file": "raw/ios/es/phone/08-mail.png",
+    "sha256": "521edb36078a3c0c478fdb7c0c967c387d99decfabc111f5de45a3626fb3b949",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:40.535Z"
+}

@@ -1,0 +1,28 @@
+{
+  "output_sha256": "5c4ea5d1b714cd1d4bbe69a931bee1be919417473704f1e46a7eaf40bc4c003b",
+  "mode": "final",
+  "target": "apple-ipad-13",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "en-US",
+  "language": "en",
+  "screen": "05-goals",
+  "plan": "free",
+  "width": 2064,
+  "height": 2752,
+  "alpha": false,
+  "caption_ratio": 0.1435,
+  "capture": {
+    "file": "raw/ios/en/tablet/05-goals.png",
+    "sha256": "9a03bbbae83691629a8213d83029531d0ee3df9212c4a32d88bfa9771a62746d",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:57:13.013Z"
+}

@@ -1,0 +1,34 @@
+{
+  "output_sha256": "4587777c41c2ff229990682bebec79cc44226a79101e25f70afe14bf71fa026c",
+  "mode": "final",
+  "target": "google-phone",
+  "store": "google",
+  "platform": "android",
+  "locale": "en-US",
+  "language": "en",
+  "screen": "08-mail",
+  "plan": "vip",
+  "width": 1440,
+  "height": 2560,
+  "alpha": false,
+  "caption_ratio": 0.1827,
+  "capture": {
+    "file": "raw/android/en/phone/08-mail.png",
+    "sha256": "f9599366f27c35ac198cd77fe442aad962803dbddf70b59ac76e8be7eefe794d",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T01:15:01.510Z",
+    "device": {
+      "model": "sdk_gphone64_x86_64",
+      "sdk": 35,
+      "width": 1080,
+      "height": 2400,
+      "density": 420
+    }
+  },
+  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "generated_at": "2026-09-30T01:16:18.879Z"
+}

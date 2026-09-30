@@ -1,0 +1,34 @@
+{
+  "output_sha256": "1152ec173c599d76b8c832253e653a3552cd8ef1953a84aa7d5a24598d9737b7",
+  "mode": "final",
+  "target": "google-phone",
+  "store": "google",
+  "platform": "android",
+  "locale": "es-419",
+  "language": "es",
+  "screen": "03-movements",
+  "plan": "free",
+  "width": 1440,
+  "height": 2560,
+  "alpha": false,
+  "caption_ratio": 0.1441,
+  "capture": {
+    "file": "raw/android/es/phone/03-movements.png",
+    "sha256": "67450ed2546648ce649144895d29792ce3abe3d7507196ac131a2809dcadab73",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T01:15:01.510Z",
+    "device": {
+      "model": "sdk_gphone64_x86_64",
+      "sdk": 35,
+      "width": 1080,
+      "height": 2400,
+      "density": 420
+    }
+  },
+  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "generated_at": "2026-09-30T01:15:26.578Z"
+}

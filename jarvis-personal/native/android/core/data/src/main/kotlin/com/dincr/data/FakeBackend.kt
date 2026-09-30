@@ -22,9 +22,14 @@ class FakeBackend(
     private val scenario: Scenario = Scenario.POPULATED,
     plan: PlanTier = PlanTier.FREE,
     private val latencyMs: Long = 0,
-    private val today: LocalDate = LocalDate.now(),
+    currentDate: LocalDate = LocalDate.now(),
+    language: AppLanguage = AppLanguage.current(),
 ) : HttpTransport {
-    enum class Scenario { POPULATED, EMPTY, FAILING, NEW_USER, LEGAL_REQUIRED, CHOOSE_PLAN }
+    /** STORE: the account of the store screenshots ([StoreSample]). */
+    enum class Scenario { POPULATED, EMPTY, FAILING, NEW_USER, LEGAL_REQUIRED, CHOOSE_PLAN, STORE }
+
+    private val store = if (scenario == Scenario.STORE) StoreSample(language) else null
+    private val today: LocalDate = if (store != null) StoreSample.TODAY else currentDate
 
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
     private var profile = sampleProfile(plan)
@@ -33,17 +38,21 @@ class FakeBackend(
     private val goals = mutableListOf<Goal>()
     private val savings = mutableListOf<SavingsPlan>()
     private val recurring = mutableListOf<RecurringItem>()
-    private var budget = listOf(BudgetItem("Comida", BigDecimal(150000)), BudgetItem("Transporte", BigDecimal(60000)))
-    private var situation: FinancialProfile? = null
+    private var budget = store?.budget() ?: listOf(BudgetItem("Comida", BigDecimal(150000)), BudgetItem("Transporte", BigDecimal(60000)))
+    private var situation: FinancialProfile? = store?.situation()
     private val candidates = mutableListOf<MailCandidate>()
     private val tickets = mutableListOf<SupportTicket>()
     /** A VIP sample account starts with a connected mailbox and notices to review. */
-    private var mailConnected = scenario == Scenario.POPULATED && plan == PlanTier.VIP
+    private var mailConnected = (scenario == Scenario.POPULATED || scenario == Scenario.STORE) && plan == PlanTier.VIP
     private var nextId = 500L
     val requests = mutableListOf<HttpRequest>()
 
     init {
         if (scenario == Scenario.POPULATED) seed()
+        store?.let {
+            movements += it.movements(); debts += it.debts(); goals += it.goals(); savings += it.savings()
+            recurring += it.recurring(); candidates += it.candidates()
+        }
     }
 
     override suspend fun send(request: HttpRequest): HttpResponse {
@@ -263,7 +272,8 @@ class FakeBackend(
                 budget = items.map { BudgetItem(it.category, it.monthlyLimit) }
                 ok(budgetView())
             }
-            path == "/user-product/basic/budget" -> ok(budgetView())
+            // STORE: the backend's guided budget for the sample, until the limits are edited.
+            path == "/user-product/basic/budget" -> if (store != null && budget == store.budget()) ok(store.engine("budget")) else ok(budgetView())
             path == "/user-product/basic/calendar" -> ok(FinancialCalendar(query["period"], recurring.filter { it.isActive == true }.map {
                 FinancialCalendar.Event("${query["period"] ?: today.toString().take(7)}-%02d".format((it.dueDay ?: 1).coerceIn(1, 28)), it.itemType, it.name, it.amount, "recurring")
             } + debts.mapNotNull { d -> d.paymentDay?.let { FinancialCalendar.Event("${query["period"] ?: today.toString().take(7)}-%02d".format(it.coerceIn(1, 28)), "debt", d.name, d.monthlyPayment, "debt") } },
@@ -286,13 +296,13 @@ class FakeBackend(
                 val (income, expenses) = totals(period)
                 ok(MonthReport(period, income, expenses, BigDecimal.ZERO, BigDecimal.ZERO, income - expenses, income - expenses, categories(period), MonthReport.Comparison(income, expenses, BigDecimal.ZERO)))
             }
-            path == "/user-product/finance/strategy-basic" -> ok(strategy())
+            path == "/user-product/finance/strategy-basic" -> store?.let { ok(it.engine("strategy_basic")) } ?: ok(strategy())
             else -> error(404, "Not Found")
         }
     }
 
     private fun vip(path: String): HttpResponse = when (path) {
-        "/user-product/vip/command-center" -> ok(CommandCenter(
+        "/user-product/vip/command-center" -> store?.let { ok(it.engine("command_center")) } ?: ok(CommandCenter(
             today.toString(),
             CommandCenter.Director("debt", "Tu prioridad es bajar la tarjeta", "Pagá ₡40.000 extra a la tarjeta este mes", true),
             CommandCenter.Score(72, "Estable", listOf(CommandCenter.Factor("Ahorro de emergencia", "warning"))),
@@ -303,7 +313,7 @@ class FakeBackend(
             listOf(CommandCenter.RoadmapStep(1, "Completá tu fondo de emergencia inicial", BigDecimal(50000), "Te protege de imprevistos."),
                 CommandCenter.RoadmapStep(2, "Pagá extra a la tarjeta", BigDecimal(40000), "Tiene la tasa más alta.")),
         ))
-        "/user-product/finance/strategy-vip" -> ok(strategy().copy(directorNote = "Priorizamos la deuda con tasa más alta."))
+        "/user-product/finance/strategy-vip" -> store?.let { ok(it.engine("strategy_vip")) } ?: ok(strategy().copy(directorNote = "Priorizamos la deuda con tasa más alta."))
         "/user-product/finance/strategy-vip/simulate" -> ok(ScenarioResult(strategy(), strategy().copy(strategicMargin = BigDecimal(260000)), ScenarioResult.Delta(BigDecimal(46000), BigDecimal(50000), BigDecimal(4000))))
         "/user-product/vip/aguinaldo" -> if (!mailConnected) error(409, "Conectá tu correo para calcular el aguinaldo.") else ok(Aguinaldo("OK", Aguinaldo.Period("${today.year - 1}-12-01", "${today.year}-11-30"), BigDecimal(5_190_000), BigDecimal(432_500)))
         "/user-product/vip/lifecycle/monthly-review" -> ok(MonthlyReview("BASELINE", today.toString().take(7), "Tu primer mes con DINCR", "Todavía no hay suficiente historia para comparar."))
@@ -316,8 +326,8 @@ class FakeBackend(
         return when {
             path == "/user-product/vip/gmail/status" -> ok(MailStatus(mailConnected, false, candidates.count { it.isPending }, true,
                 MailStatus.Consent(required = !mailConnected, version = "mail-monitor-2026-09-v2"),
-                // Like the server, the status also lists a mailbox the user disconnected earlier.
-                if (mailConnected) listOf(MailStatus.Connection(1, "gmail", "ejemplo@correo.test", "active", true, "${today.year}-01-01"),
+                // Like the server, the status also lists a mailbox the user disconnected earlier (hidden by the app).
+                if (mailConnected) listOf(MailStatus.Connection(1, "gmail", if (store != null) profile.email else "ejemplo@correo.test", "active", true, "${today.year}-01-01"),
                     MailStatus.Connection(2, "gmail", "anterior@correo.test", "disabled", false, "${today.year}-01-01")) else emptyList()))
             path == "/user-product/vip/gmail/consent" -> ok("""{"status":"accepted"}""")
             path == "/user-product/vip/gmail/connect" || path == "/user-product/vip/mail/microsoft/connect" -> ok("""{"authorization_url":"https://accounts.example.test/authorize?state=demo"}""")
@@ -434,10 +444,13 @@ class FakeBackend(
     }
 
     private fun sampleProfile(plan: PlanTier) = Profile(
-        id = 1, email = "persona@ejemplo.test", displayName = if (scenario == Scenario.NEW_USER) null else "Persona Ejemplo", role = "user",
+        id = 1, email = if (scenario == Scenario.STORE) "ana.demo@example.com" else "persona@ejemplo.test",
+        displayName = when (scenario) { Scenario.NEW_USER -> null; Scenario.STORE -> "Ana"; else -> "Persona Ejemplo" }, role = "user",
         planSelected = scenario != Scenario.NEW_USER && scenario != Scenario.CHOOSE_PLAN, profileSetupCompleted = scenario != Scenario.NEW_USER,
-        baseCurrency = "CRC", numberFormat = "dot_comma", currencyPlacement = "before", entryCurrencies = listOf("CRC", "USD"), enabledCurrencies = listOf("CRC", "USD"),
-        subscription = Profile.Subscription(plan.wire, plan.name.lowercase().replaceFirstChar { it.uppercase() }, "active", if (plan == PlanTier.FREE) "self_service" else "courtesy"),
+        baseCurrency = "CRC", numberFormat = store?.numberFormat ?: "dot_comma", currencyPlacement = "before", entryCurrencies = listOf("CRC", "USD"), enabledCurrencies = listOf("CRC", "USD"),
+        // STORE: a paid plan bought in the store (the backend records it as self_service), not a courtesy grant.
+        subscription = Profile.Subscription(plan.wire, plan.name.lowercase().replaceFirstChar { it.uppercase() }, "active",
+            if (plan == PlanTier.FREE || scenario == Scenario.STORE) "self_service" else "courtesy"),
         legal = Profile.Legal(required = scenario == Scenario.LEGAL_REQUIRED, termsVersion = "2026-09-23-v3", privacyVersion = "2026-09-25-v4"),
     )
 

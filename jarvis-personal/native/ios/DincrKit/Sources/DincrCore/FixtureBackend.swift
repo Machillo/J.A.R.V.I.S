@@ -15,6 +15,8 @@ public actor FixtureBackend: HTTPTransport {
         case populated, empty, failing, newUser, legalRequired, choosePlan
         /// VIP account whose mailbox is not connected yet: consent → connect → return → sync.
         case mailOnboarding
+        /// The store screenshots' account (`StoreSample`): the backend engines' own answers, a fixed date.
+        case store
     }
 
     public static let baseURL = URL(string: "https://fixture.dincr.invalid")!
@@ -23,6 +25,9 @@ public actor FixtureBackend: HTTPTransport {
     let scenario: Scenario
     let latency: Duration
     let today: Date
+    let language: AppLanguage
+    /// `.store`: the budget limits the engine answer was computed for (edits fall back to the local view).
+    private let storeBudget: [[String: Any]]?
     private var profile: [String: Any]
     private var movements: [[String: Any]] = []
     private var debts: [[String: Any]] = []
@@ -41,10 +46,14 @@ public actor FixtureBackend: HTTPTransport {
     private var replays: [String: (body: Data?, status: Int, response: Data)] = [:]
     public private(set) var requests: [URLRequest] = []
 
-    public init(scenario: Scenario = .populated, plan: PlanTier = .free, latency: Duration = .milliseconds(300), today: Date = .now) {
+    public init(scenario: Scenario = .populated, plan: PlanTier = .free, latency: Duration = .milliseconds(300), today: Date = .now,
+                language: AppLanguage = .current) {
         self.scenario = scenario
         self.latency = latency
-        self.today = today
+        self.language = language
+        // STORE images must not depend on the capture day.
+        self.today = scenario == .store ? Self.date(StoreSample.today) : today
+        self.storeBudget = scenario == .store ? StoreSample.budget(language) : nil
         let vip = plan == .vip || scenario == .mailOnboarding
         self.mailConnected = scenario == .populated && vip
         self.mailConsentAccepted = scenario == .populated && vip
@@ -55,6 +64,50 @@ public actor FixtureBackend: HTTPTransport {
             movements = seed.movements; debts = seed.debts; goals = seed.goals; savings = seed.savings; recurring = seed.recurring
             if scenario == .populated && vip { candidates = Self.sampleCandidates(today: today) }
         }
+        if scenario == .store {
+            profile = StoreSample.profile(plan: plan, language: language)
+            movements = StoreSample.rows("movements", language: language)
+            debts = StoreSample.rows("debts", language: language)
+            goals = StoreSample.rows("goals", language: language)
+            recurring = StoreSample.rows("recurring", language: language)
+            savings = StoreSample.savings(language)
+            budget = StoreSample.budget(language)
+            situation = StoreSample.situation(language)
+            mailConnected = plan == .vip
+            mailConsentAccepted = plan == .vip
+            if plan == .vip { candidates = StoreSample.candidates(language) }
+        }
+    }
+
+    static func date(_ day: String) -> Date {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: day) ?? .now
+    }
+
+    /// `.store`: the engine's answer for a read route, as the real backend computed it.
+    private func storeEngine(_ method: String, _ path: String) -> Answer? {
+        guard scenario == .store, method == "GET" else { return nil }
+        let name: String
+        let tier: PlanTier
+        switch path {
+        case "/user-product/free/dashboard": name = "free_dashboard"; tier = .free
+        case "/user-product/finance/strategy-basic": name = "strategy_basic"; tier = .basic
+        case "/user-product/finance/strategy-vip": name = "strategy_vip"; tier = .vip
+        case "/user-product/vip/command-center": name = "command_center"; tier = .vip
+        case "/user-product/basic/budget":
+            // Until the limits are edited, the backend's guided budget for these limits.
+            let current = try? JSONSerialization.data(withJSONObject: budget, options: [.sortedKeys])
+            let original = try? JSONSerialization.data(withJSONObject: storeBudget ?? [], options: [.sortedKeys])
+            guard current == original else { return nil }
+            name = "budget"; tier = .basic
+        default: return nil
+        }
+        if let denied = needs(tier) { return denied }
+        return ok(StoreSample.engine(name, language: language))
     }
 
     /// A client over this backend (the session is irrelevant here; the header is still checked).
@@ -97,6 +150,7 @@ public actor FixtureBackend: HTTPTransport {
     private typealias Answer = (Int, Any)
 
     private func route(_ method: String, _ path: String, _ query: [String: String], _ body: [String: Any]) -> Answer {
+        if let answer = storeEngine(method, path) { return answer }
         let parts = path.split(separator: "/").map(String.init)
         func id(at index: Int) -> Int { parts.indices.contains(index) ? Int(parts[index]) ?? -1 : -1 }
         switch (method, path) {
@@ -388,8 +442,9 @@ public actor FixtureBackend: HTTPTransport {
     private func mail(_ method: String, _ path: String, _ parts: [String], _ query: [String: String], _ body: [String: Any]) -> Answer {
         switch (method, path) {
         case ("GET", "/user-product/vip/gmail/status"):
+            let mailbox = scenario == .store ? "ana.demo@example.com" : "persona@ejemplo.test"
             let connections: [[String: Any]] = mailConnected
-                ? [["id": 1, "provider": "gmail", "google_email": "persona@ejemplo.test", "status": "active", "automatic_updates": true, "import_since": "2026-01-01"],
+                ? [["id": 1, "provider": "gmail", "google_email": mailbox, "status": "active", "automatic_updates": true, "import_since": "2026-01-01"],
                    ["id": 9, "provider": "gmail", "google_email": "antes@ejemplo.test", "status": "disabled", "automatic_updates": false]]
                 : [["id": 9, "provider": "gmail", "google_email": "antes@ejemplo.test", "status": "disabled", "automatic_updates": false]]
             return ok(["status": mailConnected ? "active" : "disabled", "connected": mailConnected, "needs_reauthorization": false, "pending": pendingCount(),

@@ -1,0 +1,28 @@
+{
+  "output_sha256": "072fa195eec92ac7a36bc95339fd59fcf9c4e907280560aaa1ee8f7df26572f5",
+  "mode": "final",
+  "target": "apple-iphone-69",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "06-budget",
+  "plan": "basic",
+  "width": 1320,
+  "height": 2868,
+  "alpha": false,
+  "caption_ratio": 0.1692,
+  "capture": {
+    "file": "raw/ios/es/phone/06-budget.png",
+    "sha256": "8aea9f4cb991d8a4d65837b1e6edb3494e738021de0b3b579e5f32d8adc9cae1",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:37.744Z"
+}

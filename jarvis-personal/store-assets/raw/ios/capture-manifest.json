@@ -1,0 +1,351 @@
+{
+  "platform": "ios",
+  "fixture": "STORE",
+  "fixture_date": "2026-09-28",
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "source_dirty": false,
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "built": true,
+  "captured_at": "2026-09-30T03:31:00.971Z",
+  "app": {
+    "bundle_id": "com.dincr.app",
+    "configuration": "Debug"
+  },
+  "xcode": "Xcode 27.0",
+  "simulators": [
+    {
+      "kind": "phone",
+      "name": "iPhone 18 Pro Max",
+      "runtime": "iPhone 18 Pro Max (D6040888-FF4B-4B57-A2EE-19AFD1C9DFD9) (Booted)"
+    },
+    {
+      "kind": "tablet",
+      "name": "iPad Pro 13-inch (M5)",
+      "runtime": "iPad Pro 13-inch (M5) (ADDEE6D6-AAC6-46A5-9260-3C2D0ED2DCCD) (Booted)"
+    }
+  ],
+  "status_bar": "simctl override: 9:41, Wi-Fi, full signal and battery",
+  "method": "xcodebuild test -only-testing:DINCRUITests/StoreScreenshots",
+  "captures": [
+    {
+      "id": "01-home",
+      "locale": "es",
+      "device": "phone",
+      "plan": "vip",
+      "file": "raw/ios/es/phone/01-home.png",
+      "sha256": "8357323efe9bd7198ba8212951919cb2de8e7373d6c3e2b732298c303c0fb2af",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "02-overview",
+      "locale": "es",
+      "device": "phone",
+      "plan": "free",
+      "file": "raw/ios/es/phone/02-overview.png",
+      "sha256": "360ced6a3ca217ae2927bfcf4e9f4544a9124c98666d0c3e79c406a3b324c434",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "03-movements",
+      "locale": "es",
+      "device": "phone",
+      "plan": "free",
+      "file": "raw/ios/es/phone/03-movements.png",
+      "sha256": "68e71ea61f201f54a93581fe4d9b6eed38087ba9b10f8aa6b00e18d3b771fa6e",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "04-debts",
+      "locale": "es",
+      "device": "phone",
+      "plan": "free",
+      "file": "raw/ios/es/phone/04-debts.png",
+      "sha256": "1b1ad44718ca1cff1567a114684c454f4289a28d423b116895f742bb344db169",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "05-goals",
+      "locale": "es",
+      "device": "phone",
+      "plan": "free",
+      "file": "raw/ios/es/phone/05-goals.png",
+      "sha256": "e13763c9d06b9f9e78a884f98acff6200bae78ae3e5aa0a68e6e867352105181",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "06-budget",
+      "locale": "es",
+      "device": "phone",
+      "plan": "basic",
+      "file": "raw/ios/es/phone/06-budget.png",
+      "sha256": "8aea9f4cb991d8a4d65837b1e6edb3494e738021de0b3b579e5f32d8adc9cae1",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "07-strategy",
+      "locale": "es",
+      "device": "phone",
+      "plan": "basic",
+      "file": "raw/ios/es/phone/07-strategy.png",
+      "sha256": "e52e26027953f25bb5c0e063de1902f17562845bf85f2985644e89ac9542ad3a",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "08-mail",
+      "locale": "es",
+      "device": "phone",
+      "plan": "vip",
+      "file": "raw/ios/es/phone/08-mail.png",
+      "sha256": "521edb36078a3c0c478fdb7c0c967c387d99decfabc111f5de45a3626fb3b949",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "01-home",
+      "locale": "en",
+      "device": "phone",
+      "plan": "vip",
+      "file": "raw/ios/en/phone/01-home.png",
+      "sha256": "676f73a8db6159ffedd4e0fcc7d84d173f1cd7c7d7161206a1dd9b57d5099f4a",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "02-overview",
+      "locale": "en",
+      "device": "phone",
+      "plan": "free",
+      "file": "raw/ios/en/phone/02-overview.png",
+      "sha256": "f2ffc40ae0a8cd6a65e5492670ccbe32f84ec1ed42dd808233ecfc06988ba0b0",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "03-movements",
+      "locale": "en",
+      "device": "phone",
+      "plan": "free",
+      "file": "raw/ios/en/phone/03-movements.png",
+      "sha256": "f80f5579e5efe226d938af6a1c5ec3a6138b36a8d97613991a916d66ad51352a",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "04-debts",
+      "locale": "en",
+      "device": "phone",
+      "plan": "free",
+      "file": "raw/ios/en/phone/04-debts.png",
+      "sha256": "04adad533edb9d2225b415303236fdeaa1b0eaba2c7a57a0dad53b7bf8bb2df2",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "05-goals",
+      "locale": "en",
+      "device": "phone",
+      "plan": "free",
+      "file": "raw/ios/en/phone/05-goals.png",
+      "sha256": "74c36e668f94f804ec91930a6c99597ea103b288447948b5ebdc9a2c1a7d997f",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "06-budget",
+      "locale": "en",
+      "device": "phone",
+      "plan": "basic",
+      "file": "raw/ios/en/phone/06-budget.png",
+      "sha256": "a56cd998651873243548ade8b0c8a68fc9374ede11f4e8775b9b340b44d2fe72",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "07-strategy",
+      "locale": "en",
+      "device": "phone",
+      "plan": "basic",
+      "file": "raw/ios/en/phone/07-strategy.png",
+      "sha256": "75649f3a6505e49fe75e03a58646183892e011bf80991363ce8f0e741aa61929",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "08-mail",
+      "locale": "en",
+      "device": "phone",
+      "plan": "vip",
+      "file": "raw/ios/en/phone/08-mail.png",
+      "sha256": "08ff7e7e3cce5760210cee4b71925f8127e05cc0573561491c752973370ada0e",
+      "width": 1320,
+      "height": 2868
+    },
+    {
+      "id": "01-home",
+      "locale": "es",
+      "device": "tablet",
+      "plan": "vip",
+      "file": "raw/ios/es/tablet/01-home.png",
+      "sha256": "0cbd9ac7860a953da17ed356c6f2a53f86f7cd592737dbe57178a1601e5428d2",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "02-overview",
+      "locale": "es",
+      "device": "tablet",
+      "plan": "free",
+      "file": "raw/ios/es/tablet/02-overview.png",
+      "sha256": "46c94597ec7541c4420215f73242bf05bc9e92b56d33c89c5861977790753e46",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "03-movements",
+      "locale": "es",
+      "device": "tablet",
+      "plan": "free",
+      "file": "raw/ios/es/tablet/03-movements.png",
+      "sha256": "db5adc9f38b99fdcf38519ac163a2f4eb8a51a50e2888f420ceabf7224774136",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "04-debts",
+      "locale": "es",
+      "device": "tablet",
+      "plan": "free",
+      "file": "raw/ios/es/tablet/04-debts.png",
+      "sha256": "f56c07540a910f42101fe2864b8c43c454b6a2fea9b08caa35a5cec21dc92e0e",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "05-goals",
+      "locale": "es",
+      "device": "tablet",
+      "plan": "free",
+      "file": "raw/ios/es/tablet/05-goals.png",
+      "sha256": "6e94be4ae7da6203d51f7daa80e6a076859eb5be1d2a57b2afc47ebb5545f7a0",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "06-budget",
+      "locale": "es",
+      "device": "tablet",
+      "plan": "basic",
+      "file": "raw/ios/es/tablet/06-budget.png",
+      "sha256": "4e67f9cf020926c67354adfd7315ca928a97185ee145e995a280522450f2da2e",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "07-strategy",
+      "locale": "es",
+      "device": "tablet",
+      "plan": "basic",
+      "file": "raw/ios/es/tablet/07-strategy.png",
+      "sha256": "e549d7cacdabf20e626a8551dd9909527539a233d1ee0a8cab8616e11cdb8017",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "08-mail",
+      "locale": "es",
+      "device": "tablet",
+      "plan": "vip",
+      "file": "raw/ios/es/tablet/08-mail.png",
+      "sha256": "683355a5c67ed1ec8cf820dcdc06bb054d02b9b99653fe737cc94939cbb403ea",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "01-home",
+      "locale": "en",
+      "device": "tablet",
+      "plan": "vip",
+      "file": "raw/ios/en/tablet/01-home.png",
+      "sha256": "f52436f8c92737db163bcae6139402e1d488ba222e96056f7af377109b37dd42",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "02-overview",
+      "locale": "en",
+      "device": "tablet",
+      "plan": "free",
+      "file": "raw/ios/en/tablet/02-overview.png",
+      "sha256": "c73a370244b893faefef12280cc0e2a095068304ae9330a064cd1fca012fb415",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "03-movements",
+      "locale": "en",
+      "device": "tablet",
+      "plan": "free",
+      "file": "raw/ios/en/tablet/03-movements.png",
+      "sha256": "3a1f210d63cdb9a6647760dec0bbef3fb412db704564fac7dbff115815fd01ee",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "04-debts",
+      "locale": "en",
+      "device": "tablet",
+      "plan": "free",
+      "file": "raw/ios/en/tablet/04-debts.png",
+      "sha256": "9fadf1717aad2f8f339f8c303fa072a6ce0696200a003dfa08700bb47a8c4b4a",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "05-goals",
+      "locale": "en",
+      "device": "tablet",
+      "plan": "free",
+      "file": "raw/ios/en/tablet/05-goals.png",
+      "sha256": "9a03bbbae83691629a8213d83029531d0ee3df9212c4a32d88bfa9771a62746d",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "06-budget",
+      "locale": "en",
+      "device": "tablet",
+      "plan": "basic",
+      "file": "raw/ios/en/tablet/06-budget.png",
+      "sha256": "9ffee7698272aee20afc89cacbd273e439d015422b8325d05fe84c79ee3e7cfe",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "07-strategy",
+      "locale": "en",
+      "device": "tablet",
+      "plan": "basic",
+      "file": "raw/ios/en/tablet/07-strategy.png",
+      "sha256": "65635d0549a0129779504963497deedc86f9c480542c8d138ffb6029dc54f637",
+      "width": 2064,
+      "height": 2752
+    },
+    {
+      "id": "08-mail",
+      "locale": "en",
+      "device": "tablet",
+      "plan": "vip",
+      "file": "raw/ios/en/tablet/08-mail.png",
+      "sha256": "3a7a17d15ae3798d1675a48abd703fd899bd54eefc73b1cead84ac7a2f03c432",
+      "width": 2064,
+      "height": 2752
+    }
+  ]
+}

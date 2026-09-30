@@ -1,0 +1,28 @@
+{
+  "output_sha256": "2b27fc242719863d1bdfd281a248eb9b823878672e048c3f74e1519b06bece09",
+  "mode": "final",
+  "target": "apple-ipad-13",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "07-strategy",
+  "plan": "basic",
+  "width": 2064,
+  "height": 2752,
+  "alpha": false,
+  "caption_ratio": 0.1985,
+  "capture": {
+    "file": "raw/ios/es/tablet/07-strategy.png",
+    "sha256": "e549d7cacdabf20e626a8551dd9909527539a233d1ee0a8cab8616e11cdb8017",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:51.629Z"
+}

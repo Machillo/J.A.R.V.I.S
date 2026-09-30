@@ -14,7 +14,9 @@ let package = Package(
         .library(name: "DincrDesign", targets: ["DincrDesign"]),
     ],
     targets: [
-        .target(name: "DincrCore"),
+        // store-sample.json: the backend engines' output for the STORE fixture (a byte copy of the Android
+        // resource; backend/tests/test_store_sample_engine.py writes and checks both).
+        .target(name: "DincrCore", resources: [.copy("Resources/store-sample.json")]),
         .target(name: "DincrDesign", dependencies: ["DincrCore"]),
         .testTarget(name: "DincrCoreTests", dependencies: ["DincrCore"], resources: [.copy("Fixtures")]),
     ]

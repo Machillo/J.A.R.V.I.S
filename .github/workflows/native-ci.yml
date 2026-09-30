@@ -1,18 +1,21 @@
 name: Native apps
 
 # DESIGN.md is the token source for both apps, so a change there runs the drift check and both
-# platform builds. The workflow file itself is included so CI changes are exercised too.
+# platform builds. store-assets/ captures the native apps (its tests read their capture tests).
+# The workflow file itself is included so CI changes are exercised too.
 on:
   pull_request:
     paths:
       - "DESIGN.md"
       - "jarvis-personal/native/**"
+      - "jarvis-personal/store-assets/**"
       - ".github/workflows/native-ci.yml"
   push:
     branches: [main]
     paths:
       - "DESIGN.md"
       - "jarvis-personal/native/**"
+      - "jarvis-personal/store-assets/**"
       - ".github/workflows/native-ci.yml"
 
 # CI of the native apps: no secrets, no signing, no deploy, no distribution.
@@ -36,6 +39,8 @@ jobs:
           node-version: 22
       - run: node jarvis-personal/native/design-tokens/generate.mjs --check
       - run: node --test jarvis-personal/native/design-tokens/generate.test.mjs
+      # Store screenshots pipeline: gates, provenance and the capture tests' screen list (no browser).
+      - run: node --test jarvis-personal/store-assets/scripts/store-assets.test.mjs
 
   android:
     runs-on: ubuntu-latest

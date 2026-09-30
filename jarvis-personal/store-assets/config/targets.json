@@ -1,0 +1,65 @@
+{
+  "$comment": "Output targets. Sizes and limits come from the audit in REQUIREMENTS.md (read 2026-09-29). Change them only by re-auditing the official pages.",
+  "audited_at": "2026-09-29",
+  "targets": [
+    {
+      "id": "apple-iphone-69",
+      "store": "apple",
+      "label": "iPhone 6.9\" (required; 6.5\"/6.3\"/6.1\"/5.5\" are scaled from it)",
+      "width": 1320,
+      "height": 2868,
+      "template": "apple",
+      "required": true,
+      "min_count": 1,
+      "max_count": 10
+    },
+    {
+      "id": "apple-ipad-13",
+      "store": "apple",
+      "label": "iPad 13\" (required while the iOS target declares TARGETED_DEVICE_FAMILY = 1,2)",
+      "width": 2064,
+      "height": 2752,
+      "template": "apple",
+      "required": true,
+      "min_count": 1,
+      "max_count": 10,
+      "note": "The native and Capacitor iOS projects declare TARGETED_DEVICE_FAMILY = 1,2. Drop this target only if Kenneth decides the app is iPhone-only (TARGETED_DEVICE_FAMILY = 1)."
+    },
+    {
+      "id": "google-phone",
+      "store": "google",
+      "label": "Google Play phone, 9:16 portrait (>= 1080 px for promotion eligibility)",
+      "width": 1440,
+      "height": 2560,
+      "template": "google",
+      "required": true,
+      "min_count": 4,
+      "max_count": 8
+    },
+    {
+      "id": "google-feature-graphic",
+      "store": "google",
+      "label": "Google Play feature graphic",
+      "width": 1024,
+      "height": 500,
+      "template": "feature-graphic",
+      "required": true,
+      "min_count": 1,
+      "max_count": 1,
+      "single": true
+    }
+  ],
+  "rules": {
+    "apple": { "formats": ["png", "jpg", "jpeg"], "alpha_allowed": false, "device_frame_allowed": true },
+    "google": {
+      "formats": ["png", "jpg", "jpeg"],
+      "alpha_allowed": false,
+      "min_side": 320,
+      "max_side": 3840,
+      "max_ratio": 2.0,
+      "device_frame_allowed": false,
+      "max_caption_area_ratio": 0.2,
+      "banned_phrases": ["download now", "install now", "play now", "try now", "descarga ahora", "descárgala", "instala ahora", "prueba ahora", "best", "#1", "top", "new", "discount", "sale", "million downloads", "mejor", "número 1", "nuevo", "nueva", "descuento", "oferta", "millones de descargas"]
+    }
+  }
+}

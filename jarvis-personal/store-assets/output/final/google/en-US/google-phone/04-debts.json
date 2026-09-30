@@ -1,0 +1,34 @@
+{
+  "output_sha256": "4349563218dda32697b2fc9342ef23dcf5b68bc98c3e38e41624bfd86f097cb4",
+  "mode": "final",
+  "target": "google-phone",
+  "store": "google",
+  "platform": "android",
+  "locale": "en-US",
+  "language": "en",
+  "screen": "04-debts",
+  "plan": "free",
+  "width": 1440,
+  "height": 2560,
+  "alpha": false,
+  "caption_ratio": 0.1441,
+  "capture": {
+    "file": "raw/android/en/phone/04-debts.png",
+    "sha256": "18f5f5af39c0091ed29b1885d1bd090fcd99f8b2cf95ebac6b9a847d2f7bceb5",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T01:15:01.510Z",
+    "device": {
+      "model": "sdk_gphone64_x86_64",
+      "sdk": 35,
+      "width": 1080,
+      "height": 2400,
+      "density": 420
+    }
+  },
+  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "generated_at": "2026-09-30T01:16:03.691Z"
+}

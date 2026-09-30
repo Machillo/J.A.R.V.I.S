@@ -1,0 +1,28 @@
+{
+  "output_sha256": "abeaa3a7a71e57586221afd0a3c56791eb53e996b1b8ba16ffcc6e9006876199",
+  "mode": "final",
+  "target": "apple-ipad-13",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "02-overview",
+  "plan": "free",
+  "width": 2064,
+  "height": 2752,
+  "alpha": false,
+  "caption_ratio": 0.1821,
+  "capture": {
+    "file": "raw/ios/es/tablet/02-overview.png",
+    "sha256": "46c94597ec7541c4420215f73242bf05bc9e92b56d33c89c5861977790753e46",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:43.802Z"
+}

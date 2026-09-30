@@ -1,0 +1,34 @@
+{
+  "output_sha256": "658a6f54de7467fdc773b3129e0eb6e631491abac92b2d571ce004c80d4c1e1f",
+  "mode": "final",
+  "target": "google-phone",
+  "store": "google",
+  "platform": "android",
+  "locale": "en-US",
+  "language": "en",
+  "screen": "05-goals",
+  "plan": "free",
+  "width": 1440,
+  "height": 2560,
+  "alpha": false,
+  "caption_ratio": 0.1101,
+  "capture": {
+    "file": "raw/android/en/phone/05-goals.png",
+    "sha256": "f287e7380644cc5d6eb6f051c7fde6140501586581169fc03e8b5c504806c981",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T01:15:01.510Z",
+    "device": {
+      "model": "sdk_gphone64_x86_64",
+      "sdk": 35,
+      "width": 1080,
+      "height": 2400,
+      "density": 420
+    }
+  },
+  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "generated_at": "2026-09-30T01:16:07.266Z"
+}

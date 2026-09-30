@@ -1,0 +1,121 @@
+<!doctype html>
+<!--
+  Store screenshot template (editable). Rendered by scripts/compose.mjs at the exact target size.
+  Placeholders: 1320 2868 es apple Sabé qué hacer con tu dinero hoy Cuánto podés gastar y qué pagar primero Plan VIP
+                ../../../../../../../jarvis-personal/store-assets/raw/ios/es/phone/01-home.png ../../../../../../../jarvis-personal/frontend/resources/icon.png DINCR  + color tokens {{c_*}} from DESIGN.md.
+  Layouts:
+    apple   caption band + the real screenshot inside a GENERIC device frame (no real device model).
+    google  caption band + the real screenshot, frameless (Google Play forbids device frames);
+            the caption band must stay <= 20% of the image (checked by compose + validate).
+  Never draw app UI here: the only UI in the image is the real capture in ../../../../../../../jarvis-personal/store-assets/raw/ios/es/phone/01-home.png.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --w: 1320px;
+    --h: 2868px;
+    /* One unit = 1/100 of the image width, so every size scales across iPhone/iPad/Play. */
+    --u: calc(var(--w) / 100);
+    --bg-top: #0A1220;
+    --bg-bottom: #0B6E68;
+    --text: #EEF3F9;
+    --text-2: #B3C0D2;
+    --accent: #3CCFBF;
+    --badge-bg: #F7EBCF;
+    --badge-text: #8A5A00;
+    --bezel: #05090f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: var(--w); height: var(--h); overflow: hidden; }
+  body {
+    background: linear-gradient(170deg, var(--bg-top) 0%, var(--bg-top) 45%, var(--bg-bottom) 140%);
+    font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text);
+    position: relative;
+    /* Flow layout: the caption takes its natural height and the capture fills what is left,
+       so a long caption can never overlap the screenshot. */
+    display: flex; flex-direction: column;
+  }
+  .caption {
+    flex: none;
+    padding: calc(var(--u) * 7) calc(var(--u) * 8) calc(var(--u) * 4);
+    text-align: center;
+  }
+  .brand { display: inline-flex; align-items: center; gap: calc(var(--u) * 1.6); margin-bottom: calc(var(--u) * 2.6); }
+  .brand img { width: calc(var(--u) * 6); height: calc(var(--u) * 6); border-radius: calc(var(--u) * 1.4); }
+  .brand span { font-weight: 800; letter-spacing: 0.06em; font-size: calc(var(--u) * 3.4); color: var(--text-2); }
+  h1 { font-size: calc(var(--u) * 6.4); line-height: 1.12; font-weight: 800; letter-spacing: -0.01em; }
+  p.sub { margin-top: calc(var(--u) * 2); font-size: calc(var(--u) * 3.5); line-height: 1.3; color: var(--text-2); }
+  .badge {
+    display: inline-block; margin-top: calc(var(--u) * 2.2);
+    padding: calc(var(--u) * 0.8) calc(var(--u) * 2.4); border-radius: 999px;
+    background: var(--badge-bg); color: var(--badge-text);
+    font-weight: 700; font-size: calc(var(--u) * 2.9);
+  }
+  .badge:empty { display: none; }
+
+  /* The whole capture is always visible: the frame/card takes the free height below the caption
+     and the image keeps its own width/height ratio inside it (never cropped, never stretched). */
+  .stage { flex: 1; min-height: 0; padding-bottom: calc(var(--u) * 5); display: flex; justify-content: center; align-items: flex-start; }
+  .device, .card { height: 100%; max-width: 86%; display: flex; }
+  .shot { display: block; height: 100%; width: auto; max-width: 100%; object-fit: contain; }
+
+  /* apple: generic frame (rounded bezel, no real device model) */
+  .apple .device {
+    padding: calc(var(--u) * 2.1); background: var(--bezel);
+    border-radius: calc(var(--u) * 11); box-shadow: 0 calc(var(--u) * 3) calc(var(--u) * 8) rgba(0,0,0,.45);
+  }
+  .apple .device .shot { border-radius: calc(var(--u) * 9); }
+  /* iPad-shaped canvases (aspect < 1.5): wider, flatter corners */
+  .apple.wide .device { border-radius: calc(var(--u) * 4.5); padding: calc(var(--u) * 1.6); }
+  .apple.wide .device .shot { border-radius: calc(var(--u) * 3.2); }
+  .apple.wide h1 { font-size: calc(var(--u) * 4.6); }
+  .apple.wide p.sub { font-size: calc(var(--u) * 2.6); }
+  .apple.wide .caption { padding-top: calc(var(--u) * 5); padding-bottom: calc(var(--u) * 3); }
+
+  /* google: frameless card, caption band capped at 20% (measured by compose.mjs) */
+  .google .caption { padding-top: calc(var(--u) * 5.5); padding-bottom: calc(var(--u) * 3); }
+  .google .brand { margin-bottom: calc(var(--u) * 1.8); }
+  .google h1 { font-size: calc(var(--u) * 5.2); }
+  .google p.sub { font-size: calc(var(--u) * 3.1); margin-top: calc(var(--u) * 1.2); }
+  .google .badge { margin-top: calc(var(--u) * 1.6); font-size: calc(var(--u) * 2.6); }
+  .google .card .shot { border-radius: calc(var(--u) * 4.5); box-shadow: 0 calc(var(--u) * 2.5) calc(var(--u) * 7) rgba(0,0,0,.45); }
+
+  .watermark {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
+  }
+  .watermark span {
+    transform: rotate(-24deg); padding: calc(var(--u) * 2) calc(var(--u) * 6);
+    background: rgba(180, 35, 63, .88); color: #fff; font-weight: 800;
+    font-size: calc(var(--u) * 5); letter-spacing: 0.04em; white-space: nowrap;
+  }
+  .watermark:empty { display: none; }
+</style>
+</head>
+<body class="apple">
+  <header class="caption" id="caption">
+    <div class="brand"><img src="../../../../../../../jarvis-personal/frontend/resources/icon.png" alt=""><span>DINCR</span></div>
+    <h1>Sabé qué hacer con tu dinero hoy</h1>
+    <p class="sub">Cuánto podés gastar y qué pagar primero</p>
+    <span class="badge">Plan VIP</span>
+  </header>
+  <main class="stage">
+    <div class="device"><img class="shot" id="shot" src="../../../../../../../jarvis-personal/store-assets/raw/ios/es/phone/01-home.png" alt=""></div>
+  </main>
+  <div class="watermark"></div>
+<script>
+  addEventListener("load", () => {
+    // Conservative text band: from the top of the first to the bottom of the last VISIBLE caption
+    // element (brand row, title, subtitle, plan badge), as a share of the image HEIGHT (full width
+    // assumed), so it over-estimates Google's "tagline area" rule rather than under-estimating it.
+    const parts = [...document.querySelectorAll("#caption > *")]
+      .map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+    const shot = document.getElementById("shot");
+    const band = parts.length ? Math.max(...parts.map((r) => r.bottom)) - Math.min(...parts.map((r) => r.top)) : 0;
+    document.body.dataset.captionRatio = (band / innerHeight).toFixed(4);
+    document.body.dataset.shotLoaded = shot ? String(shot.complete && shot.naturalWidth > 0) : "true";
+  });
+</script></body>
+</html>

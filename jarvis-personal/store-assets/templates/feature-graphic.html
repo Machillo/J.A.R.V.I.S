@@ -1,0 +1,39 @@
+<!doctype html>
+<!--
+  Google Play feature graphic (1024 x 500), editable. Brand only: icon, name, tagline, subtitle.
+  No app UI, no calls to action, no store badges, no rankings.
+  Placeholders: {{width}} {{height}} {{lang}} {{title}} {{subtitle}} {{icon}} {{brand_name}} {{watermark}} + {{c_*}}.
+-->
+<html lang="{{lang}}">
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --w: {{width}}px; --h: {{height}}px; --u: calc(var(--w) / 100); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: var(--w); height: var(--h); overflow: hidden; }
+  body {
+    background: radial-gradient(120% 140% at 85% 20%, {{c_tint}} 0%, {{c_dark_bg}} 62%);
+    font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: {{c_dark_text}};
+    display: flex; align-items: center; gap: calc(var(--u) * 5); padding: 0 calc(var(--u) * 8);
+    position: relative;
+  }
+  img { width: calc(var(--u) * 26); height: calc(var(--u) * 26); border-radius: calc(var(--u) * 5.5); box-shadow: 0 calc(var(--u) * 1.5) calc(var(--u) * 5) rgba(0,0,0,.5); }
+  .name { font-weight: 800; letter-spacing: 0.08em; font-size: calc(var(--u) * 3.4); color: {{c_dark_tint}}; }
+  h1 { margin-top: calc(var(--u) * 1.2); font-size: calc(var(--u) * 6.2); line-height: 1.08; font-weight: 800; }
+  p { margin-top: calc(var(--u) * 1.6); font-size: calc(var(--u) * 2.8); color: {{c_dark_text_2}}; }
+  .watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .watermark span { transform: rotate(-12deg); padding: calc(var(--u) * 1) calc(var(--u) * 4); background: rgba(180,35,63,.88); color: #fff; font-weight: 800; font-size: calc(var(--u) * 3.6); }
+  .watermark:empty { display: none; }
+</style>
+</head>
+<body>
+  <img src="{{icon}}" alt="">
+  <div>
+    <div class="name">{{brand_name}}</div>
+    <h1>{{title}}</h1>
+    <p>{{subtitle}}</p>
+  </div>
+  <div class="watermark">{{watermark}}</div>
+</body>
+</html>

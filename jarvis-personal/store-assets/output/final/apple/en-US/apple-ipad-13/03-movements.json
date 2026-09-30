@@ -1,0 +1,28 @@
+{
+  "output_sha256": "8e0704a2f3ee7fa8db9018a3a7c74446d4b68852b00dd9a39cd7c6abee0b9806",
+  "mode": "final",
+  "target": "apple-ipad-13",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "en-US",
+  "language": "en",
+  "screen": "03-movements",
+  "plan": "free",
+  "width": 2064,
+  "height": 2752,
+  "alpha": false,
+  "caption_ratio": 0.1435,
+  "capture": {
+    "file": "raw/ios/en/tablet/03-movements.png",
+    "sha256": "3a1f210d63cdb9a6647760dec0bbef3fb412db704564fac7dbff115815fd01ee",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:57:09.812Z"
+}

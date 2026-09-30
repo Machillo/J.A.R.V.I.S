@@ -1,0 +1,28 @@
+{
+  "output_sha256": "11b665a62f666a06cb02ccffa3d2a28c01a99be6b8c612f759cb656623398885",
+  "mode": "final",
+  "target": "apple-ipad-13",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "06-budget",
+  "plan": "basic",
+  "width": 2064,
+  "height": 2752,
+  "alpha": false,
+  "caption_ratio": 0.1985,
+  "capture": {
+    "file": "raw/ios/es/tablet/06-budget.png",
+    "sha256": "4e67f9cf020926c67354adfd7315ca928a97185ee145e995a280522450f2da2e",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:50.046Z"
+}

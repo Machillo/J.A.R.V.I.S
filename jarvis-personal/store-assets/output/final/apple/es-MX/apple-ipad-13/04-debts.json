@@ -1,0 +1,28 @@
+{
+  "output_sha256": "b1b05083fe81bc504bf6c5449ed18ef68a53eb9192c23a3d0d30bab60d5bf088",
+  "mode": "final",
+  "target": "apple-ipad-13",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "04-debts",
+  "plan": "free",
+  "width": 2064,
+  "height": 2752,
+  "alpha": false,
+  "caption_ratio": 0.1821,
+  "capture": {
+    "file": "raw/ios/es/tablet/04-debts.png",
+    "sha256": "f56c07540a910f42101fe2864b8c43c454b6a2fea9b08caa35a5cec21dc92e0e",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:46.958Z"
+}
