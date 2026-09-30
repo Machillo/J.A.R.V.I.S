@@ -44,6 +44,8 @@ public actor FixtureBackend: HTTPTransport {
     private var pendingFlows: [String: String] = [:]
     private var nextID = 500
     private var replays: [String: (body: Data?, status: Int, response: Data)] = [:]
+    /// The change the scripted JARVIS chat waits a "sí" / "no" for.
+    private var jarvisPending = false
     public private(set) var requests: [URLRequest] = []
 
     /// The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
@@ -168,6 +170,8 @@ public actor FixtureBackend: HTTPTransport {
         // Identity and account
         case ("GET", "/auth/me"): return ok(profile)
         case ("DELETE", "/auth/me"): return ok(["status": "OK", "deletion_id": "del_demo"])
+        // JARVIS chat: /jarvis/* admits owner and admin, like the backend.
+        case ("POST", "/jarvis/chat"): return jarvisChat(body["message"] as? String ?? "")
         case ("GET", "/auth/me/export"): return ok(["format_version": 1, "account": ["id": 1], "data": [String: Any]()])
         case ("POST", "/auth/profile-setup"):
             profile["display_name"] = body["display_name"]
@@ -630,6 +634,35 @@ public actor FixtureBackend: HTTPTransport {
     private func pendingCount() -> Int { candidates.filter { $0["review_status"] as? String == "pending" }.count }
 
     // MARK: Helpers
+
+    /// A scripted stand-in for the JARVIS engine (fixtures only, never real answers): "horas extra"
+    /// / "horas de OT" shows a payroll change and waits for "sí" / "no", "falla" answers 500 and
+    /// "respuesta rara" answers without a message. Anything else gets a plain reply.
+    private func jarvisChat(_ message: String) -> Answer {
+        guard ["owner", "admin"].contains(profile["role"] as? String ?? "") else { return error(403, "No tienes permisos para realizar esta acción.") }
+        let text = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.contains("falla") { return error(500, "Error interno.") }
+        if text.contains("respuesta rara") { return ok(["unexpected": true]) }
+        if jarvisPending, ["sí", "si", "no"].contains(text) {
+            jarvisPending = false
+            if text == "no" {
+                return ok(["message": "Listo, cancelé el registro. No guardé nada.", "intent": "pending_action", "status": "CANCELLED", "pending": false])
+            }
+            return ok(["message": "Señor, OT registrado: 3.0 horas. Ingreso proyectado actualizado: ₡900.000. Sobrante proyectado: ₡120.000.",
+                       "intent": "pending_action", "action_type": "create_payroll_event", "status": "OK", "pending": false])
+        }
+        if text.contains("horas"), text.contains("extra") || text.contains(" ot") {
+            jarvisPending = true
+            return ok(["message": "Voy a guardar esta evento de planilla:
+- tipo de evento: ot
+- horas: 3.0
+- monto: ₡9,000.00
+¿Confirmo y guardo? Responde sí o no.",
+                       "intent": "create_payroll_event", "action_type": "create_payroll_event", "status": "PENDING", "pending": true,
+                       "data": ["current_field": "confirm", "payload": ["event_type": "ot", "hours": 3.0]]])
+        }
+        return ok(["message": "Señor, esto es una respuesta de ejemplo.", "intent": "general", "status": "UNSUPPORTED", "pending": false, "data": NSNull()])
+    }
 
     private func ok(_ value: Any) -> Answer { (200, value) }
     private func error(_ status: Int, _ detail: String) -> Answer { (status, ["detail": detail]) }

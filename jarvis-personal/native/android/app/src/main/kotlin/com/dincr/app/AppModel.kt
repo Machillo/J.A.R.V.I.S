@@ -16,6 +16,8 @@ import com.dincr.data.FeatureFlags
 import com.dincr.data.HandledReturns
 import com.dincr.data.IdentityGate
 import com.dincr.data.InMemorySessionStore
+import com.dincr.data.Jarvis
+import com.dincr.data.JarvisChatSession
 import com.dincr.data.LaunchPolicy
 import com.dincr.data.MailReturn
 import com.dincr.data.MoneyFormat
@@ -126,6 +128,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     lateinit var environment: AppEnvironment private set
     lateinit var api: DincrApi private set
+    /** The Owner's JARVIS chat for this session only; emptied on sign-out and whenever the identity is no longer the Owner. */
+    val jarvisChat = JarvisChatSession({ message -> api.jarvisChat(message) })
     val appLock = AppLock(application)
     private var auth: SupabaseAuthClient? = null
     private lateinit var sessions: SessionManager
@@ -331,6 +335,12 @@ class AppModel(application: Application) : AndroidViewModel(application) {
 
     fun retryIdentity() = viewModelScope.launch { loadIdentity() }
 
+    // JARVIS chat: sent from the model's scope, so leaving the screen never cuts a message in half.
+    fun sendToJarvis(text: String) = viewModelScope.launch { jarvisChat.submit(text) }
+    fun confirmJarvisChange() = viewModelScope.launch { jarvisChat.confirm() }
+    fun cancelJarvisChange() = viewModelScope.launch { jarvisChat.cancel() }
+    fun retryJarvisMessage(id: Long) = viewModelScope.launch { jarvisChat.retry(id) }
+
     // --- Identity and gates ------------------------------------------------------------------------------
 
     /**
@@ -362,6 +372,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     /** Applies an identity: the Owner boundary, then legal, profile setup and plan, in that order. */
     fun apply(profile: Profile) {
         val previous = _profile.value
+        // Another account, or an account that is no longer the Owner, never sees this chat.
+        if (profile.id != previous?.id || !Jarvis.isAvailable(profile)) jarvisChat.reset()
         _profile.value = profile
         lastIdentityRefresh = System.currentTimeMillis()
         if (previous?.id != profile.id) appLock.attach(profile.id.toString())
@@ -404,6 +416,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         sessionEpoch += 1
         pendingSignIn.clear()
         appLock.detach()
+        jarvisChat.reset()
         _profile.value = null
         _flags.value = FeatureFlags()
         _notice.value = null

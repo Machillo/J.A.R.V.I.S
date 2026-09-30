@@ -37,6 +37,14 @@ class DincrApi(private val client: ApiClient) {
     }
     suspend fun supportTickets(): List<SupportTicket> = client.get("/product-ops/feedback")
     suspend fun createSupportTicket(request: SupportRequest): SupportCreated = client.send("POST", "/product-ops/feedback", request)
+
+    /**
+     * JARVIS (Owner): one chat message and the engine's answer. A POST: never retried on its own (a
+     * change is saved only after the Owner's "sí", itself a new message).
+     */
+    suspend fun jarvisChat(message: String): JarvisChatReply =
+        JarvisChatReply.from(client.send<JarvisChatRequest, kotlinx.serialization.json.JsonElement>("POST", "/jarvis/chat", JarvisChatRequest(message)))
+            ?: throw ApiError.decoding(client.currentLanguage)
     suspend fun resolveTicket(id: Long, resolved: Boolean): Acknowledgement =
         client.send("PATCH", "/product-ops/feedback/$id/resolution", ResolutionRequest(if (resolved) "resolved" else "still_happening"))
 

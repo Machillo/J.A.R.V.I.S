@@ -3,26 +3,27 @@ from __future__ import annotations
 import logging
 import re
 
-from backend.ai.action_flow import continue_pending_action, start_action, _save_action
+from backend.ai.action_flow import DIRECT_MARK, continue_pending_action, start_action
 from backend.ai.chat_memory import finish_pending_action, get_pending_action
 from backend.ai.intent_router import ACTION_TYPES, detect_intent, is_pending_interrupt
-from backend.ai.memory_service import remember_from_message, search_memory_items
+from backend.ai.memory_service import memory_content_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
 from backend.integrations.internet_search import internet_search
-from backend.tasks.calendar_service import calendar_summary, create_calendar_event_from_text
+from backend.tasks.calendar_service import calendar_summary, parse_calendar_event
 from backend.sports.service import get_sports_calendar_summary
 
 from backend.finance.service import (
     get_debts,
     get_net_worth_report,
     get_user_status,
+    preview_payroll_event,
 )
 
 from backend.goals.service import get_financial_goal_by_name
 from backend.advisor.service import analyze_spending_habits, get_financial_advice
 from backend.finance.strategic_engine import get_financial_engine_report, simulate_what_if
 from backend.finance.intelligence import plan_long_term_goal, get_debt_advisory
-from backend.finance.fixed_expenses import handle_fixed_expense_message
+from backend.finance.fixed_expenses import plan_fixed_expense_message
 from backend.ai.strategy_dashboard import build_local_strategy_blueprint
 
 logger = logging.getLogger(__name__)
@@ -253,6 +254,22 @@ def _format_financial_engine_message(report: dict) -> str:
     return "\n".join(lines)
 
 
+def _confirm_first(action_type: str, user_message: str, payload: dict, *, intent: str, source: str | None = None) -> dict:
+    """A change the chat understood: show what will be saved and wait for "sí" (action_flow)."""
+    action_result = start_action(action_type, user_message, prefill_payload=payload)
+    response = {
+        "message": action_result["message"],
+        "intent": intent,
+        "action_type": action_type,
+        "status": action_result.get("status", "PENDING"),
+        "pending": action_result.get("pending", True),
+        "data": action_result.get("data"),
+    }
+    if source:
+        response["source"] = source
+    return response
+
+
 def process_message(user_message: str):
     # Decisiones personales claras (compras/viajes) se resuelven primero con su
     # flujo local, antes de clasificar la intención, para evitar respuestas genéricas.
@@ -354,25 +371,23 @@ def process_message(user_message: str):
 
     direct_payroll = _parse_direct_payroll_or_bonus(user_message)
     if direct_payroll:
+        # Same interpretation as always (OT, VGH, holiday, bonus); the change is now shown with
+        # its amount and saved only on "sí" (action_flow), with the historical reply.
         action_type = direct_payroll["action_type"]
-        payload = direct_payroll["payload"]
-        saved_action = _save_action(action_type, payload)
-        blueprint = build_local_strategy_blueprint()
-        if action_type == "create_bonus":
-            msg = f"Señor, bono registrado por ₡{payload['amount']:,.0f}. Regla del Director: ese extra va primero a la deuda prioritaria salvo que comprometa pagos básicos. Estrategia recalculada.".replace(",", ".")
-        else:
-            labels = {"ot": "OT", "vgh": "VGH", "holiday": "feriado"}
-            event_label = labels.get(payload.get("event_type"), payload.get("event_type"))
-            msg = f"Señor, {event_label} registrado: {payload['hours']} horas. Ingreso proyectado actualizado: ₡{blueprint.get('monthly_income', 0):,.0f}. Sobrante proyectado: ₡{blueprint.get('estimated_extra_cash', 0):,.0f}.".replace(",", ".")
-        return {
-            "message": msg,
-            "intent": action_type,
-            "action_type": action_type,
-            "status": "OK",
-            "pending": False,
-            "source": "local_direct_payroll_guard",
-            "data": {"action": saved_action, "strategy": blueprint},
-        }
+        payload = {**direct_payroll["payload"], DIRECT_MARK: True}
+        if action_type == "create_payroll_event":
+            preview = preview_payroll_event(payload["event_type"], payload["hours"])
+            if preview.get("status") != "OK":
+                return {
+                    "message": f"Señor, no puedo registrar ese evento: {preview.get('message', 'no pude calcularlo')}",
+                    "intent": action_type,
+                    "action_type": action_type,
+                    "status": "ERROR",
+                    "pending": False,
+                    "source": "local_direct_payroll_guard",
+                    "data": preview,
+                }
+        return _confirm_first(action_type, user_message, payload, intent=action_type, source="local_direct_payroll_guard")
 
     intent = intent_result.get("intent", "unknown")
     action_type = intent_result.get("action_type")
@@ -383,14 +398,17 @@ def process_message(user_message: str):
         return _internet_answer(user_message, query)
 
     if intent == "create_calendar_event":
-        calendar_result = create_calendar_event_from_text(entity or user_message)
-        return {
-            "message": calendar_result.get("message"),
-            "intent": "create_calendar_event",
-            "status": calendar_result.get("status", "OK"),
-            "pending": calendar_result.get("pending", False),
-            "data": calendar_result,
-        }
+        parsed = parse_calendar_event(entity or user_message)
+        if parsed["status"] != "READY":
+            return {
+                "message": parsed.get("message"),
+                "intent": "create_calendar_event",
+                "status": parsed.get("status", "OK"),
+                "pending": parsed.get("pending", False),
+                "data": parsed,
+            }
+        payload = {"title": parsed["title"], "event_date": parsed["event_date"], "description": parsed["description"]}
+        return _confirm_first("create_calendar_event", user_message, payload, intent="create_calendar_event")
 
     if intent == "calendar_summary":
         result = calendar_summary()
@@ -415,14 +433,8 @@ def process_message(user_message: str):
     if intent == "memory":
         text_lower = user_message.lower()
         if any(trigger in text_lower for trigger in ["recuerda que", "recorda que", "recordá que", "acuérdate", "acuerdate", "guarda en memoria", "agrega a memoria", "memoriza"]):
-            result = remember_from_message(user_message)
-            return {
-                "message": "Listo, lo recordaré.",
-                "intent": "memory",
-                "status": result.get("status", "OK"),
-                "pending": False,
-                "data": result,
-            }
+            payload = {"content": memory_content_from_message(user_message)}
+            return _confirm_first("create_memory", user_message, payload, intent="memory")
 
         memories = search_memory_items(user_message, limit=8)
         if not memories:
@@ -485,7 +497,11 @@ def process_message(user_message: str):
         }
 
     if intent == "fixed_expense":
-        result = handle_fixed_expense_message(user_message)
+        result = plan_fixed_expense_message(user_message)
+        if result["status"] == "READY":
+            action = "create_fixed_expense" if result["operation"] == "create" else "update_fixed_expense"
+            payload = {key: result.get(key) for key in ("fixed_expense_id", "name", "expected_amount", "due_day")}
+            return _confirm_first(action, user_message, payload, intent="fixed_expense")
         return {
             "message": result.get("message"),
             "intent": "fixed_expense",

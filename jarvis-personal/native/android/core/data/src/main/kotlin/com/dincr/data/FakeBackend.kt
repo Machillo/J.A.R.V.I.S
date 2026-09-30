@@ -81,6 +81,34 @@ class FakeBackend(
     }
 
     private val replays = mutableMapOf<String, Pair<String?, HttpResponse>>()
+    /** The change the scripted JARVIS chat waits a "sí" / "no" for. */
+    private var jarvisPending = false
+
+    /**
+     * A scripted stand-in for the JARVIS engine (fixtures only, never real answers): "horas extra" /
+     * "horas de OT" shows a payroll change and waits for "sí" / "no", "falla" answers 500 and
+     * "respuesta rara" answers without a message. Anything else gets a plain reply.
+     */
+    private fun jarvisChat(message: String): HttpResponse {
+        if (profile.role != "owner" && profile.role != "admin") return error(403, "No tienes permisos para realizar esta acción.")
+        val text = message.lowercase().trim()
+        if ("falla" in text) return error(500, "Error interno.")
+        if ("respuesta rara" in text) return ok("""{"unexpected":true}""")
+        if (jarvisPending && text in setOf("sí", "si", "no")) {
+            jarvisPending = false
+            return if (text == "no") ok("""{"message":"Listo, cancelé el registro. No guardé nada.","intent":"pending_action","status":"CANCELLED","pending":false}""")
+            else ok("""{"message":"Señor, OT registrado: 3.0 horas. Ingreso proyectado actualizado: ₡900.000. Sobrante proyectado: ₡120.000.","intent":"pending_action","action_type":"create_payroll_event","status":"OK","pending":false}""")
+        }
+        if ("horas" in text && ("extra" in text || " ot" in text)) {
+            jarvisPending = true
+            return ok("""{"message":"Voy a guardar esta evento de planilla:
+- tipo de evento: ot
+- horas: 3.0
+- monto: ₡9,000.00
+¿Confirmo y guardo? Responde sí o no.","intent":"create_payroll_event","action_type":"create_payroll_event","status":"PENDING","pending":true,"data":{"current_field":"confirm","payload":{"event_type":"ot","hours":3.0}}}""")
+        }
+        return ok("""{"message":"Señor, esto es una respuesta de ejemplo.","intent":"general","status":"UNSUPPORTED","pending":false,"data":null}""")
+    }
 
     private fun ok(value: String) = HttpResponse(200, value)
     private inline fun <reified T> ok(value: T) = HttpResponse(200, json.encodeToString(value))
@@ -99,6 +127,8 @@ class FakeBackend(
             // Identity
             path == "/auth/me" && method == "GET" -> ok(profile)
             path == "/auth/me" && method == "DELETE" -> ok("""{"status":"OK","message":"Cuenta eliminada","deletion_id":"del_demo"}""")
+            // JARVIS chat: /jarvis/* admits owner and admin, like the backend.
+            path == "/jarvis/chat" && method == "POST" -> jarvisChat(text("message").orEmpty())
             path == "/auth/me/export" -> ok("""{"format_version":1,"generated_at":"${today}T12:00:00Z","account":{"id":1},"workspaces":[],"data":{},"truncated_tables":[],"notes":[]}""")
             path == "/auth/profile-setup" -> {
                 profile = profile.copy(displayName = text("display_name"), profileSetupCompleted = true, baseCurrency = text("base_currency") ?: "CRC",

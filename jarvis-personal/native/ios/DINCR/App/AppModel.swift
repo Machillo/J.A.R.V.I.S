@@ -51,6 +51,9 @@ final class AppModel {
     var planTier: PlanTier { profile?.planTier ?? .free }
 
     let service: DincrService
+    /// The Owner's JARVIS chat for this session only; emptied on sign-out and whenever the
+    /// identity is no longer the Owner.
+    let jarvisChat: JarvisChatSession
     let environment: AppEnvironment
     let appLock: AppLock
     private let sessions: SessionManager
@@ -71,24 +74,27 @@ final class AppModel {
         self.environment = environment
         self.appLock = AppLock()
         self.handledMailReturns = HandledReturns(UserDefaults.standard.stringArray(forKey: "dincr.mailReturns") ?? [])
+        let service: DincrService
         switch environment.mode {
         case let .live(apiURL, supabaseURL, anonKey):
             let auth = SupabaseAuthClient(projectURL: supabaseURL, anonKey: anonKey)
             let sessions = SessionManager(auth: auth, store: KeychainSessionStore())
             self.auth = auth
             self.sessions = sessions
-            self.service = DincrService(client: APIClient(baseURL: apiURL, tokens: sessions))
+            service = DincrService(client: APIClient(baseURL: apiURL, tokens: sessions))
         case let .fixtures(scenario, plan, role):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
             let latency: Duration = ProcessInfo.processInfo.arguments.contains("-DincrDisableAnimations") ? .milliseconds(50) : .milliseconds(300)
-            self.service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency))
+            service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency))
         case let .unconfigured(reason):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
-            self.service = DincrService(client: APIClient(baseURL: FixtureBackend.baseURL, tokens: FixtureTokens(), transport: UnconfiguredTransport()))
+            service = DincrService(client: APIClient(baseURL: FixtureBackend.baseURL, tokens: FixtureTokens(), transport: UnconfiguredTransport()))
             self.phase = .unconfigured(reason)
         }
+        self.service = service
+        self.jarvisChat = JarvisChatSession { message in try await service.jarvisChat(message) }
     }
 
     var language: AppLanguage { .current }
@@ -220,6 +226,8 @@ final class AppModel {
 
     func apply(_ profile: Profile) {
         let wasReady = phase == .ready
+        // Another account, or an account that is no longer the Owner, never sees this chat.
+        if profile.id != self.profile?.id || !Jarvis.isAvailable(to: profile) { jarvisChat.reset() }
         self.profile = profile
         lastIdentityRefresh = .now
         switch IdentityGate.of(profile) {
@@ -395,6 +403,7 @@ final class AppModel {
         retryMailReturn = nil
         appLock.detach()
         DataExport.clear()
+        jarvisChat.reset()
         phase = .signedOut
     }
 }

@@ -22,16 +22,15 @@ import com.dincr.design.DincrCard
 import com.dincr.design.EmptyState
 
 /**
- * JARVIS (recovery roadmap J0): the Owner's personal space inside DINCR, opened from the Profile
- * hub. Only the server's role opens it ([Jarvis.isAvailable]), and the backend still decides every
- * JARVIS request. J0 is the shell only: no section is ported yet, and each one says so instead of
- * showing sample content (iOS: `JarvisViews.swift`).
+ * JARVIS: the Owner's personal space inside DINCR, opened from the Profile hub. Only the server's
+ * role opens it ([Jarvis.isAvailable]), and the backend still decides every JARVIS request. The chat
+ * is ported (J1, [JarvisChatScreen]); a section not ported yet says so instead of showing sample
+ * content (iOS: `JarvisViews.swift`).
  */
 @Composable
 fun JarvisHubScreen(model: AppModel, nav: Navigator) = OwnerOnly(model, nav) {
     DetailScaffold("JARVIS", onBack = nav::back) {
-        Caption(tx("Tus funciones personales vuelven a DINCR por etapas. Todavía ninguna está disponible en esta app.",
-            "Your personal features are coming back to DINCR step by step. None is available in this app yet."))
+        Caption(tx("Tus funciones personales vuelven a DINCR por etapas.", "Your personal features are coming back to DINCR step by step."))
         DincrCard {
             Column {
                 Jarvis.Section.entries.forEach { section ->
@@ -44,12 +43,16 @@ fun JarvisHubScreen(model: AppModel, nav: Navigator) = OwnerOnly(model, nav) {
     }
 }
 
-/** A JARVIS section that is not ported yet: it says what is coming, never shows sample data. */
+/** A JARVIS section: the ported one (chat), or a "being restored" screen that never shows sample data. */
 @Composable
 fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerOnly(model, nav) {
     val section = Jarvis.Section.from(wire)
     if (section == null) {
         LaunchedEffect(Unit) { nav.back() }
+        return@OwnerOnly
+    }
+    if (section == Jarvis.Section.CHAT) {
+        JarvisChatScreen(model, nav)
         return@OwnerOnly
     }
     DetailScaffold(section.title, onBack = nav::back) {

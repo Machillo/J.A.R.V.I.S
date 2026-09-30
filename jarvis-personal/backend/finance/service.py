@@ -1755,22 +1755,10 @@ def get_payroll_deductions():
     return [dict(row) for row in rows]
 
 
-def add_payroll_event(
-    event_type: str,
-    hours: float,
-    description: str = ""
-):
-    profile = get_employment_profile()
-
-    if not profile:
-        return {
-            "message": "No existe perfil laboral configurado.",
-            "status": "ERROR"
-        }
-
+def payroll_event_amount(profile: dict, event_type: str, hours: float) -> tuple[float, float]:
+    """(multiplier, amount) of a payroll event from the employment profile. The only formula
+    for both the confirmation preview and the saved event."""
     hourly_rate = profile["hourly_rate"]
-
-    event_type = event_type.lower().strip()
 
     if event_type == "ot":
         multiplier = profile["overtime_multiplier"]
@@ -1787,6 +1775,35 @@ def add_payroll_event(
     else:
         multiplier = 1
         amount = hours * hourly_rate
+
+    return multiplier, amount
+
+
+def preview_payroll_event(event_type: str, hours: float) -> dict:
+    """What add_payroll_event would record, without writing (chat confirmation)."""
+    profile = get_employment_profile()
+    if not profile:
+        return {"message": "No existe perfil laboral configurado.", "status": "ERROR"}
+    event_type = event_type.lower().strip()
+    multiplier, amount = payroll_event_amount(profile, event_type, hours)
+    return {"status": "OK", "event_type": event_type, "hours": hours, "multiplier": multiplier, "amount": amount}
+
+
+def add_payroll_event(
+    event_type: str,
+    hours: float,
+    description: str = ""
+):
+    profile = get_employment_profile()
+
+    if not profile:
+        return {
+            "message": "No existe perfil laboral configurado.",
+            "status": "ERROR"
+        }
+
+    event_type = event_type.lower().strip()
+    multiplier, amount = payroll_event_amount(profile, event_type, hours)
 
     workspace_id = get_current_workspace_id()
 

@@ -73,6 +73,14 @@ Only the Supabase **anon/publishable** key is ever configured in the apps (git-i
 `/free/*` serves Free, Basic and VIP (feature minimum `free`). The Owner uses it at VIP level
 (plus the native JARVIS UI, Owner only); admin sessions stop at a notice.
 
+**JARVIS chat (Owner, J1).** `POST /jarvis/chat` `{"message"}` → an untyped dict: `message` (required,
+shown as is), `intent`, `status`, `pending`, `action_type`, `data` (shape per intent, read only for
+`data.current_field`). A change the chat understood (payroll/OT/VGH/holiday, bonus, calendar event,
+memory, fixed expense, and every create action) answers `status: PENDING, pending: true,
+data.current_field: "confirm"` with what will be saved (a payroll event also shows its computed
+amount); it is saved only when the next message is "sí" (Confirmar), "no" (Cancelar) drops it. Never
+retried automatically. The conversation is kept in memory for the session only; no message is stored.
+
 ### RC endpoints (added after C4)
 
 Every write below sends only what the user typed, bounded by the money rules; creates and
