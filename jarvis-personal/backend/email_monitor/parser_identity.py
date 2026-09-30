@@ -71,6 +71,27 @@ class ParserIdentity:
     def is_holder(self, name: str | None) -> bool:
         return bool(name) and _key(name) in {_key(item) for item in self.holder_names}
 
+    def names_holder(self, name: str | None) -> bool | None:
+        """Whether a bank-printed name is the holder's: True, False, or None when unknown.
+
+        Banks print the full legal name, often uppercase and truncated
+        ("NAME MIDDLE SURN"), while the holder's DINCR name may be shorter. Every
+        word of the holder's full name (two words or more) must appear, a word
+        matching when one is a prefix of the other and the shorter has four
+        letters or more. Without a full holder name there is no evidence.
+        """
+        full = max(self.holder_names, key=len, default="")
+        wanted = _key(full).split()
+        printed = re.findall(r"\w+", _key(name))
+        if len(wanted) < 2 or not printed:
+            return None
+
+        def same(word: str, other: str) -> bool:
+            short, long = sorted((word, other), key=len)
+            return short == long or (len(short) >= 4 and long.startswith(short))
+
+        return all(any(same(word, other) for other in printed) for word in wanted)
+
     def is_receivable_contact(self, name: str | None) -> bool:
         return bool(name) and _key(name) in {_key(item) for item in self.receivable_contacts}
 

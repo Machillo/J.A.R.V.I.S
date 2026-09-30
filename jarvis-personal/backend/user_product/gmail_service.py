@@ -56,7 +56,12 @@ logger = logging.getLogger(__name__)
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 FINVA_QUERY = os.getenv(
     "FINVA_GMAIL_QUERY",
-    "(from:notificacion@notificacionesbaccr.com OR from:notificaciones@baccredomatic.cr "
+    # BAC card alerts moved from notificacion@notificacionesbaccr.com (until 2026-07)
+    # to notificacion@baccredomatic.cr and then NotificacionBAC@baccredomatic.cr;
+    # SINPE notices moved from sinpe@notificacionesbaccr.com to notificaciones@baccredomatic.cr.
+    "(from:notificacion@notificacionesbaccr.com OR from:notificacion@baccredomatic.cr "
+    "OR from:NotificacionBAC@baccredomatic.cr OR from:sinpe@notificacionesbaccr.com "
+    "OR from:notificaciones@baccredomatic.cr "
     "OR from:alerta@baccredomatic.com OR from:estadosdecuenta@baccredomatic.cr "
     "OR from:estadodecuenta@baccredomatic.cr OR from:info@info.baccredomatic.net "
     "OR from:multimoneycr@multimoney.com OR from:financiera@multimoney.com "

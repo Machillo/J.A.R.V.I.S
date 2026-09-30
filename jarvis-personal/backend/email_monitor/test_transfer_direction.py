@@ -30,4 +30,6 @@ def test_multimoney_credit_is_parsed_from_explicit_posting_wording():
         "2026-09-22T10:00:00Z",
     )
     assert parsed["movement_direction"] == "in"
-    assert parsed["transaction_type"] == "income"
+    # The credit is recorded exactly; whether it is income is the user's call.
+    assert parsed["transaction_type"] == "transfer"
+    assert parsed["financial_effect"] == "review"

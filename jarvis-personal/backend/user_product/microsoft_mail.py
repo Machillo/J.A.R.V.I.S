@@ -43,7 +43,9 @@ AUTHORITY = "https://login.microsoftonline.com/common/oauth2/v2.0"
 CONSUMER_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad"
 GRAPH = "https://graph.microsoft.com/v1.0"
 GRAPH_SCOPE_PREFIX = "https://graph.microsoft.com/"
-ALLOWED_SENDERS = frozenset(re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)) | {"ccss.sa.cr"}
+# Lowercase: senders are compared lowercased, and the query may spell an address
+# with capitals (NotificacionBAC@baccredomatic.cr).
+ALLOWED_SENDERS = frozenset(item.lower() for item in re.findall(r"from:([\w@.\-]+)", FINVA_QUERY, flags=re.I)) | {"ccss.sa.cr"}
 
 # Render names first; the legacy FINVA_MICROSOFT_* names keep working.
 CONFIG_NAMES = (

@@ -128,6 +128,18 @@ def _transfer_like(candidate: dict[str, Any]) -> bool:
         or str(candidate.get("transaction_type") or "") in TRANSFER_TYPES
 
 
+def sinpe_reference(value: Any) -> str | None:
+    """A 25-digit SINPE reference: both banks of one transfer print the same one."""
+    digits = re.sub(r"\D", "", str(value or ""))
+    return digits if len(digits) == 25 and len(str(value).strip()) <= 30 else None
+
+
+def different_sinpe_references(first: Any, second: Any) -> bool:
+    """Two different SINPE references are two different transfers, whatever the amount."""
+    left, right = sinpe_reference(first), sinpe_reference(second)
+    return bool(left and right and left != right)
+
+
 def _endpoint(candidate: dict[str, Any]) -> str:
     return _last4(candidate.get("source_account_reference") or candidate.get("destination_account_reference"))
 
@@ -269,7 +281,10 @@ def _paired_owned_transfer(conn, candidate: dict[str, Any], own_account_id: int 
 
     A same-amount purchase must never disappear merely because a transfer was
     made that day. Require an explicit endpoint, shared bank reference or close
-    transaction times; ambiguous matches stay pending for review.
+    transaction times; ambiguous matches stay pending for review. The amount is
+    compared in the movement's own currency (USD 1,400 is not CRC 1,400), and
+    two notices carrying different bank references are different transfers: a
+    SINPE transfer carries the same 25-digit reference in both banks' notices.
     """
     direction = canonical_direction((candidate.get("raw_payload") or {}).get("movement_direction") or candidate.get("movement_direction"))
     if candidate.get("movement_kind") != "transfer" or direction not in {"in", "out"} or not own_account_id:
@@ -281,6 +296,7 @@ def _paired_owned_transfer(conn, candidate: dict[str, Any], own_account_id: int 
     rows = conn.execute(
         """SELECT c.id,c.transaction_time,c.transaction_date,c.external_reference,
                   c.source_account_reference,c.destination_account_reference,
+                  c.amount,c.currency,c.original_amount,c.original_currency,
                   a.account_last4
            FROM finva_email_candidates c
            JOIN account_balances a ON a.id=c.financial_account_id
@@ -298,10 +314,18 @@ def _paired_owned_transfer(conn, candidate: dict[str, Any], own_account_id: int 
          candidate["account_id"], candidate["workspace_id"]),
     ).fetchall()
     matches = []
+    money = _money_key(candidate)
+    reference = _plain(candidate.get("external_reference"))
     for row in rows:
         other = dict(row)
         other_own = _last4(other["account_last4"])
         if not other_own or other_own == own_reference:
+            continue
+        # The query already matched the stored amount; the original currency must agree too.
+        if other.get("amount") is not None and _money_key(other) != money:
+            continue
+        other_reference = _plain(other.get("external_reference"))
+        if different_sinpe_references(reference, other_reference):
             continue
         if direction == "out":
             destination, origin = _last4(candidate.get("destination_account_reference")), _last4(other.get("source_account_reference"))
@@ -311,8 +335,7 @@ def _paired_owned_transfer(conn, candidate: dict[str, Any], own_account_id: int 
             continue
         if origin and origin != (own_reference if direction == "out" else other_own):
             continue
-        reference = _plain(candidate.get("external_reference"))
-        shared_reference = reference and reference == _plain(other.get("external_reference"))
+        shared_reference = bool(reference) and reference == other_reference
         cross_reference = bool(destination and origin)
         close_time = False
         if candidate.get("transaction_time") and other.get("transaction_time"):
