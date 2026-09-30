@@ -915,13 +915,13 @@
       "command_center": {
         "as_of": "2026-09-28",
         "director": {
-          "priority": "debt",
-          "headline": "Atacar Tarjeta principal",
+          "priority": "emergency",
+          "headline": "Completar el fondo de emergencia",
           "next_action": "Asigná ₡350,000 a esta prioridad.",
-          "data_complete": false
+          "data_complete": true
         },
         "score": {
-          "value": 64,
+          "value": 67,
           "label": "En progreso",
           "factors": [
             {
@@ -941,8 +941,8 @@
             },
             {
               "label": "Calidad de datos",
-              "impact": "warning",
-              "value": 60
+              "impact": "positive",
+              "value": 80
             }
           ]
         },
@@ -1212,20 +1212,26 @@
         "roadmap": [
           {
             "order": 1,
+            "title": "Completar reserva",
+            "amount": 350000.0,
+            "why": "Protege tus obligaciones ante un imprevisto."
+          },
+          {
+            "order": 2,
             "title": "Abonar a Tarjeta principal",
             "amount": 350000.0,
             "why": "Es el uso de menor costo financiero según saldo y tasa conocidos."
           },
           {
-            "order": 2,
+            "order": 3,
             "title": "Financiar Fondo de emergencia",
             "amount": 45000.0,
             "why": "Alinea el aporte con fecha y prioridad."
           },
           {
-            "order": 3,
-            "title": "Invertir",
-            "amount": 350000.0,
+            "order": 4,
+            "title": "Esperar para invertir",
+            "amount": 0,
             "why": "Primero deben estar protegidos el flujo, la reserva y la deuda cara."
           }
         ],
@@ -2280,13 +2286,13 @@
       "command_center": {
         "as_of": "2026-09-28",
         "director": {
-          "priority": "debt",
-          "headline": "Pay down Main card",
+          "priority": "emergency",
+          "headline": "Complete the emergency fund",
           "next_action": "Assign ₡350,000 to this priority.",
-          "data_complete": false
+          "data_complete": true
         },
         "score": {
-          "value": 64,
+          "value": 67,
           "label": "In progress",
           "factors": [
             {
@@ -2306,8 +2312,8 @@
             },
             {
               "label": "Data quality",
-              "impact": "warning",
-              "value": 60
+              "impact": "positive",
+              "value": 80
             }
           ]
         },
@@ -2577,20 +2583,26 @@
         "roadmap": [
           {
             "order": 1,
+            "title": "Complete emergency fund",
+            "amount": 350000.0,
+            "why": "It protects your obligations against the unexpected."
+          },
+          {
+            "order": 2,
             "title": "Pay extra toward Main card",
             "amount": 350000.0,
             "why": "It is the lowest-cost use based on known balances and rates."
           },
           {
-            "order": 2,
+            "order": 3,
             "title": "Fund Emergency fund",
             "amount": 45000.0,
             "why": "It aligns the contribution with its date and priority."
           },
           {
-            "order": 3,
-            "title": "Invest",
-            "amount": 350000.0,
+            "order": 4,
+            "title": "Wait before investing",
+            "amount": 0,
             "why": "Cash flow, reserves, and expensive debt must be protected first."
           }
         ],

@@ -27,6 +27,8 @@ from backend.user_product import basic_service, free_service, income_policy, ser
 from backend.user_product.strategy_engine import build_basic_strategy, build_paycheck_plan, build_vip_insights, build_vip_strategy
 
 GOLDEN = Path(__file__).resolve().parents[2] / "native/android/core/data/src/main/resources/store-sample.json"
+# The iOS app bundles a byte copy (DincrKit resource): written with the Android file, checked equal.
+IOS_GOLDEN = Path(__file__).resolve().parents[2] / "native/ios/DincrKit/Sources/DincrCore/Resources/store-sample.json"
 
 
 class _FixtureDate(date):
@@ -194,10 +196,13 @@ def test_store_screenshots_show_the_backend_engines_output(monkeypatch):
     if os.environ.get("DINCR_UPDATE_STORE_GOLDEN") == "1":
         for language, engine in computed.items():
             golden[language]["engine"] = engine
-        GOLDEN.write_text(json.dumps(golden, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+        text = json.dumps(golden, ensure_ascii=False, indent=2) + "\n"
+        GOLDEN.write_text(text, encoding="utf-8", newline="\n")
+        IOS_GOLDEN.write_text(text, encoding="utf-8", newline="\n")
         return
     for language, engine in computed.items():
         assert golden[language].get("engine") == engine, f"store-sample.json ({language}) differs from the backend engines: regenerate it"
+    assert IOS_GOLDEN.read_bytes() == GOLDEN.read_bytes(), "the iOS copy of store-sample.json differs from the Android one: regenerate it"
 
 
 def test_the_harness_uses_the_fixture_date_everywhere(monkeypatch):
