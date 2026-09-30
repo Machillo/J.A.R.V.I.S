@@ -217,6 +217,7 @@ fun SettingsScreen(model: AppModel, nav: Navigator, appearance: Appearance, onAp
     var deleting by remember { mutableStateOf(false) }
     var deletingBusy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val profile by model.profile.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { model.recordScreen("settings_opened", "settings") }
     DetailScaffold(tx("Ajustes de cuenta", "Account settings"), nav::back) {
         Section(tx("Apariencia", "Appearance")) {
@@ -252,7 +253,7 @@ fun SettingsScreen(model: AppModel, nav: Navigator, appearance: Appearance, onAp
             }
         }
         error?.let { ErrorState(it) }
-        Section(tx("Eliminar cuenta", "Delete account")) {
+        if (profile?.canDeleteAccountInApp == true) Section(tx("Eliminar cuenta", "Delete account")) {
             Text(tx("Se borran tus datos financieros y se revoca el acceso a tu correo conectado. No se puede deshacer.", "Your financial data is deleted and access to your connected mail is revoked. This can’t be undone."),
                 style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
             TextButton({ deleting = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Eliminar mi cuenta", "Delete my account"), color = Dincr.colors.negative) }

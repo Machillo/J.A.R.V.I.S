@@ -46,11 +46,11 @@ import Testing
         #expect(format.placement == .after)
     }
 
-    @Test func ownerSessionsAreRecognized() throws {
-        for role in ["owner", "admin"] {
-            let json = #"{"id":1,"role":"\#(role)"}"#
-            #expect(try APIClient.decoder.decode(Profile.self, from: Data(json.utf8)).isOwner)
-        }
+    @Test func ownerAndAdminSessionsAreRecognized() throws {
+        let decode = { (role: String) in try APIClient.decoder.decode(Profile.self, from: Data(#"{"id":1,"role":"\#(role)"}"#.utf8)) }
+        let owner = try decode("owner"), admin = try decode("admin")
+        #expect(owner.isOwner && !owner.usesInternalAppOnly)
+        #expect(admin.usesInternalAppOnly && !admin.isOwner)
     }
 
     @Test func encodesRequestBodiesInSnakeCase() throws {

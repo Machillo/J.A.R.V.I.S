@@ -52,8 +52,11 @@ class ContractTest {
         assertEquals(MoneyFormat.Placement.AFTER, format.placement)
     }
 
-    @Test fun ownerSessionsAreRecognized() {
-        listOf("owner", "admin").forEach { assertTrue(json.decodeFromString<Profile>("""{"id":1,"role":"$it"}""").isOwner) }
+    @Test fun ownerAndAdminSessionsAreRecognized() {
+        val owner = json.decodeFromString<Profile>("""{"id":1,"role":"owner"}""")
+        val admin = json.decodeFromString<Profile>("""{"id":1,"role":"admin"}""")
+        assertTrue(owner.isOwner && !owner.usesInternalAppOnly)
+        assertTrue(admin.usesInternalAppOnly && !admin.isOwner)
     }
 
     @Test fun encodesBodiesInSnakeCaseWithExactAmounts() {

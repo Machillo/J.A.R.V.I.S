@@ -14,6 +14,7 @@ import com.dincr.data.DincrApi
 import com.dincr.data.FakeBackend
 import com.dincr.data.FeatureFlags
 import com.dincr.data.HandledReturns
+import com.dincr.data.IdentityGate
 import com.dincr.data.InMemorySessionStore
 import com.dincr.data.LaunchPolicy
 import com.dincr.data.MailReturn
@@ -251,7 +252,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         val policy = withTimeoutOrNull(8_000) { runCatching { api.releasePolicy(appVersion) }.getOrNull() } ?: return
         _release.value = policy
         val current = _phase.value
-        if (policy.isRequired && _profile.value?.isOwner != true) _phase.value = Phase.UpdateRequired(policy)
+        if (policy.isRequired && _profile.value?.usesInternalAppOnly != true) _phase.value = Phase.UpdateRequired(policy)
         else if (current is Phase.UpdateRequired) { if (_profile.value != null) apply(_profile.value!!) else _phase.value = if (sessions.hasSession) Phase.LoadingIdentity else Phase.SignedOut }
     }
 
@@ -361,21 +362,23 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         if (previous?.id != profile.id) appLock.attach(profile.id.toString())
         profile.subscription?.accessNotice?.let { notice -> notice.message?.let { _notice.value = listOfNotNull(notice.title, it).joinToString(". ") } }
         val release = _release.value
-        _phase.value = when {
-            release?.isRequired == true && !profile.isOwner -> Phase.UpdateRequired(release)
-            // Owner boundary (CLAUDE.md §4.A): the public app never serves Owner/admin sessions.
-            profile.isOwner -> Phase.OwnerNotSupported
-            profile.legal?.required == true -> Phase.LegalRequired
-            profile.profileSetupCompleted != true -> Phase.ProfileSetup
-            profile.planSelected != true -> Phase.ChoosePlan
-            else -> Phase.Ready
+        _phase.value = if (release?.isRequired == true && !profile.usesInternalAppOnly) Phase.UpdateRequired(release) else when (IdentityGate.of(profile)) {
+            // Owner boundary (CLAUDE.md §4.A): admin sessions are not served; Owner uses the public app.
+            IdentityGate.INTERNAL_ONLY -> Phase.OwnerNotSupported
+            IdentityGate.LEGAL_REQUIRED -> Phase.LegalRequired
+            IdentityGate.PROFILE_SETUP -> Phase.ProfileSetup
+            IdentityGate.CHOOSE_PLAN -> Phase.ChoosePlan
+            IdentityGate.READY -> Phase.Ready
         }
         if (_phase.value is Phase.Ready) viewModelScope.launch { refreshFlags(); reconcileStore() }
     }
 
     /** `DELETE /auth/me` for an account whose deletion is pending (or requested now), then sign out. */
-    suspend fun deleteAccount(): String? = load(language.pick("No pudimos eliminar tu cuenta.", "We couldn’t delete your account.")) { api.deleteAccount() }
-        .fold({ signOut(); null }, { it.message })
+    suspend fun deleteAccount(): String? {
+        if (_profile.value?.canDeleteAccountInApp == false) return language.pick("La cuenta Owner no se elimina desde la app.", "The Owner account can’t be deleted from the app.")
+        return load(language.pick("No pudimos eliminar tu cuenta.", "We couldn’t delete your account.")) { api.deleteAccount() }
+            .fold({ signOut(); null }, { it.message })
+    }
 
     fun signOut() = viewModelScope.launch {
         sessions.signOut()

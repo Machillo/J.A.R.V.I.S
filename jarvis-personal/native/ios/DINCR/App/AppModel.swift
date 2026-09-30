@@ -222,15 +222,16 @@ final class AppModel {
         let wasReady = phase == .ready
         self.profile = profile
         lastIdentityRefresh = .now
-        if profile.isOwner {
+        switch IdentityGate.of(profile) {
+        case .internalOnly:
             phase = .ownerNotSupported
-        } else if profile.legal?.required == true {
+        case .legalRequired:
             phase = .legalRequired
-        } else if profile.profileSetupCompleted != true {
+        case .profileSetup:
             phase = .profileSetup
-        } else if profile.planSelected != true {
+        case .choosePlan:
             phase = .choosePlan
-        } else {
+        case .ready:
             phase = .ready
             if !wasReady {
                 appLock.attach(userID: profile.id)
@@ -283,6 +284,9 @@ final class AppModel {
 
     /// G9 / A6 — the backend schedules the deletion; this device then forgets the session.
     func deleteAccount() async -> String? {
+        if profile?.canDeleteAccountInApp == false {
+            return language.pick("La cuenta Owner no se elimina desde la app.", "The Owner account can’t be deleted from the app.")
+        }
         let epoch = sessionEpoch
         do {
             try await service.deleteAccount()

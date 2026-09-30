@@ -50,10 +50,12 @@ struct ProfileHubView: View {
                 Button(tx("Cerrar sesión", "Sign out"), role: .destructive) { confirmingSignOut = true }
                     .accessibilityIdentifier("profile.signOut")
             }
-            Section {
-                Button(tx("Eliminar mi cuenta", "Delete my account"), role: .destructive) { confirmingDelete = true }.disabled(deleting)
-            } footer: {
-                Text(tx("Se programa la eliminación de tus datos en DINCR y se cierra la sesión. No se puede deshacer.", "Your DINCR data is scheduled for deletion and you are signed out. This can’t be undone."))
+            if model.profile?.canDeleteAccountInApp == true {
+                Section {
+                    Button(tx("Eliminar mi cuenta", "Delete my account"), role: .destructive) { confirmingDelete = true }.disabled(deleting)
+                } footer: {
+                    Text(tx("Se programa la eliminación de tus datos en DINCR y se cierra la sesión. No se puede deshacer.", "Your DINCR data is scheduled for deletion and you are signed out. This can’t be undone."))
+                }
             }
             if let error { Section { Text(error).foregroundStyle(DincrColor.negative) } }
         }
