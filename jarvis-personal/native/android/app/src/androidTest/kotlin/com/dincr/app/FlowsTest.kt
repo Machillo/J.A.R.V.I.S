@@ -1,7 +1,9 @@
 package com.dincr.app
 
 import android.content.Intent
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollToNodeAction
@@ -48,12 +50,22 @@ class FlowsTest {
         return ActivityScenario.launch<MainActivity>(intent).also { scenario = it }
     }
 
+    // DIAG (#296 android-ui 24): what is on screen, in the failure message itself.
+    private val trail = mutableListOf<String>()
+    private fun screen(): String = runCatching {
+        fun walk(node: SemanticsNode): List<String> = listOfNotNull(
+            node.config.getOrNull(SemanticsProperties.TestTag)?.let { "#$it" },
+            node.config.getOrNull(SemanticsProperties.Text)?.joinToString(" ") { it.text }?.takeIf { it.isNotBlank() },
+        ) + node.children.flatMap(::walk)
+        compose.onAllNodes(isRoot(), useUnmergedTree = true).fetchSemanticsNodes().flatMap(::walk).joinToString(" | ").take(1500)
+    }.getOrElse { "screen failed: $it" }
+
     private fun waitUntil(what: String, condition: () -> Boolean) {
         try {
             compose.waitUntil(15_000) { advance(); condition() }
         } catch (error: Throwable) {
             runCatching { compose.onAllNodes(isRoot()).printToLog("DINCR-UI") }
-            throw AssertionError("timed out waiting for $what", error)
+            throw AssertionError("timed out waiting for $what\nTRAIL:\n${trail.joinToString("\n")}\nSCREEN NOW: ${screen()}", error)
         }
     }
 
@@ -285,11 +297,16 @@ class FlowsTest {
     @Test fun newUserGoesThroughProfileSetupAndPlan() {
         launch("NEW_USER")
         waitForTag("setup.continue")
+        trail += "step0: ${screen()}"
         compose.onNodeWithTag("setup.continue").performClick()
+        trail += "after continue1: ${screen()}"
         compose.onNodeWithText(tx("Tomar control de mis finanzas", "Take control of my finances")).performClick()
         compose.onNodeWithTag("setup.continue").performClick()
+        trail += "after continue2: ${screen()}"
         compose.onNodeWithTag("setup.continue").performClick()
+        trail += "after continue3: ${screen()}"
         compose.onNodeWithTag("setup.continue").performClick()
+        trail += "after continue4: ${screen()}"
         waitForText(tx("Elegí tu plan", "Choose your plan"))
         click(tx("Elegir Free", "Choose Free"))
         waitForText(tx("Disponible este mes", "Available this month"))
