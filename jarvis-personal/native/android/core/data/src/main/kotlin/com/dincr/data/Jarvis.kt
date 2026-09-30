@@ -24,8 +24,8 @@ object Jarvis {
         CHAT("chat"), MEMORY("memory"), CALENDAR("calendar"), STRATEGY("strategy"), MONEY("money"),
         MONEY_CONTROL("money_control"), WEALTH("wealth"), RECORDS("records");
 
-        /** Ported to the native app: the chat (J1); the others still open "being restored". */
-        val isAvailable: Boolean get() = this == CHAT
+        /** Ported to the native app: the chat (J1) and the agenda (J2); the others still open "being restored". */
+        val isAvailable: Boolean get() = this == CHAT || this == CALENDAR
 
         companion object {
             fun from(wire: String?): Section? = entries.firstOrNull { it.wire == wire }

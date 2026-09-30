@@ -43,7 +43,7 @@ fun JarvisHubScreen(model: AppModel, nav: Navigator) = OwnerOnly(model, nav) {
     }
 }
 
-/** A JARVIS section: the ported one (chat), or a "being restored" screen that never shows sample data. */
+/** A JARVIS section: a ported one (chat, agenda), or a "being restored" screen that never shows sample data. */
 @Composable
 fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerOnly(model, nav) {
     val section = Jarvis.Section.from(wire)
@@ -53,6 +53,10 @@ fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerO
     }
     if (section == Jarvis.Section.CHAT) {
         JarvisChatScreen(model, nav)
+        return@OwnerOnly
+    }
+    if (section == Jarvis.Section.CALENDAR) {
+        JarvisAgendaScreen(model, nav)
         return@OwnerOnly
     }
     DetailScaffold(section.title, onBack = nav::back) {

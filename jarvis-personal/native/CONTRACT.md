@@ -85,6 +85,14 @@ offers "Es la respuesta" / "Es otra consulta" (sent as those words). The first u
 the answer; the second answers it as a normal request and keeps the pending action (reply carries
 `pending_action`; `current_field: "confirm"` there still offers Confirmar). Never retried automatically. The conversation is kept in memory for the session only; no message is stored.
 
+**JARVIS agenda (Owner, J2).** `GET /jarvis/calendar/upcoming?days=45` → `{"events": [...]}`: rows of the
+historical `events` table (`id`, `title`, `event_date` as stored text "YYYY-MM-DD" or
+"YYYY-MM-DD HH:MM", optional `event_type`, `description`), from today to 45 days out, in chronological
+order; a stored date that is not a real day is left out, never reinterpreted. The apps read it
+defensively (an unreadable row is dropped, a body without `events` is an error), group by day for
+display and show the time only when the text has one. It is read-only: events are created through
+the chat (a confirmed "Agendá …"), which the "¿Qué tengo?" chat answer shares with the agenda.
+
 ### RC endpoints (added after C4)
 
 Every write below sends only what the user typed, bounded by the money rules; creates and

@@ -78,6 +78,8 @@ enum class Destination(val route: String, val icon: ImageVector) {
 /** Opens a route; tab roots keep one copy each and restore their state. */
 class Navigator(private val controller: NavHostController) {
     fun open(route: String) = controller.navigate(route) { launchSingleTop = true }
+    /** Stacks [route] even over the same destination pattern (the agenda opening the chat: both `jarvis/{section}`). */
+    fun push(route: String) = controller.navigate(route)
     fun back() { controller.popBackStack() }
     fun tab(destination: Destination) = controller.navigate(destination.route) {
         popUpTo(controller.graph.findStartDestination().id) { saveState = true }

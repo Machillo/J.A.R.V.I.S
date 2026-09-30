@@ -49,9 +49,9 @@ import Testing
         #expect(!Jarvis.isAvailable(to: user.with(planSelected: true, subscription: .init(plan: "owner", status: "active"))))
     }
 
-    @Test func onlyTheChatIsPortedSoFar() {
-        // J1 ports the chat; every other section still opens a "being restored" screen.
-        #expect(Jarvis.Section.allCases.filter(\.isAvailable) == [.chat])
+    @Test func theChatAndTheAgendaAreThePortedSections() {
+        // J1 ports the chat and J2 the agenda; every other section still opens a "being restored" screen.
+        #expect(Jarvis.Section.allCases.filter(\.isAvailable) == [.chat, .calendar])
         // The same sections and wire names as Android (`Jarvis.Section`).
         #expect(Jarvis.Section.allCases.map(\.rawValue) == ["chat", "memory", "calendar", "strategy", "money", "money_control", "wealth", "records"])
     }

@@ -83,6 +83,25 @@ class FakeBackend(
     private val replays = mutableMapOf<String, Pair<String?, HttpResponse>>()
     /** The change the scripted JARVIS chat waits a "sí" / "no" for. */
     private var jarvisPending = false
+    /** The Owner's agenda (`events` table) and the event the scripted chat waits a "sí" for. */
+    private val jarvisEvents = mutableListOf<JarvisEvent>().apply {
+        if (scenario == Scenario.POPULATED) {
+            add(JarvisEvent(1, "Reunión con el contador", "${today.plusDays(2)} 10:00", "personal"))
+            add(JarvisEvent(2, "Cita médica", today.plusDays(9).toString(), "personal"))
+        }
+    }
+    private var jarvisPendingEvent: JarvisEvent? = null
+
+    private fun agendaBody() = buildJsonObject {
+        put("events", kotlinx.serialization.json.buildJsonArray {
+            jarvisEvents.forEach { event ->
+                add(buildJsonObject {
+                    put("id", event.id); put("title", event.title); put("event_date", event.eventDate)
+                    put("event_type", event.eventType); put("description", event.description)
+                })
+            }
+        })
+    }.toString()
     /** The scripted pending question (a goal's name), and whether it is asking about "Fondo de emergencia". */
     private var jarvisAsksGoalName = false
     private var jarvisClarifying = false
@@ -115,6 +134,25 @@ class FakeBackend(
             return ok("""{"message":"Tenés una pregunta pendiente: ¿Cómo se llama la meta? ¿\"Fondo de emergencia\" es la respuesta o querés hacer otra consulta?","intent":"pending_action","action_type":"create_goal","status":"PENDING","pending":true,"data":{"current_field":"clarify","held_message":"Fondo de emergencia"}}""")
         }
         if ("respuesta rara" in text) return ok("""{"unexpected":true}""")
+        jarvisPendingEvent?.takeIf { text in setOf("sí", "si", "no") }?.let { event ->
+            jarvisPendingEvent = null
+            if (text == "no") return ok("""{"message":"Listo, cancelé el registro. No guardé nada.","intent":"pending_action","status":"CANCELLED","pending":false}""")
+            jarvisEvents += event
+            return ok(buildJsonObject {
+                put("message", "Señor, listo. Guardé en calendario: ${event.title} · ${event.eventDate}.")
+                put("intent", "pending_action"); put("action_type", "create_calendar_event"); put("status", "OK"); put("pending", false)
+            }.toString())
+        }
+        if ("dentista" in text) {
+            // Like the engine: the chat shows the event first; it reaches the agenda only on "sí".
+            val event = JarvisEvent(jarvisEvents.size + 100L, "dentista", "${today.plusDays(10)} 15:00", "personal", message)
+            jarvisPendingEvent = event
+            return ok(buildJsonObject {
+                put("message", "Voy a guardar este evento:\n- título: dentista\n- fecha y hora: ${event.eventDate}\n¿Confirmo y guardo? Responde sí o no.")
+                put("intent", "create_calendar_event"); put("action_type", "create_calendar_event"); put("status", "PENDING"); put("pending", true)
+                put("data", buildJsonObject { put("current_field", "confirm") })
+            }.toString())
+        }
         if (jarvisPending && text in setOf("sí", "si", "no")) {
             jarvisPending = false
             return if (text == "no") ok("""{"message":"Listo, cancelé el registro. No guardé nada.","intent":"pending_action","status":"CANCELLED","pending":false}""")
@@ -146,6 +184,8 @@ class FakeBackend(
             path == "/auth/me" && method == "DELETE" -> ok("""{"status":"OK","message":"Cuenta eliminada","deletion_id":"del_demo"}""")
             // JARVIS chat: /jarvis/* admits owner and admin, like the backend.
             path == "/jarvis/chat" && method == "POST" -> jarvisChat(text("message").orEmpty())
+            path == "/jarvis/calendar/upcoming" && method == "GET" ->
+                if (profile.role != "owner" && profile.role != "admin") error(403, "No tienes permisos para realizar esta acción.") else ok(agendaBody())
             path == "/auth/me/export" -> ok("""{"format_version":1,"generated_at":"${today}T12:00:00Z","account":{"id":1},"workspaces":[],"data":{},"truncated_tables":[],"notes":[]}""")
             path == "/auth/profile-setup" -> {
                 profile = profile.copy(displayName = text("display_name"), profileSetupCompleted = true, baseCurrency = text("base_currency") ?: "CRC",
