@@ -51,8 +51,11 @@ final class StoreScreenshots: XCTestCase {
     }
 
     private func tab(_ app: XCUIApplication, _ title: String) {
-        // iOS 26+ tab bars can expose a tab twice (the item and its selection lens): tap the first.
-        let button = app.tabBars.buttons[title].firstMatch
+        // iPhone: the tab bar. iPad (iOS 18+): the tabs sit in the top bar, outside any tab bar.
+        // iOS 26+ can expose a tab twice (the item and its selection lens): tap the first. Each test
+        // then waits for its destination's content, so a wrong tap fails instead of capturing.
+        let inTabBar = app.tabBars.buttons[title].firstMatch
+        let button = inTabBar.waitForExistence(timeout: 5) ? inTabBar : app.buttons[title].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 15), "missing tab \(title)")
         button.tap()
     }
