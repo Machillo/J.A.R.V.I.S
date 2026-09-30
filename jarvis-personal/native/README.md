@@ -41,7 +41,8 @@ in `docs/native/PARITY_MATRIX.md`.
   the role in `/auth/me` shows it; the backend still decides every request (`/jarvis/*` keeps its
   historical owner + admin access for the web Owner app, but the native JARVIS UI is Owner-only). JARVIS
   sections are ported step by step (JARVIS recovery roadmap; the chat since J1, `JarvisChatSession`,
-  session-only history, changes saved only after Confirmar); until then each one says it is being
+  session-only history, changes saved only after Confirmar; the agenda since J2, the next 45 days of
+  events, created only through the chat via "Agendar con JARVIS"); until then each one says it is being
   restored. Free, Basic and VIP never see it; an admin session sees a notice and no app. Owner-shaped
   endpoints (`/vip/strategy-dashboard`, `/vip/debt-advisory`, `PUT /vip/salvavidas`) are not used.
 - **Reads do not write.** Opening a screen never calls a write (no lifecycle snapshot POST).

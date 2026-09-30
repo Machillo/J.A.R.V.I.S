@@ -75,15 +75,26 @@ Only the Supabase **anon/publishable** key is ever configured in the apps (git-i
 
 **JARVIS chat (Owner, J1).** `POST /jarvis/chat` `{"message"}` → an untyped dict: `message` (required,
 shown as is), `intent`, `status`, `pending`, `action_type`, `data` (shape per intent, read only for
-`data.current_field`). A change the chat understood (payroll/OT/VGH/holiday, bonus, calendar event,
-memory, fixed expense, and every create action) answers `status: PENDING, pending: true,
+`data.current_field`). Since J2 the chat's scope is quick payroll records (OT/VGH/holiday, bonus) and
+the agenda (an explicit "Agendá/Recordame … <fecha>" is always a calendar event; "¿qué tengo?"); any
+other request answers `status: UNSUPPORTED` with a short "not available in JARVIS Chat" and runs no
+other engine. A change the chat understood (payroll/OT/VGH/holiday, bonus, calendar event) answers
+`status: PENDING, pending: true,
 data.current_field: "confirm"` with what will be saved (a payroll event also shows its computed
 amount); it is saved only when the next message is "sí" (Confirmar), "no" (Cancelar) drops it. A
 message that could answer a pending question but that the router also reads as another request
-("Fondo de emergencia", "septiembre", "estrategia") answers `data.current_field: "clarify"`: the app
+("Hoy 50000" while a bonus amount is asked, "¿qué tengo?") answers `data.current_field: "clarify"`: the app
 offers "Es la respuesta" / "Es otra consulta" (sent as those words). The first uses the held text as
 the answer; the second answers it as a normal request and keeps the pending action (reply carries
 `pending_action`; `current_field: "confirm"` there still offers Confirmar). Never retried automatically. The conversation is kept in memory for the session only; no message is stored.
+
+**JARVIS agenda (Owner, J2).** `GET /jarvis/calendar/upcoming?days=45` → `{"events": [...]}`: rows of the
+historical `events` table (`id`, `title`, `event_date` as stored text "YYYY-MM-DD" or
+"YYYY-MM-DD HH:MM", optional `event_type`, `description`), from today to 45 days out, in chronological
+order; a stored date that is not a real day is left out, never reinterpreted. The apps read it
+defensively (an unreadable row is dropped, a body without `events` is an error), group by day for
+display and show the time only when the text has one. It is read-only: events are created through
+the chat (a confirmed "Agendá …"), which the "¿Qué tengo?" chat answer shares with the agenda.
 
 ### RC endpoints (added after C4)
 

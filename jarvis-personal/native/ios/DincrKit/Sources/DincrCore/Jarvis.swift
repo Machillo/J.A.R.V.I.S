@@ -23,7 +23,7 @@ public enum Jarvis {
 
         public var id: String { rawValue }
 
-        /// Ported to the native app: the chat (J1); the others still open "being restored".
-        public var isAvailable: Bool { self == .chat }
+        /// Ported to the native app: the chat (J1) and the agenda (J2); the others still open "being restored".
+        public var isAvailable: Bool { self == .chat || self == .calendar }
     }
 }

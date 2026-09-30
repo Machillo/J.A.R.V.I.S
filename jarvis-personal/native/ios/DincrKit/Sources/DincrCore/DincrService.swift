@@ -58,6 +58,12 @@ public struct DincrService: Sendable {
         try await client.send("POST", "/jarvis/chat", body: JarvisChatRequest(message: message))
     }
 
+    /// JARVIS agenda (Owner): the historical upcoming events, from today to `days` out, in order.
+    public func jarvisUpcomingEvents(days: Int = JarvisAgenda.days) async throws -> [JarvisEvent] {
+        let response: JarvisAgendaResponse = try await client.get("/jarvis/calendar/upcoming", query: [URLQueryItem(name: "days", value: String(days))])
+        return response.events
+    }
+
     public func supportTickets() async throws -> [SupportTicket] { try await client.get("/product-ops/feedback") }
 
     public func createSupportTicket(_ request: SupportRequest) async throws -> SupportCreated {

@@ -46,6 +46,9 @@ public actor FixtureBackend: HTTPTransport {
     private var replays: [String: (body: Data?, status: Int, response: Data)] = [:]
     /// The change the scripted JARVIS chat waits a "sí" / "no" for.
     private var jarvisPending = false
+    /// The Owner's agenda (`events` table) and the event the scripted chat waits a "sí" for.
+    private var jarvisEvents: [[String: Any]] = []
+    private var jarvisPendingEvent: [String: Any]?
     /// The scripted pending question (a goal's name), and whether it is asking about "Fondo de emergencia".
     private var jarvisAsksGoalName = false
     private var jarvisClarifying = false
@@ -87,6 +90,12 @@ public actor FixtureBackend: HTTPTransport {
             mailConnected = plan == .vip
             mailConsentAccepted = plan == .vip
             if plan == .vip { candidates = StoreSample.candidates(language) }
+        }
+        if scenario == .populated {
+            jarvisEvents = [
+                ["id": 1, "title": "Reunión con el contador", "event_date": Self.day(-2, today: self.today) + " 10:00", "event_type": "personal", "description": NSNull()],
+                ["id": 2, "title": "Cita médica", "event_date": Self.day(-9, today: self.today), "event_type": "personal", "description": NSNull()],
+            ]
         }
         profile["role"] = role.rawValue
         if role == .owner {
@@ -175,6 +184,9 @@ public actor FixtureBackend: HTTPTransport {
         case ("DELETE", "/auth/me"): return ok(["status": "OK", "deletion_id": "del_demo"])
         // JARVIS chat: /jarvis/* admits owner and admin, like the backend.
         case ("POST", "/jarvis/chat"): return jarvisChat(body["message"] as? String ?? "")
+        case ("GET", "/jarvis/calendar/upcoming"):
+            guard ["owner", "admin"].contains(profile["role"] as? String ?? "") else { return error(403, "No tienes permisos para realizar esta acción.") }
+            return ok(["events": jarvisEvents])
         case ("GET", "/auth/me/export"): return ok(["format_version": 1, "account": ["id": 1], "data": [String: Any]()])
         case ("POST", "/auth/profile-setup"):
             profile["display_name"] = body["display_name"]
@@ -670,6 +682,24 @@ public actor FixtureBackend: HTTPTransport {
                        "data": ["current_field": "clarify", "held_message": "Fondo de emergencia"]])
         }
         if text.contains("respuesta rara") { return ok(["unexpected": true]) }
+        if let event = jarvisPendingEvent, ["sí", "si", "no"].contains(text) {
+            jarvisPendingEvent = nil
+            if text == "no" {
+                return ok(["message": "Listo, cancelé el registro. No guardé nada.", "intent": "pending_action", "status": "CANCELLED", "pending": false])
+            }
+            jarvisEvents.append(event)
+            return ok(["message": "Señor, listo. Guardé en calendario: \(event["title"] ?? "") · \(event["event_date"] ?? "").",
+                       "intent": "pending_action", "action_type": "create_calendar_event", "status": "OK", "pending": false])
+        }
+        if text.contains("dentista") {
+            // Like the engine: the chat shows the event first; it reaches the agenda only on "sí".
+            let event: [String: Any] = ["id": jarvisEvents.count + 100, "title": "dentista", "event_date": day(-10) + " 15:00",
+                                        "event_type": "personal", "description": message]
+            jarvisPendingEvent = event
+            return ok(["message": "Voy a guardar este evento:\n- título: dentista\n- fecha y hora: \(day(-10)) 15:00\n¿Confirmo y guardo? Responde sí o no.",
+                       "intent": "create_calendar_event", "action_type": "create_calendar_event", "status": "PENDING", "pending": true,
+                       "data": ["current_field": "confirm"]])
+        }
         if jarvisPending, ["sí", "si", "no"].contains(text) {
             jarvisPending = false
             if text == "no" {

@@ -42,6 +42,11 @@ class DincrApi(private val client: ApiClient) {
      * JARVIS (Owner): one chat message and the engine's answer. A POST: never retried on its own (a
      * change is saved only after the Owner's "sí", itself a new message).
      */
+    /** JARVIS agenda (Owner): the historical upcoming events, from today to [days] out, in order. */
+    suspend fun jarvisUpcomingEvents(days: Int = JarvisAgenda.DAYS): List<JarvisEvent> =
+        JarvisAgenda.from(client.get<kotlinx.serialization.json.JsonElement>("/jarvis/calendar/upcoming", mapOf("days" to days.toString())))
+            ?: throw ApiError.decoding(client.currentLanguage)
+
     suspend fun jarvisChat(message: String): JarvisChatReply =
         JarvisChatReply.from(client.send<JarvisChatRequest, kotlinx.serialization.json.JsonElement>("POST", "/jarvis/chat", JarvisChatRequest(message)))
             ?: throw ApiError.decoding(client.currentLanguage)

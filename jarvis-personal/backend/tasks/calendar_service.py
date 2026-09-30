@@ -4,7 +4,7 @@ import re
 from datetime import date, timedelta
 from typing import Optional
 
-from backend.core.events import add_event, get_events
+from backend.core.events import AGENDA_DAYS, add_event, get_upcoming_events
 
 MONTHS = {
     "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
@@ -113,9 +113,10 @@ def create_calendar_event_from_text(text: str) -> dict:
 
 
 def calendar_summary() -> dict:
-    events = get_events()
+    """"¿Qué tengo?": the upcoming events, the same ones the Owner's agenda shows (never past ones)."""
+    events = get_upcoming_events(AGENDA_DAYS)
     return {
         "status": "OK",
         "events": events[:10],
-        "message": "Señor, estos son sus próximos compromisos." if events else "Señor, no tiene compromisos registrados todavía.",
+        "message": "Señor, estos son sus próximos compromisos." if events else "Señor, no tiene compromisos próximos.",
     }

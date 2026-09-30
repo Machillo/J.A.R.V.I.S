@@ -1,7 +1,7 @@
 """JARVIS chat (J1): a change the chat understands is shown first and saved only on "sí".
 
 The chat keeps its historical interpretation (OT, extra hours, holidays, VGH and bonuses in plain
-words; calendar, memory and fixed expenses) and its historical replies. What changed: it no longer
+words; calendar events) and its historical replies; since J2 those are all JARVIS Chat does. What changed: it no longer
 saves those messages at once. The pending change lives in chat_pending_actions, like every other
 chat action, stubbed here in memory. Nothing touches a database.
 """
@@ -39,7 +39,6 @@ def chat(monkeypatch):
         monkeypatch.setattr(module, "finish_pending_action", finish_pending_action, raising=False)
     monkeypatch.setattr(action_flow, "create_pending_action", create_pending_action)
     monkeypatch.setattr(action_flow, "update_pending_action", update_pending_action)
-    monkeypatch.setattr(jarvis_engine, "handle_personal_decision_request", lambda message: None)
     monkeypatch.setattr(finance_service, "get_employment_profile", lambda: dict(PROFILE))
     monkeypatch.setattr(strategy_dashboard, "build_local_strategy_blueprint",
                         lambda: {"monthly_income": 900000, "estimated_extra_cash": 120000})
@@ -108,22 +107,24 @@ def test_payroll_without_an_employment_profile_is_refused_not_announced(chat, mo
     assert chat["writes"] == [] and chat["pending"] is None
 
 
-def test_calendar_memory_and_fixed_expenses_wait_for_yes(chat):
-    cases = [
-        ("Agendá cita con el dentista el 5 de octubre a las 3pm", "create_calendar_event", "event", "Guardé en calendario"),
-        ("Recordá que el gimnasio cierra a las 8", "create_memory", "memory", "Listo, lo recordaré."),
-        ("Agrega gasto fijo internet 25000 día 5", "create_fixed_expense", "fixed_create", "como gasto fijo"),
-        ("Actualiza el gasto fijo del agua a 27000", "update_fixed_expense", "fixed_update", "Actualicé agua"),
-    ]
-    for message, action_type, write, reply in cases:
-        chat["writes"].clear()
-        first = jarvis_engine.process_message(message)
-        assert first["status"] == "PENDING" and first["action_type"] == action_type, message
-        assert chat["writes"] == [], message
-        assert "fixed_expense_id" not in first["message"]  # internal ids are never shown
-        saved = jarvis_engine.process_message("sí")
-        assert [name for name, _, _ in chat["writes"]] == [write], message
-        assert reply in saved["message"], message
+def test_a_calendar_event_waits_for_yes(chat):
+    first = jarvis_engine.process_message("Agendá cita con el dentista el 5 de octubre a las 3pm")
+    assert first["status"] == "PENDING" and first["action_type"] == "create_calendar_event"
+    assert chat["writes"] == []
+    saved = jarvis_engine.process_message("sí")
+    assert [name for name, _, _ in chat["writes"]] == ["event"]
+    assert "Guardé en calendario" in saved["message"]
+
+
+def test_memory_and_fixed_expenses_are_no_longer_chat_changes(chat):
+    # Outside JARVIS Chat since J2: nothing is prepared, nothing is saved, not even on "sí".
+    for message in ["Recordá que el gimnasio cierra a las 8", "Agrega gasto fijo internet 25000 día 5",
+                    "Actualiza el gasto fijo del agua a 27000"]:
+        answer = jarvis_engine.process_message(message)
+        assert answer["status"] == "UNSUPPORTED" and answer["pending"] is False, message
+        assert "no está disponible en JARVIS Chat" in answer["message"], message
+        jarvis_engine.process_message("sí")
+        assert chat["writes"] == [] and chat["pending"] is None, message
 
 
 def test_a_calendar_message_without_a_date_still_asks_for_it(chat):

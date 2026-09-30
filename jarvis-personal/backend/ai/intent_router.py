@@ -320,6 +320,20 @@ def detect_intent(user_message: str) -> dict[str, Any]:
     return _fallback_detect(user_message)
 
 
+# The calendar verbs the router and the event parser already understand ("agendá" and
+# "recuérdame" arrive without accents after normalize_message).
+_CALENDAR_COMMAND = re.compile(r"^(agenda|agendame|agendar|recordame|recuerdame)\b")
+
+
+def is_explicit_calendar_command(user_message: str) -> bool:
+    """"Agendá … el 11 de octubre": the message opens with a calendar verb and carries a date.
+
+    Such an order is a calendar event whatever it is about (a trip, a purchase, a payment), so the
+    chat's travel, purchase and debt shortcuts must not take it before the calendar intent."""
+    text = normalize_message(user_message)
+    return bool(_CALENDAR_COMMAND.match(text)) and _has_date_signal(text)
+
+
 def is_pending_interrupt(intent_result: dict[str, Any], user_message: str) -> bool:
     """True si un mensaje nuevo no debe alimentar una acción pendiente.
 

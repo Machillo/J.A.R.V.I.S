@@ -28,16 +28,16 @@ struct JarvisHubView: View {
     }
 }
 
-/// A JARVIS section: the ported one (chat), or a "being restored" screen that never shows sample data.
+/// A JARVIS section: a ported one (chat, agenda), or a "being restored" screen that never shows sample data.
 struct JarvisSectionView: View {
     let section: Jarvis.Section
 
     var body: some View {
         OwnerOnly {
-            if section == .chat {
-                JarvisChatView()
-            } else {
-                restoring
+            switch section {
+            case .chat: JarvisChatView()
+            case .calendar: JarvisAgendaView()
+            default: restoring
             }
         }
     }

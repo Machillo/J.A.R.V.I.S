@@ -154,8 +154,8 @@ private fun ChatIntro() {
         DincrCard {
             Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2), modifier = Modifier.semantics(mergeDescendants = true) {}) {
                 Text(tx("Hablale a JARVIS como siempre", "Talk to JARVIS as usual"), style = MaterialTheme.typography.titleMedium, color = Dincr.colors.text)
-                Text(tx("Preguntá por tus deudas, tu estrategia o tu agenda, o contale lo que pasó: “Hoy hice 3 horas extra”. Antes de guardar algo, JARVIS te muestra qué va a registrar.",
-                    "Ask about your debts, your strategy or your calendar, or tell it what happened: “Today I did 3 hours of overtime”. Before saving anything, JARVIS shows you what it will record."),
+                Text(tx("Registrá horas extra, VGH, feriados o bonos, o agendá algo: “Hoy hice 3 horas extra”, “Agendá dentista el 10 de octubre a las 3pm”. Antes de guardar algo, JARVIS te muestra qué va a registrar.",
+                    "Record overtime, VGH, holidays or bonuses, or schedule something: “Hoy hice 3 horas extra”, “Agendá dentista el 10 de octubre a las 3pm”. Before saving anything, JARVIS shows you what it will record."),
                     style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text2)
             }
         }

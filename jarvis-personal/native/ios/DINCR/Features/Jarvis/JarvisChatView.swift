@@ -56,8 +56,8 @@ struct JarvisChatView: View {
     private var intro: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             Text(tx("Hablale a JARVIS como siempre", "Talk to JARVIS as usual")).font(DincrFont.title2).foregroundStyle(DincrColor.text)
-            Text(tx("Preguntá por tus deudas, tu estrategia o tu agenda, o contale lo que pasó: “Hoy hice 3 horas extra”. Antes de guardar algo, JARVIS te muestra qué va a registrar.",
-                    "Ask about your debts, your strategy or your calendar, or tell it what happened: “Today I did 3 hours of overtime”. Before saving anything, JARVIS shows you what it will record."))
+            Text(tx("Registrá horas extra, VGH, feriados o bonos, o agendá algo: “Hoy hice 3 horas extra”, “Agendá dentista el 10 de octubre a las 3pm”. Antes de guardar algo, JARVIS te muestra qué va a registrar.",
+                    "Record overtime, VGH, holidays or bonuses, or schedule something: “Hoy hice 3 horas extra”, “Agendá dentista el 10 de octubre a las 3pm”. Before saving anything, JARVIS shows you what it will record."))
                 .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
         }
         .dincrCard()
