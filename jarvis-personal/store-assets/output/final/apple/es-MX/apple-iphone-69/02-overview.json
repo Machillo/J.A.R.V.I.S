@@ -1,0 +1,28 @@
+{
+  "output_sha256": "d5ceceeb9351fa95816244337697cdba261862cfe8e2fc3c19d71dd6643c9795",
+  "mode": "final",
+  "target": "apple-iphone-69",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "02-overview",
+  "plan": "free",
+  "width": 1320,
+  "height": 2868,
+  "alpha": false,
+  "caption_ratio": 0.1357,
+  "capture": {
+    "file": "raw/ios/es/phone/02-overview.png",
+    "sha256": "360ced6a3ca217ae2927bfcf4e9f4544a9124c98666d0c3e79c406a3b324c434",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:32.370Z"
+}

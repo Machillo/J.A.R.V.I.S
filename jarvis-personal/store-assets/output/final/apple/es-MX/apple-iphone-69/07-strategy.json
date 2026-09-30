@@ -1,0 +1,28 @@
+{
+  "output_sha256": "9a26ea55ee207671d16b7479561c15587d72e5c9a474955791c35b18f5091174",
+  "mode": "final",
+  "target": "apple-iphone-69",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "07-strategy",
+  "plan": "basic",
+  "width": 1320,
+  "height": 2868,
+  "alpha": false,
+  "caption_ratio": 0.1692,
+  "capture": {
+    "file": "raw/ios/es/phone/07-strategy.png",
+    "sha256": "e52e26027953f25bb5c0e063de1902f17562845bf85f2985644e89ac9542ad3a",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:39.143Z"
+}

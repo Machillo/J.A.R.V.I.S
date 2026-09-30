@@ -1,0 +1,28 @@
+{
+  "output_sha256": "a2224fcd11d02e164ab62e50201714436c6293ad6628fc367fe6f68404bda3cc",
+  "mode": "final",
+  "target": "apple-iphone-69",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "en-US",
+  "language": "en",
+  "screen": "03-movements",
+  "plan": "free",
+  "width": 1320,
+  "height": 2868,
+  "alpha": false,
+  "caption_ratio": 0.1357,
+  "capture": {
+    "file": "raw/ios/en/phone/03-movements.png",
+    "sha256": "f80f5579e5efe226d938af6a1c5ec3a6138b36a8d97613991a916d66ad51352a",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:57.573Z"
+}

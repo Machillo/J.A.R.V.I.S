@@ -1,0 +1,28 @@
+{
+  "output_sha256": "d6ae212dee82088e9882eb8c74b5530dc7953312d083ad2a455520b453ff4159",
+  "mode": "final",
+  "target": "apple-ipad-13",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "08-mail",
+  "plan": "vip",
+  "width": 2064,
+  "height": 2752,
+  "alpha": false,
+  "caption_ratio": 0.2371,
+  "capture": {
+    "file": "raw/ios/es/tablet/08-mail.png",
+    "sha256": "683355a5c67ed1ec8cf820dcdc06bb054d02b9b99653fe737cc94939cbb403ea",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:53.309Z"
+}

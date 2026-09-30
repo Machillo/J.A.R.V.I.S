@@ -1,0 +1,28 @@
+{
+  "output_sha256": "6a60b8845d6237589e35e73045cbd6f4a37ab77c20ae52fe91f59509de233ca9",
+  "mode": "final",
+  "target": "apple-iphone-69",
+  "store": "apple",
+  "platform": "ios",
+  "locale": "es-MX",
+  "language": "es",
+  "screen": "05-goals",
+  "plan": "free",
+  "width": 1320,
+  "height": 2868,
+  "alpha": false,
+  "caption_ratio": 0.1027,
+  "capture": {
+    "file": "raw/ios/es/phone/05-goals.png",
+    "sha256": "e13763c9d06b9f9e78a884f98acff6200bae78ae3e5aa0a68e6e867352105181",
+    "placeholder": false,
+    "fixture": "STORE",
+    "fixture_date": "2026-09-28",
+    "captured_at": "2026-09-30T03:31:00.971Z",
+    "device": null
+  },
+  "source_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
+  "pipeline_commit": "3baef4f254a41d2d9409604f1b3bced41e9bd87a",
+  "generated_at": "2026-09-30T03:56:36.304Z"
+}
