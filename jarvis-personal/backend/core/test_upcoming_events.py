@@ -148,7 +148,6 @@ def chat_pending(monkeypatch):
         monkeypatch.setattr(module, "finish_pending_action", finish_pending_action, raising=False)
     monkeypatch.setattr(action_flow, "create_pending_action", create_pending_action)
     monkeypatch.setattr(action_flow, "update_pending_action", lambda *args: None)
-    monkeypatch.setattr(jarvis_engine, "handle_personal_decision_request", lambda message: None)
     return state
 
 
