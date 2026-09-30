@@ -457,6 +457,7 @@ private struct CorrectionSheet: View {
                     Text(tx("Gasto", "Expense")).tag("expense")
                     Text(tx("Ingreso", "Income")).tag("income")
                     Text(tx("Pago de deuda", "Debt payment")).tag("debt_payment")
+                    Text(tx("Transferencia", "Transfer")).tag("transfer")
                 }
                 TextField(tx("Categoría", "Category"), text: $category)
                 DatePicker(tx("Fecha", "Date"), selection: $date, in: ...Date.now, displayedComponents: .date)
@@ -479,7 +480,7 @@ private struct CorrectionSheet: View {
         guard description.isEmpty else { return }
         description = candidate.description ?? ""
         amount = candidate.nativeAmount.map(model.moneyFormat.inputText) ?? ""
-        type = ["expense", "income", "debt_payment"].contains(candidate.transactionType ?? "") ? candidate.transactionType! : "expense"
+        type = ["expense", "income", "debt_payment", "transfer"].contains(candidate.transactionType ?? "") ? candidate.transactionType! : "expense"
         category = candidate.category ?? "general"
         if let day = candidate.transactionDate, let parsed = MovementEditor.dayFormatter.date(from: String(day.prefix(10))) { date = parsed }
     }

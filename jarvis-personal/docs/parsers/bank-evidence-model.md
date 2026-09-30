@@ -49,8 +49,11 @@ the other side, so the parser writes both to the candidate's `raw_payload`
 | BAC service payment | expense | expense |
 
 A transfer is never counted as income or spending by default. The user
-confirms, corrects or dismisses it. The one exception is a credit carrying
-explicit payroll words, which stays income (`payroll_income.py`).
+confirms, corrects or dismisses it, and correcting another field can keep it a
+transfer. The one exception is a third-party credit whose concept has explicit
+payroll words (whole words), which becomes income (`payroll_income.py`).
+`bank_movement` and `financial_effect` are evidence recorded for review and
+later reconciliation; no total reads them yet.
 
 An additional card on the holder's account greets its own cardholder. That
 charge is still billed to the holder, so it stays an expense, flagged
@@ -92,8 +95,9 @@ charge is still billed to the holder, so it stays an expense, flagged
 - **MultiMoney time zone:** MultiMoney printed UTC for a period. A printed time
   is read as UTC only when it matches the email's own UTC timestamp and not its
   Costa Rica time.
-- **Accounts:** only the last four digits are kept, even when a notice prints a
-  full IBAN or account number.
+- **Accounts:** the new templates and the masked-IBAN capture keep only the last
+  four digits, even when a notice prints a full IBAN or account number. The older
+  SINPE extraction of a fully printed IBAN (2022-style notices) is unchanged.
 
 ## Not supported (on purpose)
 

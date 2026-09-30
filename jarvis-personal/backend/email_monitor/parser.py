@@ -295,7 +295,9 @@ def clean_text(value: str) -> str:
     text = text.replace("\u200c", " ").replace("\u200b", " ").replace("\ufeff", " ")
     text = text.replace("\xa0", " ")
     text = re.sub(r"\r\n?", "\n", text)
-    text = re.sub(r"[ \t]+", " ", text)
+    # Every horizontal whitespace run (em spaces too) becomes one space, so no
+    # pattern downstream backtracks over a long hostile run.
+    text = re.sub(r"[^\S\n]+", " ", text)
     text = re.sub(r"\n\s+", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
@@ -585,15 +587,19 @@ def _extract_reference(text: str) -> str | None:
 
 
 def _labeled_code(text: str, label: str) -> str | None:
-    """A reference-like code printed after a label ("Referencia: BDPC1234")."""
-    match = re.search(rf"{label}\s*[:\-]?\s*([A-Z0-9]{{4,30}})\b", text or "", re.I)
+    """A reference-like code printed after a label ("Referencia: BDPC1234").
+
+    It must contain a digit, so an empty field never captures the next label word.
+    """
+    flat = re.sub(r"\s+", " ", text or "")
+    match = re.search(rf"{label} ?[:\-]? ?((?=[A-Z]*\d)[A-Z0-9]{{4,30}})\b", flat, re.I)
     return match.group(1) if match else None
 
 
 def _sinpe_reference(subject: str, text: str) -> str | None:
     """The 25-digit SINPE reference; both banks print the same one for one transfer."""
-    match = re.search(r"referencia\s*[:\-]?\s*(\d{25})(?!\d)", text or "", re.I) \
-        or re.search(r"transferencia\s*(\d{25})(?!\d)", subject or "", re.I)
+    match = re.search(r"referencia ?[:\-]? ?(\d{25})(?!\d)", re.sub(r"\s+", " ", text or ""), re.I) \
+        or re.search(r"transferencia ?(\d{25})(?!\d)", re.sub(r"\s+", " ", subject or ""), re.I)
     return match.group(1) if match else None
 
 
@@ -696,8 +702,9 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
 
 def _card_greeting_name(text: str) -> str | None:
     """The cardholder BAC greets; flattened mail continues with "A continuación ..."."""
-    match = re.search(r"Hola\s*:?\s*([^\n:]{3,90}?)\s*(?::|\n|\bA\s+continuaci|$)", text or "")
-    name = re.sub(r"\s+", " ", match.group(1)).strip(" :") if match else ""
+    flat = re.sub(r"[^\S\n]+", " ", text or "")
+    match = re.search(r"Hola:? ?([^\n:]{3,90}?) ?(?::|\n|\bA continuaci|$)", flat)
+    name = match.group(1).strip(" :") if match else ""
     return name or None
 
 
@@ -795,14 +802,18 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
         transaction_type, category, movement_kind, direction = "transfer", "Reembolso", mt.KIND_REFUND, "in"
         taxonomy = mt.movement(mt.CARD_REFUND, mt.REFUND)
     elif tipo_clean.startswith("pago"):
-        transaction_type, category, movement_kind, direction = "transfer", "Reembolso", mt.KIND_REWARD, "in"
         points = "puntos" in normalize(merchant) or "redencion" in normalize(merchant)
+        transaction_type, category, direction = "transfer", "Reembolso", "in"
+        movement_kind = mt.KIND_REWARD if points else mt.KIND_CARD_CREDIT
         taxonomy = mt.movement(mt.CARD_POINTS_CREDIT if points else mt.CARD_CREDIT, mt.REWARD if points else mt.REVIEW)
     else:
         transaction_type = "expense"
         category = infer_category(merchant, transaction_type)
         automatic = "cargo automatico" in tipo_clean
         taxonomy = mt.movement(mt.CARD_AUTOMATIC_CHARGE if automatic else mt.CARD_PURCHASE, mt.EXPENSE)
+    if reference and direction == "in":
+        # A refund may print the purchase's reference: keep the credit a movement of its own.
+        reference = f"{movement_kind}:{reference}"
     amount_crc = round(amount * exchange_rate, 2) if currency == "USD" else round(amount, 2)
     # An additional card of the same account greets its own cardholder: the
     # charge is still billed to this account, but the user must see it is not theirs.
@@ -1137,7 +1148,8 @@ def _parse_multimoney_disbursement(subject: str, sender: str, body: str, receive
     """Loan / credit-line proceeds credited to the holder's account: debt, never income."""
     text = clean_text("\n".join([subject or "", body or ""]))
     clean = normalize(text)
-    if not ("te hemos acreditado" in clean or "depositamos tu credito" in clean):
+    # Both observed notices name the credit ("de tu línea de crédito", "Depositamos tu crédito").
+    if not (("te hemos acreditado" in clean or "depositamos tu credito" in clean) and "credito" in clean):
         return None
     match = re.search(r"acreditado\s*:?\s*(?P<currency>CRC|USD|₡|¢|\$)\s*(?P<amount>[\d.,]+)", text, re.I)
     amount = _parse_number(match.group("amount")) if match else None
@@ -1401,13 +1413,13 @@ def _parse_bac_card_payment(subject: str, body: str, received_at: str | None) ->
     }
 
 
-def _parse_bac_cardless_withdrawal(subject: str, body: str, received_at: str | None) -> dict[str, Any] | None:
+def _parse_bac_cardless_withdrawal(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
     """Cardless ATM withdrawal: creating the code moves nothing; the withdrawal is cash out."""
-    if "retiro sin tarjeta" not in normalize(subject):
+    if "retiro sin tarjeta" not in normalize(subject) or "alerta@baccredomatic.com" not in normalize(sender):
         return None
     text = re.sub(r"\s+", " ", clean_text(body or ""))
     clean = normalize(text)
-    if "exitosamente" not in clean or "se retiro" not in clean:
+    if "exitosamente" not in clean or "se retiro" not in clean or "no se retiro" in clean:
         return _ignored("bac", subject, body, received_at, "Código de retiro sin tarjeta creado; todavía no hay movimiento de dinero.")
     money = re.search(r"Monto\s*:?\s*([\d.,]+)\s*(CRC|USD)", text, re.I)
     amount = _parse_number(money.group(1)) if money else None
@@ -1583,7 +1595,7 @@ def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
     if bank == "bac":
         parsed = (
             _parse_bac_purchase(subject, sender, body, None, 495.0) or _parse_bac_sinpe_movil(subject, sender, body, None)
-            or _parse_bac_sinpe(subject, sender, body, None) or _parse_bac_cardless_withdrawal(subject, body, None)
+            or _parse_bac_sinpe(subject, sender, body, None) or _parse_bac_cardless_withdrawal(subject, sender, body, None)
             or _parse_bac_alert_payment(subject, sender, body, None)
         )
         if parsed:
@@ -1634,7 +1646,7 @@ def _parse_financial_email(subject: str, sender: str, body: str, received_at: st
         parsed = _parse_bac_sinpe_movil(subject, sender, body, received_at) or _parse_bac_sinpe(subject, sender, body, received_at)
         if parsed:
             return parsed
-        parsed = _parse_bac_cardless_withdrawal(subject, body, received_at) or _parse_bac_alert_payment(subject, sender, body, received_at)
+        parsed = _parse_bac_cardless_withdrawal(subject, sender, body, received_at) or _parse_bac_alert_payment(subject, sender, body, received_at)
         if parsed:
             return parsed
 

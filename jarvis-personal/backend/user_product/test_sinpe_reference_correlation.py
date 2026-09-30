@@ -146,3 +146,16 @@ def test_confirmed_accounts_never_pair_a_usd_notice_with_a_crc_one():
 def test_without_confirmed_own_accounts_nothing_is_paired():
     bac = _candidate(_bac_credit(), 9)
     assert _paired_owned_transfer(_PairConnection([_counterpart()]), bac, None) is None
+
+
+def test_correcting_a_transfer_can_keep_it_a_transfer():
+    import pytest
+    from pydantic import ValidationError
+
+    from backend.user_product.models import GmailCandidateReviewRequest
+
+    base = {"transaction_date": "2026-09-28", "description": "SINPE recibido", "amount": 20000, "category": "Transferencias"}
+    assert GmailCandidateReviewRequest(**base, transaction_type="transfer").transaction_type == "transfer"
+    # Only the server marks a movement internal (after both accounts are confirmed as own).
+    with pytest.raises(ValidationError):
+        GmailCandidateReviewRequest(**base, transaction_type="internal_transfer")

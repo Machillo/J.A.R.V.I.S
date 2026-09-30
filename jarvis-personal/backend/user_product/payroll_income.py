@@ -24,8 +24,13 @@ def identify_received_payroll(parsed: dict[str, Any], *, subject: str, body: str
     inbound_transfer = (
         transaction_type == "transfer" and parsed.get("movement_direction") == "in"
         and str(parsed.get("movement_kind") or "transfer") == "transfer"
+        and parsed.get("financial_effect") != "own_transfer_likely"
     )
     if transaction_type != "income" and not inbound_transfer:
+        return parsed
+    # A transfer becomes salary only on the sender's own words (its concept),
+    # whole words: "denominación" is not "nómina", and bank footers don't count.
+    if inbound_transfer and not re.search(r"\b(salario|planilla|nomina|pago salarial)\b", _plain(parsed.get("description"))):
         return parsed
     text = _plain("\n".join((subject or "", body or "", str(parsed.get("description") or ""))))
     if "orden patronal" in text or not any(_plain(term) in text for term in PAYROLL_TERMS):

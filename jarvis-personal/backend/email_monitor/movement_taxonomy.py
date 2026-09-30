@@ -49,11 +49,12 @@ REVIEW = "review"                # cannot be decided from this email
 # movement_kind values for kinds that are not a plain transfer or purchase.
 KIND_REFUND = "refund"
 KIND_REWARD = "reward"
+KIND_CARD_CREDIT = "card_credit"
 KIND_CARD_PAYMENT = "card_payment"
 KIND_LOAN_DISBURSEMENT = "loan_disbursement"
 KIND_CASH_WITHDRAWAL = "cash_withdrawal"
 # Kinds tied to a card number: a signal for a credit-card account.
-CARD_KINDS = frozenset({"card_purchase", KIND_REFUND, KIND_REWARD})
+CARD_KINDS = frozenset({"card_purchase", KIND_REFUND, KIND_REWARD, KIND_CARD_CREDIT})
 
 
 def movement(bank_movement: str, effect: str, kind: str | None = None) -> dict[str, str]:

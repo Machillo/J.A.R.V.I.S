@@ -152,7 +152,9 @@ class NativeRcTest {
         correction.checked()
         rejected { correction.copy(exchangeRate = d("100001")).checked() }
         rejected { correction.copy(exchangeRate = d("0.0000001")).checked() }
-        rejected { correction.copy(transactionType = "transfer").checked() }
+        // A transfer stays a transfer when another field is corrected; internal marking is the server's.
+        correction.copy(transactionType = "transfer").checked()
+        rejected { correction.copy(transactionType = "internal_transfer").checked() }
         rejected { correction.copy(category = "").checked() }
     }
 

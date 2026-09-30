@@ -435,3 +435,63 @@ def test_cardless_withdrawal_code_moves_nothing_and_withdrawal_is_cash_out():
                       ]) + "</table>", "2024-10-22T14:11:01Z")
     assert withdrawn["transaction_type"] == "transfer" and withdrawn["movement_kind"] == "cash_withdrawal"
     assert (withdrawn["amount"], withdrawn["transaction_time"]) == (5000.0, "08:11:00")
+
+
+# --- Review hardening ----------------------------------------------------------
+
+def test_a_refund_printing_the_purchase_reference_stays_its_own_movement():
+    purchase = parse("NotificacionBAC@baccredomatic.cr", "Notificación de transacción TIENDA",
+                     bac_card("Sep 18, 2026, 10:00", merchant="TIENDA"), "2026-09-18T16:00:00Z")
+    refund = parse("NotificacionBAC@baccredomatic.cr", "Notificación de transacción TIENDA",
+                   bac_card("Sep 18, 2026, 10:00", merchant="TIENDA", tipo="DEVOLUCION"), "2026-09-18T16:05:00Z")
+    assert semantic_fingerprint(candidate(purchase, "m1")) != semantic_fingerprint(candidate(refund, "m2"))
+
+
+def test_an_empty_reference_never_captures_the_next_label():
+    first = parse("NotificacionBAC@baccredomatic.cr", "Notificación de transacción UNO",
+                  bac_card("Sep 18, 2026, 10:00", merchant="UNO", reference="", authorization="111111"), "2026-09-18T16:00:00Z")
+    second = parse("NotificacionBAC@baccredomatic.cr", "Notificación de transacción DOS",
+                   bac_card("Sep 18, 2026, 10:00", merchant="DOS", reference="", authorization="222222"), "2026-09-18T16:00:00Z")
+    assert first["reference"] == "111111" and second["reference"] == "222222"
+    assert semantic_fingerprint(candidate(first, "m1")) != semantic_fingerprint(candidate(second, "m2"))
+
+
+@pytest.mark.parametrize("space", ["\u2003", "\u2009", "\u3000", " "])
+def test_hostile_whitespace_runs_are_parsed_in_bounded_time(space):
+    import time
+    body = ("Hola" + space * 40_000 + "x" * 300 + "\nReferencia" + space * 40_000 + "Tipo\n"
+            "Comercio: TIENDA\nMonto: CRC 1,000.00\nFecha: Sep 18, 2026" + space * 40_000 + ", 10:00")
+    started = time.perf_counter()
+    p.parse_financial_email("Notificación de transacción TIENDA", "NotificacionBAC@baccredomatic.cr", body,
+                            "2026-09-18T16:00:00Z", identity=IDENTITY)
+    p.parse_financial_email("Transacción realizada", "multimoneycr@multimoney.com",
+                            "MultiMoney Monto Fecha Resumen de operación Cuenta origen: Titular:" + space * 40_000 + "x", None)
+    assert time.perf_counter() - started < 2
+
+
+def test_a_different_name_that_merely_starts_like_the_holders_is_not_the_holder():
+    identity = for_account_holder("Luis Mora")
+    assert identity.names_holder("LUISA MORALES CASTRO") is False
+    assert identity.names_holder("LUIS ALBERTO MORA") is True
+    assert identity.names_holder("LUIS ALBERTO MORA ZELE") is True
+
+
+@pytest.mark.parametrize("concept", ["denominación ahorro", "INVERSIÓN VISTA SMART COL salario"])
+def test_payroll_needs_explicit_words_in_the_concept_of_a_third_party_credit(concept):
+    html = mm_transfer("Recepción de fondos", concept, "¢500,000.00", "15/09/2026 09:00:00", REF_A,
+                       "EMPRESA EJEMPLO SA", "CR15****9876", "MARIA PRUEBA SOLANO", "CR74****1234")
+    parsed = parse("multimoneycr@multimoney.com", "Transacción realizada", html, "2026-09-15T15:00:05Z")
+    result = identify_received_payroll(parsed, subject="Transacción realizada", body=plain_text_from_html(html) + " planilla")
+    assert result["transaction_type"] == "transfer"
+
+
+def test_cardless_withdrawal_needs_the_bank_alert_sender_and_a_positive_outcome():
+    body = ("<p>El dinero no se retiró éxitosamente</p><table>" + rows([("Monto:", "5,000.00 CRC")]) + "</table>")
+    assert parse("alerta@baccredomatic.com", "Retiro sin tarjeta retirado", body, "2024-10-22T14:11:01Z")["email_kind"] == "ignored"
+    ok = "<p>El dinero se retiró éxitosamente</p><table>" + rows([("Monto:", "5,000.00 CRC")]) + "</table>"
+    assert parse("notificaciones@baccredomatic.cr", "Retiro sin tarjeta retirado", ok, "2024-10-22T14:11:01Z").get("movement_kind") != "cash_withdrawal"
+
+
+def test_a_credit_notice_without_a_credit_line_is_not_a_loan_disbursement():
+    html = "<p>¡Te hemos acreditado!</p><p>Te hemos acreditado: CRC 5,000.00 a la cuenta CR74****1234 por tu referido</p>"
+    assert parse("multimoneycr@multimoney.com", "¡Te hemos acreditado!", html, "2026-09-28T18:23:35Z").get("bank_movement") != "loan_disbursement"
