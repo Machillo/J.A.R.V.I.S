@@ -653,11 +653,7 @@ public actor FixtureBackend: HTTPTransport {
         }
         if text.contains("horas"), text.contains("extra") || text.contains(" ot") {
             jarvisPending = true
-            return ok(["message": "Voy a guardar esta evento de planilla:
-- tipo de evento: ot
-- horas: 3.0
-- monto: ₡9,000.00
-¿Confirmo y guardo? Responde sí o no.",
+            return ok(["message": "Voy a guardar esta evento de planilla:\n- tipo de evento: ot\n- horas: 3.0\n- monto: ₡9,000.00\n¿Confirmo y guardo? Responde sí o no.",
                        "intent": "create_payroll_event", "action_type": "create_payroll_event", "status": "PENDING", "pending": true,
                        "data": ["current_field": "confirm", "payload": ["event_type": "ot", "hours": 3.0]]])
         }
