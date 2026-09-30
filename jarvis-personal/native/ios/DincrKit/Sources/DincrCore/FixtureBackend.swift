@@ -46,8 +46,14 @@ public actor FixtureBackend: HTTPTransport {
     private var replays: [String: (body: Data?, status: Int, response: Data)] = [:]
     public private(set) var requests: [URLRequest] = []
 
-    public init(scenario: Scenario = .populated, plan: PlanTier = .free, latency: Duration = .milliseconds(300), today: Date = .now,
-                language: AppLanguage = .current) {
+    /// The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
+    /// app still learns the role only from `/auth/me`, exactly as with the real backend.
+    public enum Role: String, Sendable, CaseIterable {
+        case user, owner, admin
+    }
+
+    public init(scenario: Scenario = .populated, plan: PlanTier = .free, role: Role = .user, latency: Duration = .milliseconds(300),
+                today: Date = .now, language: AppLanguage = .current) {
         self.scenario = scenario
         self.latency = latency
         self.language = language
@@ -76,6 +82,11 @@ public actor FixtureBackend: HTTPTransport {
             mailConnected = plan == .vip
             mailConsentAccepted = plan == .vip
             if plan == .vip { candidates = StoreSample.candidates(language) }
+        }
+        profile["role"] = role.rawValue
+        if role == .owner {
+            // Like the backend seed: the Owner's plan is VIP, granted with access_source owner.
+            profile["subscription"] = ["plan": "vip", "plan_name": "VIP", "status": "active", "access_source": "owner"]
         }
     }
 

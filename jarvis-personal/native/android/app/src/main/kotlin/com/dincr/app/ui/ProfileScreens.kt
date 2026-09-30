@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Gavel
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
@@ -57,6 +58,7 @@ import com.dincr.data.AmountInput
 import com.dincr.data.AuthException
 import com.dincr.data.FinancialProfile
 import com.dincr.data.IdempotencyKey
+import com.dincr.data.Jarvis
 import com.dincr.data.OpsFlag
 import com.dincr.data.PlanChangeRequest
 import com.dincr.data.PlanTier
@@ -100,6 +102,10 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
                 }
                 PlanBadge(planName(profile?.plan))
             }
+        }
+        if (Jarvis.isAvailable(profile)) DincrCard {
+            // The Owner's personal space (JARVIS recovery, J0); no plan or other role sees it.
+            NavRow(Icons.Rounded.Key, "JARVIS", tx("Tu espacio personal", "Your personal space")) { nav.open("jarvis") }
         }
         DincrCard {
             Column {

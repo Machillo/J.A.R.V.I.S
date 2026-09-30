@@ -9,7 +9,7 @@ import Foundation
 struct AppEnvironment {
     enum Mode {
         case live(apiURL: URL, supabaseURL: URL, anonKey: String)
-        case fixtures(FixtureBackend.Scenario, PlanTier)
+        case fixtures(FixtureBackend.Scenario, PlanTier, FixtureBackend.Role)
         case unconfigured(LaunchPolicy.Reason)
     }
 
@@ -32,9 +32,12 @@ struct AppEnvironment {
         case let .live(apiURL, supabaseURL, anonKey):
             return AppEnvironment(mode: .live(apiURL: apiURL, supabaseURL: supabaseURL, anonKey: anonKey))
         case let .fixtures(scenario):
-            // `-DincrPlan basic|vip` picks the fixture account's plan (UI tests of plan gates).
-            let plan = arguments.firstIndex(of: "-DincrPlan").flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
-            return AppEnvironment(mode: .fixtures(scenario.flatMap(FixtureBackend.Scenario.init(rawValue:)) ?? .populated, PlanTier.from(plan)))
+            // `-DincrPlan basic|vip` picks the fixture account's plan (UI tests of plan gates), and
+            // `-DincrRole owner|admin` the role the fake server answers in /auth/me (role matrix).
+            // Fixtures only: a live session's role always comes from the real backend.
+            let argument = { (flag: String) in arguments.firstIndex(of: flag).flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil } }
+            return AppEnvironment(mode: .fixtures(scenario.flatMap(FixtureBackend.Scenario.init(rawValue:)) ?? .populated, PlanTier.from(argument("-DincrPlan")),
+                                                  argument("-DincrRole").flatMap(FixtureBackend.Role.init(rawValue:)) ?? .user))
         case let .unconfigured(reason):
             return AppEnvironment(mode: .unconfigured(reason))
         }

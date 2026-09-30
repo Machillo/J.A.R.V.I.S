@@ -31,6 +31,32 @@ def test_client_plan_or_owner_flag_cannot_grant_owner(plan):
         reset_current_user(token)
 
 
+@pytest.mark.parametrize("user", [
+    {"role": "user", "plan": "vip", "is_owner": True, "jarvis": True, "access_source": "owner"},
+    {"role": "Owner", "plan": "vip"},
+    {"role": None, "plan": "owner"},
+])
+def test_jarvis_backend_rejects_plans_and_client_flags(user):
+    # /jarvis/* never opens for a plan, a look-alike role or a client-side flag.
+    token = set_current_user(user)
+    try:
+        with pytest.raises(HTTPException) as exc:
+            internal_ai_routes.require_internal_role()
+        assert exc.value.status_code == 403
+    finally:
+        reset_current_user(token)
+
+
+@pytest.mark.parametrize("role", ["owner", "admin"])
+def test_jarvis_backend_keeps_its_historical_roles(role):
+    # /jarvis/* keeps owner + admin (the web Owner app); the native JARVIS UI is the Owner's only.
+    token = set_current_user({"role": role, "plan": "vip"})
+    try:
+        assert internal_ai_routes.require_internal_role()["role"] == role
+    finally:
+        reset_current_user(token)
+
+
 def test_owner_cannot_be_provisioned_by_admin_request():
     with pytest.raises(HTTPException) as exc:
         service.create_allowed_user("customer@example.com", role="owner")

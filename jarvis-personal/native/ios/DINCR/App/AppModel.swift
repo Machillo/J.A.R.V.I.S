@@ -78,11 +78,11 @@ final class AppModel {
             self.auth = auth
             self.sessions = sessions
             self.service = DincrService(client: APIClient(baseURL: apiURL, tokens: sessions))
-        case let .fixtures(scenario, plan):
+        case let .fixtures(scenario, plan, role):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
             let latency: Duration = ProcessInfo.processInfo.arguments.contains("-DincrDisableAnimations") ? .milliseconds(50) : .milliseconds(300)
-            self.service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, latency: latency))
+            self.service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency))
         case let .unconfigured(reason):
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
