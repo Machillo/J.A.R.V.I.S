@@ -32,13 +32,12 @@ def test_client_plan_or_owner_flag_cannot_grant_owner(plan):
 
 
 @pytest.mark.parametrize("user", [
-    {"role": "admin", "plan": "vip"},
     {"role": "user", "plan": "vip", "is_owner": True, "jarvis": True, "access_source": "owner"},
     {"role": "Owner", "plan": "vip"},
     {"role": None, "plan": "owner"},
 ])
-def test_jarvis_is_owner_only(user):
-    # JARVIS (the Owner's personal space) is never reached by admin, a plan or a client-side flag.
+def test_jarvis_backend_rejects_plans_and_client_flags(user):
+    # /jarvis/* never opens for a plan, a look-alike role or a client-side flag.
     token = set_current_user(user)
     try:
         with pytest.raises(HTTPException) as exc:
@@ -48,26 +47,14 @@ def test_jarvis_is_owner_only(user):
         reset_current_user(token)
 
 
-def test_jarvis_routes_answer_403_to_admin_before_running(monkeypatch):
-    # Over HTTP too: an admin session never reaches a JARVIS handler.
-    from fastapi import FastAPI, Request
-    from fastapi.testclient import TestClient
-
-    reached = []
-    app = FastAPI()
-
-    @app.middleware("http")
-    async def as_admin(request: Request, call_next):
-        token = set_current_user({"role": "admin", "plan": "vip"})
-        try:
-            return await call_next(request)
-        finally:
-            reset_current_user(token)
-
-    monkeypatch.setattr(internal_ai_routes, "memory_summary", lambda: reached.append("memory") or {})
-    app.include_router(internal_ai_routes.router)
-    assert TestClient(app).get("/jarvis/memory/summary").status_code == 403
-    assert reached == []
+@pytest.mark.parametrize("role", ["owner", "admin"])
+def test_jarvis_backend_keeps_its_historical_roles(role):
+    # /jarvis/* keeps owner + admin (the web Owner app); the native JARVIS UI is the Owner's only.
+    token = set_current_user({"role": role, "plan": "vip"})
+    try:
+        assert internal_ai_routes.require_internal_role()["role"] == role
+    finally:
+        reset_current_user(token)
 
 
 def test_owner_cannot_be_provisioned_by_admin_request():

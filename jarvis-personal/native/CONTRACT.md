@@ -71,7 +71,7 @@ Only the Supabase **anon/publishable** key is ever configured in the apps (git-i
 | `DELETE /user-product/free/movements/{id}` | — | `{"status","movement_id"}` | 404 (already gone → list refreshed), 422, 503 |
 
 `/free/*` serves Free, Basic and VIP (feature minimum `free`). The Owner uses it at VIP level
-(plus JARVIS, `/jarvis/*`, owner only); admin sessions stop at a notice.
+(plus the native JARVIS UI, Owner only); admin sessions stop at a notice.
 
 ### RC endpoints (added after C4)
 

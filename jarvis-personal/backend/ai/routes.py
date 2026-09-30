@@ -21,9 +21,7 @@ from backend.ai.memory_service import (
 )
 
 def require_internal_role():
-    """JARVIS is the Owner's personal space: only the server's owner role reaches it. Admin is an
-    internal role, not the Owner, and never gets the Owner's personal capabilities."""
-    return require_roles("owner")
+    return require_roles("owner", "admin")
 
 
 router = APIRouter(
