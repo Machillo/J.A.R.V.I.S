@@ -15,7 +15,7 @@ from backend.ai.action_flow import (
     start_action,
 )
 from backend.ai.chat_memory import PendingActionKept, get_pending_action, keep_pending_action
-from backend.ai.intent_router import ACTION_TYPES, YES_NO_WORDS, detect_intent, normalize_message
+from backend.ai.intent_router import ACTION_TYPES, YES_NO_WORDS, detect_intent, is_explicit_calendar_command, normalize_message
 from backend.ai.memory_service import memory_content_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
 from backend.integrations.internet_search import internet_search
@@ -343,7 +343,11 @@ def _process(user_message: str, pending_action: dict | None):
         if pending_result:
             return pending_result
 
-    if not pending_action:
+    # An explicit calendar order ("Agendá el viaje de Ecuador el 11 de octubre") goes to the
+    # calendar intent; the travel, purchase and debt shortcuts below still answer everything else.
+    explicit_calendar = is_explicit_calendar_command(user_message)
+
+    if not pending_action and not explicit_calendar:
         decision_result = handle_personal_decision_request(user_message)
         if decision_result:
             return decision_result
@@ -394,7 +398,7 @@ def _process(user_message: str, pending_action: dict | None):
         }
 
     lower_message = (user_message or "").lower()
-    if any(token in lower_message for token in ["quiero ir", "me gustaria ir", "me gustaría ir", "viajar", "viaje", "mónaco", "monaco", "f1", "formula 1", "fórmula 1"]):
+    if not explicit_calendar and any(token in lower_message for token in ["quiero ir", "me gustaria ir", "me gustaría ir", "viajar", "viaje", "mónaco", "monaco", "f1", "formula 1", "fórmula 1"]):
         if any(goal_word in lower_message for goal_word in ["quiero", "gustaria", "gustaría", "viajar", "viaje", "ir a"]):
             plan = plan_long_term_goal(user_message)
             scenarios = plan.get("scenarios", [])
@@ -415,7 +419,7 @@ def _process(user_message: str, pending_action: dict | None):
                 "data": plan,
             }
 
-    if any(token in lower_message for token in ["abono", "abonar", "amortizar", "pagar deuda", "liquidar deuda", "ahorrar para pagar"]):
+    if not explicit_calendar and any(token in lower_message for token in ["abono", "abonar", "amortizar", "pagar deuda", "liquidar deuda", "ahorrar para pagar"]):
         advice = get_debt_advisory()
         return {
             "message": advice.get("message", "Señor, generé una estrategia de deuda."),
