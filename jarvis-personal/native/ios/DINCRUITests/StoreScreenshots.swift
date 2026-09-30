@@ -51,7 +51,8 @@ final class StoreScreenshots: XCTestCase {
     }
 
     private func tab(_ app: XCUIApplication, _ title: String) {
-        let button = app.tabBars.buttons[title]
+        // iOS 26+ tab bars can expose a tab twice (the item and its selection lens): tap the first.
+        let button = app.tabBars.buttons[title].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 15), "missing tab \(title)")
         button.tap()
     }
