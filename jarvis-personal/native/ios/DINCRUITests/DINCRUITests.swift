@@ -142,9 +142,16 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Disponible este mes"].waitForExistence(timeout: 5))
     }
 
+    private func open(_ identifier: String, in app: XCUIApplication) {
+        let element = app.descendants(matching: .any)[identifier].firstMatch
+        XCTAssertTrue(element.waitForExistence(timeout: 5), "missing \(identifier)")
+        element.tap()
+    }
+
     func testDebtPaymentIsRecorded() {
         let app = launch()
         app.tabBars.buttons["Plan"].tap()
+        open("plan.debts", in: app)
         let pay = app.buttons["debt.pay.31"]
         XCTAssertTrue(pay.waitForExistence(timeout: 5))
         pay.tap()
@@ -163,6 +170,7 @@ final class DINCRUITests: XCTestCase {
     func testGoalContributionIsRecorded() {
         let app = launch()
         app.tabBars.buttons["Plan"].tap()
+        open("plan.goals", in: app)
         let contribute = app.buttons["goal.contribute.41"]
         XCTAssertTrue(contribute.waitForExistence(timeout: 5))
         contribute.tap()
@@ -172,6 +180,90 @@ final class DINCRUITests: XCTestCase {
         field.typeText("25.000")
         app.buttons["amount.save"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["plan.notice"].waitForExistence(timeout: 5))
+    }
+
+    func testBasicHomeShowsItsDashboardAndBudget() {
+        let app = launch(extra: ["-DincrPlan", "basic"])
+        XCTAssertTrue(app.descendants(matching: .any)["home.basic"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Plan"].tap()
+        open("plan.budget", in: app)
+        XCTAssertTrue(app.buttons["budget.edit"].waitForExistence(timeout: 5))
+    }
+
+    func testFreePlanDoesNotOfferBasicTools() {
+        let app = launch()
+        app.tabBars.buttons["Plan"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["plan.debts"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["plan.budget"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["profile.mail"].exists)
+    }
+
+    func testVipHomeShowsSafeToSpend() {
+        let app = launch(extra: ["-DincrPlan", "vip"])
+        XCTAssertTrue(app.descendants(matching: .any)["home.safeToSpend"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["DINCR"].tap()
+        open("advisor.strategy", in: app)
+        XCTAssertTrue(app.staticTexts["Recomendación"].waitForExistence(timeout: 5))
+    }
+
+    func testDollarExpenseAsksForTheUsersRate() {
+        let app = launch()
+        app.tabBars.buttons["Movimientos"].tap()
+        let add = app.buttons["movements.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        let currency = app.segmentedControls["editor.currency"]
+        XCTAssertTrue(currency.waitForExistence(timeout: 5))
+        currency.buttons["USD"].tap()
+        let rate = app.textFields["editor.rate"]
+        XCTAssertTrue(rate.waitForExistence(timeout: 2))
+        XCTAssertEqual(rate.value as? String, "507,5", "prefilled with the user's own latest rate, never a market rate")
+        rate.tap()
+        rate.clearAndType("")
+        let amount = app.textFields["editor.amount"]
+        amount.tap()
+        amount.typeText("12")
+        let description = app.textFields["editor.description"]
+        description.tap()
+        description.typeText("Libro")
+        app.buttons["editor.save"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Escribí cuántos colones")).firstMatch.waitForExistence(timeout: 2))
+        rate.tap()
+        rate.typeText("510")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Se guardará como")).firstMatch.waitForExistence(timeout: 2))
+        app.buttons["editor.save"].tap()
+        XCTAssertTrue(app.staticTexts["Libro"].waitForExistence(timeout: 10))
+    }
+
+    /// The flow of the Google OAuth verification video, on fixture data: Email Monitor → explanation
+    /// (gmail.readonly) → consent → Connect Gmail → provider → back to DINCR → connected → sync →
+    /// candidates → confirm. Only the provider page is simulated; the real one is DEVICE REQUIRED.
+    func testEmailMonitorConnectReviewFlow() {
+        let app = launch("mailOnboarding", extra: ["-DincrTab", "profile"])
+        open("profile.mail", in: app)
+        XCTAssertTrue(app.descendants(matching: .any)["mail.readonly"].waitForExistence(timeout: 5))
+        let accept = app.buttons["mail.consent.accept"]
+        XCTAssertTrue(accept.waitForExistence(timeout: 5))
+        XCTAssertFalse(accept.isEnabled, "consent must be checked first")
+        app.switches["mail.consent.toggle"].coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        accept.tap()
+        let connect = app.buttons["mail.connect"]
+        XCTAssertTrue(connect.waitForExistence(timeout: 5))
+        connect.tap()
+        open("mail.scope.month", in: app)
+        XCTAssertTrue(app.descendants(matching: .any)["mail.status.connected"].waitForExistence(timeout: 10))
+        let sync = app.buttons["mail.sync"]
+        XCTAssertTrue(sync.waitForExistence(timeout: 5))
+        sync.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["mail.syncSummary"].waitForExistence(timeout: 10))
+        let confirm = app.buttons["mail.accept.21"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        confirm.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["mail.notice"].waitForExistence(timeout: 10))
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: 10), "a reviewed notice leaves the pending list")
+        // A dollar notice cannot be confirmed as detected: it asks for the user's rate.
+        XCTAssertFalse(app.buttons["mail.accept.22"].exists)
+        XCTAssertTrue(app.buttons["mail.correct.22"].exists)
     }
 }
 

@@ -3,6 +3,7 @@ package com.dincr.app
 import android.content.Intent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -22,6 +23,7 @@ import androidx.compose.ui.test.printToLog
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -242,9 +244,18 @@ class FlowsTest {
     @Test fun vipHomeShowsSafeToSpendAndReviewsMail() {
         launch(plan = "vip")
         waitForText(tx("Podés gastar con tranquilidad", "Safe to spend"))
+        // next_45_days_minimum is the lowest projected balance, never labelled as the commitments.
+        waitForText(tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"))
+        compose.onAllNodes(hasText(tx("Compromisos próximos 45 días", "Commitments next 45 days")), useUnmergedTree = true).assertCountEquals(0)
         tab(tx("Perfil", "Profile"))
         click(tx("Correos financieros", "Financial emails"))
         waitForText("Compra en supermercado")
+        // A mailbox the user disconnected earlier (status "disabled") is not listed.
+        waitForText("ejemplo@correo.test")
+        assertTrue(compose.onAllNodes(hasText("anterior@correo.test"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        // The sync answer's failed_connections is a list of ids; an empty one is a plain success.
+        click(tx("Buscar avisos nuevos", "Check for new notices"))
+        waitForText(tx("Encontramos 3 avisos", "Found 3 notices"), substring = true)
         click(tx("Confirmar", "Confirm"))
         waitForText(tx("Movimiento guardado.", "Transaction saved."))
         // The dollar notice cannot be confirmed as is: it needs the user's rate.

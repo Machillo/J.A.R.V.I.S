@@ -172,6 +172,7 @@ data class CommandCenter(
     @Serializable
     data class Plan(val method: String? = null, val target: String? = null, @SerialName("monthly_to_target") val monthlyToTarget: Money? = null, val months: Int? = null, val interest: Money? = null)
 
+    /** [next45DaysMinimum] is the lowest projected balance over the next 45 days after known obligations, not their total. */
     @Serializable
     data class SafeToSpend(val amount: Money? = null, @SerialName("monthly_margin") val monthlyMargin: Money? = null, @SerialName("next_45_days_minimum") val next45DaysMinimum: Money? = null)
 

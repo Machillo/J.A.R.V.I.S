@@ -147,7 +147,7 @@ private fun VipHome(c: CommandCenter, nav: Navigator) {
         Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
             Text(tx("Podés gastar con tranquilidad", "Safe to spend"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
             MoneyText(c.safeToSpend?.amount, style = MaterialTheme.typography.displaySmall)
-            c.safeToSpend?.next45DaysMinimum?.let { AmountLine(tx("Compromisos próximos 45 días", "Commitments next 45 days"), it) }
+            c.safeToSpend?.next45DaysMinimum?.let { AmountLine(tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"), it) }
         }
     }
     c.director?.let { d ->

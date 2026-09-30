@@ -73,6 +73,9 @@ public struct APIClient: Sendable {
     static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
+        // Deterministic bodies: a retried submission sends the same bytes, so the backend's
+        // idempotency check replays the first answer instead of refusing a "different" body (409).
+        encoder.outputFormatting = [.sortedKeys]
         return encoder
     }()
 
@@ -86,17 +89,40 @@ public struct APIClient: Sendable {
         return try await perform(method: method, path: path, query: [], body: data, idempotencyKey: idempotencyKey)
     }
 
-    public func send<Response: Decodable>(_ method: String, _ path: String, as type: Response.Type = Response.self) async throws -> Response {
-        try await perform(method: method, path: path, query: [], body: nil)
+    public func send<Response: Decodable>(_ method: String, _ path: String, query: [URLQueryItem] = [], as type: Response.Type = Response.self) async throws -> Response {
+        try await perform(method: method, path: path, query: query, body: nil)
+    }
+
+    /// The raw body of a GET (the data export), without decoding it.
+    public func getData(_ path: String) async throws -> Data {
+        try await performRaw(method: "GET", path: path, query: [], body: nil, idempotencyKey: nil, authenticated: true)
+    }
+
+    /// A public route (release policy): no session and no bearer token.
+    public func getPublic<Response: Decodable>(_ path: String, query: [URLQueryItem] = [], as type: Response.Type = Response.self) async throws -> Response {
+        try decode(try await performRaw(method: "GET", path: path, query: query, body: nil, idempotencyKey: nil, authenticated: false))
     }
 
     func perform<Response: Decodable>(method: String, path: String, query: [URLQueryItem], body: Data?, idempotencyKey: String? = nil) async throws -> Response {
+        try decode(try await performRaw(method: method, path: path, query: query, body: body, idempotencyKey: idempotencyKey, authenticated: true))
+    }
+
+    func decode<Response: Decodable>(_ data: Data) throws -> Response {
+        do {
+            return try Self.decoder.decode(Response.self, from: data.isEmpty ? Data("{}".utf8) : data)
+        } catch {
+            throw APIError.decoding(language)
+        }
+    }
+
+    func performRaw(method: String, path: String, query: [URLQueryItem], body: Data?, idempotencyKey: String?, authenticated: Bool) async throws -> Data {
         let requestID = UUID().uuidString.lowercased()
         let safe = method == "GET" || method == "HEAD"
         let maxRetries = safe ? 2 : 0
         var attempt = 0
         var refreshed = false
-        var token = try await tokens.accessToken(forceRefresh: false)
+        var token: String?
+        if authenticated { token = try await tokens.accessToken(forceRefresh: false) }
 
         while true {
             var request = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
@@ -107,7 +133,7 @@ public struct APIClient: Sendable {
             request.setValue(language.rawValue, forHTTPHeaderField: "Accept-Language")
             request.setValue(requestID, forHTTPHeaderField: "X-Request-ID")
             request.setValue(String(attempt), forHTTPHeaderField: "X-Retry-Attempt")
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
             if let idempotencyKey { request.setValue(idempotencyKey, forHTTPHeaderField: "X-Idempotency-Key") }
 
             let data: Data
@@ -123,7 +149,7 @@ public struct APIClient: Sendable {
                 throw error.code == .timedOut ? APIError.timeout(language) : APIError.offline(language)
             }
 
-            if response.statusCode == 401, !refreshed {
+            if response.statusCode == 401, authenticated, !refreshed {
                 refreshed = true
                 token = try await tokens.accessToken(forceRefresh: true)
                 continue
@@ -134,11 +160,7 @@ public struct APIClient: Sendable {
             guard (200..<300).contains(response.statusCode) else {
                 throw APIError.from(status: response.statusCode, body: data, language: language, requestID: requestID)
             }
-            do {
-                return try Self.decoder.decode(Response.self, from: data.isEmpty ? Data("{}".utf8) : data)
-            } catch {
-                throw APIError.decoding(language)
-            }
+            return data
         }
     }
 

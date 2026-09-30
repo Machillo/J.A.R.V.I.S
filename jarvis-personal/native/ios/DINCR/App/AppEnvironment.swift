@@ -9,15 +9,13 @@ import Foundation
 struct AppEnvironment {
     enum Mode {
         case live(apiURL: URL, supabaseURL: URL, anonKey: String)
-        case fixtures(FixtureDincrService.Scenario, PlanTier)
+        case fixtures(FixtureBackend.Scenario, PlanTier)
         case unconfigured(LaunchPolicy.Reason)
     }
 
-    /// The prototype's own redirect, so it can never receive (or steal) the store app's
-    /// `com.dincr.app://auth/callback`. Live sign-in needs this URL in Supabase Auth → Redirect
-    /// URLs (external gate, native/README.md).
-    static let authCallbackScheme = "com.dincr.app.nativedev"
-    static let authRedirect = "com.dincr.app.nativedev://auth/callback"
+    /// The release identity's OAuth return (`AppIdentity`, pinned by tests).
+    static let authCallbackScheme = AppIdentity.authCallbackScheme
+    static let authRedirect = AppIdentity.authRedirect
 
     let mode: Mode
 
@@ -36,7 +34,7 @@ struct AppEnvironment {
         case let .fixtures(scenario):
             // `-DincrPlan basic|vip` picks the fixture account's plan (UI tests of plan gates).
             let plan = arguments.firstIndex(of: "-DincrPlan").flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
-            return AppEnvironment(mode: .fixtures(scenario.flatMap(FixtureDincrService.Scenario.init(rawValue:)) ?? .populated, PlanTier.from(plan)))
+            return AppEnvironment(mode: .fixtures(scenario.flatMap(FixtureBackend.Scenario.init(rawValue:)) ?? .populated, PlanTier.from(plan)))
         case let .unconfigured(reason):
             return AppEnvironment(mode: .unconfigured(reason))
         }

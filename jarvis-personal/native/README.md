@@ -9,9 +9,13 @@ in `docs/native/PARITY_MATRIX.md`.
   calendar, recurring, strategy, scenarios, VIP review/today/projections, mail monitor (connect,
   sync, review, own transfers, accounts), financial situation, plans and store subscription,
   app lock, export, account deletion, support, kill switches, release policy and service health.
-- **iOS** has the #279 base (sign-in, profile setup, Free home, movements) plus the legal and plan
-  gates, kill switches, debts, goals and account deletion. It is compiled and tested only in CI on
-  a macOS runner; it has never run on a device.
+- **iOS** has the same scope with the release identity `com.dincr.app`: gates, Free/Basic/VIP home,
+  movements in CRC/USD, planning (debts, goals, savings, budget, calendar, recurring, emergency,
+  aguinaldo), advisor (strategy, scenarios, review, Today, projections, reports), financial
+  situation, plans, app lock, export, deletion, support, and the **Email Monitor** (Gmail read-only:
+  consent, connect, return, sync, review, own transfers, detected accounts). It is compiled and
+  tested in CI on a macOS runner (unit tests and XCUITest in a simulator); it has not run on a
+  device yet (MAC/DEVICE REQUIRED list in the PR and `RELEASE_IDENTITY.md`).
 
 ## Status: RC, not yet the store app
 
@@ -100,8 +104,9 @@ cd jarvis-personal/native/android && ./gradlew :app:assembleDincrDebug
 
 Fixture (synthetic) data runs **only in a Debug build and only when asked for**, with a "Modo de
 demostración" banner. On Android it is an in-process fake backend (`FakeBackend`, an HTTP
-transport answering the real routes with invented data); on iOS `FixtureDincrService`.
-Scenarios: `populated`, `empty`, `failing`, `newUser`, legal required and plan choice.
+transport answering the real routes with invented data); on iOS `FixtureBackend`, the same idea.
+Scenarios: `populated`, `empty`, `failing`, `newUser`, legal required, plan choice, and on iOS
+`mailOnboarding` (a VIP mailbox to connect: consent → connect → return → sync).
 
 - iOS launch arguments: `-DincrFixtures <scenario>` (`legalRequired`, `choosePlan`…),
   optionally `-DincrSkipLogin` and `-DincrPlan basic|vip`.
@@ -111,7 +116,7 @@ Scenarios: `populated`, `empty`, `failing`, `newUser`, legal required and plan c
 - A Release build ignores all of them (Android's launcher activity is exported, so another app
   could send the extras): it can never be pointed at sample data.
 
-Without a backend configuration, both apps stop at a **"Prototipo sin servidor configurado"**
+Without a backend configuration, both apps stop at an **"App sin servidor configurado"**
 screen; they never fall back to fixtures silently. Live backend (never committed):
 
 - iOS: copy `ios/Config/Local.xcconfig.example` to `ios/Config/Local.xcconfig`.
@@ -123,8 +128,8 @@ screen; they never fall back to fixtures silently. Live backend (never committed
 
 OAuth (Supabase PKCE S256, system browser: `ASWebAuthenticationSession` on iOS, Custom Tabs on
 Android, never a WebView) returns to the identity's own redirect: `com.dincr.app://auth/callback`
-for the Android `dincr` flavor (the redirect the Capacitor app already uses), and
-`com.dincr.app.nativedev://auth/callback` for `nativedev` and iOS. The `nativedev` redirect is not
+for iOS and the Android `dincr` flavor (the redirect the Capacitor app already uses), and
+`com.dincr.app.nativedev://auth/callback` for the Android `nativedev` flavor. The `nativedev` redirect is not
 in the production allowlist and must not be added for testing; without it, Supabase falls back to
 the Site URL and the flow ends outside the app (the authorization code is useless there, because
 only the app holds its PKCE verifier).

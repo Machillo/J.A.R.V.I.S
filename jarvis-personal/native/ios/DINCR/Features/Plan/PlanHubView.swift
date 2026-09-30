@@ -2,135 +2,51 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY E1–E7 — debts and goals: see balances and record payments and contributions. Balances
-/// are the backend's; the app sends only the amount the user typed (with an idempotency key, so a
-/// retried submit is never a second payment) and reloads what the server answers.
+/// PARITY E1 — the Plan hub. Budget, calendar and recurring items are Basic; the emergency fund
+/// and the aguinaldo are VIP (the aguinaldo also needs `gmail_automation`, as in Capacitor).
 struct PlanHubView: View {
     @Environment(AppModel.self) private var model
-    @State private var state: LoadState<Snapshot> = .loading
-    @State private var action: AmountAction?
-    @State private var notice: String?
-
-    struct Snapshot: Equatable {
-        let debts: [Debt]
-        let goals: [Goal]
-    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DincrSpacing.s4) {
-                if !model.flags.isEnabled(.financialWrites) {
-                    StatusBanner(tone: .warning, title: tx("Cambios temporalmente pausados", "Changes temporarily paused"),
-                                 message: model.flags.message(.financialWrites, language: model.language)
-                                    ?? tx("Podés ver tu información; guardar cambios está en pausa por mantenimiento.", "You can see your information; saving changes is paused for maintenance."))
+        ScreenScroll(title: tx("Plan", "Plan")) {
+            WritesPausedBanner()
+            VStack(spacing: DincrSpacing.s2) {
+                link(DebtsView(), "creditcard", tx("Deudas", "Debts"), tx("Saldos, pagos y avance", "Balances, payments and progress"), id: "plan.debts")
+                link(GoalsView(), "target", tx("Metas y ahorro", "Goals and savings"), tx("Metas, aportes y planes de ahorro", "Goals, contributions and savings plans"), id: "plan.goals")
+                gated(.basic) { link(BudgetView(), "chart.pie", tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits per category"), id: "plan.budget") }
+                gated(.basic) { link(CalendarView(), "calendar", tx("Calendario", "Calendar"), tx("Pagos y compromisos del mes", "Payments and commitments this month"), id: "plan.calendar") }
+                gated(.basic) { link(RecurringView(), "repeat", tx("Recurrentes", "Recurring"), tx("Pagos e ingresos que se repiten", "Payments and income that repeat"), id: "plan.recurring") }
+                if model.planTier == .vip && model.flags.isEnabled(.vipIntelligence) {
+                    link(EmergencyFundView(), "lifepreserver", tx("Fondo de emergencia", "Emergency fund"), tx("Cuántos meses te cubre", "How many months it covers"), id: "plan.emergency")
                 }
-                if let notice {
-                    StatusBanner(tone: .info, title: notice, message: "")
-                        .accessibilityIdentifier("plan.notice")
-                }
-                switch state {
-                case .loading:
-                    SkeletonView(rows: 4)
-                case .failed(let message):
-                    ErrorStateView(message: message) { Task { await load() } }
-                case .loaded(let snapshot):
-                    debtsSection(snapshot.debts)
-                    goalsSection(snapshot.goals)
+                if model.planTier == .vip && model.flags.isEnabled(.gmailAutomation) {
+                    link(AguinaldoView(), "gift", tx("Aguinaldo", "Aguinaldo"), tx("Estimado según tus salarios", "Estimated from your salaries"), id: "plan.aguinaldo")
                 }
             }
-            .padding(.horizontal, DincrSpacing.s4)
-            .padding(.bottom, DincrSpacing.s6)
-            .frame(maxWidth: 600)
-            .frame(maxWidth: .infinity)
-        }
-        .dincrScreenBackground()
-        .navigationTitle(tx("Plan", "Plan"))
-        .refreshable { await load() }
-        .task { if case .loading = state { await load() } }
-        .sheet(item: $action) { action in
-            AmountSheet(action: action) { message in
-                notice = message
-                Task { await load() }
-            }
-            .presentationDetents([.medium])
-        }
-    }
-
-    private var canWrite: Bool { model.flags.isEnabled(.financialWrites) }
-
-    @ViewBuilder
-    private func debtsSection(_ debts: [Debt]) -> some View {
-        Text(tx("Deudas", "Debts")).font(DincrFont.title2).foregroundStyle(DincrColor.text).accessibilityAddTraits(.isHeader)
-        if debts.isEmpty {
-            Text(tx("No tenés deudas registradas.", "You have no debts recorded.")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-        }
-        ForEach(debts) { debt in
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                HStack {
-                    Text(debt.name ?? tx("Deuda", "Debt")).font(DincrFont.body.weight(.semibold))
-                    Spacer()
-                    MoneyText(debt.remainingAmount)
-                }
-                .accessibilityElement(children: .combine)
-                if let percent = debt.progressPercent {
-                    DincrProgressBar(fraction: percent / 100)
-                    Text(tx("\(Int(percent.rounded()))% pagado", "\(Int(percent.rounded()))% paid")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
-                }
-                if canWrite, (debt.remainingAmount ?? 0) > 0 {
-                    Button(tx("Registrar pago", "Record payment")) { action = .payDebt(debt) }
-                        .buttonStyle(.dincrSecondary)
-                        .accessibilityIdentifier("debt.pay.\(debt.id)")
-                }
-            }
-            .dincrCard()
         }
     }
 
     @ViewBuilder
-    private func goalsSection(_ goals: [Goal]) -> some View {
-        Text(tx("Metas", "Goals")).font(DincrFont.title2).foregroundStyle(DincrColor.text).accessibilityAddTraits(.isHeader).padding(.top, DincrSpacing.s2)
-        if goals.isEmpty {
-            Text(tx("Todavía no tenés metas.", "You have no goals yet.")).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-        }
-        ForEach(goals) { goal in
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                HStack {
-                    Text(goal.name ?? tx("Meta", "Goal")).font(DincrFont.body.weight(.semibold))
-                    Spacer()
-                    MoneyText(goal.currentAmount)
-                }
-                .accessibilityElement(children: .combine)
-                if let target = goal.targetAmount, target > 0 {
-                    let fraction = NSDecimalNumber(decimal: (goal.currentAmount ?? 0) / target).doubleValue
-                    DincrProgressBar(fraction: fraction)
-                    HStack(spacing: 4) {
-                        Text(tx("Meta:", "Target:")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
-                        MoneyText(target, font: DincrFont.caption)
-                    }
-                }
-                if canWrite, goal.status != "completed", goal.remaining.map({ $0 > 0 }) ?? true {
-                    Button(tx("Aportar", "Contribute")) { action = .contribute(goal) }
-                        .buttonStyle(.dincrSecondary)
-                        .accessibilityIdentifier("goal.contribute.\(goal.id)")
-                }
-            }
-            .dincrCard()
-        }
+    private func gated<Row: View>(_ tier: PlanTier, @ViewBuilder _ row: () -> Row) -> some View {
+        if model.planTier.rank >= tier.rank { row() }
     }
 
-    private func load() async {
-        let epoch = model.currentEpoch
-        let service = model.service
-        do {
-            async let debts = service.debts()
-            async let goals = service.goals()
-            state = .loaded(Snapshot(debts: try await debts, goals: try await goals))
-        } catch is CancellationError {
-            return
-        } catch {
-            if let message = model.message(for: error, epoch: epoch, fallback: tx("No pudimos cargar tu plan.", "We couldn’t load your plan.")) {
-                state = .failed(message)
-            }
+    private func link<Destination: View>(_ destination: Destination, _ symbol: String, _ title: String, _ subtitle: String, id: String) -> some View {
+        NavigationLink { destination } label: { HubRow(symbol: symbol, title: title, subtitle: subtitle) }
+            .buttonStyle(.plain)
+            .dincrCard(padding: DincrSpacing.s3)
+            .accessibilityIdentifier(id)
+    }
+}
+
+/// B5 — writes paused by the operational switch: shown where money can be written.
+struct WritesPausedBanner: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        if !model.flags.isEnabled(.financialWrites) {
+            StatusBanner(tone: .warning, title: tx("Cambios temporalmente pausados", "Changes temporarily paused"),
+                         message: model.flags.message(.financialWrites, language: model.language)
+                            ?? tx("Podés ver tu información; guardar cambios está en pausa por mantenimiento.", "You can see your information; saving changes is paused for maintenance."))
         }
     }
 }
@@ -138,16 +54,19 @@ struct PlanHubView: View {
 enum AmountAction: Identifiable {
     case payDebt(Debt)
     case contribute(Goal)
+    case save(SavingsPlan)
 
     var id: String {
         switch self {
         case .payDebt(let debt): "debt-\(debt.id)"
         case .contribute(let goal): "goal-\(goal.id)"
+        case .save(let plan): "savings-\(plan.id)"
         }
     }
 }
 
-/// One amount, typed in the user's own separators, sent once per submission.
+/// One amount, typed in the user's own separators. Retrying the same amount after an error reuses
+/// its idempotency key, so a lost response never records the money twice.
 struct AmountSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -156,8 +75,7 @@ struct AmountSheet: View {
     @State private var text = ""
     @State private var error: String?
     @State private var saving = false
-    /// The key of the last submission; a retry of the same amount reuses it (no double payment).
-    @State private var submission: (amount: Decimal, key: String)?
+    @State private var submission = AmountSubmission()
 
     var body: some View {
         NavigationStack {
@@ -185,6 +103,7 @@ struct AmountSheet: View {
                 }
             }
         }
+        .presentationDetents([.medium])
         .interactiveDismissDisabled(saving)
     }
 
@@ -192,13 +111,14 @@ struct AmountSheet: View {
         switch action {
         case .payDebt: tx("Registrar pago", "Record payment")
         case .contribute(let goal): tx("Aportar a «\(goal.name ?? "")»", "Contribute to “\(goal.name ?? "")”")
+        case .save(let plan): tx("Aportar a «\(plan.name ?? "")»", "Contribute to “\(plan.name ?? "")”")
         }
     }
 
     private var confirm: String {
         switch action {
         case .payDebt: tx("Registrar", "Record")
-        case .contribute: tx("Aportar", "Contribute")
+        case .contribute, .save: tx("Aportar", "Contribute")
         }
     }
 
@@ -211,18 +131,18 @@ struct AmountSheet: View {
         case .contribute(let goal):
             let remaining = goal.remaining.map { format.string($0) } ?? "—"
             return tx("Faltan \(remaining). Un aporte mayor se ajusta a la meta.", "\(remaining) to go. A larger amount is capped at the goal.")
+        case .save(let plan):
+            return tx("Ahorrado: \(format.string(plan.savedAmount ?? 0)).", "Saved: \(format.string(plan.savedAmount ?? 0)).")
         }
     }
 
     private func submit() async {
         guard !saving else { return }
         guard let amount = AmountInput.parse(text, separators: model.moneyFormat.separators) else {
-            let example = model.moneyFormat.inputText(Decimal(string: "18450.5")!)
-            error = tx("Escribí un monto mayor que cero, por ejemplo \(example).", "Enter an amount above zero, for example \(example).")
+            error = model.moneyFormat.amountHint
             return
         }
-        let key = (submission?.amount == amount ? submission?.key : nil) ?? UUID().uuidString.lowercased()
-        submission = (amount, key)
+        let key = submission.key(for: amount)
         saving = true; error = nil
         defer { saving = false }
         let epoch = model.currentEpoch
@@ -232,20 +152,15 @@ struct AmountSheet: View {
                 _ = try await model.service.payDebt(id: debt.id, amount: amount, idempotencyKey: key)
                 onDone(tx("Pago registrado", "Payment recorded"))
             case .contribute(let goal):
-                _ = try await model.service.contribute(goalID: goal.id, GoalContribution(amount: amount, contributionDate: Self.today()), idempotencyKey: key)
+                _ = try await model.service.contribute(goalID: goal.id, GoalContribution(amount: amount, contributionDate: Day.today()), idempotencyKey: key)
+                onDone(tx("Aporte registrado", "Contribution recorded"))
+            case .save(let plan):
+                _ = try await model.service.contribute(savingsPlanID: plan.id, GoalContribution(amount: amount, contributionDate: Day.today()), idempotencyKey: key)
                 onDone(tx("Aporte registrado", "Contribution recorded"))
             }
             dismiss()
         } catch {
             self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos guardar. Intentá de nuevo.", "We couldn’t save. Please try again."))
         }
-    }
-
-    static func today() -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: .now)
     }
 }

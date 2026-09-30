@@ -6,6 +6,7 @@ import SwiftUI
 struct DINCRApp: App {
     @State private var model = AppModel()
     @AppStorage("dincr.appearance") private var appearance = Appearance.system.rawValue
+    @Environment(\.scenePhase) private var scenePhase
     /// UI tests pass `-DincrDisableAnimations` so the app can go idle (looping animations block XCUITest).
     private let animationsDisabled = ProcessInfo.processInfo.arguments.contains("-DincrDisableAnimations")
 
@@ -21,7 +22,23 @@ struct DINCRApp: App {
                 .environment(\.dincrDecorativeMotion, !animationsDisabled)
                 .preferredColorScheme(Appearance(rawValue: appearance)?.colorScheme)
                 .tint(DincrColor.tint)
-                .task { await model.start() }
+                .task {
+                    DataExport.clear()
+                    await model.start()
+                }
+                // A mail OAuth return opened by the system (the authentication session delivers it
+                // directly otherwise). Sign-in callbacks only ever come through the session.
+                .onOpenURL { url in Task { await model.handleOpenURL(url) } }
+                .onChange(of: scenePhase) { _, phase in
+                    // The app-switcher snapshot is taken while inactive: with the lock on, a window above
+                    // every sheet, alert and share sheet covers the balances.
+                    PrivacyCover.shared.update(visible: phase != .active && model.appLock.isEnabled)
+                    switch phase {
+                    case .active: Task { await model.onForeground() }
+                    case .background: model.onBackground()
+                    default: break
+                    }
+                }
         }
     }
 }
@@ -39,6 +56,6 @@ enum Appearance: String, CaseIterable, Identifiable {
     }
 }
 
-/// Short bilingual copy helper, same contract as the web `tx(es, en)`.
-/// Prototype only: module work moves strings to a String Catalog.
+/// Short bilingual copy helper, same contract as the web `tx(es, en)`: Spanish (Costa Rica,
+/// voseo) or English, from the device language (the Capacitor app has no in-app language setting).
 func tx(_ spanish: String, _ english: String) -> String { AppLanguage.current.pick(spanish, english) }
