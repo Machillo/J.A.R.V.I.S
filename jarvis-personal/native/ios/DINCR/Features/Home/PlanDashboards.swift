@@ -94,7 +94,8 @@ private struct CommandCenterContent: View {
                     MoneyText(center.safeToSpend?.amount, font: DincrFont.displayAmount)
                         .accessibilityIdentifier("home.safeToSpend")
                     FigureRow(label: tx("Margen del mes", "Monthly margin"), amount: center.safeToSpend?.monthlyMargin)
-                    FigureRow(label: tx("Mínimo próximos 45 días", "Minimum next 45 days"), amount: center.safeToSpend?.next45DaysMinimum)
+                    // #292: next_45_days_minimum is the lowest balance expected in the next 45 days, not a commitment total.
+                    FigureRow(label: tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"), amount: center.safeToSpend?.next45DaysMinimum)
                 }
                 .dincrCard()
 

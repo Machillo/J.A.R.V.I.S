@@ -1,0 +1,2745 @@
+{
+  "$comment": "STORE sample for the store screenshots. inputs: StoreGoldenTest.kt (from StoreSample.kt). engine: backend/tests/test_store_sample_engine.py (real backend engines). Do not edit by hand.",
+  "es": {
+    "inputs": {
+      "today": "2026-09-28",
+      "profile": {
+        "income_type": "fixed",
+        "fixed_monthly_salary": 865000,
+        "pay_frequency": "biweekly",
+        "essential_monthly_expenses": 420000,
+        "liquid_savings": 240000,
+        "emergency_fund_target": 600000
+      },
+      "movements": [
+        {
+          "movement_id": "salary:1",
+          "source_id": 1,
+          "origin": "salary",
+          "transaction_date": "2026-09-15",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:2",
+          "source_id": 2,
+          "origin": "salary",
+          "transaction_date": "2026-09-28",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:3",
+          "source_id": 3,
+          "origin": "expense",
+          "transaction_date": "2026-09-02",
+          "description": "Alquiler",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Vivienda",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:4",
+          "source_id": 4,
+          "origin": "expense",
+          "transaction_date": "2026-09-04",
+          "description": "Supermercado",
+          "amount": 46300,
+          "transaction_type": "expense",
+          "category": "Comida",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:5",
+          "source_id": 5,
+          "origin": "expense",
+          "transaction_date": "2026-09-06",
+          "description": "Luz y agua",
+          "amount": 31800,
+          "transaction_type": "expense",
+          "category": "Servicios",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:6",
+          "source_id": 6,
+          "origin": "expense",
+          "transaction_date": "2026-09-08",
+          "description": "Internet del hogar",
+          "amount": 24900,
+          "transaction_type": "expense",
+          "category": "Servicios",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:7",
+          "source_id": 7,
+          "origin": "expense",
+          "transaction_date": "2026-09-11",
+          "description": "Gasolina",
+          "amount": 30000,
+          "transaction_type": "expense",
+          "category": "Transporte",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:8",
+          "source_id": 8,
+          "origin": "expense",
+          "transaction_date": "2026-09-13",
+          "description": "Farmacia",
+          "amount": 9800,
+          "transaction_type": "expense",
+          "category": "Salud",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:9",
+          "source_id": 9,
+          "origin": "expense",
+          "transaction_date": "2026-09-17",
+          "description": "Supermercado",
+          "amount": 52450,
+          "transaction_type": "expense",
+          "category": "Comida",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:10",
+          "source_id": 10,
+          "origin": "expense",
+          "transaction_date": "2026-09-21",
+          "description": "Gasolina",
+          "amount": 25000,
+          "transaction_type": "expense",
+          "category": "Transporte",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:11",
+          "source_id": 11,
+          "origin": "expense",
+          "transaction_date": "2026-09-24",
+          "description": "Almuerzo",
+          "amount": 8500,
+          "transaction_type": "expense",
+          "category": "Restaurantes",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:12",
+          "source_id": 12,
+          "origin": "expense",
+          "transaction_date": "2026-09-26",
+          "description": "Supermercado",
+          "amount": 38900,
+          "transaction_type": "expense",
+          "category": "Comida",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:13",
+          "source_id": 13,
+          "origin": "expense",
+          "transaction_date": "2026-09-27",
+          "description": "Café",
+          "amount": 2300,
+          "transaction_type": "expense",
+          "category": "Restaurantes",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:14",
+          "source_id": 14,
+          "origin": "expense",
+          "transaction_date": "2026-09-19",
+          "description": "Suscripción de streaming",
+          "amount": 5075,
+          "transaction_type": "expense",
+          "category": "Entretenimiento",
+          "notes": "",
+          "editable": true,
+          "original_amount": 10,
+          "original_currency": "USD",
+          "exchange_rate": 507.5
+        },
+        {
+          "movement_id": "salary:15",
+          "source_id": 15,
+          "origin": "salary",
+          "transaction_date": "2026-08-15",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:16",
+          "source_id": 16,
+          "origin": "salary",
+          "transaction_date": "2026-08-28",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:17",
+          "source_id": 17,
+          "origin": "expense",
+          "transaction_date": "2026-08-02",
+          "description": "Alquiler",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Vivienda",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:18",
+          "source_id": 18,
+          "origin": "expense",
+          "transaction_date": "2026-08-05",
+          "description": "Supermercado",
+          "amount": 142300,
+          "transaction_type": "expense",
+          "category": "Comida",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:19",
+          "source_id": 19,
+          "origin": "expense",
+          "transaction_date": "2026-08-09",
+          "description": "Luz, agua e internet",
+          "amount": 58000,
+          "transaction_type": "expense",
+          "category": "Servicios",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:20",
+          "source_id": 20,
+          "origin": "expense",
+          "transaction_date": "2026-08-13",
+          "description": "Gasolina",
+          "amount": 61500,
+          "transaction_type": "expense",
+          "category": "Transporte",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:21",
+          "source_id": 21,
+          "origin": "expense",
+          "transaction_date": "2026-08-17",
+          "description": "Farmacia",
+          "amount": 18000,
+          "transaction_type": "expense",
+          "category": "Salud",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:22",
+          "source_id": 22,
+          "origin": "expense",
+          "transaction_date": "2026-08-21",
+          "description": "Cine",
+          "amount": 27400,
+          "transaction_type": "expense",
+          "category": "Entretenimiento",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:23",
+          "source_id": 23,
+          "origin": "salary",
+          "transaction_date": "2026-07-15",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:24",
+          "source_id": 24,
+          "origin": "salary",
+          "transaction_date": "2026-07-28",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:25",
+          "source_id": 25,
+          "origin": "expense",
+          "transaction_date": "2026-07-02",
+          "description": "Alquiler",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Vivienda",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:26",
+          "source_id": 26,
+          "origin": "expense",
+          "transaction_date": "2026-07-05",
+          "description": "Supermercado",
+          "amount": 151800,
+          "transaction_type": "expense",
+          "category": "Comida",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:27",
+          "source_id": 27,
+          "origin": "expense",
+          "transaction_date": "2026-07-09",
+          "description": "Luz, agua e internet",
+          "amount": 56500,
+          "transaction_type": "expense",
+          "category": "Servicios",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:28",
+          "source_id": 28,
+          "origin": "expense",
+          "transaction_date": "2026-07-13",
+          "description": "Gasolina",
+          "amount": 64200,
+          "transaction_type": "expense",
+          "category": "Transporte",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:29",
+          "source_id": 29,
+          "origin": "expense",
+          "transaction_date": "2026-07-17",
+          "description": "Restaurante",
+          "amount": 33900,
+          "transaction_type": "expense",
+          "category": "Restaurantes",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:30",
+          "source_id": 30,
+          "origin": "expense",
+          "transaction_date": "2026-07-21",
+          "description": "Cine",
+          "amount": 22000,
+          "transaction_type": "expense",
+          "category": "Entretenimiento",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:31",
+          "source_id": 31,
+          "origin": "salary",
+          "transaction_date": "2026-06-15",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:32",
+          "source_id": 32,
+          "origin": "salary",
+          "transaction_date": "2026-06-28",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:33",
+          "source_id": 33,
+          "origin": "expense",
+          "transaction_date": "2026-06-02",
+          "description": "Alquiler",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Vivienda",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:34",
+          "source_id": 34,
+          "origin": "expense",
+          "transaction_date": "2026-06-05",
+          "description": "Supermercado",
+          "amount": 138900,
+          "transaction_type": "expense",
+          "category": "Comida",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:35",
+          "source_id": 35,
+          "origin": "expense",
+          "transaction_date": "2026-06-09",
+          "description": "Luz, agua e internet",
+          "amount": 59800,
+          "transaction_type": "expense",
+          "category": "Servicios",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:36",
+          "source_id": 36,
+          "origin": "expense",
+          "transaction_date": "2026-06-13",
+          "description": "Gasolina",
+          "amount": 58700,
+          "transaction_type": "expense",
+          "category": "Transporte",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:37",
+          "source_id": 37,
+          "origin": "expense",
+          "transaction_date": "2026-06-17",
+          "description": "Consulta médica",
+          "amount": 42500,
+          "transaction_type": "expense",
+          "category": "Salud",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:38",
+          "source_id": 38,
+          "origin": "expense",
+          "transaction_date": "2026-06-21",
+          "description": "Ropa",
+          "amount": 36000,
+          "transaction_type": "expense",
+          "category": "Compras",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:39",
+          "source_id": 39,
+          "origin": "salary",
+          "transaction_date": "2026-05-15",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:40",
+          "source_id": 40,
+          "origin": "salary",
+          "transaction_date": "2026-05-28",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:41",
+          "source_id": 41,
+          "origin": "expense",
+          "transaction_date": "2026-05-02",
+          "description": "Alquiler",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Vivienda",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:42",
+          "source_id": 42,
+          "origin": "expense",
+          "transaction_date": "2026-05-05",
+          "description": "Supermercado",
+          "amount": 147600,
+          "transaction_type": "expense",
+          "category": "Comida",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:43",
+          "source_id": 43,
+          "origin": "expense",
+          "transaction_date": "2026-05-09",
+          "description": "Luz, agua e internet",
+          "amount": 57200,
+          "transaction_type": "expense",
+          "category": "Servicios",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:44",
+          "source_id": 44,
+          "origin": "expense",
+          "transaction_date": "2026-05-13",
+          "description": "Gasolina",
+          "amount": 66100,
+          "transaction_type": "expense",
+          "category": "Transporte",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:45",
+          "source_id": 45,
+          "origin": "expense",
+          "transaction_date": "2026-05-17",
+          "description": "Restaurante",
+          "amount": 28400,
+          "transaction_type": "expense",
+          "category": "Restaurantes",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:46",
+          "source_id": 46,
+          "origin": "expense",
+          "transaction_date": "2026-05-21",
+          "description": "Cine",
+          "amount": 19500,
+          "transaction_type": "expense",
+          "category": "Entretenimiento",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:47",
+          "source_id": 47,
+          "origin": "salary",
+          "transaction_date": "2026-04-15",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:48",
+          "source_id": 48,
+          "origin": "salary",
+          "transaction_date": "2026-04-28",
+          "description": "Salario quincenal",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salario",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:49",
+          "source_id": 49,
+          "origin": "expense",
+          "transaction_date": "2026-04-02",
+          "description": "Alquiler",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Vivienda",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:50",
+          "source_id": 50,
+          "origin": "expense",
+          "transaction_date": "2026-04-05",
+          "description": "Supermercado",
+          "amount": 144100,
+          "transaction_type": "expense",
+          "category": "Comida",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:51",
+          "source_id": 51,
+          "origin": "expense",
+          "transaction_date": "2026-04-09",
+          "description": "Luz, agua e internet",
+          "amount": 58400,
+          "transaction_type": "expense",
+          "category": "Servicios",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:52",
+          "source_id": 52,
+          "origin": "expense",
+          "transaction_date": "2026-04-13",
+          "description": "Gasolina",
+          "amount": 60900,
+          "transaction_type": "expense",
+          "category": "Transporte",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:53",
+          "source_id": 53,
+          "origin": "expense",
+          "transaction_date": "2026-04-17",
+          "description": "Ropa",
+          "amount": 41200,
+          "transaction_type": "expense",
+          "category": "Compras",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:54",
+          "source_id": 54,
+          "origin": "expense",
+          "transaction_date": "2026-04-21",
+          "description": "Farmacia",
+          "amount": 12800,
+          "transaction_type": "expense",
+          "category": "Salud",
+          "notes": "",
+          "editable": true
+        }
+      ],
+      "debts": [
+        {
+          "id": 1,
+          "name": "Tarjeta principal",
+          "debt_type": "credit_card",
+          "total_amount": 750000,
+          "remaining_amount": 585000,
+          "monthly_payment": 45000,
+          "interest_rate": 36,
+          "payment_day": 3,
+          "next_payment_date": "2026-10-03"
+        },
+        {
+          "id": 2,
+          "name": "Préstamo del carro",
+          "debt_type": "loan",
+          "total_amount": 2400000,
+          "remaining_amount": 1560000,
+          "monthly_payment": 50000,
+          "interest_rate": 14.5,
+          "term_months": 48,
+          "payment_day": 1
+        }
+      ],
+      "goals": [
+        {
+          "id": 3,
+          "name": "Fondo de emergencia",
+          "target_amount": 600000,
+          "current_amount": 240000,
+          "target_date": "2027-05-28",
+          "priority": "high",
+          "status": "active"
+        }
+      ],
+      "recurring": [
+        {
+          "id": 5,
+          "name": "Internet del hogar",
+          "amount": 24900,
+          "category": "Servicios",
+          "item_type": "expense",
+          "frequency": "monthly",
+          "due_day": 8,
+          "is_active": true
+        }
+      ],
+      "budget_items": [
+        {
+          "category": "Comida",
+          "monthly_limit": 150000
+        },
+        {
+          "category": "Transporte",
+          "monthly_limit": 70000
+        },
+        {
+          "category": "Servicios",
+          "monthly_limit": 60000
+        },
+        {
+          "category": "Restaurantes",
+          "monthly_limit": 25000
+        },
+        {
+          "category": "Entretenimiento",
+          "monthly_limit": 30000
+        }
+      ],
+      "pending_notices": 2
+    },
+    "engine": {
+      "strategy_basic": {
+        "status": "healthy",
+        "priority": "debt",
+        "monthly_income": 865000.0,
+        "essential_expenses": 420000.0,
+        "minimum_debt_payments": 95000.0,
+        "strategic_margin": 350000.0,
+        "commitment_ratio": 59.5,
+        "allocations": [
+          {
+            "bucket": "debt_extra",
+            "label": "Abono extra a Tarjeta principal",
+            "amount": 350000.0,
+            "debt_id": 1
+          }
+        ],
+        "target_debt": {
+          "id": 1,
+          "name": "Tarjeta principal",
+          "remaining_amount": 585000,
+          "monthly_payment": 45000,
+          "interest_rate": 36,
+          "payment_day": 3
+        },
+        "recommendation": "Cubrí tus compromisos y dirigí el excedente a Tarjeta principal.",
+        "warnings": [],
+        "projection": {
+          "debt_id": 1,
+          "name": "Tarjeta principal",
+          "months": 2,
+          "baseline_months": 17,
+          "monthly_to_target": 395000.0
+        },
+        "simulation_extra": 0.0,
+        "optional_actions": [],
+        "next_paycheck": {
+          "pay_frequency": "biweekly",
+          "periods_per_month": 2.1667,
+          "estimated_paycheck": 399230.77,
+          "envelopes": [
+            {
+              "bucket": "essentials",
+              "label": "Gastos esenciales",
+              "amount": 193846.15
+            },
+            {
+              "bucket": "debt_minimums",
+              "label": "Cuotas de deuda",
+              "amount": 43846.15
+            },
+            {
+              "bucket": "debt_extra",
+              "label": "Abono extra a Tarjeta principal",
+              "amount": 161538.46,
+              "debt_id": 1
+            }
+          ],
+          "unassigned": 0.01
+        }
+      },
+      "strategy_vip": {
+        "status": "healthy",
+        "priority": "debt",
+        "monthly_income": 865000.0,
+        "essential_expenses": 420000.0,
+        "minimum_debt_payments": 95000.0,
+        "strategic_margin": 350000.0,
+        "commitment_ratio": 59.5,
+        "allocations": [
+          {
+            "bucket": "debt_extra",
+            "label": "Abono extra a Tarjeta principal",
+            "amount": 350000.0,
+            "debt_id": 1
+          }
+        ],
+        "target_debt": {
+          "id": 1,
+          "name": "Tarjeta principal",
+          "remaining_amount": 585000,
+          "monthly_payment": 45000,
+          "interest_rate": 36,
+          "payment_day": 3
+        },
+        "recommendation": "Cubrí tus compromisos y dirigí el excedente a Tarjeta principal.",
+        "warnings": [],
+        "projection": {
+          "debt_id": 1,
+          "name": "Tarjeta principal",
+          "months": 2,
+          "baseline_months": 17,
+          "monthly_to_target": 395000.0
+        },
+        "simulation_extra": 0.0,
+        "optional_actions": [],
+        "director_mode": true,
+        "strategy_preference": "balanced",
+        "vip_allocations": [
+          {
+            "bucket": "debt_extra",
+            "label": "Abono extra a Tarjeta principal",
+            "amount": 175000.0,
+            "debt_id": 1
+          },
+          {
+            "bucket": "emergency",
+            "label": "Fondo de emergencia",
+            "amount": 105000.0
+          },
+          {
+            "bucket": "goal",
+            "label": "Meta: Fondo de emergencia",
+            "amount": 70000.0,
+            "goal_id": 3
+          }
+        ],
+        "director_note": "DINCR coordinó deuda, seguridad, metas y tu mínimo personal según la prioridad elegida.",
+        "insights": {
+          "emergency_months": 0.6,
+          "emergency_progress": 40.0,
+          "goal_guidance": [
+            {
+              "id": 3,
+              "name": "Fondo de emergencia",
+              "priority": "high",
+              "remaining": 360000.0,
+              "target_date": "2027-05-28",
+              "monthly_needed": 45000.0
+            }
+          ],
+          "alerts": [
+            {
+              "level": "warning",
+              "code": "emergency_gap",
+              "message": "Tu fondo de emergencia está al 40.0% del objetivo."
+            }
+          ],
+          "total_debt": 2145000.0,
+          "active_goals": 1
+        },
+        "next_paycheck": {
+          "pay_frequency": "biweekly",
+          "periods_per_month": 2.1667,
+          "estimated_paycheck": 399230.77,
+          "envelopes": [
+            {
+              "bucket": "essentials",
+              "label": "Gastos esenciales",
+              "amount": 193846.15
+            },
+            {
+              "bucket": "debt_minimums",
+              "label": "Cuotas de deuda",
+              "amount": 43846.15
+            },
+            {
+              "bucket": "debt_extra",
+              "label": "Abono extra a Tarjeta principal",
+              "amount": 80769.23,
+              "debt_id": 1
+            },
+            {
+              "bucket": "emergency",
+              "label": "Fondo de emergencia",
+              "amount": 48461.54
+            },
+            {
+              "bucket": "goal",
+              "label": "Meta: Fondo de emergencia",
+              "amount": 32307.69,
+              "goal_id": 3
+            }
+          ],
+          "unassigned": 0.01
+        }
+      },
+      "command_center": {
+        "as_of": "2026-09-28",
+        "director": {
+          "priority": "emergency",
+          "headline": "Completar el fondo de emergencia",
+          "next_action": "Asigná ₡350,000 a esta prioridad.",
+          "data_complete": true
+        },
+        "score": {
+          "value": 67,
+          "label": "En progreso",
+          "factors": [
+            {
+              "label": "Flujo mensual",
+              "impact": "positive",
+              "value": 350000.0
+            },
+            {
+              "label": "Cobertura de reserva",
+              "impact": "warning",
+              "value": 0.5
+            },
+            {
+              "label": "Carga de deuda",
+              "impact": "positive",
+              "value": 11.0
+            },
+            {
+              "label": "Calidad de datos",
+              "impact": "positive",
+              "value": 80
+            }
+          ]
+        },
+        "goals": [
+          {
+            "id": 3,
+            "name": "Fondo de emergencia",
+            "target_amount": 600000,
+            "current_amount": 240000,
+            "target_date": "2027-05-28",
+            "priority": "high",
+            "remaining": 360000.0,
+            "months_left": 8,
+            "monthly_required": 45000.0,
+            "viable": true,
+            "alternative_months": 2
+          }
+        ],
+        "debt_planner": {
+          "strategies": [
+            {
+              "method": "avalanche",
+              "target": "Tarjeta principal",
+              "target_id": 1,
+              "monthly_to_target": 395000.0,
+              "months": 2,
+              "interest": 23776.5,
+              "principal": 585000.0
+            },
+            {
+              "method": "snowball",
+              "target": "Tarjeta principal",
+              "target_id": 1,
+              "monthly_to_target": 395000.0,
+              "months": 2,
+              "interest": 23776.5,
+              "principal": 585000.0
+            },
+            {
+              "method": "finva",
+              "target": "Tarjeta principal",
+              "target_id": 1,
+              "monthly_to_target": 395000.0,
+              "months": 2,
+              "interest": 23776.5,
+              "principal": 585000.0
+            }
+          ],
+          "recommended": {
+            "method": "avalanche",
+            "target": "Tarjeta principal",
+            "target_id": 1,
+            "monthly_to_target": 395000.0,
+            "months": 2,
+            "interest": 23776.5,
+            "principal": 585000.0
+          }
+        },
+        "safe_to_spend": {
+          "amount": 120100.0,
+          "monthly_margin": 350000.0,
+          "next_45_days_minimum": 120100.0
+        },
+        "alerts": [
+          {
+            "severity": "high",
+            "title": "Reserva menor a un mes",
+            "context": "La cobertura estimada es 0.5 meses.",
+            "action": "Protegé el siguiente excedente en el fondo de emergencia."
+          },
+          {
+            "severity": "medium",
+            "title": "Movimientos por revisar",
+            "context": "Hay 2 movimientos importados sin confirmar.",
+            "action": "Revisalos antes de confiar en el cierre mensual."
+          }
+        ],
+        "calendar": [
+          {
+            "date": "2026-10-01",
+            "kind": "debt",
+            "label": "Préstamo del carro",
+            "amount": 50000.0,
+            "projected_balance": 190000.0
+          },
+          {
+            "date": "2026-10-03",
+            "kind": "debt",
+            "label": "Tarjeta principal",
+            "amount": 45000.0,
+            "projected_balance": 145000.0
+          },
+          {
+            "date": "2026-10-08",
+            "kind": "expense",
+            "label": "Internet del hogar",
+            "amount": 24900.0,
+            "projected_balance": 120100.0
+          }
+        ],
+        "projections": [
+          {
+            "months": 1,
+            "cash": 590000.0,
+            "debt": 2050000.0,
+            "net_worth": -1460000.0,
+            "confidence": "medium"
+          },
+          {
+            "months": 3,
+            "cash": 1290000.0,
+            "debt": 1860000.0,
+            "net_worth": -570000.0,
+            "confidence": "medium"
+          },
+          {
+            "months": 6,
+            "cash": 2340000.0,
+            "debt": 1575000.0,
+            "net_worth": 765000.0,
+            "confidence": "medium"
+          },
+          {
+            "months": 12,
+            "cash": 4440000.0,
+            "debt": 1005000.0,
+            "net_worth": 3435000.0,
+            "confidence": "medium"
+          }
+        ],
+        "net_worth": {
+          "assets": 0,
+          "liabilities": 2145000.0,
+          "value": -2145000.0,
+          "accounts": []
+        },
+        "recurring": {
+          "items": [
+            {
+              "id": 5,
+              "name": "Internet del hogar",
+              "amount": 24900,
+              "category": "Servicios",
+              "item_type": "expense",
+              "frequency": "monthly",
+              "due_day": 8,
+              "is_active": true
+            }
+          ],
+          "detected": [],
+          "monthly_expenses": 24900.0,
+          "annual_expenses": 298800.0
+        },
+        "reports": {
+          "months": [
+            {
+              "month": "2025-10",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2025-11",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2025-12",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2026-01",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2026-02",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2026-03",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2026-04",
+              "income": 865000.0,
+              "expenses": 527400.0,
+              "debt_paid": 0.0,
+              "balance": 337600.0
+            },
+            {
+              "month": "2026-05",
+              "income": 865000.0,
+              "expenses": 528800.0,
+              "debt_paid": 0.0,
+              "balance": 336200.0
+            },
+            {
+              "month": "2026-06",
+              "income": 865000.0,
+              "expenses": 545900.0,
+              "debt_paid": 0.0,
+              "balance": 319100.0
+            },
+            {
+              "month": "2026-07",
+              "income": 865000.0,
+              "expenses": 538400.0,
+              "debt_paid": 0.0,
+              "balance": 326600.0
+            },
+            {
+              "month": "2026-08",
+              "income": 865000.0,
+              "expenses": 517200.0,
+              "debt_paid": 0.0,
+              "balance": 347800.0
+            },
+            {
+              "month": "2026-09",
+              "income": 865000.0,
+              "expenses": 485025.0,
+              "debt_paid": 0.0,
+              "balance": 379975.0
+            }
+          ],
+          "current": {
+            "month": "2026-09",
+            "income": 865000.0,
+            "expenses": 485025.0,
+            "debt_paid": 0.0,
+            "balance": 379975.0
+          },
+          "previous": {
+            "month": "2026-08",
+            "income": 865000.0,
+            "expenses": 517200.0,
+            "debt_paid": 0.0,
+            "balance": 347800.0
+          }
+        },
+        "variable_income": {
+          "estimated": 865000.0,
+          "conservative": 865000.0,
+          "variability_percent": 0.0,
+          "months_observed": 6
+        },
+        "automation": {
+          "confirmed": 0,
+          "review": 2,
+          "duplicates": 0
+        },
+        "roadmap": [
+          {
+            "order": 1,
+            "title": "Completar reserva",
+            "amount": 350000.0,
+            "why": "Protege tus obligaciones ante un imprevisto."
+          },
+          {
+            "order": 2,
+            "title": "Abonar a Tarjeta principal",
+            "amount": 350000.0,
+            "why": "Es el uso de menor costo financiero según saldo y tasa conocidos."
+          },
+          {
+            "order": 3,
+            "title": "Financiar Fondo de emergencia",
+            "amount": 45000.0,
+            "why": "Alinea el aporte con fecha y prioridad."
+          },
+          {
+            "order": 4,
+            "title": "Esperar para invertir",
+            "amount": 0,
+            "why": "Primero deben estar protegidos el flujo, la reserva y la deuda cara."
+          }
+        ],
+        "assumptions": [
+          "Montos en CRC para cálculos consolidados.",
+          "Proyecciones usan ingreso conservador y obligaciones conocidas.",
+          "Los escenarios no modifican datos reales."
+        ]
+      },
+      "budget": {
+        "income": 865000.0,
+        "debt_minimums": 95000.0,
+        "recurring_expenses": 24900.0,
+        "available_for_categories": 745100.0,
+        "is_proposal": false,
+        "items": [
+          {
+            "category": "Comida",
+            "monthly_limit": 150000,
+            "is_system": false,
+            "spent": 137650.0,
+            "remaining": 12350.0
+          },
+          {
+            "category": "Entretenimiento",
+            "monthly_limit": 30000,
+            "is_system": false,
+            "spent": 5075.0,
+            "remaining": 24925.0
+          },
+          {
+            "category": "Restaurantes",
+            "monthly_limit": 25000,
+            "is_system": false,
+            "spent": 10800.0,
+            "remaining": 14200.0
+          },
+          {
+            "category": "Servicios",
+            "monthly_limit": 60000,
+            "is_system": false,
+            "spent": 56700.0,
+            "remaining": 3300.0
+          },
+          {
+            "category": "Transporte",
+            "monthly_limit": 70000,
+            "is_system": false,
+            "spent": 55000.0,
+            "remaining": 15000.0
+          }
+        ],
+        "total_budgeted": 335000.0
+      },
+      "free_dashboard": {
+        "month": "2026-09",
+        "income": 865000.0,
+        "expenses": 485025.0,
+        "debt_paid": 0.0,
+        "debt_balance": 2145000.0,
+        "balance": 379975.0,
+        "available_after_commitments": 379975.0,
+        "categories": [
+          {
+            "category": "Vivienda",
+            "amount": 210000.0
+          },
+          {
+            "category": "Comida",
+            "amount": 137650.0
+          },
+          {
+            "category": "Servicios",
+            "amount": 56700.0
+          },
+          {
+            "category": "Transporte",
+            "amount": 55000.0
+          },
+          {
+            "category": "Restaurantes",
+            "amount": 10800.0
+          },
+          {
+            "category": "Salud",
+            "amount": 9800.0
+          },
+          {
+            "category": "Entretenimiento",
+            "amount": 5075.0
+          }
+        ],
+        "monthly_history": [
+          {
+            "month": "2026-04",
+            "income": 865000.0,
+            "expenses": 527400.0,
+            "debt_paid": 0.0,
+            "balance": 337600.0
+          },
+          {
+            "month": "2026-05",
+            "income": 865000.0,
+            "expenses": 528800.0,
+            "debt_paid": 0.0,
+            "balance": 336200.0
+          },
+          {
+            "month": "2026-06",
+            "income": 865000.0,
+            "expenses": 545900.0,
+            "debt_paid": 0.0,
+            "balance": 319100.0
+          },
+          {
+            "month": "2026-07",
+            "income": 865000.0,
+            "expenses": 538400.0,
+            "debt_paid": 0.0,
+            "balance": 326600.0
+          },
+          {
+            "month": "2026-08",
+            "income": 865000.0,
+            "expenses": 517200.0,
+            "debt_paid": 0.0,
+            "balance": 347800.0
+          },
+          {
+            "month": "2026-09",
+            "income": 865000.0,
+            "expenses": 485025.0,
+            "debt_paid": 0.0,
+            "balance": 379975.0
+          }
+        ]
+      }
+    }
+  },
+  "en": {
+    "inputs": {
+      "today": "2026-09-28",
+      "profile": {
+        "income_type": "fixed",
+        "fixed_monthly_salary": 865000,
+        "pay_frequency": "biweekly",
+        "essential_monthly_expenses": 420000,
+        "liquid_savings": 240000,
+        "emergency_fund_target": 600000
+      },
+      "movements": [
+        {
+          "movement_id": "salary:1",
+          "source_id": 1,
+          "origin": "salary",
+          "transaction_date": "2026-09-15",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:2",
+          "source_id": 2,
+          "origin": "salary",
+          "transaction_date": "2026-09-28",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:3",
+          "source_id": 3,
+          "origin": "expense",
+          "transaction_date": "2026-09-02",
+          "description": "Rent",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Housing",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:4",
+          "source_id": 4,
+          "origin": "expense",
+          "transaction_date": "2026-09-04",
+          "description": "Groceries",
+          "amount": 46300,
+          "transaction_type": "expense",
+          "category": "Food",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:5",
+          "source_id": 5,
+          "origin": "expense",
+          "transaction_date": "2026-09-06",
+          "description": "Power and water",
+          "amount": 31800,
+          "transaction_type": "expense",
+          "category": "Utilities",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:6",
+          "source_id": 6,
+          "origin": "expense",
+          "transaction_date": "2026-09-08",
+          "description": "Home internet",
+          "amount": 24900,
+          "transaction_type": "expense",
+          "category": "Utilities",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:7",
+          "source_id": 7,
+          "origin": "expense",
+          "transaction_date": "2026-09-11",
+          "description": "Gas",
+          "amount": 30000,
+          "transaction_type": "expense",
+          "category": "Transportation",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:8",
+          "source_id": 8,
+          "origin": "expense",
+          "transaction_date": "2026-09-13",
+          "description": "Pharmacy",
+          "amount": 9800,
+          "transaction_type": "expense",
+          "category": "Health",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:9",
+          "source_id": 9,
+          "origin": "expense",
+          "transaction_date": "2026-09-17",
+          "description": "Groceries",
+          "amount": 52450,
+          "transaction_type": "expense",
+          "category": "Food",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:10",
+          "source_id": 10,
+          "origin": "expense",
+          "transaction_date": "2026-09-21",
+          "description": "Gas",
+          "amount": 25000,
+          "transaction_type": "expense",
+          "category": "Transportation",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:11",
+          "source_id": 11,
+          "origin": "expense",
+          "transaction_date": "2026-09-24",
+          "description": "Lunch",
+          "amount": 8500,
+          "transaction_type": "expense",
+          "category": "Restaurants",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:12",
+          "source_id": 12,
+          "origin": "expense",
+          "transaction_date": "2026-09-26",
+          "description": "Groceries",
+          "amount": 38900,
+          "transaction_type": "expense",
+          "category": "Food",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:13",
+          "source_id": 13,
+          "origin": "expense",
+          "transaction_date": "2026-09-27",
+          "description": "Coffee",
+          "amount": 2300,
+          "transaction_type": "expense",
+          "category": "Restaurants",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:14",
+          "source_id": 14,
+          "origin": "expense",
+          "transaction_date": "2026-09-19",
+          "description": "Streaming subscription",
+          "amount": 5075,
+          "transaction_type": "expense",
+          "category": "Entertainment",
+          "notes": "",
+          "editable": true,
+          "original_amount": 10,
+          "original_currency": "USD",
+          "exchange_rate": 507.5
+        },
+        {
+          "movement_id": "salary:15",
+          "source_id": 15,
+          "origin": "salary",
+          "transaction_date": "2026-08-15",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:16",
+          "source_id": 16,
+          "origin": "salary",
+          "transaction_date": "2026-08-28",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:17",
+          "source_id": 17,
+          "origin": "expense",
+          "transaction_date": "2026-08-02",
+          "description": "Rent",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Housing",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:18",
+          "source_id": 18,
+          "origin": "expense",
+          "transaction_date": "2026-08-05",
+          "description": "Groceries",
+          "amount": 142300,
+          "transaction_type": "expense",
+          "category": "Food",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:19",
+          "source_id": 19,
+          "origin": "expense",
+          "transaction_date": "2026-08-09",
+          "description": "Power, water and internet",
+          "amount": 58000,
+          "transaction_type": "expense",
+          "category": "Utilities",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:20",
+          "source_id": 20,
+          "origin": "expense",
+          "transaction_date": "2026-08-13",
+          "description": "Gas",
+          "amount": 61500,
+          "transaction_type": "expense",
+          "category": "Transportation",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:21",
+          "source_id": 21,
+          "origin": "expense",
+          "transaction_date": "2026-08-17",
+          "description": "Pharmacy",
+          "amount": 18000,
+          "transaction_type": "expense",
+          "category": "Health",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:22",
+          "source_id": 22,
+          "origin": "expense",
+          "transaction_date": "2026-08-21",
+          "description": "Movies",
+          "amount": 27400,
+          "transaction_type": "expense",
+          "category": "Entertainment",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:23",
+          "source_id": 23,
+          "origin": "salary",
+          "transaction_date": "2026-07-15",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:24",
+          "source_id": 24,
+          "origin": "salary",
+          "transaction_date": "2026-07-28",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:25",
+          "source_id": 25,
+          "origin": "expense",
+          "transaction_date": "2026-07-02",
+          "description": "Rent",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Housing",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:26",
+          "source_id": 26,
+          "origin": "expense",
+          "transaction_date": "2026-07-05",
+          "description": "Groceries",
+          "amount": 151800,
+          "transaction_type": "expense",
+          "category": "Food",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:27",
+          "source_id": 27,
+          "origin": "expense",
+          "transaction_date": "2026-07-09",
+          "description": "Power, water and internet",
+          "amount": 56500,
+          "transaction_type": "expense",
+          "category": "Utilities",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:28",
+          "source_id": 28,
+          "origin": "expense",
+          "transaction_date": "2026-07-13",
+          "description": "Gas",
+          "amount": 64200,
+          "transaction_type": "expense",
+          "category": "Transportation",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:29",
+          "source_id": 29,
+          "origin": "expense",
+          "transaction_date": "2026-07-17",
+          "description": "Restaurant",
+          "amount": 33900,
+          "transaction_type": "expense",
+          "category": "Restaurants",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:30",
+          "source_id": 30,
+          "origin": "expense",
+          "transaction_date": "2026-07-21",
+          "description": "Movies",
+          "amount": 22000,
+          "transaction_type": "expense",
+          "category": "Entertainment",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:31",
+          "source_id": 31,
+          "origin": "salary",
+          "transaction_date": "2026-06-15",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:32",
+          "source_id": 32,
+          "origin": "salary",
+          "transaction_date": "2026-06-28",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:33",
+          "source_id": 33,
+          "origin": "expense",
+          "transaction_date": "2026-06-02",
+          "description": "Rent",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Housing",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:34",
+          "source_id": 34,
+          "origin": "expense",
+          "transaction_date": "2026-06-05",
+          "description": "Groceries",
+          "amount": 138900,
+          "transaction_type": "expense",
+          "category": "Food",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:35",
+          "source_id": 35,
+          "origin": "expense",
+          "transaction_date": "2026-06-09",
+          "description": "Power, water and internet",
+          "amount": 59800,
+          "transaction_type": "expense",
+          "category": "Utilities",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:36",
+          "source_id": 36,
+          "origin": "expense",
+          "transaction_date": "2026-06-13",
+          "description": "Gas",
+          "amount": 58700,
+          "transaction_type": "expense",
+          "category": "Transportation",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:37",
+          "source_id": 37,
+          "origin": "expense",
+          "transaction_date": "2026-06-17",
+          "description": "Doctor visit",
+          "amount": 42500,
+          "transaction_type": "expense",
+          "category": "Health",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:38",
+          "source_id": 38,
+          "origin": "expense",
+          "transaction_date": "2026-06-21",
+          "description": "Clothes",
+          "amount": 36000,
+          "transaction_type": "expense",
+          "category": "Shopping",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:39",
+          "source_id": 39,
+          "origin": "salary",
+          "transaction_date": "2026-05-15",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:40",
+          "source_id": 40,
+          "origin": "salary",
+          "transaction_date": "2026-05-28",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:41",
+          "source_id": 41,
+          "origin": "expense",
+          "transaction_date": "2026-05-02",
+          "description": "Rent",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Housing",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:42",
+          "source_id": 42,
+          "origin": "expense",
+          "transaction_date": "2026-05-05",
+          "description": "Groceries",
+          "amount": 147600,
+          "transaction_type": "expense",
+          "category": "Food",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:43",
+          "source_id": 43,
+          "origin": "expense",
+          "transaction_date": "2026-05-09",
+          "description": "Power, water and internet",
+          "amount": 57200,
+          "transaction_type": "expense",
+          "category": "Utilities",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:44",
+          "source_id": 44,
+          "origin": "expense",
+          "transaction_date": "2026-05-13",
+          "description": "Gas",
+          "amount": 66100,
+          "transaction_type": "expense",
+          "category": "Transportation",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:45",
+          "source_id": 45,
+          "origin": "expense",
+          "transaction_date": "2026-05-17",
+          "description": "Restaurant",
+          "amount": 28400,
+          "transaction_type": "expense",
+          "category": "Restaurants",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:46",
+          "source_id": 46,
+          "origin": "expense",
+          "transaction_date": "2026-05-21",
+          "description": "Movies",
+          "amount": 19500,
+          "transaction_type": "expense",
+          "category": "Entertainment",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:47",
+          "source_id": 47,
+          "origin": "salary",
+          "transaction_date": "2026-04-15",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "salary:48",
+          "source_id": 48,
+          "origin": "salary",
+          "transaction_date": "2026-04-28",
+          "description": "Paycheck",
+          "amount": 432500,
+          "transaction_type": "income",
+          "category": "Salary",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:49",
+          "source_id": 49,
+          "origin": "expense",
+          "transaction_date": "2026-04-02",
+          "description": "Rent",
+          "amount": 210000,
+          "transaction_type": "expense",
+          "category": "Housing",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:50",
+          "source_id": 50,
+          "origin": "expense",
+          "transaction_date": "2026-04-05",
+          "description": "Groceries",
+          "amount": 144100,
+          "transaction_type": "expense",
+          "category": "Food",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:51",
+          "source_id": 51,
+          "origin": "expense",
+          "transaction_date": "2026-04-09",
+          "description": "Power, water and internet",
+          "amount": 58400,
+          "transaction_type": "expense",
+          "category": "Utilities",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:52",
+          "source_id": 52,
+          "origin": "expense",
+          "transaction_date": "2026-04-13",
+          "description": "Gas",
+          "amount": 60900,
+          "transaction_type": "expense",
+          "category": "Transportation",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:53",
+          "source_id": 53,
+          "origin": "expense",
+          "transaction_date": "2026-04-17",
+          "description": "Clothes",
+          "amount": 41200,
+          "transaction_type": "expense",
+          "category": "Shopping",
+          "notes": "",
+          "editable": true
+        },
+        {
+          "movement_id": "expense:54",
+          "source_id": 54,
+          "origin": "expense",
+          "transaction_date": "2026-04-21",
+          "description": "Pharmacy",
+          "amount": 12800,
+          "transaction_type": "expense",
+          "category": "Health",
+          "notes": "",
+          "editable": true
+        }
+      ],
+      "debts": [
+        {
+          "id": 1,
+          "name": "Main card",
+          "debt_type": "credit_card",
+          "total_amount": 750000,
+          "remaining_amount": 585000,
+          "monthly_payment": 45000,
+          "interest_rate": 36,
+          "payment_day": 3,
+          "next_payment_date": "2026-10-03"
+        },
+        {
+          "id": 2,
+          "name": "Car loan",
+          "debt_type": "loan",
+          "total_amount": 2400000,
+          "remaining_amount": 1560000,
+          "monthly_payment": 50000,
+          "interest_rate": 14.5,
+          "term_months": 48,
+          "payment_day": 1
+        }
+      ],
+      "goals": [
+        {
+          "id": 3,
+          "name": "Emergency fund",
+          "target_amount": 600000,
+          "current_amount": 240000,
+          "target_date": "2027-05-28",
+          "priority": "high",
+          "status": "active"
+        }
+      ],
+      "recurring": [
+        {
+          "id": 5,
+          "name": "Home internet",
+          "amount": 24900,
+          "category": "Utilities",
+          "item_type": "expense",
+          "frequency": "monthly",
+          "due_day": 8,
+          "is_active": true
+        }
+      ],
+      "budget_items": [
+        {
+          "category": "Food",
+          "monthly_limit": 150000
+        },
+        {
+          "category": "Transportation",
+          "monthly_limit": 70000
+        },
+        {
+          "category": "Utilities",
+          "monthly_limit": 60000
+        },
+        {
+          "category": "Restaurants",
+          "monthly_limit": 25000
+        },
+        {
+          "category": "Entertainment",
+          "monthly_limit": 30000
+        }
+      ],
+      "pending_notices": 2
+    },
+    "engine": {
+      "strategy_basic": {
+        "status": "healthy",
+        "priority": "debt",
+        "monthly_income": 865000.0,
+        "essential_expenses": 420000.0,
+        "minimum_debt_payments": 95000.0,
+        "strategic_margin": 350000.0,
+        "commitment_ratio": 59.5,
+        "allocations": [
+          {
+            "bucket": "debt_extra",
+            "label": "Extra payment to Main card",
+            "amount": 350000.0,
+            "debt_id": 1
+          }
+        ],
+        "target_debt": {
+          "id": 1,
+          "name": "Main card",
+          "remaining_amount": 585000,
+          "monthly_payment": 45000,
+          "interest_rate": 36,
+          "payment_day": 3
+        },
+        "recommendation": "Cover your commitments and send the surplus to Main card.",
+        "warnings": [],
+        "projection": {
+          "debt_id": 1,
+          "name": "Main card",
+          "months": 2,
+          "baseline_months": 17,
+          "monthly_to_target": 395000.0
+        },
+        "simulation_extra": 0.0,
+        "optional_actions": [],
+        "next_paycheck": {
+          "pay_frequency": "biweekly",
+          "periods_per_month": 2.1667,
+          "estimated_paycheck": 399230.77,
+          "envelopes": [
+            {
+              "bucket": "essentials",
+              "label": "Essential expenses",
+              "amount": 193846.15
+            },
+            {
+              "bucket": "debt_minimums",
+              "label": "Debt payments",
+              "amount": 43846.15
+            },
+            {
+              "bucket": "debt_extra",
+              "label": "Extra payment to Main card",
+              "amount": 161538.46,
+              "debt_id": 1
+            }
+          ],
+          "unassigned": 0.01
+        }
+      },
+      "strategy_vip": {
+        "status": "healthy",
+        "priority": "debt",
+        "monthly_income": 865000.0,
+        "essential_expenses": 420000.0,
+        "minimum_debt_payments": 95000.0,
+        "strategic_margin": 350000.0,
+        "commitment_ratio": 59.5,
+        "allocations": [
+          {
+            "bucket": "debt_extra",
+            "label": "Extra payment to Main card",
+            "amount": 350000.0,
+            "debt_id": 1
+          }
+        ],
+        "target_debt": {
+          "id": 1,
+          "name": "Main card",
+          "remaining_amount": 585000,
+          "monthly_payment": 45000,
+          "interest_rate": 36,
+          "payment_day": 3
+        },
+        "recommendation": "Cover your commitments and send the surplus to Main card.",
+        "warnings": [],
+        "projection": {
+          "debt_id": 1,
+          "name": "Main card",
+          "months": 2,
+          "baseline_months": 17,
+          "monthly_to_target": 395000.0
+        },
+        "simulation_extra": 0.0,
+        "optional_actions": [],
+        "director_mode": true,
+        "strategy_preference": "balanced",
+        "vip_allocations": [
+          {
+            "bucket": "debt_extra",
+            "label": "Extra payment to Main card",
+            "amount": 175000.0,
+            "debt_id": 1
+          },
+          {
+            "bucket": "emergency",
+            "label": "Emergency fund",
+            "amount": 105000.0
+          },
+          {
+            "bucket": "goal",
+            "label": "Goal: Emergency fund",
+            "amount": 70000.0,
+            "goal_id": 3
+          }
+        ],
+        "director_note": "DINCR coordinated debt, safety, goals, and your personal minimum based on your chosen priority.",
+        "insights": {
+          "emergency_months": 0.6,
+          "emergency_progress": 40.0,
+          "goal_guidance": [
+            {
+              "id": 3,
+              "name": "Emergency fund",
+              "priority": "high",
+              "remaining": 360000.0,
+              "target_date": "2027-05-28",
+              "monthly_needed": 45000.0
+            }
+          ],
+          "alerts": [
+            {
+              "level": "warning",
+              "code": "emergency_gap",
+              "message": "Your emergency fund is at 40.0% of the target."
+            }
+          ],
+          "total_debt": 2145000.0,
+          "active_goals": 1
+        },
+        "next_paycheck": {
+          "pay_frequency": "biweekly",
+          "periods_per_month": 2.1667,
+          "estimated_paycheck": 399230.77,
+          "envelopes": [
+            {
+              "bucket": "essentials",
+              "label": "Essential expenses",
+              "amount": 193846.15
+            },
+            {
+              "bucket": "debt_minimums",
+              "label": "Debt payments",
+              "amount": 43846.15
+            },
+            {
+              "bucket": "debt_extra",
+              "label": "Extra payment to Main card",
+              "amount": 80769.23,
+              "debt_id": 1
+            },
+            {
+              "bucket": "emergency",
+              "label": "Emergency fund",
+              "amount": 48461.54
+            },
+            {
+              "bucket": "goal",
+              "label": "Goal: Emergency fund",
+              "amount": 32307.69,
+              "goal_id": 3
+            }
+          ],
+          "unassigned": 0.01
+        }
+      },
+      "command_center": {
+        "as_of": "2026-09-28",
+        "director": {
+          "priority": "emergency",
+          "headline": "Complete the emergency fund",
+          "next_action": "Assign ₡350,000 to this priority.",
+          "data_complete": true
+        },
+        "score": {
+          "value": 67,
+          "label": "In progress",
+          "factors": [
+            {
+              "label": "Monthly cash flow",
+              "impact": "positive",
+              "value": 350000.0
+            },
+            {
+              "label": "Reserve coverage",
+              "impact": "warning",
+              "value": 0.5
+            },
+            {
+              "label": "Debt load",
+              "impact": "positive",
+              "value": 11.0
+            },
+            {
+              "label": "Data quality",
+              "impact": "positive",
+              "value": 80
+            }
+          ]
+        },
+        "goals": [
+          {
+            "id": 3,
+            "name": "Emergency fund",
+            "target_amount": 600000,
+            "current_amount": 240000,
+            "target_date": "2027-05-28",
+            "priority": "high",
+            "remaining": 360000.0,
+            "months_left": 8,
+            "monthly_required": 45000.0,
+            "viable": true,
+            "alternative_months": 2
+          }
+        ],
+        "debt_planner": {
+          "strategies": [
+            {
+              "method": "avalanche",
+              "target": "Main card",
+              "target_id": 1,
+              "monthly_to_target": 395000.0,
+              "months": 2,
+              "interest": 23776.5,
+              "principal": 585000.0
+            },
+            {
+              "method": "snowball",
+              "target": "Main card",
+              "target_id": 1,
+              "monthly_to_target": 395000.0,
+              "months": 2,
+              "interest": 23776.5,
+              "principal": 585000.0
+            },
+            {
+              "method": "finva",
+              "target": "Main card",
+              "target_id": 1,
+              "monthly_to_target": 395000.0,
+              "months": 2,
+              "interest": 23776.5,
+              "principal": 585000.0
+            }
+          ],
+          "recommended": {
+            "method": "avalanche",
+            "target": "Main card",
+            "target_id": 1,
+            "monthly_to_target": 395000.0,
+            "months": 2,
+            "interest": 23776.5,
+            "principal": 585000.0
+          }
+        },
+        "safe_to_spend": {
+          "amount": 120100.0,
+          "monthly_margin": 350000.0,
+          "next_45_days_minimum": 120100.0
+        },
+        "alerts": [
+          {
+            "severity": "high",
+            "title": "Reserve below one month",
+            "context": "Estimated coverage is 0.5 months.",
+            "action": "Protect the next surplus in the emergency fund."
+          },
+          {
+            "severity": "medium",
+            "title": "Transactions to review",
+            "context": "There are 2 unconfirmed imported transactions.",
+            "action": "Review them before relying on the monthly close."
+          }
+        ],
+        "calendar": [
+          {
+            "date": "2026-10-01",
+            "kind": "debt",
+            "label": "Car loan",
+            "amount": 50000.0,
+            "projected_balance": 190000.0
+          },
+          {
+            "date": "2026-10-03",
+            "kind": "debt",
+            "label": "Main card",
+            "amount": 45000.0,
+            "projected_balance": 145000.0
+          },
+          {
+            "date": "2026-10-08",
+            "kind": "expense",
+            "label": "Home internet",
+            "amount": 24900.0,
+            "projected_balance": 120100.0
+          }
+        ],
+        "projections": [
+          {
+            "months": 1,
+            "cash": 590000.0,
+            "debt": 2050000.0,
+            "net_worth": -1460000.0,
+            "confidence": "medium"
+          },
+          {
+            "months": 3,
+            "cash": 1290000.0,
+            "debt": 1860000.0,
+            "net_worth": -570000.0,
+            "confidence": "medium"
+          },
+          {
+            "months": 6,
+            "cash": 2340000.0,
+            "debt": 1575000.0,
+            "net_worth": 765000.0,
+            "confidence": "medium"
+          },
+          {
+            "months": 12,
+            "cash": 4440000.0,
+            "debt": 1005000.0,
+            "net_worth": 3435000.0,
+            "confidence": "medium"
+          }
+        ],
+        "net_worth": {
+          "assets": 0,
+          "liabilities": 2145000.0,
+          "value": -2145000.0,
+          "accounts": []
+        },
+        "recurring": {
+          "items": [
+            {
+              "id": 5,
+              "name": "Home internet",
+              "amount": 24900,
+              "category": "Utilities",
+              "item_type": "expense",
+              "frequency": "monthly",
+              "due_day": 8,
+              "is_active": true
+            }
+          ],
+          "detected": [],
+          "monthly_expenses": 24900.0,
+          "annual_expenses": 298800.0
+        },
+        "reports": {
+          "months": [
+            {
+              "month": "2025-10",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2025-11",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2025-12",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2026-01",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2026-02",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2026-03",
+              "income": 0.0,
+              "expenses": 0.0,
+              "debt_paid": 0.0,
+              "balance": 0.0
+            },
+            {
+              "month": "2026-04",
+              "income": 865000.0,
+              "expenses": 527400.0,
+              "debt_paid": 0.0,
+              "balance": 337600.0
+            },
+            {
+              "month": "2026-05",
+              "income": 865000.0,
+              "expenses": 528800.0,
+              "debt_paid": 0.0,
+              "balance": 336200.0
+            },
+            {
+              "month": "2026-06",
+              "income": 865000.0,
+              "expenses": 545900.0,
+              "debt_paid": 0.0,
+              "balance": 319100.0
+            },
+            {
+              "month": "2026-07",
+              "income": 865000.0,
+              "expenses": 538400.0,
+              "debt_paid": 0.0,
+              "balance": 326600.0
+            },
+            {
+              "month": "2026-08",
+              "income": 865000.0,
+              "expenses": 517200.0,
+              "debt_paid": 0.0,
+              "balance": 347800.0
+            },
+            {
+              "month": "2026-09",
+              "income": 865000.0,
+              "expenses": 485025.0,
+              "debt_paid": 0.0,
+              "balance": 379975.0
+            }
+          ],
+          "current": {
+            "month": "2026-09",
+            "income": 865000.0,
+            "expenses": 485025.0,
+            "debt_paid": 0.0,
+            "balance": 379975.0
+          },
+          "previous": {
+            "month": "2026-08",
+            "income": 865000.0,
+            "expenses": 517200.0,
+            "debt_paid": 0.0,
+            "balance": 347800.0
+          }
+        },
+        "variable_income": {
+          "estimated": 865000.0,
+          "conservative": 865000.0,
+          "variability_percent": 0.0,
+          "months_observed": 6
+        },
+        "automation": {
+          "confirmed": 0,
+          "review": 2,
+          "duplicates": 0
+        },
+        "roadmap": [
+          {
+            "order": 1,
+            "title": "Complete emergency fund",
+            "amount": 350000.0,
+            "why": "It protects your obligations against the unexpected."
+          },
+          {
+            "order": 2,
+            "title": "Pay extra toward Main card",
+            "amount": 350000.0,
+            "why": "It is the lowest-cost use based on known balances and rates."
+          },
+          {
+            "order": 3,
+            "title": "Fund Emergency fund",
+            "amount": 45000.0,
+            "why": "It aligns the contribution with its date and priority."
+          },
+          {
+            "order": 4,
+            "title": "Wait before investing",
+            "amount": 0,
+            "why": "Cash flow, reserves, and expensive debt must be protected first."
+          }
+        ],
+        "assumptions": [
+          "Amounts in CRC for consolidated calculations.",
+          "Projections use conservative income and known obligations.",
+          "Scenarios don’t change real data."
+        ]
+      },
+      "budget": {
+        "income": 865000.0,
+        "debt_minimums": 95000.0,
+        "recurring_expenses": 24900.0,
+        "available_for_categories": 745100.0,
+        "is_proposal": false,
+        "items": [
+          {
+            "category": "Entertainment",
+            "monthly_limit": 30000,
+            "is_system": false,
+            "spent": 5075.0,
+            "remaining": 24925.0
+          },
+          {
+            "category": "Food",
+            "monthly_limit": 150000,
+            "is_system": false,
+            "spent": 137650.0,
+            "remaining": 12350.0
+          },
+          {
+            "category": "Restaurants",
+            "monthly_limit": 25000,
+            "is_system": false,
+            "spent": 10800.0,
+            "remaining": 14200.0
+          },
+          {
+            "category": "Transportation",
+            "monthly_limit": 70000,
+            "is_system": false,
+            "spent": 55000.0,
+            "remaining": 15000.0
+          },
+          {
+            "category": "Utilities",
+            "monthly_limit": 60000,
+            "is_system": false,
+            "spent": 56700.0,
+            "remaining": 3300.0
+          }
+        ],
+        "total_budgeted": 335000.0
+      },
+      "free_dashboard": {
+        "month": "2026-09",
+        "income": 865000.0,
+        "expenses": 485025.0,
+        "debt_paid": 0.0,
+        "debt_balance": 2145000.0,
+        "balance": 379975.0,
+        "available_after_commitments": 379975.0,
+        "categories": [
+          {
+            "category": "Housing",
+            "amount": 210000.0
+          },
+          {
+            "category": "Food",
+            "amount": 137650.0
+          },
+          {
+            "category": "Utilities",
+            "amount": 56700.0
+          },
+          {
+            "category": "Transportation",
+            "amount": 55000.0
+          },
+          {
+            "category": "Restaurants",
+            "amount": 10800.0
+          },
+          {
+            "category": "Health",
+            "amount": 9800.0
+          },
+          {
+            "category": "Entertainment",
+            "amount": 5075.0
+          }
+        ],
+        "monthly_history": [
+          {
+            "month": "2026-04",
+            "income": 865000.0,
+            "expenses": 527400.0,
+            "debt_paid": 0.0,
+            "balance": 337600.0
+          },
+          {
+            "month": "2026-05",
+            "income": 865000.0,
+            "expenses": 528800.0,
+            "debt_paid": 0.0,
+            "balance": 336200.0
+          },
+          {
+            "month": "2026-06",
+            "income": 865000.0,
+            "expenses": 545900.0,
+            "debt_paid": 0.0,
+            "balance": 319100.0
+          },
+          {
+            "month": "2026-07",
+            "income": 865000.0,
+            "expenses": 538400.0,
+            "debt_paid": 0.0,
+            "balance": 326600.0
+          },
+          {
+            "month": "2026-08",
+            "income": 865000.0,
+            "expenses": 517200.0,
+            "debt_paid": 0.0,
+            "balance": 347800.0
+          },
+          {
+            "month": "2026-09",
+            "income": 865000.0,
+            "expenses": 485025.0,
+            "debt_paid": 0.0,
+            "balance": 379975.0
+          }
+        ]
+      }
+    }
+  }
+}

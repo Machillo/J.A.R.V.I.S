@@ -5,9 +5,9 @@ import XCTest
 /// xcodebuild), so the regular UI-test run skips it.
 ///
 /// Each test opens the real app on the STORE sample (`-DincrFixtures store`, Debug only) with the
-/// Free plan, navigates like a user, waits for the loaded content and writes the screen to
-/// `<dir>/<es|en>/<DINCR_STORE_DEVICE: phone|tablet>/<id>.png`. Only screens the native iOS app
-/// really has are captured: Home, Transactions and the Plan hub (debts and goals).
+/// screen's plan (store-assets/config/screens.json), navigates like a user, waits for the loaded
+/// content and writes `<dir>/<es|en>/<DINCR_STORE_DEVICE: phone|tablet>/<id>.png`. The engine
+/// screens (Home VIP, budget, strategy) show the backend engines' own answers (StoreSample).
 @MainActor
 final class StoreScreenshots: XCTestCase {
     private struct Language: Sendable {
@@ -29,18 +29,31 @@ final class StoreScreenshots: XCTestCase {
         return URL(fileURLWithPath: dir).appendingPathComponent(language.id).appendingPathComponent(device)
     }
 
-    private func launch(_ language: Language) throws -> XCUIApplication {
+    private func launch(_ language: Language, plan: String) throws -> XCUIApplication {
         _ = try outputFolder(language)
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", "store", "-DincrSkipLogin", "-DincrPlan", "free",
+        app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", "store", "-DincrSkipLogin", "-DincrPlan", plan,
                                "-AppleLanguages", language.languages, "-AppleLocale", language.locale]
         app.launch()
         return app
     }
 
     private func wait(_ app: XCUIApplication, _ text: String) {
-        XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 15), "missing \"\(text)\"")
+        let element = app.staticTexts[text].exists ? app.staticTexts[text] : app.descendants(matching: .any)[text]
+        XCTAssertTrue(element.waitForExistence(timeout: 15), "missing \"\(text)\"")
+    }
+
+    private func open(_ app: XCUIApplication, _ identifier: String) {
+        let element = app.descendants(matching: .any)[identifier].firstMatch
+        XCTAssertTrue(element.waitForExistence(timeout: 15), "missing \(identifier)")
+        element.tap()
+    }
+
+    private func tab(_ app: XCUIApplication, _ title: String) {
+        let button = app.tabBars.buttons[title]
+        XCTAssertTrue(button.waitForExistence(timeout: 15), "missing tab \(title)")
+        button.tap()
     }
 
     private func capture(_ id: String, _ language: Language) throws {
@@ -50,35 +63,75 @@ final class StoreScreenshots: XCTestCase {
         try XCUIScreen.main.screenshot().pngRepresentation.write(to: folder.appendingPathComponent("\(id).png"))
     }
 
-    func testS02Overview() throws {
+    private func shoot(_ id: String, plan: String, _ steps: (XCUIApplication, Language) -> Void) throws {
         for language in Self.languages {
-            let app = try launch(language)
-            wait(app, language.pick("Disponible este mes", "Available this month"))
-            wait(app, language.pick("Ingresos y gastos", "Income and expenses"))
-            try capture("02-overview", language)
+            let app = try launch(language, plan: plan)
+            steps(app, language)
+            try capture(id, language)
             app.terminate()
+        }
+    }
+
+    func testS01Home() throws {
+        try shoot("01-home", plan: "vip") { app, l in
+            self.wait(app, l.pick("Podés gastar con tranquilidad", "Safe to spend"))
+            self.wait(app, l.pick("Tu prioridad", "Your priority"))
+        }
+    }
+
+    func testS02Overview() throws {
+        try shoot("02-overview", plan: "free") { app, l in
+            self.wait(app, l.pick("Disponible este mes", "Available this month"))
+            self.wait(app, l.pick("Ingresos y gastos", "Income and expenses"))
         }
     }
 
     func testS03Movements() throws {
-        for language in Self.languages {
-            let app = try launch(language)
-            wait(app, language.pick("Disponible este mes", "Available this month"))
-            app.tabBars.buttons[language.pick("Movimientos", "Transactions")].tap()
-            wait(app, language.pick("Café", "Coffee"))
-            try capture("03-movements", language)
-            app.terminate()
+        try shoot("03-movements", plan: "free") { app, l in
+            self.wait(app, l.pick("Disponible este mes", "Available this month"))
+            self.tab(app, l.pick("Movimientos", "Transactions"))
+            self.wait(app, l.pick("Café", "Coffee"))
         }
     }
 
     func testS04Debts() throws {
-        for language in Self.languages {
-            let app = try launch(language)
-            wait(app, language.pick("Disponible este mes", "Available this month"))
-            app.tabBars.buttons[language.pick("Plan", "Plan")].tap()
-            wait(app, language.pick("Préstamo del carro", "Car loan"))
-            try capture("04-debts", language)
-            app.terminate()
+        try shoot("04-debts", plan: "free") { app, l in
+            self.tab(app, "Plan")
+            self.open(app, "plan.debts")
+            self.wait(app, l.pick("Préstamo del carro", "Car loan"))
+        }
+    }
+
+    func testS05Goals() throws {
+        try shoot("05-goals", plan: "free") { app, l in
+            self.tab(app, "Plan")
+            self.open(app, "plan.goals")
+            self.wait(app, l.pick("Vacaciones", "Vacation"))
+        }
+    }
+
+    func testS06Budget() throws {
+        try shoot("06-budget", plan: "basic") { app, l in
+            self.tab(app, "Plan")
+            self.open(app, "plan.budget")
+            self.wait(app, l.pick("Total presupuestado", "Total budgeted"))
+            self.wait(app, "budget.edit")
+        }
+    }
+
+    func testS07Strategy() throws {
+        try shoot("07-strategy", plan: "basic") { app, l in
+            self.tab(app, "DINCR")
+            self.open(app, "advisor.strategy")
+            self.wait(app, l.pick("Margen para decidir", "Margin to decide"))
+        }
+    }
+
+    func testS08Mail() throws {
+        try shoot("08-mail", plan: "vip") { app, l in
+            self.tab(app, l.pick("Perfil", "Profile"))
+            self.open(app, "profile.mail")
+            self.wait(app, l.pick("Por revisar", "To review"))
         }
     }
 }
