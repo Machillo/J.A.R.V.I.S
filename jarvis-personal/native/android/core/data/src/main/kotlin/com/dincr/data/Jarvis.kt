@@ -16,16 +16,16 @@ object Jarvis {
     fun isAvailable(profile: Profile?): Boolean = profile?.isOwner == true
 
     /**
-     * The personal capabilities JARVIS brings back, in the recovery roadmap's order. J0 is only the
-     * shell: no section is ported yet, so each one opens a "being restored" screen. The step that
-     * ports a section makes it available here, with its own tests.
+     * The personal capabilities JARVIS brings back, in the recovery roadmap's order. A section not
+     * ported yet opens a "being restored" screen; the step that ports it makes it available here,
+     * with its own tests.
      */
     enum class Section(val wire: String) {
         CHAT("chat"), MEMORY("memory"), CALENDAR("calendar"), STRATEGY("strategy"), MONEY("money"),
         MONEY_CONTROL("money_control"), WEALTH("wealth"), RECORDS("records");
 
-        /** Ported to the native app (none yet). */
-        val isAvailable: Boolean get() = false
+        /** Ported to the native app: the chat (J1); the others still open "being restored". */
+        val isAvailable: Boolean get() = this == CHAT
 
         companion object {
             fun from(wire: String?): Section? = entries.firstOrNull { it.wire == wire }

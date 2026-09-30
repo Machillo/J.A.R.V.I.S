@@ -10,6 +10,9 @@ from backend.ai.chat_memory import (
     get_pending_action,
     update_pending_action,
 )
+from backend.core.events import add_event
+from backend.ai.memory_service import create_memory_item
+from backend.finance.fixed_expenses import apply_fixed_expense_plan
 from backend.finance.service import (
     add_bonus,
     add_debt,
@@ -17,6 +20,7 @@ from backend.finance.service import (
     add_payroll_event,
     add_salary,
     add_saving,
+    preview_payroll_event,
     set_employment_profile,
 )
 from backend.goals.service import add_financial_goal
@@ -151,7 +155,47 @@ ACTION_CONFIG = {
             "exchange_rate": "¿Qué tipo de cambio uso para los dólares?",
         },
     },
+    # Changes the chat used to save at once; now they are shown first and saved on "sí".
+    "create_calendar_event": {
+        "label": "evento",
+        "article": "este",
+        "required": ["title", "event_date"],
+        "optional_defaults": {},
+        "questions": {"title": "¿Cómo se llama el compromiso?", "event_date": "¿Para qué fecha y hora?"},
+    },
+    "create_memory": {
+        "label": "nota en memoria",
+        "required": ["content"],
+        "optional_defaults": {},
+        "questions": {"content": "¿Qué querés que recuerde?"},
+    },
+    "create_fixed_expense": {
+        "label": "gasto fijo",
+        "article": "este",
+        "required": ["name", "expected_amount"],
+        "optional_defaults": {"due_day": None},
+        "questions": {"name": "¿Cómo se llama el gasto fijo?", "expected_amount": "¿Cuál es el monto esperado?"},
+    },
+    "update_fixed_expense": {
+        "label": "cambio de gasto fijo",
+        "article": "este",
+        "required": ["fixed_expense_id", "name"],
+        "optional_defaults": {"expected_amount": None, "due_day": None},
+        "questions": {},
+    },
 }
+
+# Payload keys that drive the save but are not shown to the user.
+HIDDEN_FIELDS = {"fixed_expense_id"}
+# A pending action whose question got a message the router also reads as another request: JARVIS
+# asks which one it is. current_field becomes CLARIFY_FIELD; the message and the field it was asked
+# for wait in payload[CLARIFY_KEY]. The Owner answers with one of these phrases (native buttons).
+CLARIFY_FIELD = "clarify"
+CLARIFY_KEY = "_clarify"
+CLARIFY_ANSWER = "es la respuesta"
+CLARIFY_OTHER = "es otra consulta"
+# Payroll/bonus messages the chat used to save at once keep their historical reply once confirmed.
+DIRECT_MARK = "_direct"
 
 FIELD_LABELS = {
     "name": "nombre",
@@ -181,14 +225,20 @@ FIELD_LABELS = {
     "year": "año",
     "raw_text": "movimientos",
     "exchange_rate": "tipo de cambio",
+    "title": "título",
+    "event_date": "fecha y hora",
+    "content": "contenido",
+    "expected_amount": "monto esperado",
+    "due_day": "día de pago",
 }
 
 NUMERIC_FIELDS = {
     "total_amount", "remaining_amount", "monthly_payment", "interest_rate",
     "amount", "hours", "hourly_rate", "regular_hours_per_week",
     "overtime_multiplier", "holiday_multiplier", "target_amount", "current_amount", "exchange_rate",
+    "expected_amount",
 }
-INTEGER_FIELDS = {"term_months", "payment_day"}
+INTEGER_FIELDS = {"term_months", "payment_day", "due_day"}
 TYPE_ALIASES = {
     "ingreso": "income",
     "entrada": "income",
@@ -384,17 +434,23 @@ def _next_question(action_type: str, missing_fields: list[str]) -> str:
 
 def _format_payload(action_type: str, payload: dict[str, Any]) -> str:
     config = ACTION_CONFIG[action_type]
-    lines = [f"Voy a guardar esta {config['label']}:"]
+    lines = [f"Voy a guardar {config.get('article', 'esta')} {config['label']}:"]
     ordered = config["required"] + list(config["optional_defaults"].keys())
 
     for field in ordered:
         value = payload.get(field)
-        if value not in (None, ""):
+        if value not in (None, "") and field not in HIDDEN_FIELDS:
             label = FIELD_LABELS.get(field, field)
-            if isinstance(value, (int, float)) and field not in {"term_months", "payment_day", "hours", "regular_hours_per_week"}:
+            if isinstance(value, (int, float)) and field not in {"term_months", "payment_day", "hours", "regular_hours_per_week", "due_day"}:
                 lines.append(f"- {label}: ₡{value:,.2f}")
             else:
                 lines.append(f"- {label}: {value}")
+
+    if action_type == "create_payroll_event":
+        # What the event adds to (VGH: takes from) the payroll, with the formula add_payroll_event saves.
+        preview = preview_payroll_event(payload["event_type"], payload["hours"])
+        if preview.get("status") == "OK":
+            lines.append(f"- {FIELD_LABELS['amount']}: ₡{preview['amount']:,.2f}")
 
     lines.append("¿Confirmo y guardo? Responde sí o no.")
     return "\n".join(lines)
@@ -495,7 +551,76 @@ def _save_action(action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
             priority=final.get("priority", "medium"),
         )
 
+    if action_type == "create_calendar_event":
+        return add_event(title=final["title"], event_date=final["event_date"], event_type="personal",
+                         description=final.get("description") or final["title"])
+
+    if action_type == "create_memory":
+        return create_memory_item(content=final["content"], source="chat")
+
+    if action_type in {"create_fixed_expense", "update_fixed_expense"}:
+        operation = "create" if action_type == "create_fixed_expense" else "update"
+        return apply_fixed_expense_plan({**final, "operation": operation})
+
     raise ValueError(f"Acción no soportada: {action_type}")
+
+
+def _saved_message(action_type: str, payload: dict[str, Any], result: Any) -> str:
+    """The reply once a confirmed change is saved: the historical one for changes the chat used
+    to save at once, the generic one otherwise."""
+    if action_type == "create_calendar_event":
+        return f"Señor, listo. Guardé en calendario: {payload['title']} · {payload['event_date']}."
+    if action_type == "create_memory":
+        return "Listo, lo recordaré."
+    if action_type in {"create_fixed_expense", "update_fixed_expense"} and isinstance(result, dict):
+        return result.get("message") or "Listo. Guardé la información."
+    if payload.get(DIRECT_MARK) and action_type in {"create_bonus", "create_payroll_event"}:
+        from backend.ai.strategy_dashboard import build_local_strategy_blueprint
+
+        blueprint = build_local_strategy_blueprint()
+        if action_type == "create_bonus":
+            return f"Señor, bono registrado por ₡{payload['amount']:,.0f}. Regla del Director: ese extra va primero a la deuda prioritaria salvo que comprometa pagos básicos. Estrategia recalculada.".replace(",", ".")
+        labels = {"ot": "OT", "vgh": "VGH", "holiday": "feriado"}
+        event_label = labels.get(payload.get("event_type"), payload.get("event_type"))
+        return f"Señor, {event_label} registrado: {payload['hours']} horas. Ingreso proyectado actualizado: ₡{blueprint.get('monthly_income', 0):,.0f}. Sobrante proyectado: ₡{blueprint.get('estimated_extra_cash', 0):,.0f}.".replace(",", ".")
+    return "Listo. Guardé la información."
+
+
+def pending_prompt(action: dict[str, Any]) -> str:
+    """What the pending action is waiting for, in words ("¿Cómo se llama la meta?")."""
+    config = ACTION_CONFIG.get(action.get("action_type"))
+    if not config:
+        return "Tenés una acción pendiente."
+    field = action.get("current_field")
+    if field in (None, "confirm") or not action.get("missing_fields"):
+        return f"Tenés pendiente confirmar {config.get('article', 'esta')} {config['label']}."
+    question = config["questions"].get(field) or f"¿Cuál es el valor de {FIELD_LABELS.get(field, field)}?"
+    return f"Tenés una pregunta pendiente: {question}"
+
+
+def hold_for_clarification(action: dict[str, Any], user_message: str) -> dict[str, Any]:
+    """Keeps the pending action as it is and asks whether the message answers it or is another request."""
+    prompt = pending_prompt(action)
+    payload = dict(action.get("payload") or {})
+    payload[CLARIFY_KEY] = {"message": user_message, "field": action.get("current_field")}
+    update_pending_action(action["id"], payload, action.get("missing_fields") or [], CLARIFY_FIELD)
+    return {
+        "message": f"{prompt} ¿\"{user_message.strip()}\" es la respuesta o querés hacer otra consulta?",
+        "status": "PENDING",
+        "pending": True,
+        "action_type": action.get("action_type"),
+        "data": {"current_field": CLARIFY_FIELD, "held_message": user_message},
+    }
+
+
+def release_clarification(action: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Puts the pending action back on the field it was asking for; returns the held message."""
+    payload = dict(action.get("payload") or {})
+    held = payload.pop(CLARIFY_KEY, None) or {}
+    field = held.get("field")
+    missing = action.get("missing_fields") or []
+    update_pending_action(action["id"], payload, missing, field)
+    return str(held.get("message") or ""), {**action, "payload": payload, "current_field": field}
 
 
 def start_action(action_type: str, user_message: str, prefill_payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -555,9 +680,19 @@ def continue_pending_action(user_message: str) -> dict[str, Any] | None:
     if current_field == "confirm" or not missing:
         if _is_yes(user_message):
             result = _save_action(action_type, payload)
+            if isinstance(result, dict) and result.get("status") == "ERROR":
+                # Nothing was saved (e.g. no employment profile for a payroll event): say so.
+                finish_pending_action(action["id"], "cancelled")
+                return {
+                    "message": result.get("message") or "No pude guardar la información.",
+                    "status": "ERROR",
+                    "pending": False,
+                    "action_type": action_type,
+                    "data": result,
+                }
             finish_pending_action(action["id"], "completed")
             return {
-                "message": "Listo. Guardé la información.",
+                "message": _saved_message(action_type, payload, result),
                 "status": "OK",
                 "pending": False,
                 "action_type": action_type,

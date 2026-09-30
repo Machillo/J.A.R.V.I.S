@@ -85,7 +85,8 @@ def extract_title(text: str) -> str:
     return cleaned[:120] or "Actividad"
 
 
-def create_calendar_event_from_text(text: str) -> dict:
+def parse_calendar_event(text: str) -> dict:
+    """What a calendar message would save, without saving it (chat confirmation)."""
     event_date = extract_event_date(text)
     if not event_date:
         return {
@@ -93,8 +94,15 @@ def create_calendar_event_from_text(text: str) -> dict:
             "message": "Señor, ¿para qué fecha y hora desea guardar ese compromiso?",
             "pending": False,
         }
+    return {"status": "READY", "title": extract_title(text), "event_date": event_date, "description": text}
 
-    title = extract_title(text)
+
+def create_calendar_event_from_text(text: str) -> dict:
+    parsed = parse_calendar_event(text)
+    if parsed["status"] != "READY":
+        return parsed
+
+    title, event_date = parsed["title"], parsed["event_date"]
     event = add_event(title=title, event_date=event_date, event_type="personal", description=text)
     return {
         "status": "OK",

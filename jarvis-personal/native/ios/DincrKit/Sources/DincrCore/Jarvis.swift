@@ -13,9 +13,9 @@ public enum Jarvis {
     /// Whether the app offers JARVIS to this identity.
     public static func isAvailable(to profile: Profile?) -> Bool { profile?.isOwner == true }
 
-    /// The personal capabilities JARVIS brings back, in the recovery roadmap's order. J0 is only
-    /// the shell: no section is ported yet, so each one opens a "being restored" screen. The step
-    /// that ports a section makes it available here, with its own tests.
+    /// The personal capabilities JARVIS brings back, in the recovery roadmap's order. A section not
+    /// ported yet opens a "being restored" screen; the step that ports it makes it available here,
+    /// with its own tests.
     public enum Section: String, CaseIterable, Sendable, Identifiable, Hashable {
         case chat, memory, calendar, strategy, money
         case moneyControl = "money_control"
@@ -23,7 +23,7 @@ public enum Jarvis {
 
         public var id: String { rawValue }
 
-        /// Ported to the native app (none yet).
-        public var isAvailable: Bool { false }
+        /// Ported to the native app: the chat (J1); the others still open "being restored".
+        public var isAvailable: Bool { self == .chat }
     }
 }

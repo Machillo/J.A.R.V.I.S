@@ -27,10 +27,11 @@ final class JarvisAccessUITests: XCTestCase {
         for tab in ["Hoy", "Movimientos", "Plan", "DINCR", "Perfil"] { XCTAssertTrue(app.tabBars.buttons[tab].exists, tab) }
         XCTAssertTrue(element("profile.mail", in: app).exists)
         entry.tap()
-        let chat = element("jarvis.section.chat", in: app)
-        XCTAssertTrue(chat.waitForExistence(timeout: 5))
-        chat.tap()
-        // Nothing is ported yet: the section says so and shows no sample content.
+        let memory = element("jarvis.section.memory", in: app)
+        XCTAssertTrue(memory.waitForExistence(timeout: 5))
+        XCTAssertTrue(element("jarvis.section.chat", in: app).exists)
+        memory.tap()
+        // A section not ported yet says so and shows no sample content.
         XCTAssertTrue(element("jarvis.restoring", in: app).waitForExistence(timeout: 5))
     }
 

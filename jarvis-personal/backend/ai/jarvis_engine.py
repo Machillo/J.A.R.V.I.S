@@ -3,26 +3,37 @@ from __future__ import annotations
 import logging
 import re
 
-from backend.ai.action_flow import continue_pending_action, start_action, _save_action
-from backend.ai.chat_memory import finish_pending_action, get_pending_action
-from backend.ai.intent_router import ACTION_TYPES, detect_intent, is_pending_interrupt
-from backend.ai.memory_service import remember_from_message, search_memory_items
+from backend.ai.action_flow import (
+    CLARIFY_ANSWER,
+    CLARIFY_FIELD,
+    CLARIFY_OTHER,
+    DIRECT_MARK,
+    continue_pending_action,
+    hold_for_clarification,
+    pending_prompt,
+    release_clarification,
+    start_action,
+)
+from backend.ai.chat_memory import PendingActionKept, get_pending_action, keep_pending_action
+from backend.ai.intent_router import ACTION_TYPES, YES_NO_WORDS, detect_intent, normalize_message
+from backend.ai.memory_service import memory_content_from_message, search_memory_items
 from backend.ai.response_formatter import format_jarvis_response
 from backend.integrations.internet_search import internet_search
-from backend.tasks.calendar_service import calendar_summary, create_calendar_event_from_text
+from backend.tasks.calendar_service import calendar_summary, parse_calendar_event
 from backend.sports.service import get_sports_calendar_summary
 
 from backend.finance.service import (
     get_debts,
     get_net_worth_report,
     get_user_status,
+    preview_payroll_event,
 )
 
 from backend.goals.service import get_financial_goal_by_name
 from backend.advisor.service import analyze_spending_habits, get_financial_advice
 from backend.finance.strategic_engine import get_financial_engine_report, simulate_what_if
 from backend.finance.intelligence import plan_long_term_goal, get_debt_advisory
-from backend.finance.fixed_expenses import handle_fixed_expense_message
+from backend.finance.fixed_expenses import plan_fixed_expense_message
 from backend.ai.strategy_dashboard import build_local_strategy_blueprint
 
 logger = logging.getLogger(__name__)
@@ -253,10 +264,80 @@ def _format_financial_engine_message(report: dict) -> str:
     return "\n".join(lines)
 
 
+def _confirm_first(action_type: str, user_message: str, payload: dict, *, intent: str, source: str | None = None) -> dict:
+    """A change the chat understood: show what will be saved and wait for "sí" (action_flow)."""
+    action_result = start_action(action_type, user_message, prefill_payload=payload)
+    response = {
+        "message": action_result["message"],
+        "intent": intent,
+        "action_type": action_type,
+        "status": action_result.get("status", "PENDING"),
+        "pending": action_result.get("pending", True),
+        "data": action_result.get("data"),
+    }
+    if source:
+        response["source"] = source
+    return response
+
+
+def _pending_response(result: dict) -> dict:
+    return {
+        "message": result["message"],
+        "intent": "pending_action",
+        "action_type": result.get("action_type"),
+        "status": result.get("status", "OK"),
+        "pending": result.get("pending", False),
+        "data": result.get("data"),
+    }
+
+
+def _is_ambiguous(intent_result: dict, user_message: str) -> bool:
+    """A message waiting to fill a pending field that the router also reads as its own request
+    ("Fondo de emergencia", "septiembre", "estrategia"): JARVIS cannot know which one was meant."""
+    if normalize_message(user_message) in YES_NO_WORDS:
+        return False
+    return intent_result.get("intent") not in {"general", "unknown"}
+
+
+def _resolve_clarification(action: dict, user_message: str) -> dict:
+    """The Owner said whether the held message answers the pending action or is another request."""
+    held, restored = release_clarification(action)
+    choice = normalize_message(user_message)
+    if choice == CLARIFY_ANSWER:
+        # The held text, exactly as written, answers the field; the historical flow continues.
+        result = continue_pending_action(held)
+        return _pending_response(result) if result else _process(held, None)
+    if choice == CLARIFY_OTHER:
+        # Answered as a normal request; the pending action stays exactly where it was.
+        with keep_pending_action():
+            try:
+                response = dict(_process(held, None))
+            except PendingActionKept:
+                response = {
+                    "message": "Señor, primero terminemos o cancelemos lo pendiente antes de registrar algo nuevo.",
+                    "intent": "pending_action",
+                    "status": "BLOCKED",
+                    "pending": False,
+                    "data": None,
+                }
+        response["message"] = f"{response.get('message') or ''}\n\n{pending_prompt(restored)} Podés responderla o decir «cancelar»."
+        response["pending"] = True
+        response["pending_action"] = {"action_type": restored.get("action_type"), "current_field": restored.get("current_field")}
+        return response
+    # Anything else: the question is set aside and the message goes against the pending action as usual.
+    return _process(user_message, restored)
+
+
 def process_message(user_message: str):
+    pending_action = get_pending_action()
+    if pending_action and pending_action.get("current_field") == CLARIFY_FIELD:
+        return _resolve_clarification(pending_action, user_message)
+    return _process(user_message, pending_action)
+
+
+def _process(user_message: str, pending_action: dict | None):
     # Decisiones personales claras (compras/viajes) se resuelven primero con su
     # flujo local, antes de clasificar la intención, para evitar respuestas genéricas.
-    pending_action = get_pending_action()
     if pending_action and str(pending_action.get("action_type") or "").startswith("decision_"):
         pending_result = handle_decision_pending_action(pending_action, user_message)
         if pending_result:
@@ -276,21 +357,14 @@ def process_message(user_message: str):
         if strategy_request else detect_intent(user_message)
     )
 
-    # Si hay una acción pendiente, primero verificamos si el usuario está cambiando de tema.
-    # Esto evita que "busca Chimborazo" termine guardado como categoría o gasto.
-    if pending_action and is_pending_interrupt(intent_result, user_message):
-        finish_pending_action(pending_action["id"], "cancelled")
-    elif pending_action:
+    # Con una acción pendiente, un mensaje que el router también lee como otro pedido no se
+    # guarda como el dato ni cancela la acción: JARVIS pregunta cuál de los dos es.
+    if pending_action and _is_ambiguous(intent_result, user_message):
+        return _pending_response(hold_for_clarification(pending_action, user_message))
+    if pending_action:
         pending_result = continue_pending_action(user_message)
         if pending_result:
-            return {
-                "message": pending_result["message"],
-                "intent": "pending_action",
-                "action_type": pending_result.get("action_type"),
-                "status": pending_result.get("status", "OK"),
-                "pending": pending_result.get("pending", False),
-                "data": pending_result.get("data"),
-            }
+            return _pending_response(pending_result)
 
     # Strategy requests always use the same live engine as both strategy screens.
     # The owner chat must not ask a model to generate or override the plan.
@@ -354,25 +428,23 @@ def process_message(user_message: str):
 
     direct_payroll = _parse_direct_payroll_or_bonus(user_message)
     if direct_payroll:
+        # Same interpretation as always (OT, VGH, holiday, bonus); the change is now shown with
+        # its amount and saved only on "sí" (action_flow), with the historical reply.
         action_type = direct_payroll["action_type"]
-        payload = direct_payroll["payload"]
-        saved_action = _save_action(action_type, payload)
-        blueprint = build_local_strategy_blueprint()
-        if action_type == "create_bonus":
-            msg = f"Señor, bono registrado por ₡{payload['amount']:,.0f}. Regla del Director: ese extra va primero a la deuda prioritaria salvo que comprometa pagos básicos. Estrategia recalculada.".replace(",", ".")
-        else:
-            labels = {"ot": "OT", "vgh": "VGH", "holiday": "feriado"}
-            event_label = labels.get(payload.get("event_type"), payload.get("event_type"))
-            msg = f"Señor, {event_label} registrado: {payload['hours']} horas. Ingreso proyectado actualizado: ₡{blueprint.get('monthly_income', 0):,.0f}. Sobrante proyectado: ₡{blueprint.get('estimated_extra_cash', 0):,.0f}.".replace(",", ".")
-        return {
-            "message": msg,
-            "intent": action_type,
-            "action_type": action_type,
-            "status": "OK",
-            "pending": False,
-            "source": "local_direct_payroll_guard",
-            "data": {"action": saved_action, "strategy": blueprint},
-        }
+        payload = {**direct_payroll["payload"], DIRECT_MARK: True}
+        if action_type == "create_payroll_event":
+            preview = preview_payroll_event(payload["event_type"], payload["hours"])
+            if preview.get("status") != "OK":
+                return {
+                    "message": f"Señor, no puedo registrar ese evento: {preview.get('message', 'no pude calcularlo')}",
+                    "intent": action_type,
+                    "action_type": action_type,
+                    "status": "ERROR",
+                    "pending": False,
+                    "source": "local_direct_payroll_guard",
+                    "data": preview,
+                }
+        return _confirm_first(action_type, user_message, payload, intent=action_type, source="local_direct_payroll_guard")
 
     intent = intent_result.get("intent", "unknown")
     action_type = intent_result.get("action_type")
@@ -383,14 +455,17 @@ def process_message(user_message: str):
         return _internet_answer(user_message, query)
 
     if intent == "create_calendar_event":
-        calendar_result = create_calendar_event_from_text(entity or user_message)
-        return {
-            "message": calendar_result.get("message"),
-            "intent": "create_calendar_event",
-            "status": calendar_result.get("status", "OK"),
-            "pending": calendar_result.get("pending", False),
-            "data": calendar_result,
-        }
+        parsed = parse_calendar_event(entity or user_message)
+        if parsed["status"] != "READY":
+            return {
+                "message": parsed.get("message"),
+                "intent": "create_calendar_event",
+                "status": parsed.get("status", "OK"),
+                "pending": parsed.get("pending", False),
+                "data": parsed,
+            }
+        payload = {"title": parsed["title"], "event_date": parsed["event_date"], "description": parsed["description"]}
+        return _confirm_first("create_calendar_event", user_message, payload, intent="create_calendar_event")
 
     if intent == "calendar_summary":
         result = calendar_summary()
@@ -415,14 +490,8 @@ def process_message(user_message: str):
     if intent == "memory":
         text_lower = user_message.lower()
         if any(trigger in text_lower for trigger in ["recuerda que", "recorda que", "recordá que", "acuérdate", "acuerdate", "guarda en memoria", "agrega a memoria", "memoriza"]):
-            result = remember_from_message(user_message)
-            return {
-                "message": "Listo, lo recordaré.",
-                "intent": "memory",
-                "status": result.get("status", "OK"),
-                "pending": False,
-                "data": result,
-            }
+            payload = {"content": memory_content_from_message(user_message)}
+            return _confirm_first("create_memory", user_message, payload, intent="memory")
 
         memories = search_memory_items(user_message, limit=8)
         if not memories:
@@ -485,7 +554,11 @@ def process_message(user_message: str):
         }
 
     if intent == "fixed_expense":
-        result = handle_fixed_expense_message(user_message)
+        result = plan_fixed_expense_message(user_message)
+        if result["status"] == "READY":
+            action = "create_fixed_expense" if result["operation"] == "create" else "update_fixed_expense"
+            payload = {key: result.get(key) for key in ("fixed_expense_id", "name", "expected_amount", "due_day")}
+            return _confirm_first(action, user_message, payload, intent="fixed_expense")
         return {
             "message": result.get("message"),
             "intent": "fixed_expense",

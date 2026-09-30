@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
 
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
@@ -79,12 +81,36 @@ def get_pending_action() -> dict[str, Any] | None:
     return action
 
 
+class PendingActionKept(Exception):
+    """A new chat action was refused: the Owner's pending action is being kept (see keep_pending_action)."""
+
+
+_KEEP_PENDING_ACTION: ContextVar[bool] = ContextVar("jarvis_keep_pending_action", default=False)
+
+
+@contextmanager
+def keep_pending_action():
+    """While a message is answered as "otra consulta", the pending action it set aside must survive:
+    starting a new one (which would cancel it) raises PendingActionKept instead."""
+    token = _KEEP_PENDING_ACTION.set(True)
+    try:
+        yield
+    finally:
+        _KEEP_PENDING_ACTION.reset(token)
+
+
+def ensure_new_action_allowed() -> None:
+    if _KEEP_PENDING_ACTION.get():
+        raise PendingActionKept()
+
+
 def create_pending_action(
     action_type: str,
     payload: dict[str, Any] | None = None,
     missing_fields: list[str] | None = None,
     current_field: str | None = None,
 ) -> dict[str, Any]:
+    ensure_new_action_allowed()
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     session_id = get_or_create_chat_session()

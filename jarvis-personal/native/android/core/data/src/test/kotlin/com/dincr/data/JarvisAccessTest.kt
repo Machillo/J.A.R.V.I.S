@@ -53,9 +53,9 @@ class JarvisAccessTest {
         assertFalse(Jarvis.isAvailable(user.copy(subscription = Profile.Subscription(plan = "owner", status = "active"))))
     }
 
-    @Test fun noSectionIsPortedYet() {
-        // J0 is only the shell: every section opens a "being restored" screen.
-        assertTrue(Jarvis.Section.entries.none { it.isAvailable })
+    @Test fun onlyTheChatIsPortedSoFar() {
+        // J1 ports the chat; every other section still opens a "being restored" screen.
+        assertEquals(listOf(Jarvis.Section.CHAT), Jarvis.Section.entries.filter { it.isAvailable })
         // The same sections and wire names as iOS (`Jarvis.Section`).
         assertEquals(listOf("chat", "memory", "calendar", "strategy", "money", "money_control", "wealth", "records"), Jarvis.Section.entries.map { it.wire })
         assertEquals(Jarvis.Section.MONEY_CONTROL, Jarvis.Section.from("money_control"))

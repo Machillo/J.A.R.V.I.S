@@ -407,7 +407,9 @@ def _find_by_name(name: str) -> dict[str, Any] | None:
     return None
 
 
-def handle_fixed_expense_message(message: str) -> dict[str, Any]:
+def plan_fixed_expense_message(message: str) -> dict[str, Any]:
+    """What a fixed-expense chat message asks for, without writing (chat confirmation).
+    status READY + operation create/update is a change to confirm; any other answer is final."""
     text = _normalize(message)
 
     if any(word in text for word in ["lista", "estado", "status", "pendiente", "pagado", "recurrentes", "gastos fijos"]):
@@ -427,8 +429,8 @@ def handle_fixed_expense_message(message: str) -> dict[str, Any]:
                 break
         if not target:
             return {"status": "NEEDS_CLARIFICATION", "message": "¿Cuál gasto fijo desea actualizar?", "data": {}}
-        updated = update_fixed_expense(target["id"], expected_amount=amount, due_day=due_day)
-        return {"status": "OK", "message": f"Listo. Actualicé {updated['name']}.", "data": updated}
+        return {"status": "READY", "operation": "update", "fixed_expense_id": target["id"], "name": target["name"],
+                "expected_amount": amount, "due_day": due_day}
 
     if any(word in text for word in ["agrega", "agregar", "crea", "crear", "nuevo"]):
         if amount is None:
@@ -437,11 +439,25 @@ def handle_fixed_expense_message(message: str) -> dict[str, Any]:
         name = re.sub(r"(?:por|de)?\s*(₡|crc|colones?)?\s*\d{3,}(?:[.,]\d{2})?.*$", "", name, flags=re.I).strip(" .,;")
         if not name:
             return {"status": "NEEDS_NAME", "message": "¿Cómo se llama el gasto fijo?", "data": {}}
-        item = create_fixed_expense(name=name, category="Gastos fijos", expected_amount=amount, due_day=due_day, aliases=[name])
-        return {"status": "OK", "message": f"Listo. Guardé {name} como gasto fijo.", "data": item}
+        return {"status": "READY", "operation": "create", "name": name, "expected_amount": amount, "due_day": due_day}
 
     status = get_fixed_expense_status()
     return {"status": "OK", "message": format_fixed_expense_status(status), "data": status}
+
+
+def apply_fixed_expense_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    """Saves a READY plan from plan_fixed_expense_message (after the user confirmed it)."""
+    if plan["operation"] == "update":
+        updated = update_fixed_expense(plan["fixed_expense_id"], expected_amount=plan.get("expected_amount"), due_day=plan.get("due_day"))
+        return {"status": "OK", "message": f"Listo. Actualicé {updated['name']}.", "data": updated}
+    item = create_fixed_expense(name=plan["name"], category="Gastos fijos", expected_amount=plan["expected_amount"],
+                                due_day=plan.get("due_day"), aliases=[plan["name"]])
+    return {"status": "OK", "message": f"Listo. Guardé {plan['name']} como gasto fijo.", "data": item}
+
+
+def handle_fixed_expense_message(message: str) -> dict[str, Any]:
+    plan = plan_fixed_expense_message(message)
+    return apply_fixed_expense_plan(plan) if plan["status"] == "READY" else plan
 
 
 def format_fixed_expense_status(status: dict[str, Any]) -> str:

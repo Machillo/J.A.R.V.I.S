@@ -52,6 +52,12 @@ public struct DincrService: Sendable {
         try await client.getPublic("/product-ops/release-policy", query: [URLQueryItem(name: "platform", value: "ios"), URLQueryItem(name: "version", value: version)])
     }
 
+    /// JARVIS (Owner): one chat message and the engine's answer. A POST: never retried on its own
+    /// (a change is saved only after the Owner's "sí", itself a new message).
+    public func jarvisChat(_ message: String) async throws -> JarvisChatReply {
+        try await client.send("POST", "/jarvis/chat", body: JarvisChatRequest(message: message))
+    }
+
     public func supportTickets() async throws -> [SupportTicket] { try await client.get("/product-ops/feedback") }
 
     public func createSupportTicket(_ request: SupportRequest) async throws -> SupportCreated {

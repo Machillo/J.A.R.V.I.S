@@ -2,16 +2,16 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// JARVIS (recovery roadmap J0): the Owner's personal space inside DINCR, opened from the Profile
-/// hub. Only the server's role opens it (`Jarvis.isAvailable`), and the backend still decides every
-/// JARVIS request. J0 is the shell only: no section is ported yet, and each one says so instead of
-/// showing sample content (Android: `JarvisScreens.kt`).
+/// JARVIS: the Owner's personal space inside DINCR, opened from the Profile hub. Only the server's
+/// role opens it (`Jarvis.isAvailable`), and the backend still decides every JARVIS request. The
+/// chat is ported (J1); a section not ported yet says so instead of showing sample content
+/// (Android: `JarvisScreens.kt`).
 struct JarvisHubView: View {
     var body: some View {
         OwnerOnly {
             ScreenScroll(title: "JARVIS") {
-                Text(tx("Tus funciones personales vuelven a DINCR por etapas. Todavía ninguna está disponible en esta app.",
-                        "Your personal features are coming back to DINCR step by step. None is available in this app yet."))
+                Text(tx("Tus funciones personales vuelven a DINCR por etapas.",
+                        "Your personal features are coming back to DINCR step by step."))
                     .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
                 VStack(spacing: DincrSpacing.s2) {
                     ForEach(Jarvis.Section.allCases) { section in
@@ -28,21 +28,29 @@ struct JarvisHubView: View {
     }
 }
 
-/// A JARVIS section that is not ported yet: it says what is coming, never shows sample data.
+/// A JARVIS section: the ported one (chat), or a "being restored" screen that never shows sample data.
 struct JarvisSectionView: View {
     let section: Jarvis.Section
 
     var body: some View {
         OwnerOnly {
-            ScreenScroll(title: section.title) {
-                EmptyStateView(
-                    symbol: section.symbol,
-                    title: tx("En restauración", "Being restored"),
-                    message: tx("\(section.summary). Esta función todavía no está disponible en la app.",
-                                "\(section.summary). This feature isn’t available in the app yet.")
-                ) { EmptyView() }
-                .accessibilityIdentifier("jarvis.restoring")
+            if section == .chat {
+                JarvisChatView()
+            } else {
+                restoring
             }
+        }
+    }
+
+    private var restoring: some View {
+        ScreenScroll(title: section.title) {
+            EmptyStateView(
+                symbol: section.symbol,
+                title: tx("En restauración", "Being restored"),
+                message: tx("\(section.summary). Esta función todavía no está disponible en la app.",
+                            "\(section.summary). This feature isn’t available in the app yet.")
+            ) { EmptyView() }
+            .accessibilityIdentifier("jarvis.restoring")
         }
     }
 }

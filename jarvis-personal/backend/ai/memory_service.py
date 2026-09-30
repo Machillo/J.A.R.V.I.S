@@ -219,8 +219,13 @@ def create_memory_item(
     }
 
 
+def memory_content_from_message(user_message: str) -> str:
+    """What "recordá que…" would remember, without saving it (chat confirmation)."""
+    return _extract_memory_text(user_message)
+
+
 def remember_from_message(user_message: str) -> dict[str, Any]:
-    content = _extract_memory_text(user_message)
+    content = memory_content_from_message(user_message)
     return create_memory_item(content=content, source="chat")
 
 

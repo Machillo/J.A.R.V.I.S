@@ -40,7 +40,8 @@ in `docs/native/PARITY_MATRIX.md`.
   on top of it, JARVIS, its personal space (Profile → JARVIS; `Jarvis.swift` / `Jarvis.kt`). Only
   the role in `/auth/me` shows it; the backend still decides every request (`/jarvis/*` keeps its
   historical owner + admin access for the web Owner app, but the native JARVIS UI is Owner-only). JARVIS
-  sections are ported step by step (JARVIS recovery roadmap); until then each one says it is being
+  sections are ported step by step (JARVIS recovery roadmap; the chat since J1, `JarvisChatSession`,
+  session-only history, changes saved only after Confirmar); until then each one says it is being
   restored. Free, Basic and VIP never see it; an admin session sees a notice and no app. Owner-shaped
   endpoints (`/vip/strategy-dashboard`, `/vip/debt-advisory`, `PUT /vip/salvavidas`) are not used.
 - **Reads do not write.** Opening a screen never calls a write (no lifecycle snapshot POST).

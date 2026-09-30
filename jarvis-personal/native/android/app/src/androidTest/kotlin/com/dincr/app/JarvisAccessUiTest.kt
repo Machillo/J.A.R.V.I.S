@@ -69,8 +69,9 @@ class JarvisAccessUiTest {
         listOf(tx("Hoy", "Today"), tx("Movimientos", "Transactions"), "Plan", "DINCR", tx("Perfil", "Profile")).forEach { assertTrue(it, present(it)) }
         assertTrue(present(tx("Correos financieros", "Financial emails")))
         click("JARVIS")
-        click(tx("Chat", "Chat"))
-        // Nothing is ported yet: the section says so and shows no sample content.
+        assertTrue(present(tx("Chat", "Chat")))
+        click(tx("Memoria", "Memory"))
+        // A section not ported yet says so and shows no sample content.
         waitForText(tx("Esta función todavía no está disponible en la app.", "This feature isn’t available in the app yet."), substring = true)
     }
 
