@@ -70,8 +70,8 @@ Only the Supabase **anon/publishable** key is ever configured in the apps (git-i
 | `PUT /user-product/free/movements/{id}` | full replacement: `transaction_date`, `description`, `amount` (>0, ≤ 9 999 999 999.99), `transaction_type` (unchanged), `category`, `notes`. Never `currency`/`exchange_rate` | `{"status","movement_id"}` | 404 (deleted elsewhere → list refreshed), 422, 503 |
 | `DELETE /user-product/free/movements/{id}` | — | `{"status","movement_id"}` | 404 (already gone → list refreshed), 422, 503 |
 
-`/free/*` serves Free, Basic and VIP (feature minimum `free`). Owner/admin sessions stop at a
-notice.
+`/free/*` serves Free, Basic and VIP (feature minimum `free`). The Owner uses it at VIP level
+(plus JARVIS, `/jarvis/*`, owner only); admin sessions stop at a notice.
 
 ### RC endpoints (added after C4)
 

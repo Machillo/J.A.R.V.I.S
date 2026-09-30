@@ -71,6 +71,8 @@ struct MainTabView: View {
                     .navigationDestination(for: ProfileRoute.self) { route in
                         switch route {
                         case .mail: EmailMonitorView()
+                        case .jarvis: JarvisHubView()
+                        case .jarvisSection(let section): JarvisSectionView(section: section)
                         }
                     }
             }
@@ -80,7 +82,12 @@ struct MainTabView: View {
     }
 }
 
-enum ProfileRoute: Hashable { case mail }
+/// Routes of the Profile tab. JARVIS is the Owner's personal space (`Jarvis.isAvailable`).
+enum ProfileRoute: Hashable {
+    case mail
+    case jarvis
+    case jarvisSection(Jarvis.Section)
+}
 
 /// B5/B6/B7 and A1 — writes paused, subscription access notice, service health, optional update.
 private struct GlobalBanners: View {

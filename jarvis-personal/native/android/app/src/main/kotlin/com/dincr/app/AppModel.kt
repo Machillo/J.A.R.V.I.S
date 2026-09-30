@@ -48,7 +48,11 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 sealed interface AppEnvironment {
     data class Live(val apiUrl: String, val supabaseUrl: String, val anonKey: String) : AppEnvironment
-    data class Fixtures(val scenario: FakeBackend.Scenario, val plan: PlanTier, val skipLogin: Boolean, val latencyMs: Long = 350) : AppEnvironment
+    data class Fixtures(
+        val scenario: FakeBackend.Scenario, val plan: PlanTier, val skipLogin: Boolean, val latencyMs: Long = 350,
+        /** The role the fake server answers in /auth/me (role-matrix UI tests); never a live session's. */
+        val role: FakeBackend.Role = FakeBackend.Role.USER,
+    ) : AppEnvironment
     data class Unconfigured(val reason: LaunchPolicy.Reason) : AppEnvironment
 
     companion object {
@@ -71,6 +75,7 @@ sealed interface AppEnvironment {
                     intent?.getBooleanExtra("dincrSkipLogin", false) ?: false,
                     // UI tests pass dincrLatencyMs=0: Compose's test dispatcher does not advance simulated network delays.
                     intent?.getLongExtra("dincrLatencyMs", 350) ?: 350,
+                    FakeBackend.Role.entries.firstOrNull { it.wire == intent?.getStringExtra("dincrRole") } ?: FakeBackend.Role.USER,
                 )
             }
         }
@@ -200,7 +205,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             }
             is AppEnvironment.Fixtures -> {
                 sessions = SessionManager(null, InMemorySessionStore(if (environment.skipLogin) FIXTURE_SESSION else null))
-                api = DincrApi(ApiClient("https://fixtures.invalid", sessions, FakeBackend(environment.scenario, environment.plan, environment.latencyMs)))
+                api = DincrApi(ApiClient("https://fixtures.invalid", sessions, FakeBackend(environment.scenario, environment.plan, environment.latencyMs, role = environment.role)))
             }
             is AppEnvironment.Unconfigured -> {
                 _phase.value = Phase.Unconfigured(environment.reason)

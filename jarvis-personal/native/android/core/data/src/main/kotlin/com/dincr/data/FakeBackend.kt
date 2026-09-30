@@ -24,9 +24,16 @@ class FakeBackend(
     private val latencyMs: Long = 0,
     currentDate: LocalDate = LocalDate.now(),
     language: AppLanguage = AppLanguage.current(),
+    private val role: Role = Role.USER,
 ) : HttpTransport {
     /** STORE: the account of the store screenshots ([StoreSample]). */
     enum class Scenario { POPULATED, EMPTY, FAILING, NEW_USER, LEGAL_REQUIRED, CHOOSE_PLAN, STORE }
+
+    /**
+     * The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
+     * app still learns the role only from `/auth/me`, exactly as with the real backend.
+     */
+    enum class Role(val wire: String) { USER("user"), OWNER("owner"), ADMIN("admin") }
 
     private val store = if (scenario == Scenario.STORE) StoreSample(language) else null
     private val today: LocalDate = if (store != null) StoreSample.TODAY else currentDate
@@ -445,11 +452,13 @@ class FakeBackend(
 
     private fun sampleProfile(plan: PlanTier) = Profile(
         id = 1, email = if (scenario == Scenario.STORE) "ana.demo@example.com" else "persona@ejemplo.test",
-        displayName = when (scenario) { Scenario.NEW_USER -> null; Scenario.STORE -> "Ana"; else -> "Persona Ejemplo" }, role = "user",
+        displayName = when (scenario) { Scenario.NEW_USER -> null; Scenario.STORE -> "Ana"; else -> "Persona Ejemplo" }, role = role.wire,
         planSelected = scenario != Scenario.NEW_USER && scenario != Scenario.CHOOSE_PLAN, profileSetupCompleted = scenario != Scenario.NEW_USER,
         baseCurrency = "CRC", numberFormat = store?.numberFormat ?: "dot_comma", currencyPlacement = "before", entryCurrencies = listOf("CRC", "USD"), enabledCurrencies = listOf("CRC", "USD"),
         // STORE: a paid plan bought in the store (the backend records it as self_service), not a courtesy grant.
-        subscription = Profile.Subscription(plan.wire, plan.name.lowercase().replaceFirstChar { it.uppercase() }, "active",
+        // Owner: like the backend seed, the plan is VIP, granted with access_source owner.
+        subscription = if (role == Role.OWNER) Profile.Subscription("vip", "VIP", "active", "owner")
+        else Profile.Subscription(plan.wire, plan.name.lowercase().replaceFirstChar { it.uppercase() }, "active",
             if (plan == PlanTier.FREE || scenario == Scenario.STORE) "self_service" else "courtesy"),
         legal = Profile.Legal(required = scenario == Scenario.LEGAL_REQUIRED, termsVersion = "2026-09-23-v3", privacyVersion = "2026-09-25-v4"),
     )

@@ -36,7 +36,11 @@ in `docs/native/PARITY_MATRIX.md`.
   `docs/native/CURRENT_STATE_AUDIT.md` §5 as backend dependencies.
 - **Same API contract as the web client**: bearer token, `Accept-Language`, stable
   `X-Request-ID`, retries only for safe methods, one token refresh on 401, 20 s timeout.
-- **Owner boundary**: an Owner/admin session sees a notice, never Owner features. Owner-shaped
+- **Owner boundary**: the Owner (a server role, never a plan) uses the public app at VIP level and,
+  on top of it, JARVIS, its personal space (Profile → JARVIS; `Jarvis.swift` / `Jarvis.kt`). Only
+  the role in `/auth/me` shows it, and the backend's `/jarvis/*` answers the Owner only. JARVIS
+  sections are ported step by step (JARVIS recovery roadmap); until then each one says it is being
+  restored. Free, Basic and VIP never see it; an admin session sees a notice and no app. Owner-shaped
   endpoints (`/vip/strategy-dashboard`, `/vip/debt-advisory`, `PUT /vip/salvavidas`) are not used.
 - **Reads do not write.** Opening a screen never calls a write (no lifecycle snapshot POST).
 - **Money.** `BigDecimal`/`Decimal` only; every amount is positive, ≤ 2 decimals and ≤

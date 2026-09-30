@@ -17,6 +17,20 @@ struct ProfileHubView: View {
     var body: some View {
         List {
             Section { header }
+            if Jarvis.isAvailable(to: model.profile) {
+                // The Owner's personal space (JARVIS recovery, J0); no plan or other role sees it.
+                Section {
+                    NavigationLink(value: ProfileRoute.jarvis) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("JARVIS")
+                                Text(tx("Tu espacio personal", "Your personal space")).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                            }
+                        } icon: { Image(systemName: "person.badge.key") }
+                    }
+                    .accessibilityIdentifier("profile.jarvis")
+                }
+            }
             Section {
                 NavigationLink { SituationView() } label: { Label(tx("Situación financiera", "Financial situation"), systemImage: "person.text.rectangle") }
                     .accessibilityIdentifier("profile.situation")
