@@ -109,6 +109,13 @@ import Testing
         #expect(try Self.body(transport.requests[1])["exchange_rate"] == nil)
     }
 
+    @Test func aCorrectionCanKeepATransferATransfer() async throws {
+        let transport = ScriptedTransport([.status(200, #"{"status":"confirmed","candidate_id":7,"transaction_id":9}"#)])
+        let service = DincrService(client: client(transport))
+        _ = try await service.correctCandidate(id: 7, CandidateCorrection(transactionDate: "2026-09-01", description: "SINPE", amount: 20000, transactionType: "transfer", category: "Transferencias", exchangeRate: nil))
+        #expect(try Self.body(transport.requests[0])["transaction_type"] as? String == "transfer")
+    }
+
     @Test func invalidCorrectionsNeverLeaveTheDevice() async throws {
         let service = DincrService(client: client(ScriptedTransport([])))
         let bad: [CandidateCorrection] = [

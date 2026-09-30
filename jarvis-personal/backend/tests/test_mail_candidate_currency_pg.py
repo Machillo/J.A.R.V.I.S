@@ -407,3 +407,42 @@ def test_values_beyond_the_production_columns_are_a_422_before_any_insert(pg, ca
         _as(A, gmail_service.review_gmail_candidate, candidate_id, "accept", dict(corrections))
     assert error.value.status_code == 422
     _nothing_written(pg, candidate_id)
+
+
+# --------------------------------------------------------------------------- transfers stay transfers
+
+def _transfer_candidate(pg, ident) -> int:
+    """A SINPE-like notice: the parser records a transfer, never income or spending by default."""
+    candidate_id = _candidate(pg, ident, amount=20000)
+    with pg.cursor() as cur:
+        cur.execute("""UPDATE finva_email_candidates
+                          SET transaction_type='transfer',description='SINPE recibido',category='Transferencias'
+                        WHERE id=%s""", (candidate_id,))
+    return candidate_id
+
+
+def _no_income_or_expense(pg):
+    assert _one(pg, "SELECT COUNT(*) AS n FROM transactions WHERE transaction_type IN ('income','expense','debt_payment')")["n"] == 0
+
+
+def test_correcting_another_field_of_a_transfer_keeps_it_a_transfer(pg):
+    candidate_id = _transfer_candidate(pg, A)
+    corrections = GmailCandidateReviewRequest(
+        transaction_date="2026-09-21", description="Ahorro propio", amount=20000,
+        transaction_type="transfer", category="Transferencias",
+    ).model_dump()
+    assert _as(A, gmail_service.review_gmail_candidate, candidate_id, "accept", corrections)["status"] == "confirmed"
+    assert _one(pg, "SELECT transaction_type FROM transactions")["transaction_type"] == "transfer"
+    _no_income_or_expense(pg)
+    assert _one(pg, "SELECT payload FROM financial_input_events")["payload"]["transaction_type"] == "transfer"
+    candidate = _one(pg, "SELECT transaction_type,status,corrected_fields FROM finva_email_candidates WHERE id=%s", (candidate_id,))
+    assert (candidate["transaction_type"], candidate["status"]) == ("transfer", "confirmed")
+    assert "transaction_type" not in candidate["corrected_fields"]
+    assert set(candidate["corrected_fields"]) == {"description", "transaction_date"}
+
+
+def test_accepting_a_transfer_without_corrections_keeps_it_a_transfer(pg):
+    candidate_id = _transfer_candidate(pg, A)
+    _as(A, gmail_service.review_gmail_candidate, candidate_id, "accept")
+    assert _one(pg, "SELECT transaction_type FROM transactions")["transaction_type"] == "transfer"
+    _no_income_or_expense(pg)

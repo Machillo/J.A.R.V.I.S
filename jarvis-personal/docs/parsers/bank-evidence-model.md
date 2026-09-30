@@ -99,11 +99,25 @@ charge is still billed to the holder, so it stays an expense, flagged
   four digits, even when a notice prints a full IBAN or account number. The older
   SINPE extraction of a fully printed IBAN (2022-style notices) is unchanged.
 
-## Not supported (on purpose)
+## Client compatibility (Correct → Transfer)
 
-- **Wise:** FX top-ups and transfers that later arrive as SINPE credits. No
-  deterministic parser yet. It is a candidate for future unknown-format
-  handling. Any runtime AI for that would need an explicit change to the
-  product's no-generative-AI rule for user data.
-- **Other international institutions:** not supported.
-- **Statement PDF contents and e-invoices:** not handled in this change.
+- Clients built with this change (web, Android, iOS) offer **Transferencia** in
+  Correct and start on the candidate's own type. Correcting another field of a
+  transfer keeps it a transfer.
+- Older client builds offer only expense, income and debt payment in Correct.
+  If the user opens Correct on a transfer candidate there, the form starts on
+  "Gasto", and saving records an expense.
+- **Accept** without corrections keeps the candidate's type on every client.
+- There is no server-side fallback that rewrites a type. Roll the backend out
+  together with compatible web and native builds.
+
+## Future candidates (not supported)
+
+Each of these needs its own design. How to handle unknown formats, including
+whether any AI may be used, is a separate architecture decision.
+
+- **Wise:** FX top-ups and transfers that later arrive as SINPE credits.
+- **International banks:** none supported.
+- **Statement PDFs:** their movement tables.
+- **E-invoices:** documents that duplicate a card charge or a bill due.
+- **Unknown or ambiguous formats:** any notice without a deterministic template.

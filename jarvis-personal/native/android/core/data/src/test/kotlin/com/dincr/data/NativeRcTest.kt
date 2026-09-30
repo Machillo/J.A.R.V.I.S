@@ -282,6 +282,10 @@ class NativeRcTest {
         val usd = pending.first { it.needsRate }
         try { vip.acceptCandidate(usd.candidateId!!); fail("a foreign notice needs the user's rate") } catch (e: ApiError) { assertEquals(422, e.status) }
         assertEquals("confirmed", vip.correctCandidate(usd.candidateId!!, CandidateCorrection("2026-09-01", "Tienda", d("25"), "expense", "Compras", d("507.5"))).status)
+        // A correction can keep a movement as a transfer (neither income nor expense).
+        val fresh = fake(PlanTier.VIP)
+        val notice = fresh.mailCandidates(true).first { !it.needsRate }
+        assertEquals("confirmed", fresh.correctCandidate(notice.candidateId!!, CandidateCorrection("2026-09-02", "SINPE", d("20000"), "transfer", "Transferencias", null)).status)
     }
 
     @Test fun fakeBackendConvertsAndClearsCurrencyLikeTheServer() = runTest {
