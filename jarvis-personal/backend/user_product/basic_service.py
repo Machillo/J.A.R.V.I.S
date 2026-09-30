@@ -60,7 +60,7 @@ def _shift_month(start: date, delta: int) -> date:
 def _profile(conn, account_id: str, workspace_id: str) -> dict:
     row = conn.execute(
         """SELECT income_type,fixed_monthly_salary,hourly_rate,work_days_per_week,hours_per_day,
-                  pay_frequency,payday_note,essential_monthly_expenses,liquid_savings
+                  pay_frequency,payday_note,essential_monthly_expenses,liquid_savings,emergency_fund_target
            FROM financial_profiles WHERE account_id=%s AND workspace_id=%s""",
         (account_id, workspace_id),
     ).fetchone()
