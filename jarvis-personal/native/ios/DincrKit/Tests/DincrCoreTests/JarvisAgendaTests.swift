@@ -32,7 +32,7 @@ import Testing
         #expect(response.events.map(\.id) == [1])
     }
 
-    @Test func anAnswerWithoutEventsIsAnError() {
+    @Test func anAnswerWithoutEventsIsAnError() throws {
         for json in [#"{}"#, #"{"events":null}"#, #"{"events":"x"}"#, #"[]"#] {
             #expect(throws: (any Error).self, "\(json)") { try decode(json) }
         }

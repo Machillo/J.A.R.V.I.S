@@ -19,6 +19,8 @@ struct JarvisAgendaView: View {
                                                "Ask JARVIS to schedule something, for example “Agendá dentista el 10 de octubre a las 3pm”.")) {
                         scheduleButton
                     }
+                    // A container element, so its identifier does not replace the button's.
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("jarvis.agenda.empty")
                 } else {
                     scheduleButton
