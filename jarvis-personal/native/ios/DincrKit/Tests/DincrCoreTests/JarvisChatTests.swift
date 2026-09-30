@@ -189,6 +189,8 @@ private actor ManualReplies {
     }
 }
 
+/// Main-actor isolated like the conversation tests that use it (Swift 6: the condition never crosses actors).
+@MainActor
 private func waitUntil(_ condition: () async -> Bool) async throws {
     for _ in 0..<1_000 {
         if await condition() { return }
