@@ -1,5 +1,5 @@
 {
-  "output_sha256": "4447202762ede68a61701429e5f31e9eab24106adff5cee4d7a4e1ba02e06f79",
+  "output_sha256": "093ca7b74b1a1a705cd8ac74eaa8825eca289d04cbc8f1b9d373cb6fc0212a6a",
   "mode": "final",
   "target": "google-phone",
   "store": "google",
@@ -14,11 +14,11 @@
   "caption_ratio": 0.1487,
   "capture": {
     "file": "raw/android/es/phone/01-home.png",
-    "sha256": "992ef47959885f4c9f5614723790340b629215d40a8f336c4bdf7b5a7ff2f8ac",
+    "sha256": "7ea0ef075d726f9ceb88e825f3c6764a677eaa17e70c83419fba3329ab46ea20",
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-09-29T21:54:42.944Z",
+    "captured_at": "2026-09-30T01:15:01.510Z",
     "device": {
       "model": "sdk_gphone64_x86_64",
       "sdk": 35,
@@ -27,8 +27,8 @@
       "density": 420
     }
   },
-  "source_commit": "d224fa22facff6b876e72d66500abe798d436010",
+  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "d224fa22facff6b876e72d66500abe798d436010",
-  "generated_at": "2026-09-29T21:54:47.932Z"
+  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "generated_at": "2026-09-30T01:15:19.530Z"
 }

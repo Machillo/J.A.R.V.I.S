@@ -13,8 +13,8 @@
   "alpha": false,
   "caption_ratio": null,
   "capture": null,
-  "source_commit": "d224fa22facff6b876e72d66500abe798d436010",
+  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "d224fa22facff6b876e72d66500abe798d436010",
-  "generated_at": "2026-09-29T21:55:51.345Z"
+  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "generated_at": "2026-09-30T01:16:22.502Z"
 }

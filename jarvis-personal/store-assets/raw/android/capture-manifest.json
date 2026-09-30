@@ -2,17 +2,17 @@
   "platform": "android",
   "fixture": "STORE",
   "fixture_date": "2026-09-28",
-  "source_commit": "d224fa22facff6b876e72d66500abe798d436010",
+  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
   "source_dirty": false,
-  "pipeline_commit": "d224fa22facff6b876e72d66500abe798d436010",
+  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
   "built": true,
-  "captured_at": "2026-09-29T21:54:42.944Z",
+  "captured_at": "2026-09-30T01:15:01.510Z",
   "app": {
     "package": "com.dincr.app",
     "flavor": "dincr",
     "build_type": "debug",
     "version_name": "2.0.0-rc.1",
-    "last_update": "2026-09-29 15:53:38"
+    "last_update": "2026-09-29 19:13:35"
   },
   "device": {
     "model": "sdk_gphone64_x86_64",
@@ -29,7 +29,7 @@
       "locale": "es",
       "plan": "vip",
       "file": "raw/android/es/phone/01-home.png",
-      "sha256": "992ef47959885f4c9f5614723790340b629215d40a8f336c4bdf7b5a7ff2f8ac",
+      "sha256": "7ea0ef075d726f9ceb88e825f3c6764a677eaa17e70c83419fba3329ab46ea20",
       "width": 1080,
       "height": 2400
     },
@@ -101,7 +101,7 @@
       "locale": "en",
       "plan": "vip",
       "file": "raw/android/en/phone/01-home.png",
-      "sha256": "8f50fd26cdaa1da9dd52032270c8ddc6829960bf9ea0399c44a6dc52b3384787",
+      "sha256": "f98380f2dd35330947265fba9ce4b7ce4cda55afd9d48e14bc1dad4cfd2f4ba6",
       "width": 1080,
       "height": 2400
     },
@@ -155,7 +155,7 @@
       "locale": "en",
       "plan": "basic",
       "file": "raw/android/en/phone/07-strategy.png",
-      "sha256": "b9e8fe07a064b40440a77219757d805a398955891e24209db1a52832517703f6",
+      "sha256": "7b8c5133e54dbed45888904bb7769818058f292866317450f14e3ca997bdad45",
       "width": 1080,
       "height": 2400
     },
@@ -164,7 +164,7 @@
       "locale": "en",
       "plan": "vip",
       "file": "raw/android/en/phone/08-mail.png",
-      "sha256": "215f09f7b94fcfb0ff6d084492301ca4f8791d9fe9e9c0fa9c3eea459dda0e0e",
+      "sha256": "f9599366f27c35ac198cd77fe442aad962803dbddf70b59ac76e8be7eefe794d",
       "width": 1080,
       "height": 2400
     }

@@ -18,7 +18,7 @@
     "placeholder": false,
     "fixture": "STORE",
     "fixture_date": "2026-09-28",
-    "captured_at": "2026-09-29T21:54:42.944Z",
+    "captured_at": "2026-09-30T01:15:01.510Z",
     "device": {
       "model": "sdk_gphone64_x86_64",
       "sdk": 35,
@@ -27,8 +27,8 @@
       "density": 420
     }
   },
-  "source_commit": "d224fa22facff6b876e72d66500abe798d436010",
+  "source_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
   "app_baseline": "828751940623a06546f4cfb4a4b0f91ca41ff69e",
-  "pipeline_commit": "d224fa22facff6b876e72d66500abe798d436010",
-  "generated_at": "2026-09-29T21:54:58.596Z"
+  "pipeline_commit": "b556c02e0fbcdc8c1680ef02a8daef5d3dd42c74",
+  "generated_at": "2026-09-30T01:15:26.578Z"
 }
