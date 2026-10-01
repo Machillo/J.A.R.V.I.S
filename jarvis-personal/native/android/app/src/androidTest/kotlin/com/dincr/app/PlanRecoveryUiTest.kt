@@ -2,9 +2,12 @@ package com.dincr.app
 
 import android.content.Intent
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -14,6 +17,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.printToLog
 import androidx.test.core.app.ActivityScenario
@@ -64,12 +69,30 @@ class PlanRecoveryUiTest {
         }
     }
 
-    private fun waitForText(text: String, substring: Boolean = false) = waitUntil("\"$text\"") { present(text, substring) }
+    /** Brings a node into composition and view: lazy lists and small screens (CI emulators) hide it otherwise. */
+    private fun scrollTo(text: String, substring: Boolean = false) {
+        compose.onAllNodes(hasScrollToNodeAction()).fetchSemanticsNodes().indices.forEach { index ->
+            runCatching { compose.onAllNodes(hasScrollToNodeAction())[index].performScrollToNode(hasText(text, substring = substring)) }
+        }
+    }
+
+    private fun waitForText(text: String, substring: Boolean = false) =
+        waitUntil("\"$text\"") { present(text, substring) || run { scrollTo(text, substring); present(text, substring) } }
     private fun waitForTag(tag: String) = waitUntil("tag $tag") { compose.onAllNodes(hasTestTag(tag), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
     private fun waitForGone(text: String) = waitUntil("\"$text\" to disappear") { !present(text) }
 
     private fun click(text: String) {
         waitForText(text)
+        scrollTo(text)
+        // The clickable node itself (a row merges its texts), scrolled into view: a click outside the
+        // screen of a small emulator would do nothing.
+        val clickable = compose.onAllNodes(hasText(text) and hasClickAction())
+        if (clickable.fetchSemanticsNodes().isNotEmpty()) {
+            // Invoke the click action itself: on a small screen a row scrolled to the bottom edge sits
+            // under the navigation bar, and a tap at its center would hit the bar instead.
+            clickable.onFirst().also { runCatching { it.performScrollTo() } }.performSemanticsAction(SemanticsActions.OnClick)
+            return
+        }
         val node = compose.onAllNodesWithText(text).onFirst()
         runCatching { node.performScrollTo() }
         node.performClick()
@@ -266,6 +289,7 @@ class PlanRecoveryUiTest {
         waitForText(tx("Balance del mes", "Month balance"))
         compose.onNodeWithText(tx("Ingresos y gastos", "Income and expenses")).performScrollTo()
         click(tx("Movimientos", "Transactions"))
-        waitForText(tx("TC 507,5", "Rate 507,5"), substring = true)
+        // The rate follows the app language's decimal separator (507,5 / 507.5): match what both share.
+        waitForText(tx("TC 507", "Rate 507"), substring = true)
     }
 }
