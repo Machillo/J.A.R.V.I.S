@@ -834,6 +834,8 @@ def _simulate_debt_cascade(
 ) -> tuple[list[dict[str, Any]], int, float]:
     """Simulate an active-debt cascade without keeping cancelled/paid rows in the route."""
     candidates = [debt for debt in debts if _f(debt.get("remaining_amount")) > 0.01]
+    # The "/100" repair of the Owner's imported payments never applies to Users debts.
+    payment = _normalize_payment if owner_rules else (lambda value, _remaining=0: round(max(_f(value), 0.0), 2))
     # The live dashboard only needs a stable payoff order. Running Doctor
     # Strange here was factorial (6 debts = 720 full simulations, 8 = 40,320)
     # and this function is called twice per dashboard request. That saturated the
@@ -843,7 +845,7 @@ def _simulate_debt_cascade(
     active: list[dict[str, Any]] = []
     for debt in ordered_active:
         balance = _f(debt.get("remaining_amount"))
-        minimum = _normalize_payment(debt.get("monthly_payment"), balance)
+        minimum = payment(debt.get("monthly_payment"), balance)
         active.append({
             "priority": len(active) + 1,
             "id": debt.get("id"),
@@ -918,7 +920,7 @@ def _simulate_debt_cascade(
     result: list[dict[str, Any]] = []
     for index, debt in enumerate(ordered_active):
         balance = _f(debt.get("remaining_amount"))
-        minimum = _normalize_payment(debt.get("monthly_payment"), balance)
+        minimum = payment(debt.get("monthly_payment"), balance)
         debt_key = int(debt.get("id") or index + 1)
         closed = payoff.get(debt_key)
         payoff_month = closed.get("payoff_month") if closed else None
@@ -1247,12 +1249,18 @@ def _load_users_strategy_inputs(workspace_id: str, account_id: str, today: date)
     Income follows the shared income policy (the Home baseline); spending and debt
     payments are the ledger of the month (the same totals Home and the charts use,
     accepted bank-email movements included); obligations are the active recurring
-    expense items. No Owner table, name or cycle is read here.
+    expense items, as a monthly total. No Owner table, name or cycle is read here.
     """
     from backend.user_product.basic_service import _basic_tables_ready, _ledger_totals, _monthly_equivalent, _next_month
 
     month_start = today.replace(day=1)
     with get_connection() as conn:
+        # Debts as the user stored them (no import repair), active and paid off (for progress).
+        debts = [dict(row) for row in conn.execute(
+            """SELECT id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate
+               FROM debts WHERE workspace_id=%s ORDER BY id""",
+            (workspace_id,),
+        ).fetchall()]
         income_policy = load_income_baseline(conn, account_id=account_id, workspace_id=workspace_id, today=today)
         month = _ledger_totals(conn, workspace_id, month_start, _next_month(month_start))
         recurring = [dict(row) for row in conn.execute(
@@ -1260,19 +1268,17 @@ def _load_users_strategy_inputs(workspace_id: str, account_id: str, today: date)
                WHERE workspace_id=%s AND is_active=TRUE AND item_type='expense'""",
             (workspace_id,),
         ).fetchall()] if _basic_tables_ready(conn, "finva_recurring_items") else []
-    recurring_monthly = round(sum(_monthly_equivalent(_f(row.get("amount")), row.get("frequency") or "monthly") for row in recurring), 2)
-    # Monthly items still due later this month are reserved; earlier ones are assumed recorded.
-    pending = [
-        {"id": row.get("id"), "name": row.get("name"), "due_day": row.get("due_day"), "amount": round(_f(row.get("amount")), 2)}
-        for row in recurring
-        if (row.get("frequency") or "monthly") == "monthly" and row.get("due_day") and int(row["due_day"]) > today.day
-    ]
+    recurring_items = [{
+        "id": row.get("id"), "name": row.get("name"), "due_day": row.get("due_day"),
+        "monthly_amount": _monthly_equivalent(_f(row.get("amount")), row.get("frequency") or "monthly"),
+    } for row in recurring]
     return {
+        "debts": debts,
         "income_policy": income_policy,
         "month": month,
         "period": {"start": month_start.isoformat(), "end": (_next_month(month_start) - timedelta(days=1)).isoformat()},
-        "recurring_expense_monthly": recurring_monthly,
-        "pending_recurring": pending,
+        "recurring_expense_monthly": round(sum(item["monthly_amount"] for item in recurring_items), 2),
+        "recurring_items": recurring_items,
     }
 
 
@@ -1280,14 +1286,13 @@ def _users_strategy_blueprint() -> dict[str, Any]:
     """The neutral DINCR Users strategy (VIP): real surplus of the calendar month."""
     today = date.today()
     workspace_id = get_current_workspace_id()
-    all_debts = get_debts() or []
     inputs = _load_users_strategy_inputs(workspace_id, get_current_account_id(), today)
     try:
         salvavidas = get_salvavidas_state() or {}
     except Exception:
         salvavidas = {}
     return _users_blueprint_from_inputs(
-        all_debts=all_debts,
+        all_debts=inputs.get("debts") or [],
         inputs=inputs,
         salvavidas=salvavidas,
         goals=_fetch_active_financial_goals(workspace_id),
@@ -1311,13 +1316,14 @@ def _users_blueprint_from_inputs(
     month = inputs.get("month") or {}
     recorded_spending = max(_f(month.get("expenses")), 0.0)
     debt_paid = max(_f(month.get("debt_paid")), 0.0)
-    pending_recurring = list(inputs.get("pending_recurring") or [])
-    pending_recurring_total = round(sum(_f(item.get("amount")) for item in pending_recurring), 2)
     recurring_expense_monthly = max(_f(inputs.get("recurring_expense_monthly")), 0.0)
+    # The month commits at least its recurring obligations, recorded or not (a missing
+    # movement never proves a bill was skipped), and never counts a recorded one twice:
+    # committed = max(recorded spending, recurring obligations). What is still uncovered
+    # of the obligations is reserved as "pending recurring".
+    pending_recurring_total = round(max(recurring_expense_monthly - recorded_spending, 0.0), 2)
 
-    configured_debt_payments = sum(
-        _normalize_payment(debt.get("monthly_payment"), debt.get("remaining_amount")) for debt in debts
-    )
+    configured_debt_payments = round(sum(max(_f(debt.get("monthly_payment")), 0.0) for debt in debts), 2)
     debt_commitment = max(configured_debt_payments - debt_paid, 0.0)
     total_debt = sum(max(_f(debt.get("remaining_amount")), 0.0) for debt in debts)
     original_debt = sum(max(_f(debt.get("total_amount")), _f(debt.get("remaining_amount")), 0.0) for debt in all_debts)
@@ -1410,7 +1416,7 @@ def _users_blueprint_from_inputs(
         "monthly_expenses": round(recorded_spending, 2),
         "recorded_expenses": round(recorded_spending, 2),
         "pending_recurring_total": pending_recurring_total,
-        "pending_recurring_items": pending_recurring,
+        "recurring_obligation_items": inputs.get("recurring_items") or [],
         "recurring_living_expenses": round(recurring_expense_monthly, 2),
         "recurring_essential_living_base": round(recurring_expense_monthly, 2),
         "monthly_debt_minimums": round(configured_debt_payments, 2),
@@ -1472,8 +1478,8 @@ def _users_blueprint_from_inputs(
                "A new expense reduces the month’s surplus as soon as it appears."),
             tx("Las deudas activas reservan al menos su cuota mensual completa antes de repartir dinero.",
                "Active debts reserve at least their full monthly payment before money is allocated."),
-            tx("Los pagos recurrentes que todavía vencen este mes se reservan antes de repartir.",
-               "Recurring payments still due this month are reserved before allocating."),
+            tx("Tus pagos recurrentes se reservan completos aunque todavía no aparezcan como gasto; un gasto registrado nunca se cuenta dos veces.",
+               "Your recurring payments are reserved in full even before they show up as expenses; a recorded expense is never counted twice."),
             tx("Tu ingreso declarado es la base; los correos importados nunca la suben ni la bajan.",
                "Your declared income is the baseline; imported emails never raise or lower it."),
         ],

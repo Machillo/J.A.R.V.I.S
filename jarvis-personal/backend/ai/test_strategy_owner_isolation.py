@@ -43,14 +43,15 @@ def _as(role, fn, *args, **kwargs):
         reset_current_user(token)
 
 
-def _users_inputs(income=900000, spending=200000, debt_paid=0, pending=None, recurring=150000):
+def _users_inputs(income=900000, spending=200000, debt_paid=0, recurring=150000, debts=None):
     return {
+        "debts": [dict(d) for d in (DEBTS if debts is None else debts)],
         "income_policy": {"policy": "income-policy-v1", "source": "declared", "declared": income,
                           "baseline": income, "recurring": 0, "monthly_income": income},
         "month": {"income": income, "expenses": spending, "debt_paid": debt_paid},
         "period": {"start": "2026-09-01", "end": "2026-09-30"},
         "recurring_expense_monthly": recurring,
-        "pending_recurring": pending if pending is not None else [{"id": 1, "name": "Alquiler", "due_day": 28, "amount": 100000}],
+        "recurring_items": [{"id": 1, "name": "Alquiler", "due_day": 1, "monthly_amount": recurring}],
     }
 
 
@@ -69,7 +70,9 @@ def users_engine(monkeypatch):
     for name in OWNER_ONLY_INPUTS:
         monkeypatch.setattr(strategy_dashboard, name,
                             lambda *_a, _n=name, **_k: (_ for _ in ()).throw(AssertionError(f"Users strategy read {_n}")))
-    monkeypatch.setattr(strategy_dashboard, "get_debts", lambda: [dict(d) for d in DEBTS])
+    # Users debts come from their own rows (no Owner import repair), never from get_debts.
+    monkeypatch.setattr(strategy_dashboard, "get_debts",
+                        lambda: (_ for _ in ()).throw(AssertionError("Users strategy used get_debts")))
     monkeypatch.setattr(strategy_dashboard, "_load_users_strategy_inputs", lambda *_a: _users_inputs())
     monkeypatch.setattr(strategy_dashboard, "get_salvavidas_state",
                         lambda: {"scope": "users", "current_amount": None, "monthly_base": 260000})
@@ -106,14 +109,35 @@ def test_a_vip_users_debt_order_follows_cost_not_the_owners_popular_rule(users_e
     assert [d["name"] for d in owner_order][-1] == "Préstamo Banco Popular"  # the Owner's rule, Owner only
 
 
-def test_the_users_surplus_is_the_month_after_spending_debts_and_pending_recurring(users_engine):
+@pytest.mark.parametrize("spending, recurring, pending, surplus", [
+    # Rent not recorded yet: the 150k obligations are reserved in full.
+    (50000, 150000, 100000, 640000),       # 900k − 50k − 100k uncovered − 110k debts
+    # Rent already recorded among the 200k spent: never counted twice.
+    (200000, 150000, 0, 590000),           # 900k − 200k − 0 − 110k debts
+])
+def test_the_users_surplus_reserves_obligations_once(users_engine, spending, recurring, pending, surplus):
+    users_engine.setattr(strategy_dashboard, "_load_users_strategy_inputs",
+                         lambda *_a: _users_inputs(spending=spending, recurring=recurring))
     result = _as("user", strategy_dashboard.build_local_strategy_blueprint)
     formula = result["distribution_formula"]
-    # 900k income − 200k recorded − 110k debt payments still due − 100k rent due later = 490k.
     assert (formula["income"], formula["recorded_spending"], formula["debt_commitment"], formula["pending_recurring"]) == (
-        900000, 200000, 110000, 100000)
-    assert formula["surplus"] == 490000 and result["allocation_total"] == 490000
+        900000, spending, 110000, pending)
+    assert formula["surplus"] == surplus and result["allocation_total"] == surplus
     assert set(formula) == {"income", "recorded_spending", "debt_commitment", "pending_recurring", "surplus", "deficit"}
+
+
+def test_users_debt_payments_are_read_as_stored_never_divided_by_100(users_engine):
+    """The Owner's import repair (≥ ₡1M ⇒ ÷100) must not shrink a real VIP mortgage payment."""
+    mortgage = [{"id": 9, "name": "Hipoteca", "remaining_amount": 80_000_000, "total_amount": 90_000_000,
+                 "monthly_payment": 1_200_000, "interest_rate": 9, "debt_type": "mortgage"}]
+    users_engine.setattr(strategy_dashboard, "_load_users_strategy_inputs",
+                         lambda *_a: _users_inputs(income=3_000_000, debts=mortgage))
+    result = _as("user", strategy_dashboard.build_local_strategy_blueprint)
+    assert result["configured_debt_payments"] == 1_200_000 and result["debt_commitment_current_cycle"] == 1_200_000
+    assert result["timeline"][0]["minimum_payment"] == 1_200_000
+    # The Owner keeps his historical repair.
+    owner_timeline, *_ = strategy_dashboard._simulate_debt_cascade(mortgage, 0, owner_rules=True)
+    assert owner_timeline[0]["minimum_payment"] == 12_000
 
 
 def test_unknown_savings_are_never_reported_as_zero_in_the_users_strategy(users_engine):
@@ -206,8 +230,10 @@ def test_the_wise_ibkr_funding_model_is_only_the_owners(monkeypatch):
 ])
 def test_the_users_paths_carry_no_owner_literal_table_or_cycle(function):
     source = inspect.getsource(function).lower()
-    for literal in (*OWNER_LITERALS, "fixed_expenses", "cycle_report", "salary_projection", "account_balances"):
+    for literal in (*OWNER_LITERALS, "fixed_expenses", "cycle_report", "salary_projection", "get_debts", "bank_name"):
         assert literal not in source, (function.__name__, literal)
+    if "account_balances" in source:  # only the user's own previous Salvavidas save, by type and source
+        assert "account_type='emergency_fund' and source='salvavidas'" in source, function.__name__
 
 
 # Salvavidas ---------------------------------------------------------------------------------
@@ -231,6 +257,11 @@ class _ObligationsConn:
     def execute(self, query, params=()):
         q = " ".join(query.split())
         assert "fixed_expenses" not in q, "Users Salvavidas read the Owner's fixed_expenses"
+        if "to_regclass('public.account_balances')" in q:
+            return _Rows([{"table_name": "account_balances" if self.state.get("legacy") is not None else None}])
+        if "FROM account_balances" in q:
+            assert "workspace_id=%s" in q and params == ("ws-test",)
+            return _Rows([{"current_balance": self.state["legacy"]}])
         if "to_regclass" in q:
             return _Rows([{"missing": None}])
         if "FROM finva_recurring_items" in q:
@@ -259,7 +290,7 @@ RECURRING = [
 
 @pytest.fixture
 def salvavidas_db(monkeypatch):
-    state = {"recurring": RECURRING, "savings": 490000.0, "prefs": {}, "writes": []}
+    state = {"recurring": RECURRING, "savings": 490000.0, "prefs": {}, "writes": [], "legacy": None}
     monkeypatch.setattr(emergency_fund, "get_connection", lambda: _ObligationsConn(state))
     monkeypatch.setattr(emergency_fund, "get_preference", lambda key, default=None: state["prefs"].get(key, default))
     monkeypatch.setattr(emergency_fund, "set_preference", lambda key, value: state["prefs"].__setitem__(key, value))
@@ -282,6 +313,34 @@ def test_unknown_savings_stay_unknown_never_zero_coverage(salvavidas_db):
     state = _as("user", emergency_fund.get_salvavidas_state)
     assert state["current_amount"] is None and state["current_amount_known"] is False
     assert state["coverage_months"] is None and state["progress_percent"] is None and state["missing_amount"] is None
+
+
+def test_an_amount_saved_before_the_neutral_model_stays_visible(salvavidas_db):
+    salvavidas_db["savings"], salvavidas_db["legacy"] = None, 350000
+    state = _as("user", emergency_fund.get_salvavidas_state)
+    assert state["current_amount"] == 350000 and state["current_amount_source"] == "previous_salvavidas_save"
+    salvavidas_db["savings"] = 200000  # a declared value is the source of truth
+    state = _as("user", emergency_fund.get_salvavidas_state)
+    assert state["current_amount"] == 200000 and state["current_amount_source"] == "declared"
+
+
+def test_the_historical_screen_resending_the_shown_amount_never_declares_a_zero(salvavidas_db):
+    """The live web screen shows unknown as 0 and re-sends it with every save (review blocker)."""
+    salvavidas_db["savings"] = None
+    state = _as("user", emergency_fund.update_salvavidas, current_amount=0, protected_expense_ids=[], target_months=3)
+    assert state["target_months"] == 3 and state["current_amount"] is None and salvavidas_db["writes"] == []
+    salvavidas_db["savings"] = False  # no financial situation at all: changing the goal still works
+    assert _as("user", emergency_fund.update_salvavidas, current_amount=0, target_months=1)["target_months"] == 1
+    salvavidas_db["savings"] = 490000.0  # re-sending the amount already shown is not an edit either
+    _as("user", emergency_fund.update_salvavidas, current_amount=490000, protected_expense_ids=[], target_months=6)
+    assert salvavidas_db["writes"] == []
+
+
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), -1.0, 1e15])
+def test_an_invalid_savings_amount_is_refused(salvavidas_db, amount):
+    with pytest.raises(ValueError):
+        _as("user", emergency_fund.update_salvavidas, current_amount=amount)
+    assert salvavidas_db["writes"] == []
 
 
 def test_without_obligations_the_users_salvavidas_asks_for_them(salvavidas_db, monkeypatch):

@@ -9,7 +9,7 @@ import Foundation
 //   situation; 422 without a situation). Never `protected_expense_ids`.
 // - Owner (`scope == "owner"`): the historical JARVIS model (protected expenses, a manual balance).
 //   PUT: `current_amount`, `protected_expense_ids` or `target_months`.
-// The app never computes coverage on the device. Android twin: `SalvavidasModels.kt`.
+// The app never computes coverage on the device. Android twin: `Salvavidas.kt`.
 
 public struct Salvavidas: Decodable, Sendable, Equatable {
     public struct Components: Decodable, Sendable, Equatable {
@@ -84,6 +84,8 @@ public struct Salvavidas: Decodable, Sendable, Equatable {
     public let scope: String?
     public let currentAmount: Decimal?
     public let currentAmountKnown: Bool?
+    /// Users: where the balance comes from (`declared`, `previous_salvavidas_save`) or nil.
+    public let currentAmountSource: String?
     public let monthlyBase: Decimal?
     public let targetMonths: Int?
     public let allowedTargetMonths: [Int]?
@@ -104,7 +106,7 @@ public struct Salvavidas: Decodable, Sendable, Equatable {
     public let excludedDebtDuplicates: [Line]?
 
     enum CodingKeys: String, CodingKey {
-        case status, scope, currentAmount, currentAmountKnown, monthlyBase, targetMonths, allowedTargetMonths
+        case status, scope, currentAmount, currentAmountKnown, currentAmountSource, monthlyBase, targetMonths, allowedTargetMonths
         case targetAmount, missingAmount, coverageMonths, progressPercent, components, debts, obligations
         case milestones, verification, protectedExpenseIds, mandatoryExpenses, availableExpenses, excludedDebtDuplicates
     }
@@ -115,6 +117,7 @@ public struct Salvavidas: Decodable, Sendable, Equatable {
         scope = c.lenient(String.self, .scope)
         currentAmount = c.lenient(Decimal.self, .currentAmount)
         currentAmountKnown = c.lenient(Bool.self, .currentAmountKnown)
+        currentAmountSource = c.lenient(String.self, .currentAmountSource)
         monthlyBase = c.lenient(Decimal.self, .monthlyBase)
         targetMonths = c.lenient(Int.self, .targetMonths)
         allowedTargetMonths = c.lenient([Int].self, .allowedTargetMonths)

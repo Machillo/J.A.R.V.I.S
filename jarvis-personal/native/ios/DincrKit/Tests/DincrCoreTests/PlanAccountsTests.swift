@@ -309,7 +309,9 @@ import Testing
         #expect(bac.accounts.count == 2 && bac.brand?.logoAsset == "BankBAC" && bac.displayName == "BAC" && bac.bankCodes == ["bac"])
         #expect(bac.movements == 2 && bac.pending == 2)
         let other = try #require(groups.last)
-        #expect(other.isOther && other.accounts.map(\.id) == [4] && other.movements == 1 && other.bankCodes.isEmpty)
+        // Notice 24 says "unknown" but is linked to account 4 (no code): it is listed under Otras instituciones.
+        #expect(other.isOther && other.accounts.map(\.id) == [4] && other.movements == 1 && other.bankCodes == ["unknown"])
+        #expect(BankGroup.rows(of: BankGroup.otherID, accounts: accounts, candidates: try await api.mailCandidates(pendingOnly: false)).compactMap(\.candidateId) == [24])
         #expect(accounts.first?.maskedNumber == "•••• 1234")
         // Ownership answers are kept by the fixture, like account_balances.
         try await api.setAccountOwnership(id: 1, own: true)
@@ -326,18 +328,42 @@ import Testing
         #expect(popular.displayName == "Banco Popular" && popular.bankCodes == ["popular"] && popular.movements == 1)
         #expect(try await api.mailCandidates(bank: "Banco Popular").isEmpty, "the label never matches a notice")
         let rows = try await api.mailCandidates(bank: try #require(popular.bankCodes.first))
-        #expect(rows.compactMap(\.candidateId) == [23] && rows.allSatisfy { popular.contains($0) })
+        #expect(rows.compactMap(\.candidateId) == [23] && rows.allSatisfy { BankGroup.groupID(of: $0, accounts: accounts) == "popular" })
+    }
+
+    static func notice(_ id: Int?, _ bank: String?, account: Int? = nil, status: String = "pending") -> MailCandidate {
+        MailCandidate(candidateId: id, bank: bank, description: nil, amount: 1, currency: "CRC", accountBaseCurrency: "CRC",
+                      transactionDate: nil, transactionType: "expense", category: nil, reviewStatus: status, financialAccountId: account)
+    }
+
+    static func account(_ id: Int, _ label: String?, _ code: String?) -> FinancialIdentity.Account {
+        FinancialIdentity.Account(id: id, accountName: nil, bankName: label, currency: "CRC", accountLast4: nil, ownershipStatus: "pending", institutionCode: code)
     }
 
     @Test func noticesWithoutADetectedAccountStillHaveTheirBank() {
-        func notice(_ id: Int, _ bank: String?) -> MailCandidate {
-            MailCandidate(candidateId: id, bank: bank, description: nil, amount: 1, currency: "CRC", accountBaseCurrency: "CRC",
-                          transactionDate: nil, transactionType: "expense", category: nil, reviewStatus: "pending")
-        }
-        let groups = BankGroup.make(accounts: [], candidates: [notice(1, "multimoney"), notice(2, "unknown"), notice(3, ""), notice(4, nil), notice(5, "MultiMoney")])
+        let groups = BankGroup.make(accounts: [], candidates: [Self.notice(1, "multimoney"), Self.notice(2, "unknown"), Self.notice(3, ""), Self.notice(4, nil), Self.notice(5, "MultiMoney")])
         #expect(groups.map(\.id) == ["multimoney", BankGroup.otherID])
         #expect(groups.first?.bankCodes == ["multimoney"] && groups.first?.movements == 2 && groups.first?.displayName == "MultiMoney")
-        #expect(groups.last?.movements == 3 && groups.last?.bankCodes.isEmpty == true, "unknown or empty codes are never sent as ?bank=")
+        // "unknown" names no institution DINCR knows: Otras. No bank and no account: only in the Email Monitor.
+        #expect(groups.last?.movements == 1)
+    }
+
+    /// The same input as Android's `AccountsAnalysisTest.accountsAreGroupedByInstitutionCodeWithoutBalances`
+    /// gives the same groups, in the web app's historical bank order (not alphabetical).
+    @Test func groupsMatchAndroidForTheSameInput() {
+        let accounts = [Self.account(1, "BAC", "bac"), Self.account(2, "Banco Popular", "popular")]
+        let candidates = [Self.notice(21, "bac", account: 1), Self.notice(22, "bac", account: 1), Self.notice(23, "popular", account: 2),
+                          Self.notice(25, "multimoney"), Self.notice(24, "cooperativa_ejemplo", status: "confirmed")]
+        let groups = BankGroup.make(accounts: accounts, candidates: candidates)
+        #expect(groups.map(\.id) == ["bac", "multimoney", "popular", BankGroup.otherID])
+        let bac = groups[0]
+        #expect(bac.accounts.count == 1 && bac.movements == 2 && bac.pending == 2 && bac.bankCodes == ["bac"])
+        #expect(groups[1].accounts.isEmpty && groups[1].movements == 1)
+        #expect(groups[2].bankCodes == ["popular"] && groups[2].displayName == "Banco Popular")
+        #expect(groups[3].brand == nil && groups[3].bankCodes == ["cooperativa_ejemplo"] && groups[3].pending == 0)
+        // A notice without a bank goes to its linked account's bank; an email row without a candidate is not a movement.
+        #expect(BankGroup.groupID(of: Self.notice(30, nil, account: 2), accounts: accounts) == "popular")
+        #expect(BankGroup.rows(of: BankGroup.otherID, accounts: accounts, candidates: candidates + [Self.notice(nil, "cooperativa_ejemplo")]).compactMap(\.candidateId) == [24])
     }
 
     @Test func detectedAccountsNeverCarryABalanceOrAFullNumber() throws {

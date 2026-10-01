@@ -2,7 +2,7 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// Cuentas (VIP and `gmail_automation`; the Owner by role): the second surface of the Email Monitor's
+/// Cuentas (VIP, `gmail_automation` and `vip_intelligence`; the Owner by role): the second surface of the Email Monitor's
 /// review. Banks → accounts (`•••• last4`, currency, Es mía / No es mía) → their movements, read from
 /// the SAME candidates with `/vip/gmail/emails?bank=` or `?financial_account_id=` and reviewed with
 /// the same endpoints and states. Every screen reloads from the backend when it appears, so a notice
@@ -13,8 +13,9 @@ struct AccountsView: View {
     var body: some View {
         if model.planTier != .vip {
             ScreenScroll(title: tx("Cuentas", "Accounts")) { PlanRequiredView(tier: .vip, feature: tx("Cuentas", "Accounts")) }
-        } else if !model.flags.isEnabled(.gmailAutomation) {
-            ScreenScroll(title: tx("Cuentas", "Accounts")) { FeaturePausedView(message: model.flags.message(.gmailAutomation, language: model.language)) }
+        } else if let paused = [OpsFlag.gmailAutomation, .vipIntelligence].first(where: { !model.flags.isEnabled($0) }) {
+            // The backend pauses /vip/financial-identity under either switch: a paused state, not an error.
+            ScreenScroll(title: tx("Cuentas", "Accounts")) { FeaturePausedView(message: model.flags.message(paused, language: model.language)) }
         } else {
             BankListView()
         }
@@ -111,15 +112,22 @@ private struct BankDetailView: View {
             }
             SectionHeader(title: tx("Movimientos", "Transactions"))
             CandidateReviewList(identifier: "bank.\(group.id)") {
-                // "Otras instituciones" includes notices without a usable code, which `?bank=` cannot
-                // ask for: read the whole inbox and keep this group's rows.
+                // "Otras instituciones" also holds notices linked to an unidentified account, which
+                // `?bank=` cannot ask for: read the accounts and the inbox and keep this group's rows
+                // (only rows with a candidate: an email row without one is not a movement).
                 if group.isOther {
-                    return try await model.service.mailCandidates(pendingOnly: false).filter { group.contains($0) }
+                    let service = model.service
+                    async let identity = service.financialIdentity()
+                    async let inbox = service.mailCandidates(pendingOnly: false)
+                    let loaded = try await identity
+                    let rows = try await inbox
+                    return BankGroup.rows(of: group.id, accounts: loaded.items ?? [], candidates: rows)
                 }
                 // Known banks: `?bank=` with the institution CODE(s), never the display label.
                 var rows: [MailCandidate] = []
                 for code in group.bankCodes {
-                    for candidate in try await model.service.mailCandidates(bank: code) where !rows.contains(where: { $0.id == candidate.id }) {
+                    for candidate in try await model.service.mailCandidates(bank: code)
+                    where candidate.candidateId != nil && !rows.contains(where: { $0.id == candidate.id }) {
                         rows.append(candidate)
                     }
                 }

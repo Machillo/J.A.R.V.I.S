@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import unicodedata
 from typing import Any
@@ -359,10 +360,29 @@ def _load_users_obligations(workspace_id: str, account_id: str) -> dict[str, Any
             "SELECT liquid_savings FROM financial_profiles WHERE account_id=%s AND workspace_id=%s",
             (account_id, workspace_id),
         ).fetchone()
+        # Before the neutral model, a Users Salvavidas save wrote the amount to the workspace's
+        # own emergency_fund row (source 'salvavidas'). It is still the user's data: read it
+        # when no savings are declared, so a saved amount never turns into "unknown".
+        legacy = None
+        table = conn.execute("SELECT to_regclass('public.account_balances') AS table_name").fetchone()
+        if table and table.get("table_name"):
+            legacy = conn.execute(
+                """SELECT current_balance FROM account_balances
+                   WHERE workspace_id=%s AND is_active=TRUE AND account_type='emergency_fund' AND source='salvavidas'
+                   ORDER BY updated_at DESC,id DESC LIMIT 1""",
+                (workspace_id,),
+            ).fetchone()
     for row in recurring:
         row["monthly_amount"] = _monthly_equivalent(_f(row.get("amount")), row.get("frequency") or "monthly")
     savings = profile.get("liquid_savings") if profile else None
-    return {"debts": debts, "recurring": recurring, "liquid_savings": None if savings is None else _f(savings)}
+    legacy_balance = legacy.get("current_balance") if legacy else None
+    if savings is not None:
+        current, source = _f(savings), "declared"
+    elif legacy_balance is not None:
+        current, source = _f(legacy_balance), "previous_salvavidas_save"
+    else:
+        current, source = None, None
+    return {"debts": debts, "recurring": recurring, "liquid_savings": current, "savings_source": source}
 
 
 def _users_salvavidas_state() -> dict[str, Any]:
@@ -406,6 +426,7 @@ def _users_salvavidas_from(data: dict[str, Any], target_months: int) -> dict[str
         "scope": "users",
         "current_amount": round(current, 2) if known else None,
         "current_amount_known": known,
+        "current_amount_source": data.get("savings_source") if known else None,
         "monthly_base": monthly_base,
         "target_months": target_months,
         "allowed_target_months": list(ALLOWED_TARGET_MONTHS),
@@ -437,6 +458,13 @@ def _users_salvavidas_from(data: dict[str, Any], target_months: int) -> dict[str
     }
 
 
+def _unchanged_savings(amount: float) -> bool:
+    """Whether `amount` is just what the Users screen displayed (unknown shows as 0)."""
+    data = _load_users_obligations(get_current_workspace_id(), get_current_account_id())
+    shown = data.get("liquid_savings")
+    return round(amount, 2) == round(shown if shown is not None else 0.0, 2)
+
+
 def _update_users_salvavidas(
     *,
     current_amount: float | None,
@@ -456,14 +484,18 @@ def _update_users_salvavidas(
             "In DINCR every obligation counts toward your emergency fund.",
         ))
     clean_target = None
+    if current_amount is not None and _unchanged_savings(float(current_amount)):
+        # The historical web screen re-sends the amount it showed (0 for unknown) on every
+        # save. Re-sending what is already shown is not an edit: never declare a zero.
+        current_amount = None
     if target_months is not None:
         clean_target = int(target_months)
         if clean_target not in ALLOWED_TARGET_MONTHS:
             raise ValueError("El objetivo del Salvavidas debe ser de 1, 3 o 6 meses.")
     if current_amount is not None:
         amount = float(current_amount)
-        if amount < 0:
-            raise ValueError(tx("El ahorro no puede ser negativo.", "Savings can’t be negative."))
+        if not math.isfinite(amount) or amount < 0 or amount > 999_999_999_999.99:
+            raise ValueError(tx("Indicá un ahorro válido.", "Enter a valid savings amount."))
         with get_connection() as conn:
             updated = conn.execute(
                 """UPDATE financial_profiles SET liquid_savings=%s,updated_at=NOW()

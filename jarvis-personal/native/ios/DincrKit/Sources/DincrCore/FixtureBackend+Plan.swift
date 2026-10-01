@@ -66,7 +66,9 @@ extension FixtureBackend {
             "objective": hasIncome ? "Modo ATAQUE DE DEUDA: hay deuda con tasa alta." : "Registrá o declará tus ingresos para que DINCR pueda repartir tu sobrante.",
             "priority": ["kind": "debt", "title": "Atacar deuda: Tarjeta de crédito", "detail": "El sobrante destinado a deuda se concentra primero en esta obligación."],
             "monthly_income": hasIncome ? 865_000 : 0, "income_policy": ["policy": "income-policy-v1", "source": hasIncome ? "recorded" : "none"],
-            "monthly_expenses": 312_000, "debt_commitment_current_cycle": 95_000, "pending_recurring_total": 24_900,
+            // Recurring obligations not yet covered by recorded spending: max(24.900 − 312.000, 0).
+            "monthly_expenses": 312_000, "debt_commitment_current_cycle": 95_000, "pending_recurring_total": 0,
+            "recurring_obligation_items": [["id": 45, "name": "Internet", "due_day": 4, "monthly_amount": 24_900]],
             "safe_to_spend": 64_000, "distributable_account_cash": NSNull(),
             "emergency_fund": ["current": 120_000, "monthly_base": 330_000, "next_target": 330_000, "gap_to_next_target": 210_000, "level": "one_month_building"],
             "timeline": [["priority": 1, "name": "Tarjeta de crédito", "remaining_amount": 420_000, "recommended_payment": 205_000, "estimated_payoff_date": "2027-02-01"],
@@ -74,11 +76,11 @@ extension FixtureBackend {
             "estimated_debt_free_date": "2028-06-01", "total_debt": 1_240_000, "debt_progress_percent": 58.67, "investment_recommended": 0,
             "rules": ["Solo se distribuye el sobrante que queda después de obligaciones y gastos ya registrados.",
                       "Las deudas activas reservan al menos su cuota mensual completa antes de repartir dinero."],
-            "allocation_base_amount": 433_100,
-            "allocation_items": [["key": "ataque_de_deuda", "percentage": 50.0, "amount": 216_550, "target_name": "Tarjeta de crédito"],
-                                 ["key": "fondo_de_emergencia", "percentage": 35.0, "amount": 151_585],
-                                 ["key": "vida_controlada", "percentage": 15.0, "amount": 64_965]],
-            "distribution_formula": ["income": 865_000, "recorded_spending": 312_000, "debt_commitment": 95_000, "pending_recurring": 24_900, "surplus": 433_100, "deficit": 0],
+            "allocation_base_amount": 458_000,
+            "allocation_items": [["key": "ataque_de_deuda", "percentage": 50.0, "amount": 229_000, "target_name": "Tarjeta de crédito"],
+                                 ["key": "fondo_de_emergencia", "percentage": 35.0, "amount": 160_300],
+                                 ["key": "vida_controlada", "percentage": 15.0, "amount": 68_700]],
+            "distribution_formula": ["income": 865_000, "recorded_spending": 312_000, "debt_commitment": 95_000, "pending_recurring": 0, "surplus": 458_000, "deficit": 0],
         ]
         if owner {
             // The Owner's cycle, cash and statement figures (invented, like everything here).
@@ -123,6 +125,7 @@ extension FixtureBackend {
         var answer: [String: Any] = [
             "status": base > 0 ? "OK" : "needs_obligations", "scope": "users",
             "current_amount": current.map { number($0) as Any } ?? NSNull(), "current_amount_known": current != nil,
+            "current_amount_source": current == nil ? NSNull() as Any : "declared" as Any,
             "monthly_base": number(base), "target_months": months, "allowed_target_months": [1, 3, 6], "target_amount": number(target),
             "missing_amount": current.map { number(max(target - $0, 0)) as Any } ?? NSNull(),
             "components": ["debt_monthly_payments": number(debtMonthly), "recurring_obligations": number(recurringMonthly)],

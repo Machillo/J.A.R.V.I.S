@@ -547,7 +547,7 @@ class FakeBackend(
     /** Like `get_strategy_basic`: the declared income first, else the observed one (said so), else needs_income. */
     private fun strategy(): Strategy {
         val (source, _) = planRoutes.basicIncome(snapshot())
-        val basis = Strategy.IncomeBasis(source, if (source == "declared") null else "observed_baseline", if (source == "observed") "transactions" else null)
+        val basis = Strategy.IncomeBasis(source, if (source == "declared") null else "income-policy-v1", if (source == "observed") "transactions" else null)
         if (source == "none") return Strategy("needs_income", recommendation = "Registrá tus ingresos o completá tu situación financiera para armar tu estrategia.",
             incomeSource = source, incomeBasis = basis)
         return Strategy(

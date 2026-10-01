@@ -4,7 +4,7 @@ import Foundation
 /// app's `lib/bankIdentity.js` + `lib/bankBranding.js` (same banks, codes and text patterns, same
 /// order). Presentation only: it never decides data. The logos are the historical files of
 /// `frontend/src/assets/institutions/` in the app's asset catalog (`logoAsset`); a bank without one
-/// keeps its initials, so a missing logo never breaks a screen. Android twin: `BankBrand.kt`.
+/// keeps its initials, so a missing logo never breaks a screen. Android twin: `BankBranding.kt`.
 public struct BankBrand: Sendable, Equatable, Hashable {
     /// Stable id: a known bank's id (`bac`, `bn`…), or a compact form of an unknown name.
     public let id: String

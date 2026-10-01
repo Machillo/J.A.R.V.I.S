@@ -123,9 +123,16 @@ private fun BasicStrategyView(s: Strategy, nav: Navigator) {
 private fun LinkButton(label: String, onClick: () -> Unit) =
     androidx.compose.material3.TextButton(onClick) { Text(label, color = Dincr.colors.tint) }
 
-/** Where the monthly income comes from, as the backend's income policy says. */
+/** Income sources that are an estimate from recorded income, not a declared value. */
+private val ESTIMATED_INCOME = setOf("observed", "recorded")
+
+/**
+ * Where the monthly income comes from: Basic's `income_source` (`observed`) or the VIP income
+ * policy's `source` (`recorded`, `declared_capped_by_recorded`, `declared`).
+ */
 private fun incomeSourceNote(source: String?): String? = when (source) {
-    "observed" -> tx("Estimado con tus ingresos registrados (no declarado)", "Estimated from your recorded income (not declared)")
+    in ESTIMATED_INCOME -> tx("Estimado con tus ingresos registrados (no declarado)", "Estimated from your recorded income (not declared)")
+    "declared_capped_by_recorded" -> tx("Ingreso declarado, ajustado a lo que registraste", "Declared income, capped by what you recorded")
     "declared" -> tx("Ingreso declarado en tu situación financiera", "Income declared in your financial situation")
     else -> null
 }
@@ -133,7 +140,7 @@ private fun incomeSourceNote(source: String?): String? = when (source) {
 @Composable
 private fun DirectorStrategyView(s: DirectorStrategy, nav: Navigator) {
     if (s.status == "needs_income") { NeedsIncome(s.objective, nav); return }
-    if (s.incomePolicy?.source == "observed") ObservedIncomeNote()
+    if (s.incomePolicy?.source in ESTIMATED_INCOME) ObservedIncomeNote()
     if (s.status == "critical") StatusBanner(BannerTone.WARNING, tx("Este mes no hay sobrante real", "No real surplus this month"), s.objective.orEmpty())
     DincrCard {
         Column(Modifier.testTag("strategy.director.${s.scope}"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {

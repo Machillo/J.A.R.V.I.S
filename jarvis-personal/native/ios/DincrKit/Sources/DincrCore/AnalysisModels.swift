@@ -7,7 +7,7 @@ import Foundation
 // - `GET /finance/net-worth` (finance/service.py `get_net_worth_report`),
 // - `GET /finance/engine` (finance/strategic_engine.py `get_financial_engine_report`).
 // Every figure is the backend's; decoding is tolerant (unknown or odd values are nil, never zero).
-// Android twin: `AnalysisModels.kt`.
+// Android twin: `OwnerAnalysis.kt`.
 
 /// `GET /transactions/analysis/summary`.
 public struct TransactionAnalysis: Decodable, Sendable, Equatable {

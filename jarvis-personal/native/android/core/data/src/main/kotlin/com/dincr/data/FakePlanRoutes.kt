@@ -90,7 +90,8 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             objective = if (status == "needs_income") "Registrá o declará tus ingresos para que DINCR pueda repartir tu sobrante." else "Modo DEBT ATTACK: se acelera la deuda sin dejar de construir seguridad.",
             priority = target?.let { DirectorStrategy.Priority("debt", "Atacar deuda: ${it.name}", "El sobrante destinado a deuda se concentra primero en esta obligación.") },
             monthlyIncome = income,
-            incomePolicy = DirectorStrategy.IncomePolicy(if (incomeSource == "declared") "declared_first" else "observed_baseline", incomeSource),
+            // The backend income policy's own values: "declared" or, without a declared income, "recorded".
+            incomePolicy = DirectorStrategy.IncomePolicy("income-policy-v1", if (incomeSource == "declared") "declared" else if (incomeSource == "none") "none" else "recorded"),
             monthlyExpenses = spent, debtCommitmentCurrentCycle = debtCommitment, pendingRecurringTotal = if (owner) null else pendingRecurring,
             safeToSpend = part(15),
             // Like the backend director: unknown Users savings count as 0 here; `salvavidas` says they are unknown.

@@ -134,7 +134,8 @@ private struct DashboardStrategyContent: View {
             }
             FigureRow(label: tx("Gastos registrados este mes", "Spending recorded this month"), amount: plan.monthlyExpenses)
             FigureRow(label: tx("Cuotas de deuda pendientes", "Pending debt payments"), amount: plan.debtCommitmentCurrentCycle)
-            FigureRow(label: tx("Pagos recurrentes pendientes", "Pending recurring payments"), amount: plan.pendingRecurringTotal)
+            // Recurring obligations not yet covered by the spending recorded this month (backend figure).
+            FigureRow(label: tx("Obligaciones recurrentes sin cubrir", "Recurring obligations not yet covered"), amount: plan.pendingRecurringTotal)
             FigureRow(label: tx("Podés gastar con tranquilidad", "Safe to spend"), amount: plan.safeToSpend)
         }
         .dincrCard()

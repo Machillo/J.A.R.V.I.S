@@ -7,7 +7,7 @@ import Foundation
 // - Owner: `GET /jarvis/premium/strategy-dashboard`, `strategy.scope == "owner"` (the historical
 //   JARVIS model). Only the server role in `/auth/me` selects it; the backend decides again.
 // Decoding is tolerant: an unknown key is ignored and a value of an unexpected type is unknown
-// (nil, shown as "—"), never zero. Android twin: `StrategyModels.kt`.
+// (nil, shown as "—"), never zero. Android twin: `StrategyDashboard.kt`.
 
 extension KeyedDecodingContainer {
     /// The value, or nil when it is missing, null or of another type: one odd field never hides the screen.
@@ -324,7 +324,7 @@ public enum DistributionLabels {
         case "statement_spending": return language.pick("Gastos del estado de cuenta", "Statement spending")
         case "new_spending_after_cut": return language.pick("Gastos nuevos después del corte", "New spending after the cut")
         case "debt_commitment": return language.pick("Cuotas de deuda pendientes", "Pending debt payments")
-        case "pending_recurring": return language.pick("Pagos recurrentes pendientes", "Pending recurring payments")
+        case "pending_recurring": return language.pick("Obligaciones recurrentes sin cubrir", "Recurring obligations not yet covered")
         case "mandatory_fixed_pending": return language.pick("Gastos fijos pendientes", "Pending fixed expenses")
         case "surplus": return language.pick("Sobrante para repartir", "Surplus to allocate")
         case "deficit": return language.pick("Faltante", "Shortfall")
