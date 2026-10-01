@@ -159,10 +159,9 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
     isMounted: () => mounted.current,
     onApplied: () => {
       const decision = action === "reject" ? "rejected" : corrections ? "corrected" : "accepted";
-      // One event per review: the decision and how long the notice waited, as a bucket.
-      trackEvent("mail_candidate_reviewed", {
-        decision, review_latency: reviewLatencyBucket(item.received_at), is_transfer: Boolean(item.is_internal_transfer),
-      });
+      // One event per review: the decision and how long the candidate waited since DINCR
+      // detected it (DINCR's own record, not the email's date), as a bucket.
+      trackEvent("mail_candidate_reviewed", { decision, review_latency: reviewLatencyBucket(item.created_at) });
       trackEvent("useful_action", { action_type: "mail_candidate_reviewed" });
     },
     ui: {

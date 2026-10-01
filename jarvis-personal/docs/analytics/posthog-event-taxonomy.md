@@ -29,6 +29,8 @@ Este documento es el **contrato v2**: taxonomía canónica, audiencias Users/Own
 |---|---|---|---|
 | `user` | `role=user`, plan `free`/`basic`/`vip`, documentos legales aceptados | Solo `userEvents` | `audience`, `plan`, `platform`, `app_version`, `environment` |
 | `owner` | `role=owner`, documentos legales aceptados | Solo `ownerEvents` (`jarvis_*`) | `audience`, `platform`, `app_version`, `environment` (sin `plan`) |
+
+**Owner y aceptación legal.** La app no muestra la pantalla de consentimiento al Owner. Si su cuenta no tiene una aceptación registrada de las versiones vigentes, no se envía **ningún** evento JARVIS (fail-safe). Hay dos caminos, y es una **decisión de producto**: que el Owner acepte las versiones vigentes, o eximirlo de ese requisito. El código no cambia esto en silencio.
 | ninguna | admin, cuentas sin aceptación legal, planes desconocidos, web, builds sin clave | Nada | — |
 
 - La audiencia la decide la cuenta, nunca quien llama: `captureProductEvent` siempre sobrescribe `audience`.
@@ -84,7 +86,7 @@ Este documento es el **contrato v2**: taxonomía canónica, audiencias Users/Own
 | `mailbox_connection_failed` | El OAuth volvió con error | `provider`, `error_code` |
 | `mailbox_disconnected` | Buzón desconectado | — |
 | `mail_sync_requested` | "Actualizar" manual. El resultado lo reporta el servidor | — |
-| `mail_candidate_reviewed` | Revisión de un candidato | `decision`: accepted/corrected/rejected, `review_latency`: under_1h/under_1d/under_7d/over_7d, `is_transfer` |
+| `mail_candidate_reviewed` | Revisión de un candidato | `decision`: accepted/corrected/rejected, `review_latency`: under_1h/under_1d/under_7d/over_7d, medido desde que DINCR **detectó** el candidato (no desde la fecha del correo) |
 | `financial_account_reviewed` | Revisión de una cuenta detectada | `ownership_status`: own/not_mine |
 | `account_deletion_started` / `account_deletion_failed` | Eliminación de cuenta | — |
 | `data_export_completed` | Exportación de datos | — |
@@ -149,7 +151,7 @@ Todos llevan además `success`, `source_type=server`, `environment`, `$process_p
   - Email Monitor: `decision`, `review_latency`, `ownership_status`, `provider`, `error_code`;
   - acciones: `action_type`;
   - errores: `endpoint`, `method`, `error_category`.
-- **Booleanos:** `success`, `is_transfer`.
+- **Booleano:** `success`.
 - **`app_version`:** solo `x.y.z`.
 - **`status_code`:** entero entre 100 y 599.
 - **Solo en el servidor:** plantillas de ruta, nombres de clase de excepción, `duration_ms` redondeada y conteos acotados.
@@ -164,7 +166,8 @@ Todos llevan además `success`, `source_type=server`, `environment`, `$process_p
 - URLs y rutas;
 - mensajes o stacks de error;
 - texto del chat de JARVIS, prompts y eventos de calendario;
-- fechas exactas (solo buckets).
+- fechas exactas (solo buckets);
+- cualquier valor derivado de un correo (fecha del mensaje, clasificación del parser como "transferencia propia", banco). Lo único que sale es la decisión del usuario y un bucket calculado sobre registros propios de DINCR.
 
 **Guards:**
 - **Móvil** (`npm run test:product-analytics`):
@@ -249,7 +252,7 @@ Sin clave o con un host fuera de la lista (`us|eu.i.posthog.com`), la analítica
    - `app_resumed`;
    - `logout`.
    Todos con `audience=user`.
-3. **Cuenta Owner:**
+3. **Cuenta Owner** (requiere su aceptación legal registrada, ver §2):
    - solo `jarvis_opened` y `jarvis_section_viewed`, con `audience=owner`;
    - al usar Estrategia o el Chat, **ningún** evento de Users ni texto.
 4. **Abrir un evento.** Debe tener:

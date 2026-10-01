@@ -16,8 +16,8 @@ assert.deepEqual(safeAnalyticsProperties({
   $current_url: "https://example.com/#access_token=secret", $set: { email: "private@example.com" },
 }), { plan: "vip", platform: "android", success: true, decision: "corrected" });
 assert.deepEqual(safeAnalyticsProperties({ plan: "VIP@gmail.com", platform: "web", source_type: "BAC", screen: "/debts/1234" }), {});
-assert.deepEqual(safeAnalyticsProperties({ app_version: "1.9.11", is_transfer: false, constructor: "x", toString: "y" }), {
-  app_version: "1.9.11", is_transfer: false,
+assert.deepEqual(safeAnalyticsProperties({ app_version: "1.9.11", success: false, is_transfer: true, constructor: "x", toString: "y" }), {
+  app_version: "1.9.11", success: false,
 });
 assert.ok(analyticsEvents.has("account_deletion_started"));
 assert.equal(analyticsEvents.has("$pageview"), false);
@@ -31,7 +31,9 @@ assert.match(sdk, /user\?\.legal\?\.required !== false\) return null/);
 assert.doesNotMatch(sdk, /posthog\.identify\(/);
 assert.doesNotMatch(gmail, /bank: item\.|institution_country: item\.|auto_saved: result\./);
 assert.match(gmail, /trackEvent\("mailbox_connected", \{ provider: outcome\.provider \}\)/, "every provider's connection is counted on the device");
-assert.match(gmail, /review_latency: reviewLatencyBucket\(item\.received_at\)/, "the review latency leaves the device as a bucket only");
+assert.match(gmail, /review_latency: reviewLatencyBucket\(item\.created_at\) \}/, "review latency: a bucket of DINCR's detection time, nothing from the email");
+const reviewEvent = gmail.slice(gmail.indexOf('trackEvent("mail_candidate_reviewed"'), gmail.indexOf('trackEvent("useful_action"'));
+assert.ok(reviewEvent.length > 0 && !/received_at|is_internal_transfer|is_transfer|bank|subject|sender/.test(reviewEvent), "no value derived from the email is sent with a review");
 
 function runSdk({ key = "", mobile = true, legal = false, appId = "com.dincr.app", role = "user", plan = "vip" } = {}) {
   const calls = [];
@@ -98,7 +100,7 @@ assert.equal(calls.filter(([name, value]) => name === "capture" && value.event =
 
 // --- Privacy guard: no allowed property name may describe financial content,
 // mail content, identity or credentials. Adding one to the contract fails here.
-const SENSITIVE = /amount|balance|salary|income|debt|iban|account_?(id|number)|workspace|card|sinpe|subject|body|snippet|sender|recipient|counterpart|payee|payer|email|mail_?address|name|token|secret|password|cookie|auth|header|raw|payload|description|merchant|url|path|query|stack|(^|_)message($|_)|(^|_)ip($|_)|phone|user_?id|person|prompt|(^|_)text($|_)|chat|conversation|transcript|calendar|title|note|content|date|(^|_)at$|address|location|wealth/i;
+const SENSITIVE = /amount|balance|salary|income|debt|iban|account_?(id|number)|workspace|card|sinpe|subject|body|snippet|sender|recipient|counterpart|payee|payer|email|mail_?address|name|token|secret|password|cookie|auth|header|raw|payload|description|merchant|url|path|query|stack|(^|_)message($|_)|(^|_)ip($|_)|phone|user_?id|person|prompt|(^|_)text($|_)|chat|conversation|transcript|calendar|title|note|content|(^|_)date|(^|_)at$|address|location|wealth/i;
 for (const name of analyticsPropertyNames) assert.doesNotMatch(name, SENSITIVE, `analytics property '${name}' looks sensitive`);
 const hostile = {
   amount: 12500, balance: 1, salary: 1, debt: 1, iban: "CR05015202001026284066", account_number: "1234",
@@ -154,7 +156,9 @@ const registryBody = registry.slice(registry.indexOf("  return {"), registry.las
 const registryPages = new Set([...registryBody.matchAll(/^ {4}"?([a-z-]+)"?:/gm)].map((m) => m[1]));
 assert.deepEqual([...registryPages].sort(), [...userScreens].sort(), "screen enum = every Users page id");
 const personal = fs.readFileSync(new URL("../src/personal/PersonalApp.jsx", import.meta.url), "utf8");
-for (const [, page] of personal.matchAll(/case "([a-z_-]+)":/g)) assert.ok(jarvisSections.has(page), `JARVIS page '${page}' missing from jarvisSections`);
+const ownerPages = [...personal.matchAll(/case "([^"]+)":/g)].map((m) => m[1]);
+assert.ok(ownerPages.length >= 20, "the Owner page switch was found");
+for (const page of ownerPages) assert.ok(jarvisSections.has(page), `JARVIS page '${page}' missing from jarvisSections`);
 assert.ok(jarvisSections.has("dashboard"));
 assert.ok(mailOAuthErrorCodes.has("other"));
 for (const [path, module] of [["/user-product/vip/gmail/sync", "mail"], ["/user-product/vip/mail/oauth/complete?flow=secret", "mail"], ["/auth/me", "auth"],

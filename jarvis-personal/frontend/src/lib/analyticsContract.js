@@ -40,8 +40,10 @@ export const userScreens = new Set([
 
 // Every Owner page of personal/PersonalApp.jsx (checked by the contract test).
 export const jarvisSections = new Set([
-  "dashboard", "finance", "receivables", "wealth", "reconciliation", "deterioration", "investments",
-  "businesses", "goals", "transactions", "memory", "strategy", "emails", "settings", "chats", "profile",
+  "dashboard", "finance", "receivables", "wealth", "financialAccounts", "netWorth", "financialTimeline",
+  "reconciliation", "deterioration", "investments", "businesses", "goals", "transactions", "memory",
+  "strategy", "additionalCards", "emails", "settings", "chats", "moneyControl", "userManagement",
+  "productOperations", "profile",
 ]);
 
 // A useful action is a successful write the user made on purpose: the activation
@@ -79,11 +81,12 @@ export function usefulActionFor(method, path) {
   return null;
 }
 
-// How long a mail candidate waited before review, as a bucket (never a date).
-export function reviewLatencyBucket(receivedAt, now = Date.now()) {
-  const received = Date.parse(receivedAt || "");
-  if (!Number.isFinite(received) || received > now) return undefined;
-  const hours = (now - received) / 3_600_000;
+// How long a mail candidate waited for review since DINCR detected it, as a bucket
+// (never a date). Uses the candidate's own creation time, not the email's date.
+export function reviewLatencyBucket(detectedAt, now = Date.now()) {
+  const detected = Date.parse(detectedAt || "");
+  if (!Number.isFinite(detected) || detected > now) return undefined;
+  const hours = (now - detected) / 3_600_000;
   if (hours < 1) return "under_1h";
   if (hours < 24) return "under_1d";
   if (hours < 24 * 7) return "under_7d";
@@ -112,7 +115,7 @@ const categories = {
   error_category: new Set(["window_error", "unhandled_rejection", "render_error", "network", "server", "client"]),
 };
 
-const booleans = new Set(["success", "is_transfer"]);
+const booleans = new Set(["success"]);
 
 const endpointRules = [
   [/^\/auth\b/, "auth"],

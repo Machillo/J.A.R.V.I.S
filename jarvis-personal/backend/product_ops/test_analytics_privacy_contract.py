@@ -22,7 +22,8 @@ SENSITIVE = re.compile(
     r"amount|balance|salary|income|debt|iban|account|workspace|card|sinpe|subject|body|snippet|sender|recipient|"
     r"counterpart|payee|payer|email|mail_?address|name|token|secret|password|cookie|auth|header|raw|payload|"
     r"description|merchant|url|query|stack|(^|_)message($|_)|(^|_)ip($|_)|phone|user|person|mailbox|connection|"
-    r"prompt|(^|_)text($|_)|chat|conversation|transcript|calendar|title|note|content",
+    r"prompt|(^|_)text($|_)|chat|conversation|transcript|calendar|title|note|content|(^|_)date|(^|_)at$|address|"
+    r"location|wealth",
     re.I,
 )
 HOSTILE = {
