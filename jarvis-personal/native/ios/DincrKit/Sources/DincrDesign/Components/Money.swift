@@ -21,6 +21,7 @@ public struct MoneyText: View {
     let currency: String?
     let font: Font
     @Environment(\.moneyFormat) private var format
+    @Environment(\.dincrOwnerAppearance) private var owner
 
     public init(_ amount: Decimal?, sign: MoneyFormat.Sign = .none, currency: String? = nil, font: Font = DincrFont.amount) {
         self.amount = amount; self.sign = sign; self.currency = currency; self.font = font
@@ -29,7 +30,7 @@ public struct MoneyText: View {
     public var body: some View {
         Text(amount.map { format.string($0, sign: sign, currency: currency) } ?? "—")
             .font(font)
-            .foregroundStyle(sign == .income ? DincrColor.positive : DincrColor.text)
+            .foregroundStyle(sign == .income ? (owner ? OwnerColor.positive : DincrColor.positive) : (owner ? OwnerColor.text : DincrColor.text))
             .lineLimit(1)
             .minimumScaleFactor(0.6)
             .accessibilityLabel(amount.map { format.spoken($0, sign: sign, currency: currency) } ?? AppLanguage.current.pick("sin dato", "no data"))
@@ -46,6 +47,7 @@ public struct MoneyRow: View {
     let symbol: String
     let isReadOnly: Bool
     let currency: String?
+    @Environment(\.dincrOwnerAppearance) private var owner
 
     public init(title: String, subtitle: String, amount: Decimal, kind: Movement.Kind, symbol: String, isReadOnly: Bool = false, currency: String? = nil) {
         self.title = title; self.subtitle = subtitle; self.amount = amount; self.kind = kind
@@ -56,14 +58,14 @@ public struct MoneyRow: View {
         HStack(spacing: DincrSpacing.s3) {
             Image(systemName: symbol)
                 .font(.system(size: DincrIconSize.md, weight: .medium))
-                .foregroundStyle(kind == .income ? DincrColor.positive : DincrColor.text2)
+                .foregroundStyle(kind == .income ? (owner ? OwnerColor.positive : DincrColor.positive) : (owner ? OwnerColor.text2 : DincrColor.text2))
                 .frame(width: 40, height: 40)
-                .background(DincrColor.surface2, in: Circle())
+                .background(owner ? OwnerColor.surface2 : DincrColor.surface2, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(DincrFont.body)
-                    .foregroundStyle(DincrColor.text)
+                    .foregroundStyle(owner ? OwnerColor.text : DincrColor.text)
                     .lineLimit(2)
                 HStack(spacing: 4) {
                     if isReadOnly {
@@ -72,7 +74,7 @@ public struct MoneyRow: View {
                     Text(subtitle)
                 }
                 .font(DincrFont.caption)
-                .foregroundStyle(DincrColor.textMuted)
+                .foregroundStyle(owner ? OwnerColor.textMuted : DincrColor.textMuted)
             }
             Spacer(minLength: DincrSpacing.s2)
             MoneyText(amount, sign: kind == .income ? .income : .expense, currency: currency)

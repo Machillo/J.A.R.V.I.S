@@ -8,6 +8,7 @@ public struct SkeletonView: View {
     let showsFigure: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dincrDecorativeMotion) private var decorativeMotion
+    @Environment(\.dincrOwnerAppearance) private var owner
     @State private var dimmed = false
 
     public init(rows: Int = 4, showsFigure: Bool = true) {
@@ -26,7 +27,7 @@ public struct SkeletonView: View {
             VStack(spacing: DincrSpacing.s4) {
                 ForEach(0..<rows, id: \.self) { _ in
                     HStack(spacing: DincrSpacing.s3) {
-                        Circle().fill(DincrColor.surface2).frame(width: 40, height: 40)
+                        Circle().fill(placeholder).frame(width: 40, height: 40)
                         VStack(alignment: .leading, spacing: 6) {
                             block(width: 160, height: 14)
                             block(width: 100, height: 10)
@@ -47,8 +48,10 @@ public struct SkeletonView: View {
         .accessibilityLabel(AppLanguage.current.pick("Cargando", "Loading"))
     }
 
+    private var placeholder: Color { owner ? OwnerColor.surface2 : DincrColor.surface2 }
+
     private func block(width: CGFloat, height: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: DincrRadius.xs).fill(DincrColor.surface2).frame(width: width, height: height)
+        RoundedRectangle(cornerRadius: DincrRadius.xs).fill(placeholder).frame(width: width, height: height)
     }
 }
 
@@ -58,24 +61,30 @@ public struct EmptyStateView<Action: View>: View {
     let title: String
     let message: String
     let action: Action
+    @Environment(\.dincrOwnerAppearance) private var owner
 
     public init(symbol: String, title: String, message: String, @ViewBuilder action: () -> Action) {
         self.symbol = symbol; self.title = title; self.message = message; self.action = action()
     }
 
     public var body: some View {
+        let shape = RoundedRectangle(cornerRadius: owner ? OwnerRadius.card : DincrRadius.lg, style: .continuous)
         VStack(spacing: DincrSpacing.s3) {
+            // Owner: scales with Dynamic Type (a text style). Other accounts keep their current size.
             Image(systemName: symbol)
-                .font(.system(size: 32, weight: .regular))
-                .foregroundStyle(DincrColor.tint)
+                .font(owner ? Font.largeTitle.weight(.regular) : Font.system(size: 32, weight: .regular))
+                .foregroundStyle(owner ? OwnerColor.accent : DincrColor.tint)
                 .accessibilityHidden(true)
-            Text(title).font(DincrFont.title2).foregroundStyle(DincrColor.text).multilineTextAlignment(.center)
-            Text(message).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2).multilineTextAlignment(.center)
+            Text(title).font(DincrFont.title2).foregroundStyle(owner ? OwnerColor.text : DincrColor.text).multilineTextAlignment(.center)
+            Text(message).font(DincrFont.bodySmall).foregroundStyle(owner ? OwnerColor.text2 : DincrColor.text2).multilineTextAlignment(.center)
             action.padding(.top, DincrSpacing.s2)
         }
         .padding(DincrSpacing.s6)
         .frame(maxWidth: .infinity)
-        .background(DincrColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous))
+        .background(owner ? OwnerColor.surface : DincrColor.surface, in: shape)
+        .overlay {
+            if owner { shape.strokeBorder(OwnerColor.border, lineWidth: 1) }
+        }
     }
 }
 
