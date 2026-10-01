@@ -27,7 +27,8 @@ OFFICIAL_CATEGORIES: list[dict[str, Any]] = [
     {"group_name": "GASTOS VARIABLES", "category_name": "Restaurante", "transaction_type": "expense", "sort_order": 220, "aliases": ["restaurante", "uber eats", "ubereats", "comida rapida", "comida rápida", "mcdonald", "mcdonalds", "burger", "kfc", "pizza", "soda", "cafeteria", "cafetería"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Transporte", "transaction_type": "expense", "sort_order": 230, "aliases": ["uber", "didi", "taxi", "bus", "transporte", "peaje", "parqueo"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Gasolina", "transaction_type": "expense", "sort_order": 240, "aliases": ["gasolina", "combustible", "bomba", "estacion", "estación", "servicentro"]},
-    {"group_name": "GASTOS VARIABLES", "category_name": "Entretenimiento", "transaction_type": "expense", "sort_order": 250, "aliases": ["cine", "netflix", "spotify", "playstation", "psn", "juego", "videojuego", "entretenimiento", "salida", "anime"]},
+    {"group_name": "GASTOS VARIABLES", "category_name": "Entretenimiento", "transaction_type": "expense", "sort_order": 250, "aliases": ["cine", "playstation", "psn", "juego", "videojuego", "entretenimiento", "salida", "anime"]},
+    {"group_name": "GASTOS VARIABLES", "category_name": "Suscripciones", "transaction_type": "expense", "sort_order": 255, "aliases": ["suscripcion", "suscripción", "suscripciones", "subscription", "streaming", "netflix", "spotify"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Compras", "transaction_type": "expense", "sort_order": 260, "aliases": ["compra", "compras", "amazon", "temu", "shein", "ropa", "zapatos", "tienda", "mall"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Salud", "transaction_type": "expense", "sort_order": 270, "aliases": ["salud", "farmacia", "medicina", "doctor", "medico", "médico", "clinica", "clínica", "dentista", "hospital"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Deporte", "transaction_type": "expense", "sort_order": 275, "aliases": ["deporte", "muay thai", "muaythai", "boxeo", "box", "artes marciales"]},
@@ -101,8 +102,9 @@ def normalize_category(value: str | None, transaction_type: str | None = None) -
     if compact in _ALIAS_TO_CATEGORY:
         return _safe_category(_ALIAS_TO_CATEGORY[compact], transaction_type)
 
+    # Whole words only: a short alias ("ot", "ins", "box") must not match inside another word.
     for alias, category in _ALIAS_TO_CATEGORY.items():
-        if alias and alias in compact:
+        if alias and re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", compact):
             if _category_matches_transaction_type(category, transaction_type):
                 return category
 
