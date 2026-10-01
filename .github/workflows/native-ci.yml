@@ -123,12 +123,44 @@ jobs:
       # Use the newest stable Xcode that lists a concrete iPhone simulator for this scheme.
       - name: Pick an Xcode and an iPhone simulator it supports
         id: sim
+        # Switching Xcode restarts CoreSimulator, and right after it -showdestinations can list only
+        # placeholders (intermittent "no destination" on the same image). So: wait for the service,
+        # retry, and if this Xcode's runtime has no iPhone device, create one from what is installed.
         run: |
+          pick() {
+            xcodebuild -project DINCR.xcodeproj -scheme DINCR -showdestinations 2>&1 \
+              | grep "platform:iOS Simulator" | grep -v placeholder | grep "name:iPhone" | head -1 | sed -E 's/.*id:([^,]+),.*/\1/'
+          }
           for xcode in $(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -Vr); do
             sudo xcode-select -s "$xcode"
-            id=$(xcodebuild -project DINCR.xcodeproj -scheme DINCR -showdestinations 2>/dev/null \
-              | grep "platform:iOS Simulator" | grep -v placeholder | grep "name:iPhone" | head -1 | sed -E 's/.*id:([^,]+),.*/\1/')
+            xcrun simctl list runtimes >/dev/null 2>&1 || true
+            id=""
+            for attempt in 1 2 3; do
+              id=$(pick)
+              if [ -n "$id" ]; then break; fi
+              echo "$xcode: no iPhone simulator destination yet (attempt $attempt)"
+              sleep 15
+            done
+            if [ -z "$id" ]; then
+              # The newest installed iOS runtime and an iPhone type it supports.
+              pair=$(xcrun simctl list runtimes available -j | python3 -c '
+          import json, sys
+          rs = [r for r in json.load(sys.stdin)["runtimes"] if r.get("platform") == "iOS"]
+          rs.sort(key=lambda r: [int(x) for x in r["version"].split(".")])
+          for r in reversed(rs):
+              phones = [t for t in r.get("supportedDeviceTypes", []) if t.get("productFamily") == "iPhone"]
+              if phones:
+                  print(r["identifier"], phones[-1]["identifier"])
+                  break
+          ' || true)
+              if [ -n "$pair" ]; then
+                echo "$xcode: creating an iPhone simulator ($pair)"
+                xcrun simctl create "DINCR CI iPhone" ${pair#* } ${pair% *} >/dev/null || true
+                id=$(pick)
+              fi
+            fi
             if [ -n "$id" ]; then echo "Using $xcode, simulator $id"; break; fi
+            echo "$xcode: no usable iPhone simulator"; xcrun simctl list runtimes || true
           done
           test -n "$id"
           xcodebuild -version
