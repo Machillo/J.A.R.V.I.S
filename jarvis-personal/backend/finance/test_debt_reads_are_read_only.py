@@ -80,7 +80,8 @@ class Conn:
                 payments.append({"workspace_id": p[0], "debt_id": p[1], "principal": p[3], "payment_date": p[12], "installment_number": p[13]})
             return _rows([])
         if q.startswith("INSERT INTO transactions"):
-            txs.append({"workspace_id": params[0], "type": "debt_payment", "amount": params[3]})
+            if not any((x["workspace_id"], x["notes"]) == (params[6], params[7]) for x in txs):
+                txs.append({"workspace_id": params[0], "type": "debt_payment", "amount": params[3], "notes": params[5]})
             return _rows([])
         if q.startswith("UPDATE debts SET start_date"):
             start, first, balance, paid, last, nxt, finished, debt_id, workspace = params
@@ -220,7 +221,7 @@ def test_dry_run_lists_due_installments_and_writes_nothing(store):
     assert plan["dry_run"] is True and len(plan["installments"]) == 5
     assert [i["installment_number"] for i in plan["installments"]] == [1, 2, 3, 4, 5]
     assert all(date.fromisoformat(i["due_date"]) <= TODAY for i in plan["installments"])
-    assert plan["debts_updated"] == [2]
+    assert plan["debts_to_update"] == [2] and "debts_updated" not in plan
     assert store.writes == [] and _stored(store, 2) == before
 
 
@@ -245,6 +246,59 @@ def test_the_command_records_each_due_installment_once_and_is_idempotent(store):
     assert second["installments"] == [] and second["debts_updated"] == []
     assert store.writes == writes_after_first
     assert len(store.state["payments"]) == 5 and len(store.state["transactions"]) == 5
+
+
+def test_a_partly_recorded_debt_with_a_stale_counter_gets_only_the_missing_installments(store):
+    # Installments 1-4 are due (payment day 1), 5 is next month. The ledger already has 1 and 2
+    # (with their transactions), the row's balance reflects them, but installments_paid says 1.
+    _owner_debt_in_a(store)
+    first_due = service._add_months(TODAY.replace(day=1), -3, 1)
+    due = [service._add_months(first_due, n, 1).isoformat() for n in range(5)]
+    debt = store.state["debts"][2]
+    debt.update(payment_day=1, first_payment_date=first_due, installments_paid=1,
+                last_payment_date=due[1], remaining_amount=450000.0)
+    for number in (1, 2):
+        store.state["payments"].append({"workspace_id": WS_A, "debt_id": 2, "principal": 25000.0,
+                                        "payment_date": due[number - 1], "installment_number": number})
+        store.state["transactions"].append({"workspace_id": WS_A, "type": "debt_payment", "amount": 50000.0,
+                                            "notes": f"debt_id:2;installment:{number}"})
+    before = _stored(store, 2)
+    token = _as("owner")
+    try:
+        dry = service.apply_due_installments(dry_run=True)
+        after_dry = (list(store.writes), _stored(store, 2), len(store.state["payments"]), len(store.state["transactions"]))
+        real = service.apply_due_installments(dry_run=False)
+        writes_after_real = list(store.writes)
+        again = service.apply_due_installments(dry_run=False)
+    finally:
+        reset_current_user(token)
+
+    # Dry run: writes nothing, plans only the missing due installments 3 and 4, chained on the balance.
+    assert after_dry == ([], before, 2, 2)
+    assert dry["debts_to_update"] == [2] and "debts_updated" not in dry
+    plan = dry["installments"]
+    assert [(i["installment_number"], i["due_date"]) for i in plan] == [(3, due[2]), (4, due[3])]
+    assert plan[0]["previous_remaining_amount"] == 450000.0
+    assert plan[1]["previous_remaining_amount"] == plan[0]["new_remaining_amount"]
+    assert all(0 < i["principal"] <= i["amount"] for i in plan)
+    assert all(i["new_remaining_amount"] == round(i["previous_remaining_amount"] - i["principal"], 2) for i in plan)
+    assert plan[1]["new_remaining_amount"] < plan[0]["new_remaining_amount"] < 450000.0
+
+    # Real run: exactly the plan, nothing duplicated, row brought in line with the ledger.
+    assert real["installments"] == plan and real["debts_updated"] == [2] and "debts_to_update" not in real
+    assert sorted(p["installment_number"] for p in store.state["payments"]) == [1, 2, 3, 4]
+    assert len({p["payment_date"] for p in store.state["payments"]}) == 4
+    notes = [t["notes"] for t in store.state["transactions"]]
+    assert sorted(notes) == [f"debt_id:2;installment:{n}" for n in (1, 2, 3, 4)]
+    stored = _stored(store, 2)
+    assert stored["remaining_amount"] == plan[-1]["new_remaining_amount"]
+    assert stored["installments_paid"] == 4
+    assert stored["last_payment_date"] == due[3] and stored["next_payment_date"] == due[4]
+
+    # A second real run is idempotent: nothing planned, nothing written.
+    assert again == {"dry_run": False, "installments": [], "debts_updated": []}
+    assert store.writes == writes_after_real and _stored(store, 2) == stored
+    assert len(store.state["payments"]) == 4 and len(store.state["transactions"]) == 4
 
 
 def test_an_installment_not_yet_due_is_never_recorded(store):

@@ -400,6 +400,10 @@ def apply_due_installments(workspace_id: str | None = None, *, dry_run: bool = T
     in debt_payments (with its debt_payment transaction) and only then moves the
     debt's balance. A debt row is updated only when one of its values changes.
     ``dry_run`` (the default) computes the same plan and writes nothing.
+
+    Returns ``{"dry_run", "installments", "debts_to_update"}`` on a dry run and
+    ``{"dry_run", "installments", "debts_updated"}`` on a real run, so a dry run
+    never reports a write that did not happen.
     """
     if not schedule_automation_enabled():
         raise HTTPException(status_code=403, detail="Solo el Owner aplica cuotas programadas.")
@@ -558,7 +562,8 @@ def apply_due_installments(workspace_id: str | None = None, *, dry_run: bool = T
 
         if not dry_run and (plan or updated):
             conn.commit()
-    return {"dry_run": dry_run, "installments": plan, "debts_updated": updated}
+    debts_key = "debts_to_update" if dry_run else "debts_updated"
+    return {"dry_run": dry_run, "installments": plan, debts_key: updated}
 
 def _monthly_amount_from_frequency(amount: float, frequency: str | None) -> float:
     frequency = (frequency or 'monthly').lower().strip()
