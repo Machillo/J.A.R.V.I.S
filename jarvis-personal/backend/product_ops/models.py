@@ -28,7 +28,7 @@ class AnalyticsEventIn(BaseModel):
     install_id: str = Field(max_length=36, pattern=_UUID)
     session_id: str | None = Field(default=None, max_length=36, pattern=_UUID)
     platform: Literal["android", "ios"]
-    app_version: str | None = Field(default=None, max_length=20)
+    app_version: str | None = Field(default=None, max_length=20, pattern=r"^[0-9A-Za-z.+-]+$")
     build: Literal["release", "debug"] = "release"
 
 

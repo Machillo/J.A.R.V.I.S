@@ -96,7 +96,7 @@ SERVER_CATEGORIES: dict[str, frozenset[str]] = {
 CLIENT_BOOLEANS = frozenset({"success"})
 
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-APP_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
+APP_VERSION = re.compile(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}", re.ASCII)
 
 
 def safe_client_properties(properties: dict[str, Any] | None) -> dict[str, Any]:
@@ -154,7 +154,7 @@ def build_relay_payload(event: dict[str, Any], audience: str | None, plan: str |
     if audience == "user":
         properties["plan"] = plan
     version = event.get("app_version")
-    if isinstance(version, str) and APP_VERSION.match(version):
+    if isinstance(version, str) and APP_VERSION.fullmatch(version):
         properties["app_version"] = version
     session_id = str(event.get("session_id") or "").lower()
     if UUID.match(session_id):

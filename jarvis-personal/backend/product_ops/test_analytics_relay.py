@@ -227,5 +227,45 @@ def test_prepared_payloads_are_posted_with_the_server_key_only(monkeypatch):
             return None
 
     monkeypatch.setattr(posthog_events.requests, "post", lambda url, json, timeout: posted.append((url, json)) or Response())
+    assert posthog_events._relay_slots.acquire(blocking=False)
     posthog_events._send_prepared({"event": "screen_viewed", "distinct_id": INSTALL, "properties": {}})
     assert posted == [("https://us.i.posthog.com/capture/", {"api_key": "phc_test", "event": "screen_viewed", "distinct_id": INSTALL, "properties": {}})]
+
+
+def test_a_flood_is_dropped_not_queued_without_limit(monkeypatch):
+    monkeypatch.setenv("POSTHOG_API_KEY", "phc_test")
+    monkeypatch.setenv("POSTHOG_HOST", "https://us.i.posthog.com")
+    submitted = []
+    monkeypatch.setattr(posthog_events, "_relay_executor", type("E", (), {"submit": lambda _self, fn, payload: submitted.append(payload)})())
+    monkeypatch.setattr(posthog_events, "_relay_slots", posthog_events.threading.BoundedSemaphore(3))
+    results = [posthog_events.capture_prepared_later({"event": "screen_viewed"}) for _ in range(5)]
+    assert results == [True, True, True, False, False] and len(submitted) == 3
+
+
+def test_the_relay_logs_no_identifier_or_property(monkeypatch, caplog):
+    monkeypatch.setenv("POSTHOG_API_KEY", "phc_test")
+    monkeypatch.setenv("POSTHOG_HOST", "https://us.i.posthog.com")
+
+    def fail(*args, **kwargs):
+        raise posthog_events.requests.ConnectionError(f"boom {INSTALL} overview")
+
+    monkeypatch.setattr(posthog_events.requests, "post", fail)
+    assert posthog_events._relay_slots.acquire(blocking=False)
+    with caplog.at_level("DEBUG"):
+        posthog_events._send_prepared({"event": "screen_viewed", "distinct_id": INSTALL, "properties": {"screen": "overview"}})
+    assert caplog.text and INSTALL not in caplog.text and "overview" not in caplog.text
+
+
+def test_the_route_is_authenticated_and_bound_to_the_strict_model():
+    from backend import main
+    from backend.product_ops import routes
+
+    assert "/product-ops/analytics" not in main.PUBLIC_PATHS
+    route = next(r for r in routes.router.routes if getattr(r, "path", "") == "/product-ops/analytics")
+    assert route.methods == {"POST"}
+    assert route.dependant.body_params[0].type_ is AnalyticsEventIn or route.dependant.body_params[0].field_info.annotation is AnalyticsEventIn
+
+
+def test_app_version_is_strict_ascii_xyz():
+    for bad in ["1.2.3" + chr(10), "１.２.３", "12345.0.0", "1.2", "1.2.3-rc.1"]:
+        assert "app_version" not in relay.build_relay_payload({**event(), "app_version": bad}, "user", "free")["properties"], bad

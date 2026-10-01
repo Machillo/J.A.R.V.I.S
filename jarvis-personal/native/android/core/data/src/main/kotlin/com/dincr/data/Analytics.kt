@@ -104,6 +104,8 @@ class NativeAnalytics(
     private val appVersion = AnalyticsContract.appVersion(versionName)
     private var sessionId: String? = null
     private var lastEventAt = 0L
+    /** Bumped on sign-out: an event recorded for one account is never sent after it signed out. */
+    @Volatile private var generation = 0
 
     @Volatile var enabled = false
 
@@ -130,6 +132,7 @@ class NativeAnalytics(
     @Synchronized
     fun reset() {
         enabled = false
+        generation += 1
         sessionId = null
         store.write(INSTALL_ID, null)
     }
@@ -146,8 +149,9 @@ class NativeAnalytics(
 
     private fun record(name: String, properties: Map<String, String> = emptyMap()) {
         val event = nextEvent(name, properties) ?: return
+        val recordedIn = generation
         // Analytics never blocks or breaks the app.
-        scope.launch { runCatching { send(event) } }
+        scope.launch { if (recordedIn == generation) runCatching { send(event) } }
     }
 
     companion object {

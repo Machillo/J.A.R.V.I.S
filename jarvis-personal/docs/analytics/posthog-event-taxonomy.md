@@ -73,6 +73,11 @@ La app nativa ya pide la aceptación al Owner (`IdentityGate.LEGAL_REQUIRED` ant
   - Nunca se deriva de la cuenta, el correo ni ningún identificador.
   - El relay lo usa como `distinct_id` y no lo guarda, no lo registra en logs ni lo combina con `account_id` o `workspace_id`.
   - La sesión es un UUID que se renueva tras 30 minutos sin actividad.
+  - Un evento registrado antes de cerrar sesión nunca se envía después: un contador de generación lo descarta.
+  - El relay tiene su propia cola, acotada: ante una avalancha descarta eventos en lugar de crecer o retrasar los eventos de salud del servidor.
+- **Límites conocidos del anonimato por instalación** (no explotados; documentados):
+  - **Correlación por tiempo:** en Android, `recordScreen` también escribe en `product_events` (con `account_id`) en el mismo instante. Quien tenga acceso a la vez a la base de datos y a PostHog podría unir ambos por timestamp. El código nunca los combina.
+  - **Restauración de iOS:** el ID vive en `UserDefaults`, que entra en los respaldos de iCloud y la migración de dispositivo. Sobrevive a una restauración hasta el siguiente cierre de sesión. En Android, los respaldos lo excluyen. Pendiente de verificar en un dispositivo.
 - **Servidor:** un `distinct_id` aleatorio nuevo por evento (`dincr_server_<uuid>`). Sirve para conteos de salud, no para usuarios.
 
 **Diseño propuesto: pseudónimo estable. NO implementado. HUMAN GATE legal.**

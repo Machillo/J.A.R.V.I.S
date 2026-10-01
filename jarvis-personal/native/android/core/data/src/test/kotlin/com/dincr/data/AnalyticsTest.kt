@@ -1,7 +1,9 @@
 package com.dincr.data
 
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -70,6 +72,17 @@ class AnalyticsTest {
         analytics.enabled = true
         analytics.appOpened()
         assertNotEquals(first, sent.last().installId)
+    }
+
+    @Test fun anEventRecordedBeforeSignOutIsNeverSentAfterIt() {
+        val scope = TestScope(StandardTestDispatcher())
+        val queued = mutableListOf<AnalyticsEvent>()
+        val delayed = NativeAnalytics(MemoryStore(), "2.0.0", "release", scope, { 0L }) { queued += it }
+        delayed.enabled = true
+        delayed.appOpened()
+        delayed.reset()
+        scope.advanceUntilIdle()
+        assertTrue(queued.isEmpty())
     }
 
     @Test fun aSessionEndsAfterThirtyIdleMinutes() {

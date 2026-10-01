@@ -97,6 +97,8 @@ public actor NativeAnalytics {
     private var enabled = false
     private var sessionID: String?
     private var lastEventAt = Date.distantPast
+    /// Bumped on sign-out: an event recorded for one account is never sent after it signed out.
+    private var generation = 0
 
     public init(
         defaults: UserDefaults = .standard, version: String, build: String,
@@ -145,12 +147,14 @@ public actor NativeAnalytics {
 
     /// A hook for `APIClient(onSuccessfulWrite:)`.
     public nonisolated var writeHook: @Sendable (String, String) -> Void {
-        { [weak self] method, path in Task { await self?.writeSucceeded(method: method, path: path) } }
+        // Strong capture: no cycle (AppModel → service → APIClient → this hook → the actor).
+        { method, path in Task { await self.writeSucceeded(method: method, path: path) } }
     }
 
     /// Sign-out: stop, and start the next account with a new anonymous install ID.
     public func reset() {
         enabled = false
+        generation += 1
         sessionID = nil
         defaults.removeObject(forKey: Self.installIDKey)
     }
@@ -175,8 +179,10 @@ public actor NativeAnalytics {
         // sends go out one after another, in the order they were recorded.
         let send = self.send
         let previous = pending
+        let recordedIn = generation
         pending = Task {
             await previous?.value
+            guard recordedIn == self.generation else { return }
             try? await send(event)
         }
     }
