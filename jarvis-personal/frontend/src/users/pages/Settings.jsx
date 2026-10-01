@@ -105,7 +105,7 @@ export default function Settings({ user, onUserChange, onLogout }) {
       const activeProfile = await confirmedPlanProfile(response, planCode, getMe);
       identifyTelemetryUser(activeProfile);
       const change = response?.status === "downgrade_scheduled" ? "scheduled" : response?.status === "plan_kept" ? "kept" : "immediate";
-      trackEvent("plan_selected", { plan: planCode, change });
+      trackEvent("plan_selected", { plan: planCode, plan_change: change });
       if (!["downgrade_scheduled", "plan_kept"].includes(response?.status)) {
         trackEvent("plan_access_granted", { plan: planCode, access_type: planCode === "free" ? "free" : "promotion" });
       }

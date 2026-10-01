@@ -196,7 +196,6 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
       setSalvavidasAmount(String(Number(data?.current_amount || 0)));
       setSalvavidasTargetMonths(Number(data?.target_months || 6));
       setProtectedExpenseIds(Array.isArray(data?.protected_expense_ids) ? data.protected_expense_ids : []);
-      trackEvent("salvavidas_saved", { target_months: Number(data?.target_months || salvavidasTargetMonths) });
       await load({ keepPage: true });
     } catch (error) {
       setSalvavidasState((current) => ({ ...current, saving: false, error: error.message || tx("No pude guardar el Salvavidas.", "I couldn’t save the emergency fund.") }));
@@ -340,10 +339,7 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
                   type="button"
                   key={item.months}
                   className={`salvavidas-milestone ${item.reached ? "reached" : ""} ${salvavidasTargetMonths === item.months ? "selected" : ""}`}
-                  onClick={() => {
-                    setSalvavidasTargetMonths(item.months);
-                    trackEvent("salvavidas_target_selected", { target_months: item.months });
-                  }}
+                  onClick={() => setSalvavidasTargetMonths(item.months)}
                   aria-pressed={salvavidasTargetMonths === item.months}
                 >
                   {item.reached ? <CheckCircle2 size={16} /> : <span className="milestone-dot" />}
@@ -651,7 +647,10 @@ export default function PremiumStrategy({ api, brandName = "JARVIS" }) {
             <button
               type="button"
               className={`strategy-option-card-v3 ${active ? "active" : ""}`}
-              onClick={() => setActiveSection(active ? null : key)}
+              onClick={() => {
+                if (!active) trackEvent("strategy_tool_opened", { strategy_tool: key });
+                setActiveSection(active ? null : key);
+              }}
               aria-expanded={active}
               key={key}
             >

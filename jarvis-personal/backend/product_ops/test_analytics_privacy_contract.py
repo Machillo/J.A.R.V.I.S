@@ -21,7 +21,8 @@ BACKEND = Path(__file__).resolve().parents[1]
 SENSITIVE = re.compile(
     r"amount|balance|salary|income|debt|iban|account|workspace|card|sinpe|subject|body|snippet|sender|recipient|"
     r"counterpart|payee|payer|email|mail_?address|name|token|secret|password|cookie|auth|header|raw|payload|"
-    r"description|merchant|url|query|stack|(^|_)message($|_)|(^|_)ip($|_)|phone|user|person|mailbox|connection",
+    r"description|merchant|url|query|stack|(^|_)message($|_)|(^|_)ip($|_)|phone|user|person|mailbox|connection|"
+    r"prompt|(^|_)text($|_)|chat|conversation|transcript|calendar|title|note|content",
     re.I,
 )
 HOSTILE = {
@@ -30,6 +31,7 @@ HOSTILE = {
     "counterparty": "Persona", "email": "a@example.com", "access_token": "ya29.secret", "refresh_token": "1//secret",
     "authorization": "Bearer secret", "cookie": "sb=secret", "password": "p", "raw_payload": {"amount": 1},
     "account_id": "00000000-0000-0000-0000-000000000001", "workspace_id": "w", "connection_id": 7,
+    "prompt": "cuanto gane", "text": "hola", "chat_message": "x", "calendar_title": "Cita",
     # Allowed names with values that must still be refused:
     "provider": "yahoo", "trigger": "Bearer x", "route": "/user-product/vip/gmail/42?token=secret",
     "exception_type": "ValueError: CR05015202001026284066", "messages_scanned": -3, "status_code": "500",

@@ -24,7 +24,7 @@ import { categoryLabel, categoryValue } from "../../lib/categories";
 import { trackEvent } from "../../lib/telemetry";
 import { createLatestOnly, createReviewGate, runCandidateReview } from "../../lib/candidateReview";
 import { MAIL_OAUTH_RESULT_EVENT, takeMailOAuthOutcome } from "../../lib/mailOAuth";
-import { mailOAuthErrorCodes } from "../../lib/analyticsContract";
+import { mailOAuthErrorCodes, reviewLatencyBucket } from "../../lib/analyticsContract";
 import LegalLink from "../../components/LegalLink";
 import FinvaFormSheet from "../components/FinvaFormSheet";
 import gmailLogo from "../../assets/institutions/gmail.png";
@@ -159,10 +159,11 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
     isMounted: () => mounted.current,
     onApplied: () => {
       const decision = action === "reject" ? "rejected" : corrections ? "corrected" : "accepted";
-      trackEvent("email_candidate_reviewed", { decision, source_type: "email" });
-      trackEvent("transaction_candidate_reviewed", { decision, source_type: "email" });
-      if (action === "reject") trackEvent("transaction_rejected", { source_type: "email" });
-      else if (!item.is_internal_transfer) trackEvent("transaction_confirmed", { source_type: "email" });
+      // One event per review: the decision and how long the notice waited, as a bucket.
+      trackEvent("mail_candidate_reviewed", {
+        decision, review_latency: reviewLatencyBucket(item.received_at), is_transfer: Boolean(item.is_internal_transfer),
+      });
+      trackEvent("useful_action", { action_type: "mail_candidate_reviewed" });
     },
     ui: {
       begin: () => { setBusy(`${action}-${item.candidate_id}`); setError(""); setMessage(""); setReviewNotice(null); },
@@ -184,10 +185,7 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
     setBusy(`account-${item.id}`); setError(""); setMessage("");
     try {
       await confirmVipFinancialAccount(item.id, ownershipStatus);
-      trackEvent("financial_account_ownership_reviewed", {
-        ownership_status: ownershipStatus,
-      });
-      if (ownershipStatus === "own") trackEvent("financial_account_confirmed");
+      trackEvent("financial_account_reviewed", { ownership_status: ownershipStatus });
       setMessage(ownershipStatus === "own" ? tx("Cuenta confirmada como propia.", "Account confirmed as yours.") : tx("Cuenta marcada como ajena.", "Account marked as not yours."));
       await load();
     } catch (err) { setError(err.message || tx("No se pudo confirmar la cuenta.", "Couldn’t confirm the account.")); }
@@ -218,8 +216,8 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
       const outcome = takeMailOAuthOutcome();
       if (!outcome) return;
       if (outcome.ok) {
-        // Gmail is counted server-side as gmail_connected; only other providers report here.
-        if (outcome.provider !== "gmail") trackEvent("mail_connected", { source_type: "email", provider: outcome.provider });
+        // Every provider, from the device (funnel). The backend's gmail_connected stays a health signal.
+        trackEvent("mailbox_connected", { provider: outcome.provider });
         setError("");
         setMessage(tx("Correo conectado. DINCR está revisando tus avisos financieros.", "Mailbox connected. DINCR is reviewing your financial notices."));
       } else {
@@ -262,7 +260,7 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
         ? connectVipMicrosoftMail(scope)
         : connectVipGmail(scope, getOAuthLocale({ appLanguage: deviceLanguage() })));
       setHistoryChoice(null);
-      trackEvent("gmail_connection_started", { source_type: "email", provider });
+      trackEvent("mailbox_connection_started", { provider });
       if (!response?.authorization_url) throw new Error(tx("El proveedor no devolvió una dirección de autorización.", "The provider did not return an authorization URL."));
       await Browser.open({ url: response.authorization_url, presentationStyle: "popover" });
     } catch (err) { setHistoryChoice(null); setError(err.message || tx("No se pudo abrir Google.", "Couldn’t open Google.")); }
@@ -270,24 +268,17 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
   };
 
   const sync = async () => {
-    trackEvent("gmail_sync_started", { source_type: "email" });
+    // The outcome of every sync is reported by the backend (mail_sync_completed/failed).
+    trackEvent("mail_sync_requested");
     setBusy("sync"); setError(""); setMessage("");
     try {
       const result = await syncVipGmail();
-      trackEvent("gmail_sync_completed", {
-        scan_scope: result.scan_scope || "unknown",
-        initial_scan_complete: Boolean(result.initial_scan_complete),
-        success: result.status === "ok",
-        // Counts only: how many messages and candidates, never which or what.
-        messages_scanned: result.found, candidates_pending: result.pending, duplicates: result.duplicates,
-      });
       await load();
       const progress = result.scan_scope !== "recent" && !result.initial_scan_complete
         ? tx(" DINCR continuará revisando el resto del período elegido en las próximas actualizaciones.", " DINCR will keep scanning the rest of the chosen period during the next refreshes.")
         : "";
       setMessage(tx(`Listo: ${result.auto_saved || 0} movimientos nuevos y ${result.pending || 0} por revisar.`, `Done: ${result.auto_saved || 0} new transactions and ${result.pending || 0} to review.`) + progress + (result.failed_connections?.length ? tx(" Algunas conexiones necesitan atención.", "Some connections need attention.") : ""));
     } catch (err) {
-      trackEvent("gmail_sync_failed", { success: false });
       setError(err.message || tx("No se pudo actualizar Gmail.", "Couldn’t refresh Gmail."));
       await load();
     }
@@ -298,7 +289,7 @@ export default function GmailAutomation({ view = "mail", onNavigate }) {
     setBusy("disconnect"); setError(""); setMessage("");
     try {
       await disconnectVipGmail(connectionId);
-      trackEvent("gmail_disconnected");
+      trackEvent("mailbox_disconnected");
       await load();
       setMessage(tx("Ese correo quedó desconectado de DINCR.", "That mailbox was disconnected from DINCR."));
     } catch (err) { setError(err.message || tx("No se pudo desconectar Gmail.", "Couldn’t disconnect Gmail.")); }

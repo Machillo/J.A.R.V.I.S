@@ -30,7 +30,9 @@ export const trackScreen = (screenName) => {
   const cleanScreen = String(screenName || "unknown").slice(0, 80);
   // Local only: the incident reporter labels a failure with the screen it happened on.
   window.sessionStorage.setItem("finva:current-screen", cleanScreen);
-  captureProductEvent("screen_viewed", { screen: cleanScreen.replace(/^finva_/, "") });
+  // Owner pages are JARVIS sections (audience=owner); Users pages are screens.
+  if (cleanScreen.startsWith("jarvis_")) captureProductEvent("jarvis_section_viewed", { jarvis_section: cleanScreen.slice(7) });
+  else captureProductEvent("screen_viewed", { screen: cleanScreen.replace(/^finva_/, "") });
 };
 
 export const trackEvent = (name, params = {}) => {

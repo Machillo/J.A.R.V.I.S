@@ -1,6 +1,6 @@
 import posthog from "posthog-js";
 import { Capacitor } from "@capacitor/core";
-import { analyticsEvents, safeAnalyticsProperties } from "./analyticsContract";
+import { analyticsEvents, ownerEvents, safeAnalyticsProperties, userEvents } from "./analyticsContract";
 import { DINCR_APP_ID, isDincrAppId } from "./appIdentity";
 
 const key = import.meta.env.VITE_POSTHOG_KEY?.trim();
@@ -9,7 +9,8 @@ const validHost = /^https:\/\/(?:us|eu)\.i\.posthog\.com\/?$/.test(host || "");
 const isDincrBuild = isDincrAppId(import.meta.env.VITE_NATIVE_APP_ID || DINCR_APP_ID);
 
 let initialized = false;
-let eligible = false;
+// "user" (Free/Basic/VIP), "owner" (JARVIS metadata only) or null (nothing is sent).
+let audience = null;
 let context = {};
 let opened = false;
 let lastUserId = null;
@@ -48,9 +49,12 @@ const initialize = () => {
       // (`ip: false` has no effect): `$geoip_disable` skips IP geolocation.
       before_send: (event) => {
         if (!analyticsEvents.has(event?.event)) return null;
+        // $session_id is posthog-js's random per-session UUID (needed to count sessions).
+        const sessionId = event.properties?.$session_id;
         return { event: event.event, uuid: event.uuid, properties: {
           token: event.properties?.token,
           distinct_id: event.properties?.distinct_id,
+          ...(typeof sessionId === "string" && /^[0-9a-f-]{36}$/i.test(sessionId) ? { $session_id: sessionId } : {}),
           $process_person_profile: false,
           $geoip_disable: true,
           ...safeAnalyticsProperties(event.properties),
@@ -62,12 +66,20 @@ const initialize = () => {
   return initialized;
 };
 
+// Users and the Owner are separate audiences: a Users account sends only Users
+// events (audience=user) and the Owner only JARVIS events (audience=owner), so the
+// Owner can always be excluded from commercial metrics. Admins are never tracked.
+const audienceOf = (user) => {
+  if (!user?.id || user?.legal?.required !== false) return null;
+  if (user.role === "user" && ["free", "basic", "vip"].includes(user?.subscription?.plan)) return "user";
+  if (user.role === "owner") return "owner";
+  return null;
+};
+
 export const setProductAnalyticsUser = (user) => {
-  const plan = user?.subscription?.plan;
-  const legalAccepted = user?.legal?.required === false;
-  const canTrack = Boolean(user?.id && legalAccepted && user?.role === "user" && ["free", "basic", "vip"].includes(plan));
-  if (!canTrack || !initialize()) {
-    eligible = false;
+  const nextAudience = audienceOf(user);
+  if (!nextAudience || !initialize()) {
+    audience = null;
     opened = false;
     lastUserId = null;
     context = {};
@@ -81,12 +93,18 @@ export const setProductAnalyticsUser = (user) => {
     opened = false;
   }
   lastUserId = user.id;
-  context = { plan, platform: Capacitor.getPlatform(), app_version: import.meta.env.VITE_APP_VERSION || "", environment: analyticsEnvironment() };
-  eligible = true;
-  try { posthog.opt_in_capturing(); } catch { eligible = false; return; }
+  context = {
+    audience: nextAudience,
+    ...(nextAudience === "user" ? { plan: user.subscription.plan } : {}),
+    platform: Capacitor.getPlatform(),
+    app_version: import.meta.env.VITE_APP_VERSION || "",
+    environment: analyticsEnvironment(),
+  };
+  audience = nextAudience;
+  try { posthog.opt_in_capturing(); } catch { audience = null; return; }
   if (!opened) {
     opened = true;
-    captureProductEvent("app_opened");
+    captureProductEvent(audience === "owner" ? "jarvis_opened" : "app_opened");
   }
   if (loginPending) {
     loginPending = false;
@@ -98,8 +116,11 @@ export const setProductAnalyticsUser = (user) => {
 // acceptance, Users plan), so nothing is sent for accounts that never are.
 export const noteLoginCompleted = () => { loginPending = true; };
 
+const allowedFor = (name) => (audience === "user" ? userEvents : audience === "owner" ? ownerEvents : null)?.has(name);
+
 export const captureProductEvent = (name, properties = {}) => {
-  if (!eligible || !initialized || !analyticsEvents.has(name)) return;
-  try { posthog.capture(name, safeAnalyticsProperties({ ...context, ...properties })); }
+  if (!initialized || !analyticsEvents.has(name) || !allowedFor(name)) return;
+  // The audience comes from the account, never from the caller.
+  try { posthog.capture(name, safeAnalyticsProperties({ ...context, ...properties, audience: context.audience })); }
   catch { /* optional */ }
 };
