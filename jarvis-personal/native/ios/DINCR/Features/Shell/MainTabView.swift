@@ -52,10 +52,17 @@ struct MainTabView: View {
         }
     }
 
+    /// The Owner's scene (DESIGN.md → Owner identity) comes only from the server role in `/auth/me`.
+    private var isOwner: Bool { Jarvis.isAvailable(to: model.profile) }
+
     private var tabs: some View {
         // Classic tabItem API keeps the iOS 17 baseline.
         TabView(selection: $selection) {
-            NavigationStack { HomeView(openMovements: { selection = .movements }) }
+            NavigationStack {
+                HomeView(openMovements: { selection = .movements })
+                    // The Owner's Today opens JARVIS, the mail review and the agenda in place.
+                    .navigationDestination(for: ProfileRoute.self) { route in ProfileRouteDestination(route: route) }
+            }
                 .tabItem { Label(tx("Hoy", "Today"), systemImage: "chart.bar.xaxis") }
                 .tag(Tab.home)
             NavigationStack { MovementsView() }
@@ -69,25 +76,36 @@ struct MainTabView: View {
                 .tag(Tab.advisor)
             NavigationStack(path: $profilePath) {
                 ProfileHubView()
-                    .navigationDestination(for: ProfileRoute.self) { route in
-                        switch route {
-                        case .mail: EmailMonitorView().onAppear { model.trackScreen("mail") }
-                        case .jarvis: JarvisHubView().onAppear { model.trackJarvisOpened() }
-                        case .jarvisSection(let section): JarvisSectionView(section: section).onAppear { model.trackJarvisSection(section) }
-                        }
-                    }
+                    .navigationDestination(for: ProfileRoute.self) { route in ProfileRouteDestination(route: route) }
             }
             .tabItem { Label(tx("Perfil", "Profile"), systemImage: "person.crop.circle") }
             .tag(Tab.profile)
         }
+        .environment(\.dincrOwnerAppearance, isOwner)
+        .tint(isOwner ? OwnerColor.accent : nil)
     }
 }
 
-/// Routes of the Profile tab. JARVIS is the Owner's personal space (`Jarvis.isAvailable`).
+/// Routes of the Profile tab, also opened from the Owner's Today. JARVIS is the Owner's personal
+/// space (`Jarvis.isAvailable`); its screens close themselves for any other identity.
 enum ProfileRoute: Hashable {
     case mail
     case jarvis
     case jarvisSection(Jarvis.Section)
+}
+
+private struct ProfileRouteDestination: View {
+    let route: ProfileRoute
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        // Analytics: navigation metadata only (the backend relay decides the audience).
+        switch route {
+        case .mail: EmailMonitorView().onAppear { model.trackScreen("mail") }
+        case .jarvis: JarvisHubView().onAppear { model.trackJarvisOpened() }
+        case .jarvisSection(let section): JarvisSectionView(section: section).onAppear { model.trackJarvisSection(section) }
+        }
+    }
 }
 
 /// B5/B6/B7 and A1 — writes paused, subscription access notice, service health, optional update.

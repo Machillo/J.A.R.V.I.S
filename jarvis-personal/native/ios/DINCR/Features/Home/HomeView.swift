@@ -12,6 +12,16 @@ struct HomeView: View {
     @State private var state: LoadState<FreeDashboard> = .loading
 
     var body: some View {
+        // The Owner (server role, never a plan) has its own Today: money, attention, agenda and JARVIS.
+        if Jarvis.isAvailable(to: model.profile) {
+            OwnerHomeView()
+        } else {
+            planBody
+        }
+    }
+
+    @ViewBuilder
+    private var planBody: some View {
         switch model.planTier {
         case .vip where model.flags.isEnabled(.vipIntelligence):
             VipHomeView(openMovements: openMovements)
