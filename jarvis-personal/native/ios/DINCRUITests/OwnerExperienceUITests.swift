@@ -33,11 +33,16 @@ final class OwnerExperienceUITests: XCTestCase {
     }
 
     /// Scrolls until the element can be tapped (Today is longer than one screen at large sizes).
+    /// It scrolls toward the element: back up when it sits above the visible area (e.g. after
+    /// returning from a screen opened near the bottom), down otherwise. At most 8 swipes.
     @discardableResult
     private func reveal(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
         let target = element(identifier, in: app)
         XCTAssertTrue(target.waitForExistence(timeout: 10), "missing \(identifier)")
-        for _ in 0..<8 where !target.isHittable { app.swipeUp() }
+        let viewport = app.windows.firstMatch.frame
+        for _ in 0..<8 where !target.isHittable {
+            if target.frame.midY < viewport.midY { app.swipeDown() } else { app.swipeUp() }
+        }
         XCTAssertTrue(target.isHittable, "\(identifier) is not reachable")
         return target
     }
