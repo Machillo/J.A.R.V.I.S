@@ -23,6 +23,8 @@ ENGLISH_REASONS = {
     "BAC tarjeta adicional: el correo saluda a otra persona; confirmá si el cargo es tuyo.": "BAC additional card: the email greets another person; confirm whether the charge is yours.",
     "Código de retiro sin tarjeta creado; todavía no hay movimiento de dinero.": "Cardless withdrawal code created; no money has moved yet.",
     "BAC depósito: monto, fecha y remitente extraídos por plantilla alerta.": "BAC deposit: amount, date, and sender extracted with the alert template.",
+    "BAC depósito: monto y fecha por plantilla alerta; el aviso menciona salario/planilla.": "BAC deposit: amount and date from the alert template; the notice mentions salary/payroll.",
+    "BAC depósito: monto y fecha por plantilla alerta; el aviso no identifica quién depositó.": "BAC deposit: amount and date from the alert template; the notice does not say who made the deposit.",
     "BAC pago de servicio: monto, fecha y servicio extraídos por plantilla alerta.": "BAC bill payment: amount, date, and service extracted with the alert template.",
     "Comprobante SINPE oficial; pendiente confirmar contraparte o cuenta propia.": "Official SINPE receipt; the counterparty or own account still needs confirmation.",
     "Comprobante oficial de cuota Popular; requiere revisar posible rebajo de planilla.": "Official Banco Popular payment receipt; check for a possible payroll deduction.",

@@ -1561,12 +1561,24 @@ def _parse_bac_alert_payment(subject: str, sender: str, body: str, received_at: 
         return _internal_ignored("bac", subject, body, received_at, "Movimiento entre cuentas propias detectado en alerta BAC; no se genera candidato financiero.")
 
     extras: dict[str, Any] = {}
-    if is_deposit:
+    if is_deposit and re.search(r"\b(salario|planilla|nomina|pago salarial)\b", clean):
+        # Income only on the notice's own words; payroll_income decides if it is salary.
         transaction_type = "income"
         description = "Depósito BAC"
         category = "Otros ingresos"
         account = "BAC Depósito"
-        reason = "BAC depósito: monto, fecha y remitente extraídos por plantilla alerta."
+        reason = "BAC depósito: monto y fecha por plantilla alerta; el aviso menciona salario/planilla."
+    elif is_deposit:
+        # A deposit notice names the receiving account, never the payer: like a SINPE
+        # credit it may be income, a refund or the holder's own money. It stays an
+        # inbound transfer and the user (or a correlation) decides its effect.
+        transaction_type = "transfer"
+        description = "Depósito BAC"
+        category = infer_category(description, transaction_type)
+        account = "BAC Depósito"
+        reason = "BAC depósito: monto y fecha por plantilla alerta; el aviso no identifica quién depositó."
+        extras = {**mt.movement(mt.TRANSFER_IN, mt.REVIEW, "transfer"), "movement_direction": "in",
+                  "reference": _labeled_code(text, r"N[uú]mero\s+de\s+referencia")}
     elif _is_card_payment(text):
         return _ignored("bac", subject, body, received_at, "Pago de tarjeta BAC detectado; se ignora para evitar doble conteo porque las compras individuales ya son los gastos.")
     else:
