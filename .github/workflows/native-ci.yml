@@ -134,3 +134,15 @@ jobs:
           xcodebuild -version
           echo "id=$id" >> "$GITHUB_OUTPUT"
       - run: xcodebuild -project DINCR.xcodeproj -scheme DINCR -destination "id=${{ steps.sim.outputs.id }}" CODE_SIGNING_ALLOWED=NO test
+        env:
+          # OwnerExperienceUITests.testOwnerScreenshots writes the Owner screens here (synthetic fixtures)
+          # for design review without a Mac; the test skips when this is unset.
+          TEST_RUNNER_DINCR_OWNER_SHOTS_DIR: ${{ runner.temp }}/owner-shots
+      - name: Upload the Owner screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owner-ios-screenshots
+          path: ${{ runner.temp }}/owner-shots
+          if-no-files-found: ignore
+          retention-days: 14

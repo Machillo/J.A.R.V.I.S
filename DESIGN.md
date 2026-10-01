@@ -379,6 +379,22 @@ category); trailing amount in tabular `body` weight 600 with sign (`+` in `posit
 are shortcuts only: the same actions are always reachable from the row's detail screen or context
 menu, so no action is swipe-only.
 
+## Owner identity (DINCR Owner / JARVIS)
+
+The single Owner account is not a plan, so "plans don't repaint the app" does not apply to it. The
+Owner keeps DINCR's structure, navigation (the same five tabs), system type, components and voice,
+and changes only the scene, below a root that reads the server role (`dincrOwnerAppearance`):
+
+- A deep petrol background (a quiet radial to near black in dark; white to pale blue in light; one
+  flat color with Increase Contrast), blue-tinted surfaces with a hairline border (decorative only),
+  and one cyan accent instead of the teal tint. Owner tokens: `OwnerColor` in DincrDesign
+  (`Owner/OwnerTheme.swift`), light and dark, text ≥ 4.5:1 on every Owner surface.
+- JARVIS has one quiet mark (a static cyan orb), never animated, glowing or game-like.
+- Cards: radius 22; controls and quick actions: 18. Lists of records stay native lists or one
+  grouped surface with separated rows — never one card per record.
+- Everything else in this file still applies: no eyebrows, no stat-tile grids, money signed with
+  `+` / `−` and never by color alone, unknown values "—", system materials only for blur.
+
 ## Do's and Don'ts
 
 ### Do:
