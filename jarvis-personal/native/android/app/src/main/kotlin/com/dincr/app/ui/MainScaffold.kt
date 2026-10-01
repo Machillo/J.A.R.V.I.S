@@ -153,8 +153,15 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("accounts") { AccountsScreen(model, nav) }
                             composable("support") { SupportScreen(model, nav) }
                             // JARVIS: the Owner's personal space (Jarvis.isAvailable); each screen checks it again.
-                            composable("jarvis") { JarvisHubScreen(model, nav) }
-                            composable("jarvis/{section}") { entry -> JarvisSectionScreen(model, nav, entry.arguments?.getString("section")) }
+                            composable("jarvis") {
+                                LaunchedEffect(Unit) { model.recordJarvisOpened() }
+                                JarvisHubScreen(model, nav)
+                            }
+                            composable("jarvis/{section}") { entry ->
+                                val section = entry.arguments?.getString("section")
+                                LaunchedEffect(section) { model.recordJarvisSection(section) }
+                                JarvisSectionScreen(model, nav, section)
+                            }
                         }
                     }
                 }

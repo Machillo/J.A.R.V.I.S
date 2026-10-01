@@ -25,6 +25,7 @@ struct MainTabView: View {
             tabs
                 .safeAreaInset(edge: .top, spacing: 0) { GlobalBanners() }
                 .overlay(alignment: .bottom) { NoticeToast() }
+                .onChange(of: selection, initial: true) { _, tab in model.trackScreen(tab.rawValue) }
                 .onChange(of: model.pendingRoute) { _, route in
                     guard route == "mail" else { return }
                     model.pendingRoute = nil
@@ -70,9 +71,9 @@ struct MainTabView: View {
                 ProfileHubView()
                     .navigationDestination(for: ProfileRoute.self) { route in
                         switch route {
-                        case .mail: EmailMonitorView()
-                        case .jarvis: JarvisHubView()
-                        case .jarvisSection(let section): JarvisSectionView(section: section)
+                        case .mail: EmailMonitorView().onAppear { model.trackScreen("mail") }
+                        case .jarvis: JarvisHubView().onAppear { model.trackJarvisOpened() }
+                        case .jarvisSection(let section): JarvisSectionView(section: section).onAppear { model.trackJarvisSection(section) }
                         }
                     }
             }

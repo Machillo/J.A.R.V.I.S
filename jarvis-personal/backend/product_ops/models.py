@@ -1,6 +1,6 @@
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 
 class ProductEvent(BaseModel):
@@ -14,6 +14,22 @@ class ProductEvent(BaseModel):
     success: bool = True
     duration_bucket: Literal["instant", "short", "medium", "long"] | None = None
     app_version: str | None = Field(default=None, max_length=30)
+
+
+_UUID = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+
+
+class AnalyticsEventIn(BaseModel):
+    """A native app's product event (contract v2); analytics_relay validates it again."""
+    model_config = ConfigDict(extra="forbid")
+
+    event: str = Field(max_length=40, pattern=r"^[a-z_]+$")
+    properties: dict[Annotated[str, StringConstraints(max_length=40)], Annotated[str, StringConstraints(max_length=40)] | bool | int] = Field(default_factory=dict, max_length=8)
+    install_id: str = Field(max_length=36, pattern=_UUID)
+    session_id: str | None = Field(default=None, max_length=36, pattern=_UUID)
+    platform: Literal["android", "ios"]
+    app_version: str | None = Field(default=None, max_length=20)
+    build: Literal["release", "debug"] = "release"
 
 
 class FeedbackCreate(BaseModel):

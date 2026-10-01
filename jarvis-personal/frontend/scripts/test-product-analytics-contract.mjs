@@ -76,7 +76,8 @@ assert.equal(event.properties.audience, "user", "the caller can never change the
 assert.equal(event.properties.token, "phc_public_project_key", "the public project key is required for ingestion");
 assert.equal(event.properties.$process_person_profile, false, "no person profiles");
 assert.equal(event.properties.$geoip_disable, true, "no IP geolocation");
-assert.deepEqual(Object.keys(event.properties).sort(), ["$geoip_disable", "$process_person_profile", "audience", "decision", "distinct_id", "environment", "plan", "platform", "token"]);
+assert.deepEqual(Object.keys(event.properties).sort(), ["$geoip_disable", "$process_person_profile", "audience", "client", "decision", "distinct_id", "environment", "plan", "platform", "token"]);
+assert.equal(event.properties.client, "capacitor");
 assert.equal(event.properties.environment, "development", "non-production builds are labelled");
 
 // The real posthog-js pipeline must accept what before_send returns. It silently

@@ -147,6 +147,32 @@ def capture_backend_event(event_name: str, properties: dict[str, Any] | None = N
         logger.warning("DINCR aggregate analytics unavailable")
 
 
+def is_configured() -> bool:
+    return _configuration() is not None
+
+
+def _send_prepared(payload: dict[str, Any]) -> None:
+    configuration = _configuration()
+    if not configuration:
+        return
+    key, host = configuration
+    try:
+        response = requests.post(f"{host}/capture/", json={"api_key": key, **payload}, timeout=(0.5, 1.5))
+        response.raise_for_status()
+    except requests.RequestException:
+        logger.warning("DINCR product analytics relay unavailable")
+
+
+def capture_prepared_later(payload: dict[str, Any]) -> None:
+    """Queue an already validated relay payload (analytics_relay.build_relay_payload)."""
+    if not is_configured():
+        return
+    try:
+        _executor.submit(_send_prepared, dict(payload))
+    except RuntimeError:  # interpreter shutting down
+        pass
+
+
 def capture_backend_event_later(event_name: str, properties: dict[str, Any] | None = None) -> None:
     """Queue an event from code that has no BackgroundTasks (syncs, crons, handlers).
 

@@ -38,12 +38,14 @@ export const userScreens = new Set([
   "vip-emergency", "vip-aguinaldo", "vip-preferences",
 ]);
 
-// Every Owner page of personal/PersonalApp.jsx (checked by the contract test).
+// Every Owner page of personal/PersonalApp.jsx and every native Jarvis.Section wire value
+// (both checked by the contract tests). A section is navigation only, never its content.
 export const jarvisSections = new Set([
   "dashboard", "finance", "receivables", "wealth", "financialAccounts", "netWorth", "financialTimeline",
   "reconciliation", "deterioration", "investments", "businesses", "goals", "transactions", "memory",
   "strategy", "additionalCards", "emails", "settings", "chats", "moneyControl", "userManagement",
   "productOperations", "profile",
+  "chat", "calendar", "money", "money_control", "records",
 ]);
 
 // A useful action is a successful write the user made on purpose: the activation
@@ -97,6 +99,8 @@ const categories = {
   plan: new Set(["free", "basic", "vip"]),
   audience: new Set(["user", "owner"]),
   platform: new Set(["android", "ios"]),
+  // Which app sent it: the Capacitor app (posthog-js) or the native apps (backend relay).
+  client: new Set(["capacitor", "native"]),
   environment: new Set(["production", "staging", "development"]),
   screen: userScreens,
   jarvis_section: jarvisSections,

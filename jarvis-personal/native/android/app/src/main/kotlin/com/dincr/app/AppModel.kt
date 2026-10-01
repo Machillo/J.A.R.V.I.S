@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dincr.data.AnalyticsRelay
+import com.dincr.data.AnalyticsStore
 import com.dincr.data.ApiClient
 import com.dincr.data.ApiError
 import com.dincr.data.AppLanguage
@@ -21,6 +23,7 @@ import com.dincr.data.JarvisChatSession
 import com.dincr.data.LaunchPolicy
 import com.dincr.data.MailReturn
 import com.dincr.data.MoneyFormat
+import com.dincr.data.NativeAnalytics
 import com.dincr.data.OAuthProvider
 import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
@@ -136,6 +139,14 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     private val pendingSignIn = PendingSignInStore(application)
     private var fixturePkce: Pkce? = null
     private val prefs = application.getSharedPreferences("dincr.preferences", Context.MODE_PRIVATE)
+    /** Product analytics (contract v2) through the backend relay: live backend only, on while the identity is ready. */
+    private var analytics: NativeAnalytics? = null
+    private val analyticsStore = object : AnalyticsStore {
+        override fun read(key: String): String? = prefs.getString(key, null)
+        override fun write(key: String, value: String?) {
+            prefs.edit().apply { if (value == null) remove(key) else putString(key, value) }.apply()
+        }
+    }
 
     init {
         // A data export left over from an earlier session (or a crash) is removed at startup.
@@ -205,7 +216,10 @@ class AppModel(application: Application) : AndroidViewModel(application) {
                 val client = SupabaseAuthClient(environment.supabaseUrl, environment.anonKey)
                 auth = client
                 sessions = SessionManager(client, KeystoreSessionStore(getApplication())) { viewModelScope.launch { signedOut() } }
-                api = DincrApi(ApiClient(environment.apiUrl, sessions))
+                val relay = AnalyticsRelay(ApiClient(environment.apiUrl, sessions))
+                val tracker = NativeAnalytics(analyticsStore, BuildConfig.VERSION_NAME, if (BuildConfig.DEBUG) "debug" else "release", viewModelScope) { relay.send(it) }
+                analytics = tracker
+                api = DincrApi(ApiClient(environment.apiUrl, sessions, onSuccessfulWrite = tracker::writeSucceeded))
             }
             is AppEnvironment.Fixtures -> {
                 sessions = SessionManager(null, InMemorySessionStore(if (environment.skipLogin) FIXTURE_SESSION else null))
@@ -390,6 +404,11 @@ class AppModel(application: Application) : AndroidViewModel(application) {
             IdentityGate.READY -> Phase.Ready
         }
         if (_phase.value is Phase.Ready) viewModelScope.launch { refreshFlags(); reconcileStore() }
+        analytics?.let { tracker ->
+            val ready = _phase.value is Phase.Ready
+            if (ready && !tracker.enabled) { tracker.enabled = true; tracker.appOpened() }
+            if (!ready) tracker.enabled = false
+        }
     }
 
     /** `DELETE /auth/me` for an account whose deletion is pending (or requested now), then sign out. */
@@ -414,6 +433,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun signedOut() {
+        analytics?.reset()
         clearExports()
         sessionEpoch += 1
         pendingSignIn.clear()
@@ -473,9 +493,15 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     // --- Analytics (backend allow-list only; no personal data) ----------------------------------------
 
     fun recordScreen(eventName: String, surface: String) {
+        analytics?.screen(surface)
         if (eventName !in ProductEvent.ALLOWED || _phase.value !is Phase.Ready || isFixtures) return
         viewModelScope.launch { runCatching { api.recordEvent(ProductEvent(eventName, surface, true, appVersion)) } }
     }
+
+    /** JARVIS navigation (Owner): the hub and its sections, never their content. */
+    fun recordJarvisOpened() { analytics?.jarvisOpened() }
+
+    fun recordJarvisSection(wire: String?) { Jarvis.Section.from(wire)?.let { analytics?.jarvisSection(it) } }
 
     private companion object {
         const val IDENTITY_THROTTLE_MS = 15_000L

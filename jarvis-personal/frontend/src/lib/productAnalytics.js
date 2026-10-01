@@ -95,6 +95,7 @@ export const setProductAnalyticsUser = (user) => {
   lastUserId = user.id;
   context = {
     audience: nextAudience,
+    client: "capacitor",
     ...(nextAudience === "user" ? { plan: user.subscription.plan } : {}),
     platform: Capacitor.getPlatform(),
     app_version: import.meta.env.VITE_APP_VERSION || "",

@@ -52,16 +52,20 @@ public struct APIClient: Sendable {
     let language: AppLanguage
     let timeout: TimeInterval
     let backoff: @Sendable (Int) async -> Void
+    /// Told (method, path) after each successful write: the analytics `useful_action` signal.
+    let onSuccessfulWrite: (@Sendable (String, String) -> Void)?
 
     public init(
         baseURL: URL, tokens: AccessTokenProvider, transport: HTTPTransport = URLSessionTransport(),
         language: AppLanguage = .current, timeout: TimeInterval = 20,
         backoff: @escaping @Sendable (Int) async -> Void = { attempt in
             try? await Task.sleep(for: .milliseconds(400 * (1 << attempt)))
-        }
+        },
+        onSuccessfulWrite: (@Sendable (String, String) -> Void)? = nil
     ) {
         self.baseURL = baseURL; self.tokens = tokens; self.transport = transport
         self.language = language; self.timeout = timeout; self.backoff = backoff
+        self.onSuccessfulWrite = onSuccessfulWrite
     }
 
     static let decoder: JSONDecoder = {
@@ -160,6 +164,7 @@ public struct APIClient: Sendable {
             guard (200..<300).contains(response.statusCode) else {
                 throw APIError.from(status: response.statusCode, body: data, language: language, requestID: requestID)
             }
+            if !safe { onSuccessfulWrite?(method, path) }
             return data
         }
     }

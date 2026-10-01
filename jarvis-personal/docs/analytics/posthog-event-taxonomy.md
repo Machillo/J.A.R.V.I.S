@@ -4,7 +4,7 @@
 
 PostHog es la telemetría permanente de DINCR. Sirve para saber cómo funciona el producto después del lanzamiento sin revisar la base de datos. Recibe eventos, estados, resultados, conteos, duraciones y metadata técnica no sensible. **Nunca** es una copia de Supabase.
 
-Este documento es el **contrato v2**: taxonomía canónica, audiencias Users/Owner, identidad, allowlist de propiedades y configuración de build.
+Este documento es el **contrato v2**: taxonomía canónica, audiencias Users/Owner, identidad, allowlist de propiedades y configuración de build. Es **un solo contrato** para todos los clientes: la app Capacitor y las apps nativas iOS/Android.
 
 ## 1. Arquitectura
 
@@ -14,14 +14,30 @@ Este documento es el **contrato v2**: taxonomía canónica, audiencias Users/Own
 | SDK del móvil | `frontend/src/lib/productAnalytics.js` | `posthog-js`, **solo en la compilación nativa DINCR** (Capacitor `com.dincr.app`). Decide la audiencia de la cuenta (`user`, `owner` o ninguna). `before_send` reconstruye cada evento con la lista cerrada. |
 | Fachada | `frontend/src/lib/telemetry.js` (`trackEvent`, `trackScreen`, `recordError`) | Único punto de emisión. Las páginas `jarvis_*` del Owner se envían como `jarvis_section_viewed`. |
 | Acción útil | `frontend/src/users/services/jarvisApi.js` (`request`) | Tras una escritura exitosa de Users, emite `useful_action` con el tipo de acción (nunca la ruta ni el contenido). |
+| Relay de las apps nativas | `backend/product_ops/analytics_relay.py` (`POST /product-ops/analytics`) | Recibe los eventos v2 de iOS/Android y los valida contra el mismo contrato (paridad probada). Decide en el servidor la audiencia, el plan y el entorno, y los reenvía a PostHog con la configuración existente del backend. No escribe en la base de datos. |
+| Contrato nativo | `native/android/core/data/.../Analytics.kt`, `native/ios/DincrKit/Sources/DincrCore/Analytics.swift` | Eventos que envía la app nativa, mapeo de pantallas, reglas de acción útil (idénticas a las de Capacitor) e ID anónimo de instalación. Sin SDK ni clave de PostHog. |
 | Contrato del servidor | `backend/product_ops/posthog_events.py` | `SERVER_EVENTS` define, por evento, sus propiedades y tipos cerrados. |
 | Salud de la sincronización de correo | `backend/user_product/mail_sync_analytics.py` | Un resultado por cada sync de Gmail/Outlook, con todos sus disparadores. |
 | Baseline histórico | `backend/scripts/posthog_signups_baseline.py` | Se corre una sola vez, a mano: agregados diarios de altas. |
 
-**Clientes:**
-- La app publicada en las tiendas es la app **Capacitor** (`frontend/`), en Android y en iOS. Es la única que tiene SDK de PostHog.
-- Las apps nativas Swift/Kotlin (`native/`) no se publican y no tienen SDK de PostHog. Su Android envía `POST /product-ops/events` a la tabla propia `product_events`, que no es PostHog (ver `native/RELEASE_IDENTITY.md`).
-- La web y dincr.com no envían analítica: `Capacitor.isNativePlatform()` es falso fuera de la app.
+**Clientes y transporte:**
+
+| Cliente | Estado | Cómo llega a PostHog |
+|---|---|---|
+| Capacitor (`frontend/`), Android e iOS | App de tienda actual. Sigue siendo el **fallback** mientras termina la migración | `posthog-js` en el dispositivo, con `client=capacitor`. Necesita `VITE_POSTHOG_KEY` y `VITE_POSTHOG_HOST` en el build (§7) |
+| Nativa iOS (Swift) y Android (Kotlin) (`native/`) | **Candidata de reemplazo**, con la identidad de release `com.dincr.app`. Sustituir Capacitor está sujeto a los gates humanos de `native/RELEASE_IDENTITY.md` | `POST /product-ops/analytics` → validación y allowlist en el backend → PostHog, con `client=native`. **Sin SDK ni clave de PostHog en el cliente.** Usa la configuración de PostHog que el backend ya tiene |
+| Web y dincr.com | — | Nada |
+
+- **Por qué un relay y no el SDK en Swift/Kotlin:**
+  - un solo contrato validado en el servidor;
+  - ningún SDK, secreto ni configuración nueva en cada cliente;
+  - la audiencia y el plan salen de los registros del servidor, no del dispositivo;
+  - PostHog ve la IP de Render, no la del usuario.
+- **El relay no reemplaza `POST /product-ops/events`.** Ese endpoint sigue alimentando la tabla propia `product_events` (`*_opened`, con `account_id`), que usa el tablero interno de Product Ops. No se copia a PostHog.
+- **Paridad garantizada** por `backend/product_ops/test_analytics_relay.py`:
+  - el relay del backend replica el contrato de Capacitor (eventos y cada categoría);
+  - Kotlin y Swift usan exactamente las mismas reglas de acción útil;
+  - sus eventos, pantallas y secciones JARVIS pertenecen al contrato.
 
 ## 2. Audiencias: Users y Owner
 
@@ -29,11 +45,19 @@ Este documento es el **contrato v2**: taxonomía canónica, audiencias Users/Own
 |---|---|---|---|
 | `user` | `role=user`, plan `free`/`basic`/`vip`, documentos legales aceptados | Solo `userEvents` | `audience`, `plan`, `platform`, `app_version`, `environment` |
 | `owner` | `role=owner`, documentos legales aceptados | Solo `ownerEvents` (`jarvis_*`) | `audience`, `platform`, `app_version`, `environment` (sin `plan`) |
+| ninguna | admin, cuentas sin aceptación legal, planes desconocidos, web, builds sin clave | Nada | — |
+
+Todos los eventos llevan además `client`: `capacitor` o `native`.
+
+**Quién decide la audiencia:**
+- **Capacitor:** el SDK, con el perfil de `/auth/me`.
+- **Nativo:** el **servidor** (`analytics_relay.audience_of`), con el rol, el plan y la aceptación legal de sus propios registros. El cliente no puede fijar `audience`, `plan`, `client` ni `environment`. Un build `debug` se etiqueta siempre `development`.
 
 **Owner y aceptación legal (decidido).** El Owner **no** está exento: es una cuenta DINCR real y necesita la aceptación vigente, igual que Users. Sin ella no se envía **ningún** evento JARVIS (fail-safe).
 
 **Gap conocido.** `App.jsx` salta la pantalla `LegalConsent` para los roles owner y admin, así que el Owner nunca puede registrar su aceptación desde la app. El backend ya calcula `legal` para cualquier rol y `POST /auth/legal/accept` acepta cualquier rol. El arreglo es solo de cliente y queda como follow-up aparte: mostrar `LegalConsent` al Owner cuando `legal.required` sea verdadero, sin volver a correr el onboarding.
-| ninguna | admin, cuentas sin aceptación legal, planes desconocidos, web, builds sin clave | Nada | — |
+
+La app nativa ya pide la aceptación al Owner (`IdentityGate.LEGAL_REQUIRED` antes de `READY`).
 
 - La audiencia la decide la cuenta, nunca quien llama: `captureProductEvent` siempre sobrescribe `audience`.
 - **Excluir al Owner de las métricas comerciales:** filtrar `audience = user`. Un evento de Users nunca lleva `audience=owner` y el Owner nunca emite eventos de Users. Lo prueba `npm run test:product-analytics`.
@@ -44,6 +68,11 @@ Este documento es el **contrato v2**: taxonomía canónica, audiencias Users/Own
 **Hoy (vigente):**
 - **Móvil:** ID anónimo de dispositivo de posthog-js. Se rota al cerrar sesión o cambiar de cuenta. No se llama a `identify`, no hay perfiles de persona (`person_profiles: "never"`, `$process_person_profile: false`), no hay geolocalización por IP y no se envía ningún ID de cuenta.
   - PostHog deriva un `person_id` determinista del `distinct_id` aunque no haya perfiles. Por eso DAU/WAU/MAU, funnels y retención funcionan **por dispositivo**.
+- **App nativa:** un UUID aleatorio por instalación (`analytics_install_id`), el equivalente nativo del ID anónimo de posthog-js.
+  - Se rota al cerrar sesión.
+  - Nunca se deriva de la cuenta, el correo ni ningún identificador.
+  - El relay lo usa como `distinct_id` y no lo guarda, no lo registra en logs ni lo combina con `account_id` o `workspace_id`.
+  - La sesión es un UUID que se renueva tras 30 minutos sin actividad.
 - **Servidor:** un `distinct_id` aleatorio nuevo por evento (`dincr_server_<uuid>`). Sirve para conteos de salud, no para usuarios.
 
 **Diseño propuesto: pseudónimo estable. NO implementado. HUMAN GATE legal.**
@@ -99,14 +128,27 @@ Este documento es el **contrato v2**: taxonomía canónica, audiencias Users/Own
 
 | Evento | Cuándo | Propiedades adicionales |
 |---|---|---|
-| `jarvis_opened` | El Owner abre la app (una vez por sesión) | — |
-| `jarvis_section_viewed` | Cambio de sección de JARVIS | `jarvis_section`: cada página de `personal/PersonalApp.jsx` (por ejemplo `chats`) |
+| `jarvis_opened` | Capacitor: el Owner abre la app (una vez por sesión). Nativo: el Owner abre el hub JARVIS | — |
+| `jarvis_section_viewed` | Cambio de sección de JARVIS | `jarvis_section`: cada página de `personal/PersonalApp.jsx` (por ejemplo `chats`) y cada `Jarvis.Section` nativa (`chat`, `calendar`, que es la Agenda, `memory`…). Es solo navegación: nunca su contenido |
 
-**REQUIERE INSTRUMENTACIÓN NATIVA** (no hay SDK de PostHog en las apps Swift/Kotlin, que no se publican):
-- la Agenda de JARVIS;
-- `jarvis_intent_resolved` {`intent_category`: overtime/bonus/holiday_vgh/calendar/other, `status`: pending_confirmation/confirmed/cancelled, `success`}.
+**Pendiente** (decisión aparte, no implementado): `jarvis_intent_resolved` {`intent_category`: overtime/bonus/holiday_vgh/calendar/other, `status`: pending_confirmation/confirmed/cancelled, `success`}.
+- Viviría en las apps nativas y viajaría por el mismo relay.
+- Requiere definir antes cómo se clasifica un intent sin texto.
 
-Ambos viven solo en las apps nativas.
+### Apps nativas (iOS/Android, por el relay)
+
+Hoy envían este **subconjunto** del contrato. El relay acepta cualquier evento del contrato, así que agregar más no cambia el backend.
+
+| Evento | Cuándo | Propiedades adicionales |
+|---|---|---|
+| `app_opened` | La identidad queda lista (una vez por sesión de la app) | — |
+| `screen_viewed` | Android: pantallas que ya registraban `*_opened`. iOS: pestañas y Email Monitor | `screen`, mapeado con `AnalyticsContract.SCREENS` / `screens` (por ejemplo `home`→`overview`, `movements`→`transactions`) |
+| `useful_action` / `financial_profile_saved` | Una escritura exitosa (gancho del cliente HTTP) | `action_type`, con las mismas reglas que Capacitor |
+| `jarvis_opened` / `jarvis_section_viewed` | Owner: hub JARVIS y sus secciones | `jarvis_section` |
+
+**Diferencias intencionales con Capacitor:**
+- **Todavía no se instrumentan en nativo:** el funnel de onboarding (`onboarding_*`, `plan_selected`), el Email Monitor (`mailbox_*`, `mail_candidate_reviewed`), `strategy_tool_opened`, los errores cliente (`api_error`, `app_error`) y `login_completed`/`logout`. El contrato y el relay ya los aceptan; falta solo el punto de emisión en cada pantalla nativa.
+- **`jarvis_opened`** significa "abrir el hub JARVIS" en nativo y "abrir la app" en Capacitor. Se distinguen con `client`.
 
 ### Servidor (anónimos)
 
@@ -204,7 +246,11 @@ Siempre con el filtro `environment = production`. Las métricas comerciales llev
 - **MRR:** no hay fuente de Store billing fiable.
 - **Agenda e intents de JARVIS:** requieren instrumentación nativa.
 
-## 7. Configuración del build (por qué no llegaba nada)
+## 7. Configuración (por qué no llegaba nada)
+
+**Apps nativas:** no necesitan ninguna configuración nueva. Usan la API de DINCR que ya tienen, y el backend reenvía con su `POSTHOG_API_KEY`/`POSTHOG_HOST`. Sin esa configuración, el relay no hace nada.
+
+**App Capacitor:**
 
 **Causa:**
 - Los builds publicados se compilaron **sin `VITE_POSTHOG_KEY` ni `VITE_POSTHOG_HOST`**.
@@ -245,7 +291,7 @@ Sin clave o con un host fuera de la lista (`us|eu.i.posthog.com`), la analítica
 
 ## 11. Verificación física mínima (teléfono → PostHog)
 
-1. Compilar con `VITE_POSTHOG_KEY` y `VITE_POSTHOG_HOST` e instalar en Android e iOS.
+1. **Capacitor:** compilar con `VITE_POSTHOG_KEY` y `VITE_POSTHOG_HOST` e instalar en Android e iOS. **Nativo:** un build `release` contra el backend de producción (`debug` se etiqueta `development`).
 2. **Cuenta User** con los documentos aceptados. En Live events deben aparecer:
    - `app_opened` y `login_completed`;
    - `screen_viewed` al navegar;
@@ -265,4 +311,7 @@ Sin clave o con un host fuera de la lista (`us|eu.i.posthog.com`), la analítica
 6. **Correo:**
    - conectar Gmail: `mailbox_connection_started`, luego `mailbox_connected` (móvil), `gmail_connected` y `mail_sync_completed` (`trigger=connect`), ambos del servidor;
    - revisar un candidato: un único `mail_candidate_reviewed`.
-7. **Red:** solo `/e/` y `/array/<key>/config`.
+7. **Red:**
+   - **Capacitor:** solo `/e/` y `/array/<key>/config`.
+   - **Nativo:** solo `POST /product-ops/analytics` a la API de DINCR; ninguna llamada a PostHog desde el teléfono.
+8. **Nativo, en PostHog:** los eventos llevan `client=native` y el `distinct_id` es el UUID de instalación. Tras cerrar sesión, el UUID cambia.
