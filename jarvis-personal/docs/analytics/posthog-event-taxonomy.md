@@ -30,7 +30,9 @@ Este documento es el **contrato v2**: taxonomía canónica, audiencias Users/Own
 | `user` | `role=user`, plan `free`/`basic`/`vip`, documentos legales aceptados | Solo `userEvents` | `audience`, `plan`, `platform`, `app_version`, `environment` |
 | `owner` | `role=owner`, documentos legales aceptados | Solo `ownerEvents` (`jarvis_*`) | `audience`, `platform`, `app_version`, `environment` (sin `plan`) |
 
-**Owner y aceptación legal.** La app no muestra la pantalla de consentimiento al Owner. Si su cuenta no tiene una aceptación registrada de las versiones vigentes, no se envía **ningún** evento JARVIS (fail-safe). Hay dos caminos, y es una **decisión de producto**: que el Owner acepte las versiones vigentes, o eximirlo de ese requisito. El código no cambia esto en silencio.
+**Owner y aceptación legal (decidido).** El Owner **no** está exento: es una cuenta DINCR real y necesita la aceptación vigente, igual que Users. Sin ella no se envía **ningún** evento JARVIS (fail-safe).
+
+**Gap conocido.** `App.jsx` salta la pantalla `LegalConsent` para los roles owner y admin, así que el Owner nunca puede registrar su aceptación desde la app. El backend ya calcula `legal` para cualquier rol y `POST /auth/legal/accept` acepta cualquier rol. El arreglo es solo de cliente y queda como follow-up aparte: mostrar `LegalConsent` al Owner cuando `legal.required` sea verdadero, sin volver a correr el onboarding.
 | ninguna | admin, cuentas sin aceptación legal, planes desconocidos, web, builds sin clave | Nada | — |
 
 - La audiencia la decide la cuenta, nunca quien llama: `captureProductEvent` siempre sobrescribe `audience`.
