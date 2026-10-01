@@ -1,8 +1,9 @@
-"""Reading Home/Strategy must never rewrite user-owned debt data.
+"""Reading debts never writes: not for Users, not for the Owner.
 
-The automatic installment sync (record each due installment as paid and rewrite
-the debt) is a DINCR Owner automation. DINCR Users never opt in, so every read
-path that reaches get_debts() must leave their debts, payments and ledger
+Applying scheduled installments (record each due installment as paid and move the
+debt) is the explicit command `apply_due_installments` (POST
+/finance/debts/apply-due-installments, dry run by default). Every read path that
+reaches get_debts() or the cycle report leaves debts, payments and the ledger
 untouched. The real finance.service code runs against an in-memory store.
 Synthetic data only.
 """
@@ -13,7 +14,10 @@ from types import SimpleNamespace
 import pytest
 
 from backend.auth.current_user import reset_current_user, set_current_user
-from backend.finance import service
+from fastapi import HTTPException
+
+from backend.finance import routes, service
+from backend.main import app
 from backend.financial_lifecycle import state as lifecycle_state
 
 WS_A, WS_B = "workspace-a", "workspace-b"
@@ -163,38 +167,149 @@ def test_imported_transactions_then_home_keep_the_debt_in_context(store, monkeyp
         assert current["debt"]["monthly_payments"] == 50000.0
 
 
+def _owner_debt_in_a(store):
+    """An Owner debt with five installments already due, in the Owner workspace A."""
+    store.state["debts"][2]["workspace_id"] = WS_A
+    store.state["debts"].pop(1)
+
+
+def test_owner_reads_never_write(store):
+    _owner_debt_in_a(store)
+    before = _stored(store, 2)
+    token = _as("owner")
+    try:
+        first, second = service.get_debts(), routes.debts()
+    finally:
+        reset_current_user(token)
+    assert store.writes == []
+    assert _stored(store, 2) == before
+    assert store.state["payments"] == [] and store.state["transactions"] == []
+    assert first == second
+
+
+def test_the_cycle_report_never_applies_installments(monkeypatch):
+    calls, writes = [], []
+    monkeypatch.setattr(service, "apply_due_installments", lambda *a, **k: calls.append(1))
+
+    class ReadOnly:
+        def __enter__(self): return self
+        def __exit__(self, *_a): return False
+        def commit(self): writes.append("commit")
+        def execute(self, query, params=()):
+            if query.lstrip().upper().startswith(("UPDATE", "INSERT", "DELETE")):
+                writes.append(query.split()[0])
+            return _rows([])
+
+    monkeypatch.setattr(service, "get_connection", lambda: ReadOnly())
+    token = _as("owner")
+    try:
+        service.get_financial_cycle_report(as_of=TODAY)
+    finally:
+        reset_current_user(token)
+    assert calls == [] and writes == []
+
+
+def test_dry_run_lists_due_installments_and_writes_nothing(store):
+    _owner_debt_in_a(store)
+    before = _stored(store, 2)
+    token = _as("owner")
+    try:
+        plan = service.apply_due_installments(dry_run=True)
+    finally:
+        reset_current_user(token)
+    assert plan["dry_run"] is True and len(plan["installments"]) == 5
+    assert [i["installment_number"] for i in plan["installments"]] == [1, 2, 3, 4, 5]
+    assert all(date.fromisoformat(i["due_date"]) <= TODAY for i in plan["installments"])
+    assert plan["debts_updated"] == [2]
+    assert store.writes == [] and _stored(store, 2) == before
+
+
+def test_the_command_records_each_due_installment_once_and_is_idempotent(store):
+    _owner_debt_in_a(store)
+    token = _as("owner")
+    try:
+        planned = service.apply_due_installments(dry_run=True)["installments"]
+        first = service.apply_due_installments(dry_run=False)
+        writes_after_first = list(store.writes)
+        second = service.apply_due_installments(dry_run=False)
+    finally:
+        reset_current_user(token)
+    # The real run records exactly the dry run's plan.
+    assert first["installments"] == planned
+    assert [p["installment_number"] for p in store.state["payments"]] == [1, 2, 3, 4, 5]
+    assert len(store.state["transactions"]) == 5
+    debt = _stored(store, 2)
+    assert debt["remaining_amount"] == planned[-1]["new_remaining_amount"] < 500000.0
+    assert debt["installments_paid"] == 5
+    # Running it again changes nothing and writes nothing.
+    assert second["installments"] == [] and second["debts_updated"] == []
+    assert store.writes == writes_after_first
+    assert len(store.state["payments"]) == 5 and len(store.state["transactions"]) == 5
+
+
+def test_an_installment_not_yet_due_is_never_recorded(store):
+    _owner_debt_in_a(store)
+    store.state["debts"][2]["first_payment_date"] = TODAY + timedelta(days=20)
+    before = _stored(store, 2)
+    token = _as("owner")
+    try:
+        dry = service.apply_due_installments(dry_run=True)
+        real = service.apply_due_installments(dry_run=False)
+    finally:
+        reset_current_user(token)
+    assert dry["installments"] == [] and real["installments"] == []
+    # Nothing to record: the debt row (updated_at included) is not written.
+    assert store.writes == [] and _stored(store, 2) == before
+
+
+def test_the_command_never_touches_another_workspace(store):
+    before_b = _stored(store, 2)  # debt 2 lives in workspace B
+    token = _as("owner", WS_A)
+    try:
+        service.apply_due_installments(dry_run=False)
+    finally:
+        reset_current_user(token)
+    assert _stored(store, 2) == before_b
+    assert all(p["workspace_id"] == WS_A for p in store.state["payments"])
+
+
+def test_only_the_owner_can_run_the_command(store):
+    for role in ("user", "admin"):
+        token = _as(role)
+        try:
+            with pytest.raises(HTTPException) as denied:
+                service.apply_due_installments(dry_run=False)
+        finally:
+            reset_current_user(token)
+        assert denied.value.status_code == 403
+    assert store.writes == []
+
+
+def test_the_command_route_is_a_dry_run_by_default(store):
+    _owner_debt_in_a(store)
+    token = _as("owner")
+    try:
+        result = routes.debts_apply_due_installments()
+    finally:
+        reset_current_user(token)
+    assert result["dry_run"] is True and result["installments"]
+    assert store.writes == []
+    route = next(r for r in app.routes if getattr(r, "path", "") == "/finance/debts/apply-due-installments")
+    assert route.methods == {"POST"}
+    assert not any(getattr(r, "path", "") == "/finance/debts/apply-due-installments" and "GET" in r.methods for r in app.routes)
+
+
 def test_another_workspace_never_affects_the_debt(store):
     before = _stored(store, 1)
-    token = _as("owner", WS_B)  # even the Owner automation of workspace B
+    token = _as("owner", WS_B)  # even the Owner of workspace B, reading
     try:
         service.get_debts()
     finally:
         reset_current_user(token)
     assert _stored(store, 1) == before
-    assert all(p["workspace_id"] == WS_B for p in store.state["payments"])
+    assert store.writes == []
     token = _as("user", WS_A)
     try:
         assert [d["id"] for d in service.get_debts()] == [1]
     finally:
         reset_current_user(token)
-
-
-def test_without_an_authenticated_context_nothing_is_written(store):
-    service._sync_automatic_debt_payments(90, WS_A)
-    assert store.writes == []
-
-
-def test_owner_schedule_automation_is_preserved_and_idempotent(store):
-    """The Owner still gets due installments applied once each."""
-    store.state["debts"][2]["workspace_id"] = WS_A  # an Owner debt in the Owner workspace
-    store.state["debts"].pop(1)
-    token = _as("owner")
-    try:
-        first = service.get_debts()
-        second = service.get_debts()
-    finally:
-        reset_current_user(token)
-    installments = [p["installment_number"] for p in store.state["payments"]]
-    assert installments and installments == sorted(set(installments))  # once each
-    assert first[0]["remaining_amount"] < 500000.0
-    assert second[0]["remaining_amount"] == first[0]["remaining_amount"]

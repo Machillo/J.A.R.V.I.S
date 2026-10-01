@@ -45,6 +45,7 @@ from backend.finance.service import (
     get_bonuses,
     add_debt,
     get_debts,
+    apply_due_installments,
     add_saving,
     get_savings,
     add_investment,
@@ -227,6 +228,15 @@ def create_debt(request: DebtRequest):
 @router.get("/debts")
 def debts():
     return get_debts()
+
+
+@router.post("/debts/apply-due-installments")
+def debts_apply_due_installments(dry_run: bool = True):
+    """Explicit command: record scheduled installments already due, once each (Owner).
+
+    ``dry_run`` (default true) returns the plan and writes nothing; reads never apply installments.
+    """
+    return apply_due_installments(dry_run=dry_run)
 
 @router.delete("/debts/{debt_id}")
 def remove_debt(debt_id: int):

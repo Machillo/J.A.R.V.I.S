@@ -1,15 +1,16 @@
-"""Who may have scheduled debt installments applied automatically.
+"""Who may have scheduled debt installments applied.
 
-`_sync_automatic_debt_payments` records each due installment as paid (debt_payments,
-a debt_payment transaction) and rewrites the debt's remaining_amount,
-installments_paid and payment dates. It runs from read paths (get_debts, the cycle
-report), so it must only act where that automation was configured on purpose:
+`service.apply_due_installments` records each due installment as paid (debt_payments,
+a debt_payment transaction) and moves the debt's remaining_amount, installments_paid
+and payment dates. It is an explicit command (POST /finance/debts/apply-due-installments,
+dry run by default) and never runs from a read: listing debts, the cycle report,
+Home, Strategy or an advisor never alter them.
 
 - DINCR Owner creates debts through `add_debt` with an explicit schedule
-  (start/first payment date, auto_update_monthly) and relies on it.
+  (start/first payment date, auto_update_monthly) and applies due installments
+  with the command.
 - DINCR Users never opt in: their debts change only through explicit writes
-  (edit a debt, register a payment). Opening Home, Strategy or an advisor must
-  never alter them.
+  (edit a debt, register a payment).
 """
 from __future__ import annotations
 
