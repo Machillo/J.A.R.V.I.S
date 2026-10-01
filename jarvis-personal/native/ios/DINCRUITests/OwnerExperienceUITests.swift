@@ -12,10 +12,14 @@ final class OwnerExperienceUITests: XCTestCase {
                         appearance: String? = nil, extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["-DincrDisableAnimations", "-DincrFixtures", scenario, "-DincrSkipLogin",
-                               "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
-            + (role.map { ["-DincrRole", $0] } ?? []) + (plan.map { ["-DincrPlan", $0] } ?? [])
-            + (tab.map { ["-DincrTab", $0] } ?? []) + (appearance.map { ["-dincr.appearance", $0] } ?? []) + extra
+        var arguments: [String] = ["-DincrDisableAnimations", "-DincrFixtures", scenario, "-DincrSkipLogin",
+                                   "-AppleLanguages", "(es)", "-AppleLocale", "es_CR"]
+        if let role { arguments += ["-DincrRole", role] }
+        if let plan { arguments += ["-DincrPlan", plan] }
+        if let tab { arguments += ["-DincrTab", tab] }
+        if let appearance { arguments += ["-dincr.appearance", appearance] }
+        arguments += extra
+        app.launchArguments = arguments
         app.launch()
         return app
     }
