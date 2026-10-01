@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -48,7 +49,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dincr.app.AppModel
 import com.dincr.app.tx
+import com.dincr.data.AppLanguage
 import com.dincr.data.AuthException
+import com.dincr.data.BankBranding
 import com.dincr.data.MoneyFormat
 import com.dincr.data.ProfileSetup
 import com.dincr.design.Dincr
@@ -127,21 +130,7 @@ fun ProfileSetupScreen(model: AppModel) {
                         }
                     }
                 }
-                else -> Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
-                    Header(tx("¿Qué bancos usás?", "Which banks do you use?"), tx("Esto no conecta ninguna cuenta ni comparte contraseñas. DINCR nunca te pedirá la contraseña de tu banco.", "This doesn’t connect any account or share passwords. DINCR will never ask for your bank password."))
-                    val list = listOf("bac" to "BAC Credomatic", "bn" to "Banco Nacional", "bcr" to "Banco de Costa Rica", "popular" to "Banco Popular",
-                        "davivienda" to "Davivienda", "scotiabank" to tx("DAVIbank (antes Scotiabank)", "DAVIbank (formerly Scotiabank)"), "promerica" to "Promerica", "multimoney" to "MultiMoney")
-                    Column(Modifier.background(Dincr.colors.surface, RoundedCornerShape(DincrRadius.lg)).padding(horizontal = DincrSpacing.s2)) {
-                        list.forEachIndexed { index, (id, label) ->
-                            val checked = id in banks
-                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).toggleable(checked, role = Role.Checkbox) { banks = if (it) banks + id else banks - id }, verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(checked, onCheckedChange = null)
-                                Text(label, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text, modifier = Modifier.padding(start = DincrSpacing.s2))
-                            }
-                            if (index < list.lastIndex) HorizontalDivider(color = Dincr.colors.line)
-                        }
-                    }
-                }
+                else -> InstitutionsStep(banks) { banks = it }
             }
             error?.let { ErrorState(it) }
         }
@@ -186,5 +175,45 @@ private fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect:
         options.forEachIndexed { index, (value, label) ->
             SegmentedButton(selected == value, { onSelect(value) }, SegmentedButtonDefaults.itemShape(index, options.size)) { Text(label) }
         }
+    }
+}
+
+/**
+ * The institutions step (historical meaning): a preference that personalizes DINCR. It does NOT
+ * connect any account; the same field (`selected_financial_institutions`) and request as before.
+ * Logos are the historical assets only ([BankLogo]).
+ */
+@Composable
+private fun InstitutionsStep(selected: Set<String>, onChange: (Set<String>) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s4)) {
+        Header(tx("Tus bancos en un solo lugar", "Your banks in one place"),
+            tx("Seleccioná las instituciones que utilizás. Esta selección no conecta tus cuentas; podrás autorizar por separado la lectura de correos financieros compatibles.",
+                "Select the institutions you use. This selection does not connect your accounts; you can separately authorize reading compatible financial emails."))
+        val list = BankBranding.onboardingInstitutions(AppLanguage.current())
+        list.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
+                pair.forEach { institution ->
+                    val checked = institution.id in selected
+                    Column(
+                        Modifier.weight(1f).heightIn(min = 104.dp)
+                            .background(if (checked) Dincr.colors.tintContainer else Dincr.colors.surface, RoundedCornerShape(DincrRadius.lg))
+                            .toggleable(checked, role = Role.Checkbox) { onChange(if (it) selected + institution.id else selected - institution.id) }
+                            .padding(DincrSpacing.s3).testTag("setup.bank.${institution.id}"),
+                        verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            BankLogo(BankBranding.identify(institution.logoId), size = 44.dp)
+                            Spacer(Modifier.weight(1f))
+                            Checkbox(checked, onCheckedChange = null)
+                        }
+                        Text(institution.name, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text)
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+        Text(tx("Esto no conecta ninguna cuenta ni comparte contraseñas. DINCR nunca te pedirá la contraseña de tu banco.",
+            "This doesn’t connect any account or share passwords. DINCR will never ask for your bank password."),
+            style = MaterialTheme.typography.bodySmall, color = Dincr.colors.textMuted)
     }
 }

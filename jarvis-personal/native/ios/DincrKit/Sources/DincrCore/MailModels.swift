@@ -146,19 +146,26 @@ public struct MailCandidate: Decodable, Sendable, Equatable, Identifiable {
     public let resolutionReason: String?
     public let isInternalTransfer: Bool?
     public let sourceType: String?
+    /// The detected account (`account_balances.id`) the notice belongs to, when known (Cuentas).
+    public let financialAccountId: Int?
+    /// The parser's reading of the bank movement and its effect (e.g. a card payment); may be null.
+    public let bankMovement: String?
+    public let financialEffect: String?
 
     public var id: String { candidateId.map { "c\($0)" } ?? "e\(emailId ?? 0)" }
 
     public init(candidateId: Int?, emailId: Int? = nil, bank: String?, sender: String? = nil, subject: String? = nil, receivedAt: String? = nil,
                 description: String?, amount: Decimal?, currency: String?, originalAmount: Decimal? = nil, originalCurrency: String? = nil,
                 accountBaseCurrency: String?, transactionDate: String?, transactionType: String?, category: String?,
-                reviewStatus: String?, resolutionReason: String? = nil, isInternalTransfer: Bool? = false) {
+                reviewStatus: String?, resolutionReason: String? = nil, isInternalTransfer: Bool? = false,
+                financialAccountId: Int? = nil, bankMovement: String? = nil, financialEffect: String? = nil) {
         self.candidateId = candidateId; self.emailId = emailId; self.bank = bank; self.sender = sender; self.subject = subject
         self.receivedAt = receivedAt; self.description = description; self.amount = amount; self.currency = currency
         self.originalAmount = originalAmount; self.originalCurrency = originalCurrency; self.accountBaseCurrency = accountBaseCurrency
         self.transactionDate = transactionDate; self.transactionType = transactionType; self.category = category
         self.reviewStatus = reviewStatus; self.resolutionReason = resolutionReason; self.isInternalTransfer = isInternalTransfer
         self.sourceType = nil
+        self.financialAccountId = financialAccountId; self.bankMovement = bankMovement; self.financialEffect = financialEffect
     }
 
     /// The account's base currency; the backend uses CRC when it is unknown (`candidate_currency`).
@@ -182,6 +189,9 @@ public struct MailCandidate: Decodable, Sendable, Equatable, Identifiable {
         let base = baseCurrency
         return native != base && Self.convertible.contains(native) && Self.convertible.contains(base)
     }
+
+    /// The bank when it can be identified (its name, else the sender); nil otherwise (no invented logo).
+    public var identifiedBank: BankBrand? { BankBrand.identify(bank) ?? BankBrand.identify(inText: sender) }
 
     /// A currency DINCR cannot convert: the notice can only be rejected.
     public var cannotConvert: Bool {
@@ -245,10 +255,24 @@ public struct FinancialIdentity: Decodable, Sendable, Equatable {
         public let currency: String?
         public let accountLast4: String?
         public let ownershipStatus: String?
+        /// The institution as the parser identified it (`bac`, `bn`…); may be null.
+        public let institutionCode: String?
+        public let institutionCountry: String?
+        public let accountType: String?
 
-        public init(id: Int, accountName: String?, bankName: String?, currency: String?, accountLast4: String?, ownershipStatus: String?) {
+        public init(id: Int, accountName: String?, bankName: String?, currency: String?, accountLast4: String?, ownershipStatus: String?,
+                    institutionCode: String? = nil, institutionCountry: String? = nil, accountType: String? = nil) {
             self.id = id; self.accountName = accountName; self.bankName = bankName; self.currency = currency
             self.accountLast4 = accountLast4; self.ownershipStatus = ownershipStatus
+            self.institutionCode = institutionCode; self.institutionCountry = institutionCountry; self.accountType = accountType
+        }
+
+        /// The bank's branding: the institution code first, then the bank name.
+        public var brand: BankBrand { BankBrand.describe(institutionCode, fallbackName: bankName) }
+        /// `•••• 1234`, never a full number (only the last four digits are ever stored).
+        public var maskedNumber: String? {
+            guard let last4 = accountLast4?.filter(\.isNumber), !last4.isEmpty else { return nil }
+            return "•••• \(last4.suffix(4))"
         }
     }
     public let items: [Account]?

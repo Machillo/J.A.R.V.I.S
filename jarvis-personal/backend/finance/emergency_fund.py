@@ -6,13 +6,24 @@ import unicodedata
 from typing import Any
 
 from backend.ai.preferences import get_preference, set_preference
-from backend.auth.current_user import get_current_workspace_id
+from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx
 
 PREFERENCE_KEY = "salvavidas"
 DEFAULT_TARGET_MONTHS = 6
 ALLOWED_TARGET_MONTHS = (1, 3, 6)
+
+# The Owner boundary. The historical JARVIS Salvavidas (his Casa/Línea/Liberty
+# obligations, the protected-expense picker over his fixed_expenses, the balance kept
+# in a MultiMoney account) runs only for the server-resolved Owner role. DINCR Users
+# (and admin) get the neutral model: months of their own real obligations.
+OWNER_ROLE = "owner"
+
+
+def _is_owner() -> bool:
+    """Server-authoritative: the role resolved for this request, never a client flag."""
+    return (get_current_user() or {}).get("role") == OWNER_ROLE
 
 
 def _f(value: Any) -> float:
@@ -167,6 +178,12 @@ def _expense_payload(expense: dict[str, Any], monthly: float, *, selected: bool 
 
 
 def get_salvavidas_state() -> dict[str, Any]:
+    if _is_owner():
+        return _owner_salvavidas_state()
+    return _users_salvavidas_state()
+
+
+def _owner_salvavidas_state() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     config = _load_config()
     debts = _fetch_active_debts(workspace_id)
@@ -247,6 +264,7 @@ def get_salvavidas_state() -> dict[str, Any]:
 
     return {
         "status": "OK",
+        "scope": "owner",
         "current_amount": round(current, 2),
         "monthly_base": round(monthly_base, 2),
         "target_months": target_months,
@@ -285,6 +303,10 @@ def update_salvavidas(
     protected_expense_ids: list[int] | None = None,
     target_months: int | None = None,
 ) -> dict[str, Any]:
+    if not _is_owner():
+        return _update_users_salvavidas(
+            current_amount=current_amount, protected_expense_ids=protected_expense_ids, target_months=target_months,
+        )
     config = _load_config()
     if current_amount is not None:
         config["current_amount"] = max(float(current_amount), 0.0)
@@ -316,4 +338,146 @@ def update_salvavidas(
             source="salvavidas",
             note="Saldo actualizado desde Strategy",
         )
+    return get_salvavidas_state()
+
+
+# DINCR Users ----------------------------------------------------------------------------
+
+def _load_users_obligations(workspace_id: str, account_id: str) -> dict[str, Any]:
+    """The workspace's real obligations and declared savings; no Owner table or name."""
+    from backend.user_product.basic_service import _basic_tables_ready, _monthly_equivalent
+
+    debts = _fetch_active_debts(workspace_id)
+    with get_connection() as conn:
+        recurring = [dict(row) for row in conn.execute(
+            """SELECT id,name,amount,category,frequency,due_day FROM finva_recurring_items
+               WHERE workspace_id=%s AND is_active=TRUE AND item_type='expense'
+               ORDER BY due_day NULLS LAST,name""",
+            (workspace_id,),
+        ).fetchall()] if _basic_tables_ready(conn, "finva_recurring_items") else []
+        profile = conn.execute(
+            "SELECT liquid_savings FROM financial_profiles WHERE account_id=%s AND workspace_id=%s",
+            (account_id, workspace_id),
+        ).fetchone()
+    for row in recurring:
+        row["monthly_amount"] = _monthly_equivalent(_f(row.get("amount")), row.get("frequency") or "monthly")
+    savings = profile.get("liquid_savings") if profile else None
+    return {"debts": debts, "recurring": recurring, "liquid_savings": None if savings is None else _f(savings)}
+
+
+def _users_salvavidas_state() -> dict[str, Any]:
+    """Neutral Salvavidas: 1/3/6 months of the workspace's real obligations.
+
+    Obligations are the active debts' monthly payments plus the active recurring
+    expense items. The fund is the savings the user declared in the financial
+    situation; unknown savings stay unknown (never shown as zero coverage).
+    """
+    data = _load_users_obligations(get_current_workspace_id(), get_current_account_id())
+    return _users_salvavidas_from(data, _load_config()["target_months"])
+
+
+def _users_salvavidas_from(data: dict[str, Any], target_months: int) -> dict[str, Any]:
+    debt_items = [{
+        "id": debt.get("id"),
+        "name": debt.get("name") or tx("Deuda", "Debt"),
+        "debt_type": debt.get("debt_type") or "other",
+        "monthly_payment": round(max(_f(debt.get("monthly_payment")), 0.0), 2),
+        "remaining_amount": round(max(_f(debt.get("remaining_amount")), 0.0), 2),
+        "payment_day": debt.get("payment_day"),
+    } for debt in data.get("debts") or []]
+    obligation_items = [{
+        "id": row.get("id"),
+        "name": row.get("name") or tx("Pago recurrente", "Recurring payment"),
+        "category": row.get("category"),
+        "expected_amount": round(max(_f(row.get("amount")), 0.0), 2),
+        "monthly_amount": round(max(_f(row.get("monthly_amount")), 0.0), 2),
+        "frequency": row.get("frequency") or "monthly",
+        "due_day": row.get("due_day"),
+    } for row in data.get("recurring") or []]
+    debt_monthly = sum(item["monthly_payment"] for item in debt_items)
+    recurring_monthly = sum(item["monthly_amount"] for item in obligation_items)
+    monthly_base = round(debt_monthly + recurring_monthly, 2)
+    target = round(monthly_base * target_months, 2)
+    current = data.get("liquid_savings")
+    known = current is not None
+    status = "OK" if monthly_base > 0 else "needs_obligations"
+    return {
+        "status": status,
+        "scope": "users",
+        "current_amount": round(current, 2) if known else None,
+        "current_amount_known": known,
+        "monthly_base": monthly_base,
+        "target_months": target_months,
+        "allowed_target_months": list(ALLOWED_TARGET_MONTHS),
+        "target_amount": target,
+        "missing_amount": round(max(target - current, 0.0), 2) if known else None,
+        "coverage_months": round(current / monthly_base, 2) if known and monthly_base > 0 else None,
+        "progress_percent": round(min((current / target) * 100.0, 100.0), 2) if known and target > 0 else None,
+        "components": {
+            "debt_monthly_payments": round(debt_monthly, 2),
+            "recurring_obligations": round(recurring_monthly, 2),
+        },
+        "debts": debt_items,
+        "obligations": obligation_items,
+        "milestones": [{
+            "months": months,
+            "target": round(monthly_base * months, 2),
+            "reached": (current >= monthly_base * months) if known and monthly_base > 0 else False,
+        } for months in ALLOWED_TARGET_MONTHS],
+        "verification": {
+            "mode": "declared",
+            "message": (
+                tx("El fondo es el ahorro que declaraste en tu situación financiera.",
+                   "The fund is the savings you declared in your financial situation.")
+                if known else
+                tx("Declará tus ahorros en tu situación financiera para medir la cobertura.",
+                   "Declare your savings in your financial situation to measure coverage.")
+            ),
+        },
+    }
+
+
+def _update_users_salvavidas(
+    *,
+    current_amount: float | None,
+    protected_expense_ids: list[int] | None,
+    target_months: int | None,
+) -> dict[str, Any]:
+    """Users choose the 1/3/6-month goal and may update their declared savings.
+
+    The fund is the declared liquid savings of the financial situation (one source of
+    truth): a saved amount updates financial_profiles.liquid_savings, never an account
+    named after a bank. Users have no protected-expense picker (every obligation
+    counts); an empty list, which the historical screen always sends, changes nothing.
+    """
+    if protected_expense_ids:
+        raise ValueError(tx(
+            "En DINCR todas tus obligaciones cuentan para el Salvavidas.",
+            "In DINCR every obligation counts toward your emergency fund.",
+        ))
+    clean_target = None
+    if target_months is not None:
+        clean_target = int(target_months)
+        if clean_target not in ALLOWED_TARGET_MONTHS:
+            raise ValueError("El objetivo del Salvavidas debe ser de 1, 3 o 6 meses.")
+    if current_amount is not None:
+        amount = float(current_amount)
+        if amount < 0:
+            raise ValueError(tx("El ahorro no puede ser negativo.", "Savings can’t be negative."))
+        with get_connection() as conn:
+            updated = conn.execute(
+                """UPDATE financial_profiles SET liquid_savings=%s,updated_at=NOW()
+                   WHERE account_id=%s AND workspace_id=%s RETURNING account_id""",
+                (round(amount, 2), get_current_account_id(), get_current_workspace_id()),
+            ).fetchone()
+            if not updated:
+                raise ValueError(tx(
+                    "Completá primero tu situación financiera para guardar tus ahorros.",
+                    "Complete your financial situation first to save your savings.",
+                ))
+            conn.commit()
+    if clean_target is not None:
+        config = _load_config()
+        config["target_months"] = clean_target
+        set_preference(PREFERENCE_KEY, config)
     return get_salvavidas_state()

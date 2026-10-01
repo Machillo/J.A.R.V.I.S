@@ -218,7 +218,8 @@ public struct DincrService: Sendable {
 
     public func strategyBasic() async throws -> Strategy { try await client.get("/user-product/finance/strategy-basic") }
 
-    // MARK: VIP (C3, E11, E12, F3–F9). Owner-shaped routes are deliberately absent.
+    // MARK: VIP (C3, E11, E12, F3–F9). The Plan tab's strategy dashboards and Salvavidas are in
+    // `DincrService+Plan.swift`; the backend picks the Users or Owner model by the server role.
 
     public func commandCenter() async throws -> CommandCenter { try await client.get("/user-product/vip/command-center") }
 

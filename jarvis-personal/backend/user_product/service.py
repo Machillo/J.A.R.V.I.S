@@ -714,11 +714,37 @@ def _strategy_snapshot():
     }
 
 
+def _basic_income_basis(snapshot: dict) -> tuple[dict, dict]:
+    """Basic Strategy income: the declared income first; without one, the observed income.
+
+    The observed income is the shared income policy's baseline (the Home reading of
+    recorded income and recurring items). It is only read for this answer: it is never
+    written back to financial_profiles as if the user had declared it.
+    """
+    if _money(snapshot.get("monthly_income_estimate")) > 0:
+        return snapshot, {"source": "declared", "policy": None}
+    from backend.user_product.income_policy import load_income_baseline
+
+    with get_connection() as conn:
+        policy = load_income_baseline(conn, account_id=get_current_account_id(), workspace_id=get_current_workspace_id())
+    observed = _money(policy.get("monthly_income"))
+    if observed <= 0:
+        return snapshot, {"source": "none", "policy": policy.get("policy")}
+    return {**snapshot, "monthly_income_estimate": observed}, {
+        "source": "observed", "policy": policy.get("policy"), "observed_source": policy.get("source"),
+    }
+
+
 def get_strategy_basic(extra_monthly: float = 0):
     require_feature("strategy_basic")
-    snapshot = _strategy_snapshot()
+    snapshot, income_basis = _basic_income_basis(_strategy_snapshot())
     strategy = build_basic_strategy(snapshot, extra_monthly=extra_monthly)
-    return {**strategy, "next_paycheck": build_paycheck_plan(strategy, snapshot.get("pay_frequency"), vip=False)}
+    return {
+        **strategy,
+        "income_source": income_basis["source"],
+        "income_basis": income_basis,
+        "next_paycheck": build_paycheck_plan(strategy, snapshot.get("pay_frequency"), vip=False),
+    }
 
 
 def get_strategy_vip():

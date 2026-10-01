@@ -15,6 +15,18 @@ from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.goals.strategy import build_goal_portfolio
 from backend.user_product.income_policy import load_income_baseline
 
+# The Owner boundary. The personal JARVIS strategy (payroll/OT/bonus income, the pay
+# cycle that rolls on day 6 with the card cut on the 21st, MultiMoney cash, the
+# Casa/Línea obligations, the Popular ordering, the Wise/IBKR funding model) runs
+# only for the server-resolved Owner role. DINCR Users (and admin) get the neutral
+# strategy: their own income policy, calendar month, recurring items and debts.
+OWNER_ROLE = "owner"
+
+
+def _is_owner() -> bool:
+    """Server-authoritative: the role resolved for this request, never a client flag."""
+    return (get_current_user() or {}).get("role") == OWNER_ROLE
+
 logger = logging.getLogger("jarvis.strategy")
 
 
@@ -422,7 +434,7 @@ def _build_dynamic_director_allocation(
     }
 
 
-def _fetch_investment_portfolio(workspace_id: str) -> dict[str, Any]:
+def _fetch_investment_portfolio(workspace_id: str, owner: bool = False) -> dict[str, Any]:
     """Resumen local de inversiones, listo para una futura sincronización IBKR read-only."""
     legacy_value = 0.0
     contributed = 0.0
@@ -455,15 +467,18 @@ def _fetch_investment_portfolio(workspace_id: str) -> dict[str, Any]:
     except Exception:
         contributed = legacy_value
     net_pnl = realized + unrealized + dividends - taxes - commissions - funding_fees
-    return {
+    portfolio = {
         "market_value": round(legacy_value,2), "contributed_capital": round(contributed,2),
         "realized_pnl": round(realized,2), "unrealized_pnl": round(unrealized,2), "dividends": round(dividends,2),
         "taxes": round(taxes,2), "commissions": round(commissions,2), "funding_fees": round(funding_fees,2),
         "net_pnl": round(net_pnl,2), "reserved_to_invest_crc": round(reserved,2),
-        "funding_model": {"wise_percent_estimate": 1.23, "wise_to_ibkr_fixed_usd": 1.13},
         "currency": "USD",
-        "sync_status": "manual_ready_for_ibkr",
     }
+    if owner:
+        # The Owner's own funding route (Wise -> IBKR); never a Users default.
+        portfolio["funding_model"] = {"wise_percent_estimate": 1.23, "wise_to_ibkr_fixed_usd": 1.13}
+        portfolio["sync_status"] = "manual_ready_for_ibkr"
+    return portfolio
 
 
 def _monthly_amount_from_frequency(amount: Any, frequency: str | None, interval_months: Any = 1) -> float:
@@ -791,7 +806,7 @@ def _pick_strategy(debts: list[dict[str, Any]]) -> str:
     return "dictador"
 
 
-def _sort_debts_for_director(debts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _sort_debts_for_director(debts: list[dict[str, Any]], owner_rules: bool = False) -> list[dict[str, Any]]:
     def score(debt: dict[str, Any]) -> tuple:
         balance = _f(debt.get("remaining_amount"))
         rate = _f(debt.get("interest_rate"))
@@ -804,7 +819,8 @@ def _sort_debts_for_director(debts: list[dict[str, Any]]) -> list[dict[str, Any]
         zero_rate_financing_last = 1 if debt_type == "tasa_cero" and rate <= 0.0001 else 0
         high_rate_bucket = 0 if rate >= 25 else 1
         small_bucket = 0 if balance <= 200_000 else 1
-        popular_last = 1 if "popular" in name and balance > 1_000_000 else 0
+        # Owner-only: his large Popular loan goes last. Users debts are ordered by cost only.
+        popular_last = 1 if owner_rules and "popular" in name and balance > 1_000_000 else 0
         return (zero_rate_financing_last, no_interest_bucket, popular_last, high_rate_bucket, small_bucket, -rate, balance)
 
     return sorted(debts, key=score)
@@ -814,6 +830,7 @@ def _simulate_debt_cascade(
     debts: list[dict[str, Any]],
     recurring_monthly_extra: float,
     first_month_extra: float = 0.0,
+    owner_rules: bool = False,
 ) -> tuple[list[dict[str, Any]], int, float]:
     """Simulate an active-debt cascade without keeping cancelled/paid rows in the route."""
     candidates = [debt for debt in debts if _f(debt.get("remaining_amount")) > 0.01]
@@ -822,7 +839,7 @@ def _simulate_debt_cascade(
     # and this function is called twice per dashboard request. That saturated the
     # small Render instance and caused the browser's 20s timeout. Keep the
     # exhaustive simulator for the explicit debt-strategy tool, not this hot path.
-    ordered_active = _sort_debts_for_director(candidates)
+    ordered_active = _sort_debts_for_director(candidates, owner_rules)
     active: list[dict[str, Any]] = []
     for debt in ordered_active:
         balance = _f(debt.get("remaining_amount"))
@@ -929,12 +946,20 @@ def _simulate_debt_cascade(
     return result, total_months, recurring_pool
 
 def build_local_strategy_blueprint() -> dict[str, Any]:
-    """Live personal strategy focused on real surplus, not gross income.
+    """Live strategy focused on real surplus, not gross income.
 
     Current-cycle distribution follows one rule: obligations and every expense
     already registered come out first. Only the remainder is distributed among
-    Salvavidas, debt attack, goals, investment and free life money.
+    Salvavidas, debt attack, goals, investment and free life money. The Owner gets
+    his historical JARVIS strategy; everyone else the neutral DINCR Users one.
     """
+    if _is_owner():
+        return _owner_strategy_blueprint()
+    return _users_strategy_blueprint()
+
+
+def _owner_strategy_blueprint() -> dict[str, Any]:
+    """The Owner's historical JARVIS strategy (payroll, pay cycle, MultiMoney, Casa/Línea)."""
     all_debts = get_debts() or []
     debts = [debt for debt in all_debts if _f(debt.get("remaining_amount")) > 0.01]
     summary = get_financial_summary() or {}
@@ -965,21 +990,6 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     )
     current_month_extra_net = max(current_month_income - recurring_monthly_income, 0.0)
     income_policy = None
-    if get_current_user().get("role") != "owner":
-        # DINCR Users: the Owner payroll inputs above don't apply (a Users declared
-        # salary lives in financial_profiles), and "income already received" is
-        # subtracted because the Owner's received money sits in the MultiMoney
-        # balance counted as cash. Users have no such balance, so subtracting
-        # imported deposits made them vanish. Use the shared income policy, the same
-        # baseline Home uses, and plan the whole monthly income.
-        with get_connection() as conn:
-            income_policy = load_income_baseline(
-                conn, account_id=get_current_account_id(), workspace_id=workspace_id,
-            )
-        recurring_monthly_income = current_month_income = income_policy["monthly_income"]
-        income_received_current_cycle = 0.0
-        remaining_income_current_cycle = current_month_income
-        current_month_extra_net = 0.0
 
     configured_debt_payments = sum(
         _normalize_payment(debt.get("monthly_payment"), debt.get("remaining_amount"))
@@ -1043,7 +1053,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
     if emergency_monthly_base <= 0:
         emergency_monthly_base = recurring_living_expenses + configured_debt_payments
 
-    investment_portfolio = _fetch_investment_portfolio(workspace_id)
+    investment_portfolio = _fetch_investment_portfolio(workspace_id, True)
 
     director = _build_dynamic_director_allocation(
         available_before_allocation=max(current_before_allocation, 0.0),
@@ -1085,12 +1095,14 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         debts,
         recurring_monthly_extra=recurring_debt_attack_extra,
         first_month_extra=0.0,
+        owner_rules=True,
     )
     first_month_adjustment = current_debt_attack_extra - recurring_debt_attack_extra
     timeline, total_months, payment_pool = _simulate_debt_cascade(
         debts,
         recurring_monthly_extra=recurring_debt_attack_extra,
         first_month_extra=first_month_adjustment,
+        owner_rules=True,
     )
     primary_debt_name = timeline[0].get("name") if timeline else None
     for item in allocation_items:
@@ -1140,6 +1152,7 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
 
     return {
         "month": _month_key(),
+        "scope": "owner",
         "status": status,
         "strategy_type": "director_financiero_dinamico_v3",
         "title": tx("Estrategia de Protección de Flujo", "Cash Flow Protection Strategy") if no_free_cash else tx(f"Director Financiero · {mode_label}", f"Financial Director · {mode_label}"),
@@ -1227,6 +1240,245 @@ def build_local_strategy_blueprint() -> dict[str, Any]:
         "base_timeline": base_timeline,
         "rules": rules,
     }
+
+def _load_users_strategy_inputs(workspace_id: str, account_id: str, today: date) -> dict[str, Any]:
+    """The Users inputs for this calendar month, all scoped to the account/workspace.
+
+    Income follows the shared income policy (the Home baseline); spending and debt
+    payments are the ledger of the month (the same totals Home and the charts use,
+    accepted bank-email movements included); obligations are the active recurring
+    expense items. No Owner table, name or cycle is read here.
+    """
+    from backend.user_product.basic_service import _basic_tables_ready, _ledger_totals, _monthly_equivalent, _next_month
+
+    month_start = today.replace(day=1)
+    with get_connection() as conn:
+        income_policy = load_income_baseline(conn, account_id=account_id, workspace_id=workspace_id, today=today)
+        month = _ledger_totals(conn, workspace_id, month_start, _next_month(month_start))
+        recurring = [dict(row) for row in conn.execute(
+            """SELECT id,name,amount,frequency,due_day FROM finva_recurring_items
+               WHERE workspace_id=%s AND is_active=TRUE AND item_type='expense'""",
+            (workspace_id,),
+        ).fetchall()] if _basic_tables_ready(conn, "finva_recurring_items") else []
+    recurring_monthly = round(sum(_monthly_equivalent(_f(row.get("amount")), row.get("frequency") or "monthly") for row in recurring), 2)
+    # Monthly items still due later this month are reserved; earlier ones are assumed recorded.
+    pending = [
+        {"id": row.get("id"), "name": row.get("name"), "due_day": row.get("due_day"), "amount": round(_f(row.get("amount")), 2)}
+        for row in recurring
+        if (row.get("frequency") or "monthly") == "monthly" and row.get("due_day") and int(row["due_day"]) > today.day
+    ]
+    return {
+        "income_policy": income_policy,
+        "month": month,
+        "period": {"start": month_start.isoformat(), "end": (_next_month(month_start) - timedelta(days=1)).isoformat()},
+        "recurring_expense_monthly": recurring_monthly,
+        "pending_recurring": pending,
+    }
+
+
+def _users_strategy_blueprint() -> dict[str, Any]:
+    """The neutral DINCR Users strategy (VIP): real surplus of the calendar month."""
+    today = date.today()
+    workspace_id = get_current_workspace_id()
+    all_debts = get_debts() or []
+    inputs = _load_users_strategy_inputs(workspace_id, get_current_account_id(), today)
+    try:
+        salvavidas = get_salvavidas_state() or {}
+    except Exception:
+        salvavidas = {}
+    return _users_blueprint_from_inputs(
+        all_debts=all_debts,
+        inputs=inputs,
+        salvavidas=salvavidas,
+        goals=_fetch_active_financial_goals(workspace_id),
+        investment_portfolio=_fetch_investment_portfolio(workspace_id),
+        today=today,
+    )
+
+
+def _users_blueprint_from_inputs(
+    *,
+    all_debts: list[dict[str, Any]],
+    inputs: dict[str, Any],
+    salvavidas: dict[str, Any],
+    goals: list[dict[str, Any]],
+    investment_portfolio: dict[str, Any],
+    today: date,
+) -> dict[str, Any]:
+    debts = [debt for debt in all_debts if _f(debt.get("remaining_amount")) > 0.01]
+    income_policy = inputs["income_policy"]
+    monthly_income = _f(income_policy.get("monthly_income"))
+    month = inputs.get("month") or {}
+    recorded_spending = max(_f(month.get("expenses")), 0.0)
+    debt_paid = max(_f(month.get("debt_paid")), 0.0)
+    pending_recurring = list(inputs.get("pending_recurring") or [])
+    pending_recurring_total = round(sum(_f(item.get("amount")) for item in pending_recurring), 2)
+    recurring_expense_monthly = max(_f(inputs.get("recurring_expense_monthly")), 0.0)
+
+    configured_debt_payments = sum(
+        _normalize_payment(debt.get("monthly_payment"), debt.get("remaining_amount")) for debt in debts
+    )
+    debt_commitment = max(configured_debt_payments - debt_paid, 0.0)
+    total_debt = sum(max(_f(debt.get("remaining_amount")), 0.0) for debt in debts)
+    original_debt = sum(max(_f(debt.get("total_amount")), _f(debt.get("remaining_amount")), 0.0) for debt in all_debts)
+    paid_debt = max(original_debt - total_debt, 0.0)
+    progress = round((paid_debt / original_debt) * 100, 2) if original_debt > 0 else 0.0
+
+    goal_reserves = _calculate_goal_reserves(goals)
+    current_before_allocation = monthly_income - recorded_spending - debt_commitment - pending_recurring_total
+
+    # Unknown savings are planned conservatively (as nothing saved yet) but never reported as zero.
+    savings_known = salvavidas.get("current_amount") is not None
+    savings_total = max(_f(salvavidas.get("current_amount")), 0.0)
+    emergency_monthly_base = max(_f(salvavidas.get("monthly_base")), 0.0)
+    if emergency_monthly_base <= 0:
+        emergency_monthly_base = recurring_expense_monthly + configured_debt_payments
+
+    director = _build_dynamic_director_allocation(
+        available_before_allocation=max(current_before_allocation, 0.0),
+        debts=debts,
+        goal_reserves=goal_reserves,
+        savings_total=savings_total,
+        emergency_monthly_base=emergency_monthly_base,
+    )
+    emergency = dict(director.get("emergency") or {})
+    emergency["current_known"] = savings_known
+    if not savings_known:
+        emergency.update(current=None, gap_to_next_target=None, level="unknown")
+    allocation_amounts = director.get("allocation_amounts") or {}
+    allocation_items = director.get("allocation_items") or []
+    allocation_base_amount = _f(director.get("allocation_base_amount"))
+    current_debt_attack_extra = _f(allocation_amounts.get("ataque_de_deuda"))
+
+    recurring_director = _build_dynamic_director_allocation(
+        available_before_allocation=max(monthly_income - recurring_expense_monthly - configured_debt_payments, 0.0),
+        debts=debts,
+        goal_reserves=goal_reserves,
+        savings_total=savings_total,
+        emergency_monthly_base=emergency_monthly_base,
+    )
+    recurring_debt_attack_extra = _f((recurring_director.get("allocation_amounts") or {}).get("ataque_de_deuda"))
+    base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
+        debts, recurring_monthly_extra=recurring_debt_attack_extra, first_month_extra=0.0,
+    )
+    first_month_adjustment = current_debt_attack_extra - recurring_debt_attack_extra
+    timeline, total_months, payment_pool = _simulate_debt_cascade(
+        debts, recurring_monthly_extra=recurring_debt_attack_extra, first_month_extra=first_month_adjustment,
+    )
+    primary_debt_name = timeline[0].get("name") if timeline else None
+    for item in allocation_items:
+        if item.get("key") == "ataque_de_deuda":
+            item["target_name"] = primary_debt_name
+    months_saved = 0
+    if base_total_months and total_months and base_total_months < 999 and total_months < 999:
+        months_saved = max(base_total_months - total_months, 0)
+
+    no_free_cash = current_before_allocation <= 0.0
+    mode = director.get("mode") or "cash_protection"
+    mode_label = director.get("mode_label") or tx("PROTECCIÓN DE CAJA", "CASH PROTECTION")
+    status = "needs_income" if monthly_income <= 0 else ("critical" if no_free_cash else ("controlled" if total_debt > 0 else "strong"))
+    if monthly_income <= 0:
+        objective = tx("Registrá o declará tus ingresos para que DINCR pueda repartir tu sobrante.",
+                       "Record or declare your income so DINCR can allocate your surplus.")
+    elif no_free_cash:
+        objective = tx("Este mes no tiene sobrante real. Primero cubrí obligaciones y gastos registrados.",
+                       "This month has no real surplus. Cover obligations and recorded expenses first.")
+    else:
+        objective = tx(f"Modo {mode_label}: {director.get('mode_reason')}", f"{mode_label} mode: {director.get('mode_reason')}")
+    priority = _build_current_priority(no_free_cash=no_free_cash, director=director, timeline=timeline)
+    period = inputs.get("period") or {}
+
+    return {
+        "month": today.strftime("%Y-%m"),
+        "scope": "users",
+        "status": status,
+        "strategy_type": "director_financiero_dinamico_v3",
+        "title": tx("Estrategia de Protección de Flujo", "Cash Flow Protection Strategy") if no_free_cash else tx(f"Director Financiero · {mode_label}", f"Financial Director · {mode_label}"),
+        "mode": mode,
+        "mode_label": mode_label,
+        "mode_reason": director.get("mode_reason"),
+        "objective": objective,
+        "priority": priority,
+        "period": period,
+        "monthly_income": round(monthly_income, 2),
+        "recurring_monthly_income": round(monthly_income, 2),
+        "current_month_extra_net": 0.0,
+        "income_received_current_cycle": 0.0,
+        "remaining_income_current_cycle": round(monthly_income, 2),
+        "income_policy": {key: income_policy.get(key) for key in ("policy", "source", "declared", "baseline", "recurring")},
+        "current_month_one_time_debt_boost": round(max(first_month_adjustment, 0.0), 2),
+        "monthly_expenses": round(recorded_spending, 2),
+        "recorded_expenses": round(recorded_spending, 2),
+        "pending_recurring_total": pending_recurring_total,
+        "pending_recurring_items": pending_recurring,
+        "recurring_living_expenses": round(recurring_expense_monthly, 2),
+        "recurring_essential_living_base": round(recurring_expense_monthly, 2),
+        "monthly_debt_minimums": round(configured_debt_payments, 2),
+        "configured_debt_payments": round(configured_debt_payments, 2),
+        "current_debt_payments": round(debt_paid, 2),
+        "debt_commitment_current_cycle": round(debt_commitment, 2),
+        "debt_payments_reserved": round(debt_commitment, 2),
+        "critical_goals_reserved": round(_f(director.get("urgent_goal_reserved")), 2),
+        "current_goal_allocation": round(_f(director.get("urgent_goal_reserved")), 2),
+        "available_before_goals": round(current_before_allocation, 2),
+        "strategic_available_cash": round(allocation_base_amount, 2),
+        # Users have no account balance DINCR can trust: cash is unknown, never zero-filled.
+        "distributable_account_cash": None,
+        "estimated_extra_cash": round(allocation_base_amount, 2),
+        "base_estimated_extra_cash": round(_f(recurring_director.get("allocation_base_amount")), 2),
+        "safe_to_spend": round(_f(director.get("safe_to_spend")), 2),
+        "investment_recommended": round(_f(director.get("investment_recommended")), 2),
+        "investment_target": round(_f(director.get("investment_target")), 2),
+        "investment_portfolio": investment_portfolio,
+        "emergency_fund": emergency,
+        "salvavidas": salvavidas,
+        "urgent_goals": director.get("urgent_goals") or [],
+        "goal_portfolio": director.get("goal_portfolio") or {},
+        "debt_attack_extra": round(current_debt_attack_extra, 2),
+        "recurring_debt_attack_extra": round(recurring_debt_attack_extra, 2),
+        "debt_payment_pool": round(payment_pool, 2),
+        "base_debt_payment_pool": round(base_payment_pool, 2),
+        "goals": goals,
+        "goal_reserves": goal_reserves,
+        "allocation": director.get("allocation") or {},
+        "allocation_base_amount": round(allocation_base_amount, 2),
+        "allocation_amounts": allocation_amounts,
+        "allocation_items": allocation_items,
+        "allocation_total": round(sum(_f(item.get("amount")) for item in allocation_items), 2),
+        "distribution_formula": {
+            "income": round(monthly_income, 2),
+            "recorded_spending": round(recorded_spending, 2),
+            "debt_commitment": round(debt_commitment, 2),
+            "pending_recurring": pending_recurring_total,
+            "surplus": round(allocation_base_amount, 2),
+            "deficit": round(max(-current_before_allocation, 0.0), 2),
+        },
+        "primary_debt_name": primary_debt_name,
+        "total_debt": round(total_debt, 2),
+        "debt_original_total": round(original_debt, 2),
+        "debt_paid_total": round(paid_debt, 2),
+        "debt_progress_percent": progress,
+        "estimated_total_months": total_months if timeline else 0,
+        "estimated_debt_free_date": _add_months_iso(today, total_months if total_months < 999 else None),
+        "base_estimated_total_months": base_total_months if base_timeline else 0,
+        "base_estimated_debt_free_date": _add_months_iso(today, base_total_months if base_total_months < 999 else None),
+        "months_saved_by_current_extras": months_saved,
+        "timeline": timeline,
+        "base_timeline": base_timeline,
+        "rules": [
+            tx("Solo se distribuye el sobrante que queda después de obligaciones y gastos ya registrados.",
+               "Only the surplus left after obligations and recorded expenses is allocated."),
+            tx("Un gasto nuevo reduce el sobrante del mes desde que aparece.",
+               "A new expense reduces the month’s surplus as soon as it appears."),
+            tx("Las deudas activas reservan al menos su cuota mensual completa antes de repartir dinero.",
+               "Active debts reserve at least their full monthly payment before money is allocated."),
+            tx("Los pagos recurrentes que todavía vencen este mes se reservan antes de repartir.",
+               "Recurring payments still due this month are reserved before allocating."),
+            tx("Tu ingreso declarado es la base; los correos importados nunca la suben ni la bajan.",
+               "Your declared income is the baseline; imported emails never raise or lower it."),
+        ],
+    }
+
 
 def get_premium_strategy_dashboard() -> dict[str, Any]:
     """Return a live strategy calculated from the current database state.

@@ -2,8 +2,9 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY F1 — the DINCR tab. Free → monthly summary; Basic → strategy and reports; VIP (while
-/// `vip_intelligence` is on) → Today, strategy, scenarios, monthly review and projections.
+/// PARITY F1 — the DINCR tab. Free → monthly summary; Basic → reports; VIP (while
+/// `vip_intelligence` is on) → Today, scenarios, monthly review and projections. The strategy lives
+/// in the Plan tab (Estrategia, Distribución de dinero).
 struct AdvisorHubView: View {
     @Environment(AppModel.self) private var model
 
@@ -14,12 +15,9 @@ struct AdvisorHubView: View {
             VStack(spacing: DincrSpacing.s2) {
                 if vip {
                     link(TodayView(), "sun.max", tx("Hoy", "Today"), tx("Lo que DINCR vio en tus números", "What DINCR noticed in your numbers"), id: "advisor.today")
-                    link(StrategyView(vip: true), "map", tx("Tu estrategia", "Your strategy"), tx("Cómo repartir tu dinero este mes", "How to split your money this month"), id: "advisor.strategy")
                     link(ScenariosView(), "slider.horizontal.3", tx("Escenarios", "Scenarios"), tx("¿Y si gano o gasto distinto?", "What if I earn or spend differently?"), id: "advisor.scenarios")
                     link(MonthlyReviewView(), "checklist", tx("Revisión del mes", "Monthly review"), tx("Cómo te fue y qué sigue", "How it went and what’s next"), id: "advisor.review")
                     link(ProjectionsView(), "chart.line.uptrend.xyaxis", tx("Proyecciones", "Projections"), tx("Tus próximos meses", "Your next months"), id: "advisor.projections")
-                } else if tier.rank >= PlanTier.basic.rank {
-                    link(StrategyView(vip: false), "map", tx("Tu estrategia", "Your strategy"), tx("Cómo repartir tu dinero este mes", "How to split your money this month"), id: "advisor.strategy")
                 }
                 link(MonthlySummaryView(), "calendar.badge.checkmark", tx("Resumen del mes", "Monthly summary"), tx("Ingresos, gastos y categorías", "Income, expenses and categories"), id: "advisor.summary")
                 if tier.rank >= PlanTier.basic.rank && model.flags.isEnabled(.advancedReports) {
@@ -79,27 +77,11 @@ private struct SummaryContent: View {
     }
 }
 
-/// PARITY F2/F3 — the strategy from `/finance/strategy-basic` (Basic) or `/finance/strategy-vip`
-/// (VIP). Owner-shaped strategy payloads are never requested.
-struct StrategyView: View {
-    @Environment(AppModel.self) private var model
-    let vip: Bool
-
-    var body: some View {
-        ScreenScroll(title: tx("Tu estrategia", "Your strategy")) {
-            AsyncContent(load: { () async throws -> Strategy in
-                if vip { return try await model.service.strategyVip() }
-                return try await model.service.strategyBasic()
-            }) { strategy, _ in
-                StrategyContent(strategy: strategy)
-            }
-            FinancialDisclaimer()
-        }
-    }
-}
-
+/// The Basic strategy's figures (`/finance/strategy-basic`), shown by the Plan tab's Estrategia.
+/// `showsAllocations`: the split lives in Distribución de dinero.
 struct StrategyContent: View {
     let strategy: Strategy
+    var showsAllocations = true
 
     var body: some View {
         if let recommendation = strategy.recommendation ?? strategy.directorNote {
@@ -118,7 +100,7 @@ struct StrategyContent: View {
         }
         .dincrCard()
         let allocations = (strategy.vipAllocations?.isEmpty == false ? strategy.vipAllocations : strategy.allocations) ?? []
-        if !allocations.isEmpty {
+        if showsAllocations && !allocations.isEmpty {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("Cómo repartirlo", "How to split it"))
                 ForEach(Array(allocations.enumerated()), id: \.offset) { _, allocation in

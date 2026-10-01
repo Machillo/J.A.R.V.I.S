@@ -771,6 +771,11 @@
         },
         "simulation_extra": 0.0,
         "optional_actions": [],
+        "income_source": "declared",
+        "income_basis": {
+          "source": "declared",
+          "policy": null
+        },
         "next_paycheck": {
           "pay_frequency": "biweekly",
           "periods_per_month": 2.1667,
@@ -2142,6 +2147,11 @@
         },
         "simulation_extra": 0.0,
         "optional_actions": [],
+        "income_source": "declared",
+        "income_basis": {
+          "source": "declared",
+          "policy": null
+        },
         "next_paycheck": {
           "pay_frequency": "biweekly",
           "periods_per_month": 2.1667,

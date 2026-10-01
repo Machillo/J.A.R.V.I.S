@@ -365,7 +365,11 @@ def gmail_status() -> dict[str, Any]:
     }
 
 
-def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
+def list_gmail_emails(
+    status: str | None = None, bank: str | None = None, financial_account_id: int | None = None,
+) -> dict[str, Any]:
+    """The review inbox. Email Monitor lists it whole; Cuentas lists the same rows for one
+    bank or one detected account. Both read and review exactly the same candidates."""
     account_id = get_current_account_id()
     workspace_id = get_current_workspace_id()
     allowed = {"pending", "auto_saved", "confirmed", "rejected", "duplicate"}
@@ -376,6 +380,12 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
     if status:
         status_filter = " AND c.status=%s"
         params.append(status)
+    if bank and bank.strip():
+        status_filter += " AND LOWER(COALESCE(c.bank,m.bank,''))=LOWER(%s)"
+        params.append(bank.strip())
+    if financial_account_id is not None:
+        status_filter += " AND c.financial_account_id=%s"
+        params.append(financial_account_id)
     with get_connection() as conn:
         rows = conn.execute(
             f"""SELECT m.id AS email_id,m.sender,m.subject,m.received_at,m.bank,m.status AS email_status,
@@ -387,7 +397,9 @@ def list_gmail_emails(status: str | None = None) -> dict[str, Any]:
                        c.parser_name,c.parser_version,c.extraction_method,c.confidence,
                        c.uncertainty_reason,c.status AS review_status,c.reviewed_at,c.created_at,
                        c.source_type,c.source_provider,c.statement_document_id,
-                       c.is_internal_transfer,c.related_candidate_id,c.resolution_reason
+                       c.is_internal_transfer,c.related_candidate_id,c.resolution_reason,
+                       c.financial_account_id,c.raw_payload->>'bank_movement' AS bank_movement,
+                       c.raw_payload->>'financial_effect' AS financial_effect
                 FROM finva_email_messages m
                 JOIN accounts a ON a.id=m.account_id
                 LEFT JOIN finva_email_candidates c ON c.email_message_id=m.id

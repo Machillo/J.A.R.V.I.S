@@ -190,37 +190,69 @@ struct ProfileSetupView: View {
         }
     }
 
+    /// The banks the user uses: a preference that personalizes DINCR (`selected_financial_institutions`).
+    /// It never connects an account; the logos are the historical ones (`BankBrand`).
     private var institutionsStep: some View {
-        let banks: [(String, String, Bool)] = [
-            ("bac", "BAC Credomatic", true), ("bn", "Banco Nacional", false), ("bcr", "Banco de Costa Rica", false),
-            ("popular", "Banco Popular", false), ("davivienda", "Davivienda", false),
-            ("scotiabank", tx("DAVIbank (antes Scotiabank)", "DAVIbank (formerly Scotiabank)"), false),
-            ("promerica", "Promerica", false), ("multimoney", "MultiMoney", true),
-        ]
+        let columns = [GridItem(.flexible(), spacing: DincrSpacing.s2), GridItem(.flexible(), spacing: DincrSpacing.s2)]
         return VStack(alignment: .leading, spacing: DincrSpacing.s4) {
-            header(tx("¿Qué bancos usás?", "Which banks do you use?"), tx("Esto no conecta ninguna cuenta ni comparte contraseñas. DINCR nunca te pedirá la contraseña de tu banco.", "This doesn’t connect any account or share passwords. DINCR will never ask for your bank password."))
-            VStack(spacing: 0) {
-                ForEach(banks, id: \.0) { id, name, supported in
-                    Toggle(isOn: Binding(get: { institutions.contains(id) }, set: { on in
-                        if on { institutions.insert(id) } else { institutions.remove(id) }
-                    })) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(name).font(DincrFont.body).foregroundStyle(DincrColor.text)
-                            if supported {
-                                Text(tx("Compatible con correos financieros en VIP", "Works with financial emails in VIP"))
-                                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
-                            }
-                        }
-                    }
-                    .tint(DincrColor.tint)
-                    .padding(.vertical, DincrSpacing.s2)
-                    .frame(minHeight: 52)
-                    if id != banks.last?.0 { Divider().overlay(DincrColor.line) }
+            header(tx("Tus bancos en un solo lugar", "Your banks in one place"),
+                   tx("Seleccioná las instituciones que utilizás. Esta selección no conecta tus cuentas; podrás autorizar por separado la lectura de correos financieros compatibles.",
+                      "Select the institutions you use. This selection does not connect your accounts; you can separately authorize reading compatible financial emails."))
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tx("Tu seguridad primero", "Your security comes first")).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.text)
+                    Text(tx("DINCR nunca te pedirá la contraseña de tu banco.", "DINCR will never ask for your bank password."))
+                        .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
+                }
+            } icon: { Image(systemName: "checkmark.shield").foregroundStyle(DincrColor.tint) }
+            LazyVGrid(columns: columns, spacing: DincrSpacing.s2) {
+                ForEach(BankBrand.onboardingChoices, id: \.id) { choice in
+                    bankCard(id: choice.id, mailSupported: choice.mailSupported)
                 }
             }
-            .padding(.horizontal, DincrSpacing.s4)
-            .background(DincrColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous))
+            .sensoryFeedback(.selection, trigger: institutions)
+            Text(tx("Esto no conecta ninguna cuenta ni comparte contraseñas. Solo personaliza DINCR y prepara la automatización que vos autoricés después.",
+                    "This does not connect any account or share passwords. It only personalizes DINCR and prepares automation you authorize later."))
+                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                .accessibilityIdentifier("setup.banks.note")
         }
+    }
+
+    private func bankCard(id: String, mailSupported: Bool) -> some View {
+        let brand = BankBrand.describe(id)
+        // `scotiabank` is the stored id of DAVIbank (kept for existing profiles).
+        let name = id == "scotiabank" ? tx("DAVIbank (antes Scotiabank)", "DAVIbank (formerly Scotiabank)") : brand.name
+        let selected = institutions.contains(id)
+        return Button {
+            if selected { institutions.remove(id) } else { institutions.insert(id) }
+        } label: {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                HStack(alignment: .top) {
+                    BankLogo(brand: brand, size: 44)
+                    Spacer(minLength: 0)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? DincrColor.tint : DincrColor.fieldBorder)
+                        .accessibilityHidden(true)
+                }
+                Text(name).font(DincrFont.bodySmall.weight(.semibold)).foregroundStyle(DincrColor.text)
+                    .multilineTextAlignment(.leading).lineLimit(2)
+                Text(mailSupported ? tx("Disponible para la suscripción VIP", "Available with the VIP subscription")
+                                   : tx("Solo para personalizar tu perfil", "Only to personalize your profile"))
+                    .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
+                    .multilineTextAlignment(.leading).lineLimit(2)
+            }
+            .padding(DincrSpacing.s3)
+            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+            .background(DincrColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous)
+                .strokeBorder(selected ? DincrColor.tint : DincrColor.line, lineWidth: selected ? 2 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .accessibilityIdentifier("setup.bank.\(id)")
     }
 
     private func finish() async {

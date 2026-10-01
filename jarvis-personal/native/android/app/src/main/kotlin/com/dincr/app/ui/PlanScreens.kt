@@ -8,12 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CreditCard
-import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.material.icons.rounded.Redeem
-import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
@@ -42,7 +40,6 @@ import com.dincr.data.DebtRequest
 import com.dincr.data.Feature
 import com.dincr.data.IdempotencyKey
 import com.dincr.data.InterestRateInput
-import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
 import com.dincr.data.WholeNumberInput
 import com.dincr.design.Dincr
@@ -55,7 +52,12 @@ import java.math.BigDecimal
 import java.time.LocalDate
 import kotlinx.coroutines.launch
 
-/** E1 — Plan hub: what each plan can plan. */
+/**
+ * E1 — the Plan tab: exactly Aguinaldo, Estrategia, Salvavidas and Distribución de dinero, each
+ * behind its historical plan gate. A row the plan does not include stays visible, locked, and opens
+ * the plans screen. The Owner passes every gate by the server role ([Profile.planTier]). Debts and
+ * goals live in Hoy; budget, calendar and recurring payments in Perfil → Finanzas.
+ */
 @Composable
 fun PlanHubScreen(model: AppModel, nav: Navigator) {
     val profile by model.profile.collectAsStateWithLifecycle()
@@ -64,32 +66,24 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
         Text(tx("Plan", "Plan"), style = MaterialTheme.typography.headlineMedium, color = Dincr.colors.text)
         DincrCard {
             Column {
-                NavRow(Icons.Rounded.CreditCard, tx("Deudas", "Debts"), tx("Saldos, cuotas y pagos", "Balances, payments")) { nav.open("debts") }
-                NavRow(Icons.Rounded.Flag, tx("Metas y ahorros", "Goals and savings"), tx("Metas y planes de ahorro", "Goals and savings plans")) { nav.open("goals") }
-            }
-        }
-        DincrCard {
-            Column {
-                if (plan.allows(Feature.GUIDED_BUDGET)) {
-                    NavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits by category")) { nav.open("budget") }
-                    NavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), tx("Pagos e ingresos del mes", "Payments and income this month")) { nav.open("calendar") }
-                    NavRow(Icons.Rounded.Repeat, tx("Pagos recurrentes", "Recurring payments"), tx("Suscripciones y pagos fijos", "Subscriptions and fixed payments")) { nav.open("recurring") }
-                } else {
-                    NavRow(Icons.Rounded.PieChart, tx("Presupuesto, calendario y recurrentes", "Budget, calendar and recurring"), tx("Disponible desde Basic", "Available from Basic"), badge = "Basic") { nav.open("plans") }
-                }
-            }
-        }
-        DincrCard {
-            Column {
-                if (plan.allows(Feature.STRATEGY_VIP)) {
-                    NavRow(Icons.Rounded.Shield, tx("Fondo de emergencia", "Emergency fund"), tx("Cuántos meses te cubre", "How many months it covers")) { nav.open("emergency") }
-                    if (model.isOn(OpsFlag.GMAIL_AUTOMATION)) NavRow(Icons.Rounded.Redeem, tx("Aguinaldo", "Aguinaldo"), tx("Estimación con las órdenes de la CCSS", "Estimate from CCSS payroll notices")) { nav.open("aguinaldo") }
-                } else {
-                    NavRow(Icons.Rounded.Shield, tx("Fondo de emergencia y aguinaldo", "Emergency fund and aguinaldo"), tx("Disponible en VIP", "Available in VIP"), badge = "VIP") { nav.open("plans") }
-                }
+                PlanRow(plan.allows(Feature.GMAIL_AUTOMATION), PlanTier.VIP, Icons.Rounded.Redeem, tx("Aguinaldo", "Aguinaldo"),
+                    tx("Estimación con las órdenes de la CCSS", "Estimate from CCSS payroll notices"), nav, "aguinaldo")
+                PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.AutoAwesome, tx("Estrategia", "Strategy"),
+                    tx("Tu prioridad y el plan de tus deudas", "Your priority and your debt plan"), nav, "strategy")
+                PlanRow(plan.allows(Feature.STRATEGY_VIP), PlanTier.VIP, Icons.Rounded.Shield, tx("Salvavidas", "Emergency fund"),
+                    tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers"), nav, "salvavidas")
+                PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.PieChart, tx("Distribución de dinero", "Money distribution"),
+                    tx("Cómo repartir tu sobrante", "How to split your surplus"), nav, "distribution")
             }
         }
     }
+}
+
+@Composable
+private fun PlanRow(available: Boolean, minimum: PlanTier, icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, nav: Navigator, route: String) {
+    if (available) NavRow(icon, title, subtitle) { nav.open(route) }
+    else NavRow(icon, title, if (minimum == PlanTier.VIP) tx("Disponible desde VIP", "Available from VIP") else tx("Disponible desde Basic", "Available from Basic"),
+        badge = if (minimum == PlanTier.VIP) "VIP" else "Basic") { nav.open("plans") }
 }
 
 /** E2–E5 — debts: list with progress, create, edit (Basic+), payment, delete. */

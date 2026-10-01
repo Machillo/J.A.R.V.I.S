@@ -28,7 +28,7 @@ struct JarvisHubView: View {
     }
 }
 
-/// A JARVIS section: a ported one (chat, agenda), or a "being restored" screen that never shows sample data.
+/// A JARVIS section: a ported one (chat, agenda, analysis), or a "being restored" screen that never shows sample data.
 struct JarvisSectionView: View {
     let section: Jarvis.Section
 
@@ -37,6 +37,7 @@ struct JarvisSectionView: View {
             switch section {
             case .chat: JarvisChatView()
             case .calendar: JarvisAgendaView()
+            case .analysis: OwnerAnalysisView()
             default: restoring
             }
         }
@@ -82,6 +83,7 @@ extension Jarvis.Section {
         case .moneyControl: tx("Control de dinero", "Money control")
         case .wealth: tx("Patrimonio", "Wealth")
         case .records: tx("Registros", "Records")
+        case .analysis: tx("Análisis financiero", "Financial analysis")
         }
     }
 
@@ -95,6 +97,7 @@ extension Jarvis.Section {
         case .moneyControl: tx("Cobros pendientes y tarjetas adicionales", "Money owed to you and additional cards")
         case .wealth: tx("Patrimonio, inversiones y negocios", "Net worth, investments and businesses")
         case .records: tx("Importar, conciliar y tu línea de tiempo", "Import, reconcile and your timeline")
+        case .analysis: tx("Gasto por categoría, flujo mensual, patrimonio y salud financiera", "Spending by category, monthly flow, net worth and financial health")
         }
     }
 
@@ -108,6 +111,7 @@ extension Jarvis.Section {
         case .moneyControl: "arrow.left.arrow.right.circle"
         case .wealth: "chart.pie"
         case .records: "tray.and.arrow.down"
+        case .analysis: "chart.bar.xaxis"
         }
     }
 }

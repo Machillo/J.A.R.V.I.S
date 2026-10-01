@@ -202,7 +202,7 @@ class FlowsTest {
     @Test fun debtPaymentIsRecorded() {
         launch()
         waitForText(tx("Disponible este mes", "Available this month"))
-        tab(tx("Plan", "Plan"))
+        // Debts live in Hoy.
         click(tx("Deudas", "Debts"))
         waitForText("Tarjeta de ejemplo")
         click(tx("Registrar pago", "Record payment"))
@@ -215,7 +215,7 @@ class FlowsTest {
     @Test fun goalContributionIsRecorded() {
         launch()
         waitForText(tx("Disponible este mes", "Available this month"))
-        tab(tx("Plan", "Plan"))
+        // Goals live in Hoy.
         click(tx("Metas y ahorros", "Goals and savings"))
         waitForText("Fondo de emergencia")
         click(tx("Aportar", "Contribute"))
@@ -235,7 +235,8 @@ class FlowsTest {
     @Test fun basicPlanShowsTheBudget() {
         launch(plan = "basic")
         waitForText(tx("Balance del mes", "Month balance"))
-        tab(tx("Plan", "Plan"))
+        // Budget lives in Perfil → Finanzas.
+        tab(tx("Perfil", "Profile"))
         click(tx("Presupuesto", "Budget"))
         waitForText(tx("Gastado este mes", "Spent this month"))
         waitForText("Comida")

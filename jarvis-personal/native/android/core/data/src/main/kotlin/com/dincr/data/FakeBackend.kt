@@ -48,11 +48,17 @@ class FakeBackend(
     private var budget = store?.budget() ?: listOf(BudgetItem("Comida", BigDecimal(150000)), BudgetItem("Transporte", BigDecimal(60000)))
     private var situation: FinancialProfile? = store?.situation()
     private val candidates = mutableListOf<MailCandidate>()
+    /** Accounts detected in the notices (`account_balances`): no balance is ever served (unknown, not zero). */
+    private val accounts = mutableListOf<FinancialIdentity.Account>()
     private val tickets = mutableListOf<SupportTicket>()
     /** A VIP sample account starts with a connected mailbox and notices to review. */
     private var mailConnected = (scenario == Scenario.POPULATED || scenario == Scenario.STORE) && plan == PlanTier.VIP
     private var nextId = 500L
     val requests = mutableListOf<HttpRequest>()
+    private val planRoutes = FakePlanRoutes(json, today)
+    private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
+    private val isOwner get() = profile.role == "owner"
+    private val isInternal get() = profile.role == "owner" || profile.role == "admin"
 
     init {
         if (scenario == Scenario.POPULATED) seed()
@@ -186,6 +192,16 @@ class FakeBackend(
             path == "/jarvis/chat" && method == "POST" -> jarvisChat(text("message").orEmpty())
             path == "/jarvis/calendar/upcoming" && method == "GET" ->
                 if (profile.role != "owner" && profile.role != "admin") error(403, "No tienes permisos para realizar esta acción.") else ok(agendaBody())
+            // The Owner's strategy: this fake serves it to the Owner role only.
+            path == "/jarvis/premium/strategy-dashboard" && method == "GET" ->
+                if (!isOwner) error(403, "No tienes permisos para realizar esta acción.") else ok(planRoutes.strategyDashboard(snapshot(), owner = true, role = profile.role))
+            // JARVIS "Análisis financiero": the internal routers admit owner and admin, like main.py INTERNAL_ONLY.
+            path == "/transactions/analysis/summary" || path == "/finance/net-worth" || path == "/finance/engine" -> when {
+                !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
+                path == "/finance/net-worth" -> ok(planRoutes.netWorth(snapshot()))
+                path == "/finance/engine" -> ok(planRoutes.engine(snapshot()))
+                else -> ok(planRoutes.analysis(snapshot()))
+            }
             path == "/auth/me/export" -> ok("""{"format_version":1,"generated_at":"${today}T12:00:00Z","account":{"id":1},"workspaces":[],"data":{},"truncated_tables":[],"notes":[]}""")
             path == "/auth/profile-setup" -> {
                 profile = profile.copy(displayName = text("display_name"), profileSetupCompleted = true, baseCurrency = text("base_currency") ?: "CRC",
@@ -335,6 +351,8 @@ class FakeBackend(
 
             // Situation
             path == "/user-product/financial-situation" && method == "PUT" -> {
+                // Like FinancialSituationRequest: work_days_per_week is required (1–7) for every income type.
+                if (int("work_days_per_week")?.takeIf { it in 1..7 } == null) return error(422, "work_days_per_week: Field required")
                 situation = json.decodeFromString(FinancialProfile.serializer(), body.toString()); ok(financialSituation())
             }
             path == "/user-product/financial-situation" -> ok(financialSituation())
@@ -344,7 +362,8 @@ class FakeBackend(
 
             // VIP
             path.startsWith("/user-product/vip/gmail") || path.startsWith("/user-product/vip/mail") || path.startsWith("/user-product/vip/financial-identity") ->
-                needs(PlanTier.VIP) ?: mail(method, path, segments, body)
+                needs(PlanTier.VIP) ?: mail(method, path, segments, query, body)
+            path == "/user-product/vip/salvavidas" -> needs(PlanTier.VIP) ?: salvavidas(method, body)
             path.startsWith("/user-product/vip") || path.startsWith("/user-product/finance/strategy-vip") -> needs(PlanTier.VIP) ?: vip(path)
             else -> error(404, "Not Found")
         }
@@ -358,7 +377,8 @@ class FakeBackend(
                 val totals = totals(today.toString().take(7))
                 ok(BasicDashboard(today.toString().take(7), totals.first, totals.second, BigDecimal.ZERO, totals.first - totals.second,
                     BasicDashboard.DebtProgress(debts.sumOf { it.totalAmount ?: BigDecimal.ZERO }, debts.sumOf { it.remainingAmount ?: BigDecimal.ZERO }, debts.sumOf { it.monthlyPayment ?: BigDecimal.ZERO }, 35.0),
-                    savings.sumOf { it.savedAmount ?: BigDecimal.ZERO }, GoalProgress(goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }, goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }, 40.0, goals.size)))
+                    savings.sumOf { it.savedAmount ?: BigDecimal.ZERO }, GoalProgress(goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }, goals.sumOf { it.targetAmount ?: BigDecimal.ZERO }, 40.0, goals.size),
+                    monthlyHistory = freeDashboard().monthlyHistory))
             }
             path == "/user-product/basic/budget" && method == "PUT" -> {
                 val items = body?.get("items")?.let { json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(BudgetLimit.serializer()), it) }.orEmpty()
@@ -395,7 +415,20 @@ class FakeBackend(
         }
     }
 
+    /** GET, or PUT with only the fields to change (users vs owner by the server role, like the backend). */
+    private fun salvavidas(method: String, body: JsonObject?): HttpResponse {
+        if (method != "PUT") return ok(planRoutes.salvavidas(snapshot(), isOwner))
+        fun field(key: String) = body?.get(key)?.takeIf { it !is kotlinx.serialization.json.JsonNull }
+        val ids = field("protected_expense_ids")?.let { (it as? kotlinx.serialization.json.JsonArray)?.mapNotNull { id -> id.jsonPrimitive.content.toLongOrNull() } }
+        val (status, answer, updated) = planRoutes.updateSalvavidas(snapshot(), isOwner, field("target_months")?.jsonPrimitive?.content?.toIntOrNull(),
+            field("current_amount")?.jsonPrimitive?.content?.let(::BigDecimal), ids)
+        if (status != 200) return error(status, answer)
+        updated?.let { situation = it }
+        return ok(answer)
+    }
+
     private fun vip(path: String): HttpResponse = when (path) {
+        "/user-product/vip/strategy-dashboard" -> ok(planRoutes.strategyDashboard(snapshot(), owner = isOwner, role = profile.role))
         "/user-product/vip/command-center" -> store?.let { ok(it.engine("command_center")) } ?: ok(CommandCenter(
             today.toString(),
             CommandCenter.Director("debt", "Tu prioridad es bajar la tarjeta", "Pagá ₡40.000 extra a la tarjeta este mes", true),
@@ -415,7 +448,7 @@ class FakeBackend(
         else -> error(404, "Not Found")
     }
 
-    private fun mail(method: String, path: String, segments: List<String>, body: JsonObject?): HttpResponse {
+    private fun mail(method: String, path: String, segments: List<String>, query: Map<String, String>, body: JsonObject?): HttpResponse {
         fun text(key: String) = body?.get(key)?.jsonPrimitive?.content?.takeIf { it != "null" }
         return when {
             path == "/user-product/vip/gmail/status" -> ok(MailStatus(mailConnected, false, candidates.count { it.isPending }, true,
@@ -430,10 +463,21 @@ class FakeBackend(
                 """{"status":"ok","connections":1,"failed_connections":[],"scan_scope":"year_to_date","initial_scan_complete":true,""" +
                     """"found":3,"auto_saved":1,"pending":${candidates.count { it.isPending }},"payroll_reports":0,"duplicates":0}""")
             path == "/user-product/vip/gmail" && method == "DELETE" -> { mailConnected = false; ok("""{"status":"disconnected"}""") }
-            path == "/user-product/vip/gmail/emails" -> ok(MailCandidateList("ok", candidates.toList()))
+            // One candidate store for Email Monitor and Cuentas; the same filters as list_gmail_emails.
+            path == "/user-product/vip/gmail/emails" -> ok(MailCandidateList("ok", candidates.filter { c ->
+                query["status"].isNullOrEmpty() || c.reviewStatus == query["status"]
+            }.filter { c -> query["bank"].isNullOrBlank() || c.bank.orEmpty().equals(query["bank"]!!.trim(), ignoreCase = true) }
+                .filter { c -> query["financial_account_id"]?.toLongOrNull()?.let { c.financialAccountId == it } ?: true }))
             path == "/user-product/vip/gmail/own-transfer-suggestions" -> ok(OwnTransferSuggestions())
-            path == "/user-product/vip/financial-identity" -> ok(FinancialIdentity(listOf(FinancialIdentity.Account(1, "Cuenta de ejemplo", "Banco de ejemplo", "bac", "CRC", "1234", "pending")), FinancialIdentity.Summary(1)))
-            segments.take(4) == listOf("user-product", "vip", "financial-identity", "accounts") -> ok("""{"status":"ok"}""")
+            path == "/user-product/vip/financial-identity" -> ok(FinancialIdentity(accounts.toList(), FinancialIdentity.Summary(accounts.size, accounts.count { it.ownershipStatus == "pending" })))
+            segments.take(4) == listOf("user-product", "vip", "financial-identity", "accounts") -> {
+                val index = accounts.indexOfFirst { it.id == segments.getOrNull(4)?.toLongOrNull() }
+                val status = text("ownership_status")
+                if (index < 0) return error(404, "Cuenta financiera no encontrada.")
+                if (status !in setOf("own", "not_mine")) return error(422, "La propiedad debe confirmarse como propia o ajena.")
+                accounts[index] = accounts[index].copy(ownershipStatus = status)
+                ok("""{"status":"ok"}""")
+            }
             segments.take(4) == listOf("user-product", "vip", "gmail", "candidates") -> {
                 val id = segments.getOrNull(4)?.toLongOrNull()
                 val index = candidates.indexOfFirst { it.candidateId == id }
@@ -447,7 +491,11 @@ class FakeBackend(
                     action == "accept" -> {
                         if (method == "PUT" && candidate.needsRate && text("exchange_rate") == null) return error(422, "Indicá el tipo de cambio.")
                         candidates[index] = candidate.copy(reviewStatus = "confirmed")
-                        ok(CandidateReviewResult("confirmed", id, id() ))
+                        // Accepting records one movement; a second accept answers already_reviewed above.
+                        val sid = id()
+                        movements += Movement("transaction:$sid", sid, "transaction", candidate.transactionDate ?: today.toString(), candidate.description,
+                            candidate.amount ?: BigDecimal.ZERO, candidate.transactionType ?: "expense", candidate.category, "", false)
+                        ok(CandidateReviewResult("confirmed", id, sid))
                     }
                     else -> error(404, "Not Found")
                 }
@@ -496,12 +544,20 @@ class FakeBackend(
         FinancialSituation.DebtSummary(debts.size, debts.sumOf { it.remainingAmount ?: BigDecimal.ZERO }, debts.count { it.interestRate == null }),
         FinancialSituation.GoalSummary(goals.size, goals.sumOf { it.currentAmount ?: BigDecimal.ZERO }))
 
-    private fun strategy() = Strategy(
-        "tight", "debt", BigDecimal(865000), BigDecimal(420000), BigDecimal(95000), BigDecimal(214000),
-        listOf(Strategy.Allocation("emergency", "Fondo de emergencia", BigDecimal(60000)), Strategy.Allocation("debt_extra", "Extra a la tarjeta", BigDecimal(100000)), Strategy.Allocation("flex", "Libre", BigDecimal(54000))),
-        recommendation = "Destiná ₡100.000 extra a la tarjeta y ₡60.000 a tu fondo de emergencia.",
-        projection = Strategy.Projection("Tarjeta de ejemplo", 14, 31, BigDecimal(195000)),
-    )
+    /** Like `get_strategy_basic`: the declared income first, else the observed one (said so), else needs_income. */
+    private fun strategy(): Strategy {
+        val (source, _) = planRoutes.basicIncome(snapshot())
+        val basis = Strategy.IncomeBasis(source, if (source == "declared") null else "observed_baseline", if (source == "observed") "transactions" else null)
+        if (source == "none") return Strategy("needs_income", recommendation = "Registrá tus ingresos o completá tu situación financiera para armar tu estrategia.",
+            incomeSource = source, incomeBasis = basis)
+        return Strategy(
+            "tight", "debt", BigDecimal(865000), BigDecimal(420000), BigDecimal(95000), BigDecimal(214000),
+            listOf(Strategy.Allocation("emergency", "Fondo de emergencia", BigDecimal(60000)), Strategy.Allocation("debt_extra", "Extra a la tarjeta", BigDecimal(100000), 1), Strategy.Allocation("flex", "Libre", BigDecimal(54000))),
+            recommendation = "Destiná ₡100.000 extra a la tarjeta y ₡60.000 a tu fondo de emergencia.",
+            projection = Strategy.Projection("Tarjeta de ejemplo", 14, 31, BigDecimal(195000)),
+            incomeSource = source, incomeBasis = basis,
+        )
+    }
 
     private fun progress(debt: Debt): Double {
         val total = debt.totalAmount ?: return 0.0
@@ -531,10 +587,25 @@ class FakeBackend(
         goals += Goal(3, "Fondo de emergencia", BigDecimal(600000), BigDecimal(240000), today.plusMonths(8).toString(), "high", "active")
         savings += SavingsPlan(4, "Vacaciones", BigDecimal(25000), BigDecimal(75000), today.minusMonths(3).withDayOfMonth(1).toString(), today.plusMonths(9).withDayOfMonth(1).toString(), "active")
         recurring += RecurringItem(5, "Internet", BigDecimal(24900), "Internet", "expense", "monthly", 4, true)
-        candidates += MailCandidate(21, 21, null, "Banco de ejemplo", "avisos@banco.test", "Notificación de compra", "${day(1)}T10:00:00Z", "Compra en supermercado", BigDecimal(15300), "CRC",
-            accountBaseCurrency = "CRC", transactionDate = day(1), transactionType = "expense", category = "Comida", reviewStatus = "pending")
-        candidates += MailCandidate(22, 22, null, "Banco de ejemplo", "avisos@banco.test", "Compra internacional", "${day(2)}T10:00:00Z", "Tienda en línea", BigDecimal(25), "USD",
-            accountBaseCurrency = "CRC", transactionDate = day(2), transactionType = "expense", category = "Compras", reviewStatus = "pending")
+        // Like the backend: a candidate's `bank` is the institution CODE; detected accounts carry the
+        // label (`bank_name`) plus `institution_code`. Notices of a known bank with an account, of a
+        // bank whose label differs from its code (Banco Popular / popular), of a known bank without
+        // a detected account, and of an institution DINCR does not identify.
+        candidates += MailCandidate(21, 21, null, "bac", "avisos@banco.test", "Notificación de compra", "${day(1)}T10:00:00Z", "Compra en supermercado", BigDecimal(15300), "CRC",
+            accountBaseCurrency = "CRC", transactionDate = day(1), transactionType = "expense", category = "Comida", reviewStatus = "pending",
+            financialAccountId = 1, bankMovement = "purchase", financialEffect = "expense")
+        candidates += MailCandidate(22, 22, null, "bac", "avisos@banco.test", "Compra internacional", "${day(2)}T10:00:00Z", "Tienda en línea", BigDecimal(25), "USD",
+            accountBaseCurrency = "CRC", transactionDate = day(2), transactionType = "expense", category = "Compras", reviewStatus = "pending",
+            financialAccountId = 1, bankMovement = "purchase", financialEffect = "expense")
+        candidates += MailCandidate(23, 23, null, "popular", "avisos@banco.test", "Transferencia recibida", "${day(3)}T10:00:00Z", "Transferencia de ejemplo", BigDecimal(50000), "CRC",
+            accountBaseCurrency = "CRC", transactionDate = day(3), transactionType = "income", category = "Transferencias", reviewStatus = "pending",
+            financialAccountId = 2, bankMovement = "transfer_in", financialEffect = "income")
+        candidates += MailCandidate(25, 25, null, "multimoney", "avisos@billetera.test", "Pago con billetera", "${day(4)}T10:00:00Z", "Recarga de ejemplo", BigDecimal(5000), "CRC",
+            accountBaseCurrency = "CRC", transactionDate = day(4), transactionType = "expense", category = "Servicios", reviewStatus = "pending")
+        candidates += MailCandidate(24, 24, null, "cooperativa_ejemplo", "avisos@cooperativa.test", "Pago de servicio", "${day(5)}T10:00:00Z", "Pago de agua", BigDecimal(8200), "CRC",
+            accountBaseCurrency = "CRC", transactionDate = day(5), transactionType = "expense", category = "Servicios", reviewStatus = "confirmed")
+        accounts += FinancialIdentity.Account(1, "Cuenta de ejemplo", "BAC", "bac", "CR", "checking", "CRC", "1234", "pending")
+        accounts += FinancialIdentity.Account(2, "Ahorro de ejemplo", "Banco Popular", "popular", "CR", "savings", "CRC", "5678", "own")
     }
 
     private fun sampleProfile(plan: PlanTier) = Profile(
