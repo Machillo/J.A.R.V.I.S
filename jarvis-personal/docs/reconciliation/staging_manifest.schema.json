@@ -1,0 +1,366 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dincr/reconciliation/staging-manifest-row",
+  "title": "Historical reconstruction staging row (one expected movement)",
+  "description": "One row per movement evidenced by a bank notice or statement line, for one mailbox and one month. Lives outside the repository, in the operator's private evidence directory. UNKNOWN is a value, never zero, income or expense.",
+  "type": "object",
+  "required": [
+    "row_key",
+    "month",
+    "mailbox",
+    "evidence",
+    "expected",
+    "parser",
+    "comparison",
+    "action",
+    "reconciliation"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "unknownable_text": {
+      "type": [
+        "string"
+      ],
+      "description": "A value, or the literal \"UNKNOWN\" when the evidence does not show it."
+    },
+    "money": {
+      "type": "object",
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "amount": {
+          "type": [
+            "string"
+          ],
+          "pattern": "^(UNKNOWN|[0-9]+(\\.[0-9]{1,2})?)$",
+          "description": "Decimal string in the movement's own currency; never a float, never 0 for unknown."
+        },
+        "currency": {
+          "enum": [
+            "CRC",
+            "USD",
+            "UNKNOWN"
+          ]
+        }
+      }
+    },
+    "financial_type": {
+      "enum": [
+        "expense",
+        "income",
+        "own_transfer",
+        "card_payment",
+        "debt_payment",
+        "refund",
+        "fee",
+        "interest",
+        "loan_received",
+        "receivable_payment",
+        "payroll",
+        "bonus",
+        "UNKNOWN"
+      ],
+      "description": "own_transfer: both ends proven to be the Owner's confirmed accounts (never income nor expense). card_payment: never income. refund: never ordinary income."
+    }
+  },
+  "properties": {
+    "row_key": {
+      "type": "string",
+      "description": "Stable key: sha256(mailbox_hash|provider_message_id|movement_index). No raw ids in shared files."
+    },
+    "month": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+    },
+    "mailbox": {
+      "type": "object",
+      "required": [
+        "mailbox_hash",
+        "provider"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mailbox_hash": {
+          "type": "string",
+          "description": "sha256 of the lowercased address; the address itself is never stored."
+        },
+        "provider": {
+          "enum": [
+            "gmail",
+            "microsoft"
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "kind",
+        "source_ref",
+        "received_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "notification",
+            "statement_line",
+            "payroll_report",
+            "other"
+          ]
+        },
+        "source_ref": {
+          "type": "string",
+          "description": "Internal reference (finva_email_messages.id / statement document + line), never the raw message id or content."
+        },
+        "received_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "template": {
+          "type": "string",
+          "description": "Bank template id the notice matches (e.g. bac.purchase.v2), for the parser loop."
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "description": "The human-confirmed interpretation. Every field may be UNKNOWN.",
+      "required": [
+        "date",
+        "institution",
+        "money",
+        "direction",
+        "financial_type",
+        "confidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "type": "string",
+          "pattern": "^(UNKNOWN|[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+        },
+        "time": {
+          "type": "string",
+          "pattern": "^(UNKNOWN|[0-2][0-9]:[0-5][0-9])$"
+        },
+        "institution": {
+          "$ref": "#/$defs/unknownable_text"
+        },
+        "account_ref": {
+          "$ref": "#/$defs/unknownable_text",
+          "description": "Last 4 / account label as the bank shows it; never a full number."
+        },
+        "money": {
+          "$ref": "#/$defs/money"
+        },
+        "original_money": {
+          "$ref": "#/$defs/money",
+          "description": "Only when the bank converted (USD purchase billed in CRC)."
+        },
+        "direction": {
+          "enum": [
+            "in",
+            "out",
+            "UNKNOWN"
+          ]
+        },
+        "financial_type": {
+          "$ref": "#/$defs/financial_type"
+        },
+        "counterparty": {
+          "$ref": "#/$defs/unknownable_text",
+          "description": "Normalized merchant/counterparty."
+        },
+        "description": {
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/unknownable_text"
+        },
+        "transfer_reference": {
+          "$ref": "#/$defs/unknownable_text",
+          "description": "Bank reference / SINPE id when present. Dedupe uses it with date+amount+account, never amount alone."
+        },
+        "own_account_origin": {
+          "$ref": "#/$defs/unknownable_text"
+        },
+        "own_account_destination": {
+          "$ref": "#/$defs/unknownable_text"
+        },
+        "debt_ref": {
+          "$ref": "#/$defs/unknownable_text",
+          "description": "Debt this payment reduces, only when proven."
+        },
+        "duplicate_of": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "row_key of the same movement seen in another notice/statement (proven, not by amount)."
+        },
+        "confidence": {
+          "enum": [
+            "confirmed",
+            "high",
+            "medium",
+            "low"
+          ]
+        }
+      }
+    },
+    "parser": {
+      "type": "object",
+      "description": "What the current parser produced for the same evidence (parser version recorded).",
+      "required": [
+        "version",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "git SHA of the parser that ran."
+        },
+        "status": {
+          "enum": [
+            "parsed",
+            "ignored",
+            "failed",
+            "not_run"
+          ]
+        },
+        "result": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Same shape as expected (subset), as produced."
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "required": [
+        "match"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "match": {
+          "type": "boolean"
+        },
+        "discrepancies": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "missed",
+              "spurious",
+              "amount",
+              "currency",
+              "direction",
+              "type",
+              "date",
+              "account",
+              "counterparty",
+              "category",
+              "duplicate",
+              "own_transfer"
+            ]
+          }
+        },
+        "root_cause": {
+          "type": "string",
+          "description": "Template/structure-level cause, never 'this one email says…'."
+        }
+      }
+    },
+    "action": {
+      "enum": [
+        "write",
+        "skip_duplicate",
+        "skip_not_financial",
+        "needs_user_review",
+        "parser_fix",
+        "unknown_hold"
+      ],
+      "description": "unknown_hold: kept out of the books until evidence exists (UNKNOWN is never written as zero)."
+    },
+    "reconciliation": {
+      "type": "object",
+      "description": "Cross-month evidence. The economic date (expected.date) never changes because evidence arrives later: transaction date != statement cycle != statement arrival date.",
+      "required": [
+        "status",
+        "economic_month"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "confirmed",
+            "pending_reconciliation"
+          ],
+          "description": "pending_reconciliation: written to no ledger as income, refund or own transfer until evidence decides it; UNKNOWN stays UNKNOWN."
+        },
+        "economic_month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+          "description": "Month of expected.date. A statement's cycle or arrival month never replaces it."
+        },
+        "pending_reason": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Set when later evidence settles a pending movement: the same row is reclassified (never duplicated) and the totals of its economic month are recalculated.",
+          "required": [
+            "evidence_kind",
+            "evidence_ref",
+            "evidence_cycle",
+            "evidence_arrival",
+            "resolved_on",
+            "previous_financial_type"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "evidence_kind": {
+              "enum": [
+                "statement_line",
+                "notification",
+                "user_answer",
+                "other"
+              ]
+            },
+            "evidence_ref": {
+              "type": "string",
+              "description": "Internal reference to the document/line; no raw content."
+            },
+            "evidence_cycle": {
+              "type": "string",
+              "description": "Cycle the document covers (e.g. 2026-01-21..2026-02-20)."
+            },
+            "evidence_arrival": {
+              "type": "string",
+              "format": "date"
+            },
+            "resolved_on": {
+              "type": "string",
+              "format": "date"
+            },
+            "previous_financial_type": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

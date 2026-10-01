@@ -112,6 +112,35 @@ def test_card_alert_date_and_time_formats_of_the_current_senders(fecha, date, ti
     assert (parsed["transaction_date"], parsed["transaction_time"]) == (date, time)
 
 
+@pytest.mark.parametrize("merchant, category", [
+    ("Google Crunchyroll Ejemplo", "Suscripciones"),  # widely known streaming and cloud-storage plans
+    ("NETFLIX.COM", "Suscripciones"),
+    ("Google One", "Suscripciones"),
+    ("APPLE.COM/BILL", "Suscripciones"),
+    ("CAFE EJEMPLO CENTRO 2", "Restaurante"),       # cafés and coffee shops: the catalog's cafetería
+    ("COFFEE PLACE", "Restaurante"),
+    ("GRANIZADOS", "Restaurante"),
+    ("SEGURO PROTECCION EJEMPLO", "Seguros"),        # insurance charges: the catalog's Seguros
+    ("POLIZA HOGAR EJEMPLO", "Seguros"),
+])
+def test_card_merchants_get_a_category_of_the_official_catalog(merchant, category):
+    from backend.finance.category_catalog import OFFICIAL_CATEGORIES
+    parsed = parse("notificacion@notificacionesbaccr.com", f"Notificación de transacción {merchant} 12-01-2026 - 12:20",
+                   bac_card("Ene 12, 2026, 12:20", merchant=merchant), "2026-01-12T18:20:22Z")
+    assert parsed["category"] == category
+    assert parsed["category"] in {item["category_name"] for item in OFFICIAL_CATEGORIES}
+    assert candidate(parsed)["category"] == category
+
+
+@pytest.mark.parametrize("merchant", ["TIENDA SPORT BOX EJEMPLO", "DROPBOX*EJEMPLO", "XBOX EJEMPLO"])
+def test_a_store_named_sport_or_box_is_not_a_sport_membership(merchant):
+    # Equipment bought at a sports store is a purchase; "box" also names unrelated merchants.
+    parsed = parse("notificacion@notificacionesbaccr.com", f"Notificación de transacción {merchant} 04-01-2026 - 17:22",
+                   bac_card("Ene 4, 2026, 17:22", merchant=merchant), "2026-01-04T23:23:01Z")
+    assert parsed["category"] != "Deporte"
+    assert candidate(parsed)["category"] == "Compras"
+
+
 def test_card_purchase_is_an_expense_with_a_reference():
     parsed = parse("NotificacionBAC@baccredomatic.cr", "Notificación de transacción DLC*UBER EATS 23-09-2026 - 13:32",
                    bac_card("Sep 23, 2026 , 13:32"), "2026-09-23T19:32:51Z")
@@ -407,6 +436,43 @@ def test_card_payment_is_a_move_between_own_products_not_an_expense(card_currenc
     assert (parsed["origin_account"], parsed["destination_account"]) == ("****1111", "****4321")
     assert parsed["reference"] == "0042 2026-09-28 11:10:12"
     assert (parsed["exchange_rate"] is not None) is (card_currency == "USD")
+
+
+def bac_redemption(card="5100-00**-****-4321", points="1200", amount="3000.00", destination="CR****************9876",
+                   reference="11112222-11112222", fecha="15/09/2026; 10:05 AM"):
+    # BAC's points/cashback redemption receipt (alerta@baccredomatic.com). Its footer points to the
+    # statement in Banca Móvil ("verifique su estado de cuenta"); the receipt itself is a movement.
+    return (
+        "<h1>Comprobante de Redención</h1><p>Estimado(a) MARIA PRUEBA SOLANO :</p>"
+        f"<p>Su solicitud de redención de puntos/millas/cashback relacionados a su tarjeta {card} fue aplicada con éxito.</p>"
+        f"<table><tr><td>Cantidad Redimida</td><td>Monto</td></tr><tr><td>{points} Puntos</td><td>=</td><td>{amount} CRC</td></tr></table>"
+        "<p><b>Plan de lealtad:</b> PLAN EJEMPLO</p>"
+        f"<p><b>Producto destino:</b> {destination}</p><p><b>Número de Referencia:</b> {reference}</p>"
+        f"<p><b>Fecha de redención:</b> {fecha}</p>"
+        "<p>Para más información, verifique su estado de cuenta en Banca Móvil o Banca en Línea.</p>"
+    )
+
+
+def test_points_redemption_receipt_is_a_reward_into_the_destination_account_not_a_statement():
+    parsed = parse("alerta@baccredomatic.com", "BAC Credomatic - Comprobante de Redención", bac_redemption(), "2026-09-15T16:06:00Z")
+    assert parsed["email_kind"] == "movement"
+    assert parsed["bank_movement"] == "card_points_credit" and parsed["financial_effect"] == "reward"
+    # Points turned into money: never spending, never ordinary income.
+    assert parsed["transaction_type"] == "transfer" and parsed["movement_direction"] == "in"
+    assert parsed["amount"] == 3000.0 and parsed["currency"] == "CRC"
+    assert (parsed["transaction_date"], parsed["transaction_time"]) == ("2026-09-15", "10:05:00")
+    assert parsed["card_last4"] == "4321" and parsed["destination_account"].endswith("9876")
+    assert parsed["reference"] == "reward:11112222-11112222"
+    row = candidate(parsed)
+    assert row["destination_account_reference"].endswith("9876") and row["transaction_type"] == "transfer"
+
+
+def test_a_receipt_that_only_mentions_the_statement_is_not_a_statement():
+    # A real statement still is one.
+    statement = parse("estadodecuenta@baccredomatic.cr", "Estado de cuenta de tarjeta(s) de crédito 202609",
+                      "<p>Adjunto encontrará un archivo en formato PDF en el cual se detalla su estado de cuenta "
+                      "para su(s) tarjeta(s) de crédito correspondientes al mes de Setiembre</p>", "2026-09-22T22:44:00Z")
+    assert statement["email_kind"] == "statement"
 
 
 def test_service_payment_is_an_expense_identified_by_its_authorization():

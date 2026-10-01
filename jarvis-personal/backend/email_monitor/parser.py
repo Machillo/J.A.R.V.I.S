@@ -682,10 +682,16 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
         # Reglas explícitas antes de IA. Usar solo categorías oficiales para evitar
         # que normalize_category caiga en alias raros como "Horas extra".
         ("Servicios", ["openai", "chatgpt", "render.com", "render ", "supabase", "railway", "vercel", "github", "domain", "hosting", "openai api"]),
-        ("Deporte", ["gym", "gimnasio", "novo fit", "coffee bar novo fit", "uno sport", "uno sports", "box"]),
+        # Recurring app, streaming and cloud-storage plans.
+        ("Suscripciones", ["crunchyroll", "netflix", "spotify", "google one", "icloud", "apple.com/bill", "apple.com bill"]),
+        ("Seguros", ["seguro ", "poliza", "póliza"]),
+        # Training and memberships; a store with "sport"/"box" in its name sells equipment (Compras).
+        ("Deporte", ["gym", "gimnasio", "novo fit", "coffee bar novo fit", "boxeo", "muay thai", "artes marciales"]),
         ("Entretenimiento", ["playstation", "ps plus", "supercell", "fs *supercell", "gossip", "kingshot", "juego", "store.supercell", "roku"]),
-        ("Suscripciones", ["apple.com/bill", "apple.com bill", "apple", "icloud", "crunchyroll", "google crunchyroll", "google one", "netflix", "resume.io", "spotify"]),
-        ("Restaurante", ["taco bell", "pops", "mcdonald", "arcos dorados", "kfc", "restaurante", "sacc restaurante", "pizza", "burger", "uber eats"]),
+        ("Servicios", ["apple", "resume.io"]),
+        ("Restaurante", ["taco bell", "pops", "mcdonald", "arcos dorados", "kfc", "restaurante", "sacc restaurante", "pizza", "burger", "uber eats",
+                         # Cafés and snack stands: the catalog's cafetería.
+                         "cafe ", "café", "coffee", "cafeteria", "cafetería", "granizado"]),
         ("Comida", ["maxi pali", "maxipali", "pali", "palí", "walmart", "am pm", "automercado", "auto mercado", "supermercado", "jose m.zeledon", "zeledon"]),
         ("Gasolina", ["gasolinera", "estacion de servicio", "estación de servicio", "combustible", "servicentro"]),
         ("Transporte", ["uber rides", "uber", "parqueo", "taxi", "didi"]),
@@ -1413,6 +1419,68 @@ def _parse_bac_card_payment(subject: str, body: str, received_at: str | None) ->
     }
 
 
+_REDEMPTION_CARD = re.compile(r"tarjeta\s+(\d{4}-\d{2}\*\*-\*{4}-(\d{4}))", re.I)
+_REDEMPTION_AMOUNT = re.compile(r"Puntos[\s*#|]*=[\s*#|]*([0-9][0-9.,]*)\s*(CRC|USD)", re.I)
+_REDEMPTION_REFERENCE = re.compile(r"N[uú]mero\s+de\s+Referencia\s*:?[\s*#|]*([0-9][0-9-]{3,40}[0-9])", re.I)
+_REDEMPTION_DESTINATION = re.compile(r"Producto\s+destino\s*:?[\s*#|]*(CR[0-9Xx*]{4,30}|[0-9Xx*]{4,30})", re.I)
+
+
+def _parse_bac_reward_redemption(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
+    """BAC points/cashback redemption receipt: points become money in a destination product.
+
+    The receipt's footer refers to the statement ("verifique su estado de cuenta"), so it is
+    recognized before statement detection. The credit is a reward: never spending and never
+    ordinary income; the destination product is reported for ownership resolution.
+    """
+    text = clean_text("\n".join([sender or "", subject or "", body or ""]))
+    clean = normalize(text)
+    if not ("comprobante de redencion" in clean and "redencion de puntos" in clean):
+        return None
+    amount_match = _REDEMPTION_AMOUNT.search(text)
+    if not amount_match:
+        return None
+    amount = _parse_number(amount_match.group(1))
+    if amount is None or amount <= 0:
+        return None
+    currency = amount_match.group(2).upper()
+    card = _REDEMPTION_CARD.search(text)
+    card_last4 = card.group(2) if card else None
+    destination = _REDEMPTION_DESTINATION.search(text)
+    destination_account = _masked_account(destination.group(1)) if destination else ""
+    reference_match = _REDEMPTION_REFERENCE.search(text)
+    reference = reference_match.group(1) if reference_match else ""
+    date_raw = _label_value(text, r"Fecha de redenci[oó]n") or text
+    transaction_date, time_value = _parse_datetime_text(date_raw.replace(";", ""), received_at)
+    notes = ["BAC redención de puntos por plantilla"]
+    if card_last4:
+        notes.append(f"tarjeta ****{card_last4}")
+    if destination_account:
+        notes.append(f"destino: {destination_account}")
+    if reference:
+        notes.append(f"referencia {reference}")
+    return {
+        **_base_result("bac", "movement", received_at),
+        "transaction_date": transaction_date,
+        "transaction_time": time_value,
+        "description": "Redención de puntos BAC",
+        "amount": round(amount, 2),
+        "currency": currency,
+        "transaction_type": "transfer",
+        "category": "Reembolso",
+        "account": f"BAC ****{card_last4}" if card_last4 else "BAC Tarjeta",
+        "notes": " | ".join(notes),
+        "card_last4": card_last4,
+        "destination_account": destination_account,
+        "reference": f"{mt.KIND_REWARD}:{reference}" if reference else "",
+        "movement_direction": "in",
+        **mt.movement(mt.CARD_POINTS_CREDIT, mt.REWARD),
+        "movement_kind": mt.KIND_REWARD,
+        "dedupe_key": f"bac_reward|{transaction_date}|{card_last4 or ''}|{round(amount, 2)}|{reference or time_value or ''}",
+        "confidence": 0.95,
+        "confidence_reason": "BAC comprobante de redención: puntos, monto, producto destino y referencia por plantilla exacta.",
+    }
+
+
 def _parse_bac_cardless_withdrawal(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
     """Cardless ATM withdrawal: creating the code moves nothing; the withdrawal is cash out."""
     if "retiro sin tarjeta" not in normalize(subject) or "alerta@baccredomatic.com" not in normalize(sender):
@@ -1590,6 +1658,8 @@ def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
     text = "\n".join([sender or "", subject or "", body or ""])
     if bank == "unknown":
         return "ignored", "No es un correo de BAC, Banco Popular o MultiMoney."
+    if bank == "bac" and _parse_bac_reward_redemption(subject, sender, body, None):
+        return "movement", "Redención de puntos BAC estructurada detectada."
     if _parse_statement(subject, sender, body, None):
         return "statement", "Estado de cuenta detectado; queda como documento pendiente."
     if bank == "bac":
@@ -1632,6 +1702,12 @@ def _parse_financial_email(subject: str, sender: str, body: str, received_at: st
 
     if bank == "unknown":
         return _ignored(bank, subject, body, received_at, "No es un correo de BAC, Banco Popular o MultiMoney.")
+
+    # A redemption receipt mentions the statement in its footer: it is a movement.
+    if bank == "bac":
+        redemption = _parse_bac_reward_redemption(subject, sender, body, received_at)
+        if redemption:
+            return redemption
 
     # Estados de cuenta tienen prioridad: son documentos, no movimientos.
     statement = _parse_statement(subject, sender, body, received_at)

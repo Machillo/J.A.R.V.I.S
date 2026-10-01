@@ -17,6 +17,7 @@ ENGLISH_REASONS = {
     "BAC SINPE: dirección, monto, referencia, cuentas y fecha extraídos por plantilla exacta.": "BAC SINPE: direction, amount, reference, accounts, and date extracted with an exact template.",
     "BAC SINPE: dirección, monto, referencia, cuenta y fecha extraídos por plantilla exacta; el correo no identifica la otra parte.": "BAC SINPE: direction, amount, reference, account, and date extracted with an exact template; the email doesn’t identify the other party.",
     "BAC compra: comercio, fecha, tipo, tarjeta, ciclo y monto extraídos por plantilla exacta.": "BAC purchase: merchant, date, type, card, cycle, and amount extracted with an exact template.",
+    "BAC comprobante de redención: puntos, monto, producto destino y referencia por plantilla exacta.": "BAC redemption receipt: points, amount, destination product, and reference extracted with an exact template.",
     "BAC pago de tarjeta: cuenta origen, tarjeta, montos y tipo de cambio por plantilla exacta; no es gasto.": "BAC card payment: source account, card, amounts, and exchange rate extracted with an exact template; it isn’t an expense.",
     "BAC retiro sin tarjeta: monto, fecha y hora por plantilla exacta.": "BAC cardless withdrawal: amount, date, and time extracted with an exact template.",
     "BAC tarjeta adicional: el correo saluda a otra persona; confirmá si el cargo es tuyo.": "BAC additional card: the email greets another person; confirm whether the charge is yours.",
