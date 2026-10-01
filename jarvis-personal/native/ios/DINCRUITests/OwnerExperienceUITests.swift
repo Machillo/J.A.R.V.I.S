@@ -74,6 +74,24 @@ final class OwnerExperienceUITests: XCTestCase {
         XCTAssertTrue(text("Por revisar", in: app).waitForExistence(timeout: 10), "the Email Monitor's review list")
     }
 
+    func testOwnerTodayReachesDebtsAndGoals() {
+        // Debts and goals left the Plan tab for Today (#302); the Owner's own Today (#303) keeps them,
+        // opening the same screens the other plans reach from theirs.
+        let app = launch()
+        XCTAssertTrue(element("owner.home", in: app).waitForExistence(timeout: 10))
+        reveal("owner.home.debts", in: app).tap()
+        XCTAssertTrue(app.navigationBars["Deudas"].waitForExistence(timeout: 10), "the debts screen")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        reveal("owner.home.goals", in: app).tap()
+        XCTAssertTrue(app.navigationBars["Metas y ahorro"].waitForExistence(timeout: 10), "the goals screen")
+        // Plan keeps its four rows: debts and goals are not brought back there.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.tabBars.buttons["Plan"].tap()
+        XCTAssertTrue(element("plan.strategy", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("plan.debts", in: app).exists)
+        XCTAssertFalse(element("plan.goals", in: app).exists)
+    }
+
     func testAnEmptyAgendaOnTodayOffersJarvis() {
         let app = launch(scenario: "empty")
         reveal("owner.home.agenda.empty", in: app).tap()

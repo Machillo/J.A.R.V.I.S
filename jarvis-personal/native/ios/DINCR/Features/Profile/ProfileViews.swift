@@ -43,6 +43,7 @@ struct ProfileHubView: View {
                         .accessibilityIdentifier("profile.accounts")
                 }
             }
+            .dincrRowBackground()
             if model.planTier.rank >= PlanTier.basic.rank {
                 // Basic tools, moved here from the Plan tab (navigation only).
                 Section(tx("Finanzas", "Finances")) {
@@ -53,8 +54,8 @@ struct ProfileHubView: View {
                     NavigationLink { RecurringView() } label: { Label(tx("Recurrentes", "Recurring"), systemImage: "repeat") }
                         .accessibilityIdentifier("profile.recurring")
                 }
+                .dincrRowBackground()
             }
-            .dincrRowBackground()
             Section(tx("Cuenta", "Account")) {
                 NavigationLink { PlanSettingsView() } label: { Label(tx("Plan", "Plan"), systemImage: "star") }
                     .accessibilityIdentifier("profile.plan")

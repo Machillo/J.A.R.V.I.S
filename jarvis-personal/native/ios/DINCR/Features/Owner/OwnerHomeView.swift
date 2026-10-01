@@ -6,8 +6,9 @@ import SwiftUI
 /// 1. who and when (greeting with the profile's first name),
 /// 2. how am I (the backend's key figure: safe to spend, or the month's balance without VIP intelligence),
 /// 3. what needs attention (mail notices to review, alerts),
-/// 4. what comes next (the JARVIS agenda),
-/// 5. JARVIS (chat and agenda), also reachable from the mark in the header.
+/// 4. your finances (debts and goals: the same screens the other plans reach from their Today),
+/// 5. what comes next (the JARVIS agenda),
+/// 6. JARVIS (chat and agenda), also reachable from the mark in the header.
 /// Read-only: opening it never writes. Each part loads on its own, so a failing agenda never hides
 /// the money, and nothing is invented when the backend sends no value ("—").
 struct OwnerHomeView: View {
@@ -21,6 +22,7 @@ struct OwnerHomeView: View {
                 header
                 summarySection
                 attentionSection
+                financesSection
                 upcomingSection
                 jarvisSection
             }
@@ -157,7 +159,31 @@ struct OwnerHomeView: View {
         }
     }
 
-    // MARK: 4. Next
+    // MARK: 4. Finances
+
+    /// Debts and goals left the Plan tab for Today; the Owner's Today keeps them, opening the same
+    /// screens (navigation only: their data and rules are unchanged).
+    @ViewBuilder
+    private var financesSection: some View {
+        OwnerSectionHeader(tx("Tus finanzas", "Your finances"))
+        OwnerGroup {
+            NavigationLink { DebtsView() } label: {
+                OwnerRow(symbol: "creditcard", title: tx("Deudas", "Debts"),
+                         detail: tx("Saldos, pagos y avance", "Balances, payments and progress"))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("owner.home.debts")
+            OwnerDivider()
+            NavigationLink { GoalsView() } label: {
+                OwnerRow(symbol: "target", title: tx("Metas y ahorro", "Goals and savings"),
+                         detail: tx("Metas, aportes y planes de ahorro", "Goals, contributions and savings plans"))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("owner.home.goals")
+        }
+    }
+
+    // MARK: 5. Next
 
     @ViewBuilder
     private var upcomingSection: some View {
@@ -190,7 +216,7 @@ struct OwnerHomeView: View {
         }
     }
 
-    // MARK: 5. JARVIS
+    // MARK: 6. JARVIS
 
     @ViewBuilder
     private var jarvisSection: some View {
