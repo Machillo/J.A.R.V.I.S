@@ -237,8 +237,8 @@ struct TodayView: View {
 
     var body: some View {
         ScreenScroll(title: tx("Hoy", "Today")) {
-            AsyncContent(load: { try await model.service.proactiveAdvisor() }) { advisor, _ in
-                TodayContent(advisor: advisor)
+            AsyncContent(load: { try await model.service.dincrToday() }) { today, _ in
+                TodayContent(today: today)
             }
             FinancialDisclaimer()
         }
@@ -246,16 +246,45 @@ struct TodayView: View {
 }
 
 private struct TodayContent: View {
-    let advisor: ProactiveAdvisor
+    let today: DincrToday
 
     var body: some View {
-        let alerts = advisor.alerts ?? []
-        if alerts.isEmpty {
-            EmptyStateView(symbol: "sun.max", title: tx("Nada urgente", "Nothing urgent"),
-                           message: advisor.message ?? tx("DINCR te avisa cuando algo cambie en tus números.", "DINCR lets you know when something changes in your numbers.")) { EmptyView() }
+        if today.isBaseline {
+            // No earlier observation yet: changes can't be compared, but the current situation is known.
+            StatusBanner(tone: .info, title: tx("Aprendiendo tu punto de partida", "Learning your starting point"),
+                         message: today.advisor.message ?? tx("DINCR necesita una observación anterior para detectar cambios.", "DINCR needs an earlier observation to detect changes."))
+                .accessibilityIdentifier("today.baseline")
+            let current = today.currentAlerts ?? []
+            if !current.isEmpty {
+                Text(tx("Tu situación actual", "Your current situation")).font(DincrFont.title2).foregroundStyle(DincrColor.text)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(Array(current.enumerated()), id: \.offset) { _, alert in
+                    StatusBanner(tone: Self.tone(alert.severity), title: alert.title ?? "",
+                                 message: [alert.context, alert.action].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " "))
+                        .accessibilityIdentifier("today.current.alert")
+                }
+            } else if today.currentAlerts != nil {
+                EmptyStateView(symbol: "sun.max", title: tx("Nada urgente hoy", "Nothing urgent today"),
+                               message: tx("Tu situación actual no tiene avisos.", "Your current situation has no alerts.")) { EmptyView() }
+            }
+        } else {
+            let alerts = today.advisor.alerts ?? []
+            if alerts.isEmpty {
+                EmptyStateView(symbol: "sun.max", title: tx("Nada urgente", "Nothing urgent"),
+                               message: today.advisor.message ?? tx("DINCR te avisa cuando algo cambie en tus números.", "DINCR lets you know when something changes in your numbers.")) { EmptyView() }
+            }
+            ForEach(Array(alerts.enumerated()), id: \.offset) { _, alert in
+                StatusBanner(tone: alert.severity == "high" ? .error : (alert.severity == "low" ? .info : .warning), title: alert.title ?? "", message: alert.explanation ?? "")
+            }
         }
-        ForEach(Array(alerts.enumerated()), id: \.offset) { _, alert in
-            StatusBanner(tone: alert.severity == "high" ? .error : (alert.severity == "low" ? .info : .warning), title: alert.title ?? "", message: alert.explanation ?? "")
+    }
+
+    /// Command-center severities: critical/high are errors, low/info informational, the rest warnings.
+    static func tone(_ severity: String?) -> StatusBanner.Tone {
+        switch severity {
+        case "critical", "high": .error
+        case "low", "info": .info
+        default: .warning
         }
     }
 }

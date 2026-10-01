@@ -272,6 +272,32 @@ import Testing
         #expect(ConversionPreview.baseAmount(typed: 10, currency: "EUR", base: "CRC", rate: 1) == nil)
     }
 
+    @Test func theCorrectionSheetReadsTheDecimalTheKeyboardOffers() {
+        // A Spanish iPhone's decimal pad only offers ",": "453,84" must work with either profile format.
+        for format in [MoneyFormat.Separators.commaDot, .dotComma] {
+            #expect(CorrectionInput.rate("453,84", separators: format) == Decimal(string: "453.84"), "\(format)")
+            #expect(CorrectionInput.rate("453.84", separators: format) == Decimal(string: "453.84"), "\(format)")
+            #expect(CorrectionInput.rate("507,5", separators: format) == Decimal(string: "507.5"), "\(format)")
+            #expect(CorrectionInput.rate("507.123456", separators: format) == Decimal(string: "507.123456"), "\(format)")
+            #expect(CorrectionInput.amount("9,99", separators: format) == Decimal(string: "9.99"), "\(format)")
+            #expect(CorrectionInput.amount("9.99", separators: format) == Decimal(string: "9.99"), "\(format)")
+        }
+        // The profile's own format keeps its meaning: thousands groups are still thousands.
+        #expect(CorrectionInput.amount("100.000", separators: .dotComma) == 100_000)
+        #expect(CorrectionInput.amount("1,000", separators: .commaDot) == 1_000)
+        // Ambiguous or mixed text is refused, never guessed.
+        #expect(CorrectionInput.rate("453,840", separators: .commaDot) == nil)
+        #expect(CorrectionInput.rate("453.840", separators: .dotComma) == nil)
+        for bad in ["1.234,5,6", "1,2,3", "12,34,567", "0,0000001", "0", "", "-1", "1e3", "abc"] {
+            #expect(CorrectionInput.rate(bad, separators: .commaDot) == nil, "\(bad)")
+            #expect(CorrectionInput.rate(bad, separators: .dotComma) == nil, "\(bad)")
+        }
+        #expect(CorrectionInput.amount("1.234,56", separators: .commaDot) == nil)
+        #expect(CorrectionInput.amount("1,234.56", separators: .dotComma) == nil)
+        // The strict parsers used by every other money field are unchanged.
+        #expect(RateInput.parse("453,84", separators: .commaDot) == nil)
+    }
+
     @Test func aForeignEntryWithoutARateNeverLeavesTheDevice() async throws {
         let service = DincrService(client: APIClient(baseURL: URL(string: "https://api.example.test")!, tokens: CountingTokens(), transport: ScriptedTransport([]), backoff: { _ in }))
         await #expect(throws: APIError.self) {

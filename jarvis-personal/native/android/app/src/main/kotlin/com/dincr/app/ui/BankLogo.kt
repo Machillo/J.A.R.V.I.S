@@ -55,7 +55,9 @@ fun BankLogo(bank: BankBranding.Bank?, modifier: Modifier = Modifier, size: Dp =
     val logo = bank?.takeIf { it.hasLogo }?.let { bankLogoRes(it.id) }
     val shape = RoundedCornerShape(DincrRadius.md)
     if (logo != null) {
-        Box(modifier.size(size).background(Color.White, shape).border(1.dp, Dincr.colors.line, shape).padding(4.dp).testTag("bank.logo.${bank.id}"), contentAlignment = Alignment.Center) {
+        // White logos (MultiMoney) sit on the historical dark tile; the rest on white.
+        val tile = if (bank.logoNeedsDarkTile) Color(0xFF203046) else Color.White
+        Box(modifier.size(size).background(tile, shape).border(1.dp, Dincr.colors.line, shape).padding(4.dp).testTag("bank.logo.${bank.id}"), contentAlignment = Alignment.Center) {
             Image(painterResource(logo), contentDescription = null, contentScale = ContentScale.Fit)
         }
     } else {

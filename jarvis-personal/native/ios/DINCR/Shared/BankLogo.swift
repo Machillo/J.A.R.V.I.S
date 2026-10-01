@@ -27,7 +27,9 @@ struct BankLogo: View {
             }
         }
         .frame(width: size, height: size)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
+        // White logos (MultiMoney) sit on the historical dark tile; the rest on white.
+        .background(brand.logoNeedsDarkTile ? Color(red: 0x20 / 255, green: 0x30 / 255, blue: 0x46 / 255) : Color.white,
+                    in: RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: DincrRadius.sm, style: .continuous).strokeBorder(DincrColor.line, lineWidth: 1))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(brand.name.isEmpty ? tx("Institución", "Institution") : brand.name)

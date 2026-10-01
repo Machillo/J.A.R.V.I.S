@@ -459,6 +459,30 @@ import Testing
         let owner = try await FixtureBackend.service(FixtureBackend(scenario: .populated, role: .owner, latency: .zero)).ownerAnalysis()
         #expect(owner.engine.health?.score != nil && owner.netWorth.netWorth != nil && !owner.transactions.flowMonths().isEmpty)
     }
+
+    // MARK: Logo tiles
+
+    @Test func theWhiteMultiMoneyLogoSitsOnTheHistoricalDarkTile() {
+        // The historical asset is white on transparent: on a white tile it was an empty white box.
+        #expect(BankBrand.identify("multimoney")?.logoNeedsDarkTile == true)
+        for other in ["bac", "bcr", "bn", "popular", "promerica", "davivienda", "davibank"] {
+            #expect(BankBrand.identify(other)?.logoNeedsDarkTile == false, "\(other)")
+        }
+        #expect(BankBrand.identify("cooperativa ejemplo")?.logoNeedsDarkTile != true)
+    }
+
+    // MARK: DINCR → Hoy
+
+    @Test func dincrTodayShowsTheCurrentAlertsWhileTheAdvisorHasNoEarlierObservation() async throws {
+        // The advisor answers BASELINE (native never saves observations); the command center already
+        // knows today's alerts, the same ones the main Today shows.
+        let vip = FixtureBackend.service(FixtureBackend(scenario: .populated, plan: .vip, latency: .zero))
+        let today = try await vip.dincrToday()
+        #expect(today.isBaseline)
+        let center = try await vip.commandCenter()
+        #expect(today.currentAlerts == center.alerts)
+        #expect(today.currentAlerts?.first?.title == "Pago de tarjeta en 5 días")
+    }
 }
 
 /// Answers by path (the analysis loads its three routes concurrently, in any order).

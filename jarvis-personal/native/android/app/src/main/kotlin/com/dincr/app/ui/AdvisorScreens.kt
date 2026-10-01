@@ -160,11 +160,25 @@ fun MonthlyReviewScreen(model: AppModel, nav: Navigator) {
 /** F9 — VIP proactive advisor ("DINCR hoy"). */
 @Composable
 fun TodayScreen(model: AppModel, nav: Navigator) {
-    val advisor = rememberLoad(model) { model.api.proactiveAdvisor() }
+    val today = rememberLoad(model) { model.api.dincrToday() }
     DetailScaffold(tx("DINCR hoy", "DINCR today"), nav::back) {
-        LoadContent(advisor) { a ->
+        LoadContent(today) { t ->
+            val a = t.advisor
             when {
-                a.status == "BASELINE" -> StatusBanner(BannerTone.INFO, tx("Aprendiendo tu punto de partida", "Learning your starting point"), a.message ?: tx("DINCR necesita unos días de historia para avisarte de cambios.", "DINCR needs a few days of history to alert you about changes."))
+                t.isBaseline -> {
+                    // No earlier observation yet: changes can't be compared, but the current situation is known.
+                    StatusBanner(BannerTone.INFO, tx("Aprendiendo tu punto de partida", "Learning your starting point"), a.message ?: tx("DINCR necesita unos días de historia para avisarte de cambios.", "DINCR needs a few days of history to alert you about changes."))
+                    val current = t.currentAlerts.orEmpty()
+                    if (current.isNotEmpty()) {
+                        SectionTitle(tx("Tu situación actual", "Your current situation"))
+                        current.forEach { alert ->
+                            val tone = if (alert.severity in setOf("critical", "high")) BannerTone.WARNING else BannerTone.INFO
+                            StatusBanner(tone, alert.title.orEmpty(), listOfNotNull(alert.context, alert.action).filter { it.isNotBlank() }.joinToString(" "))
+                        }
+                    } else if (t.currentAlerts != null) {
+                        EmptyState(Icons.Rounded.NotificationsActive, tx("Nada urgente hoy", "Nothing urgent today"), tx("Tu situación actual no tiene avisos.", "Your current situation has no alerts."))
+                    }
+                }
                 a.alerts.isEmpty() -> EmptyState(Icons.Rounded.NotificationsActive, tx("Todo en orden", "All good"), a.message ?: tx("No hay cambios que requieran tu atención.", "Nothing needs your attention."))
                 else -> a.alerts.forEach { alert ->
                     val tone = when (alert.severity) { "critical", "high" -> BannerTone.WARNING; "success" -> BannerTone.INFO; else -> BannerTone.INFO }

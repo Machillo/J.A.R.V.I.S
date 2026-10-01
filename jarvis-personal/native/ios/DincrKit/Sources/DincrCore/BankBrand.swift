@@ -14,6 +14,12 @@ public struct BankBrand: Sendable, Equatable, Hashable {
     public let logoAsset: String?
     public let isKnown: Bool
 
+    /// The historical MultiMoney logo is drawn in white on a transparent background: on the usual
+    /// white tile it is invisible. The web app put it on a dark tile (ProfileSetup.css
+    /// `.bank-mark--logo.bank-mark--violet`, #203046); the native tile does the same.
+    public var logoNeedsDarkTile: Bool { logoAsset != nil && Self.whiteLogos.contains(id) }
+    public static let whiteLogos: Set<String> = ["multimoney"]
+
     struct Identity: Sendable {
         let id: String
         let name: String

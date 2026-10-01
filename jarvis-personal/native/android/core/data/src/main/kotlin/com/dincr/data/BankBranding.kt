@@ -13,7 +13,17 @@ object BankBranding {
     data class Bank(val id: String, val name: String, val short: String, val known: Boolean) {
         /** The historical assets: bac, bcr, bn, davibank, davivienda, multimoney, popular, promerica. */
         val hasLogo: Boolean get() = known && id in LOGO_IDS
+
+        /**
+         * The historical MultiMoney logo is drawn in white on a transparent background: invisible on
+         * the usual white tile. The web app put it on a dark tile (ProfileSetup.css
+         * `.bank-mark--logo.bank-mark--violet`, #203046); the native tile does the same. iOS: `BankBrand.logoNeedsDarkTile`.
+         */
+        val logoNeedsDarkTile: Boolean get() = hasLogo && id in WHITE_LOGO_IDS
     }
+
+    /** Logos drawn in white (see [Bank.logoNeedsDarkTile]). */
+    val WHITE_LOGO_IDS = setOf("multimoney")
 
     private data class Identity(val id: String, val name: String, val short: String, val codes: Set<String>, val text: Regex)
 

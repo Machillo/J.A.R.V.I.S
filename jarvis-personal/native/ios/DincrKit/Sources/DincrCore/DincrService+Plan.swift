@@ -22,6 +22,19 @@ extension DincrService {
         }
     }
 
+    // MARK: DINCR → Hoy
+
+    /// The proactive advisor compares today with an earlier saved observation; until one exists it
+    /// answers BASELINE with no alerts. Meanwhile the command center already computes the current
+    /// alerts (the main Today shows them), so DINCR → Hoy shows those, read-only and labelled as
+    /// the current situation, instead of "nothing urgent". Not BASELINE: the advisor alone.
+    public func dincrToday() async throws -> DincrToday {
+        let advisor = try await proactiveAdvisor()
+        guard advisor.status == "BASELINE" else { return DincrToday(advisor: advisor, currentAlerts: nil) }
+        let current: [CommandCenter.Alert]? = try? await commandCenter().alerts ?? []
+        return DincrToday(advisor: advisor, currentAlerts: current)
+    }
+
     // MARK: Salvavidas (VIP; the Owner by role)
 
     public func salvavidas() async throws -> Salvavidas { try await client.get("/user-product/vip/salvavidas") }
@@ -65,4 +78,13 @@ extension DincrService {
         async let report = self.financialEngine()
         return OwnerAnalysis(transactions: try await analysis, netWorth: try await worth, engine: try await report)
     }
+}
+
+/// DINCR → Hoy: the proactive advisor and, only while it has no earlier observation (BASELINE),
+/// the command center's current alerts (nil when not BASELINE or when they could not be read).
+public struct DincrToday: Sendable, Equatable {
+    public let advisor: ProactiveAdvisor
+    public let currentAlerts: [CommandCenter.Alert]?
+
+    public var isBaseline: Bool { advisor.status == "BASELINE" }
 }

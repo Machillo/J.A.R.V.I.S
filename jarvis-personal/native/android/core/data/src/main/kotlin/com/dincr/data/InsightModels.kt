@@ -251,3 +251,11 @@ data class ProactiveAdvisor(
     @Serializable
     data class Action(val label: String? = null, val route: String? = null)
 }
+
+/**
+ * DINCR → Hoy: the proactive advisor and, only while it has no earlier observation (BASELINE), the
+ * command center's current alerts (null when not BASELINE or when they could not be read).
+ */
+data class DincrToday(val advisor: ProactiveAdvisor, val currentAlerts: List<CommandCenter.Alert>?) {
+    val isBaseline: Boolean get() = advisor.status == "BASELINE"
+}

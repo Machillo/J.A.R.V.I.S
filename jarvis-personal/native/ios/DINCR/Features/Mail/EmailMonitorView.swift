@@ -458,7 +458,8 @@ struct CorrectionSheet: View {
                 if candidate.needsRate {
                     VStack(alignment: .leading) {
                         Text(tx("Tipo de cambio (colones por 1 dólar)", "Exchange rate (colones per 1 dollar)")).font(DincrFont.label)
-                        TextField(tx("Tipo de cambio", "Exchange rate"), text: $rate).keyboardType(.decimalPad).accessibilityIdentifier("correct.rate")
+                        TextField(tx("Tipo de cambio", "Exchange rate"), text: $rate, prompt: Text(model.moneyFormat.inputText(Decimal(string: "507.5")!)))
+                            .keyboardType(.decimalPad).accessibilityIdentifier("correct.rate")
                     }
                 }
                 Picker(tx("Tipo", "Type"), selection: $type) {
@@ -497,10 +498,10 @@ struct CorrectionSheet: View {
         let separators = model.moneyFormat.separators
         let text = description.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { error = tx("Escribí una descripción.", "Enter a description."); return }
-        guard let value = AmountInput.parse(amount, separators: separators) else { error = model.moneyFormat.amountHint; return }
+        guard let value = CorrectionInput.amount(amount, separators: separators) else { error = model.moneyFormat.amountHint; return }
         var exchangeRate: Decimal?
         if candidate.needsRate {
-            guard let parsed = RateInput.parse(rate, separators: separators) else {
+            guard let parsed = CorrectionInput.rate(rate, separators: separators) else {
                 error = tx("Escribí cuántos colones vale 1 dólar.", "Enter how many colones 1 dollar is worth."); return
             }
             exchangeRate = parsed

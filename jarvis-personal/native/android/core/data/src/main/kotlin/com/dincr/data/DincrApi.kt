@@ -123,6 +123,19 @@ class DincrApi(private val client: ApiClient) {
     suspend fun monthlyReview(period: String): MonthlyReview = client.get("/user-product/vip/lifecycle/monthly-review", mapOf("period" to period))
     suspend fun proactiveAdvisor(): ProactiveAdvisor = client.get("/user-product/vip/lifecycle/proactive-advisor")
 
+    /**
+     * DINCR → Hoy. The proactive advisor compares today with an earlier saved observation; until one
+     * exists it answers BASELINE with no alerts. Meanwhile the command center already computes the
+     * current alerts (the main Today shows them), so this surface shows those, read-only and labelled
+     * as the current situation, instead of "nothing urgent". Not BASELINE: the advisor alone.
+     */
+    suspend fun dincrToday(): DincrToday {
+        val advisor = proactiveAdvisor()
+        if (advisor.status != "BASELINE") return DincrToday(advisor, null)
+        val current = try { commandCenter().alerts } catch (e: kotlin.coroutines.cancellation.CancellationException) { throw e } catch (_: Exception) { null }
+        return DincrToday(advisor, current)
+    }
+
     // --- Mail (VIP) -----------------------------------------------------------------------------------
     suspend fun mailStatus(): MailStatus = client.get("/user-product/vip/gmail/status")
     suspend fun acceptMailConsent(version: String): Acknowledgement =

@@ -20,13 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
 import com.dincr.app.tx
-import com.dincr.data.AmountInput
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.BankBranding
 import com.dincr.data.CandidateCorrection
 import com.dincr.data.CandidateReviewResult
-import com.dincr.data.ExchangeRateInput
+import com.dincr.data.CorrectionInput
 import com.dincr.data.MailCandidate
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
@@ -170,8 +169,8 @@ fun CorrectionSheet(candidate: MailCandidate, saving: Boolean, onDismiss: () -> 
     var errors by remember { mutableStateOf(mapOf<String, String>()) }
     FormSheet(tx("Corregir y guardar", "Correct and save"), saving, null, tx("Guardar", "Save"), onDismiss = onDismiss, onPrimary = {
         val found = mutableMapOf<String, String>()
-        val amountValue = AmountInput.parse(amount, format.separators).also { if (it == null) found["amount"] = tx("Monto no válido.", "Not a valid amount.") }
-        val rateValue = if (candidate.needsRate) ExchangeRateInput.parse(rate, format.separators).also { if (it == null) found["rate"] = tx("Escribí cuántos colones vale 1 dólar.", "Enter how many colones 1 dollar is worth.") } else null
+        val amountValue = CorrectionInput.amount(amount, format.separators).also { if (it == null) found["amount"] = tx("Monto no válido.", "Not a valid amount.") }
+        val rateValue = if (candidate.needsRate) CorrectionInput.rate(rate, format.separators).also { if (it == null) found["rate"] = tx("Escribí cuántos colones vale 1 dólar.", "Enter how many colones 1 dollar is worth.") } else null
         if (description.isBlank()) found["description"] = tx("Escribí una descripción.", "Enter a description.")
         if (category.isBlank()) found["category"] = tx("Escribí una categoría.", "Enter a category.")
         errors = found
