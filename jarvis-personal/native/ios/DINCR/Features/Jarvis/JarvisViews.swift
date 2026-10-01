@@ -2,29 +2,60 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// JARVIS: the Owner's personal space inside DINCR, opened from the Profile hub. Only the server's
-/// role opens it (`Jarvis.isAvailable`), and the backend still decides every JARVIS request. The
-/// chat is ported (J1); a section not ported yet says so instead of showing sample content
-/// (Android: `JarvisScreens.kt`).
+/// JARVIS: the Owner's personal space inside DINCR, opened from the Owner's Today and the Profile
+/// hub. Only the server's role opens it (`Jarvis.isAvailable`), and the backend still decides every
+/// JARVIS request. A native grouped list: what works today first (chat, agenda), then what is still
+/// being restored, which says so instead of showing sample content (Android: `JarvisScreens.kt`).
 struct JarvisHubView: View {
+    private var available: [Jarvis.Section] { Jarvis.Section.allCases.filter(\.isAvailable) }
+    private var restoring: [Jarvis.Section] { Jarvis.Section.allCases.filter { !$0.isAvailable } }
+
     var body: some View {
         OwnerOnly {
-            ScreenScroll(title: "JARVIS") {
-                Text(tx("Tus funciones personales vuelven a DINCR por etapas.",
-                        "Your personal features are coming back to DINCR step by step."))
-                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
-                VStack(spacing: DincrSpacing.s2) {
-                    ForEach(Jarvis.Section.allCases) { section in
-                        NavigationLink(value: ProfileRoute.jarvisSection(section)) {
-                            HubRow(symbol: section.symbol, title: section.title, subtitle: section.isAvailable ? section.summary : tx("En restauración", "Being restored"))
-                        }
-                        .buttonStyle(.plain)
-                        .dincrCard(padding: DincrSpacing.s3)
-                        .accessibilityIdentifier("jarvis.section.\(section.rawValue)")
+            List {
+                Section {
+                    HStack(spacing: DincrSpacing.s3) {
+                        JarvisMark(size: 44)
+                        Text(tx("Tu capa personal dentro de DINCR.", "Your personal layer inside DINCR."))
+                            .font(DincrFont.bodySmall).foregroundStyle(OwnerColor.text2)
                     }
+                    .padding(.vertical, DincrSpacing.s1)
+                    .accessibilityElement(children: .combine)
                 }
+                .dincrRowBackground()
+                Section(tx("Disponible", "Available")) {
+                    ForEach(available) { section in row(section, detail: section.summary) }
+                }
+                .dincrRowBackground()
+                Section {
+                    ForEach(restoring) { section in row(section, detail: section.summary) }
+                } header: {
+                    Text(tx("En restauración", "Being restored"))
+                } footer: {
+                    Text(tx("Estas funciones vuelven a DINCR por etapas; mientras tanto no muestran datos de ejemplo.",
+                            "These features come back to DINCR step by step; until then they show no sample data."))
+                }
+                .dincrRowBackground()
             }
+            .listStyle(.insetGrouped)
+            .dincrListBackground()
+            .navigationTitle("JARVIS")
         }
+    }
+
+    private func row(_ section: Jarvis.Section, detail: String) -> some View {
+        NavigationLink(value: ProfileRoute.jarvisSection(section)) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(section.title).font(DincrFont.body.weight(.semibold))
+                    Text(detail).font(DincrFont.caption).foregroundStyle(OwnerColor.text2)
+                }
+            } icon: {
+                Image(systemName: section.symbol).foregroundStyle(section.isAvailable ? OwnerColor.accent : OwnerColor.textMuted)
+            }
+            .padding(.vertical, 2)
+        }
+        .accessibilityIdentifier("jarvis.section.\(section.rawValue)")
     }
 }
 

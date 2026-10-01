@@ -16,7 +16,7 @@ struct ProfileHubView: View {
 
     var body: some View {
         List {
-            Section { header }
+            Section { header }.dincrRowBackground()
             if Jarvis.isAvailable(to: model.profile) {
                 // The Owner's personal space (JARVIS recovery, J0); no plan or other role sees it.
                 Section {
@@ -30,6 +30,7 @@ struct ProfileHubView: View {
                     }
                     .accessibilityIdentifier("profile.jarvis")
                 }
+                .dincrRowBackground()
             }
             Section {
                 NavigationLink { SituationView() } label: { Label(tx("Situación financiera", "Financial situation"), systemImage: "person.text.rectangle") }
@@ -53,6 +54,7 @@ struct ProfileHubView: View {
                         .accessibilityIdentifier("profile.recurring")
                 }
             }
+            .dincrRowBackground()
             Section(tx("Cuenta", "Account")) {
                 NavigationLink { PlanSettingsView() } label: { Label(tx("Plan", "Plan"), systemImage: "star") }
                     .accessibilityIdentifier("profile.plan")
@@ -64,11 +66,13 @@ struct ProfileHubView: View {
                     Text(tx("Oscuro", "Dark")).tag(Appearance.dark.rawValue)
                 } label: { Label(tx("Apariencia", "Appearance"), systemImage: "circle.lefthalf.filled") }
             }
+            .dincrRowBackground()
             Section(tx("Ayuda y legal", "Help and legal")) {
                 NavigationLink { SupportView() } label: { Label(tx("Soporte", "Support"), systemImage: "questionmark.bubble") }
                 Link(destination: LegalLinks.terms) { Label(tx("Términos y condiciones", "Terms and conditions"), systemImage: "doc.text") }
                 Link(destination: LegalLinks.privacy) { Label(tx("Política de privacidad", "Privacy policy"), systemImage: "hand.raised") }
             }
+            .dincrRowBackground()
             Section {
                 Button { Task { await export() } } label: {
                     Label(exporting ? tx("Preparando…", "Preparing…") : tx("Descargar mis datos", "Download my data"), systemImage: "square.and.arrow.down")
@@ -77,14 +81,16 @@ struct ProfileHubView: View {
                 Button(tx("Cerrar sesión", "Sign out"), role: .destructive) { confirmingSignOut = true }
                     .accessibilityIdentifier("profile.signOut")
             }
+            .dincrRowBackground()
             if model.profile?.canDeleteAccountInApp == true {
                 Section {
                     Button(tx("Eliminar mi cuenta", "Delete my account"), role: .destructive) { confirmingDelete = true }.disabled(deleting)
                 } footer: {
                     Text(tx("Se programa la eliminación de tus datos en DINCR y se cierra la sesión. No se puede deshacer.", "Your DINCR data is scheduled for deletion and you are signed out. This can’t be undone."))
                 }
+                .dincrRowBackground()
             }
-            if let error { Section { Text(error).foregroundStyle(DincrColor.negative) } }
+            if let error { Section { Text(error).foregroundStyle(DincrColor.negative) }.dincrRowBackground() }
         }
         .scrollContentBackground(.hidden)
         .dincrScreenBackground()
@@ -116,7 +122,17 @@ struct ProfileHubView: View {
                 Text(model.profile?.email ?? "").font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
             }
             Spacer()
-            PlanBadge(plan: model.profile?.plan ?? "free")
+            if model.profile?.isOwner == true {
+                // The Owner is not a plan: no plan badge, the Owner mark instead.
+                Text("Owner")
+                    .font(DincrFont.caption.weight(.semibold))
+                    .foregroundStyle(OwnerColor.onAccentContainer)
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(OwnerColor.accentContainer, in: Capsule())
+                    .accessibilityLabel("DINCR Owner")
+            } else {
+                PlanBadge(plan: model.profile?.plan ?? "free")
+            }
         }
         .accessibilityElement(children: .combine)
     }

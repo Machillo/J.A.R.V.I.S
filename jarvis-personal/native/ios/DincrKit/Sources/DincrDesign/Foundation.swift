@@ -65,15 +65,81 @@ public enum DincrMotion {
 }
 
 public extension View {
-    /// Card surface: tonal, no shadow (DESIGN.md → Elevation & Depth).
+    /// Card surface: tonal, no shadow (DESIGN.md → Elevation & Depth). Below the Owner root it is the
+    /// Owner surface with its hairline border (DESIGN.md → Owner identity).
     func dincrCard(padding: CGFloat = DincrSpacing.s4) -> some View {
-        self.padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DincrColor.surface, in: RoundedRectangle(cornerRadius: DincrRadius.lg, style: .continuous))
+        modifier(DincrCardModifier(padding: padding))
     }
 
-    /// Screen background.
+    /// Screen background (the Owner's petrol scene below the Owner root).
     func dincrScreenBackground() -> some View {
-        background(DincrColor.bg.ignoresSafeArea())
+        modifier(DincrScreenBackgroundModifier())
+    }
+
+    /// A `List` / `Form` on the screen background: under the Owner root the system grouped background
+    /// gives way to the Owner scene (rows use `dincrRowBackground()`); unchanged for everyone else.
+    func dincrListBackground() -> some View {
+        modifier(DincrListBackgroundModifier())
+    }
+
+    /// The background of one list row or section: the Owner surface under the Owner root, the system
+    /// default otherwise.
+    func dincrRowBackground() -> some View {
+        modifier(DincrRowBackgroundModifier())
+    }
+}
+
+private struct DincrCardModifier: ViewModifier {
+    let padding: CGFloat
+    @Environment(\.dincrOwnerAppearance) private var owner
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: owner ? OwnerRadius.card : DincrRadius.lg, style: .continuous)
+        content
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(owner ? OwnerColor.surface : DincrColor.surface, in: shape)
+            .overlay {
+                if owner { shape.strokeBorder(OwnerColor.border, lineWidth: 1) }
+            }
+    }
+}
+
+private struct DincrScreenBackgroundModifier: ViewModifier {
+    @Environment(\.dincrOwnerAppearance) private var owner
+
+    func body(content: Content) -> some View {
+        content.background {
+            if owner {
+                OwnerBackground().ignoresSafeArea()
+            } else {
+                DincrColor.bg.ignoresSafeArea()
+            }
+        }
+    }
+}
+
+private struct DincrListBackgroundModifier: ViewModifier {
+    @Environment(\.dincrOwnerAppearance) private var owner
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if owner {
+            content
+                .scrollContentBackground(.hidden)
+                .background { OwnerBackground().ignoresSafeArea() }
+        } else {
+            content
+        }
+    }
+}
+
+private struct DincrRowBackgroundModifier: ViewModifier {
+    @Environment(\.dincrOwnerAppearance) private var owner
+
+    func body(content: Content) -> some View {
+        // nil keeps the system's default row background.
+        let background: Color? = owner ? OwnerColor.surface : nil
+        return content.listRowBackground(background)
     }
 }
