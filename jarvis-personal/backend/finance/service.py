@@ -1,6 +1,8 @@
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from fastapi import HTTPException
+
 from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.finance.debt_automation import schedule_automation_enabled
@@ -390,15 +392,25 @@ def _payment_breakdown_with_extra(
     return actual_payment, principal, round(interest, 2), round(fee, 2), round(extra_principal, 2)
 
 
-def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None) -> None:
-    """Sincroniza cuotas vencidas usando fechas reales y un libro de pagos idempotente.
+def apply_due_installments(workspace_id: str | None = None, *, dry_run: bool = True) -> dict[str, Any]:
+    """Explicit command: record each scheduled installment that is already due, once.
 
-    La fecha de inicio, primera cuota, día de pago y fecha actual determinan cuántas
-    cuotas debieron aplicarse. Cada cuota se registra una sola vez en debt_payments.
+    Never called from a read. The start date, first installment, payment day and
+    today decide how many installments are due; each one is recorded at most once
+    in debt_payments (with its debt_payment transaction) and only then moves the
+    debt's balance. A debt row is updated only when one of its values changes.
+    ``dry_run`` (the default) computes the same plan and writes nothing.
+
+    Returns ``{"dry_run", "installments", "debts_to_update"}`` on a dry run and
+    ``{"dry_run", "installments", "debts_updated"}`` on a real run, so a dry run
+    never reports a write that did not happen.
     """
-    if not schedule_automation_enabled(): return  # DINCR Users: reads never write (debt_automation.py)
+    if not schedule_automation_enabled():
+        raise HTTPException(status_code=403, detail="Solo el Owner aplica cuotas programadas.")
     workspace_id = workspace_id or get_current_workspace_id()
     today = date.today()
+    plan: list[dict[str, Any]] = []
+    updated: list[int] = []
     with get_connection() as conn:
         debts = conn.execute(
             """
@@ -415,7 +427,6 @@ def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None)
             (workspace_id,),
         ).fetchall()
 
-        changed = False
         for debt in debts:
             payment_day = int(debt.get("payment_day") or 1)
             start_date = _parse_date(debt.get("start_date")) or _parse_date(debt.get("created_at")) or today
@@ -444,6 +455,7 @@ def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None)
 
             # El valor histórico guardado actúa como ancla; solo creamos cuotas posteriores.
             previous_payment_date = _parse_date(debt.get("last_payment_date"))
+            posted = 0
             for installment_number in range(paid_count + 1, target_paid + 1):
                 due = _add_months(first_due, installment_number - 1, payment_day)
                 if due.isoformat() in existing_dates:
@@ -464,58 +476,69 @@ def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None)
                 if principal <= 0:
                     break
                 balance = round(max(balance - principal, 0), 2)
+                plan.append({
+                    "debt_id": debt["id"], "installment_number": installment_number, "due_date": due.isoformat(),
+                    "amount": actual_payment, "principal": principal, "interest": interest, "fee": fee,
+                    "previous_remaining_amount": previous_balance, "new_remaining_amount": balance,
+                })
 
-                conn.execute(
-                    """
-                    INSERT INTO debt_payments (
-                        workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
-                        fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
-                        previous_monthly_payment, new_monthly_payment, description,
-                        payment_date, installment_number, source, created_at
+                if not dry_run:
+                    conn.execute(
+                        """
+                        INSERT INTO debt_payments (
+                            workspace_id, debt_id, payment_type, amount, principal_amount, interest_amount,
+                            fee_amount, extra_principal_amount, previous_remaining_amount, new_remaining_amount,
+                            previous_monthly_payment, new_monthly_payment, description,
+                            payment_date, installment_number, source, created_at
+                        )
+                        SELECT %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto_schedule', NOW()
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM debt_payments
+                            WHERE workspace_id = %s AND debt_id = %s
+                              AND payment_type = 'monthly_payment' AND payment_date = %s
+                        )
+                        """,
+                        (
+                            workspace_id, debt["id"], actual_payment, principal, interest, fee, extra_principal, previous_balance, balance,
+                            monthly_payment, monthly_payment,
+                            f"Cuota automática {installment_number}/{term or '?'} de {debt.get('name') or 'deuda'}",
+                            due.isoformat(), installment_number,
+                            workspace_id, debt["id"], due.isoformat(),
+                        ),
                     )
-                    SELECT %s, %s, 'monthly_payment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'auto_schedule', NOW()
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM debt_payments
-                        WHERE workspace_id = %s AND debt_id = %s
-                          AND payment_type = 'monthly_payment' AND payment_date = %s
+                    conn.execute(
+                        """
+                        INSERT INTO transactions (
+                            workspace_id, transaction_date, description, amount, transaction_type,
+                            category, account, source, notes, created_at
+                        )
+                        SELECT %s, %s, %s, %s, 'debt_payment', %s, NULL, 'auto_debt_schedule', %s, NOW()
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM transactions
+                            WHERE workspace_id = %s AND source = 'auto_debt_schedule' AND notes = %s
+                        )
+                        """,
+                        (
+                            workspace_id, due.isoformat(), f"Cuota {debt.get('name') or 'deuda'}", actual_payment,
+                            debt.get("name") or "Deudas", f"debt_id:{debt['id']};installment:{installment_number}",
+                            workspace_id, f"debt_id:{debt['id']};installment:{installment_number}",
+                        ),
                     )
-                    """,
-                    (
-                        workspace_id, debt["id"], actual_payment, principal, interest, fee, extra_principal, previous_balance, balance,
-                        monthly_payment, monthly_payment,
-                        f"Cuota automática {installment_number}/{term or '?'} de {debt.get('name') or 'deuda'}",
-                        due.isoformat(), installment_number,
-                        workspace_id, debt["id"], due.isoformat(),
-                    ),
-                )
-                conn.execute(
-                    """
-                    INSERT INTO transactions (
-                        workspace_id, transaction_date, description, amount, transaction_type,
-                        category, account, source, notes, created_at
-                    )
-                    SELECT %s, %s, %s, %s, 'debt_payment', %s, NULL, 'auto_debt_schedule', %s, NOW()
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM transactions
-                        WHERE workspace_id = %s AND source = 'auto_debt_schedule' AND notes = %s
-                    )
-                    """,
-                    (
-                        workspace_id, due.isoformat(), f"Cuota {debt.get('name') or 'deuda'}", actual_payment,
-                        debt.get("name") or "Deudas", f"debt_id:{debt['id']};installment:{installment_number}",
-                        workspace_id, f"debt_id:{debt['id']};installment:{installment_number}",
-                    ),
-                )
                 paid_count = installment_number
                 previous_payment_date = due
                 existing_dates.add(due.isoformat())
-                changed = True
+                posted += 1
 
-            # Siempre normalizamos fechas, saldo y contador. El saldo solo avanza
-            # mediante cuotas registradas en este libro, por lo que es idempotente.
+            # The row is written only for a real change: an installment recorded now, or
+            # ledger installments the row's counter does not reflect yet. Nothing due: untouched.
+            if posted == 0 and ledger_paid <= int(debt.get("installments_paid") or 0):
+                continue
             last_due = previous_payment_date or _parse_date(debt.get("last_payment_date"))
             finished = balance <= 0 or (term and paid_count >= term)
             next_due = None if finished else _add_months(first_due, paid_count, payment_day)
+            updated.append(debt["id"])
+            if dry_run:
+                continue
             conn.execute(
                 """
                 UPDATE debts
@@ -537,7 +560,10 @@ def _sync_automatic_debt_payments(user_id: int, workspace_id: str | None = None)
                 ),
             )
 
-        conn.commit()
+        if not dry_run and (plan or updated):
+            conn.commit()
+    debts_key = "debts_to_update" if dry_run else "debts_updated"
+    return {"dry_run": dry_run, "installments": plan, debts_key: updated}
 
 def _monthly_amount_from_frequency(amount: float, frequency: str | None) -> float:
     frequency = (frequency or 'monthly').lower().strip()
@@ -778,9 +804,8 @@ def add_debt(
 
 
 def get_debts():
-    user_id = get_current_user_id()
+    """Read only: lists the workspace's debts. Due installments are applied only by apply_due_installments."""
     workspace_id = get_current_workspace_id()
-    _sync_automatic_debt_payments(user_id, workspace_id)
 
     with get_connection() as conn:
         rows = conn.execute(
@@ -1353,12 +1378,6 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     expense_end_exclusive = expense_end_display + timedelta(days=1)
     expense_closed = as_of >= expense_end_exclusive
 
-    # Debt synchronization is useful, but Finance must never collapse to zero
-    # because a legacy debt row cannot be synchronized.
-    try:
-        _sync_automatic_debt_payments(user_id)
-    except Exception:
-        pass
 
     # Salary projection is optional infrastructure. A failure here must not hide
     # real transaction expenses already present in the database.
