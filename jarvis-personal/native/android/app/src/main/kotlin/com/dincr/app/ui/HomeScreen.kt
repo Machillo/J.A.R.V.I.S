@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -79,7 +81,19 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
                     is HomeData.Vip -> VipHome(data.center, nav)
                 }
             }
+            YourFinances(nav)
             (situation.state as? Load.Ready)?.value?.let { ProfileNudge(it, nav) }
+        }
+    }
+}
+
+/** Debts and goals (all plans) live in Hoy; the screens themselves are unchanged. */
+@Composable
+private fun YourFinances(nav: Navigator) {
+    DincrCard {
+        Column {
+            NavRow(Icons.Rounded.CreditCard, tx("Deudas", "Debts"), tx("Saldos, cuotas y pagos", "Balances, payments")) { nav.open("debts") }
+            NavRow(Icons.Rounded.Flag, tx("Metas y ahorros", "Goals and savings"), tx("Metas y planes de ahorro", "Goals and savings plans")) { nav.open("goals") }
         }
     }
 }
@@ -112,6 +126,10 @@ private fun FreeHome(d: FreeDashboard, nav: Navigator) {
 private fun BasicHome(data: HomeData.Basic, nav: Navigator) {
     val d = data.dashboard
     KeyFigure(tx("Balance del mes", "Month balance"), d.balance, d.income, d.expenses, d.debt?.remaining)
+    // The backend's six months (zero-filled), as on iOS (PlanDashboards); nothing summed on the device.
+    if (d.monthlyHistory.isNotEmpty()) Section(tx("Ingresos y gastos", "Income and expenses")) {
+        IncomeExpenseBars(d.monthlyHistory.map { Triple(shortMonth(it.month), it.income, it.expenses) })
+    }
     data.budget?.let { budget ->
         val spent = budget.items.sumOf { it.spent ?: BigDecimal.ZERO }
         Section(tx("Presupuesto", "Budget")) {

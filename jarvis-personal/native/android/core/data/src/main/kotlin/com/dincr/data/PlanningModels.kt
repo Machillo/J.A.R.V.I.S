@@ -197,3 +197,15 @@ data class FinancialProfile(
     @SerialName("strategy_preference") val strategyPreference: String? = null,
     @SerialName("discretionary_monthly_minimum") val discretionaryMonthlyMinimum: Money? = null,
 )
+
+/**
+ * The situation form's work days. The backend (and the historical web form) require
+ * `work_days_per_week` (1–7, a NOT NULL column) for EVERY income type, so the form always shows and
+ * sends it: the stored value, or the web form's visible, editable default of 5.
+ */
+object SituationDefaults {
+    const val WORK_DAYS = 5
+    val WORK_DAYS_RANGE = 1..7
+
+    fun workDays(current: FinancialProfile?): Int = current?.workDaysPerWeek?.takeIf { it in WORK_DAYS_RANGE } ?: WORK_DAYS
+}

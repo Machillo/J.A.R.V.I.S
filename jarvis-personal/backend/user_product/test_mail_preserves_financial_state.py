@@ -114,6 +114,14 @@ class LedgerConnection:
             return self._result(one=dict(profile) if profile and profile["workspace_id"] == params[1] else None)
         if q.startswith("SELECT to_regclass(%s) IS NOT NULL AS exists"):
             return self._result(one={"exists": True})
+        if "FROM debts WHERE workspace_id = %s AND COALESCE(remaining_amount, 0) > 0" in q:  # Users Salvavidas
+            return self._result([dict(d) for d in work["debts"] if d["workspace_id"] == params[0] and d["remaining_amount"] > 0])
+        if q.startswith("SELECT to_regclass('public.account_balances') AS table_name"):
+            return self._result(one={"table_name": "account_balances"})
+        if "FROM account_balances WHERE workspace_id=%s AND is_active=TRUE AND account_type='emergency_fund'" in q:
+            rows = [a for a in work["accounts"] if a["workspace_id"] == params[0] and a["is_active"]
+                    and a.get("account_type") == "emergency_fund" and a.get("source") == "salvavidas"]
+            return self._result(one=dict(rows[0]) if rows else None)
         if "FROM debts WHERE workspace_id=%s" in q:
             debts = [dict(d) for d in work["debts"] if d["workspace_id"] == params[0]]
             if q.startswith("SELECT COUNT(*) AS count"):

@@ -30,6 +30,7 @@ private struct BasicDashboardContent: View {
                     FigureRow(label: tx("Pagado a deudas", "Paid to debts"), amount: dashboard.debtPaid)
                 }
                 .dincrCard()
+                HomePlanningLinks()
 
                 if let debt = dashboard.debt, (debt.original ?? 0) > 0 {
                     VStack(alignment: .leading, spacing: DincrSpacing.s2) {
@@ -98,6 +99,7 @@ private struct CommandCenterContent: View {
                     FigureRow(label: tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"), amount: center.safeToSpend?.next45DaysMinimum)
                 }
                 .dincrCard()
+                HomePlanningLinks()
 
                 if let director = center.director {
                     VStack(alignment: .leading, spacing: DincrSpacing.s2) {

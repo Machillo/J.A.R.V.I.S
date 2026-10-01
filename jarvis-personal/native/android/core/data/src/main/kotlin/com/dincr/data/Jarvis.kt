@@ -22,10 +22,12 @@ object Jarvis {
      */
     enum class Section(val wire: String) {
         CHAT("chat"), MEMORY("memory"), CALENDAR("calendar"), STRATEGY("strategy"), MONEY("money"),
-        MONEY_CONTROL("money_control"), WEALTH("wealth"), RECORDS("records");
+        MONEY_CONTROL("money_control"), WEALTH("wealth"), RECORDS("records"),
+        /** "Análisis financiero": the historical web Finanzas tab (analysis summary, net worth, engine). */
+        ANALYSIS("analysis");
 
-        /** Ported to the native app: the chat (J1) and the agenda (J2); the others still open "being restored". */
-        val isAvailable: Boolean get() = this == CHAT || this == CALENDAR
+        /** Ported to the native app: the chat (J1), the agenda (J2) and the analysis; the others still open "being restored". */
+        val isAvailable: Boolean get() = this == CHAT || this == CALENDAR || this == ANALYSIS
 
         companion object {
             fun from(wire: String?): Section? = entries.firstOrNull { it.wire == wire }

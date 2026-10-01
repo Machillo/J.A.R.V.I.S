@@ -1,9 +1,10 @@
 import Foundation
 
 // Read models of the dashboards, reports and strategy screens. The backend computes every figure;
-// the app only presents them. Owner-shaped payloads (`/vip/strategy-dashboard`,
-// `/vip/debt-advisory`) are deliberately not modelled: the public app uses the neutral
-// `/finance/strategy-vip` engine (CLAUDE.md §4.A). Same shapes as Android `InsightModels.kt`.
+// the app only presents them. The Plan tab's strategy dashboards (`/vip/strategy-dashboard` for
+// Users, `/jarvis/premium/strategy-dashboard` for the Owner) live in `StrategyModels.swift`; the
+// backend picks the Users or Owner model by the server role (CLAUDE.md §4.A), never the app.
+// `/vip/debt-advisory` is not used. Same shapes as Android `InsightModels.kt`.
 // Every field is optional: a missing value is unknown and is shown as "—", never as zero.
 
 public struct CategoryTotal: Decodable, Sendable, Equatable {
@@ -94,6 +95,15 @@ public struct Strategy: Decodable, Sendable, Equatable {
         public let bucket: String?
         public let label: String?
         public let amount: Decimal?
+        /// The debt an extra payment goes to (Basic `debt_extra`).
+        public let debtId: Int?
+    }
+    /// How the Basic strategy got its monthly income: what the user declared, else the income
+    /// recorded in DINCR (an estimate, never written back as declared), else none.
+    public struct IncomeBasis: Decodable, Sendable, Equatable {
+        public let source: String?
+        public let policy: String?
+        public let observedSource: String?
     }
     public struct TargetDebt: Decodable, Sendable, Equatable {
         public let name: String?
@@ -145,6 +155,14 @@ public struct Strategy: Decodable, Sendable, Equatable {
     public let nextPaycheck: Paycheck?
     public let directorNote: String?
     public let insights: Insights?
+    /// `declared` | `observed` | `none` (strategy-basic).
+    public let incomeSource: String?
+    public let incomeBasis: IncomeBasis?
+
+    /// The income is an estimate from recorded movements, not a declared figure: the screen says so.
+    public var usesObservedIncome: Bool { (incomeSource ?? incomeBasis?.source) == "observed" }
+    /// No income to plan with: the screen asks for the financial situation instead of a strategy.
+    public var needsIncome: Bool { status == "needs_income" }
 }
 
 /// `POST /finance/strategy-vip/simulate`: a what-if that is not saved.

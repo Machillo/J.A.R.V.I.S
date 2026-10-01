@@ -8,6 +8,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.QueryStats
 import androidx.compose.material.icons.rounded.RequestQuote
 import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.runtime.Composable
@@ -43,7 +44,7 @@ fun JarvisHubScreen(model: AppModel, nav: Navigator) = OwnerOnly(model, nav) {
     }
 }
 
-/** A JARVIS section: a ported one (chat, agenda), or a "being restored" screen that never shows sample data. */
+/** A JARVIS section: a ported one (chat, agenda, analysis), or a "being restored" screen that never shows sample data. */
 @Composable
 fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerOnly(model, nav) {
     val section = Jarvis.Section.from(wire)
@@ -57,6 +58,10 @@ fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerO
     }
     if (section == Jarvis.Section.CALENDAR) {
         JarvisAgendaScreen(model, nav)
+        return@OwnerOnly
+    }
+    if (section == Jarvis.Section.ANALYSIS) {
+        JarvisAnalysisScreen(model, nav)
         return@OwnerOnly
     }
     DetailScaffold(section.title, onBack = nav::back) {
@@ -84,6 +89,7 @@ private val Jarvis.Section.title: String get() = when (this) {
     Jarvis.Section.MONEY_CONTROL -> tx("Control de dinero", "Money control")
     Jarvis.Section.WEALTH -> tx("Patrimonio", "Wealth")
     Jarvis.Section.RECORDS -> tx("Registros", "Records")
+    Jarvis.Section.ANALYSIS -> tx("Análisis financiero", "Financial analysis")
 }
 
 private val Jarvis.Section.summary: String get() = when (this) {
@@ -95,6 +101,7 @@ private val Jarvis.Section.summary: String get() = when (this) {
     Jarvis.Section.MONEY_CONTROL -> tx("Cobros pendientes y tarjetas adicionales", "Money owed to you and additional cards")
     Jarvis.Section.WEALTH -> tx("Patrimonio, inversiones y negocios", "Net worth, investments and businesses")
     Jarvis.Section.RECORDS -> tx("Importar, conciliar y tu línea de tiempo", "Import, reconcile and your timeline")
+    Jarvis.Section.ANALYSIS -> tx("Gastos, flujo, patrimonio y salud financiera", "Spending, cash flow, net worth and financial health")
 }
 
 private val Jarvis.Section.icon: ImageVector get() = when (this) {
@@ -106,4 +113,5 @@ private val Jarvis.Section.icon: ImageVector get() = when (this) {
     Jarvis.Section.MONEY_CONTROL -> Icons.Rounded.RequestQuote
     Jarvis.Section.WEALTH -> Icons.Rounded.PieChart
     Jarvis.Section.RECORDS -> Icons.Rounded.Timeline
+    Jarvis.Section.ANALYSIS -> Icons.Rounded.QueryStats
 }

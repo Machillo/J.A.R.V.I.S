@@ -95,6 +95,11 @@ data class MailCandidate(
     @SerialName("is_internal_transfer") val isInternalTransfer: Boolean? = null,
     @SerialName("source_type") val sourceType: String? = null,
     @SerialName("parse_reason") val parseReason: String? = null,
+    /** The detected account (`/vip/financial-identity`) this notice belongs to, when known. */
+    @SerialName("financial_account_id") val financialAccountId: Long? = null,
+    /** Parser codes kept as text (may be null); shown nowhere as money. */
+    @SerialName("bank_movement") val bankMovement: String? = null,
+    @SerialName("financial_effect") val financialEffect: String? = null,
 ) {
     /**
      * The money as the bank notice stated it. The parser's converted `amount` is not trusted when
@@ -175,13 +180,15 @@ data class FinancialIdentity(val items: List<Account> = emptyList(), val summary
         @SerialName("account_name") val accountName: String? = null,
         @SerialName("bank_name") val bankName: String? = null,
         @SerialName("institution_code") val institutionCode: String? = null,
+        @SerialName("institution_country") val institutionCountry: String? = null,
+        @SerialName("account_type") val accountType: String? = null,
         val currency: String? = null,
         @SerialName("account_last4") val accountLast4: String? = null,
         @SerialName("ownership_status") val ownershipStatus: String? = null,
     )
 
     @Serializable
-    data class Summary(val pending: Int? = null)
+    data class Summary(val total: Int? = null, val pending: Int? = null)
 }
 
 @Serializable

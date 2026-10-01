@@ -43,9 +43,15 @@ in `docs/native/PARITY_MATRIX.md`.
   sections are ported step by step (JARVIS recovery roadmap; the chat since J1, `JarvisChatSession`,
   session-only history, changes saved only after Confirmar; the agenda since J2, the next 45 days of
   events, created only through the chat via "Agendar con JARVIS"); until then each one says it is being
-  restored. Free, Basic and VIP never see it; an admin session sees a notice and no app. Owner-shaped
-  endpoints (`/vip/strategy-dashboard`, `/vip/debt-advisory`, `PUT /vip/salvavidas`) are not used.
-- **Reads do not write.** Opening a screen never calls a write (no lifecycle snapshot POST).
+  restored. Free, Basic and VIP never see it; an admin session sees a notice and no app. The Owner's
+  strategy comes from `/jarvis/premium/strategy-dashboard` (his historical JARVIS inputs) and his
+  "Análisis financiero" JARVIS section from the Owner finance routes; VIP users use the neutral
+  `/vip/strategy-dashboard` and `/vip/salvavidas` (the backend runs the Owner's personal rules only for the
+  server Owner role). Plan holds Aguinaldo, Estrategia, Salvavidas and Distribución; Cuentas reviews the
+  same mail candidates as Correos. `/vip/debt-advisory` is not used.
+- **Reads do not write.** Opening a screen never calls a write (no lifecycle snapshot POST). One
+  documented exception, Owner only: the historical `GET /finance/net-worth` keeps one derived
+  net-worth snapshot per day (an upsert for its history chart; no balance, debt or transaction changes).
 - **Money.** `BigDecimal`/`Decimal` only; every amount is positive, ≤ 2 decimals and ≤
   9,999,999,999.99 (NUMERIC(12,2)); exchange rates are the user's own (> 0, never fetched or
   invented); creates carry an idempotency key reused only when the same submission is retried.

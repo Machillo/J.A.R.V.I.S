@@ -150,8 +150,8 @@ final class DINCRUITests: XCTestCase {
 
     func testDebtPaymentIsRecorded() {
         let app = launch()
-        app.tabBars.buttons["Plan"].tap()
-        open("plan.debts", in: app)
+        // Debts live on Hoy (moved from the Plan tab).
+        open("home.debts", in: app)
         let pay = app.buttons["debt.pay.31"]
         XCTAssertTrue(pay.waitForExistence(timeout: 5))
         pay.tap()
@@ -169,8 +169,7 @@ final class DINCRUITests: XCTestCase {
 
     func testGoalContributionIsRecorded() {
         let app = launch()
-        app.tabBars.buttons["Plan"].tap()
-        open("plan.goals", in: app)
+        open("home.goals", in: app)
         let contribute = app.buttons["goal.contribute.41"]
         XCTAssertTrue(contribute.waitForExistence(timeout: 5))
         contribute.tap()
@@ -185,25 +184,32 @@ final class DINCRUITests: XCTestCase {
     func testBasicHomeShowsItsDashboardAndBudget() {
         let app = launch(extra: ["-DincrPlan", "basic"])
         XCTAssertTrue(app.descendants(matching: .any)["home.basic"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Plan"].tap()
-        open("plan.budget", in: app)
+        // The budget lives in Perfil → Finanzas.
+        app.tabBars.buttons["Perfil"].tap()
+        open("profile.budget", in: app)
         XCTAssertTrue(app.buttons["budget.edit"].waitForExistence(timeout: 5))
     }
 
     func testFreePlanDoesNotOfferBasicTools() {
         let app = launch()
-        app.tabBars.buttons["Plan"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["plan.debts"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.descendants(matching: .any)["plan.budget"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.debts"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Perfil"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.situation"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["profile.budget"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["profile.mail"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["profile.accounts"].exists)
     }
 
     func testVipHomeShowsSafeToSpend() {
         let app = launch(extra: ["-DincrPlan", "vip"])
         XCTAssertTrue(app.descendants(matching: .any)["home.safeToSpend"].waitForExistence(timeout: 5))
+        // The strategy left the DINCR tab: it lives in Plan → Estrategia.
         app.tabBars.buttons["DINCR"].tap()
-        open("advisor.strategy", in: app)
-        XCTAssertTrue(app.staticTexts["Recomendación"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["advisor.summary"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["advisor.strategy"].exists)
+        app.tabBars.buttons["Plan"].tap()
+        open("plan.strategy", in: app)
+        XCTAssertTrue(app.descendants(matching: .any)["strategy.dashboard"].waitForExistence(timeout: 10))
     }
 
     func testDollarExpenseAsksForTheUsersRate() {

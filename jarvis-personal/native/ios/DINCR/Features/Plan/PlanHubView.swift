@@ -2,40 +2,91 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY E1 — the Plan hub. Budget, calendar and recurring items are Basic; the emergency fund
-/// and the aguinaldo are VIP (the aguinaldo also needs `gmail_automation`, as in Capacitor).
+/// PARITY E1 — the Plan tab: exactly four rows, in this order (`PlanHubItem`): Aguinaldo,
+/// Estrategia, Salvavidas and Distribución de dinero. A row the plan does not include stays
+/// visible, locked ("Disponible desde Basic/VIP"), and opens the plans screen; a row paused by an
+/// operational switch says so. Debts and goals are on Home; budget, calendar and recurring items in
+/// Profile → Finanzas.
 struct PlanHubView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         ScreenScroll(title: tx("Plan", "Plan")) {
-            WritesPausedBanner()
             VStack(spacing: DincrSpacing.s2) {
-                link(DebtsView(), "creditcard", tx("Deudas", "Debts"), tx("Saldos, pagos y avance", "Balances, payments and progress"), id: "plan.debts")
-                link(GoalsView(), "target", tx("Metas y ahorro", "Goals and savings"), tx("Metas, aportes y planes de ahorro", "Goals, contributions and savings plans"), id: "plan.goals")
-                gated(.basic) { link(BudgetView(), "chart.pie", tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits per category"), id: "plan.budget") }
-                gated(.basic) { link(CalendarView(), "calendar", tx("Calendario", "Calendar"), tx("Pagos y compromisos del mes", "Payments and commitments this month"), id: "plan.calendar") }
-                gated(.basic) { link(RecurringView(), "repeat", tx("Recurrentes", "Recurring"), tx("Pagos e ingresos que se repiten", "Payments and income that repeat"), id: "plan.recurring") }
-                if model.planTier == .vip && model.flags.isEnabled(.vipIntelligence) {
-                    link(EmergencyFundView(), "lifepreserver", tx("Fondo de emergencia", "Emergency fund"), tx("Cuántos meses te cubre", "How many months it covers"), id: "plan.emergency")
-                }
-                if model.planTier == .vip && model.flags.isEnabled(.gmailAutomation) {
-                    link(AguinaldoView(), "gift", tx("Aguinaldo", "Aguinaldo"), tx("Estimado según tus salarios", "Estimated from your salaries"), id: "plan.aguinaldo")
+                ForEach(PlanHubItem.allCases) { item in
+                    row(item)
                 }
             }
         }
     }
 
     @ViewBuilder
-    private func gated<Row: View>(_ tier: PlanTier, @ViewBuilder _ row: () -> Row) -> some View {
-        if model.planTier.rank >= tier.rank { row() }
-    }
-
-    private func link<Destination: View>(_ destination: Destination, _ symbol: String, _ title: String, _ subtitle: String, id: String) -> some View {
-        NavigationLink { destination } label: { HubRow(symbol: symbol, title: title, subtitle: subtitle) }
+    private func row(_ item: PlanHubItem) -> some View {
+        let availability = item.availability(tier: model.planTier, flags: model.flags)
+        switch availability {
+        case .available:
+            NavigationLink { destination(item) } label: { HubRow(symbol: item.symbol, title: item.title, subtitle: item.subtitle) }
+                .buttonStyle(.plain)
+                .dincrCard(padding: DincrSpacing.s3)
+                .accessibilityIdentifier("plan.\(item.rawValue)")
+        case .locked(let tier):
+            NavigationLink { PlanSettingsView() } label: {
+                HubRow(symbol: item.symbol, title: item.title,
+                       subtitle: tx("Disponible desde \(PlanLabel.name(tier.rawValue))", "Available from \(PlanLabel.name(tier.rawValue))"), locked: tier)
+            }
             .buttonStyle(.plain)
             .dincrCard(padding: DincrSpacing.s3)
-            .accessibilityIdentifier(id)
+            .accessibilityIdentifier("plan.\(item.rawValue)")
+            .accessibilityHint(tx("Abre los planes", "Opens the plans"))
+        case .paused(let flag):
+            NavigationLink {
+                ScreenScroll(title: item.title) { FeaturePausedView(message: model.flags.message(flag, language: model.language)) }
+            } label: {
+                HubRow(symbol: item.symbol, title: item.title, subtitle: tx("En pausa por mantenimiento", "Paused for maintenance"))
+            }
+            .buttonStyle(.plain)
+            .dincrCard(padding: DincrSpacing.s3)
+            .accessibilityIdentifier("plan.\(item.rawValue)")
+        }
+    }
+
+    @ViewBuilder
+    private func destination(_ item: PlanHubItem) -> some View {
+        switch item {
+        case .aguinaldo: AguinaldoView()
+        case .strategy: PlanStrategyView()
+        case .salvavidas: SalvavidasView()
+        case .distribution: DistributionView()
+        }
+    }
+}
+
+extension PlanHubItem {
+    var title: String {
+        switch self {
+        case .aguinaldo: tx("Aguinaldo", "Aguinaldo")
+        case .strategy: tx("Estrategia", "Strategy")
+        case .salvavidas: "Salvavidas"
+        case .distribution: tx("Distribución de dinero", "Money distribution")
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .aguinaldo: tx("Estimado según tus salarios", "Estimated from your salaries")
+        case .strategy: tx("Tu prioridad y el plan de tus deudas", "Your priority and your debt plan")
+        case .salvavidas: tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers")
+        case .distribution: tx("Cómo repartir tu sobrante del mes", "How to split this month’s surplus")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .aguinaldo: "gift"
+        case .strategy: "map"
+        case .salvavidas: "lifepreserver"
+        case .distribution: "chart.pie"
+        }
     }
 }
 

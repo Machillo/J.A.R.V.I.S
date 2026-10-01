@@ -230,7 +230,11 @@ def vip_salvavidas():
 
 @router.put("/vip/salvavidas")
 def vip_salvavidas_update(request: SalvavidasUpdateRequest):
-    require_feature("strategy_vip"); return update_salvavidas(**request.model_dump(exclude_unset=True))
+    require_feature("strategy_vip")
+    try:
+        return update_salvavidas(**request.model_dump(exclude_unset=True))
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 @router.get("/vip/aguinaldo")
 def vip_aguinaldo():
@@ -285,8 +289,9 @@ def vip_gmail_sync():
     require_feature("gmail_automation"); return sync_current_gmail()
 
 @router.get("/vip/gmail/emails")
-def vip_gmail_emails(status: str | None = None):
-    require_feature("gmail_automation"); return list_gmail_emails(status)
+def vip_gmail_emails(status: str | None = None, bank: str | None = Query(default=None, max_length=80),
+                     financial_account_id: int | None = Query(default=None, gt=0)):
+    require_feature("gmail_automation"); return list_gmail_emails(status, bank, financial_account_id)
 
 @router.get("/vip/gmail/own-transfer-suggestions")
 def vip_own_transfer_suggestions():
