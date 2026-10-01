@@ -38,10 +38,24 @@ struct ProfileHubView: View {
                 if model.planTier == .vip {
                     NavigationLink(value: ProfileRoute.mail) { Label(tx("Monitor de correo", "Email Monitor"), systemImage: "envelope") }
                         .accessibilityIdentifier("profile.mail")
-                    NavigationLink { DetectedAccountsView() } label: { Label(tx("Cuentas detectadas", "Detected accounts"), systemImage: "building.columns") }
+                    // Cuentas: the detected accounts by bank, with their movements (same review as the monitor).
+                    NavigationLink { AccountsView() } label: { Label(tx("Cuentas", "Accounts"), systemImage: "building.columns") }
+                        .accessibilityIdentifier("profile.accounts")
                 }
             }
             .dincrRowBackground()
+            if model.planTier.rank >= PlanTier.basic.rank {
+                // Basic tools, moved here from the Plan tab (navigation only).
+                Section(tx("Finanzas", "Finances")) {
+                    NavigationLink { BudgetView() } label: { Label(tx("Presupuesto", "Budget"), systemImage: "chart.pie") }
+                        .accessibilityIdentifier("profile.budget")
+                    NavigationLink { CalendarView() } label: { Label(tx("Calendario financiero", "Financial calendar"), systemImage: "calendar") }
+                        .accessibilityIdentifier("profile.calendar")
+                    NavigationLink { RecurringView() } label: { Label(tx("Recurrentes", "Recurring"), systemImage: "repeat") }
+                        .accessibilityIdentifier("profile.recurring")
+                }
+                .dincrRowBackground()
+            }
             Section(tx("Cuenta", "Account")) {
                 NavigationLink { PlanSettingsView() } label: { Label(tx("Plan", "Plan"), systemImage: "star") }
                     .accessibilityIdentifier("profile.plan")
@@ -172,7 +186,7 @@ private struct SituationForm: View {
     @State private var incomeType = "fixed"
     @State private var salary = ""
     @State private var hourly = ""
-    @State private var days = ""
+    @State private var days = String(WorkDays.defaultValue)
     @State private var hours = ""
     @State private var frequency = "monthly"
     @State private var essentials = ""
@@ -203,8 +217,15 @@ private struct SituationForm: View {
                     MoneyField(label: tx("Salario mensual", "Monthly salary"), text: $salary)
                 } else {
                     MoneyField(label: tx("Pago por hora", "Hourly rate"), text: $hourly)
-                    TextField(tx("Días por semana", "Days per week"), text: $days).keyboardType(.numberPad)
                     TextField(tx("Horas por día", "Hours per day"), text: $hours).keyboardType(.decimalPad)
+                }
+                // Every income type: the backend needs it (1–7), like the historical web form.
+                LabeledContent(tx("Días que trabajás por semana", "Days you work per week")) {
+                    TextField(tx("Días", "Days"), text: $days)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 80)
+                        .accessibilityIdentifier("situation.workDays")
                 }
                 Picker(tx("Frecuencia de pago", "Pay frequency"), selection: $frequency) {
                     Text(tx("Semanal", "Weekly")).tag("weekly")
@@ -249,7 +270,7 @@ private struct SituationForm: View {
         incomeType = profile?.incomeType ?? "fixed"
         salary = profile?.fixedMonthlySalary.map(format.inputText) ?? ""
         hourly = profile?.hourlyRate.map(format.inputText) ?? ""
-        days = profile?.workDaysPerWeek.map(String.init) ?? ""
+        days = String(profile?.workDaysPerWeek ?? WorkDays.defaultValue)
         hours = profile?.hoursPerDay.map { "\($0)" } ?? ""
         frequency = profile?.payFrequency ?? "monthly"
         essentials = profile?.essentialMonthlyExpenses.map(format.inputText) ?? ""
@@ -271,11 +292,14 @@ private struct SituationForm: View {
               let savingsValue = optional(savings), let emergencyValue = optional(emergency), let minimumValue = optional(minimum) else {
             error = model.moneyFormat.amountHint; return
         }
+        guard let workDays = WorkDays.parse(days) else {
+            error = tx("Indicá cuántos días trabajás por semana, de 1 a 7.", "Enter how many days you work per week, from 1 to 7."); return
+        }
         var profile = situation.financialProfile ?? FinancialProfile()
         profile.incomeType = incomeType
         profile.fixedMonthlySalary = incomeType == "fixed" ? salaryValue : nil
         profile.hourlyRate = incomeType == "hourly" ? hourlyValue : nil
-        profile.workDaysPerWeek = incomeType == "hourly" ? Int(days) : nil
+        profile.workDaysPerWeek = workDays
         profile.hoursPerDay = incomeType == "hourly" ? Decimal(string: hours.replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX")) : nil
         profile.payFrequency = frequency
         profile.essentialMonthlyExpenses = essentialsValue

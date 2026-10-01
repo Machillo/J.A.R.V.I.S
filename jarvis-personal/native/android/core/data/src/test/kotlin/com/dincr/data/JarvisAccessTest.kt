@@ -53,11 +53,12 @@ class JarvisAccessTest {
         assertFalse(Jarvis.isAvailable(user.copy(subscription = Profile.Subscription(plan = "owner", status = "active"))))
     }
 
-    @Test fun theChatAndTheAgendaAreThePortedSections() {
-        // J1 ports the chat and J2 the agenda; every other section still opens a "being restored" screen.
-        assertEquals(listOf(Jarvis.Section.CHAT, Jarvis.Section.CALENDAR), Jarvis.Section.entries.filter { it.isAvailable })
+    @Test fun theChatTheAgendaAndTheAnalysisAreThePortedSections() {
+        // J1 ports the chat, J2 the agenda, and the analysis is the web Finanzas tab; every other
+        // section still opens a "being restored" screen.
+        assertEquals(listOf(Jarvis.Section.CALENDAR, Jarvis.Section.CHAT, Jarvis.Section.ANALYSIS).sorted(), Jarvis.Section.entries.filter { it.isAvailable }.sorted())
         // The same sections and wire names as iOS (`Jarvis.Section`).
-        assertEquals(listOf("chat", "memory", "calendar", "strategy", "money", "money_control", "wealth", "records"), Jarvis.Section.entries.map { it.wire })
+        assertEquals(listOf("chat", "memory", "calendar", "strategy", "money", "money_control", "wealth", "records", "analysis"), Jarvis.Section.entries.map { it.wire })
         assertEquals(Jarvis.Section.MONEY_CONTROL, Jarvis.Section.from("money_control"))
         assertEquals(null, Jarvis.Section.from("admin"))
     }

@@ -4,9 +4,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // Read models of the dashboards, reports and strategy screens. The backend computes every figure;
-// the app only presents them. Owner-shaped payloads (`/vip/strategy-dashboard`,
-// `/vip/debt-advisory`) are deliberately not modelled: the public app uses the neutral
-// `/finance/strategy-vip` engine (CLAUDE.md §4.A).
+// the app only presents them. The director strategy (`/vip/strategy-dashboard`, scope users, and
+// the Owner's `/jarvis/premium/strategy-dashboard`) lives in StrategyDashboard.kt; which one an
+// identity reads is [StrategyContract] (CLAUDE.md §4.A).
 
 @Serializable
 data class CategoryTotal(val category: String? = null, val amount: Money? = null)
@@ -95,9 +95,18 @@ data class Strategy(
     @SerialName("next_paycheck") val nextPaycheck: Paycheck? = null,
     @SerialName("director_note") val directorNote: String? = null,
     val insights: Insights? = null,
+    /** strategy-basic: where the monthly income comes from (`declared`, `observed`, `none`). */
+    @SerialName("income_source") val incomeSource: String? = null,
+    @SerialName("income_basis") val incomeBasis: IncomeBasis? = null,
 ) {
+    /** The income was estimated from recorded income, not declared: the screen says so. */
+    val isIncomeObserved: Boolean get() = incomeSource == "observed"
+
     @Serializable
-    data class Allocation(val bucket: String? = null, val label: String? = null, val amount: Money? = null)
+    data class IncomeBasis(val source: String? = null, val policy: String? = null, @SerialName("observed_source") val observedSource: String? = null)
+
+    @Serializable
+    data class Allocation(val bucket: String? = null, val label: String? = null, val amount: Money? = null, @SerialName("debt_id") val debtId: Long? = null)
 
     @Serializable
     data class TargetDebt(val id: Long? = null, val name: String? = null, @SerialName("remaining_amount") val remainingAmount: Money? = null, @SerialName("monthly_payment") val monthlyPayment: Money? = null)
@@ -241,4 +250,12 @@ data class ProactiveAdvisor(
 
     @Serializable
     data class Action(val label: String? = null, val route: String? = null)
+}
+
+/**
+ * DINCR → Hoy: the proactive advisor and, only while it has no earlier observation (BASELINE), the
+ * command center's current alerts (null when not BASELINE or when they could not be read).
+ */
+data class DincrToday(val advisor: ProactiveAdvisor, val currentAlerts: List<CommandCenter.Alert>?) {
+    val isBaseline: Boolean get() = advisor.status == "BASELINE"
 }

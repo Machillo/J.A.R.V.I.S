@@ -91,6 +91,41 @@ def discover_candidate_account(
     return financial_account_id
 
 
+def relink_account_candidates(conn, *, account: dict[str, Any], account_id: str, workspace_id: str) -> list[int]:
+    """Link this account's own notices that lost or never got their link (a command, never a read).
+
+    "No es mía" unlinks an account's candidates; switching it back to "Es mía" must link them again,
+    or the own-transfer pairing (which matches on the link) stays broken. Only candidates of this
+    account/workspace without a link are considered, and only when the SAME rule discovery uses
+    (``_account_signal``) points to exactly this institution, last 4 digits and currency.
+    """
+    code = str(account.get("institution_code") or "").strip().lower()
+    last4 = str(account.get("account_last4") or "")
+    currency = str(account.get("currency") or "CRC").upper()
+    if not code or not last4:
+        return []
+    rows = conn.execute(
+        """SELECT id,movement_direction,destination_account_reference,source_account_reference,
+                  source_account_label,bank,currency,movement_kind
+           FROM finva_email_candidates
+           WHERE account_id=%s AND workspace_id=%s AND financial_account_id IS NULL
+             AND LOWER(COALESCE(bank,''))=%s""",
+        (account_id, workspace_id, code),
+    ).fetchall()
+    matching = []
+    for row in rows:
+        signal = _account_signal(dict(row))
+        if signal and (signal["institution_code"], signal["account_last4"], signal["currency"]) == (code, last4, currency):
+            matching.append(int(row["id"]))
+    if matching:
+        conn.execute(
+            """UPDATE finva_email_candidates SET financial_account_id=%s,updated_at=NOW()
+               WHERE id = ANY(%s) AND account_id=%s AND workspace_id=%s AND financial_account_id IS NULL""",
+            (int(account["id"]), matching, account_id, workspace_id),
+        )
+    return matching
+
+
 def list_financial_identity() -> dict[str, Any]:
     account_id, workspace_id = get_current_account_id(), get_current_workspace_id()
     with get_connection() as conn:
@@ -143,6 +178,8 @@ def confirm_financial_account(account_balance_id: int, ownership_status: str, di
                    WHERE financial_account_id=%s AND account_id=%s AND workspace_id=%s""",
                 (account_balance_id, account_id, workspace_id),
             )
+        else:
+            relink_account_candidates(conn, account=dict(row), account_id=account_id, workspace_id=workspace_id)
         from backend.user_product.candidate_resolution import reevaluate_workspace_candidates
         reevaluate_workspace_candidates(conn, account_id=account_id, workspace_id=workspace_id)
         conn.commit()

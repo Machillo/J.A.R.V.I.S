@@ -16,6 +16,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.PieChart
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Gavel
@@ -44,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -62,6 +66,7 @@ import com.dincr.data.Jarvis
 import com.dincr.data.OpsFlag
 import com.dincr.data.PlanChangeRequest
 import com.dincr.data.PlanTier
+import com.dincr.data.SituationDefaults
 import com.dincr.data.SupportRequest
 import com.dincr.data.WholeNumberInput
 import com.dincr.design.BannerTone
@@ -107,13 +112,14 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
             // The Owner's personal space (JARVIS recovery, J0); no plan or other role sees it.
             NavRow(Icons.Rounded.Key, "JARVIS", tx("Tu espacio personal", "Your personal space")) { nav.open("jarvis") }
         }
+        FinanceSection(plan, nav)
         DincrCard {
             Column {
                 NavRow(Icons.Rounded.Person, tx("Mi situación financiera", "My financial situation"), tx("Ingresos, gastos esenciales y ahorros", "Income, essential expenses and savings")) { nav.open("situation") }
                 NavRow(Icons.Rounded.Star, tx("Mi plan", "My plan"), planName(profile?.plan) + (if (profile?.isCourtesy == true) tx(" · cortesía", " · courtesy") else "")) { nav.open("plans") }
                 if (plan == PlanTier.VIP && model.isOn(OpsFlag.GMAIL_AUTOMATION)) {
                     NavRow(Icons.Rounded.Email, tx("Correos financieros", "Financial emails"), tx("Avisos de tu banco para revisar", "Bank notices to review")) { nav.open("mail") }
-                    NavRow(Icons.Rounded.AccountBalance, tx("Cuentas detectadas", "Detected accounts"), tx("Confirmá cuáles son tuyas", "Confirm which are yours")) { nav.open("accounts") }
+                    NavRow(Icons.Rounded.AccountBalance, tx("Cuentas", "Accounts"), tx("Tus bancos, cuentas y movimientos", "Your banks, accounts and transactions")) { nav.open("accounts") }
                 }
                 NavRow(Icons.Rounded.Settings, tx("Ajustes de cuenta", "Account settings"), tx("Apariencia, datos y privacidad", "Appearance, data and privacy")) { nav.open("settings") }
                 NavRow(Icons.Rounded.Lock, tx("Seguridad", "Security"), tx("Bloqueo de la app", "App lock")) { nav.open("security") }
@@ -127,6 +133,23 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
     }
     if (confirming) ConfirmDialog(tx("¿Cerrar sesión en este dispositivo?", "Sign out on this device?"), tx("Tus datos quedan en tu cuenta.", "Your data stays in your account."),
         tx("Cerrar sesión", "Sign out"), onDismiss = { confirming = false }, onConfirm = { confirming = false; model.signOut() })
+}
+
+/** Perfil → Finanzas: budget, financial calendar and recurring payments (Basic+; locked below). */
+@Composable
+private fun FinanceSection(plan: PlanTier, nav: Navigator) {
+    SectionTitle(tx("Finanzas", "Finances"))
+    DincrCard {
+        Column {
+            if (plan.allows(com.dincr.data.Feature.GUIDED_BUDGET)) {
+                NavRow(Icons.Rounded.PieChart, tx("Presupuesto", "Budget"), tx("Límites por categoría", "Limits by category")) { nav.open("budget") }
+                NavRow(Icons.Rounded.CalendarMonth, tx("Calendario financiero", "Financial calendar"), tx("Pagos e ingresos del mes", "Payments and income this month")) { nav.open("calendar") }
+                NavRow(Icons.Rounded.Repeat, tx("Pagos recurrentes", "Recurring payments"), tx("Suscripciones y pagos fijos", "Subscriptions and fixed payments")) { nav.open("recurring") }
+            } else {
+                NavRow(Icons.Rounded.PieChart, tx("Presupuesto, calendario y recurrentes", "Budget, calendar and recurring"), tx("Disponible desde Basic", "Available from Basic"), badge = "Basic") { nav.open("plans") }
+            }
+        }
+    }
 }
 
 /**
@@ -150,7 +173,8 @@ private fun SituationForm(model: AppModel, current: FinancialProfile?, observedI
     var incomeType by remember { mutableStateOf(current?.incomeType ?: "fixed") }
     var salary by remember { mutableStateOf(text(current?.fixedMonthlySalary)) }
     var hourly by remember { mutableStateOf(text(current?.hourlyRate)) }
-    var days by remember { mutableStateOf(current?.workDaysPerWeek?.toString().orEmpty()) }
+    // Every income type needs work_days_per_week (1–7, NOT NULL): prefilled, or 5 like the web form.
+    var days by remember { mutableStateOf(SituationDefaults.workDays(current).toString()) }
     var hours by remember { mutableStateOf(current?.hoursPerDay?.let(format::inputText).orEmpty()) }
     var frequency by remember { mutableStateOf(current?.payFrequency ?: "monthly") }
     var essentials by remember { mutableStateOf(text(current?.essentialMonthlyExpenses)) }
@@ -166,11 +190,10 @@ private fun SituationForm(model: AppModel, current: FinancialProfile?, observedI
         observedIncome?.takeIf { it.signum() > 0 }?.let { Caption(tx("En los últimos 90 días registraste en promedio ${format.format(it)} por mes.", "In the last 90 days you recorded ${format.format(it)} per month on average.")) }
         ChoiceChips(listOf("fixed" to tx("Salario fijo", "Fixed salary"), "hourly" to tx("Por horas", "Hourly")), incomeType, { incomeType = it })
         if (incomeType == "fixed") MoneyField(tx("Salario mensual", "Monthly salary"), salary, { salary = it }, errors["salary"])
-        else {
-            MoneyField(tx("Pago por hora", "Hourly rate"), hourly, { hourly = it }, errors["hourly"])
-            FormField(tx("Días por semana", "Days per week"), days, { days = it }, errors["days"], KeyboardType.Number)
-            FormField(tx("Horas por día", "Hours per day"), hours, { hours = it }, errors["hours"], KeyboardType.Decimal)
-        }
+        else MoneyField(tx("Pago por hora", "Hourly rate"), hourly, { hourly = it }, errors["hourly"])
+        FormField(tx("Días que trabajás por semana", "Days you work per week"), days, { days = it }, errors["days"], KeyboardType.Number,
+            supporting = tx("Entre 1 y 7.", "1 to 7."), modifier = Modifier.testTag("situation.days"))
+        if (incomeType == "hourly") FormField(tx("Horas por día", "Hours per day"), hours, { hours = it }, errors["hours"], KeyboardType.Decimal)
         ChoiceChips(listOf("weekly" to tx("Semanal", "Weekly"), "biweekly" to tx("Quincenal", "Every two weeks"), "monthly" to tx("Mensual", "Monthly")), frequency, { frequency = it }, tx("Te pagan", "You get paid"))
     }
     if (plan != PlanTier.FREE) Section(tx("Gastos y ahorros", "Expenses and savings")) {
@@ -191,7 +214,8 @@ private fun SituationForm(model: AppModel, current: FinancialProfile?, observedI
             incomeType = incomeType,
             fixedMonthlySalary = if (incomeType == "fixed") money("salary", salary, positive = true) else null,
             hourlyRate = if (incomeType == "hourly") money("hourly", hourly, positive = true) else null,
-            workDaysPerWeek = if (incomeType == "hourly" && days.isNotBlank()) WholeNumberInput.parse(days, 1..7).also { if (it == null) found["days"] = tx("Entre 1 y 7.", "1 to 7.") } else current?.workDaysPerWeek,
+            // Always sent, for every income type (the backend answers 422 without it).
+            workDaysPerWeek = WholeNumberInput.parse(days, SituationDefaults.WORK_DAYS_RANGE).also { if (it == null) found["days"] = tx("Entre 1 y 7.", "1 to 7.") },
             hoursPerDay = if (incomeType == "hourly" && hours.isNotBlank()) com.dincr.data.AmountInput.parseDecimal(hours, format.separators, 2, java.math.BigDecimal(24), allowZero = false).also { if (it == null) found["hours"] = tx("Entre 0 y 24.", "0 to 24.") } else current?.hoursPerDay,
             payFrequency = frequency,
             paydayNote = current?.paydayNote,

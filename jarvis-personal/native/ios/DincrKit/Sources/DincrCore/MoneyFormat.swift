@@ -193,6 +193,36 @@ public enum RateInput {
     }
 }
 
+/// Amount and exchange rate of the mail notice correction ("Corregir aviso"). Its decimal keyboard
+/// follows the device language (a Spanish iPhone only offers ","), while the parsers follow the
+/// profile's number format, so "453,84" was refused for a comma_dot profile. Here the user's own
+/// format is tried first (identical results); only when it fails is the OTHER separator read as
+/// the decimal mark, and only when it is the single separator in the text and is not followed by
+/// exactly 3 digits (that would be a thousands group: "453,840" is refused, never guessed).
+/// Mixed separators keep failing. Scoped to this sheet; other money fields are unchanged.
+public enum CorrectionInput {
+    public static func amount(_ text: String, separators: MoneyFormat.Separators) -> Decimal? {
+        parse(text, separators: separators, maxFraction: AmountInput.maxFractionDigits) { AmountInput.parse($0, separators: $1) }
+    }
+
+    public static func rate(_ text: String, separators: MoneyFormat.Separators) -> Decimal? {
+        parse(text, separators: separators, maxFraction: RateInput.maxFractionDigits) { RateInput.parse($0, separators: $1) }
+    }
+
+    static func parse(_ text: String, separators: MoneyFormat.Separators, maxFraction: Int,
+                      strict: (String, MoneyFormat.Separators) -> Decimal?) -> Decimal? {
+        if let value = strict(text, separators) { return value }
+        let trimmed = text.replacingOccurrences(of: " ", with: "")
+        let other: Character = separators == .dotComma ? "." : ","
+        let marks = trimmed.filter { $0 == "." || $0 == "," }
+        guard marks.count == 1, marks.first == other else { return nil }
+        let parts = trimmed.split(separator: other, omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty, (1...maxFraction).contains(parts[1].count), parts[1].count != 3 else { return nil }
+        // Read with the swapped format, so every bound of the strict parser still applies.
+        return strict(trimmed, separators == .dotComma ? .commaDot : .dotComma)
+    }
+}
+
 /// The base-currency amount the backend will store for an amount typed in another currency, for a
 /// preview only (the backend computes and stores the real value). Same arithmetic as
 /// `entry_currency.resolve_entry_amount`: amount to cents, rate to 6 decimals, dollars to colones

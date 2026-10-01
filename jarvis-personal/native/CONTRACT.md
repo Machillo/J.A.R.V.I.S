@@ -110,13 +110,30 @@ submission is retried). The plan gate in the app mirrors `BUILTIN_FEATURE_MIN_PL
 | Movements | `GET /free/monthly-summary?period`, `PUT /free/movements/{id}` with `currency` + `exchange_rate` | See "Currency edits" |
 | Debts | `GET/POST /finance/debts`, `PUT/DELETE /finance/debts/{id}`, `POST /finance/debts/{id}/payments` | Edit needs Basic; a payment larger than the balance is capped by the backend |
 | Goals and savings | `/goals`, `/goals/{id}`, `/goals/{id}/contributions`, `/savings-plans…` | Contribution date validated before sending |
-| Situation | `GET/PUT /financial-situation` | An empty field is sent as null (unknown), never zero; observed income is never copied into a declared value |
-| Basic | `/basic/dashboard`, `/basic/budget` (GET/PUT), `/basic/calendar?period`, `/basic/recurring…`, `/basic/reports?period`, `/finance/strategy-basic` | |
-| VIP | `/vip/command-center`, `/finance/strategy-vip`, `POST /finance/strategy-vip/simulate` (read-only simulation), `/vip/aguinaldo` (409 → not applicable), `/vip/lifecycle/monthly-review`, `/vip/lifecycle/proactive-advisor` | `POST /vip/lifecycle/snapshots` is **not** called (reads do not write); `/vip/strategy-dashboard`, `/vip/debt-advisory` and `PUT /vip/salvavidas` are Owner-shaped and not used |
-| Mail (VIP) | `/vip/gmail/status`, `/consent`, `/connect`, `/vip/mail/microsoft/connect`, `/vip/mail/oauth/complete`, `/sync`, `/emails`, `/candidates` (+ accept / correct / reject), own-transfer suggestions, `/vip/financial-identity` accounts | `/emails` answers `{status, items}` (not a bare list); `/sync` answers `failed_connections` as a **list of connection ids**; `/status.connections` includes `disabled` rows, which are hidden; `/connect` body is `{import_scope, locale}` (`en`/`es`); a missing `account_base_currency` is CRC; `resolution_reason` is an internal code, never shown raw. A candidate in another currency without a usable rate asks for the user's rate; `already_reviewed` is reported, not treated as an error; the OAuth return is completed once (ledger) |
+| Situation | `GET/PUT /financial-situation` | An empty field is sent as null (unknown), never zero; observed income is never copied into a declared value; `work_days_per_week` (1–7) is required for **every** income type (historical contract, NOT NULL column): the form always asks it (5 when there is no profile, visible and editable) |
+| Basic | `/basic/dashboard`, `/basic/budget` (GET/PUT), `/basic/calendar?period`, `/basic/recurring…`, `/basic/reports?period`, `/finance/strategy-basic` | Strategy Basic: declared income first; without it the observed income of the income policy, never persisted; `income_source` = `declared`/`observed`/`none` (the app labels an estimate) |
+| VIP | `/vip/command-center`, `/vip/strategy-dashboard` (Estrategia + Distribución), `GET/PUT /vip/salvavidas`, `/vip/aguinaldo` (409 → not applicable; paused by `vip_intelligence`), `/vip/lifecycle/monthly-review`, `/vip/lifecycle/proactive-advisor` | `POST /vip/lifecycle/snapshots` is **not** called (reads do not write). The strategy dashboard and the Salvavidas answer the neutral Users model (`scope: "users"`); the Owner's personal rules run only for the server Owner role (see "Plan") |
+| Mail (VIP) | `/vip/gmail/status`, `/consent`, `/connect`, `/vip/mail/microsoft/connect`, `/vip/mail/oauth/complete`, `/sync`, `/emails` (`?status`, `?bank`, `?financial_account_id`), `/candidates` (+ accept / correct / reject), own-transfer suggestions, `/vip/financial-identity` accounts | Correos and Cuentas are two surfaces of the same candidates: Cuentas reads `/emails?bank=` / `?financial_account_id=` and reviews with the same endpoints; rows carry `financial_account_id`, `bank_movement`, `financial_effect`; no balance is shown. `/emails` answers `{status, items}` (not a bare list); `/sync` answers `failed_connections` as a **list of connection ids**; `/status.connections` includes `disabled` rows, which are hidden; `/connect` body is `{import_scope, locale}` (`en`/`es`); a missing `account_base_currency` is CRC; `resolution_reason` is an internal code, never shown raw. A candidate in another currency without a usable rate asks for the user's rate; `already_reviewed` is reported, not treated as an error; the OAuth return is completed once (ledger) |
 | Store | `/product-ops/billing/store/catalog`, `/entitlement`, `/customer-token`, Google verification | The app never grants a plan; the backend verifies every purchase token |
 | Support | `GET/POST /product-ops/feedback`, resolution | |
 | Export | `GET /auth/me/export` | Shared as a file from the app cache, never logged |
+
+## Plan, Strategy and Owner analysis
+
+- Plan holds only Aguinaldo, Estrategia, Salvavidas and Distribución. Deudas and Metas live in Hoy;
+  Presupuesto, Calendario and Recurrentes in Perfil → Finanzas.
+- Three strategy contracts: Basic `/finance/strategy-basic`; VIP `/vip/strategy-dashboard`
+  (`scope: "users"`: income policy, calendar month ledger, recurring items, debts; cash is unknown,
+  `distributable_account_cash: null`); Owner `/jarvis/premium/strategy-dashboard` (`scope: "owner"`:
+  the historical JARVIS inputs — salary/deductions/OT/VGH/holidays/bonuses, his pay cycle, cash,
+  Casa/Línea obligations, investments). Distribución reads the same answer (`allocations` for Basic,
+  `allocation_items` + `distribution_formula` for VIP and Owner).
+- Salvavidas: Users get 1/3/6 months of their real obligations (debt payments + recurring expense items)
+  against their declared savings (unknown stays unknown); `PUT` takes `target_months` and/or
+  `current_amount` (the declared savings). The Owner keeps his historical model (`scope: "owner"`).
+- Owner "Análisis financiero" (JARVIS section): `GET /transactions/analysis/summary`,
+  `/finance/engine`, `/finance/net-worth` (owner/admin routes). `/finance/net-worth` stores a net-worth
+  snapshot on read (historical Owner behaviour).
 
 ## Currency edits (#269, #273)
 

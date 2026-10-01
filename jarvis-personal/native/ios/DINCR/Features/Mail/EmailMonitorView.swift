@@ -377,7 +377,9 @@ private struct ScopeSheet: View {
     }
 }
 
-private struct CandidateCard: View {
+/// One bank notice to review. Shared by the Email Monitor and Cuentas (the same review, the same
+/// endpoints); a notice already reviewed shows its state instead of the actions.
+struct CandidateCard: View {
     let candidate: MailCandidate
     let busy: Bool
     let confirm: () -> Void
@@ -387,6 +389,7 @@ private struct CandidateCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
             HStack(alignment: .firstTextBaseline) {
+                if let brand = candidate.identifiedBank { BankLogo(brand: brand, size: 32) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(candidate.description ?? candidate.subject ?? tx("Aviso bancario", "Bank notice")).font(DincrFont.body.weight(.semibold))
                     Text([candidate.bank, Day.label(candidate.transactionDate)].compactMap { $0 }.joined(separator: " · "))
@@ -396,27 +399,32 @@ private struct CandidateCard: View {
                 MoneyText(candidate.nativeAmount, sign: candidate.transactionType == "income" ? .income : .expense, currency: candidate.nativeCurrency)
             }
             .accessibilityElement(children: .combine)
-            if candidate.cannotConvert {
-                Text(tx("Está en \(candidate.nativeCurrency ?? "otra moneda"), que DINCR no puede convertir. Solo podés descartarlo.",
-                        "It’s in \(candidate.nativeCurrency ?? "another currency"), which DINCR can’t convert. You can only dismiss it."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
-            } else if candidate.needsRate {
-                Text(tx("Está en \(candidate.nativeCurrency ?? ""). Tocá Corregir e indicá tu tipo de cambio.", "It’s in \(candidate.nativeCurrency ?? ""). Tap Correct and enter your exchange rate."))
-                    .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
-            }
-            HStack(spacing: DincrSpacing.s2) {
-                if !candidate.needsRate && !candidate.cannotConvert {
-                    Button(tx("Confirmar", "Confirm"), action: confirm).buttonStyle(.dincrPrimary(loading: busy))
-                        .accessibilityIdentifier("mail.accept.\(candidate.candidateId ?? 0)")
+            if !candidate.isPending {
+                CandidateStatusLabel(status: candidate.reviewStatus, internalTransfer: candidate.isInternalTransfer == true)
+                    .accessibilityIdentifier("candidate.status.\(candidate.candidateId ?? 0)")
+            } else {
+                if candidate.cannotConvert {
+                    Text(tx("Está en \(candidate.nativeCurrency ?? "otra moneda"), que DINCR no puede convertir. Solo podés descartarlo.",
+                            "It’s in \(candidate.nativeCurrency ?? "another currency"), which DINCR can’t convert. You can only dismiss it."))
+                        .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
+                } else if candidate.needsRate {
+                    Text(tx("Está en \(candidate.nativeCurrency ?? ""). Tocá Corregir e indicá tu tipo de cambio.", "It’s in \(candidate.nativeCurrency ?? ""). Tap Correct and enter your exchange rate."))
+                        .font(DincrFont.caption).foregroundStyle(DincrColor.warning)
                 }
-                if !candidate.cannotConvert {
-                    Button(tx("Corregir", "Correct"), action: correct).buttonStyle(.dincrSecondary)
-                        .accessibilityIdentifier("mail.correct.\(candidate.candidateId ?? 0)")
+                HStack(spacing: DincrSpacing.s2) {
+                    if !candidate.needsRate && !candidate.cannotConvert {
+                        Button(tx("Confirmar", "Confirm"), action: confirm).buttonStyle(.dincrPrimary(loading: busy))
+                            .accessibilityIdentifier("mail.accept.\(candidate.candidateId ?? 0)")
+                    }
+                    if !candidate.cannotConvert {
+                        Button(tx("Corregir", "Correct"), action: correct).buttonStyle(.dincrSecondary)
+                            .accessibilityIdentifier("mail.correct.\(candidate.candidateId ?? 0)")
+                    }
+                    Button(tx("Descartar", "Dismiss"), role: .destructive, action: reject).frame(minHeight: 44)
+                        .accessibilityIdentifier("mail.reject.\(candidate.candidateId ?? 0)")
                 }
-                Button(tx("Descartar", "Dismiss"), role: .destructive, action: reject).frame(minHeight: 44)
-                    .accessibilityIdentifier("mail.reject.\(candidate.candidateId ?? 0)")
+                .disabled(busy)
             }
-            .disabled(busy)
         }
         .dincrCard()
     }
@@ -424,7 +432,7 @@ private struct CandidateCard: View {
 
 /// Accept with corrections: amount in the notice's own currency, and the user's own rate when that
 /// currency is not the account's (DINCR never looks rates up).
-private struct CorrectionSheet: View {
+struct CorrectionSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let candidate: MailCandidate
@@ -450,7 +458,8 @@ private struct CorrectionSheet: View {
                 if candidate.needsRate {
                     VStack(alignment: .leading) {
                         Text(tx("Tipo de cambio (colones por 1 dólar)", "Exchange rate (colones per 1 dollar)")).font(DincrFont.label)
-                        TextField(tx("Tipo de cambio", "Exchange rate"), text: $rate).keyboardType(.decimalPad).accessibilityIdentifier("correct.rate")
+                        TextField(tx("Tipo de cambio", "Exchange rate"), text: $rate, prompt: Text(model.moneyFormat.inputText(Decimal(string: "507.5")!)))
+                            .keyboardType(.decimalPad).accessibilityIdentifier("correct.rate")
                     }
                 }
                 Picker(tx("Tipo", "Type"), selection: $type) {
@@ -489,10 +498,10 @@ private struct CorrectionSheet: View {
         let separators = model.moneyFormat.separators
         let text = description.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { error = tx("Escribí una descripción.", "Enter a description."); return }
-        guard let value = AmountInput.parse(amount, separators: separators) else { error = model.moneyFormat.amountHint; return }
+        guard let value = CorrectionInput.amount(amount, separators: separators) else { error = model.moneyFormat.amountHint; return }
         var exchangeRate: Decimal?
         if candidate.needsRate {
-            guard let parsed = RateInput.parse(rate, separators: separators) else {
+            guard let parsed = CorrectionInput.rate(rate, separators: separators) else {
                 error = tx("Escribí cuántos colones vale 1 dólar.", "Enter how many colones 1 dollar is worth."); return
             }
             exchangeRate = parsed

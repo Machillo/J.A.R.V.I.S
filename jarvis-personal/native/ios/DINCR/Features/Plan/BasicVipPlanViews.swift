@@ -358,64 +358,49 @@ private struct RecurringForm: View {
     }
 }
 
-/// PARITY E11 — emergency fund coverage (VIP), read-only from the declared financial situation.
-/// `PUT /vip/salvavidas` is Owner-shaped and is not used; the figures are edited in the situation.
-struct EmergencyFundView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        ScreenScroll(title: tx("Fondo de emergencia", "Emergency fund")) {
-            AsyncContent(load: { try await model.service.financialSituation() }) { situation, _ in
-                EmergencyContent(profile: situation.financialProfile)
-            }
-            FinancialDisclaimer()
-        }
-    }
-}
-
-private struct EmergencyContent: View {
-    let profile: FinancialProfile?
-
-    var body: some View {
-        let savings = profile?.liquidSavings
-        let essentials = profile?.essentialMonthlyExpenses
-        if savings == nil || essentials == nil {
-            EmptyStateView(symbol: "lifepreserver", title: tx("Definí tu fondo de emergencia", "Set your emergency fund"),
-                           message: tx("Indicá tus ahorros disponibles y tus gastos esenciales en tu situación financiera.", "Add your available savings and essential expenses in your financial situation.")) {
-                NavigationLink(tx("Completar situación", "Complete situation")) { SituationView() }.buttonStyle(.dincrPrimary)
-            }
-        } else if let savings, let essentials {
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                FigureRow(label: tx("Ahorros disponibles", "Available savings"), amount: savings)
-                FigureRow(label: tx("Gastos esenciales del mes", "Essential monthly expenses"), amount: essentials)
-                FigureRow(label: tx("Meta del fondo", "Fund target"), amount: profile?.emergencyFundTarget)
-                if essentials > 0 {
-                    let months = NSDecimalNumber(decimal: savings / essentials).doubleValue
-                    InfoRow(label: tx("Te cubre", "It covers"), value: tx(String(format: "%.1f meses", months), String(format: "%.1f months", months)))
-                    DincrProgressBar(fraction: months / 6)
-                    Text(tx("Referencia: de 3 a 6 meses de gastos esenciales.", "Reference: 3 to 6 months of essential expenses."))
-                        .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
-                }
-            }
-            .dincrCard()
-        }
-    }
-}
-
-/// PARITY E12 — aguinaldo estimate (VIP; needs a connected mailbox: 409 means not applicable yet).
+/// PARITY E12 — aguinaldo estimate (VIP; paused with `vip_intelligence`; a 409 means no mailbox
+/// is connected yet). "Sincronizar y recalcular" reads the mailbox again (`POST /vip/gmail/sync`)
+/// and reloads; it is offered only while `gmail_automation` is on. Same flow as Android.
 struct AguinaldoView: View {
     @Environment(AppModel.self) private var model
+    @State private var generation = 0
+    @State private var syncing = false
+    @State private var error: String?
 
     var body: some View {
         ScreenScroll(title: tx("Aguinaldo", "Aguinaldo")) {
+            if let error { ErrorStateView(message: error) }
             AsyncContent(load: { () async throws -> Aguinaldo? in
                 // 409: not applicable yet (no connected mailbox); shown as an empty state, not an error.
                 do { return try await model.service.aguinaldo() } catch let error as APIError where error.status == 409 { return nil }
             }) { aguinaldo, _ in
                 AguinaldoContent(aguinaldo: aguinaldo)
             }
+            .id(generation)
+            if model.flags.isEnabled(.gmailAutomation) {
+                Button(tx("Sincronizar y recalcular", "Sync and recalculate")) { Task { await syncAndReload() } }
+                    .buttonStyle(.dincrPrimary(loading: syncing))
+                    .disabled(syncing)
+                    .accessibilityIdentifier("aguinaldo.sync")
+            }
+            Text(tx("Estimación según la ley costarricense; confirmala con tu patrono.", "Estimate under Costa Rican law; confirm it with your employer."))
+                .font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
             FinancialDisclaimer()
         }
+    }
+
+    private func syncAndReload() async {
+        guard !syncing else { return }
+        syncing = true; error = nil
+        defer { syncing = false }
+        let epoch = model.currentEpoch
+        do {
+            _ = try await model.service.syncMail()
+        } catch {
+            self.error = model.message(for: error, epoch: epoch, fallback: tx("No pudimos sincronizar tu correo.", "We couldn’t sync your mail."))
+        }
+        // Reload either way: the estimate is always the backend's latest answer.
+        if epoch == model.currentEpoch { generation += 1 }
     }
 }
 

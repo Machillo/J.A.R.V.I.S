@@ -159,6 +159,37 @@ object ExchangeRateInput {
         AmountInput.parseDecimal(text, separators, FRACTION_DIGITS, MAX_RATE, allowZero = false)
 }
 
+/**
+ * Amount and exchange rate of the mail notice correction ("Corregir aviso"). The decimal keyboard
+ * follows the device language (a Spanish keyboard may only offer ","), while the parsers follow the
+ * profile's number format, so "453,84" was refused for a comma_dot profile. The user's own format is
+ * tried first (identical results); only when it fails is the OTHER separator read as the decimal
+ * mark, and only when it is the single separator in the text and is not followed by exactly 3
+ * digits (that would be a thousands group: "453,840" is refused, never guessed). Mixed separators
+ * keep failing. Scoped to that sheet; other money fields are unchanged. iOS: `CorrectionInput`.
+ */
+object CorrectionInput {
+    fun amount(text: String, separators: MoneyFormat.Separators): BigDecimal? =
+        parse(text, separators, AmountInput.MAX_FRACTION_DIGITS) { t, s -> AmountInput.parse(t, s) }
+
+    fun rate(text: String, separators: MoneyFormat.Separators): BigDecimal? =
+        parse(text, separators, ExchangeRateInput.FRACTION_DIGITS) { t, s -> ExchangeRateInput.parse(t, s) }
+
+    private fun parse(text: String, separators: MoneyFormat.Separators, maxFraction: Int,
+                      strict: (String, MoneyFormat.Separators) -> BigDecimal?): BigDecimal? {
+        strict(text, separators)?.let { return it }
+        val trimmed = text.replace(" ", "")
+        val other = if (separators == MoneyFormat.Separators.DOT_COMMA) '.' else ','
+        val marks = trimmed.filter { it == '.' || it == ',' }
+        if (marks.length != 1 || marks[0] != other) return null
+        val parts = trimmed.split(other)
+        if (parts.size != 2 || parts[0].isEmpty() || parts[1].length !in 1..maxFraction || parts[1].length == 3) return null
+        // Read with the swapped format, so every bound of the strict parser still applies.
+        val swapped = if (separators == MoneyFormat.Separators.DOT_COMMA) MoneyFormat.Separators.COMMA_DOT else MoneyFormat.Separators.DOT_COMMA
+        return strict(trimmed, swapped)
+    }
+}
+
 /** Annual interest percent of a debt: `debts.interest_rate` NUMERIC(8,4), so `[0, 9999.9999]`. */
 object InterestRateInput {
     val MAX_RATE = BigDecimal("9999.9999")

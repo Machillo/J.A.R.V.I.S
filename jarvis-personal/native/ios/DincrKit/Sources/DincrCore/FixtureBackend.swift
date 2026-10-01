@@ -28,17 +28,25 @@ public actor FixtureBackend: HTTPTransport {
     let language: AppLanguage
     /// `.store`: the budget limits the engine answer was computed for (edits fall back to the local view).
     private let storeBudget: [[String: Any]]?
-    private var profile: [String: Any]
-    private var movements: [[String: Any]] = []
-    private var debts: [[String: Any]] = []
+    // Internal (not private): `FixtureBackend+Plan.swift` serves the Plan, Cuentas and analysis routes.
+    var profile: [String: Any]
+    var movements: [[String: Any]] = []
+    var debts: [[String: Any]] = []
     private var goals: [[String: Any]] = []
     private var savings: [[String: Any]] = []
-    private var recurring: [[String: Any]] = []
+    var recurring: [[String: Any]] = []
     private var budget: [[String: Any]] = [["category": "Comida", "monthly_limit": 150_000], ["category": "Transporte", "monthly_limit": 60_000]]
-    private var situation: [String: Any]?
-    private var candidates: [[String: Any]] = []
+    var situation: [String: Any]?
+    /// ONE candidate store: Email Monitor and Cuentas read and review the same rows.
+    var candidates: [[String: Any]] = []
+    /// Detected accounts (`/vip/financial-identity`); ownership answers are kept.
+    var identityAccounts: [[String: Any]] = FixtureBackend.sampleAccounts()
+    /// Salvavidas preferences: the 1/3/6-month goal, and the Owner's manual balance and protected expenses.
+    var salvavidasTargetMonths = 6
+    var ownerSalvavidasCurrent: Decimal = 450_000
+    var ownerProtectedExpenses: Set<Int> = [62]
     private var tickets: [[String: Any]] = []
-    private var mailConnected: Bool
+    var mailConnected: Bool
     private var mailConsentAccepted: Bool
     /// flow → completion issued by the fixture "provider"; redeemed once.
     private var pendingFlows: [String: String] = [:]
@@ -172,7 +180,7 @@ public actor FixtureBackend: HTTPTransport {
 
     // MARK: Routing
 
-    private typealias Answer = (Int, Any)
+    typealias Answer = (Int, Any)
 
     private func route(_ method: String, _ path: String, _ query: [String: String], _ body: [String: Any]) -> Answer {
         if let answer = storeEngine(method, path) { return answer }
@@ -255,11 +263,16 @@ public actor FixtureBackend: HTTPTransport {
         // Situation
         case ("GET", "/user-product/financial-situation"): return ok(financialSituation())
         case ("PUT", "/user-product/financial-situation"):
+            // Like the backend: `work_days_per_week` is required (NOT NULL) for every income type.
+            guard let days = body["work_days_per_week"] as? Int, (1...7).contains(days) else {
+                return error(422, "Indicá cuántos días trabajás por semana (1 a 7).")
+            }
             situation = body
             return ok(financialSituation())
         default: break
         }
 
+        if let answer = planRoute(method, path, query, body) { return answer }
         if parts.starts(with: ["user-product", "free", "movements"]), parts.count == 4 { return editMovement(method, parts[3].removingPercentEncoding ?? parts[3], body) }
         if parts.starts(with: ["user-product", "finance", "debts"]), parts.count >= 4 { return debt(method, id(at: 3), parts.count == 5 ? parts[4] : nil, body) }
         if parts.starts(with: ["user-product", "goals"]), parts.count >= 3 { return goal(method, id(at: 2), parts.count == 4 ? parts[3] : nil, body) }
@@ -425,7 +438,7 @@ public actor FixtureBackend: HTTPTransport {
             return ok(["period": period, "income": number(income), "expenses": number(expenses), "debt_paid": 0, "goal_contributions": 0,
                        "saved": number(income - expenses), "balance": number(income - expenses), "categories": categories(period),
                        "comparison": ["income": number(income), "expenses": number(expenses), "debt_paid": 0]])
-        case ("GET", "/user-product/finance/strategy-basic"): return ok(Self.strategy)
+        case ("GET", "/user-product/finance/strategy-basic"): return ok(strategyBasic())
         default:
             if parts.starts(with: ["user-product", "basic", "recurring"]), parts.count == 4, let index = recurring.firstIndex(where: { $0["id"] as? Int == Int(parts[3]) }) {
                 if method == "DELETE" { recurring.remove(at: index); return ok(["status": "ok"]) }
@@ -520,17 +533,21 @@ public actor FixtureBackend: HTTPTransport {
             mailConnected = false
             return ok(["status": "disconnected"])
         case ("GET", "/user-product/vip/gmail/emails"):
-            let filter = query["status"] ?? ""
-            return ok(["status": "ok", "items": filter.isEmpty ? candidates : candidates.filter { $0["review_status"] as? String == filter }])
+            return ok(["status": "ok", "items": filteredCandidates(query)])
         case ("GET", "/user-product/vip/gmail/own-transfer-suggestions"): return ok(["items": [Any]()])
         case ("GET", "/user-product/vip/financial-identity"):
-            return ok(["status": "ok", "items": [["id": 1, "account_name": "Cuenta de ejemplo", "bank_name": "Banco de ejemplo", "currency": "CRC", "account_last4": "1234", "ownership_status": "pending"]],
-                       "summary": ["total": 1, "pending": 1, "owned": 0, "not_mine": 0]])
+            let states = identityAccounts.map { $0["ownership_status"] as? String ?? "pending" }
+            return ok(["status": "ok", "items": identityAccounts,
+                       "summary": ["total": states.count, "pending": states.filter { $0 == "pending" }.count,
+                                   "owned": states.filter { $0 == "own" }.count, "not_mine": states.filter { $0 == "not_mine" }.count]])
         default: break
         }
-        if parts.starts(with: ["user-product", "vip", "financial-identity", "accounts"]) {
-            guard ["own", "not_mine"].contains(body["ownership_status"] as? String ?? "") else { return error(422, "Estado inválido.") }
-            return ok(["status": "ok"])
+        if parts.starts(with: ["user-product", "vip", "financial-identity", "accounts"]), parts.count == 5 {
+            let status = body["ownership_status"] as? String ?? ""
+            guard ["own", "not_mine"].contains(status) else { return error(422, "Estado inválido.") }
+            guard let index = identityAccounts.firstIndex(where: { $0["id"] as? Int == Int(parts[4]) }) else { return error(404, "Cuenta financiera no encontrada.") }
+            identityAccounts[index]["ownership_status"] = status
+            return ok(identityAccounts[index])
         }
         if parts.starts(with: ["user-product", "vip", "gmail", "candidates"]), parts.count == 6, let candidateID = Int(parts[4]) {
             return review(method, candidateID, parts[5], body)
@@ -583,7 +600,7 @@ public actor FixtureBackend: HTTPTransport {
 
     // MARK: Read models
 
-    private func totals(_ period: String) -> (Decimal, Decimal) {
+    func totals(_ period: String) -> (Decimal, Decimal) {
         let rows = movements.filter { ($0["transaction_date"] as? String ?? "").hasPrefix(period) }
         let income = rows.filter { $0["transaction_type"] as? String == "income" }.reduce(Decimal(0)) { $0 + (decimal($1["amount"]) ?? 0) }
         let expenses = rows.filter { $0["transaction_type"] as? String != "income" }.reduce(Decimal(0)) { $0 + (decimal($1["amount"]) ?? 0) }
@@ -601,7 +618,7 @@ public actor FixtureBackend: HTTPTransport {
         return byCategory.sorted { $0.value > $1.value }.map { ["category": $0.key, "amount": number($0.value)] }
     }
 
-    private func history() -> [[String: Any]] {
+    func history() -> [[String: Any]] {
         let calendar = Calendar(identifier: .gregorian)
         return (0..<6).reversed().map { back in
             let date = calendar.date(byAdding: .month, value: -back, to: today) ?? today
@@ -717,18 +734,18 @@ public actor FixtureBackend: HTTPTransport {
         return ok(["message": "Señor, esto es una respuesta de ejemplo.", "intent": "general", "status": "UNSUPPORTED", "pending": false, "data": NSNull()])
     }
 
-    private func ok(_ value: Any) -> Answer { (200, value) }
-    private func error(_ status: Int, _ detail: String) -> Answer { (status, ["detail": detail]) }
+    func ok(_ value: Any) -> Answer { (200, value) }
+    func error(_ status: Int, _ detail: String) -> Answer { (status, ["detail": detail]) }
     static func errorBody(_ detail: String) -> Data { (try? JSONSerialization.data(withJSONObject: ["detail": detail])) ?? Data() }
 
-    private func needs(_ tier: PlanTier) -> Answer? {
+    func needs(_ tier: PlanTier) -> Answer? {
         let plan = PlanTier.from((profile["subscription"] as? [String: Any])?["plan"] as? String)
         return plan.rank < tier.rank ? error(403, "Esta función no está incluida en tu plan.") : nil
     }
 
-    private func nextId() -> Int { nextID += 1; return nextID }
+    func nextId() -> Int { nextID += 1; return nextID }
 
-    private func decimal(_ value: Any?) -> Decimal? {
+    func decimal(_ value: Any?) -> Decimal? {
         switch value {
         case let number as NSNumber: return Decimal(string: number.stringValue, locale: Locale(identifier: "en_US_POSIX"))
         case let text as String: return Decimal(string: text, locale: Locale(identifier: "en_US_POSIX"))
@@ -736,12 +753,12 @@ public actor FixtureBackend: HTTPTransport {
         }
     }
 
-    private func number(_ value: Decimal) -> NSDecimalNumber { Self.number(value) }
+    func number(_ value: Decimal) -> NSDecimalNumber { Self.number(value) }
     static func number(_ value: Decimal) -> NSDecimalNumber { NSDecimalNumber(decimal: value) }
 
-    private func sum(_ rows: [[String: Any]], _ key: String) -> Decimal { rows.reduce(0) { $0 + (decimal($1[key]) ?? 0) } }
+    func sum(_ rows: [[String: Any]], _ key: String) -> Decimal { rows.reduce(0) { $0 + (decimal($1[key]) ?? 0) } }
 
-    private func day(_ offset: Int) -> String { Self.day(offset, today: today) }
+    func day(_ offset: Int) -> String { Self.day(offset, today: today) }
 
     static func day(_ offset: Int, today: Date) -> String {
         let calendar = Calendar(identifier: .gregorian)
@@ -787,15 +804,25 @@ public actor FixtureBackend: HTTPTransport {
     static func sampleCandidates(today: Date) -> [[String: Any]] {
         func day(_ offset: Int) -> String { Self.day(offset, today: today) }
         return [
-            ["candidate_id": 21, "email_id": 21, "bank": "Banco de ejemplo", "sender": "avisos@banco.test", "subject": "Notificación de compra", "received_at": "\(day(1))T10:00:00Z",
+            // Like the parsers, `bank` is the institution CODE (`bac`, `popular`); detected accounts carry
+            // the display label in `bank_name`. Institutions are public names; the rest is invented.
+            ["candidate_id": 21, "email_id": 21, "bank": "bac", "sender": "avisos@banco.test", "subject": "Notificación de compra", "received_at": "\(day(1))T10:00:00Z",
              "description": "Compra en supermercado", "amount": 15_300, "currency": "CRC", "account_base_currency": "CRC", "transaction_date": day(1),
-             "transaction_type": "expense", "category": "Comida", "review_status": "pending"],
-            ["candidate_id": 22, "email_id": 22, "bank": "Banco de ejemplo", "sender": "avisos@banco.test", "subject": "Compra internacional", "received_at": "\(day(2))T10:00:00Z",
+             "transaction_type": "expense", "category": "Comida", "review_status": "pending",
+             "financial_account_id": 1, "bank_movement": "purchase", "financial_effect": "expense"],
+            ["candidate_id": 22, "email_id": 22, "bank": "bac", "sender": "avisos@banco.test", "subject": "Compra internacional", "received_at": "\(day(2))T10:00:00Z",
              "description": "Tienda en línea", "amount": 25, "currency": "USD", "account_base_currency": "CRC", "transaction_date": day(2),
-             "transaction_type": "expense", "category": "Compras", "review_status": "pending"],
-            ["candidate_id": 23, "email_id": 23, "bank": "Banco de ejemplo", "sender": "avisos@banco.test", "subject": "Compra en euros", "received_at": "\(day(3))T10:00:00Z",
+             "transaction_type": "expense", "category": "Compras", "review_status": "pending",
+             "financial_account_id": 2, "bank_movement": "purchase", "financial_effect": "expense"],
+            ["candidate_id": 23, "email_id": 23, "bank": "popular", "sender": "avisos@banco.test", "subject": "Compra en euros", "received_at": "\(day(3))T10:00:00Z",
              "description": "Museo", "amount": 12, "currency": "EUR", "account_base_currency": "CRC", "transaction_date": day(3),
-             "transaction_type": "expense", "category": "Entretenimiento", "review_status": "pending"],
+             "transaction_type": "expense", "category": "Entretenimiento", "review_status": "pending",
+             "financial_account_id": 3, "bank_movement": NSNull(), "financial_effect": NSNull()],
+            // A notice whose institution the parser could not tell: listed under "Otras instituciones".
+            ["candidate_id": 24, "email_id": 24, "bank": "unknown", "sender": "notificaciones@entidad.test", "subject": "Depósito recibido", "received_at": "\(day(4))T10:00:00Z",
+             "description": "Depósito de ejemplo", "amount": 40_000, "currency": "CRC", "account_base_currency": "CRC", "transaction_date": day(4),
+             "transaction_type": "income", "category": "Ingresos", "review_status": "pending",
+             "financial_account_id": 4, "bank_movement": "deposit", "financial_effect": "income"],
         ]
     }
 

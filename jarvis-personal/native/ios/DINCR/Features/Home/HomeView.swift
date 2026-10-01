@@ -82,6 +82,8 @@ struct HomeView: View {
         .dincrCard()
         .accessibilityElement(children: .contain)
 
+        HomePlanningLinks()
+
         if empty {
             EmptyStateView(
                 symbol: "tray",

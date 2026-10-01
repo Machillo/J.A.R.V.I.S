@@ -66,10 +66,11 @@ enum class Destination(val route: String, val icon: ImageVector) {
     companion object {
         /** Which tab a pushed screen belongs to (the tab stays highlighted, as in the Capacitor app). */
         fun of(route: String?): Destination = when (route?.substringBefore('/')) {
-            null, "home" -> HOME
+            null, "home", "debts", "goals" -> HOME
             "movements", "monthly" -> MOVEMENTS
-            "plan", "debts", "goals", "budget", "calendar", "recurring", "emergency", "aguinaldo" -> PLAN
-            "advisor", "strategy", "scenarios", "review", "today", "projections", "reports" -> ADVISOR
+            "plan", "aguinaldo", "strategy", "salvavidas", "distribution" -> PLAN
+            "advisor", "scenarios", "review", "today", "projections", "reports" -> ADVISOR
+            // Perfil → Finanzas (budget, calendar, recurring), Cuentas and everything else.
             else -> PROFILE
         }
     }
@@ -135,10 +136,11 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("budget") { BudgetScreen(model, nav) }
                             composable("calendar") { CalendarScreen(model, nav) }
                             composable("recurring") { RecurringScreen(model, nav) }
-                            composable("emergency") { EmergencyScreen(model, nav) }
                             composable("aguinaldo") { AguinaldoScreen(model, nav) }
-                            composable("advisor") { AdvisorHubScreen(model, nav) }
                             composable("strategy") { StrategyScreen(model, nav) }
+                            composable("salvavidas") { SalvavidasScreen(model, nav) }
+                            composable("distribution") { DistributionScreen(model, nav) }
+                            composable("advisor") { AdvisorHubScreen(model, nav) }
                             composable("scenarios") { ScenariosScreen(model, nav) }
                             composable("review") { MonthlyReviewScreen(model, nav) }
                             composable("today") { TodayScreen(model, nav) }
@@ -151,6 +153,8 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("security") { SecurityScreen(model, nav) }
                             composable("mail") { MailScreen(model, nav) }
                             composable("accounts") { AccountsScreen(model, nav) }
+                            composable("accounts/bank/{key}") { entry -> BankAccountsScreen(model, nav, entry.arguments?.getString("key")) }
+                            composable("accounts/account/{id}") { entry -> AccountMovementsScreen(model, nav, entry.arguments?.getString("id")?.toLongOrNull()) }
                             composable("support") { SupportScreen(model, nav) }
                             // JARVIS: the Owner's personal space (Jarvis.isAvailable); each screen checks it again.
                             composable("jarvis") { JarvisHubScreen(model, nav) }

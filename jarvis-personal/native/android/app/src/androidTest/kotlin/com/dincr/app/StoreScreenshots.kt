@@ -99,7 +99,6 @@ class StoreScreenshots {
     @Test fun s04Debts() {
         launch("free")
         waitForText(today)
-        click(tx("Plan", "Plan"))
         click(tx("Deudas", "Debts"))
         waitForText(tx("Préstamo del carro", "Car loan"))
         capture("04-debts")
@@ -108,7 +107,6 @@ class StoreScreenshots {
     @Test fun s05Goals() {
         launch("free")
         waitForText(today)
-        click(tx("Plan", "Plan"))
         click(tx("Metas y ahorros", "Goals and savings"))
         waitForText(tx("Vacaciones", "Vacation"))
         capture("05-goals")
@@ -117,7 +115,7 @@ class StoreScreenshots {
     @Test fun s06Budget() {
         launch("basic")
         waitForText(today)
-        click(tx("Plan", "Plan"))
+        click(tx("Perfil", "Profile"))
         click(tx("Presupuesto", "Budget"))
         waitForText(tx("Entretenimiento", "Entertainment"))
         capture("06-budget")
@@ -126,7 +124,7 @@ class StoreScreenshots {
     @Test fun s07Strategy() {
         launch("basic")
         waitForText(today)
-        click("DINCR")
+        click(tx("Plan", "Plan"))
         click(tx("Estrategia", "Strategy"))
         waitForText(tx("Margen para decidir", "Room to decide"))
         capture("07-strategy")

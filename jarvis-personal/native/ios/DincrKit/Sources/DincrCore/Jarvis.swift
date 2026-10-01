@@ -20,10 +20,13 @@ public enum Jarvis {
         case chat, memory, calendar, strategy, money
         case moneyControl = "money_control"
         case wealth, records
+        /// "Análisis financiero": the historical web Finanzas tab (spending, flow, net worth, engine).
+        case analysis
 
         public var id: String { rawValue }
 
-        /// Ported to the native app: the chat (J1) and the agenda (J2); the others still open "being restored".
-        public var isAvailable: Bool { self == .chat || self == .calendar }
+        /// Ported to the native app: the chat (J1), the agenda (J2) and the financial analysis; the
+        /// others still open "being restored".
+        public var isAvailable: Bool { self == .chat || self == .calendar || self == .analysis }
     }
 }

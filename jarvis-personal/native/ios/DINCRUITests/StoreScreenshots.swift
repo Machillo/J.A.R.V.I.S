@@ -100,24 +100,22 @@ final class StoreScreenshots: XCTestCase {
 
     func testS04Debts() throws {
         try shoot("04-debts", plan: "free") { app, l in
-            self.tab(app, "Plan")
-            self.open(app, "plan.debts")
+            self.open(app, "home.debts") // debts live on Hoy
             self.wait(app, l.pick("Préstamo del carro", "Car loan"))
         }
     }
 
     func testS05Goals() throws {
         try shoot("05-goals", plan: "free") { app, l in
-            self.tab(app, "Plan")
-            self.open(app, "plan.goals")
+            self.open(app, "home.goals") // goals live on Hoy
             self.wait(app, l.pick("Vacaciones", "Vacation"))
         }
     }
 
     func testS06Budget() throws {
         try shoot("06-budget", plan: "basic") { app, l in
-            self.tab(app, "Plan")
-            self.open(app, "plan.budget")
+            self.tab(app, l.pick("Perfil", "Profile"))
+            self.open(app, "profile.budget") // Perfil → Finanzas
             self.wait(app, l.pick("Total presupuestado", "Total budgeted"))
             self.wait(app, "budget.edit")
         }
@@ -125,8 +123,8 @@ final class StoreScreenshots: XCTestCase {
 
     func testS07Strategy() throws {
         try shoot("07-strategy", plan: "basic") { app, l in
-            self.tab(app, "DINCR")
-            self.open(app, "advisor.strategy")
+            self.tab(app, "Plan")
+            self.open(app, "plan.strategy")
             self.wait(app, l.pick("Margen para decidir", "Margin to decide"))
         }
     }

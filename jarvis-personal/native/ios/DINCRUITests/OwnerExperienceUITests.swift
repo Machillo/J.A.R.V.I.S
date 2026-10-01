@@ -33,11 +33,16 @@ final class OwnerExperienceUITests: XCTestCase {
     }
 
     /// Scrolls until the element can be tapped (Today is longer than one screen at large sizes).
+    /// It scrolls toward the element: back up when it sits above the visible area (e.g. after
+    /// returning from a screen opened near the bottom), down otherwise. At most 8 swipes.
     @discardableResult
     private func reveal(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
         let target = element(identifier, in: app)
         XCTAssertTrue(target.waitForExistence(timeout: 10), "missing \(identifier)")
-        for _ in 0..<8 where !target.isHittable { app.swipeUp() }
+        let viewport = app.windows.firstMatch.frame
+        for _ in 0..<8 where !target.isHittable {
+            if target.frame.midY < viewport.midY { app.swipeDown() } else { app.swipeUp() }
+        }
         XCTAssertTrue(target.isHittable, "\(identifier) is not reachable")
         return target
     }
@@ -72,6 +77,24 @@ final class OwnerExperienceUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         reveal("owner.home.attention.mail", in: app).tap()
         XCTAssertTrue(text("Por revisar", in: app).waitForExistence(timeout: 10), "the Email Monitor's review list")
+    }
+
+    func testOwnerTodayReachesDebtsAndGoals() {
+        // Debts and goals left the Plan tab for Today (#302); the Owner's own Today (#303) keeps them,
+        // opening the same screens the other plans reach from theirs.
+        let app = launch()
+        XCTAssertTrue(element("owner.home", in: app).waitForExistence(timeout: 10))
+        reveal("owner.home.debts", in: app).tap()
+        XCTAssertTrue(app.navigationBars["Deudas"].waitForExistence(timeout: 10), "the debts screen")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        reveal("owner.home.goals", in: app).tap()
+        XCTAssertTrue(app.navigationBars["Metas y ahorro"].waitForExistence(timeout: 10), "the goals screen")
+        // Plan keeps its four rows: debts and goals are not brought back there.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.tabBars.buttons["Plan"].tap()
+        XCTAssertTrue(element("plan.strategy", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("plan.debts", in: app).exists)
+        XCTAssertFalse(element("plan.goals", in: app).exists)
     }
 
     func testAnEmptyAgendaOnTodayOffersJarvis() {

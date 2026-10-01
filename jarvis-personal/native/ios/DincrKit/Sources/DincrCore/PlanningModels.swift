@@ -312,6 +312,20 @@ public struct FinancialSituation: Decodable, Sendable, Equatable {
     public let goals: GoalSummary?
 }
 
+/// "Días que trabajás por semana": the backend (and the historical web form) needs it for every
+/// income type (`work_days_per_week` is NOT NULL), so the form always shows and sends it.
+public enum WorkDays {
+    /// The web form's default when there is no profile yet: visible and editable, never hidden.
+    public static let defaultValue = 5
+    public static let range = 1...7
+
+    /// A whole number of days from 1 to 7, or nil.
+    public static func parse(_ text: String) -> Int? {
+        guard let days = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)), range.contains(days) else { return nil }
+        return days
+    }
+}
+
 /// The declared financial profile. `PUT /financial-situation` stores exactly this: a field the user
 /// left empty is null (unknown), never zero, and an observed average is never copied into it.
 public struct FinancialProfile: Codable, Sendable, Equatable {

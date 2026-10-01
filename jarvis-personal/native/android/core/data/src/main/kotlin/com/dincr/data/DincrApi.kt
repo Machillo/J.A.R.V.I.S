@@ -107,6 +107,14 @@ class DincrApi(private val client: ApiClient) {
     suspend fun report(period: String): MonthReport = client.get("/user-product/basic/reports", mapOf("period" to period))
     suspend fun strategyBasic(): Strategy = client.get("/user-product/finance/strategy-basic")
 
+    // --- Plan: strategy, distribution, Salvavidas ----------------------------------------------------
+    /** VIP Users' director strategy (`strategy.scope == "users"`). */
+    suspend fun strategyDashboard(): StrategyDashboard = client.get("/user-product/vip/strategy-dashboard")
+    /** The Owner's strategy (`strategy.scope == "owner"`): only called when `/auth/me` says owner ([StrategyContract]). */
+    suspend fun ownerStrategyDashboard(): StrategyDashboard = client.get("/jarvis/premium/strategy-dashboard")
+    suspend fun salvavidas(): Salvavidas = client.get("/user-product/vip/salvavidas")
+    suspend fun updateSalvavidas(update: SalvavidasUpdate): Salvavidas = client.send("PUT", "/user-product/vip/salvavidas", update)
+
     // --- VIP ----------------------------------------------------------------------------------------
     suspend fun commandCenter(): CommandCenter = client.get("/user-product/vip/command-center")
     suspend fun strategyVip(): Strategy = client.get("/user-product/finance/strategy-vip")
@@ -114,6 +122,19 @@ class DincrApi(private val client: ApiClient) {
     suspend fun aguinaldo(): Aguinaldo = client.get("/user-product/vip/aguinaldo")
     suspend fun monthlyReview(period: String): MonthlyReview = client.get("/user-product/vip/lifecycle/monthly-review", mapOf("period" to period))
     suspend fun proactiveAdvisor(): ProactiveAdvisor = client.get("/user-product/vip/lifecycle/proactive-advisor")
+
+    /**
+     * DINCR → Hoy. The proactive advisor compares today with an earlier saved observation; until one
+     * exists it answers BASELINE with no alerts. Meanwhile the command center already computes the
+     * current alerts (the main Today shows them), so this surface shows those, read-only and labelled
+     * as the current situation, instead of "nothing urgent". Not BASELINE: the advisor alone.
+     */
+    suspend fun dincrToday(): DincrToday {
+        val advisor = proactiveAdvisor()
+        if (advisor.status != "BASELINE") return DincrToday(advisor, null)
+        val current = try { commandCenter().alerts } catch (e: kotlin.coroutines.cancellation.CancellationException) { throw e } catch (_: Exception) { null }
+        return DincrToday(advisor, current)
+    }
 
     // --- Mail (VIP) -----------------------------------------------------------------------------------
     suspend fun mailStatus(): MailStatus = client.get("/user-product/vip/gmail/status")
@@ -128,6 +149,13 @@ class DincrApi(private val client: ApiClient) {
         client.send("DELETE", "/user-product/vip/gmail", mapOf("connection_id" to connectionId.toString()))
     suspend fun mailCandidates(pendingOnly: Boolean): List<MailCandidate> =
         client.get<MailCandidateList>("/user-product/vip/gmail/emails", mapOf("status" to if (pendingOnly) "pending" else "")).items
+    /** The same review inbox, for one bank (as the candidates name it) or one detected account (Cuentas). */
+    suspend fun mailCandidates(bank: String? = null, financialAccountId: Long? = null): List<MailCandidate> =
+        client.get<MailCandidateList>("/user-product/vip/gmail/emails", buildMap {
+            put("status", "")
+            bank?.trim()?.takeIf { it.isNotEmpty() }?.let { put("bank", it.take(80)) }
+            financialAccountId?.takeIf { it > 0 }?.let { put("financial_account_id", it.toString()) }
+        }).items
     suspend fun acceptCandidate(id: Long): CandidateReviewResult = client.send("POST", "/user-product/vip/gmail/candidates/$id/accept")
     suspend fun correctCandidate(id: Long, correction: CandidateCorrection): CandidateReviewResult =
         client.send("PUT", "/user-product/vip/gmail/candidates/$id/accept", correction.checked())
@@ -138,6 +166,11 @@ class DincrApi(private val client: ApiClient) {
     suspend fun financialIdentity(): FinancialIdentity = client.get("/user-product/vip/financial-identity")
     suspend fun setAccountOwnership(id: Long, own: Boolean): Acknowledgement =
         client.send("PUT", "/user-product/vip/financial-identity/accounts/$id", OwnershipRequest(if (own) "own" else "not_mine"))
+
+    // --- JARVIS "Análisis financiero" (Owner; the routers are owner/admin on the server) --------------
+    suspend fun transactionAnalysis(): TransactionAnalysis = client.get("/transactions/analysis/summary")
+    suspend fun netWorth(): NetWorthReport = client.get("/finance/net-worth")
+    suspend fun financialEngine(): FinancialEngineReport = client.get("/finance/engine")
 
     // --- Store billing ----------------------------------------------------------------------------------
     suspend fun storeCatalog(): StoreCatalog = client.get("/product-ops/billing/store/catalog")

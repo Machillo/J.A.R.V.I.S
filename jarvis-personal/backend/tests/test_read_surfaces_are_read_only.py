@@ -67,12 +67,21 @@ def ledger(monkeypatch):
     reset_current_user(token)
 
 
+def _salvavidas(monkeypatch, db):
+    from backend.finance import emergency_fund
+    monkeypatch.setattr(emergency_fund, "get_connection", db.connect)
+    monkeypatch.setattr(emergency_fund, "get_preference", lambda _key, default=None: default)
+    return emergency_fund.get_salvavidas_state()
+
+
 READ_SURFACES = {
     "home_command_center": lambda _mp, _db: vip_service.get_vip_command_center(),
     "financial_situation": lambda _mp, _db: service.get_financial_situation(),
     "debt_list": lambda _mp, _db: service.list_user_debts(),
     "strategy_vip": lambda _mp, _db: service.get_strategy_vip(),
     "vip_strategy_dashboard": lambda mp, db: _strategy(mp, db),
+    "strategy_basic": lambda _mp, _db: service.get_strategy_basic(),
+    "vip_salvavidas": lambda mp, db: _salvavidas(mp, db),
 }
 
 
