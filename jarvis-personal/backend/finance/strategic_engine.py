@@ -188,6 +188,7 @@ def _group_monthly(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "expenses": 0.0,
                 "debt_payments": 0.0,
                 "investments": 0.0,
+                "other_inflows": 0.0,
                 "net_operational": 0.0,
                 "net_cash": 0.0,
             },
@@ -204,11 +205,13 @@ def _group_monthly(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
             bucket["debt_payments"] += amount
         elif ttype in {"investment", "investment_deposit"}:
             bucket["investments"] += amount
+        elif ttype in {"receivable_payment", "asset_sale"}:   # cash in, never earned income
+            bucket["other_inflows"] += amount
 
     result = []
     for month, values in sorted(months.items()):
         values["net_operational"] = values["income"] - values["expenses"] - values["debt_payments"]
-        values["net_cash"] = values["income"] + values["loan_received"] - values["expenses"] - values["debt_payments"] - values["investments"]
+        values["net_cash"] = values["income"] + values["loan_received"] + values["other_inflows"] - values["expenses"] - values["debt_payments"] - values["investments"]
         result.append({"month": month, **values})
     return result
 
@@ -551,7 +554,7 @@ def reconcile_bank_balance(current_balance: float | None = None, opening_balance
             "required_fields": ["opening_balance", "current_balance"],
         }
 
-    income_types = {"income", "loan_received", "loan_disbursement", "investment_withdrawal"}
+    income_types = {"income", "loan_received", "loan_disbursement", "investment_withdrawal", "receivable_payment", "asset_sale"}
     outflow_types = {"expense", "debt_payment", "investment", "investment_deposit", "transfer"}
 
     inflows = sum(_as_float(tx.get("amount")) for tx in transactions if tx.get("transaction_type") in income_types)

@@ -12,6 +12,7 @@ from fastapi import HTTPException, status
 
 from backend.auth.current_user import get_current_user, get_current_user_id, require_roles
 from backend.core.database import get_connection
+from backend.finance import receivable_semantics
 from backend.finance.category_catalog import normalize_category
 from backend.email_monitor.parser import (
     fingerprint_candidate,
@@ -84,7 +85,7 @@ def _with_current_bac_sources(query: str) -> str:
 
 
 def build_current_month_gmail_query(base_query: str | None = None, today: date | None = None) -> str:
-    """Return Gmail query scoped to Kenneth's active card/bank cycle.
+    """Return Gmail query scoped to the holder's active card/bank cycle.
 
     BAC card expenses must be reviewed by cut cycle, not calendar month.
     Default cycle: 21 -> 21. On June 8 this scans May 21 through June 21,
@@ -495,11 +496,11 @@ def _repair_historical_scheduled_commitments(conn, workspace_id: str) -> int:
 
 def _seed_default_card_aliases(conn, user_id: int, workspace_id: str | None = None) -> None:
     workspace_id = workspace_id or _workspace_id_for_user(conn, user_id)
-    """Keep known BAC additional cards owner-aware.
+    """Keep the configured BAC cards owner-aware.
 
-    Kenneth's cards stay in the catalog as primary cards for parsing, but the
-    Additional Cards UI filters them out. Emily and Sidey are the only default
-    additional-card owners shown there.
+    The holder's own cards are primary (is_primary) and stay in the catalog for
+    parsing; the Additional Cards UI shows only non-primary cards. Owners come from
+    configuration (JARVIS_CARD_ALIASES), never from code.
     """
     try:
         configured = json.loads(os.getenv("JARVIS_CARD_ALIASES", "[]") or "[]")
@@ -509,7 +510,8 @@ def _seed_default_card_aliases(conn, user_id: int, workspace_id: str | None = No
         (
             str(item.get("last4") or ""),
             str(item.get("owner") or ""),
-            str(item.get("relationship") or "principal"),
+            # Without an explicit relationship, a non-primary card is an additional card (never the holder's).
+            str(item.get("relationship") or ("principal" if item.get("is_primary") else "adicional")),
             bool(item.get("is_primary", False)),
         )
         for item in configured
@@ -639,74 +641,55 @@ def get_email_monitor_status() -> dict[str, Any]:
     }
 
 
+def _receivables_follow_candidates(conn, workspace_id: str, candidates: list[dict[str, Any]]) -> None:
+    """A card purchase that is saved, confirmed or rejected changes what an additional
+    cardholder owes, so the cycle's receivable charge is brought up to date here, in the
+    same transaction. A failure never blocks the mail operation; the explicit receivables
+    sync repairs it.
+    """
+    days = set()
+    for candidate in candidates:
+        if candidate.get("card_last4") or candidate.get("card_owner"):
+            try:
+                days.add(date.fromisoformat(str(candidate.get("transaction_date"))[:10]))
+            except ValueError:
+                continue
+    for day in sorted(days):
+        conn.execute("SAVEPOINT receivables_follow")
+        try:
+            receivable_semantics.mirror_additional_card_cycle(conn, workspace_id, day)
+            conn.execute("RELEASE SAVEPOINT receivables_follow")
+        except Exception as exc:
+            conn.execute("ROLLBACK TO SAVEPOINT receivables_follow")
+            logger.warning("Additional-card receivable not updated (%s); run the receivables sync", type(exc).__name__)
+
+
 def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transaction_id: int, candidate: dict[str, Any]) -> None:
     workspace_id = _workspace_id_for_user(conn, user_id)
-    """When an accepted email is an income from Emily/Sidey, reduce IOU balance.
+    """When a confirmed movement pays a receivable person, record it as that collection.
 
-    This keeps Cuentas por cobrar in sync immediately after the user confirms a
-    SINPE Móvil payment instead of waiting for a later refresh job.
+    The person is matched against the workspace's own receivables; the movement becomes
+    a collection (not income) and the receivable goes down.
     """
     if candidate.get("transaction_type") not in {"income", "reimbursement"}:
         return
-    text = " ".join([
-        str(candidate.get("description") or ""),
-        str(candidate.get("category") or ""),
-        str(candidate.get("account") or ""),
-        str(candidate.get("notes") or ""),
-    ]).lower()
-    payer = "Emily" if "emily" in text else "Sidey" if "sidey" in text else None
+    text = " ".join(str(candidate.get(key) or "") for key in ("description", "category", "account", "notes"))
+    payer = receivable_semantics.payer_from_text(text, receivable_semantics.receivable_people(conn, workspace_id))
     if not payer:
         return
+    # Never block saving the financial transaction because the receivable link failed: the
+    # savepoint keeps the transaction usable after a database error.
+    conn.execute("SAVEPOINT receivable_collection")
     try:
-        rec = conn.execute(
-            """
-            SELECT id, original_amount, paid_amount, pending_amount
-            FROM receivables
-            WHERE workspace_id = %s
-              AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
-              AND source_type = 'additional_card_auto'
-            ORDER BY id ASC
-            LIMIT 1
-            """,
-            (workspace_id, payer),
-        ).fetchone()
-        if not rec:
-            return
-        already = conn.execute(
-            """
-            SELECT id FROM receivable_payments
-            WHERE workspace_id = %s AND source_transaction_id = %s
-            LIMIT 1
-            """,
-            (workspace_id, transaction_id),
-        ).fetchone()
-        if already:
-            return
-        pending = float(rec.get("pending_amount") or 0)
-        amount = min(float(candidate.get("amount") or 0), max(pending, 0))
-        if amount <= 0:
-            return
-        new_paid = float(rec.get("paid_amount") or 0) + amount
-        new_pending = max(float(rec.get("original_amount") or 0) - new_paid, 0)
-        status = "completed" if new_pending <= 0.01 else "partial"
-        conn.execute(
-            """
-            INSERT INTO receivable_payments (user_id, workspace_id, receivable_id, amount, source_transaction_id, notes)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (user_id, workspace_id, rec["id"], amount, transaction_id, f"Pago detectado automáticamente desde correo: {candidate.get('description') or ''}"),
+        receivable_semantics.link_collection(
+            conn, workspace_id=workspace_id, person=payer, transaction_id=transaction_id,
+            amount=float(candidate.get("amount") or 0), entry_date=str(candidate.get("transaction_date") or "")[:10] or None,
+            description=str(candidate.get("description") or ""),
         )
-        conn.execute(
-            """
-            UPDATE receivables
-            SET paid_amount = %s, pending_amount = %s, status = %s, updated_at = NOW()
-            WHERE id = %s AND workspace_id = %s
-            """,
-            (new_paid, new_pending, status, rec["id"], workspace_id),
-        )
-    except Exception:
-        # Never block saving the financial transaction because IOU sync failed.
-        return
+        conn.execute("RELEASE SAVEPOINT receivable_collection")
+    except Exception as exc:
+        conn.execute("ROLLBACK TO SAVEPOINT receivable_collection")
+        logger.warning("Receivable collection not linked (%s); run the receivables sync", type(exc).__name__)
 
 
 def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
@@ -761,7 +744,7 @@ def _extract_card_last4_from_account(account: str | None) -> str | None:
 
 
 def _enrich_candidate_with_card_alias(conn, workspace_id: str, candidate: dict[str, Any]) -> dict[str, Any]:
-    """Attach owner labels such as Kenneth/Emily/Sidey for additional cards.
+    """Attach the configured owner label of the card (holder or additional cardholder).
 
     This is only metadata in notes/category review; it never changes money values.
     """
@@ -804,7 +787,10 @@ def _transaction_duplicate_match(conn, workspace_id: str, candidate: dict[str, A
         WHERE workspace_id = %s
         AND transaction_date = %s
         AND ABS(amount - %s) < 0.01
-        AND transaction_type = %s
+        AND (transaction_type = %s
+             -- a money-in movement may since have been recorded as a receivable collection
+             OR (%s IN ('income', 'reimbursement', 'receivable_payment')
+                 AND transaction_type IN ('income', 'reimbursement', 'receivable_payment')))
         AND LOWER(description) = LOWER(%s)
         LIMIT 1
         """,
@@ -813,6 +799,7 @@ def _transaction_duplicate_match(conn, workspace_id: str, candidate: dict[str, A
             candidate["transaction_date"],
             candidate["amount"],
             candidate["transaction_type"],
+            candidate["transaction_type"],
             candidate["description"],
         ),
     ).fetchone()
@@ -820,11 +807,12 @@ def _transaction_duplicate_match(conn, workspace_id: str, candidate: dict[str, A
 
 
 def _existing_receivable_payment_match(conn, workspace_id: str, candidate: dict[str, Any]) -> int | None:
-    """Prefer an already-recorded Sidey receivable payment over a new email income."""
+    """Prefer an already-recorded receivable payment of the person a new email names."""
     if candidate.get("transaction_type") not in {"income", "reimbursement"}:
         return None
-    text = " ".join(str(candidate.get(key) or "") for key in ("description", "notes", "account")).lower()
-    if "sidey" not in text:
+    text = " ".join(str(candidate.get(key) or "") for key in ("description", "notes", "account"))
+    payer = receivable_semantics.payer_from_text(text, receivable_semantics.receivable_people(conn, workspace_id))
+    if not payer:
         return None
     tables = conn.execute(
         "SELECT to_regclass('public.receivables') IS NOT NULL AS r, to_regclass('public.receivable_payments') IS NOT NULL AS p"
@@ -844,15 +832,12 @@ def _existing_receivable_payment_match(conn, workspace_id: str, candidate: dict[
         WHERE t.workspace_id = %s
           AND t.transaction_date::date = %s::date
           AND ABS(t.amount - %s) < 0.01
-          AND t.transaction_type = 'income'
-          AND (
-              LOWER(COALESCE(r.person_name, '')) = 'sidey'
-              OR t.source = 'receivable_manual'
-          )
-        ORDER BY CASE WHEN LOWER(COALESCE(r.person_name, '')) = 'sidey' THEN 0 ELSE 1 END, t.id
+          AND t.transaction_type IN ('income', 'receivable_payment')
+          AND LOWER(COALESCE(r.person_name, '')) = LOWER(%s)
+        ORDER BY t.id
         LIMIT 1
         """,
-        (workspace_id, candidate["transaction_date"], candidate["amount"]),
+        (workspace_id, candidate["transaction_date"], candidate["amount"], payer),
     ).fetchone()
     return int(row["id"]) if row else None
 
@@ -1180,6 +1165,9 @@ def scan_email_text(
 
     with get_connection() as conn:
         workspace_id = _workspace_id_for_user(conn, user_id)
+        # Receivables may change in this transaction: take the workspace lock first, the
+        # same order as every receivable writer (no deadlock, no double confirmation).
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         parsed = apply_workspace_email_rules(conn, workspace_id, parsed)
         email_message_id = _upsert_ingested_message(
             conn,
@@ -1603,6 +1591,7 @@ def scan_email_text(
             extracted_payload=parsed,
             reason=review_reason,
         )
+        _receivables_follow_candidates(conn, workspace_id, [dict(candidate_row)])
         conn.commit()
 
     return {
@@ -1676,6 +1665,9 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
     decision_clean = (decision or "").lower().strip()
 
     with get_connection() as conn:
+        # Receivables may change in this transaction: take the workspace lock first, the
+        # same order as every receivable writer (no deadlock, no double confirmation).
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         row = conn.execute(
             """
             SELECT *
@@ -1699,6 +1691,7 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
                 """,
                 (candidate_id, workspace_id),
             )
+            _receivables_follow_candidates(conn, workspace_id, [candidate])
             conn.commit()
             return {"status": "OK", "message": "Candidato rechazado."}
 
@@ -1736,6 +1729,7 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
             """,
             (transaction_id, candidate_id, workspace_id),
         )
+        _receivables_follow_candidates(conn, workspace_id, [candidate])
         conn.commit()
 
     return {"status": "OK", "message": "Movimiento guardado.", "transaction_id": transaction_id}
@@ -1793,6 +1787,9 @@ def classify_candidate(
 
     with get_connection() as conn:
         workspace_id = _workspace_id_for_user(conn, user_id)
+        # Receivables may change in this transaction: take the workspace lock first, the
+        # same order as every receivable writer (no deadlock, no double confirmation).
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         row = conn.execute(
             "SELECT * FROM email_transaction_candidates WHERE id = %s AND workspace_id = %s",
             (candidate_id, workspace_id),
@@ -1839,7 +1836,7 @@ def classify_candidate(
                     user_id, workspace_id, f"learned_email_{digest}", signature["concept"],
                     signature["direction"], signature["origin_account_key"], signature["destination_account_key"],
                     clean_description, clean_type, clean_category, bool(auto_commit_future),
-                    "Clasificación enseñada por Kenneth desde la revisión de correos.",
+                    "Clasificación enseñada por el titular desde la revisión de correos.",
                     json.dumps({"learned_from_candidate_id": candidate_id, "strict_signature": True}),
                 ),
             ).fetchone()
@@ -1864,6 +1861,7 @@ def classify_candidate(
                 candidate_id, workspace_id,
             ),
         )
+        _receivables_follow_candidates(conn, workspace_id, [candidate])
         conn.commit()
 
     message = "Guardado y aprendido. La próxima coincidencia exacta será automática." if learned and auto_commit_future else "Movimiento guardado."
@@ -1906,6 +1904,7 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
     items: list[dict[str, Any]] = []
 
     with get_connection() as conn:
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)   # same order as every receivable writer
         placeholders = ",".join(["%s"] * len(unique_ids))
         rows = conn.execute(
             f"""
@@ -1969,6 +1968,7 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
             confirmed += 1
             items.append({"id": cid, "status": "confirmed", "transaction_id": transaction_id})
 
+        _receivables_follow_candidates(conn, workspace_id, [by_id[cid] for cid in unique_ids if cid in by_id])
         conn.commit()
 
     return {

@@ -17,7 +17,7 @@ const tx = (es, en) => language === "es" ? es : en;
 const money = (value) => formatMoney(value);
 const today = () => new Date().toISOString().slice(0,10);
 const incomeCategories = ["Boleta de pago","Bono","Reembolso","Otros ingresos"];
-const expenseCategories = ["Vivienda","Servicios","Internet","Teléfono","Seguros","Comida","Restaurante","Transporte","Gasolina","Entretenimiento","Compras","Salud","Deporte","Servicios personales","Mascotas","Otros"];
+const expenseCategories = ["Vivienda","Servicios","Internet","Teléfono","Seguros","Comida","Restaurante","Transporte","Gasolina","Entretenimiento","Compras","Salud","Deporte","Servicios personales","Viajes y turismo","Mascotas","Otros"];
 const incomeEmpty = () => ({ amount:"", currency:baseCurrency(), exchange_rate:"", description:"", category:categoryLabel("Salario"), entry_date:today() });
 const expenseEmpty = () => ({ amount:"", currency:baseCurrency(), exchange_rate:"", description:"", category:categoryLabel("Compras"), entry_date:today() });
 

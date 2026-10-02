@@ -8,6 +8,7 @@ const ENGLISH_CATEGORY_LABELS = {
   Bono: "Bonus",
   Comida: "Food",
   Compras: "Shopping",
+  "Cuentas por cobrar": "Receivables",
   Deporte: "Sports",
   Deudas: "Debts",
   Entretenimiento: "Entertainment",
@@ -28,12 +29,15 @@ const ENGLISH_CATEGORY_LABELS = {
   Salud: "Health",
   Seguros: "Insurance",
   Servicios: "Utilities",
+  "Sin categoría": "Uncategorized",
   "Servicios personales": "Personal services",
   Suscripciones: "Subscriptions",
   Teléfono: "Phone",
   Transferencia: "Transfer",
   "Transferencia interna": "Internal transfer",
   Transporte: "Transportation",
+  "Venta de activo": "Asset sale",
+  "Viajes y turismo": "Travel",
   Vivienda: "Housing",
 };
 

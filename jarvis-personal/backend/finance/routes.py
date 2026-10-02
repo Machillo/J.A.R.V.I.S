@@ -107,6 +107,7 @@ from backend.finance.intelligence import (
     get_real_availability,
     get_debt_advisory,
     list_receivables,
+    sync_receivables,
     create_receivable,
     add_receivable_entry,
     update_receivable_entry,
@@ -632,7 +633,13 @@ def debt_advisory(extra_cash: float | None = None):
 
 @router.get("/receivables")
 def receivables():
+    # Pure read. Deriving the ledger from other data is the explicit POST below.
     return list_receivables()
+
+
+@router.post("/receivables/sync")
+def receivables_sync():
+    return sync_receivables()
 
 
 @router.post("/receivables")

@@ -33,7 +33,14 @@ OFFICIAL_CATEGORIES: list[dict[str, Any]] = [
     {"group_name": "GASTOS VARIABLES", "category_name": "Salud", "transaction_type": "expense", "sort_order": 270, "aliases": ["salud", "farmacia", "medicina", "doctor", "medico", "médico", "clinica", "clínica", "dentista", "hospital"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Deporte", "transaction_type": "expense", "sort_order": 275, "aliases": ["deporte", "muay thai", "muaythai", "boxeo", "box", "artes marciales"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Servicios personales", "transaction_type": "expense", "sort_order": 278, "aliases": ["servicio personal", "servicios personales", "lavado de ropa", "lavar ropa", "lavanderia", "lavandería"]},
+    # Spending while travelling (flights, lodging, tours). Distinct from the "Viajes"
+    # savings goal below: a trip is paid with this category, saved for with that one.
+    {"group_name": "GASTOS VARIABLES", "category_name": "Viajes y turismo", "transaction_type": "expense", "sort_order": 279, "aliases": ["viaje", "viajes", "vuelo", "vuelos", "aerolinea", "aerolínea", "boleto aereo", "boleto aéreo", "hotel", "hospedaje", "alojamiento", "airbnb", "tour", "tours", "turismo"]},
     {"group_name": "GASTOS VARIABLES", "category_name": "Mascotas", "transaction_type": "expense", "sort_order": 280, "aliases": ["mascota", "mascotas", "hamster", "hámster", "veterinaria", "vet", "alimento mascota"]},
+
+    # An expense whose category is not known yet. Explicit, so an unknown never hides
+    # inside a real category ("Compras").
+    {"group_name": "SIN CLASIFICAR", "category_name": "Sin categoría", "transaction_type": "expense", "sort_order": 290, "aliases": ["sin categoria", "sin categoría", "desconocido", "unknown"]},
 
     # Deudas
     {"group_name": "DEUDAS", "category_name": "Tarjeta BAC", "transaction_type": "expense", "sort_order": 310, "aliases": ["bac", "tarjeta bac", "visa bac", "mastercard bac"]},
@@ -46,6 +53,11 @@ OFFICIAL_CATEGORIES: list[dict[str, Any]] = [
     {"group_name": "AHORRO", "category_name": "Fondo emergencia", "transaction_type": "transfer", "sort_order": 410, "aliases": ["fondo emergencia", "emergencia", "fondo de emergencia"]},
     {"group_name": "AHORRO", "category_name": "Viajes", "transaction_type": "transfer", "sort_order": 420, "aliases": ["viaje", "viajes", "ecuador", "japon", "japón", "mexico", "méxico"]},
     {"group_name": "AHORRO", "category_name": "Meta personal", "transaction_type": "transfer", "sort_order": 430, "aliases": ["meta", "meta personal", "objetivo", "ahorro"]},
+
+    # Cobros y ventas: money that comes in without being earned income.
+    # A collection reduces what someone owes; an asset sale turns an owned thing into cash.
+    {"group_name": "COBROS Y VENTAS", "category_name": "Cuentas por cobrar", "transaction_type": "receivable_payment", "sort_order": 450, "aliases": ["cuentas por cobrar", "cobro", "cobros"]},
+    {"group_name": "COBROS Y VENTAS", "category_name": "Venta de activo", "transaction_type": "asset_sale", "sort_order": 460, "aliases": ["venta de activo", "venta de bien", "venta de vehiculo", "venta de vehículo"]},
 
     # Inversiones
     {"group_name": "INVERSIONES", "category_name": "IBKR", "transaction_type": "transfer", "sort_order": 510, "aliases": ["ibkr", "interactive brokers", "acciones", "bolsa"]},
@@ -61,17 +73,29 @@ _CATEGORY_TRANSACTION_TYPE = {
     item["category_name"]: item["transaction_type"]
     for item in OFFICIAL_CATEGORIES
 }
-_ALIAS_TO_CATEGORY: dict[str, str] = {}
+# One alias may belong to categories of different types ("viajes": the savings goal and
+# travel spending); the transaction type decides which one applies.
+_ALIAS_TO_CATEGORIES: dict[str, list[str]] = {}
 for item in OFFICIAL_CATEGORIES:
-    _ALIAS_TO_CATEGORY[item["category_name"].strip().lower()] = item["category_name"]
-    for alias in item.get("aliases", []):
-        _ALIAS_TO_CATEGORY[alias.strip().lower()] = item["category_name"]
+    for alias in [item["category_name"], *item.get("aliases", [])]:
+        names = _ALIAS_TO_CATEGORIES.setdefault(alias.strip().lower(), [])
+        if item["category_name"] not in names:
+            names.append(item["category_name"])
+_ALIAS_TO_CATEGORY: dict[str, str] = {alias: names[0] for alias, names in _ALIAS_TO_CATEGORIES.items()}
 
-DEFAULT_EXPENSE_CATEGORY = "Compras"
+# Unknown is a category of its own: never a silent "Compras".
+UNKNOWN_EXPENSE_CATEGORY = "Sin categoría"
+DEFAULT_EXPENSE_CATEGORY = UNKNOWN_EXPENSE_CATEGORY
 DEFAULT_INCOME_CATEGORY = "Otros ingresos"
 
 
+# A collection or an asset sale takes only its own category, never an income or expense one.
+_OWN_CATEGORY_TYPE = {"receivable_payment": "receivable_payment", "receivable_offset": "receivable_payment", "asset_sale": "asset_sale"}
+
+
 def _category_matches_transaction_type(category: str, transaction_type: str | None) -> bool:
+    if transaction_type in _OWN_CATEGORY_TYPE:
+        return _CATEGORY_TRANSACTION_TYPE.get(category) == _OWN_CATEGORY_TYPE[transaction_type]
     if transaction_type == "income":
         return _CATEGORY_TRANSACTION_TYPE.get(category) == "income"
     if transaction_type in {"expense", "debt_payment"}:
@@ -79,36 +103,59 @@ def _category_matches_transaction_type(category: str, transaction_type: str | No
     return True
 
 
+# Settling a receivable and selling an asset have their own categories; every other
+# non-income movement without a known category is explicitly "Sin categoría".
+_TYPE_DEFAULT_CATEGORY = {"receivable_payment": "Cuentas por cobrar", "receivable_offset": "Cuentas por cobrar", "asset_sale": "Venta de activo"}
+
+
+def default_category(transaction_type: str | None) -> str:
+    if transaction_type == "income":
+        return DEFAULT_INCOME_CATEGORY
+    return _TYPE_DEFAULT_CATEGORY.get(transaction_type or "", DEFAULT_EXPENSE_CATEGORY)
+
+
+def manual_expense_category(value: str | None) -> str:
+    """The category of a manual expense as typed; empty or the API placeholder "general" is unknown, never Compras."""
+    clean = str(value or "").strip()
+    return UNKNOWN_EXPENSE_CATEGORY if clean.lower() in {"", "general"} else clean
+
+
 def _safe_category(category: str, transaction_type: str | None) -> str:
     if _category_matches_transaction_type(category, transaction_type):
         return category
-    return DEFAULT_INCOME_CATEGORY if transaction_type == "income" else DEFAULT_EXPENSE_CATEGORY
+    return default_category(transaction_type)
+
+
+def _compatible(names: list[str], transaction_type: str | None) -> str | None:
+    """First category of the transaction's own type, else the first compatible one."""
+    exact = next((name for name in names if _CATEGORY_TRANSACTION_TYPE.get(name) == transaction_type), None)
+    return exact or next((name for name in names if _category_matches_transaction_type(name, transaction_type)), None)
 
 
 def normalize_category(value: str | None, transaction_type: str | None = None) -> str:
     if not value:
-        return DEFAULT_INCOME_CATEGORY if transaction_type == "income" else DEFAULT_EXPENSE_CATEGORY
+        return default_category(transaction_type)
 
     raw = value.strip()
     normalized = raw.lower()
 
-    if normalized in _CATEGORY_BY_NORMALIZED_NAME:
-        return _safe_category(_CATEGORY_BY_NORMALIZED_NAME[normalized], transaction_type)
-
-    if normalized in _ALIAS_TO_CATEGORY:
-        return _safe_category(_ALIAS_TO_CATEGORY[normalized], transaction_type)
-
     compact = re.sub(r"\s+", " ", normalized)
-    if compact in _ALIAS_TO_CATEGORY:
-        return _safe_category(_ALIAS_TO_CATEGORY[compact], transaction_type)
+    for key in (normalized, compact):
+        exact_name = _CATEGORY_BY_NORMALIZED_NAME.get(key)
+        if exact_name and _category_matches_transaction_type(exact_name, transaction_type):
+            return exact_name
+        if key in _ALIAS_TO_CATEGORIES:
+            # A name or alias shared across types resolves to the one matching the transaction.
+            return _compatible(_ALIAS_TO_CATEGORIES[key], transaction_type) or _safe_category(_ALIAS_TO_CATEGORIES[key][0], transaction_type)
 
     # Whole words only: a short alias ("ot", "ins", "box") must not match inside another word.
-    for alias, category in _ALIAS_TO_CATEGORY.items():
+    for alias, names in _ALIAS_TO_CATEGORIES.items():
         if alias and re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", compact):
-            if _category_matches_transaction_type(category, transaction_type):
+            category = _compatible(names, transaction_type)
+            if category:
                 return category
 
-    return DEFAULT_INCOME_CATEGORY if transaction_type == "income" else DEFAULT_EXPENSE_CATEGORY
+    return default_category(transaction_type)
 
 
 def expense_type_for_category(category: str) -> str:

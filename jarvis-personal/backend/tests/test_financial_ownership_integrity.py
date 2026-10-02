@@ -152,7 +152,7 @@ def test_every_guarded_insert_sets_its_workspace():
 # with open work on them (mail ingestion, the Users product, the Owner IBKR bridge)
 # and an operator script. The count may only go down.
 LEGACY_USER_ID_WRITERS = {
-    "backend/email_monitor/service.py": 3,
+    "backend/email_monitor/service.py": 2,
     "backend/integrations/ibkr_readonly.py": 1,
     "backend/scripts/finva_personal_isolation_check.py": 2,
     "backend/user_product/gmail_service.py": 2,

@@ -146,7 +146,7 @@ def _looks_like_debt_duplicate(expense: dict[str, Any], debts: list[dict[str, An
 
 
 def _is_mandatory_fixed_expense(expense: dict[str, Any]) -> bool:
-    """Kenneth's V1 always-protected recurrent bills: house and phone line."""
+    """V1 always-protected recurrent bills: house and phone line."""
     name = _normalize(expense.get("name"))
     category = _normalize(expense.get("category"))
     aliases = [_normalize(item) for item in _aliases(expense.get("aliases"))]

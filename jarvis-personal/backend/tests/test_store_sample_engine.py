@@ -136,7 +136,7 @@ class _StoreConnection:
         if "FROM finva_budget_items" in sql:
             rows = [{"category": b["category"], "monthly_limit": b["monthly_limit"], "is_system": False} for b in self.inputs["budget_items"]]
             return _Rows(sorted(rows, key=lambda r: (not r["is_system"], r["category"])))  # ORDER BY is_system DESC, category
-        if "GROUP BY category" in sql:  # this month's spending per category (guided budget, Free dashboard)
+        if "GROUP BY category" in sql or "GROUP BY 1" in sql:  # this month's spending per category (guided budget, Free dashboard)
             start, end = params[1], params[2]
             categories = sorted({m["category"] for m in self.movements if m["transaction_type"] == "expense" and start <= m["date"] < end})
             rows = [{"category": c, "amount": self._sum("expense", start, end, c)} for c in categories]

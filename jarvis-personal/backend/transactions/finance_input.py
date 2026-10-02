@@ -125,7 +125,7 @@ def _detect_category(text: str, transaction_type: str) -> str:
         return "Préstamo"
     if transaction_type == "debt_payment":
         return "Otros préstamos"
-    return normalize_category("Compras", "expense")
+    return normalize_category("", "expense")  # unknown stays explicit ("Sin categoría"), never Compras
 
 
 def _description_from_line(line: str) -> str:

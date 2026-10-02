@@ -527,7 +527,7 @@ def _get_strategy_living_expenses(workspace_id: str, debts: list[dict[str, Any]]
 
     Debts stay authoritative in ``debts`` and are never duplicated from
     ``fixed_expenses``. For the non-debt recurring base we keep the commitments
-    Kenneth marked as unavoidable in V1: house and phone line.
+    the holder marked as unavoidable in V1: house and phone line.
     """
     debt_names = {str(d.get("name") or "").lower().strip() for d in debts}
     with get_connection() as conn:
@@ -1511,7 +1511,7 @@ def get_premium_strategy_dashboard() -> dict[str, Any]:
 
 
 def get_additional_card_report() -> dict[str, Any]:
-    """Report only additional-card spending, not Kenneth's primary card.
+    """Report only additional-card spending, never the holder's primary cards (is_primary).
 
     Email-confirmed movements are joined back to email_transaction_candidates so
     the report can use card_last4/card_owner parsed from BAC notifications. This
@@ -1527,7 +1527,6 @@ def get_additional_card_report() -> dict[str, Any]:
             FROM card_aliases
             WHERE workspace_id = %s
               AND COALESCE(is_primary, FALSE) = FALSE
-              AND LOWER(owner_label) NOT IN ('kenneth', 'kenneth andres')
             ORDER BY owner_label ASC, card_last4 ASC
             """,
             (workspace_id,),

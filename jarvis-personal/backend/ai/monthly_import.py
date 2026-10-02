@@ -177,7 +177,7 @@ def normalize_category(text: str, transaction_type: str = "expense") -> str:
         if key in normalized:
             return category
 
-    return "Gastos variables / Compras"
+    return "Sin categoría"
 
 
 def extract_month_year(text: str) -> dict[str, int] | None:

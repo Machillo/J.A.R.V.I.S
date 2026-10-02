@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
-from backend.finance.category_catalog import expense_type_for_category, normalize_category
+from backend.finance.category_catalog import expense_type_for_category, manual_expense_category, normalize_category
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 
 
@@ -61,7 +61,7 @@ def _categories(conn, workspace_id: str, start: date, end: date) -> list[dict]:
              UNION ALL
              SELECT category,amount FROM transactions WHERE workspace_id=%s AND transaction_type='expense'
                AND {transaction_date} >= %s AND {transaction_date} < %s
-           ) q GROUP BY category ORDER BY amount DESC""",
+           ) q GROUP BY 1 ORDER BY amount DESC""",
         (workspace_id,start,end,workspace_id,start,end),
     ).fetchall()
     return [{"category": row["category"], "amount": _money(row["amount"])} for row in rows]
@@ -161,7 +161,7 @@ def update_free_movement(movement_id: str, payload) -> dict:
                 WHERE id=%s AND workspace_id=%s RETURNING id""",(values["amount"],payload.description.strip(),payload.category.strip(),*original,payload.transaction_date,source_id,workspace_id)).fetchone()
         elif origin == "expense":
             if payload.transaction_type != "expense": raise HTTPException(status_code=422,detail="Un gasto debe conservar su tipo.")
-            category=payload.category.strip() or "Compras"
+            category=manual_expense_category(payload.category)
             row=conn.execute("""UPDATE expenses SET amount=%s,description=%s,category=%s,expense_type=%s,original_amount=%s,original_currency=%s,exchange_rate=%s,
                 created_at=%s::date+TIME '12:00'
                 WHERE id=%s AND workspace_id=%s RETURNING id""",(values["amount"],payload.description.strip(),category,expense_type_for_category(category),*original,payload.transaction_date,source_id,workspace_id)).fetchone()
