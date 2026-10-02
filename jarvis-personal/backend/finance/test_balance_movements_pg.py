@@ -166,6 +166,7 @@ def test_the_declaration_day_is_the_costa_rica_day_not_the_utc_day(db):
 
 @pytest.mark.parametrize("kind, effect", [("income", 1000), ("refund", 1000), ("reimbursement", 1000),
                                           ("receivable_payment", 1000), ("asset_sale", 1000),
+                                          ("loan_received", 1000), ("loan_disbursement", 1000),
                                           ("expense", -1000), ("debt_payment", -1000),
                                           ("receivable_offset", 0), ("internal_transfer", 0), ("transfer", 0)])
 def test_cash_direction_of_each_movement_type(db, kind, effect):
@@ -202,9 +203,60 @@ def test_another_workspace_movement_never_moves_a_balance(db):
     assert other not in balances()
 
 
+def test_loan_proceeds_are_cash_in_the_receiving_account_and_never_income_or_spending(db):
+    from backend.transactions import analyzer
+
+    acc = account(db, balance=100000)
+    movement(db, acc, "2026-10-05", 250000, "loan_received", created="2026-10-05 10:00:00-06")
+    assert float(balances()[acc]["calculated_balance"]) == 350000.0
+    [month] = analyzer.get_monthly_flow()
+    assert month["earned_income"] == 0.0 and month["spending"] == 0.0 and month["loan_received"] == 250000.0
+
+
+def test_a_loan_repaid_with_the_same_money_leaves_the_balance_unchanged(db):
+    acc = account(db, balance=100000)
+    movement(db, acc, "2026-10-05", 250000, "loan_received", created="2026-10-05 10:00:00-06")
+    movement(db, acc, "2026-10-05", 250000, "debt_payment", created="2026-10-05 13:00:00-06")
+    item = balances()[acc]
+    assert item["movements_since_balance"] == 2 and float(item["calculated_balance"]) == 100000.0
+
+
+def test_net_worth_gains_no_phantom_loan_when_its_debt_is_recorded(db):
+    from backend.finance import service
+
+    acc = account(db, balance=100000)
+    movement(db, acc, "2026-10-05", 250000, "loan_received", created="2026-10-05 10:00:00-06")
+    q(db, "INSERT INTO debts (workspace_id, name, total_amount, remaining_amount, monthly_payment) VALUES (%s, 'Préstamo', 250000, 250000, 0)", (WS_A,))
+    report = service.get_net_worth_report()
+    assert report["assets"]["savings_total"] == 350000.0
+    assert report["net_worth"] == 100000.0                                    # +250,000 cash and +250,000 debt
+    assert q(db, "SELECT count(*) FROM debts")[0][0] == 1                     # the balance engine never creates a debt
+
+
+def test_consumers_agree_on_a_balance_with_loan_proceeds(db, monkeypatch):
+    from backend.finance import reconciliation, strategic_engine
+
+    acc = account(db, balance=100000)
+    movement(db, acc, "2026-10-03", 250000, "loan_received", created="2026-10-03 12:00:00-06")
+    movement(db, acc, "2026-10-04", 30000, "expense", created="2026-10-04 12:00:00-06")
+    expected = 320000.0
+    assert float(balances()[acc]["calculated_balance"]) == expected
+    [detail] = reconciliation.get_financial_reconciliation()["accounts"]
+    assert detail["expected_balance"] == expected
+    monkeypatch.setattr(strategic_engine, "_today", lambda: date(2026, 10, 6))
+    assert strategic_engine.forecast_month_end_balance()["opening_available"] == expected
+
+
+def test_another_workspace_loan_never_moves_a_balance(db):
+    acc = account(db)
+    movement(db, acc, "2026-10-05", 250000, "loan_received", ws=WS_B, created="2026-10-05 10:00:00-06")   # mislinked to A's account id
+    assert float(balances()[acc]["calculated_balance"]) == 100000.0
+
+
 def test_reading_balances_writes_nothing(db):
     acc = account(db)
     movement(db, acc, "2026-10-05", 1000, "expense", created="2026-10-05 10:00:00-06")
+    movement(db, acc, "2026-10-05", 250000, "loan_received", created="2026-10-05 11:00:00-06")
     before = {t: q(db, f"SELECT * FROM {t} ORDER BY id") for t in TABLES}
     balances()
     assert {t: q(db, f"SELECT * FROM {t} ORDER BY id") for t in TABLES} == before
