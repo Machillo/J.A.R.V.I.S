@@ -38,3 +38,28 @@ def test_whole_word_aliases_still_categorize(value, transaction_type, expected):
 def test_unknown_text_falls_back_to_the_default_of_its_type():
     assert normalize_category("Otros gastos", "expense") == DEFAULT_EXPENSE_CATEGORY
     assert normalize_category("cotización", "income") == DEFAULT_INCOME_CATEGORY
+
+
+@pytest.mark.parametrize("value, transaction_type, expected", [
+    ("Viajes", "expense", "Viajes y turismo"),        # spending on a trip
+    ("viaje a la playa", "expense", "Viajes y turismo"),
+    ("Airbnb Cuenca", "expense", "Viajes y turismo"),
+    ("Viajes", "transfer", "Viajes"),                 # saving for a trip stays the savings goal
+    ("viajes", "transfer", "Viajes"),
+    ("ecuador", "transfer", "Viajes"),
+    ("Venta de activo", "asset_sale", "Venta de activo"),
+    ("Cuentas por cobrar", "receivable_payment", "Cuentas por cobrar"),
+])
+def test_a_name_shared_by_spending_and_saving_follows_the_transaction_type(value, transaction_type, expected):
+    assert normalize_category(value, transaction_type) == expected
+
+
+@pytest.mark.parametrize("value", ["", None, "Otros gastos", "Comercio desconocido XYZ"])
+def test_an_unknown_expense_is_explicitly_unknown_never_compras(value):
+    assert normalize_category(value, "expense") == "Sin categoría"
+    assert DEFAULT_EXPENSE_CATEGORY == "Sin categoría"
+
+
+def test_regalos_is_not_in_the_catalog_yet():
+    # A gift has no canonical category; it stays unknown until one is approved.
+    assert normalize_category("Regalos", "expense") == "Sin categoría"

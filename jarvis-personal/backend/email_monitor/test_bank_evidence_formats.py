@@ -132,13 +132,17 @@ def test_card_merchants_get_a_category_of_the_official_catalog(merchant, categor
     assert candidate(parsed)["category"] == category
 
 
-@pytest.mark.parametrize("merchant", ["TIENDA SPORT BOX EJEMPLO", "DROPBOX*EJEMPLO", "XBOX EJEMPLO"])
-def test_a_store_named_sport_or_box_is_not_a_sport_membership(merchant):
+@pytest.mark.parametrize("merchant, category", [
+    ("TIENDA SPORT BOX EJEMPLO", "Compras"),        # a store: a purchase
+    ("DROPBOX*EJEMPLO", "Sin categoría"),           # unknown merchant: explicitly unknown, never a silent "Compras"
+    ("XBOX EJEMPLO", "Sin categoría"),
+])
+def test_a_store_named_sport_or_box_is_not_a_sport_membership(merchant, category):
     # Equipment bought at a sports store is a purchase; "box" also names unrelated merchants.
     parsed = parse("notificacion@notificacionesbaccr.com", f"Notificación de transacción {merchant} 04-01-2026 - 17:22",
                    bac_card("Ene 4, 2026, 17:22", merchant=merchant), "2026-01-04T23:23:01Z")
     assert parsed["category"] != "Deporte"
-    assert candidate(parsed)["category"] == "Compras"
+    assert candidate(parsed)["category"] == category
 
 
 def test_card_purchase_is_an_expense_with_a_reference():
