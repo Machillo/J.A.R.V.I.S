@@ -24,7 +24,9 @@ from backend.email_monitor.deduplication import canonical_score, find_semantic_d
 from backend.email_monitor.normalization import normalize_description
 from backend.email_monitor.personal_rules import apply_workspace_email_rules
 from backend.email_monitor.statement_reconciliation import reconcile_statement
-from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
+from backend.email_monitor.payroll_statement import parse_ccss_order_patronal, parse_payroll_receipt
+from backend.email_monitor.sender_trust import trusted_payroll_sender
+from backend.finance import payroll_receipts
 from backend.email_monitor.popular_pdf import parse_popular_email_document
 
 OWNER_EMAIL = (
@@ -735,7 +737,24 @@ def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
     ).fetchone()
     transaction_id = int(row["id"])
     _auto_apply_receivable_payment_from_candidate(conn, user_id, transaction_id, candidate)
+    _match_payroll_receipts(conn, user_id, transaction_id)
     return transaction_id
+
+
+def _match_payroll_receipts(conn, user_id: int, transaction_id: int) -> None:
+    """A newly saved income may be the deposit a stored payroll receipt was waiting for.
+
+    Linking only explains the income; it never creates another one. A failure never blocks
+    saving the transaction (the savepoint keeps the outer transaction usable).
+    """
+    workspace_id = _workspace_id_for_user(conn, user_id)
+    conn.execute("SAVEPOINT payroll_receipt_match")
+    try:
+        payroll_receipts.match_pending_for_transaction(conn, workspace_id=workspace_id, transaction_id=transaction_id)
+        conn.execute("RELEASE SAVEPOINT payroll_receipt_match")
+    except Exception as exc:
+        conn.execute("ROLLBACK TO SAVEPOINT payroll_receipt_match")
+        logger.warning("Payroll receipt not matched (%s)", type(exc).__name__)
 
 
 def _extract_card_last4_from_account(account: str | None) -> str | None:
@@ -1146,6 +1165,36 @@ def scan_email_text(
             "payroll_report": payroll_report,
             "candidate": None,
         }
+
+    # A payroll receipt explains a salary deposit; it is stored as evidence and linked to the
+    # deposit it explains, never turned into a transaction or a candidate. Parsing is not trust:
+    # only a sender this workspace trusts for payroll may store one (else it is ordinary mail).
+    receipt = parse_payroll_receipt(body)
+    trusted = None
+    if receipt:
+        with get_connection() as conn:
+            trusted = trusted_payroll_sender(conn, _workspace_id_for_user(conn, user_id), sender)
+    if receipt and trusted:
+        with get_connection() as conn:
+            workspace_id = _workspace_id_for_user(conn, user_id)
+            email_message_id = _upsert_ingested_message(
+                conn, user_id=user_id, provider_message_id=provider_message_id,
+                email_fp=email_fp, sender=sender, subject=subject, received_at=received_at,
+                bank="payroll", status="payroll_receipt", body=body,
+                reason=f"Comprobante de planilla {receipt['period_start']} a {receipt['period_end']}.",
+                attachment_names=attachment_names,
+            )
+            stored = payroll_receipts.record_receipt(conn, workspace_id=workspace_id, parsed=receipt, source="mail_receipt",
+                                                     source_key=provider_message_id or email_fp, sender=sender)
+            _log_email_event(
+                conn, user_id=user_id, email_message_id=email_message_id,
+                provider_message_id=provider_message_id, sender=sender, subject=subject,
+                bank="payroll", action="payroll_receipt", result=str(stored.get("status")).lower(),
+                extracted_payload={k: receipt[k] for k in ("period_start", "period_end", "issue_date", "gross", "deductions_total", "net", "consistent")},
+                reason="Comprobante de planilla guardado como evidencia del depósito; no crea movimientos.",
+            )
+            conn.commit()
+        return {"status": "PAYROLL_RECEIPT", "message": "Comprobante de planilla guardado.", "receipt": stored, "candidate": None}
 
     # Banco Popular is enabled only in JARVIS' owner email monitor. DINCR's VIP
     # Gmail service keeps its existing provider list until this parser is proven
