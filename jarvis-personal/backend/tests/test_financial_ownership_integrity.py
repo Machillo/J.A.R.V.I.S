@@ -300,7 +300,10 @@ def test_the_migration_requires_the_request_path_schema_first():
 
 
 def _delete_guard_tables() -> set[str]:
-    sql = MIGRATION.read_text(encoding="utf-8")
+    # The registry as the database ends up with it: its latest definition, in migration order.
+    defining = [path for path in sorted((ROOT / "database" / "migrations").glob("*.sql"))
+                if "FUNCTION public.dincr_delete_guard_tables()" in path.read_text(encoding="utf-8")]
+    sql = (defining[-1] if defining else MIGRATION).read_text(encoding="utf-8")
     body = sql[sql.index("FUNCTION public.dincr_delete_guard_tables()"):]
     body = body[:body.index("AS t(table_name)")]
     return set(_ownership_tables()) | set(re.findall(r"\('([a-z_]+)'\)", body))
