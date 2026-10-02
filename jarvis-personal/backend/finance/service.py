@@ -127,7 +127,7 @@ def _financial_cycle_bounds(today: date | None = None, closing_day: int = 5) -> 
 def _card_billing_cycle_bounds(today: date | None = None, cut_day: int = 21) -> tuple[date, date]:
     """BAC card expense cycle: 21 -> 21, end exclusive.
 
-    Kenneth reviews card spending by statement cut, not by the operating cash
+    The holder reviews card spending by statement cut, not by the operating cash
     cycle used for payroll/card payment planning. Example on Jun 10: May 21 <=
     expense_date < Jun 21.
     """

@@ -60,7 +60,7 @@ def _with_popular_gmail_sources(query: str) -> str:
 
 
 def build_current_month_gmail_query(base_query: str | None = None, today: date | None = None) -> str:
-    """Return Gmail query scoped to Kenneth's active card/bank cycle.
+    """Return Gmail query scoped to the holder's active card/bank cycle.
 
     BAC card expenses must be reviewed by cut cycle, not calendar month.
     Default cycle: 21 -> 21. On June 8 this scans May 21 through June 21,
@@ -615,6 +615,29 @@ def get_email_monitor_status() -> dict[str, Any]:
     }
 
 
+def _receivables_follow_candidates(conn, workspace_id: str, candidates: list[dict[str, Any]]) -> None:
+    """A card purchase that is saved, confirmed or rejected changes what an additional
+    cardholder owes, so the cycle's receivable charge is brought up to date here, in the
+    same transaction. A failure never blocks the mail operation; the explicit receivables
+    sync repairs it.
+    """
+    days = set()
+    for candidate in candidates:
+        if candidate.get("card_last4") or candidate.get("card_owner"):
+            try:
+                days.add(date.fromisoformat(str(candidate.get("transaction_date"))[:10]))
+            except ValueError:
+                continue
+    for day in sorted(days):
+        conn.execute("SAVEPOINT receivables_follow")
+        try:
+            receivable_semantics.mirror_additional_card_cycle(conn, workspace_id, day)
+            conn.execute("RELEASE SAVEPOINT receivables_follow")
+        except Exception as exc:
+            conn.execute("ROLLBACK TO SAVEPOINT receivables_follow")
+            logger.warning("Additional-card receivable not updated (%s); run the receivables sync", type(exc).__name__)
+
+
 def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transaction_id: int, candidate: dict[str, Any]) -> None:
     workspace_id = _workspace_id_for_user(conn, user_id)
     """When a confirmed movement pays a receivable person, record it as that collection.
@@ -625,18 +648,22 @@ def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transactio
     if candidate.get("transaction_type") not in {"income", "reimbursement"}:
         return
     text = " ".join(str(candidate.get(key) or "") for key in ("description", "category", "account", "notes"))
+    payer = receivable_semantics.payer_from_text(text, receivable_semantics.receivable_people(conn, workspace_id))
+    if not payer:
+        return
+    # Never block saving the financial transaction because the receivable link failed: the
+    # savepoint keeps the transaction usable after a database error.
+    conn.execute("SAVEPOINT receivable_collection")
     try:
-        payer = receivable_semantics.payer_from_text(text, receivable_semantics.receivable_people(conn, workspace_id))
-        if not payer:
-            return
         receivable_semantics.link_collection(
             conn, workspace_id=workspace_id, person=payer, transaction_id=transaction_id,
             amount=float(candidate.get("amount") or 0), entry_date=str(candidate.get("transaction_date") or "")[:10] or None,
             description=str(candidate.get("description") or ""),
         )
-    except Exception:
-        # Never block saving the financial transaction because the receivable link failed.
-        return
+        conn.execute("RELEASE SAVEPOINT receivable_collection")
+    except Exception as exc:
+        conn.execute("ROLLBACK TO SAVEPOINT receivable_collection")
+        logger.warning("Receivable collection not linked (%s); run the receivables sync", type(exc).__name__)
 
 
 def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
@@ -1532,6 +1559,7 @@ def scan_email_text(
             extracted_payload=parsed,
             reason=review_reason,
         )
+        _receivables_follow_candidates(conn, workspace_id, [dict(candidate_row)])
         conn.commit()
 
     return {
@@ -1628,6 +1656,7 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
                 """,
                 (candidate_id, workspace_id),
             )
+            _receivables_follow_candidates(conn, workspace_id, [candidate])
             conn.commit()
             return {"status": "OK", "message": "Candidato rechazado."}
 
@@ -1665,6 +1694,7 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
             """,
             (transaction_id, candidate_id, workspace_id),
         )
+        _receivables_follow_candidates(conn, workspace_id, [candidate])
         conn.commit()
 
     return {"status": "OK", "message": "Movimiento guardado.", "transaction_id": transaction_id}
@@ -1793,6 +1823,7 @@ def classify_candidate(
                 candidate_id, workspace_id,
             ),
         )
+        _receivables_follow_candidates(conn, workspace_id, [candidate])
         conn.commit()
 
     message = "Guardado y aprendido. La próxima coincidencia exacta será automática." if learned and auto_commit_future else "Movimiento guardado."
@@ -1898,6 +1929,7 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
             confirmed += 1
             items.append({"id": cid, "status": "confirmed", "transaction_id": transaction_id})
 
+        _receivables_follow_candidates(conn, workspace_id, [by_id[cid] for cid in unique_ids if cid in by_id])
         conn.commit()
 
     return {

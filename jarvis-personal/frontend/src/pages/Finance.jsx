@@ -704,7 +704,7 @@ export function ReceivablesPanel({ data, onPaymentSaved }) {
 
       {showAdd && (
         <form className="receivable-entry-form" onSubmit={submitEntry}>
-          <label>Persona<input value={entryPerson} onChange={(e) => setEntryPerson(e.target.value)} placeholder="Emily, Mamá, Sidey..." /></label>
+          <label>Persona<input value={entryPerson} onChange={(e) => setEntryPerson(e.target.value)} placeholder="Ej.: Ana, Mamá, Luis..." /></label>
           <label>Monto<input type="number" min="1" step="0.01" inputMode="decimal" value={entryAmount} onChange={(e) => setEntryAmount(e.target.value)} /></label>
           <label>Tipo<select value={entryKind} onChange={(e) => setEntryKind(e.target.value)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>Fecha<input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /></label>

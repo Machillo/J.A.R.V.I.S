@@ -527,7 +527,7 @@ def _get_strategy_living_expenses(workspace_id: str, debts: list[dict[str, Any]]
 
     Debts stay authoritative in ``debts`` and are never duplicated from
     ``fixed_expenses``. For the non-debt recurring base we keep the commitments
-    Kenneth marked as unavoidable in V1: house and phone line.
+    the holder marked as unavoidable in V1: house and phone line.
     """
     debt_names = {str(d.get("name") or "").lower().strip() for d in debts}
     with get_connection() as conn:

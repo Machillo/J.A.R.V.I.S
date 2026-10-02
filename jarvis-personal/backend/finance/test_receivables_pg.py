@@ -54,7 +54,8 @@ CREATE TABLE card_aliases (
     relationship TEXT, is_primary BOOLEAN NOT NULL DEFAULT FALSE);
 CREATE TABLE email_transaction_candidates (
     id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL, transaction_id BIGINT, transaction_date DATE NOT NULL,
-    amount NUMERIC(14,2) NOT NULL, transaction_type TEXT NOT NULL, card_owner TEXT, card_last4 TEXT, status TEXT);
+    amount NUMERIC(14,2) NOT NULL, transaction_type TEXT NOT NULL, card_owner TEXT, card_last4 TEXT, status TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 """
 TABLES = ("transactions", "receivables", "receivable_payments", "receivable_entries", "card_aliases", "email_transaction_candidates")
 
@@ -154,8 +155,8 @@ def test_sync_is_the_explicit_writer_and_is_idempotent(db):
     assert first["status"] == "OK" and snapshot(db)["receivable_entries"] == after_first["receivable_entries"]
     charges = q(db, "SELECT amount, source_type FROM receivable_entries WHERE entry_type = 'charge' ORDER BY id")
     assert [(float(a), s) for a, s in charges] == [(100000.0, "manual_loan"), (5000.0, "additional_card_auto")]
-    # The legacy income is linked once and never rewritten by the sync.
-    assert q(db, "SELECT transaction_type FROM transactions") == [("income",)]
+    # The legacy payer-named income is linked once and, like any collection, stops being income.
+    assert q(db, "SELECT transaction_type FROM transactions") == [("receivable_payment",)]
     assert float(q(db, "SELECT pending_amount FROM receivables")[0][0]) == 98000.0
 
 
@@ -251,3 +252,141 @@ def test_a_confirmed_mail_naming_a_receivable_person_becomes_that_collection(db,
     assert confirm("SINPE recibido", "payer: Persona Desconocida") == "income"   # nobody the workspace is owed by
     assert confirm("Ana Prueba", "") == "income"                                 # a name without payment context
     assert float(q(db, "SELECT pending_amount FROM receivables WHERE id = %s", (rid,))[0][0]) == 40000.0
+
+
+def stored(conn, rid):
+    row = q(conn, "SELECT original_amount, paid_amount, pending_amount, status FROM receivables WHERE id = %s", (rid,))[0]
+    return float(row[0]), float(row[1]), float(row[2]), row[3]
+
+
+def test_each_operation_leaves_the_balance_right_and_open_list_refresh_writes_nothing(db):
+    """Charges, collections, offsets and reimbursements update the stored balance themselves;
+    opening, listing and refreshing the screen afterwards never writes."""
+    from backend.core import database
+    from backend.finance import intelligence
+
+    rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=200000, description="Celular", entry_kind="installment_sale")["item"]["id"]
+    assert stored(db, rid) == (200000.0, 0.0, 200000.0, "pending")                       # charge
+    intelligence.apply_receivable_payment(rid, 10000, method="SINPE", payment_date=TODAY)
+    assert stored(db, rid) == (200000.0, 10000.0, 190000.0, "partial")                    # cash collection
+    intelligence.apply_receivable_payment(rid, 18500, method="non_cash_offset", payment_date=TODAY)
+    assert stored(db, rid) == (200000.0, 28500.0, 171500.0, "partial")                    # non-cash offset
+    other = intelligence.add_receivable_entry(person_name="Luis Ejemplo", amount=30000, description="", entry_kind="purchase")["item"]["id"]
+    refund = q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, source) VALUES (%s, %s, 'Reembolso recibido', 30000, 'reimbursement', 'manual') RETURNING id", (WS_A, TODAY))[0][0]
+    intelligence.apply_receivable_payment(other, 30000, source_transaction_id=refund, payment_date=TODAY)
+    assert stored(db, other) == (30000.0, 30000.0, 0.0, "completed")                       # reimbursement
+    assert types(db) == {"receivable_payment": 2, "receivable_offset": 1}
+
+    before = snapshot(db)
+    dbname = q(db, "SELECT current_database()")[0][0]
+    q(db, f'ALTER DATABASE "{dbname}" SET default_transaction_read_only = on')
+    database.close_idle_connections()
+    try:
+        listings = [intelligence.list_receivables() for _ in range(3)]               # open, list, refresh
+    finally:
+        q(db, f'ALTER DATABASE "{dbname}" RESET default_transaction_read_only')
+        database.close_idle_connections()
+    assert snapshot(db) == before
+    assert listings[0] == listings[1] == listings[2]
+    by_person = {item["person_name"]: item for item in listings[0]["items"]}
+    assert by_person["Ana Prueba"]["current_amount_due"] == 171500.0 and by_person["Luis Ejemplo"]["current_amount_due"] == 0.0
+
+
+def test_mail_card_purchases_update_the_additional_cardholder_without_any_sync(db, monkeypatch):
+    from backend.core import database
+    from backend.email_monitor import service
+
+    monkeypatch.setattr(service, "_workspace_id_for_user", lambda conn, user_id: WS_A)
+    q(db, "INSERT INTO card_aliases (workspace_id, card_last4, owner_label, is_primary) VALUES (%s, '1111', 'Ana Prueba', FALSE), (%s, '9999', 'Titular', TRUE)", (WS_A, WS_A))
+    rows = q(db, """INSERT INTO email_transaction_candidates (workspace_id, transaction_id, transaction_date, amount, transaction_type, card_owner, card_last4, status)
+                    VALUES (%s, NULL, %s, 5000, 'expense', 'Ana Prueba', '1111', 'confirmed'), (%s, NULL, %s, 2500, 'expense', 'Ana Prueba', '1111', 'pending'),
+                           (%s, NULL, %s, 9000, 'expense', 'Titular', '9999', 'confirmed'), (%s, NULL, %s, 4000, 'expense', 'Ana Prueba', '1111', 'confirmed')
+                    RETURNING id""", (WS_A, TODAY, WS_A, TODAY, WS_A, TODAY, WS_B, TODAY))
+    with database.get_connection() as conn:                       # what a scan/confirmation does in its own transaction
+        service._receivables_follow_candidates(conn, WS_A, [{"card_last4": "1111", "transaction_date": TODAY}])
+        conn.commit()
+    [(rid,)] = q(db, "SELECT id FROM receivables WHERE workspace_id = %s", (WS_A,))
+    assert stored(db, rid) == (5000.0, 0.0, 5000.0, "pending")   # holder card and other workspace excluded, pending not counted
+    assert q(db, "SELECT count(*) FROM receivables WHERE workspace_id = %s", (WS_B,)) == [(0,)]
+    with database.get_connection() as conn:                       # repeating it changes nothing
+        service._receivables_follow_candidates(conn, WS_A, [{"card_last4": "1111", "transaction_date": TODAY}])
+        conn.commit()
+    assert q(db, "SELECT count(*) FROM receivable_entries") == [(1,)]
+    service.decide_candidate(rows[0][0], "reject")               # the only confirmed purchase is rejected
+    assert stored(db, rid) == (0.0, 0.0, 0.0, "completed")
+    assert q(db, "SELECT is_archived, amount FROM receivable_entries") == [(True, 5000)]   # kept as history, not deleted
+
+
+def test_a_movement_settles_at_most_once_and_only_if_it_is_money_in(db):
+    from backend.finance import intelligence
+
+    rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=50000, description="", entry_kind="loan")["item"]["id"]
+    tx_id = q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, source) VALUES (%s, %s, 'SINPE', 20000, 'income', 'manual') RETURNING id", (WS_A, TODAY))[0][0]
+    assert intelligence.apply_receivable_payment(rid, 20000, source_transaction_id=tx_id, payment_date=TODAY)["status"] == "OK"
+    assert intelligence.apply_receivable_payment(rid, 20000, source_transaction_id=tx_id, payment_date=TODAY)["status"] == "DUPLICATE"
+    other = intelligence.add_receivable_entry(person_name="Luis Ejemplo", amount=50000, description="", entry_kind="loan")["item"]["id"]
+    assert intelligence.apply_receivable_payment(other, 20000, source_transaction_id=tx_id, payment_date=TODAY)["status"] == "DUPLICATE"
+    expense = q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, source) VALUES (%s, %s, 'Supermercado', 20000, 'expense', 'manual') RETURNING id", (WS_A, TODAY))[0][0]
+    assert intelligence.apply_receivable_payment(rid, 20000, source_transaction_id=expense, payment_date=TODAY)["status"] == "ERROR"
+    assert q(db, "SELECT count(*) FROM receivable_entries WHERE entry_type = 'payment'") == [(1,)]
+    assert stored(db, rid)[2] == 30000.0 and stored(db, other)[2] == 50000.0
+
+
+def test_concurrent_settlements_of_one_movement_apply_once_across_people(db):
+    import threading
+    from backend.auth.current_user import reset_current_user, set_current_user
+    from backend.finance import intelligence
+
+    rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=50000, description="", entry_kind="loan")["item"]["id"]
+    rid2 = intelligence.add_receivable_entry(person_name="Luis Ejemplo", amount=50000, description="", entry_kind="loan")["item"]["id"]
+    tx_id = q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, source) VALUES (%s, %s, 'SINPE', 20000, 'income', 'manual') RETURNING id", (WS_A, TODAY))[0][0]
+    results, start = [], threading.Barrier(4)
+
+    def settle(target):
+        token = set_current_user({"id": 7, "account_id": "account-a", "workspace_id": WS_A, "role": "owner"})
+        try:
+            start.wait()
+            results.append(intelligence.apply_receivable_payment(target, 20000, source_transaction_id=tx_id, payment_date=TODAY)["status"])
+        finally:
+            reset_current_user(token)
+
+    # The same movement offered to two different people at once (different row locks).
+    threads = [threading.Thread(target=settle, args=(target,)) for target in (rid, rid2, rid, rid2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(results) == ["DUPLICATE", "DUPLICATE", "DUPLICATE", "OK"]
+    assert q(db, "SELECT count(*) FROM receivable_entries WHERE entry_type = 'payment'") == [(1,)]
+    assert sorted([stored(db, rid)[2], stored(db, rid2)[2]]) == [30000.0, 50000.0]
+
+
+def test_settlements_wait_for_the_workspace_receivable_lock(db, admin_uri):
+    """Every receivable writer serializes on one per-workspace lock (no check-then-insert race)."""
+    import threading
+    import time
+    from backend.auth.current_user import reset_current_user, set_current_user
+    from backend.finance import intelligence
+
+    rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=50000, description="", entry_kind="loan")["item"]["id"]
+    holder = psycopg2.connect(db.dsn)
+    with holder.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"receivables:{WS_A}",))   # held until commit
+    finished = []
+
+    def settle():
+        token = set_current_user({"id": 7, "account_id": "account-a", "workspace_id": WS_A, "role": "owner"})
+        try:
+            intelligence.apply_receivable_payment(rid, 1000, method="SINPE", payment_date=TODAY)
+            finished.append(time.monotonic())
+        finally:
+            reset_current_user(token)
+
+    worker = threading.Thread(target=settle)
+    worker.start()
+    time.sleep(0.5)
+    released = time.monotonic()
+    holder.commit()
+    holder.close()
+    worker.join(10)
+    assert finished and finished[0] >= released

@@ -41,63 +41,12 @@ def _month_bounds(today: date | None = None) -> tuple[date, date]:
 
 
 def _card_cycle_bounds(today: date | None = None, cutoff_day: int = 21) -> tuple[date, date]:
-    """Return the active BAC-style card cycle [start, end).
-
-    The configured personal cycle closes on day 21. On/after the 21st the
-    current cycle starts that same day; before it, the cycle started on the
-    21st of the previous month.
-    """
-    today = today or date.today()
-    cutoff_day = min(max(int(cutoff_day or 21), 1), 28)
-    if today.day >= cutoff_day:
-        start = today.replace(day=cutoff_day)
-    else:
-        if today.month == 1:
-            start = date(today.year - 1, 12, cutoff_day)
-        else:
-            start = date(today.year, today.month - 1, cutoff_day)
-    if start.month == 12:
-        end = date(start.year + 1, 1, cutoff_day)
-    else:
-        end = date(start.year, start.month + 1, cutoff_day)
-    return start, end
-
-
-def _person_key(person_name: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", "-", str(person_name or "").strip().lower())
-    return normalized.strip("-") or "persona"
+    """Return the active BAC-style card cycle [start, end) (closes on day 21)."""
+    return receivable_semantics.card_cycle_bounds(today, cutoff_day)
 
 
 def _get_or_create_person_receivable(conn, user_id: int, person_name: str) -> dict[str, Any]:
-    workspace_id = get_current_workspace_id()
-    clean_name = str(person_name or "").strip()
-    if not clean_name:
-        raise ValueError("La persona es obligatoria.")
-    row = conn.execute(
-        """
-        SELECT *
-        FROM receivables
-        WHERE workspace_id = %s
-          AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
-        ORDER BY CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END, id ASC
-        LIMIT 1
-        """,
-        (workspace_id, clean_name),
-    ).fetchone()
-    if row:
-        return dict(row)
-    created = conn.execute(
-        """
-        INSERT INTO receivables (
-            workspace_id, person_name, original_amount, paid_amount, pending_amount,
-            status, notes, source_type, source_key
-        )
-        VALUES (%s, %s, 0, 0, 0, 'completed', '', 'person_account', %s)
-        RETURNING *
-        """,
-        (workspace_id, clean_name, f"person:{_person_key(clean_name)}"),
-    ).fetchone()
-    return dict(created)
+    return receivable_semantics.person_receivable(conn, get_current_workspace_id(), person_name)
 
 
 def _backfill_receivable_entries(conn, user_id: int) -> None:
@@ -176,91 +125,7 @@ def _backfill_receivable_entries(conn, user_id: int) -> None:
 
 
 def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str, Any]:
-    workspace_id = get_current_workspace_id()
-    totals = conn.execute(
-        """
-        SELECT
-            COALESCE(SUM(amount) FILTER (WHERE entry_type = 'charge'), 0) AS charged,
-            COALESCE(SUM(amount) FILTER (WHERE entry_type = 'payment'), 0) AS paid
-        FROM receivable_entries
-        WHERE workspace_id = %s AND receivable_id = %s
-          AND COALESCE(is_archived, FALSE) = FALSE
-        """,
-        (workspace_id, receivable_id),
-    ).fetchone()
-    charged = round(max(_as_float(totals.get("charged")), 0.0), 2)
-    paid = round(max(_as_float(totals.get("paid")), 0.0), 2)
-    pending = round(charged - paid, 2)
-    status = "credit" if pending < -0.01 else "completed" if abs(pending) <= 0.01 else "partial" if paid > 0 else "pending"
-    updated = conn.execute(
-        """
-        UPDATE receivables
-        SET original_amount = %s,
-            paid_amount = %s,
-            pending_amount = %s,
-            status = %s,
-            updated_at = NOW()
-        WHERE id = %s AND workspace_id = %s
-        RETURNING *
-        """,
-        (charged, paid, pending, status, receivable_id, workspace_id),
-    ).fetchone()
-    return dict(updated)
-
-def _fetch_additional_card_totals(
-    conn, workspace_id: str, cycle_start: date, cycle_end: date
-) -> list[dict[str, Any]]:
-    """Return additional-card spending only for the active card cycle.
-
-    Historical purchases stay in prior cycles and are carried only when an
-    unpaid balance remains. This prevents old payments from cancelling a new
-    manual charge entered this month.
-    """
-    rows = conn.execute(
-        """
-        WITH additional_aliases AS (
-            SELECT workspace_id, card_last4, owner_label
-            FROM card_aliases
-            WHERE workspace_id = %s
-              AND COALESCE(is_primary, FALSE) = FALSE
-        ), candidate_movements AS (
-            SELECT
-                COALESCE(a.owner_label, c.card_owner) AS person_name,
-                COALESCE(a.card_last4, c.card_last4) AS card_last4,
-                COALESCE(c.transaction_id, c.id * -1) AS movement_key,
-                c.amount
-            FROM email_transaction_candidates c
-            LEFT JOIN additional_aliases a
-              ON a.workspace_id = c.workspace_id
-             AND a.card_last4 = c.card_last4
-            WHERE c.workspace_id = %s
-              AND c.transaction_type = 'expense'
-              AND COALESCE(c.amount, 0) > 0
-              AND c.transaction_date >= %s
-              AND c.transaction_date < %s
-              AND COALESCE(c.status, '') IN ('confirmed', 'auto_saved', 'imported')
-              AND COALESCE(c.status, '') NOT IN ('duplicate', 'rejected')
-              AND (
-                    a.card_last4 IS NOT NULL
-                 OR LOWER(TRIM(COALESCE(c.card_owner,''))) IN (
-                        SELECT LOWER(TRIM(owner_label)) FROM additional_aliases
-                    )
-              )
-        )
-        SELECT
-            person_name,
-            COALESCE(SUM(amount), 0) AS total_amount,
-            COUNT(DISTINCT movement_key) AS movement_count,
-            ARRAY_AGG(DISTINCT card_last4 ORDER BY card_last4)
-              FILTER (WHERE card_last4 IS NOT NULL AND card_last4 <> '') AS cards
-        FROM candidate_movements
-        WHERE COALESCE(person_name, '') <> ''
-        GROUP BY person_name
-        ORDER BY person_name
-        """,
-        (workspace_id, workspace_id, cycle_start, cycle_end),
-    ).fetchall()
-    return [dict(row) for row in rows]
+    return receivable_semantics.recalculate(conn, get_current_workspace_id(), receivable_id)
 
 
 def _detect_receivable_payer_from_transaction(row: dict[str, Any], people: list[str]) -> str | None:
@@ -274,12 +139,12 @@ def _detect_receivable_payer_from_transaction(row: dict[str, Any], people: list[
 
 
 def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
-    workspace_id = get_current_workspace_id()
-    """Link legacy income/reimbursement rows that name a receivable person to that receivable.
+    """Repair: link legacy income/reimbursement rows that name a receivable person.
 
-    Runs only from the explicit sync (never from a read). It links each movement once;
-    it never retypes or rewrites the movement itself.
+    Runs only from the explicit sync (never from a read). Each movement is linked once
+    and, like any collection, stops counting as earned income.
     """
+    workspace_id = get_current_workspace_id()
     rows = conn.execute(
         """
         SELECT id, transaction_date, description, amount, transaction_type, category, account, source, notes
@@ -296,126 +161,16 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
     for raw in rows:
         tx = dict(raw)
         payer = _detect_receivable_payer_from_transaction(tx, people)
-        if not payer:
-            continue
-        rec = conn.execute(
-            """
-            SELECT id, original_amount, paid_amount, pending_amount
-            FROM receivables
-            WHERE workspace_id = %s
-              AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
-            ORDER BY CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END, id ASC
-            LIMIT 1
-            """,
-            (workspace_id, payer),
-        ).fetchone()
-        if not rec:
-            continue
-        already = conn.execute(
-            """
-            SELECT id FROM receivable_payments
-            WHERE workspace_id = %s AND source_transaction_id = %s
-            LIMIT 1
-            """,
-            (workspace_id, tx["id"]),
-        ).fetchone()
-        if already:
-            continue
-        pending = _as_float(rec.get("pending_amount"))
-        payment = min(_as_float(tx.get("amount")), max(pending, 0.0))
-        if payment <= 0:
-            continue
-        new_paid = _as_float(rec.get("paid_amount")) + payment
-        new_pending = max(_as_float(rec.get("original_amount")) - new_paid, 0.0)
-        status = "completed" if new_pending <= 0.01 else "partial"
-        conn.execute(
-            """
-            INSERT INTO receivable_payments (workspace_id, receivable_id, amount, source_transaction_id, notes)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (workspace_id, rec["id"], payment, tx["id"], f"Pago detectado automáticamente desde ingreso: {tx.get('description') or ''}"),
-        )
-        payment_date = tx.get("transaction_date") or date.today()
-        if isinstance(payment_date, str):
-            payment_date = datetime.fromisoformat(payment_date[:10]).date()
-        cycle_start, cycle_end = _card_cycle_bounds(payment_date)
-        conn.execute(
-            """
-            INSERT INTO receivable_entries (
-                workspace_id, receivable_id, entry_type, amount, description,
-                entry_date, source_type, source_key, source_transaction_id,
-                cycle_start, cycle_end, is_archived
+        if payer:
+            receivable_semantics.link_collection(
+                conn, workspace_id=workspace_id, person=payer, transaction_id=int(tx["id"]), amount=_as_float(tx.get("amount")),
+                entry_date=str(tx.get("transaction_date") or date.today())[:10], description=str(tx.get("description") or payer),
             )
-            VALUES (%s, %s, 'payment', %s, %s, %s, 'income_auto', %s, %s, %s, %s, FALSE)
-            ON CONFLICT DO NOTHING
-            """,
-            (
-                workspace_id,
-                rec["id"],
-                payment,
-                f"Pago detectado: {tx.get('description') or payer}",
-                payment_date,
-                f"income_transaction:{tx['id']}",
-                tx["id"],
-                cycle_start,
-                cycle_end,
-            ),
-        )
-        _recalculate_receivable(conn, user_id, int(rec["id"]))
 
 
 def _sync_auto_additional_card_receivables(conn, user_id: int) -> None:
-    workspace_id = get_current_workspace_id()
-    """Mirror only the active cycle's additional-card purchases."""
-    _backfill_receivable_entries(conn, user_id)
-    cycle_start, cycle_end = _card_cycle_bounds()
-    totals = _fetch_additional_card_totals(conn, workspace_id, cycle_start, cycle_end)
-
-    for row in totals:
-        person = str(row.get("person_name") or "").strip()
-        if not person:
-            continue
-        account = _get_or_create_person_receivable(conn, user_id, person)
-        source_key = f"additional_cards:{_person_key(person)}:{cycle_start.isoformat()}"
-        amount = round(max(_as_float(row.get("total_amount")), 0.0), 2)
-        description = (
-            f"Compras de tarjetas adicionales del ciclo "
-            f"{cycle_start.isoformat()} a {cycle_end.isoformat()} "
-            f"({', '.join(row.get('cards') or []) or 'sin tarjeta'})"
-        )
-        if amount > 0:
-            conn.execute(
-                """
-                INSERT INTO receivable_entries (
-                    workspace_id, receivable_id, entry_type, amount, description,
-                    entry_date, source_type, source_key, cycle_start, cycle_end, is_archived
-                )
-                VALUES (%s, %s, 'charge', %s, %s, %s, 'additional_card_auto', %s, %s, %s, FALSE)
-                ON CONFLICT (workspace_id, source_key) WHERE source_key IS NOT NULL
-                DO UPDATE SET
-                    receivable_id = EXCLUDED.receivable_id,
-                    amount = EXCLUDED.amount,
-                    description = EXCLUDED.description,
-                    entry_date = EXCLUDED.entry_date,
-                    cycle_start = EXCLUDED.cycle_start,
-                    cycle_end = EXCLUDED.cycle_end,
-                    is_archived = FALSE
-                """,
-                (
-                    workspace_id, account["id"], amount, description, cycle_start,
-                    source_key, cycle_start, cycle_end,
-                ),
-            )
-            conn.execute(
-                """
-                UPDATE receivables
-                SET source_type = CASE WHEN source_type = 'manual' THEN 'person_account' ELSE source_type END,
-                    updated_at = NOW()
-                WHERE id = %s AND workspace_id = %s
-                """,
-                (account["id"], workspace_id),
-            )
-            _recalculate_receivable(conn, user_id, int(account["id"]))
+    """Repair: mirror the active cycle's additional-card purchases (normally done when a purchase is confirmed)."""
+    receivable_semantics.mirror_additional_card_cycle(conn, get_current_workspace_id())
 
 
 def _fetch_active_goals(workspace_id: str) -> list[dict[str, Any]]:
@@ -824,14 +579,17 @@ def list_receivables() -> dict[str, Any]:
 
 
 def sync_receivables() -> dict[str, Any]:
-    """Explicit receivable sync (the only place the ledger is derived from other data).
+    """Explicit repair/reconciliation of the receivable ledger. Never called by a read.
 
-    Backfills legacy balances, mirrors the active cycle's additional-card purchases,
-    links legacy payer-named income, and recalculates every balance. Idempotent.
+    Every normal operation keeps balances current by itself (charges, collections,
+    offsets, and confirmed or rejected additional-card purchases). This exists for data
+    those operations never saw: legacy balances and payments, a card alias changed to
+    additional, and payer-named income saved before the payer existed. Idempotent.
     """
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         _backfill_receivable_entries(conn, user_id)
         _sync_auto_additional_card_receivables(conn, user_id)
         _sync_receivable_payments_from_income(conn, user_id)
@@ -867,6 +625,7 @@ def add_receivable_entry(
 
     final_description = clean_description or receivable_semantics.CHARGE_KINDS[clean_kind]
     with get_connection() as conn:
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         _backfill_receivable_entries(conn, user_id)
         account = _get_or_create_person_receivable(conn, user_id, clean_name)
         entry_day = datetime.fromisoformat(safe_date).date()
@@ -894,6 +653,7 @@ def update_receivable_entry(receivable_id: int, entry_id: int, amount: float | N
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         entry = conn.execute("SELECT * FROM receivable_entries WHERE id=%s AND receivable_id=%s AND workspace_id=%s FOR UPDATE", (entry_id, receivable_id, workspace_id)).fetchone()
         if not entry:
             return {"status": "NOT_FOUND", "message": "Movimiento no encontrado."}
@@ -950,6 +710,8 @@ def apply_receivable_payment(
         return {"status": "ERROR", "message": "Monto inválido."}
 
     with get_connection() as conn:
+        # Workspace lock first (same order as every receivable write) so concurrent writers never deadlock.
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         rec = conn.execute(
             "SELECT * FROM receivables WHERE id = %s AND workspace_id = %s FOR UPDATE",
             (receivable_id, workspace_id),
@@ -957,7 +719,6 @@ def apply_receivable_payment(
         if not rec:
             return {"status": "NOT_FOUND", "message": "Cuenta por cobrar no encontrada."}
 
-        pending = _as_float(rec["pending_amount"])
         # Overpayments are valid: a negative balance means the person has credit
         # in their favor and must remain visible instead of being clipped to zero.
         payment = round(amount, 2)
@@ -975,11 +736,16 @@ def apply_receivable_payment(
             safe_payment_date = date.today().isoformat()
 
         linked_transaction_id = source_transaction_id
-        if linked_transaction_id is not None and not conn.execute(
-            "SELECT 1 FROM transactions WHERE id = %s AND workspace_id = %s", (linked_transaction_id, workspace_id)
-        ).fetchone():
-            return {"status": "NOT_FOUND", "message": "Movimiento no encontrado."}
         if linked_transaction_id is not None:
+            linked = conn.execute(
+                "SELECT transaction_type FROM transactions WHERE id = %s AND workspace_id = %s", (linked_transaction_id, workspace_id)
+            ).fetchone()
+            if not linked:
+                return {"status": "NOT_FOUND", "message": "Movimiento no encontrado."}
+            if linked["transaction_type"] not in receivable_semantics.SETTLING_TRANSACTION_TYPES:
+                return {"status": "ERROR", "message": "Ese movimiento no es un cobro: un gasto, deuda o venta no salda una cuenta por cobrar."}
+            if receivable_semantics.is_movement_applied(conn, workspace_id, linked_transaction_id):
+                return {"status": "DUPLICATE", "message": "Ese pago ya fue aplicado.", "source_transaction_id": linked_transaction_id}
             # The user states this existing movement settles the receivable: it is a
             # collection (or an offset), so it stops counting as earned income.
             conn.execute(
@@ -1022,22 +788,6 @@ def apply_receivable_payment(
                 ),
             ).fetchone()
             linked_transaction_id = int(tx_row["id"])
-
-        already = conn.execute(
-            """
-            SELECT id FROM receivable_payments
-            WHERE workspace_id = %s
-              AND source_transaction_id = %s
-            LIMIT 1
-            """,
-            (workspace_id, linked_transaction_id),
-        ).fetchone()
-        if already:
-            return {"status": "DUPLICATE", "message": "Ese pago ya fue aplicado.", "source_transaction_id": linked_transaction_id}
-
-        new_paid = round(_as_float(rec["paid_amount"]) + payment, 2)
-        new_pending = round(_as_float(rec["original_amount"]) - new_paid, 2)
-        status = "credit" if new_pending < -0.01 else "completed" if abs(new_pending) <= 0.01 else "partial"
 
         conn.execute(
             """
