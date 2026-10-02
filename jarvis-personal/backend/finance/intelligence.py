@@ -9,6 +9,7 @@ from backend.auth.current_user import get_current_user_id, get_current_workspace
 from backend.core.database import get_connection
 from backend.core.i18n import plural, tx as localized, voice
 from backend.finance import receivable_semantics
+from backend.finance import balance_movements
 
 
 def _as_float(value: Any, default: float = 0.0) -> float:
@@ -850,7 +851,7 @@ def list_account_balances() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT a.id, a.account_name, a.bank_name, a.account_type, a.account_last4, a.currency, a.annual_interest_rate,
                    a.last_reconciliation_difference,
                    a.current_balance, a.balance_as_of, a.source, a.include_in_net_worth, a.is_active, a.updated_at,
@@ -858,16 +859,8 @@ def list_account_balances() -> dict[str, Any]:
                    a.current_balance + COALESCE(m.movement_delta,0) AS calculated_balance,
                    COALESCE(m.movement_count,0) AS movements_since_balance
             FROM account_balances a
-            LEFT JOIN LATERAL (
-                SELECT COUNT(*) AS movement_count,
-                       COALESCE(SUM(CASE
-                           WHEN t.transaction_type IN ('income','refund','reimbursement','receivable_payment','asset_sale') THEN t.amount
-                           WHEN t.transaction_type IN ('expense','debt_payment') THEN -t.amount
-                           ELSE 0 END),0) AS movement_delta
-                FROM transactions t
-                WHERE t.workspace_id=a.workspace_id AND t.financial_account_id=a.id
-                  AND t.created_at > a.balance_as_of
-            ) m ON TRUE
+            -- Movements after the declared balance, by economic date (see balance_movements).
+            LEFT JOIN LATERAL ({balance_movements.movements_since_declaration_sql("a")}) m ON TRUE
             WHERE a.workspace_id = %s AND COALESCE(a.is_active, true) = true
             ORDER BY a.bank_name, a.account_name
             """,
@@ -907,18 +900,12 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
     workspace_id = get_current_workspace_id()
     with get_connection() as conn:
         existing = conn.execute(
-            """
+            f"""
             SELECT a.id, a.current_balance, a.source,
-                   a.current_balance + COALESCE((
-                       SELECT SUM(CASE
-                           WHEN t.transaction_type IN ('income','refund','reimbursement','receivable_payment','asset_sale') THEN t.amount
-                           WHEN t.transaction_type IN ('expense','debt_payment') THEN -t.amount
-                           ELSE 0 END)
-                       FROM transactions t
-                       WHERE t.workspace_id=a.workspace_id AND t.financial_account_id=a.id
-                         AND t.created_at > a.balance_as_of
-                   ),0) AS expected_balance
+                   a.current_balance + m.movement_delta AS expected_balance
             FROM account_balances a
+            -- The same expectation list_account_balances shows (see balance_movements).
+            CROSS JOIN LATERAL ({balance_movements.movements_since_declaration_sql("a")}) m
             WHERE a.workspace_id = %s AND LOWER(a.account_name) = LOWER(%s) AND COALESCE(a.account_last4,'') = COALESCE(%s,'')
             LIMIT 1
             """,
