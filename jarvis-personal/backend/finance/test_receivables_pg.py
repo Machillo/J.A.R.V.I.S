@@ -491,3 +491,27 @@ def test_unknown_spending_is_one_counted_bucket_in_the_monthly_summary(db):
     with database.get_connection() as conn:
         rows = free_service._categories(conn, WS_A, start, start + timedelta(days=40))
     assert rows == [{"category": "Sin categoría", "amount": 3000.0}, {"category": "Comida", "amount": 500.0}]
+
+
+def test_configured_cards_without_a_relationship_follow_their_primary_flag(monkeypatch):
+    import json
+    from backend.email_monitor import service
+
+    monkeypatch.setenv("JARVIS_CARD_ALIASES", json.dumps([{"last4": "1111", "owner": "Ana Prueba"}, {"last4": "9999", "owner": "Titular", "is_primary": True}]))
+    seen = []
+
+    class Recorder:
+        def execute(self, sql, params=()):
+            seen.append(params)
+
+    service._seed_default_card_aliases(Recorder(), 7, WS_A)
+    assert [(p[2], p[4], p[5]) for p in seen] == [("1111", "adicional", False), ("9999", "principal", True)]
+
+
+def test_a_linked_movement_settles_exactly_its_own_amount(db):
+    from backend.finance import intelligence
+
+    rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=50000, description="", entry_kind="loan")["item"]["id"]
+    tx = q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, source) VALUES (%s, %s, 'SINPE', 20000, 'income', 'manual') RETURNING id", (WS_A, TODAY))[0][0]
+    assert intelligence.apply_receivable_payment(rid, 18500, source_transaction_id=tx, payment_date=TODAY)["status"] == "ERROR"
+    assert types(db) == {"income": 1}                             # no part of the income silently vanished

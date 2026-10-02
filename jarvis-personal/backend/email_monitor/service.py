@@ -485,7 +485,8 @@ def _seed_default_card_aliases(conn, user_id: int, workspace_id: str | None = No
         (
             str(item.get("last4") or ""),
             str(item.get("owner") or ""),
-            str(item.get("relationship") or "principal"),
+            # Without an explicit relationship, a non-primary card is an additional card (never the holder's).
+            str(item.get("relationship") or ("principal" if item.get("is_primary") else "adicional")),
             bool(item.get("is_primary", False)),
         )
         for item in configured

@@ -747,8 +747,9 @@ def apply_receivable_payment(
                 return {"status": "ERROR", "message": "Ese movimiento no es un cobro: solo dinero recibido salda una cuenta por cobrar."}
             if not how["is_cash"]:
                 return {"status": "ERROR", "message": "Una compensación no mueve dinero: no se registra sobre un movimiento existente."}
-            if payment > _as_float(linked["amount"]) + 0.01:
-                return {"status": "ERROR", "message": "El monto aplicado supera el del movimiento."}
+            if abs(payment - _as_float(linked["amount"])) > 0.01:
+                # The whole movement becomes the collection, so it must settle exactly its amount.
+                return {"status": "ERROR", "message": "El monto aplicado debe ser el del movimiento."}
             if receivable_semantics.is_movement_applied(conn, workspace_id, linked_transaction_id):
                 return {"status": "DUPLICATE", "message": "Ese pago ya fue aplicado.", "source_transaction_id": linked_transaction_id}
             # The user states this existing movement settles the receivable: it is a
