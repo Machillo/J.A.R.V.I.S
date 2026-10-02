@@ -34,9 +34,13 @@ import re
 # Explicit, documented fallback (see module docstring). The only place it is defined.
 DECLARATION_TIMEZONE = "America/Costa_Rica"
 
-# Cash direction of a movement on its account. receivable_offset moves no cash, and own
-# transfers / card payments keep their existing neutral treatment (no effect here).
-CASH_IN_TYPES = ("income", "refund", "reimbursement", "receivable_payment", "asset_sale")
+# Cash direction of a movement on its account. This is not its economic classification:
+# loan proceeds (loan_received / loan_disbursement) put cash into the receiving account
+# but are never income, and the liability lives in debts, never here. receivable_offset
+# moves no cash. Own transfers / card payments keep their neutral treatment: a transfer
+# is one row linked to one account, with no explicit origin and destination, so its two
+# sides cannot be applied (docs/finance/account-balance-cash-effects.md).
+CASH_IN_TYPES = ("income", "refund", "reimbursement", "receivable_payment", "asset_sale", "loan_received", "loan_disbursement")
 CASH_OUT_TYPES = ("expense", "debt_payment")
 
 _IDENT = re.compile(r"^[a-z_][a-z0-9_]*$")
