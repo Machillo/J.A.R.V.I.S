@@ -58,6 +58,8 @@ Regenerate this file whenever a writer is added. Any Users writer must satisfy `
 | `net_worth_snapshots` | — | `finance/service._save_net_worth_snapshot` INSERT | — |
 | `payroll_deductions` | — | `finance/service.add_payroll_deduction` INSERT | — |
 | `payroll_events` | `user_product/free_service.update_free_movement` UPDATE<br>`user_product/service.create_overtime` INSERT | `finance/service.add_payroll_event` INSERT | — |
+| `payroll_receipt_lines` | — | `finance/payroll_receipts.record_receipt` INSERT | — |
+| `payroll_receipts` | — | `finance/payroll_receipts.link_receipt` UPDATE<br>`finance/payroll_receipts.match_receipt` UPDATE<br>`finance/payroll_receipts.record_receipt` INSERT | — |
 | `payroll_salary_reports` | `auth/service.delete_current_account` DELETE<br>`user_product/gmail_service._ingest_message` INSERT<br>`user_product/payroll_income.link_received_payroll` UPDATE | `email_monitor/service.scan_email_text` INSERT | — |
 | `receivable_entries` | — | `finance/intelligence._backfill_receivable_entries` INSERT<br>`finance/intelligence.add_receivable_entry` INSERT<br>`finance/intelligence.apply_receivable_payment` INSERT<br>`finance/intelligence.update_receivable_entry` UPDATE<br>`finance/receivable_semantics.link_collection` INSERT<br>`finance/receivable_semantics.mirror_additional_card_cycle` INSERT/UPDATE | — |
 | `receivable_payments` | — | `finance/intelligence.apply_receivable_payment` INSERT<br>`finance/intelligence.update_receivable_entry` UPDATE<br>`finance/receivable_semantics.link_collection` INSERT | — |

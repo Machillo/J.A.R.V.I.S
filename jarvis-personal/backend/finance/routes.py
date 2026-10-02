@@ -7,7 +7,11 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 
+from backend.auth.current_user import get_current_workspace_id
+from backend.core.database import get_connection
+from backend.finance import payroll_receipts
 from backend.finance.models import (
+    PayrollReceiptLinkRequest,
     SalaryRequest,
     BonusRequest,
     DebtRequest,
@@ -725,3 +729,30 @@ def plan_goal(request: GoalPlanningRequest):
         description=request.description,
         estimated_total_cost=request.estimated_total_cost,
     )
+
+
+# Payroll receipts: what a salary deposit was made of. Reads never write; the receipt never adds
+# income (the linked deposit is the income).
+@router.get("/payroll/receipts")
+def payroll_receipts_list(date_from: str | None = None, date_to: str | None = None):
+    with get_connection() as conn:
+        items = payroll_receipts.list_receipts(conn, workspace_id=get_current_workspace_id(), date_from=date_from, date_to=date_to)
+    return {"status": "OK", "items": items}
+
+
+@router.get("/payroll/receipts/{receipt_id}")
+def payroll_receipt_detail(receipt_id: int):
+    with get_connection() as conn:
+        item = payroll_receipts.get_receipt(conn, workspace_id=get_current_workspace_id(), receipt_id=receipt_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Comprobante no encontrado.")
+    return {"status": "OK", "item": item}
+
+
+@router.post("/payroll/receipts/{receipt_id}/link")
+def payroll_receipt_link(receipt_id: int, request: PayrollReceiptLinkRequest):
+    with get_connection() as conn:
+        result = payroll_receipts.link_receipt(conn, workspace_id=get_current_workspace_id(), receipt_id=receipt_id,
+                                               transaction_id=request.transaction_id)
+        conn.commit()
+    return result

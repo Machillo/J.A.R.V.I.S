@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
-from backend.finance import balance_movements
+from backend.finance import balance_movements, payroll_receipts
 from backend.finance.debt_automation import schedule_automation_enabled
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
 
@@ -1524,6 +1524,9 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     other_inflows_total = sum(_as_float(r.get("amount")) for r in loan_transactions if r.get("transaction_type") in ("receivable_payment", "asset_sale"))
     loans_total = sum(_as_float(r.get("amount")) for r in loan_transactions) - other_inflows_total
     expected_total = base_net + extra_expected
+    # Salary received this cycle replaces its projected share; it never adds on top of it.
+    salary_received = payroll_receipts.salary_received(income_transactions)
+    pending_projection = payroll_receipts.pending_projection(expected_total, salary_received)
 
     try:
         from backend.finance.intelligence import calculate_goal_reserves, _fetch_active_goals
@@ -1536,7 +1539,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     )
 
     real_balance = (
-        expected_total
+        pending_projection
         + income_received_total
         + loans_total
         + other_inflows_total
@@ -1568,6 +1571,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             "extra_expected": round(extra_expected, 2),
             "expected_total": round(expected_total, 2),
             "received_from_transactions": round(income_received_total, 2),
+            "salary_received": salary_received, "pending_projection": pending_projection,
             "other_cash_inflows": round(other_inflows_total, 2),
             "items": extra_items,
         },
