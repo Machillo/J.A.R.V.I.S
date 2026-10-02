@@ -11,6 +11,11 @@ the amounts are equal to the cent, the deposit falls in the receipt's payment wi
 either the deposit names the receipt's period or it is the only payroll-worded candidate.
 Anything weaker stays POSSIBLE_MATCH (for a person to confirm) or PAYROLL_ONLY.
 
+Trust: parsing and authorization are separate. Any well-formed receipt can be parsed, but a
+mail receipt is stored only when its sender is trusted by THAT workspace
+(``payroll_trusted_senders``, exact address, strict From parse). An untrusted or spoofed
+receipt is never stored, so it can never be linked to a deposit.
+
 Shared code: the workspace is always passed explicitly; no employer, person or account is
 known here.
 """
@@ -20,6 +25,8 @@ import re
 import unicodedata
 from datetime import date, timedelta
 from typing import Any
+
+from backend.email_monitor.sender_trust import single_sender_address, trusted_payroll_sender
 
 INCOME_KINDS = {"ordinary", "overtime", "holiday_paid", "holiday_worked", "vacation", "bonus", "other_income"}
 DEDUCTION_KINDS = {"social_security", "income_tax", "association", "loan_repayment", "other_deduction"}
@@ -56,14 +63,21 @@ def _debt_for(conn, workspace_id: str, label: str) -> int | None:
     return hits[0] if len(hits) == 1 else None
 
 
-def record_receipt(conn, *, workspace_id: str, parsed: dict[str, Any], source: str, source_key: str | None = None) -> dict[str, Any]:
+def record_receipt(conn, *, workspace_id: str, parsed: dict[str, Any], source: str, source_key: str | None = None,
+                   sender: str | None = None) -> dict[str, Any]:
     """Store a parsed receipt (``payroll_statement.parse_payroll_receipt``) and try to match it.
 
-    Idempotent: the same source message or the same (period, gross, net) is stored once.
-    A receipt whose lines do not add up is rejected, never stored.
+    A mail receipt (``source='mail_receipt'``) is stored only when ``sender`` is trusted by this
+    workspace; no other source is accepted yet. Idempotent: the same source message or the same
+    (period, gross, net) is stored once. A receipt whose lines do not add up is rejected.
     """
     if not parsed or parsed.get("kind") != "payroll_receipt":
         return {"status": "NOT_A_RECEIPT"}
+    if source != "mail_receipt":
+        return {"status": "UNSUPPORTED_SOURCE"}
+    source_address = trusted_payroll_sender(conn, workspace_id, sender or "")
+    if not source_address:
+        return {"status": "UNTRUSTED_SOURCE"}
     if not parsed.get("consistent"):
         return {"status": "REJECTED_INCONSISTENT"}
     existing = conn.execute(
@@ -77,10 +91,10 @@ def record_receipt(conn, *, workspace_id: str, parsed: dict[str, Any], source: s
         return {"status": "DUPLICATE", "receipt_id": int(existing["id"])}
     receipt_id = int(conn.execute(
         """INSERT INTO payroll_receipts (workspace_id, period_code, period_start, period_end, issue_date, gross, deductions, net,
-                                         match_status, source, source_key)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'PAYROLL_ONLY', %s, %s) RETURNING id""",
+                                         match_status, source, source_key, source_address)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'PAYROLL_ONLY', %s, %s, %s) RETURNING id""",
         (workspace_id, parsed.get("period_code"), parsed["period_start"], parsed["period_end"], parsed.get("issue_date"),
-         parsed["gross"], parsed["deductions_total"], parsed["net"], source, source_key),
+         parsed["gross"], parsed["deductions_total"], parsed["net"], source, source_key, source_address),
     ).fetchone()["id"])
     for section, lines in (("income", parsed["income_lines"]), ("deduction", parsed["deduction_lines"])):
         for line in lines:
@@ -247,3 +261,30 @@ def salary_received(income_rows: list[dict[str, Any]]) -> float:
 def pending_projection(projected: float, received: float) -> float:
     """The projected salary still to come: received salary replaces the projection, never adds to it."""
     return round(max(float(projected or 0) - float(received or 0), 0.0), 2)
+
+
+def list_trusted_senders(conn, *, workspace_id: str) -> list[dict[str, Any]]:
+    """Read only: the payroll senders this workspace trusts (active and revoked)."""
+    return [dict(r) for r in conn.execute(
+        "SELECT id, sender_address, label, active, created_at FROM payroll_trusted_senders WHERE workspace_id = %s ORDER BY id",
+        (workspace_id,)).fetchall()]
+
+
+def trust_sender(conn, *, workspace_id: str, sender: str, label: str | None = None) -> dict[str, Any]:
+    """Trust one exact sender address for this workspace's payroll receipts (a person's decision)."""
+    address = single_sender_address(sender)
+    if not address:
+        return {"status": "ERROR", "message": "Indicá una sola dirección de correo válida."}
+    row = conn.execute(
+        """INSERT INTO payroll_trusted_senders (workspace_id, sender_address, label) VALUES (%s, %s, %s)
+           ON CONFLICT (workspace_id, sender_address) DO UPDATE SET active = TRUE, label = COALESCE(EXCLUDED.label, payroll_trusted_senders.label), updated_at = NOW()
+           RETURNING id, sender_address, label, active""",
+        (workspace_id, address, (label or "")[:120] or None)).fetchone()
+    return {"status": "OK", "item": dict(row)}
+
+
+def revoke_trusted_sender(conn, *, workspace_id: str, sender_id: int) -> dict[str, Any]:
+    """Stop trusting a sender (kept as history; receipts already stored keep their source)."""
+    row = conn.execute("UPDATE payroll_trusted_senders SET active = FALSE, updated_at = NOW() WHERE id = %s AND workspace_id = %s RETURNING id",
+                       (sender_id, workspace_id)).fetchone()
+    return {"status": "OK"} if row else {"status": "NOT_FOUND"}

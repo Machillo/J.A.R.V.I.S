@@ -25,6 +25,7 @@ from backend.email_monitor.normalization import normalize_description
 from backend.email_monitor.personal_rules import apply_workspace_email_rules
 from backend.email_monitor.statement_reconciliation import reconcile_statement
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal, parse_payroll_receipt
+from backend.email_monitor.sender_trust import trusted_payroll_sender
 from backend.finance import payroll_receipts
 from backend.email_monitor.popular_pdf import parse_popular_email_document
 
@@ -1166,9 +1167,14 @@ def scan_email_text(
         }
 
     # A payroll receipt explains a salary deposit; it is stored as evidence and linked to the
-    # deposit it explains, never turned into a transaction or a candidate.
+    # deposit it explains, never turned into a transaction or a candidate. Parsing is not trust:
+    # only a sender this workspace trusts for payroll may store one (else it is ordinary mail).
     receipt = parse_payroll_receipt(body)
+    trusted = None
     if receipt:
+        with get_connection() as conn:
+            trusted = trusted_payroll_sender(conn, _workspace_id_for_user(conn, user_id), sender)
+    if receipt and trusted:
         with get_connection() as conn:
             workspace_id = _workspace_id_for_user(conn, user_id)
             email_message_id = _upsert_ingested_message(
@@ -1179,7 +1185,7 @@ def scan_email_text(
                 attachment_names=attachment_names,
             )
             stored = payroll_receipts.record_receipt(conn, workspace_id=workspace_id, parsed=receipt, source="mail_receipt",
-                                                     source_key=provider_message_id or email_fp)
+                                                     source_key=provider_message_id or email_fp, sender=sender)
             _log_email_event(
                 conn, user_id=user_id, email_message_id=email_message_id,
                 provider_message_id=provider_message_id, sender=sender, subject=subject,

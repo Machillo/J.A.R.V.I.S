@@ -1,7 +1,7 @@
 """Payroll receipts on PostgreSQL, connected as the application role (dincr_app).
 
 Built on the role test's environment (identity baseline, ownership guards, dincr_app) plus
-20261003120000_payroll_receipts. A receipt explains a salary deposit and never adds income,
+20261002150000_payroll_receipts. A receipt explains a salary deposit and never adds income,
 spending, balance or debt; the database enforces its invariants. Synthetic data only.
 """
 from __future__ import annotations
@@ -15,8 +15,8 @@ from backend.tests.test_dincr_app_role_pg import WS_A, WS_B, env  # noqa: F401  
 psycopg2 = pytest.importorskip("psycopg2")
 
 ROOT = Path(__file__).resolve().parents[2] / "database"
-MIGRATION = ROOT / "migrations/20261003120000_payroll_receipts.sql"
-ROLLBACK = ROOT / "rollback/20261003120000_payroll_receipts_rollback.sql"
+MIGRATION = ROOT / "migrations/20261002150000_payroll_receipts.sql"
+ROLLBACK = ROOT / "rollback/20261002150000_payroll_receipts_rollback.sql"
 
 RECEIPT = """COMPROBANTE DE PAGO
 | EMPRESA EJEMPLO, S.A. | PLANILLA SEMANAL COLONES |
@@ -37,6 +37,7 @@ RECEIPT = """COMPROBANTE DE PAGO
 | NETO A PAGAR: ¢ 42,764.55 |
 """
 NET = 42764.55
+TRUSTED = "payroll@empresa-ejemplo.test"          # a synthetic employer sender, trusted by WS_A in these tests
 
 
 def weekly(period_from: str, period_to: str, issued: str, net_text: str = "42,764.55") -> str:
@@ -207,14 +208,30 @@ def test_migration_reapplies_and_rolls_back_only_when_empty(db):
 
 # ---------------------------------------------------------------- module: record, match, read
 
-def record(text, key=None):
+def trust(ws, sender):
+    from backend.core.database import get_connection
+    from backend.finance import payroll_receipts
+    with get_connection() as conn:
+        out = payroll_receipts.trust_sender(conn, workspace_id=ws, sender=sender)
+        conn.commit()
+    return out
+
+
+def record(text, key=None, sender=TRUSTED, ws=WS_A, trusted=True):
     from backend.core.database import get_connection
     from backend.email_monitor.payroll_statement import parse_payroll_receipt
     from backend.finance import payroll_receipts
+    if trusted:
+        trust(WS_A, TRUSTED)
     with get_connection() as conn:
-        out = payroll_receipts.record_receipt(conn, workspace_id=WS_A, parsed=parse_payroll_receipt(text), source="mail_receipt", source_key=key)
+        out = payroll_receipts.record_receipt(conn, workspace_id=ws, parsed=parse_payroll_receipt(text), source="mail_receipt", source_key=key, sender=sender)
         conn.commit()
     return out
+
+
+def stored_receipts(owner, ws=WS_A):
+    owner.execute("SELECT count(*) FROM payroll_receipts WHERE workspace_id = %s", (ws,))
+    return owner.fetchone()[0]
 
 
 def snapshot(owner, ws=WS_A):
@@ -328,3 +345,72 @@ def test_reading_receipts_writes_nothing(db):
         database.close_idle_connections()
     owner.execute("SELECT md5(string_agg(r::text, ',')) FROM payroll_receipts r")
     assert owner.fetchone() == before and len(listed) == 1
+
+
+# ---------------------------------------------------------------- trust boundary: parsing is not authorization
+
+def test_a_trusted_sender_with_a_valid_receipt_is_stored_with_its_source(db):
+    out = record(RECEIPT, key="t1", sender=f"Nómina <{TRUSTED.upper()}>")
+    assert out["status"] == "RECORDED"
+    db["owner"].execute("SELECT source, source_address FROM payroll_receipts WHERE id = %s", (out["receipt_id"],))
+    assert db["owner"].fetchone() == ("mail_receipt", TRUSTED)
+
+
+@pytest.mark.parametrize("sender", [
+    "otro@empresa-ejemplo.test",                          # same domain, another address
+    "payroll@empresa-ejemplo.test.attacker.test",         # lookalike domain
+    "payroll@empresa-ejemp1o.test",                       # lookalike spelling
+    f"{TRUSTED} <attacker@evil.test>",                    # trusted address in the display name
+    f"Nómina <{TRUSTED}> <attacker@evil.test>",           # two addresses
+    f"<{TRUSTED}> attacker@evil.test",                    # trailing address
+    "",
+])
+def test_an_untrusted_or_spoofed_sender_never_stores_the_same_receipt(db, sender):
+    trust(WS_A, TRUSTED)
+    out = record(RECEIPT, key="s1", sender=sender, trusted=False)
+    assert out == {"status": "UNTRUSTED_SOURCE"} and stored_receipts(db["owner"]) == 0
+
+
+def test_a_trusted_sender_with_an_invalid_body_stores_nothing(db):
+    assert record("Hola, adjunto información.", key="i1")["status"] == "NOT_A_RECEIPT"
+    assert record(RECEIPT.replace("NETO A PAGAR: ¢ 42,764.55", "NETO A PAGAR: ¢ 50,000.00"), key="i2")["status"] == "REJECTED_INCONSISTENT"
+    assert stored_receipts(db["owner"]) == 0
+
+
+def test_a_rejected_fake_receipt_can_never_be_linked_to_a_real_income_later(db):
+    from backend.core.database import get_connection
+    from backend.finance import payroll_receipts
+    trust(WS_A, TRUSTED)
+    assert record(RECEIPT, key="f1", sender="attacker@evil.test", trusted=False)["status"] == "UNTRUSTED_SOURCE"
+    dep = tx(db["app"], WS_A, "2030-01-17", NET, description="Planilla 06/01/2030 12/01/2030", category="Salario")
+    with get_connection() as conn:
+        assert payroll_receipts.match_pending_for_transaction(conn, workspace_id=WS_A, transaction_id=dep) == []
+        conn.commit()
+    db["owner"].execute("SELECT count(*) FROM payroll_receipts WHERE transaction_id = %s", (dep,))
+    assert db["owner"].fetchone()[0] == 0
+
+
+def test_trust_is_per_workspace_and_can_be_revoked(db):
+    from backend.core.database import get_connection
+    from backend.finance import payroll_receipts
+    trust(WS_B, TRUSTED)                                                                  # trusted by B only
+    assert record(RECEIPT, key="w1", trusted=False)["status"] == "UNTRUSTED_SOURCE"        # A does not inherit it
+    item = trust(WS_A, TRUSTED)["item"]
+    with get_connection() as conn:
+        assert payroll_receipts.revoke_trusted_sender(conn, workspace_id=WS_B, sender_id=item["id"])["status"] == "NOT_FOUND"  # B cannot revoke A's
+        assert payroll_receipts.revoke_trusted_sender(conn, workspace_id=WS_A, sender_id=item["id"])["status"] == "OK"
+        conn.commit()
+    assert record(RECEIPT, key="w2", trusted=False)["status"] == "UNTRUSTED_SOURCE"
+    with get_connection() as conn:
+        assert [s["sender_address"] for s in payroll_receipts.list_trusted_senders(conn, workspace_id=WS_A)] == [TRUSTED]
+
+
+def test_a_mail_receipt_row_without_a_trusted_source_is_refused_by_the_database(db):
+    app = db["app"]
+    def unsourced():
+        app.execute("BEGIN")
+        app.execute("""INSERT INTO payroll_receipts (workspace_id, period_start, period_end, gross, deductions, net, source)
+                       VALUES (%s, '2030-05-01', '2030-05-07', 150, 50, 100, 'mail_receipt') RETURNING id""", (WS_A,))
+        app.execute("COMMIT")
+    assert fails(app, unsourced)
+    assert fails(app, lambda: app.execute("INSERT INTO payroll_trusted_senders (workspace_id, sender_address) VALUES (%s, 'Mixed@Case.test')", (WS_A,)))

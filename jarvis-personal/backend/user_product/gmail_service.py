@@ -29,6 +29,7 @@ from backend.email_monitor.parser import parse_financial_email
 from backend.email_monitor.parser_identity import for_account_holder
 from backend.email_monitor.popular_pdf import parse_popular_email_document
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
+from backend.email_monitor.sender_trust import single_sender_address as _single_sender_address
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text, plain_text_from_html
 from backend.finance.category_catalog import normalize_category
 from backend.user_product.financial_candidate import canonical_candidate
@@ -141,25 +142,6 @@ def _list_message_page(service, query: str, *, page_token: str | None, limit: in
     response = service.users().messages().list(**request).execute()
     items = [item for item in response.get("messages", []) if item.get("id")]
     return items, response.get("nextPageToken")
-
-
-def _single_sender_address(sender: str) -> str | None:
-    """The one address of a From header, or None when the header is ambiguous or malformed."""
-    header = (sender or "").strip()
-    brackets = re.findall(r"<([^<>]*)>", header)
-    if len(brackets) > 1:
-        return None
-    if brackets:
-        display, _, trailing = header.partition("<")
-        # A display name holding an address ("alerta@banco <x@evil>") or a second
-        # recipient after the brackets is never a genuine bank notification.
-        if "@" in display or trailing.split(">", 1)[-1].strip():
-            return None
-        address = brackets[0]
-    else:
-        address = header
-    address = address.strip().lower()
-    return address if re.fullmatch(r"[a-z0-9_.+\-]+@[a-z0-9.\-]+", address) else None
 
 
 def _sender_in(sender: str, allowed: set[str]) -> bool:

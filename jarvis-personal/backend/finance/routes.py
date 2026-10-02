@@ -12,6 +12,7 @@ from backend.core.database import get_connection
 from backend.finance import payroll_receipts
 from backend.finance.models import (
     PayrollReceiptLinkRequest,
+    PayrollTrustedSenderRequest,
     SalaryRequest,
     BonusRequest,
     DebtRequest,
@@ -754,5 +755,29 @@ def payroll_receipt_link(receipt_id: int, request: PayrollReceiptLinkRequest):
     with get_connection() as conn:
         result = payroll_receipts.link_receipt(conn, workspace_id=get_current_workspace_id(), receipt_id=receipt_id,
                                                transaction_id=request.transaction_id)
+        conn.commit()
+    return result
+
+
+# Which mail senders this workspace trusts for payroll receipts (a person's decision, by exact address).
+@router.get("/payroll/trusted-senders")
+def payroll_trusted_senders():
+    with get_connection() as conn:
+        items = payroll_receipts.list_trusted_senders(conn, workspace_id=get_current_workspace_id())
+    return {"status": "OK", "items": items}
+
+
+@router.post("/payroll/trusted-senders")
+def payroll_trust_sender(request: PayrollTrustedSenderRequest):
+    with get_connection() as conn:
+        result = payroll_receipts.trust_sender(conn, workspace_id=get_current_workspace_id(), sender=request.sender, label=request.label)
+        conn.commit()
+    return result
+
+
+@router.post("/payroll/trusted-senders/{sender_id}/revoke")
+def payroll_revoke_sender(sender_id: int):
+    with get_connection() as conn:
+        result = payroll_receipts.revoke_trusted_sender(conn, workspace_id=get_current_workspace_id(), sender_id=sender_id)
         conn.commit()
     return result

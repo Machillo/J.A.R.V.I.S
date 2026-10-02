@@ -228,3 +228,8 @@ class SalvavidasUpdateRequest(BaseModel):
 
 class PayrollReceiptLinkRequest(BaseModel):
     transaction_id: int
+
+
+class PayrollTrustedSenderRequest(BaseModel):
+    sender: str
+    label: str | None = None
