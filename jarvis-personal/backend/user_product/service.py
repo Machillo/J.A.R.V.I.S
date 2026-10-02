@@ -10,7 +10,7 @@ from backend.auth.saas import require_feature
 from backend.core.database import get_connection
 from backend.core.idempotency import mark_applied
 from backend.finance.service import get_payroll_events
-from backend.finance.category_catalog import normalize_category, expense_type_for_category
+from backend.finance.category_catalog import manual_expense_category, normalize_category, expense_type_for_category
 from backend.user_product.basic_service import _require_basic_tables
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 from backend.user_product.strategy_engine import (
@@ -194,7 +194,7 @@ def list_expenses():
 def create_expense_entry(payload):
     user_id = _legacy_financial_user_id()
     workspace_id = get_current_workspace_id()
-    category = (payload.category or "Compras").strip()
+    category = manual_expense_category(payload.category)
     expense_type = expense_type_for_category(category)
     with get_connection() as conn:
         values = _entry_values(conn, payload)
@@ -212,7 +212,7 @@ def create_expense_entry(payload):
 
 def update_expense(expense_id: int, payload):
     workspace_id = get_current_workspace_id()
-    category = (payload.category or "Compras").strip()
+    category = manual_expense_category(payload.category)
     with get_connection() as conn:
         values = _entry_values(conn, payload)
         row = conn.execute(

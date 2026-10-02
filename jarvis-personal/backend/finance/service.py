@@ -2707,7 +2707,7 @@ def get_net_worth_report():
             FROM account_balances a
             LEFT JOIN LATERAL (
                 SELECT COALESCE(SUM(CASE
-                    WHEN t.transaction_type IN ('income','refund','reimbursement') THEN t.amount
+                    WHEN t.transaction_type IN ('income','refund','reimbursement','receivable_payment','asset_sale') THEN t.amount
                     WHEN t.transaction_type IN ('expense','debt_payment') THEN -t.amount
                     ELSE 0 END),0) AS movement_delta
                 FROM transactions t

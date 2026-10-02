@@ -761,7 +761,10 @@ def _transaction_duplicate_match(conn, workspace_id: str, candidate: dict[str, A
         WHERE workspace_id = %s
         AND transaction_date = %s
         AND ABS(amount - %s) < 0.01
-        AND transaction_type = %s
+        AND (transaction_type = %s
+             -- a money-in movement may since have been recorded as a receivable collection
+             OR (%s IN ('income', 'reimbursement', 'receivable_payment')
+                 AND transaction_type IN ('income', 'reimbursement', 'receivable_payment')))
         AND LOWER(description) = LOWER(%s)
         LIMIT 1
         """,
@@ -769,6 +772,7 @@ def _transaction_duplicate_match(conn, workspace_id: str, candidate: dict[str, A
             workspace_id,
             candidate["transaction_date"],
             candidate["amount"],
+            candidate["transaction_type"],
             candidate["transaction_type"],
             candidate["description"],
         ),
@@ -803,14 +807,11 @@ def _existing_receivable_payment_match(conn, workspace_id: str, candidate: dict[
           AND t.transaction_date::date = %s::date
           AND ABS(t.amount - %s) < 0.01
           AND t.transaction_type IN ('income', 'receivable_payment')
-          AND (
-              LOWER(COALESCE(r.person_name, '')) = LOWER(%s)
-              OR t.source = 'receivable_manual'
-          )
-        ORDER BY CASE WHEN LOWER(COALESCE(r.person_name, '')) = LOWER(%s) THEN 0 ELSE 1 END, t.id
+          AND LOWER(COALESCE(r.person_name, '')) = LOWER(%s)
+        ORDER BY t.id
         LIMIT 1
         """,
-        (workspace_id, candidate["transaction_date"], candidate["amount"], payer, payer),
+        (workspace_id, candidate["transaction_date"], candidate["amount"], payer),
     ).fetchone()
     return int(row["id"]) if row else None
 
@@ -1138,6 +1139,9 @@ def scan_email_text(
 
     with get_connection() as conn:
         workspace_id = _workspace_id_for_user(conn, user_id)
+        # Receivables may change in this transaction: take the workspace lock first, the
+        # same order as every receivable writer (no deadlock, no double confirmation).
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         parsed = apply_workspace_email_rules(conn, workspace_id, parsed)
         email_message_id = _upsert_ingested_message(
             conn,
@@ -1633,6 +1637,9 @@ def decide_candidate(candidate_id: int, decision: str) -> dict[str, Any]:
     decision_clean = (decision or "").lower().strip()
 
     with get_connection() as conn:
+        # Receivables may change in this transaction: take the workspace lock first, the
+        # same order as every receivable writer (no deadlock, no double confirmation).
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         row = conn.execute(
             """
             SELECT *
@@ -1752,6 +1759,9 @@ def classify_candidate(
 
     with get_connection() as conn:
         workspace_id = _workspace_id_for_user(conn, user_id)
+        # Receivables may change in this transaction: take the workspace lock first, the
+        # same order as every receivable writer (no deadlock, no double confirmation).
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)
         row = conn.execute(
             "SELECT * FROM email_transaction_candidates WHERE id = %s AND workspace_id = %s",
             (candidate_id, workspace_id),
@@ -1866,6 +1876,7 @@ def bulk_decide_candidates(candidate_ids: list[int], decision: str) -> dict[str,
     items: list[dict[str, Any]] = []
 
     with get_connection() as conn:
+        receivable_semantics.lock_workspace_receivables(conn, workspace_id)   # same order as every receivable writer
         placeholders = ",".join(["%s"] * len(unique_ids))
         rows = conn.execute(
             f"""

@@ -371,7 +371,7 @@ def test_settlements_wait_for_the_workspace_receivable_lock(db, admin_uri):
     rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=50000, description="", entry_kind="loan")["item"]["id"]
     holder = psycopg2.connect(db.dsn)
     with holder.cursor() as cur:
-        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"receivables:{WS_A}",))   # held until commit
+        cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"receivables:{WS_A}",))   # held until commit
     finished = []
 
     def settle():
@@ -390,3 +390,104 @@ def test_settlements_wait_for_the_workspace_receivable_lock(db, admin_uri):
     holder.close()
     worker.join(10)
     assert finished and finished[0] >= released
+
+
+def test_automatic_match_never_turns_money_not_owed_into_a_collection(db, monkeypatch):
+    """A payer-named income is a collection only up to what the person still owes."""
+    from backend.core import database
+    from backend.email_monitor import service
+    from backend.finance import intelligence
+
+    rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=10000, description="", entry_kind="loan")["item"]["id"]
+    monkeypatch.setattr(service, "_workspace_id_for_user", lambda conn, user_id: WS_A)
+
+    def confirm(amount):
+        tx_id = q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, source) VALUES (%s, %s, 'SINPE recibido', %s, 'income', 'email_monitor') RETURNING id", (WS_A, TODAY, amount))[0][0]
+        with database.get_connection() as conn:
+            service._auto_apply_receivable_payment_from_candidate(conn, 7, tx_id, {"transaction_type": "income", "description": "SINPE recibido", "notes": "payer: Ana Prueba", "amount": amount, "transaction_date": TODAY})
+            conn.commit()
+        return q(db, "SELECT transaction_type, category, notes FROM transactions WHERE id = %s", (tx_id,))[0]
+
+    assert confirm(15000)[0] == "income"                         # more than owed: left for the user to decide
+    linked = confirm(10000)
+    assert linked[0] == "receivable_payment" and linked[1] == "Cuentas por cobrar" and "tipo anterior: income" in linked[2]
+    assert stored(db, rid) == (10000.0, 10000.0, 0.0, "completed")
+    assert confirm(5000)[0] == "income"                          # settled person: a later SINPE is not a collection
+
+
+def test_a_holder_card_never_becomes_a_receivable_even_if_not_flagged_primary(db):
+    from backend.core import database
+    from backend.finance import receivable_semantics
+
+    q(db, "INSERT INTO card_aliases (workspace_id, card_last4, owner_label, relationship, is_primary) VALUES (%s, '2222', 'Titular', 'principal', FALSE), (%s, '1111', 'Ana Prueba', 'adicional', FALSE)", (WS_A, WS_A))
+    q(db, "INSERT INTO email_transaction_candidates (workspace_id, transaction_id, transaction_date, amount, transaction_type, card_owner, card_last4, status) VALUES (%s, NULL, %s, 9000, 'expense', 'Titular', '2222', 'confirmed'), (%s, NULL, %s, 3000, 'expense', 'Ana Prueba', '1111', 'confirmed')", (WS_A, TODAY, WS_A, TODAY))
+    with database.get_connection() as conn:
+        receivable_semantics.mirror_additional_card_cycle(conn, WS_A)
+        conn.commit()
+    assert q(db, "SELECT person_name, pending_amount FROM receivables") == [("Ana Prueba", 3000)]
+
+
+def test_only_received_money_settles_and_never_more_than_it_brought(db):
+    from backend.finance import intelligence
+
+    rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=50000, description="", entry_kind="loan")["item"]["id"]
+
+    def movement(kind, amount=20000):
+        return q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, source) VALUES (%s, %s, 'mov', %s, %s, 'manual') RETURNING id", (WS_A, TODAY, amount, kind))[0][0]
+
+    assert intelligence.apply_receivable_payment(rid, 20000, source_transaction_id=movement("transfer"), payment_date=TODAY)["status"] == "ERROR"
+    assert intelligence.apply_receivable_payment(rid, 20000, source_transaction_id=movement("asset_sale"), payment_date=TODAY)["status"] == "ERROR"
+    cash = movement("income")
+    assert intelligence.apply_receivable_payment(rid, 18500, source_transaction_id=cash, method="non_cash_offset", payment_date=TODAY)["status"] == "ERROR"
+    assert intelligence.apply_receivable_payment(rid, 25000, source_transaction_id=cash, payment_date=TODAY)["status"] == "ERROR"
+    assert types(db) == {"transfer": 1, "asset_sale": 1, "income": 1}           # nothing was retyped
+    assert stored(db, rid)[2] == 50000.0
+
+
+def test_collections_and_asset_sales_raise_the_account_balance(db):
+    from backend.finance import intelligence
+
+    q(db, """CREATE TABLE account_balances (id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL, account_name TEXT, bank_name TEXT, account_type TEXT,
+             account_last4 TEXT, currency TEXT DEFAULT 'CRC', annual_interest_rate NUMERIC, last_reconciliation_difference NUMERIC, current_balance NUMERIC(14,2),
+             balance_as_of TIMESTAMPTZ, source TEXT, include_in_net_worth BOOLEAN DEFAULT TRUE, is_active BOOLEAN DEFAULT TRUE, updated_at TIMESTAMPTZ DEFAULT NOW());
+             CREATE TABLE exchange_rates (id BIGSERIAL PRIMARY KEY, workspace_id UUID, currency TEXT, exchange_rate NUMERIC, rate_date DATE);""")
+    acc = q(db, "INSERT INTO account_balances (workspace_id, account_name, bank_name, current_balance, balance_as_of) VALUES (%s, 'Cuenta', 'Banco', 100000, NOW() - INTERVAL '1 day') RETURNING id", (WS_A,))[0][0]
+    rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=50000, description="", entry_kind="loan")["item"]["id"]
+    tx = q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, source, financial_account_id) VALUES (%s, %s, 'SINPE', 20000, 'income', 'manual', %s) RETURNING id", (WS_A, TODAY, acc))[0][0]
+    q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, category, financial_account_id) VALUES (%s, %s, 'Venta de vehículo', 775000, 'asset_sale', 'Venta de activo', %s)", (WS_A, TODAY, acc))
+    before = intelligence.list_account_balances()["items"][0]["calculated_balance"]
+    intelligence.apply_receivable_payment(rid, 20000, source_transaction_id=tx, payment_date=TODAY)
+    after = intelligence.list_account_balances()["items"][0]["calculated_balance"]
+    assert float(before) == float(after) == 895000.0             # retyping a collection never moves cash out of the account
+
+
+def test_mail_duplicate_checks_survive_the_collection_retype(db):
+    from backend.core import database
+    from backend.email_monitor import service
+    from backend.finance import intelligence
+
+    rid = intelligence.add_receivable_entry(person_name="Ana Prueba", amount=50000, description="", entry_kind="loan")["item"]["id"]
+    other = intelligence.add_receivable_entry(person_name="Luis Ejemplo", amount=50000, description="", entry_kind="loan")["item"]["id"]
+    tx = q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, source) VALUES (%s, %s, 'SINPE recibido', 20000, 'income', 'email_monitor') RETURNING id", (WS_A, TODAY))[0][0]
+    intelligence.apply_receivable_payment(rid, 20000, source_transaction_id=tx, payment_date=TODAY)
+    intelligence.apply_receivable_payment(other, 7000, method="SINPE", payment_date=TODAY)          # Luis's manual collection
+    with database.get_connection() as conn:
+        same = service._transaction_duplicate_match(conn, WS_A, {"transaction_date": TODAY, "amount": 20000, "transaction_type": "income", "description": "SINPE recibido"})
+        foreign = service._existing_receivable_payment_match(conn, WS_A, {"transaction_type": "income", "transaction_date": TODAY, "amount": 7000, "description": "SINPE de Ana Prueba", "notes": "abono"})
+    assert same == tx                                            # the same mail again is recognised after the retype
+    assert foreign is None                                       # Ana's mail never matches Luis's manual collection
+
+
+def test_unknown_spending_is_one_counted_bucket_in_the_monthly_summary(db):
+    """Legacy empty categories and explicit "Sin categoría" are one row, counted in full."""
+    from datetime import timedelta
+    from backend.core import database
+    from backend.user_product import free_service
+
+    q(db, "CREATE TABLE expenses (id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL, amount NUMERIC(14,2), category TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())")
+    q(db, "INSERT INTO expenses (workspace_id, amount, category) VALUES (%s, 1000, ''), (%s, 500, 'Comida')", (WS_A, WS_A))
+    q(db, "INSERT INTO transactions (workspace_id, transaction_date, description, amount, transaction_type, category) VALUES (%s, %s, 'x', 2000, 'expense', 'Sin categoría')", (WS_A, TODAY))
+    start = date.today().replace(day=1)
+    with database.get_connection() as conn:
+        rows = free_service._categories(conn, WS_A, start, start + timedelta(days=40))
+    assert rows == [{"category": "Sin categoría", "amount": 3000.0}, {"category": "Comida", "amount": 500.0}]

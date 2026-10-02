@@ -32,8 +32,12 @@ COLLECTION_TRANSACTION_TYPE = "receivable_payment"
 OFFSET_TRANSACTION_TYPE = "receivable_offset"
 ASSET_SALE_TRANSACTION_TYPE = "asset_sale"
 RECEIVABLE_CATEGORY = "Cuentas por cobrar"
-# Existing movements that may be stated to settle a receivable (money in, or already a settlement).
-SETTLING_TRANSACTION_TYPES = {"income", "reimbursement", "transfer", "receivable_payment", "receivable_offset"}
+# Existing movements that may be stated to settle a receivable: money that came in, or a
+# movement already recorded as a collection. A transfer is excluded (its direction is unknown).
+SETTLING_TRANSACTION_TYPES = {"income", "reimbursement", "receivable_payment"}
+# A card alias with one of these relationships is the holder's own card even if it was not
+# flagged primary; its purchases are never owed by anyone.
+HOLDER_RELATIONSHIPS = ("principal", "titular", "holder", "owner")
 
 CASH_METHODS = {"manual", "sinpe", "transfer", "transferencia", "deposit", "deposito", "depósito", "cash", "efectivo"}
 OFFSET_METHODS = {"offset", "non_cash_offset", "compensacion", "compensación"}
@@ -124,7 +128,7 @@ def lock_workspace_receivables(conn, workspace_id: str) -> None:
     Two concurrent operations (a mail scan and a manual payment) must not create the
     same person twice or apply the same movement twice.
     """
-    conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"receivables:{workspace_id}",))
+    conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"receivables:{workspace_id}",))
 
 
 def recalculate(conn, workspace_id: str, receivable_id: int) -> dict[str, Any]:
@@ -141,19 +145,29 @@ def recalculate(conn, workspace_id: str, receivable_id: int) -> dict[str, Any]:
     return dict(row) if row else {}
 
 
+def find_person_receivable(conn, workspace_id: str, person_name: str) -> dict[str, Any] | None:
+    """The one receivable row every operation uses for a person (charges and collections alike)."""
+    row = conn.execute(
+        """
+        SELECT * FROM receivables
+        WHERE workspace_id = %s AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
+        ORDER BY CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END, id ASC
+        LIMIT 1
+        """,
+        (workspace_id, str(person_name or "").strip()),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def person_receivable(conn, workspace_id: str, person_name: str) -> dict[str, Any]:
     """The workspace's receivable account for ``person_name``, created when missing."""
     clean_name = str(person_name or "").strip()
     if not clean_name:
         raise ValueError("La persona es obligatoria.")
     lock_workspace_receivables(conn, workspace_id)
-    row = conn.execute(
-        """SELECT * FROM receivables WHERE workspace_id = %s AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s))
-           ORDER BY CASE source_type WHEN 'additional_card_auto' THEN 1 ELSE 2 END, id ASC LIMIT 1""",
-        (workspace_id, clean_name),
-    ).fetchone()
+    row = find_person_receivable(conn, workspace_id, clean_name)
     if row:
-        return dict(row)
+        return row
     return dict(conn.execute(
         """INSERT INTO receivables (workspace_id, person_name, original_amount, paid_amount, pending_amount, status, notes, source_type, source_key)
            VALUES (%s, %s, 0, 0, 0, 'completed', '', 'person_account', %s) RETURNING *""",
@@ -164,13 +178,15 @@ def person_receivable(conn, workspace_id: str, person_name: str) -> dict[str, An
 def additional_card_totals(conn, workspace_id: str, cycle_start: date, cycle_end: date) -> list[dict[str, Any]]:
     """Per person, the confirmed purchases of the workspace's additional cards in one cycle.
 
-    A card is additional only when the workspace marked its alias as not primary.
+    A card is additional only when the workspace marked its alias as not primary and its
+    relationship is not the holder's.
     """
     rows = conn.execute(
         """
         WITH additional_aliases AS (
             SELECT workspace_id, card_last4, owner_label FROM card_aliases
             WHERE workspace_id = %s AND COALESCE(is_primary, FALSE) = FALSE
+              AND LOWER(TRIM(COALESCE(relationship, ''))) <> ALL(%s)
         ), candidate_movements AS (
             SELECT COALESCE(a.owner_label, c.card_owner) AS person_name, COALESCE(a.card_last4, c.card_last4) AS card_last4,
                    COALESCE(c.transaction_id, c.id * -1) AS movement_key, c.amount
@@ -186,7 +202,7 @@ def additional_card_totals(conn, workspace_id: str, cycle_start: date, cycle_end
                ARRAY_AGG(DISTINCT card_last4 ORDER BY card_last4) FILTER (WHERE card_last4 IS NOT NULL AND card_last4 <> '') AS cards
         FROM candidate_movements WHERE COALESCE(person_name, '') <> '' GROUP BY person_name ORDER BY person_name
         """,
-        (workspace_id, workspace_id, cycle_start, cycle_end),
+        (workspace_id, list(HOLDER_RELATIONSHIPS), workspace_id, cycle_start, cycle_end),
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -240,31 +256,56 @@ def mirror_additional_card_cycle(conn, workspace_id: str, day: date | None = Non
     return len(touched)
 
 
-def link_collection(conn, *, workspace_id: str, person: str, transaction_id: int,
-                    amount: float, entry_date: str, description: str) -> bool:
-    """Record an existing cash movement as the collection of ``person``'s receivable.
+_COLLECTION_ORIGINS = {"correo": "email_collection", "sync": "income_auto"}
 
-    The movement becomes a ``receivable_payment`` (money in, not income), the ledger gets
-    one payment entry, and the balance is recalculated from the ledger. Idempotent per
-    movement. Returns False when there is nothing to apply.
+
+def link_collection(conn, *, workspace_id: str, person: str, transaction_id: int,
+                    amount: float, entry_date: str, description: str, origin: str = "correo") -> bool:
+    """Record an existing cash movement, detected automatically, as ``person``'s collection.
+
+    Only when the person still owes at least that amount: an automatic match never turns
+    money that was not owed into a "collection" (a gift, a shared bill, an overpayment stay
+    income for the user to decide). The movement becomes a ``receivable_payment`` (money in,
+    not income) with its previous type kept in the notes; the ledger gets one payment entry
+    and the balance is recalculated from the ledger. Idempotent per movement. Returns False
+    when nothing was applied.
     """
     lock_workspace_receivables(conn, workspace_id)
-    rec = conn.execute(
-        "SELECT id FROM receivables WHERE workspace_id = %s AND LOWER(TRIM(person_name)) = LOWER(TRIM(%s)) ORDER BY id LIMIT 1",
-        (workspace_id, person),
-    ).fetchone()
-    if not rec or float(amount or 0) <= 0:
+    rec = find_person_receivable(conn, workspace_id, person)
+    amount = round(float(amount or 0), 2)
+    entry_date = entry_date or date.today().isoformat()
+    if not rec or amount <= 0 or is_movement_applied(conn, workspace_id, transaction_id):
         return False
-    if is_movement_applied(conn, workspace_id, transaction_id):
+    ledger = [dict(e) for e in conn.execute(
+        "SELECT entry_type, amount, is_archived FROM receivable_entries WHERE workspace_id = %s AND receivable_id = %s",
+        (workspace_id, rec["id"])).fetchall()]
+    if amount > receivable_totals(ledger)["pending_amount"] + 0.01:
         return False
-    conn.execute("UPDATE transactions SET transaction_type = %s WHERE id = %s AND workspace_id = %s AND transaction_type IN ('income', 'reimbursement')",
-                 (COLLECTION_TRANSACTION_TYPE, transaction_id, workspace_id))
-    conn.execute("INSERT INTO receivable_payments (workspace_id, receivable_id, amount, source_transaction_id, notes) VALUES (%s, %s, %s, %s, %s)",
-                 (workspace_id, rec["id"], round(float(amount), 2), transaction_id, f"Cobro detectado desde correo: {description}"[:300]))
     conn.execute(
-        """INSERT INTO receivable_entries (workspace_id, receivable_id, entry_type, amount, description, entry_date, source_type, source_key, source_transaction_id, is_archived)
-           VALUES (%s, %s, 'payment', %s, %s, %s, 'email_collection', %s, %s, FALSE) ON CONFLICT DO NOTHING""",
-        (workspace_id, rec["id"], round(float(amount), 2), f"Cobro: {description}"[:300], entry_date, f"payment_transaction:{transaction_id}", transaction_id),
+        """
+        UPDATE transactions
+        SET transaction_type = %s, category = %s,
+            notes = CONCAT_WS(' | ', NULLIF(notes, ''), 'Cobro de cuenta por cobrar (tipo anterior: ' || transaction_type || ')')
+        WHERE id = %s AND workspace_id = %s AND transaction_type IN ('income', 'reimbursement')
+        """,
+        (COLLECTION_TRANSACTION_TYPE, RECEIVABLE_CATEGORY, transaction_id, workspace_id),
+    )
+    conn.execute(
+        """
+        INSERT INTO receivable_payments (workspace_id, receivable_id, amount, source_transaction_id, notes)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (workspace_id, rec["id"], amount, transaction_id, f"Cobro detectado ({origin}): {description}"[:300]),
+    )
+    conn.execute(
+        """
+        INSERT INTO receivable_entries (workspace_id, receivable_id, entry_type, amount, description, entry_date,
+                                        source_type, source_key, source_transaction_id, is_archived)
+        VALUES (%s, %s, 'payment', %s, %s, %s, %s, %s, %s, FALSE)
+        ON CONFLICT DO NOTHING
+        """,
+        (workspace_id, rec["id"], amount, f"Cobro: {description}"[:300], entry_date,
+         _COLLECTION_ORIGINS.get(origin, "email_collection"), f"payment_transaction:{transaction_id}", transaction_id),
     )
     recalculate(conn, workspace_id, int(rec["id"]))
     return True

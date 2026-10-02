@@ -89,7 +89,13 @@ DEFAULT_EXPENSE_CATEGORY = UNKNOWN_EXPENSE_CATEGORY
 DEFAULT_INCOME_CATEGORY = "Otros ingresos"
 
 
+# A collection or an asset sale takes only its own category, never an income or expense one.
+_OWN_CATEGORY_TYPE = {"receivable_payment": "receivable_payment", "receivable_offset": "receivable_payment", "asset_sale": "asset_sale"}
+
+
 def _category_matches_transaction_type(category: str, transaction_type: str | None) -> bool:
+    if transaction_type in _OWN_CATEGORY_TYPE:
+        return _CATEGORY_TRANSACTION_TYPE.get(category) == _OWN_CATEGORY_TYPE[transaction_type]
     if transaction_type == "income":
         return _CATEGORY_TRANSACTION_TYPE.get(category) == "income"
     if transaction_type in {"expense", "debt_payment"}:
@@ -97,10 +103,27 @@ def _category_matches_transaction_type(category: str, transaction_type: str | No
     return True
 
 
+# Settling a receivable and selling an asset have their own categories; every other
+# non-income movement without a known category is explicitly "Sin categoría".
+_TYPE_DEFAULT_CATEGORY = {"receivable_payment": "Cuentas por cobrar", "receivable_offset": "Cuentas por cobrar", "asset_sale": "Venta de activo"}
+
+
+def default_category(transaction_type: str | None) -> str:
+    if transaction_type == "income":
+        return DEFAULT_INCOME_CATEGORY
+    return _TYPE_DEFAULT_CATEGORY.get(transaction_type or "", DEFAULT_EXPENSE_CATEGORY)
+
+
+def manual_expense_category(value: str | None) -> str:
+    """The category of a manual expense as typed; empty or the API placeholder "general" is unknown, never Compras."""
+    clean = str(value or "").strip()
+    return UNKNOWN_EXPENSE_CATEGORY if clean.lower() in {"", "general"} else clean
+
+
 def _safe_category(category: str, transaction_type: str | None) -> str:
     if _category_matches_transaction_type(category, transaction_type):
         return category
-    return DEFAULT_INCOME_CATEGORY if transaction_type == "income" else DEFAULT_EXPENSE_CATEGORY
+    return default_category(transaction_type)
 
 
 def _compatible(names: list[str], transaction_type: str | None) -> str | None:
@@ -111,7 +134,7 @@ def _compatible(names: list[str], transaction_type: str | None) -> str | None:
 
 def normalize_category(value: str | None, transaction_type: str | None = None) -> str:
     if not value:
-        return DEFAULT_INCOME_CATEGORY if transaction_type == "income" else DEFAULT_EXPENSE_CATEGORY
+        return default_category(transaction_type)
 
     raw = value.strip()
     normalized = raw.lower()
@@ -132,7 +155,7 @@ def normalize_category(value: str | None, transaction_type: str | None = None) -
             if category:
                 return category
 
-    return DEFAULT_INCOME_CATEGORY if transaction_type == "income" else DEFAULT_EXPENSE_CATEGORY
+    return default_category(transaction_type)
 
 
 def expense_type_for_category(category: str) -> str:

@@ -63,3 +63,26 @@ def test_an_unknown_expense_is_explicitly_unknown_never_compras(value):
 def test_regalos_is_not_in_the_catalog_yet():
     # A gift has no canonical category; it stays unknown until one is approved.
     assert normalize_category("Regalos", "expense") == "Sin categoría"
+
+
+def test_each_movement_type_without_a_category_gets_an_explicit_one():
+    from backend.finance.category_catalog import normalize_category
+    assert normalize_category("", "receivable_payment") == "Cuentas por cobrar"
+    assert normalize_category("", "receivable_offset") == "Cuentas por cobrar"
+    assert normalize_category("venta", "asset_sale") == "Venta de activo"          # never an income category
+    assert normalize_category("pago", "receivable_payment") == "Cuentas por cobrar"  # never "Salario"
+    assert normalize_category("", "transfer") == "Sin categoría"
+    assert normalize_category("Comida", "expense") == "Comida"                    # a real category stays editable
+
+
+def test_manual_expenses_without_a_category_are_unknown_not_compras():
+    from backend.finance.category_catalog import manual_expense_category
+    assert manual_expense_category("") == manual_expense_category(None) == manual_expense_category("general") == "Sin categoría"
+    assert manual_expense_category(" Comida ") == "Comida"
+
+
+def test_text_import_and_chat_import_never_default_to_compras():
+    from backend.ai.monthly_import import normalize_category as chat_category
+    from backend.transactions.finance_input import _detect_category
+    assert _detect_category("XYZ 5000", "expense") == "Sin categoría"
+    assert chat_category("algo raro") == "Sin categoría"

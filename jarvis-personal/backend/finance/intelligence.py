@@ -165,6 +165,7 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
             receivable_semantics.link_collection(
                 conn, workspace_id=workspace_id, person=payer, transaction_id=int(tx["id"]), amount=_as_float(tx.get("amount")),
                 entry_date=str(tx.get("transaction_date") or date.today())[:10], description=str(tx.get("description") or payer),
+                origin="sync",
             )
 
 
@@ -670,7 +671,7 @@ def update_receivable_entry(receivable_id: int, entry_id: int, amount: float | N
         """, (new_amount, new_description, new_date, cycle_start, cycle_end, entry_id, receivable_id, workspace_id)).fetchone()
         linked_id = entry.get("source_transaction_id")
         if linked_id and entry.get("entry_type") == "payment":
-            conn.execute("UPDATE transactions SET amount=%s, original_amount=%s, transaction_date=%s, notes=%s WHERE id=%s AND workspace_id=%s", (new_amount, new_amount, new_date, f"Pago corregido de cuenta por cobrar #{receivable_id}. {new_description}".strip(), linked_id, workspace_id))
+            conn.execute("UPDATE transactions SET amount=%s, original_amount=%s, transaction_date=%s, notes=CONCAT_WS(' | ', NULLIF(notes, ''), %s) WHERE id=%s AND workspace_id=%s", (new_amount, new_amount, new_date, f"Pago corregido de cuenta por cobrar #{receivable_id}. {new_description}".strip(), linked_id, workspace_id))
             conn.execute("UPDATE receivable_payments SET amount=%s, notes=%s WHERE source_transaction_id=%s AND workspace_id=%s", (new_amount, new_description, linked_id, workspace_id))
         account = _recalculate_receivable(conn, user_id, receivable_id)
         conn.commit()
@@ -738,22 +739,28 @@ def apply_receivable_payment(
         linked_transaction_id = source_transaction_id
         if linked_transaction_id is not None:
             linked = conn.execute(
-                "SELECT transaction_type FROM transactions WHERE id = %s AND workspace_id = %s", (linked_transaction_id, workspace_id)
+                "SELECT transaction_type, amount FROM transactions WHERE id = %s AND workspace_id = %s", (linked_transaction_id, workspace_id)
             ).fetchone()
             if not linked:
                 return {"status": "NOT_FOUND", "message": "Movimiento no encontrado."}
             if linked["transaction_type"] not in receivable_semantics.SETTLING_TRANSACTION_TYPES:
-                return {"status": "ERROR", "message": "Ese movimiento no es un cobro: un gasto, deuda o venta no salda una cuenta por cobrar."}
+                return {"status": "ERROR", "message": "Ese movimiento no es un cobro: solo dinero recibido salda una cuenta por cobrar."}
+            if not how["is_cash"]:
+                return {"status": "ERROR", "message": "Una compensación no mueve dinero: no se registra sobre un movimiento existente."}
+            if payment > _as_float(linked["amount"]) + 0.01:
+                return {"status": "ERROR", "message": "El monto aplicado supera el del movimiento."}
             if receivable_semantics.is_movement_applied(conn, workspace_id, linked_transaction_id):
                 return {"status": "DUPLICATE", "message": "Ese pago ya fue aplicado.", "source_transaction_id": linked_transaction_id}
             # The user states this existing movement settles the receivable: it is a
-            # collection (or an offset), so it stops counting as earned income.
+            # collection, so it stops counting as earned income (its previous type is kept).
             conn.execute(
                 """
-                UPDATE transactions SET transaction_type = %s
+                UPDATE transactions
+                SET transaction_type = %s, category = %s,
+                    notes = CONCAT_WS(' | ', NULLIF(notes, ''), 'Cobro de cuenta por cobrar (tipo anterior: ' || transaction_type || ')')
                 WHERE id = %s AND workspace_id = %s AND transaction_type IN ('income', 'reimbursement')
                 """,
-                (how["transaction_type"], linked_transaction_id, workspace_id),
+                (how["transaction_type"], receivable_semantics.RECEIVABLE_CATEGORY, linked_transaction_id, workspace_id),
             )
         if linked_transaction_id is None:
             tx_row = conn.execute(
@@ -853,7 +860,7 @@ def list_account_balances() -> dict[str, Any]:
             LEFT JOIN LATERAL (
                 SELECT COUNT(*) AS movement_count,
                        COALESCE(SUM(CASE
-                           WHEN t.transaction_type IN ('income','refund','reimbursement') THEN t.amount
+                           WHEN t.transaction_type IN ('income','refund','reimbursement','receivable_payment','asset_sale') THEN t.amount
                            WHEN t.transaction_type IN ('expense','debt_payment') THEN -t.amount
                            ELSE 0 END),0) AS movement_delta
                 FROM transactions t
@@ -903,7 +910,7 @@ def upsert_account_balance(account_name: str, current_balance: float, bank_name:
             SELECT a.id, a.current_balance, a.source,
                    a.current_balance + COALESCE((
                        SELECT SUM(CASE
-                           WHEN t.transaction_type IN ('income','refund','reimbursement') THEN t.amount
+                           WHEN t.transaction_type IN ('income','refund','reimbursement','receivable_payment','asset_sale') THEN t.amount
                            WHEN t.transaction_type IN ('expense','debt_payment') THEN -t.amount
                            ELSE 0 END)
                        FROM transactions t
