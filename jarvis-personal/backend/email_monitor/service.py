@@ -58,6 +58,31 @@ def _with_popular_gmail_sources(query: str) -> str:
     return f"({query} OR {additions})" if query.strip() else f"({additions})"
 
 
+# BAC moved its card alerts to notificacion@ / NotificacionBAC@baccredomatic.cr (2026-07/08) and
+# SINPE notices from sinpe@notificacionesbaccr.com to notificaciones@baccredomatic.cr (2026-04).
+# A query persisted before a move would silently stop fetching that kind of notice.
+CURRENT_BAC_SENDERS = (
+    "notificacion@notificacionesbaccr.com",
+    "notificacion@baccredomatic.cr",
+    "notificacionbac@baccredomatic.cr",
+    "sinpe@notificacionesbaccr.com",
+    "notificaciones@baccredomatic.cr",
+)
+
+
+def _with_current_bac_sources(query: str) -> str:
+    """Add every current BAC notice sender a persisted query misses (a from: on the whole domain covers it)."""
+    lowered = (query or "").lower()
+    missing = [
+        f"from:{sender}" for sender in CURRENT_BAC_SENDERS
+        if f"from:{sender}" not in lowered and f"from:{sender.split('@', 1)[1]}" not in lowered
+    ]
+    if not missing:
+        return query
+    additions = " OR ".join(missing)
+    return f"({query} OR {additions})" if (query or "").strip() else f"({additions})"
+
+
 def build_current_month_gmail_query(base_query: str | None = None, today: date | None = None) -> str:
     """Return Gmail query scoped to Kenneth's active card/bank cycle.
 
@@ -526,7 +551,7 @@ def _settings_query_for_owner(conn, user_id: int, workspace_id: str | None = Non
         (user_id, workspace_id, DEFAULT_QUERY),
     ).fetchone()
     gmail_query = (row or {}).get("gmail_query") or DEFAULT_QUERY
-    popular_query = _with_popular_gmail_sources(gmail_query)
+    popular_query = _with_current_bac_sources(_with_popular_gmail_sources(gmail_query))
     if popular_query != gmail_query:
         gmail_query = popular_query
         conn.execute(
@@ -1542,6 +1567,8 @@ def scan_email_text(
             and candidate_row.get("status") == "pending"
             and bool(candidate_row.get("auto_commit_allowed"))
             and float(candidate_row.get("confidence") or 0) >= AUTO_COMMIT_CONFIDENCE
+            # A foreign-currency amount was converted with an assumed rate: never saved unreviewed.
+            and str(candidate_row.get("original_currency") or "").upper() in ("", "CRC")
         ):
             transaction_id = _insert_transaction(conn, user_id, candidate_row)
             conn.execute(

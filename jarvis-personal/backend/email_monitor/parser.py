@@ -33,6 +33,7 @@ BANK_SENDERS = {
         "estadosdecuenta@baccredomatic.cr",
         "estadodecuenta@baccredomatic.cr",
         "info@info.baccredomatic.net",
+        "info@baccredomatic.com",  # credit disbursements (and promotions, which no template accepts)
     ],
     "popular": [
         "bancopopular.fi.cr",
@@ -681,7 +682,8 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
     rules = [
         # Reglas explícitas antes de IA. Usar solo categorías oficiales para evitar
         # que normalize_category caiga en alias raros como "Horas extra".
-        ("Servicios", ["openai", "chatgpt", "render.com", "render ", "supabase", "railway", "vercel", "github", "domain", "hosting", "openai api"]),
+        ("Servicios", ["openai", "chatgpt", "render.com", "render ", "supabase", "railway", "vercel", "github", "domain", "hosting", "openai api",
+                       "cloudflare", "figma"]),
         # Recurring app, streaming and cloud-storage plans.
         ("Suscripciones", ["crunchyroll", "netflix", "spotify", "google one", "icloud", "apple.com/bill", "apple.com bill"]),
         ("Seguros", ["seguro ", "poliza", "póliza"]),
@@ -692,18 +694,29 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
         ("Restaurante", ["taco bell", "pops", "mcdonald", "arcos dorados", "kfc", "restaurante", "sacc restaurante", "pizza", "burger", "uber eats",
                          # Cafés and snack stands: the catalog's cafetería.
                          "cafe ", "café", "coffee", "cafeteria", "cafetería", "granizado"]),
-        ("Comida", ["maxi pali", "maxipali", "pali", "palí", "walmart", "am pm", "automercado", "auto mercado", "supermercado", "jose m.zeledon", "zeledon"]),
-        ("Gasolina", ["gasolinera", "estacion de servicio", "estación de servicio", "combustible", "servicentro"]),
-        ("Transporte", ["uber rides", "uber", "parqueo", "taxi", "didi"]),
+        ("Comida", ["maxi pali", "maxipali", "pali", "palí", "walmart", "am pm", "automercado", "auto mercado", "supermercado", "jose m.zeledon", "zeledon",
+                    "comida"]),
+        # BAC truncates merchant names (~22 chars): "ESTACION DE SERV.LA ..." is still a fuel station.
+        ("Gasolina", ["gasolinera", "estacion de servicio", "estación de servicio", "estacion de serv", "combustible", "servicentro"]),
+        # Vehicle inspection (RTV) is a transport cost.
+        ("Transporte", ["uber rides", "uber", "parqueo", "taxi", "didi", "dekra"]),
         ("Salud", ["farmacia", "farmavalue", "hospital", "clinica", "clínica", "nutricionista", "terapia", "medico", "médico"]),
-        ("Compras", ["temu", "amazon", "tienda", "ecommerce", "ishop", "aliss", "city mall", "shein", "zara", "pull&bear", "bershka", "barber shop", "las vegas"]),
+        ("Compras", ["temu", "amazon", "tienda", "ecommerce", "ishop", "aliss", "city mall", "shein", "zara", "pull&bear", "bershka", "barber shop", "las vegas",
+                     "ferreteria", "ferretería", "ropa", "zapatos", "camisa"]),
         ("Teléfono", ["liberty", "linea", "línea", "movil", "móvil", "kolbi", "claro"]),
         ("Vivienda", ["casa", "alquiler"]),
     ]
     for category, words in rules:
         if any(word in clean for word in words):
             return category
-    return "Otros gastos"
+    return FALLBACK_EXPENSE_CATEGORY
+
+
+# No rule matched: the merchant is unknown. Storage maps this label to the
+# catalog's default expense category, so the parse must say it is a guess.
+FALLBACK_EXPENSE_CATEGORY = "Otros gastos"
+# Below the email auto-commit threshold: a guess is never saved without review.
+GUESS_CONFIDENCE_CAP = 0.9
 
 
 def _card_greeting_name(text: str) -> str | None:
@@ -840,7 +853,7 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
     if time_value:
         notes.append(f"hora: {time_value}")
     if currency == "USD":
-        notes.append(f"monto original USD {amount:.2f}; TC {exchange_rate}")
+        notes.append(f"monto original USD {amount:.2f}; TC {exchange_rate} asumido, sin evidencia")
     cycle_start, cycle_end = billing_cycle_for_date(transaction_date)
     if cycle_start and cycle_end:
         notes.append(f"ciclo tarjeta: {cycle_start} a {cycle_end}")
@@ -861,6 +874,9 @@ def _parse_bac_purchase(subject: str, sender: str, body: str, received_at: str |
         "original_amount": amount if currency == "USD" else None,
         "original_currency": "USD" if currency == "USD" else None,
         "exchange_rate": exchange_rate if currency == "USD" else None,
+        # The notice prints no rate: the caller's default is an assumption. The real
+        # rate is known only when the card's USD balance is paid (receipt or statement).
+        "exchange_rate_source": "assumed_default" if currency == "USD" else None,
         "card_last4": card_last4,
         "card_owner": holder,
         "cardholder_mismatch": cardholder_mismatch,
@@ -893,7 +909,7 @@ def _parse_bac_sinpe_movil(subject: str, sender: str, body: str, received_at: st
     if "transferencia" not in clean or "monto" not in clean:
         return None
     if _has_rejected_movement(text):
-        return _ignored("bac", subject, body, received_at, "Transferencia SINPE Móvil rechazada/no aplicada; no afecta finanzas.")
+        return _rejected("bac", subject, body, received_at, "Transferencia SINPE Móvil rechazada/no aplicada; no afecta finanzas.")
 
     amount, _currency = _parse_context_amount(text)
     if amount is None or amount <= 0:
@@ -976,7 +992,7 @@ def _parse_bac_sinpe(subject: str, sender: str, body: str, received_at: str | No
         return None
 
     if _has_rejected_movement(text):
-        return _ignored("bac", subject, body, received_at, "Transferencia SINPE rechazada/no aplicada; no afecta finanzas.")
+        return _rejected("bac", subject, body, received_at, "Transferencia SINPE rechazada/no aplicada; no afecta finanzas.")
 
     amount, _currency = _parse_context_amount(text)
     if amount is None or amount <= 0:
@@ -1150,6 +1166,51 @@ def _multimoney_clock(transaction_date: str, time_value: str | None, received_at
     return converted.date().isoformat(), converted.strftime("%H:%M:%S")
 
 
+def _parse_bac_loan_disbursement(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
+    """BAC credit drawn against a card ("extrafinanciamiento") paid into an account: debt, never income."""
+    text = clean_text("\n".join([subject or "", body or ""]))
+    clean = normalize(text)
+    if not ("ha recibido su desembolso" in clean and "desembolsado a" in clean):
+        return None
+    match = re.search(r"desembolso\s*:?\s*(?P<currency>CRC|USD|₡|¢|\$)\s*(?P<amount>[\d.,]+)", text, re.I)
+    amount = _parse_number(match.group("amount")) if match else None
+    if amount is None or amount <= 0:
+        return None
+    currency = _currency_code(match.group("currency"))
+    account = re.search(r"a\s+la\s+cuenta\s*:?\s*(\d{6,22})", text, re.I)
+    card = re.search(r"tarjeta\s+de\s+cobro\s*:?\s*\d{4,6}X+(\d{4})", text, re.I)
+    term = re.search(r"plazo\s*:?\s*(\d{1,3})\s*meses", text, re.I)
+    installment = re.search(r"cuota\s+mensual\s*:?\s*(?:CRC|USD|₡|¢|\$)\s*([\d.,]+)", text, re.I)
+    destination = _masked_account(account.group(1)) if account else ""
+    notes = ["BAC desembolso de crédito sobre tarjeta", "deuda nueva, no es ingreso"]
+    if term:
+        notes.append(f"plazo {term.group(1)} meses")
+    if installment:
+        notes.append(f"cuota mensual {installment.group(1)}")
+    if card:
+        notes.append(f"tarjeta de cobro ****{card.group(1)}")
+    transaction_date = _local_date(received_at) or parse_date(received_at or "", received_at)
+    return {
+        **_base_result("bac", "movement", received_at),
+        "transaction_date": transaction_date,
+        "description": "Desembolso de crédito BAC",
+        "amount": round(amount, 2),
+        "transaction_type": "transfer",
+        "category": "Otros préstamos",
+        "account": "BAC",
+        "notes": " | ".join(notes),
+        "original_amount": amount if currency == "USD" else None,
+        "original_currency": "USD" if currency == "USD" else None,
+        "card_last4": card.group(1) if card else None,
+        **mt.movement(mt.LOAN_DISBURSEMENT, mt.LIABILITY, mt.KIND_LOAN_DISBURSEMENT),
+        "dedupe_key": f"bac_loan_disbursement|{transaction_date}|{round(amount, 2)}|{destination}",
+        "confidence": 0.97,
+        "confidence_reason": "BAC: desembolso de crédito a tu cuenta; es deuda, no ingreso.",
+        "movement_direction": "in",
+        "destination_account": destination,
+    }
+
+
 def _parse_multimoney_disbursement(subject: str, sender: str, body: str, received_at: str | None) -> dict[str, Any] | None:
     """Loan / credit-line proceeds credited to the holder's account: debt, never income."""
     text = clean_text("\n".join([subject or "", body or ""]))
@@ -1195,7 +1256,7 @@ def _parse_multimoney_transfer(subject: str, sender: str, body: str, received_at
     if not ("multimoney" in clean and "monto" in clean and "fecha" in clean):
         return None
     if _has_rejected_movement(text):
-        return _ignored("multimoney", subject, body, received_at, "Movimiento MultiMoney rechazado/no aplicado; no afecta finanzas.")
+        return _rejected("multimoney", subject, body, received_at, "Movimiento MultiMoney rechazado/no aplicado; no afecta finanzas.")
 
     if not (
         "resumen de operacion" in clean
@@ -1408,6 +1469,7 @@ def _parse_bac_card_payment(subject: str, body: str, received_at: str | None) ->
         "original_amount": amount if currency == "USD" else None,
         "original_currency": "USD" if currency == "USD" else None,
         "exchange_rate": exchange_rate if exchange_rate and exchange_rate != 1 else None,
+        "exchange_rate_source": "email" if exchange_rate and exchange_rate != 1 else None,
         "reference": unique_reference or None,
         **mt.movement(mt.CARD_PAYMENT, mt.OWN_TRANSFER_LIKELY, mt.KIND_CARD_PAYMENT),
         "dedupe_key": f"bac_card_payment|{transaction_date}|{round(amount, 2)}|{unique_reference}",
@@ -1655,6 +1717,21 @@ def _parse_statement(subject: str, sender: str, body: str, received_at: str | No
     }
 
 
+def _rejected(bank: str, subject: str, body: str, received_at: str | None, reason: str) -> dict[str, Any]:
+    """A rejected transfer moves no money. Its bank reference is kept because another
+    institution may still have announced the same transfer (e.g. "débito aplicado"):
+    that notice is cancelled by this reference, never counted."""
+    text = clean_text("\n".join([subject or "", body or ""]))
+    reference = re.search(r"referencia\s*:?\s*(\d{10,30})", text, re.I)
+    return {**_ignored(bank, subject, body, received_at, reason), "rejected_reference": reference.group(1) if reference else None}
+
+
+def cancelled_by_rejection(parsed: dict[str, Any], rejected_references: set[str]) -> bool:
+    """True when a movement's reference was later reported rejected by the other bank."""
+    reference = str(parsed.get("reference") or "")
+    return bool(reference) and parsed.get("email_kind") == "movement" and reference in rejected_references
+
+
 def _ignored(bank: str, subject: str, body: str, received_at: str | None, reason: str) -> dict[str, Any]:
     return {
         **_base_result(bank, "ignored", received_at),
@@ -1676,7 +1753,8 @@ def classify_email(subject: str, sender: str, body: str) -> tuple[str, str]:
         return "statement", "Estado de cuenta detectado; queda como documento pendiente."
     if bank == "bac":
         parsed = (
-            _parse_bac_purchase(subject, sender, body, None, 495.0) or _parse_bac_sinpe_movil(subject, sender, body, None)
+            _parse_bac_purchase(subject, sender, body, None, 495.0) or _parse_bac_loan_disbursement(subject, sender, body, None)
+            or _parse_bac_sinpe_movil(subject, sender, body, None)
             or _parse_bac_sinpe(subject, sender, body, None) or _parse_bac_cardless_withdrawal(subject, sender, body, None)
             or _parse_bac_alert_payment(subject, sender, body, None)
         )
@@ -1705,7 +1783,26 @@ def parse_financial_email(
     accounts, and never the Owner's.
     """
     with use_identity(identity):
-        return _parse_financial_email(subject, sender, body, received_at, exchange_rate)
+        return _flag_guesses(_parse_financial_email(subject, sender, body, received_at, exchange_rate))
+
+
+def _flag_guesses(parsed: dict[str, Any]) -> dict[str, Any]:
+    """Mark what the parse assumed instead of read, and keep it below auto-commit.
+
+    - A foreign-currency movement without a rate printed in the mail needs the real rate.
+    - An expense whose merchant matched no category rule has a guessed category.
+    """
+    if parsed.get("email_kind") != "movement":
+        return parsed
+    foreign = str(parsed.get("original_currency") or "").upper() not in ("", "CRC")
+    if foreign and parsed.get("exchange_rate_source") != "email":
+        parsed["needs_exchange_rate"] = True
+        parsed["confidence"] = min(float(parsed.get("confidence") or 0), GUESS_CONFIDENCE_CAP)
+    if parsed.get("transaction_type") == "expense" and parsed.get("category") == FALLBACK_EXPENSE_CATEGORY:
+        parsed["needs_category"] = True
+        parsed["category_source"] = "fallback"
+        parsed["confidence"] = min(float(parsed.get("confidence") or 0), GUESS_CONFIDENCE_CAP)
+    return parsed
 
 
 def _parse_financial_email(subject: str, sender: str, body: str, received_at: str | None, exchange_rate: float) -> dict[str, Any]:
@@ -1728,7 +1825,7 @@ def _parse_financial_email(subject: str, sender: str, body: str, received_at: st
 
     # Plantillas exactas por banco. No buscar números genéricos fuera de estas plantillas.
     if bank == "bac":
-        parsed = _parse_bac_purchase(subject, sender, body, received_at, exchange_rate)
+        parsed = _parse_bac_purchase(subject, sender, body, received_at, exchange_rate) or _parse_bac_loan_disbursement(subject, sender, body, received_at)
         if parsed:
             return parsed
         parsed = _parse_bac_sinpe_movil(subject, sender, body, received_at) or _parse_bac_sinpe(subject, sender, body, received_at)

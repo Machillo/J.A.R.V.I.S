@@ -42,6 +42,7 @@ ENGLISH_REASONS = {
     "MultiMoney: concepto, monto, fecha, dirección y cuentas extraídos por plantilla exacta.": "MultiMoney: description, amount, date, direction, and accounts extracted with an exact template.",
     "MultiMoney: concepto, monto, fecha, referencia y cuentas extraídos por plantilla exacta.": "MultiMoney: description, amount, date, reference, and accounts extracted with an exact template.",
     "MultiMoney: desembolso de crédito a tu cuenta; es deuda, no ingreso.": "MultiMoney: loan proceeds credited to your account; it’s debt, not income.",
+    "BAC: desembolso de crédito a tu cuenta; es deuda, no ingreso.": "BAC: loan proceeds credited to your account; it’s debt, not income.",
     "No es un correo de BAC, Banco Popular o MultiMoney.": "Not an email from BAC, Banco Popular, or MultiMoney.",
     "No se pudo procesar este aviso. Quedó registrado y se reintenta si vuelve a aparecer en una sincronización.": "We couldn’t process this notice. It was recorded and is retried if it shows up again in a sync.",
     "Pago de tarjeta BAC detectado; se ignora para evitar doble conteo porque las compras individuales ya son los gastos.": "BAC card payment detected; ignored to avoid double counting because the individual purchases are already the expenses.",
