@@ -134,7 +134,11 @@ def test_every_table_and_command_the_backend_uses_is_granted():
 # only applies migrations already on main, and merging the code deploys it. Each entry
 # is exactly the privileges granted and the PR that brings the code, which must remove
 # the entry (test_a_grant_ahead_of_its_code_is_removed_once_the_code_uses_it fails then).
-GRANTED_AHEAD_OF_CODE: dict[str, tuple[set[str], str]] = {}
+GRANTED_AHEAD_OF_CODE: dict[str, tuple[set[str], str]] = {
+    "payroll_receipts": ({"SELECT", "INSERT", "UPDATE"}, "#311"),
+    "payroll_receipt_lines": ({"SELECT", "INSERT"}, "#311"),
+    "payroll_trusted_senders": ({"SELECT", "INSERT", "UPDATE"}, "#311"),
+}
 
 
 def test_the_role_is_not_granted_tables_the_backend_never_uses():
