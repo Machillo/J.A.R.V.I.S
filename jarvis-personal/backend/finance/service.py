@@ -1444,7 +1444,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
                    category, account, source, notes, created_at
             FROM transactions
             WHERE workspace_id = %s
-              AND LOWER(BTRIM(COALESCE(transaction_type, ''))) IN ('loan_received', 'loan_disbursement')
+              AND LOWER(BTRIM(COALESCE(transaction_type, ''))) IN ('loan_received', 'loan_disbursement', 'receivable_payment', 'asset_sale')
               AND {_transaction_date_expr()} >= %s::date
               AND {_transaction_date_expr()} < %s::date
             ORDER BY {_transaction_date_expr()} DESC, id DESC
@@ -1519,7 +1519,9 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
     debt_payments_total = sum(_as_float(row.get("amount")) for row in debt_payments)
     total_outflow = expenses_total + debt_payments_total
     income_received_total = sum(_as_float(row.get("amount")) for row in income_transactions)
-    loans_total = sum(_as_float(row.get("amount")) for row in loan_transactions)
+    # Collections and asset sales are cash in, never earned income (receivable_offset moves no cash).
+    other_inflows_total = sum(_as_float(r.get("amount")) for r in loan_transactions if r.get("transaction_type") in ("receivable_payment", "asset_sale"))
+    loans_total = sum(_as_float(r.get("amount")) for r in loan_transactions) - other_inflows_total
     expected_total = base_net + extra_expected
 
     try:
@@ -1536,6 +1538,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
         expected_total
         + income_received_total
         + loans_total
+        + other_inflows_total
         - total_outflow
         - goals_reserved
     )
@@ -1564,6 +1567,7 @@ def get_financial_cycle_report(as_of: date | None = None) -> dict:
             "extra_expected": round(extra_expected, 2),
             "expected_total": round(expected_total, 2),
             "received_from_transactions": round(income_received_total, 2),
+            "other_cash_inflows": round(other_inflows_total, 2),
             "items": extra_items,
         },
         "expenses": {

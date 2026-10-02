@@ -5,6 +5,9 @@ import calendar
 
 
 LOAN_TYPES = ("loan_received", "loan_disbursement")
+# Cash that comes in without being earned income: a receivable collected, an owned asset sold.
+# A receivable_offset moves no money and is in none of these lists.
+NON_INCOME_CASH_INFLOW_TYPES = ("receivable_payment", "asset_sale")
 OUTFLOW_TYPES = ("expense", "debt_payment")
 
 
@@ -29,6 +32,8 @@ def get_transaction_summary():
         total_transfers = get_total("transfer")
         total_investments = get_total("investment")
         total_investment_withdrawals = get_total("investment_withdrawal")
+        total_receivable_collections = get_total("receivable_payment")
+        total_asset_sales = get_total("asset_sale")
 
         total_loan_received = conn.execute(
             """
@@ -58,7 +63,9 @@ def get_transaction_summary():
         "investment_withdrawals": total_investment_withdrawals,
         "loan_disbursements": total_loan_received,
         "loan_received": total_loan_received,
-        "net_from_transactions": total_income + total_loan_received - total_expenses - total_debt_payments,
+        "receivable_collections": total_receivable_collections,
+        "asset_sale_proceeds": total_asset_sales,
+        "net_from_transactions": total_income + total_loan_received + total_receivable_collections + total_asset_sales - total_expenses - total_debt_payments,
         "total_transactions": total_transactions,
     }
 
@@ -134,7 +141,9 @@ def get_monthly_flow():
     Inflows:
     - income (salary, bonuses, investment interest, etc.);
     - loan_received / loan_disbursement (cash received from financing);
-    - receivable_payment (money paid back by people who owed the user).
+    - receivable_payment (money paid back by people who owed the user);
+    - asset_sale (cash from selling something the user owned).
+    None of the last two is earned income (``earned_income`` counts only ``income``).
 
     Expenses shown by Analytics:
     - expense (actual consumption/spending), net of refunds.
@@ -152,11 +161,12 @@ def get_monthly_flow():
             SELECT
                 to_char(transaction_date, 'YYYY-MM') AS month,
                 COALESCE(SUM(CASE
-                    WHEN transaction_type IN ('income', 'loan_received', 'loan_disbursement', 'receivable_payment')
+                    WHEN transaction_type IN ('income', 'loan_received', 'loan_disbursement', 'receivable_payment', 'asset_sale')
                     THEN amount ELSE 0 END), 0) AS income,
                 COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END), 0) AS earned_income,
                 COALESCE(SUM(CASE WHEN transaction_type IN ('loan_received', 'loan_disbursement') THEN amount ELSE 0 END), 0) AS loan_received,
                 COALESCE(SUM(CASE WHEN transaction_type = 'receivable_payment' THEN amount ELSE 0 END), 0) AS receivable_payments,
+                COALESCE(SUM(CASE WHEN transaction_type = 'asset_sale' THEN amount ELSE 0 END), 0) AS asset_sale_proceeds,
                 COALESCE(SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END), 0) AS gross_expenses,
                 COALESCE(SUM(CASE WHEN transaction_type = 'refund' THEN amount ELSE 0 END), 0) AS refunds,
                 COALESCE(SUM(CASE WHEN transaction_type = 'debt_payment' THEN amount ELSE 0 END), 0) AS debt_payments
@@ -173,7 +183,7 @@ def get_monthly_flow():
     for row in rows:
         item = dict(row)
         for key in (
-            "income", "earned_income", "loan_received", "receivable_payments",
+            "income", "earned_income", "loan_received", "receivable_payments", "asset_sale_proceeds",
             "gross_expenses", "refunds", "debt_payments",
         ):
             item[key] = round(float(item.get(key) or 0), 2)

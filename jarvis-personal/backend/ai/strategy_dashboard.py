@@ -1511,7 +1511,7 @@ def get_premium_strategy_dashboard() -> dict[str, Any]:
 
 
 def get_additional_card_report() -> dict[str, Any]:
-    """Report only additional-card spending, not Kenneth's primary card.
+    """Report only additional-card spending, never the holder's primary cards (is_primary).
 
     Email-confirmed movements are joined back to email_transaction_candidates so
     the report can use card_last4/card_owner parsed from BAC notifications. This
@@ -1527,7 +1527,6 @@ def get_additional_card_report() -> dict[str, Any]:
             FROM card_aliases
             WHERE workspace_id = %s
               AND COALESCE(is_primary, FALSE) = FALSE
-              AND LOWER(owner_label) NOT IN ('kenneth', 'kenneth andres')
             ORDER BY owner_label ASC, card_last4 ASC
             """,
             (workspace_id,),

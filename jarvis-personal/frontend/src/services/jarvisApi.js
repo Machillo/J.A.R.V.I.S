@@ -67,6 +67,8 @@ export const getRealAvailability = () => request("/finance/real-availability");
 export const getDebtAdvisory = (extraCash = null) => request(`/finance/debt-advisory${extraCash == null ? "" : `?extra_cash=${encodeURIComponent(extraCash)}`}`);
 export const getDebtStrategies = () => request("/finance/engine/debt-strategies");
 export const getReceivables = () => request("/finance/receivables");
+// Deriving the receivable ledger (additional cards, legacy payments) is an explicit write, never part of the read.
+export const syncReceivables = () => jsonRequest("/finance/receivables/sync", "POST", {});
 export const createReceivable = (payload) => jsonRequest("/finance/receivables", "POST", payload);
 export const addReceivableEntry = async (payload) => {
   try {

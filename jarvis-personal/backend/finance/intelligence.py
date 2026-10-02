@@ -8,6 +8,7 @@ from typing import Any
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import plural, tx as localized, voice
+from backend.finance import receivable_semantics
 
 
 def _as_float(value: Any, default: float = 0.0) -> float:
@@ -222,7 +223,6 @@ def _fetch_additional_card_totals(
             FROM card_aliases
             WHERE workspace_id = %s
               AND COALESCE(is_primary, FALSE) = FALSE
-              AND LOWER(TRIM(owner_label)) NOT IN ('kenneth', 'kenneth andres')
         ), candidate_movements AS (
             SELECT
                 COALESCE(a.owner_label, c.card_owner) AS person_name,
@@ -263,40 +263,22 @@ def _fetch_additional_card_totals(
     return [dict(row) for row in rows]
 
 
-def _detect_receivable_payer_from_transaction(row: dict[str, Any]) -> str | None:
+def _detect_receivable_payer_from_transaction(row: dict[str, Any], people: list[str]) -> str | None:
     """Detect a receivable payment only from explicit payer evidence.
 
-    A generic income must never reduce Emily/Sidey automatically.  The email
-    parser or the user must leave a clear payer trace in description/notes, and
-    the movement must look like a SINPE/transfer/payment.  This prevents false
-    matches such as the previous ₡577.20 income that was applied to Emily.
+    A generic income must never reduce anyone's balance automatically. The movement
+    must look like a payment and name exactly one of the workspace's receivable people.
     """
-    text = " ".join([
-        str(row.get("description") or ""),
-        str(row.get("category") or ""),
-        str(row.get("account") or ""),
-        str(row.get("notes") or ""),
-    ]).lower()
-    has_payment_context = any(token in text for token in (
-        "sinpe", "sinpe movil", "sinpe móvil", "transferencia",
-        "abono", "pago", "reembolso", "payer=", "remitente", "origen",
-    ))
-    if not has_payment_context:
-        return None
-    if "emily" in text or "emily andrea" in text or "emily andrea alvarado" in text:
-        return "Emily"
-    if "sidey" in text:
-        return "Sidey"
-    return None
+    text = " ".join(str(row.get(key) or "") for key in ("description", "category", "account", "notes"))
+    return receivable_semantics.payer_from_text(text, people)
 
 
 def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
     workspace_id = get_current_workspace_id()
-    """Apply incoming SINPE/reimbursement payments to matching receivables.
+    """Link legacy income/reimbursement rows that name a receivable person to that receivable.
 
-    Example: Emily sends a SINPE Móvil payment. The transaction is income and
-    notes contain payer: Emily. We record it once in receivable_payments so the
-    pending balance decreases automatically without manual double entry.
+    Runs only from the explicit sync (never from a read). It links each movement once;
+    it never retypes or rewrites the movement itself.
     """
     rows = conn.execute(
         """
@@ -310,9 +292,10 @@ def _sync_receivable_payments_from_income(conn, user_id: int) -> None:
         """,
         (workspace_id,),
     ).fetchall()
+    people = receivable_semantics.receivable_people(conn, workspace_id)
     for raw in rows:
         tx = dict(raw)
-        payer = _detect_receivable_payer_from_transaction(tx)
+        payer = _detect_receivable_payer_from_transaction(tx, people)
         if not payer:
             continue
         rec = conn.execute(
@@ -734,10 +717,7 @@ def list_receivables() -> dict[str, Any]:
     workspace_id = get_current_workspace_id()
     cycle_start, cycle_end = _card_cycle_bounds()
     with get_connection() as conn:
-        _backfill_receivable_entries(conn, user_id)
-        _sync_auto_additional_card_receivables(conn, user_id)
-        _sync_receivable_payments_from_income(conn, user_id)
-
+        # Read only: no backfill, sync or recalculation here (POST /finance/receivables/sync does that).
         account_rows = conn.execute(
             """
             SELECT id, person_name, original_amount, paid_amount, pending_amount,
@@ -759,7 +739,11 @@ def list_receivables() -> dict[str, Any]:
             if not person_key or person_key in seen_people:
                 continue
             seen_people.add(person_key)
-            item = _recalculate_receivable(conn, user_id, int(row["id"]))
+            ledger = [dict(e) for e in conn.execute(
+                "SELECT entry_type, amount, is_archived FROM receivable_entries WHERE workspace_id = %s AND receivable_id = %s",
+                (workspace_id, row["id"]),
+            ).fetchall()]
+            item = {**row, **receivable_semantics.receivable_totals(ledger)}
 
             cycle_totals = conn.execute(
                 """
@@ -823,7 +807,6 @@ def list_receivables() -> dict[str, Any]:
             item["paid_amount"] = round(cycle_payments, 2)
             item["status"] = "credit" if current_due < -0.01 else "completed" if abs(current_due) <= 0.01 else "partial" if cycle_payments > 0 else "pending"
             items.append(item)
-        conn.commit()
 
     return {
         "status": "OK",
@@ -840,6 +823,25 @@ def list_receivables() -> dict[str, Any]:
     }
 
 
+def sync_receivables() -> dict[str, Any]:
+    """Explicit receivable sync (the only place the ledger is derived from other data).
+
+    Backfills legacy balances, mirrors the active cycle's additional-card purchases,
+    links legacy payer-named income, and recalculates every balance. Idempotent.
+    """
+    user_id = get_current_user_id()
+    workspace_id = get_current_workspace_id()
+    with get_connection() as conn:
+        _backfill_receivable_entries(conn, user_id)
+        _sync_auto_additional_card_receivables(conn, user_id)
+        _sync_receivable_payments_from_income(conn, user_id)
+        ids = [int(r["id"]) for r in conn.execute("SELECT id FROM receivables WHERE workspace_id = %s", (workspace_id,)).fetchall()]
+        for receivable_id in ids:
+            _recalculate_receivable(conn, user_id, receivable_id)
+        conn.commit()
+    return {"status": "OK", "receivables_recalculated": len(ids)}
+
+
 def add_receivable_entry(
     person_name: str,
     amount: float,
@@ -847,15 +849,12 @@ def add_receivable_entry(
     entry_kind: str = "purchase",
     entry_date: str | None = None,
 ) -> dict[str, Any]:
-    """Add a manual purchase/loan/transfer owed by any person."""
+    """Add a charge owed by a person: a purchase on their behalf, money lent, or an instalment sale."""
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
     clean_name = str(person_name or "").strip()
     clean_description = str(description or "").strip()
-    clean_kind = str(entry_kind or "purchase").strip().lower()
-    valid_kinds = {"purchase", "loan", "transfer", "cash", "other"}
-    if clean_kind not in valid_kinds:
-        clean_kind = "other"
+    clean_kind = receivable_semantics.charge_kind(entry_kind)
     numeric_amount = round(max(_as_float(amount), 0.0), 2)
     if not clean_name:
         return {"status": "ERROR", "message": "La persona es obligatoria."}
@@ -866,14 +865,7 @@ def add_receivable_entry(
     except Exception:
         safe_date = date.today().isoformat()
 
-    labels = {
-        "purchase": "Compra pagada por Kenneth",
-        "loan": "Dinero prestado",
-        "transfer": "Transferencia prestada",
-        "cash": "Efectivo prestado",
-        "other": "Cuenta por cobrar manual",
-    }
-    final_description = clean_description or labels[clean_kind]
+    final_description = clean_description or receivable_semantics.CHARGE_KINDS[clean_kind]
     with get_connection() as conn:
         _backfill_receivable_entries(conn, user_id)
         account = _get_or_create_person_receivable(conn, user_id, clean_name)
@@ -941,14 +933,15 @@ def apply_receivable_payment(
     payment_date: str | None = None,
     method: str = "manual",
 ) -> dict[str, Any]:
-    """Register a receivable payment and mirror it as income.
+    """Settle (part of) a receivable. Settling is never earned income.
 
-    Important business rule:
-    - Additional-card purchases are counted as expenses.
-    - When Emily/Sidey pays back, that payment must also enter transactions as
-      income so the monthly cashflow is not understated.
-    - Only explicit manual payments or transactions with explicit payer evidence
-      should reduce receivables. Generic income must never be auto-applied.
+    - A cash collection (method sinpe/transfer/deposit/cash/manual) records a
+      ``receivable_payment`` transaction: money in, receivable down.
+    - A non-cash offset (method ``non_cash_offset``) records a ``receivable_offset``:
+      the receivable goes down, no money moved, nothing is income or expense.
+    Whatever the receivable's kind (instalment sale, loan, reimbursable purchase,
+    additional card), the original charge is the one economic event; settling only
+    reduces it. The method is kept in the notes, never as an account.
     """
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
@@ -969,7 +962,8 @@ def apply_receivable_payment(
         # in their favor and must remain visible instead of being clipped to zero.
         payment = round(amount, 2)
         person_name = str(rec["person_name"] or "Cuenta por cobrar").strip()
-        clean_method = (method or "manual").strip() or "manual"
+        how = receivable_semantics.settlement(method)
+        clean_method = how["method"]
         clean_notes = (notes or "").strip()
         safe_payment_date = None
         if payment_date:
@@ -981,6 +975,20 @@ def apply_receivable_payment(
             safe_payment_date = date.today().isoformat()
 
         linked_transaction_id = source_transaction_id
+        if linked_transaction_id is not None and not conn.execute(
+            "SELECT 1 FROM transactions WHERE id = %s AND workspace_id = %s", (linked_transaction_id, workspace_id)
+        ).fetchone():
+            return {"status": "NOT_FOUND", "message": "Movimiento no encontrado."}
+        if linked_transaction_id is not None:
+            # The user states this existing movement settles the receivable: it is a
+            # collection (or an offset), so it stops counting as earned income.
+            conn.execute(
+                """
+                UPDATE transactions SET transaction_type = %s
+                WHERE id = %s AND workspace_id = %s AND transaction_type IN ('income', 'reimbursement')
+                """,
+                (how["transaction_type"], linked_transaction_id, workspace_id),
+            )
         if linked_transaction_id is None:
             tx_row = conn.execute(
                 """
@@ -999,17 +1007,18 @@ def apply_receivable_payment(
                     exchange_rate,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, 'income', 'Cuentas por cobrar', %s, 'receivable_manual', %s, %s, 'CRC', 1, NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'receivable_manual', %s, NULL, NULL, NULL, NOW())
                 RETURNING id
                 """,
                 (
                     workspace_id,
                     safe_payment_date,
-                    f"Pago de {person_name}",
+                    f"{'Compensación con' if not how['is_cash'] else 'Pago de'} {person_name}",
                     payment,
-                    clean_method,
-                    f"Pago manual aplicado a cuenta por cobrar #{receivable_id}. {clean_notes}".strip(),
-                    payment,
+                    how["transaction_type"],
+                    receivable_semantics.RECEIVABLE_CATEGORY,
+                    how["account"],
+                    f"{'Compensación sin efectivo' if not how['is_cash'] else 'Cobro'} aplicado a cuenta por cobrar #{receivable_id}. Método: {clean_method}. {clean_notes}".strip(),
                 ),
             ).fetchone()
             linked_transaction_id = int(tx_row["id"])
@@ -1052,15 +1061,16 @@ def apply_receivable_payment(
                 entry_date, source_type, source_key, source_transaction_id,
                 cycle_start, cycle_end, is_archived
             )
-            VALUES (%s, %s, 'payment', %s, %s, %s, 'manual_payment', %s, %s, %s, %s, FALSE)
+            VALUES (%s, %s, 'payment', %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
             ON CONFLICT DO NOTHING
             """,
             (
                 workspace_id,
                 receivable_id,
                 payment,
-                f"Pago recibido por {clean_method}. {clean_notes}".strip(),
+                (f"Compensación sin efectivo. {clean_notes}" if not how["is_cash"] else f"Pago recibido por {clean_method}. {clean_notes}").strip(),
                 safe_payment_date,
+                how["entry_source_type"],
                 f"payment_transaction:{linked_transaction_id}",
                 linked_transaction_id,
                 cycle_start,

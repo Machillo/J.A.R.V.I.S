@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { tx } from "../lib/locale";
-import { getReceivables } from "../services/jarvisApi";
+import { getReceivables, syncReceivables } from "../services/jarvisApi";
 import { ReceivablesPanel } from "./Finance";
 
 export default function Receivables({ onRefresh }) {
@@ -8,14 +8,16 @@ export default function Receivables({ onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = async ({ sync = false } = {}) => {
     setLoading(true); setError("");
+    // The list is a pure read; opening the screen asks once, explicitly, to sync the ledger first.
+    if (sync) await syncReceivables().catch(() => null);
     try { setData(await getReceivables()); }
     catch (err) { setError(err.message || "Could not load receivables."); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load({ sync: true }); }, []);
 
   if (loading) return <section className="dashboard-page"><div className="empty-state full-width"><div className="jarvis-loader"></div><h3>{tx("Cargando cuentas por cobrar...", "Loading receivables...")}</h3></div></section>;
   if (error) return <section className="dashboard-page"><div className="empty-state full-width danger"><h3>{tx("Cuentas por cobrar no disponibles", "Receivables unavailable")}</h3><p>{error}</p><button className="hud-action-button" onClick={load}>{tx("Reintentar", "Retry")}</button></div></section>;

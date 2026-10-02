@@ -767,7 +767,7 @@ export function ReceivablesPanel({ data, onPaymentSaved }) {
                   <form className="receivable-payment-form" onSubmit={submitPayment}>
                     <label>Monto recibido<input type="number" min="1" step="0.01" inputMode="decimal" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} /></label>
                     <label>Fecha<input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></label>
-                    <label>Método<select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}><option>SINPE</option><option>Transferencia</option><option>Efectivo</option><option>Otro</option></select></label>
+                    <label>Método<select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}><option>SINPE</option><option>Transferencia</option><option>Efectivo</option><option value="non_cash_offset">Compensación (sin efectivo)</option><option>Otro</option></select></label>
                     <label className="receivable-payment-notes">Nota<input value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} placeholder="Opcional" /></label>
                     {message && <p className="form-message error">{message}</p>}
                     <button className="hud-action-button" type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar pago"}</button>
