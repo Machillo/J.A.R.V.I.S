@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
+from backend.finance import balance_movements
 from backend.finance.debt_automation import schedule_automation_enabled
 from backend.finance.category_catalog import normalize_category, expense_type_for_category
 
@@ -2696,7 +2697,7 @@ def get_net_worth_report():
 
         accounts_table = conn.execute("SELECT to_regclass('public.account_balances') AS table_name").fetchone()
         financial_accounts = conn.execute(
-            """
+            f"""
             SELECT a.id, a.account_name AS name, a.account_type, a.currency, a.current_balance, a.source,
                    CASE WHEN a.currency='CRC' THEN a.current_balance + COALESCE(m.movement_delta,0)
                         ELSE (a.current_balance + COALESCE(m.movement_delta,0)) * COALESCE((
@@ -2705,15 +2706,8 @@ def get_net_worth_report():
                             ORDER BY rate_date DESC,id DESC LIMIT 1
                         ), 1) END AS amount
             FROM account_balances a
-            LEFT JOIN LATERAL (
-                SELECT COALESCE(SUM(CASE
-                    WHEN t.transaction_type IN ('income','refund','reimbursement','receivable_payment','asset_sale') THEN t.amount
-                    WHEN t.transaction_type IN ('expense','debt_payment') THEN -t.amount
-                    ELSE 0 END),0) AS movement_delta
-                FROM transactions t
-                WHERE t.workspace_id=a.workspace_id AND t.financial_account_id=a.id
-                  AND t.created_at > a.balance_as_of
-            ) m ON TRUE
+            -- Movements after the declared balance, by economic date (see balance_movements).
+            LEFT JOIN LATERAL ({balance_movements.movements_since_declaration_sql("a")}) m ON TRUE
             WHERE a.workspace_id=%s AND a.is_active=TRUE AND a.include_in_net_worth=TRUE
             """,
             (workspace_id,),
