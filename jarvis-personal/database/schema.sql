@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS allowed_users (
     id BIGSERIAL PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
-    role TEXT NOT NULL DEFAULT 'user',
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'owner')),
     status TEXT NOT NULL DEFAULT 'pending',
     supabase_user_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -795,7 +795,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     supabase_user_id UUID UNIQUE,
     primary_email TEXT NOT NULL,
     display_name TEXT,
-    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'owner')),
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'owner')),
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'blocked', 'pending')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
