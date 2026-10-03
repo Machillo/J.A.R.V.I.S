@@ -1,0 +1,65 @@
+name: Financial history
+
+# Daily financial-history job (master plan P0.2): GET reads no longer store the health
+# observation or the Owner's advisor strategy; POST /financial-history/cron records them,
+# one observation per workspace per Costa Rica date. This workflow is the official scheduler.
+#
+# It calls only POST /financial-history/cron (never /notifications/cron). Inactive until the
+# Owner configures both:
+#   - repository variable DINCR_BACKEND_URL  (backend origin, no path)
+#   - repository secret   DINCR_CRON_SECRET  (the cron secret the backend already reads:
+#                                             NOTIFICATION_CRON_SECRET, else EMAIL_MONITOR_CRON_SECRET)
+# The secret is sent only in the X-Cron-Secret header and never printed. The response holds
+# only counts (status, date, eligible, recorded, strategy_changed, failed); only those are logged.
+on:
+  schedule:
+    - cron: "0 5 * * *"   # 05:00 UTC = 23:00 America/Costa_Rica (UTC-6, no daylight saving)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: financial-history
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE_URL: ${{ vars.DINCR_BACKEND_URL }}
+      CRON_SECRET: ${{ secrets.DINCR_CRON_SECRET }}
+    steps:
+      - name: POST /financial-history/cron
+        run: |
+          if [ -z "$BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::notice::Financial history not configured (set the DINCR_BACKEND_URL variable and the DINCR_CRON_SECRET secret)."
+            exit 0
+          fi
+          code=000
+          # Retry only transient failures (network error, a cold start or gateway timeout).
+          # 403/503 (secret), 409 (a run in progress) and 5xx from the job itself are not retried:
+          # a second full run must never start blindly.
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o body.json -w '%{http_code}' -X POST "${BASE_URL%/}/financial-history/cron" \
+                   -H "X-Cron-Secret: ${CRON_SECRET}" --connect-timeout 30 --max-time 600 || echo 000)
+            case "$code" in
+              000|502|504) echo "attempt ${attempt}: HTTP ${code} (transient)"; sleep 30 ;;
+              *) break ;;
+            esac
+          done
+          case "$code" in
+            200)
+              python3 - <<'PY'
+          import json, sys
+          data = json.load(open("body.json"))
+          print({key: data.get(key) for key in ("status", "date", "eligible", "recorded", "strategy_changed", "failed")})
+          if data.get("failed"):
+              print(f"::error::{data['failed']} workspace(s) failed; see the backend logs (error class only).")
+              sys.exit(1)
+          PY
+              ;;
+            409) echo "::notice::A financial-history run is already in progress; nothing started." ;;
+            *)   echo "::error::POST /financial-history/cron answered HTTP ${code}."; exit 1 ;;
+          esac
