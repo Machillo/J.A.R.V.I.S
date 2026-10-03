@@ -706,8 +706,9 @@ def _create_personal_account(conn, supabase_user: dict[str, Any]) -> None:
         (f"personal:{account_id}", account_id, f"{supabase_user['email']} Personal"),
     ).fetchone()
     conn.execute(
-        """INSERT INTO workspace_members(workspace_id,account_id,member_role,status,created_at,updated_at)
-           VALUES(%s,%s,'owner','active',NOW(),NOW())""",
+        # The account's membership of its own workspace: isolation only, no role (P0.2d).
+        """INSERT INTO workspace_members(workspace_id,account_id,status,created_at,updated_at)
+           VALUES(%s,%s,'active',NOW(),NOW())""",
         (workspace["id"], account_id),
     )
 

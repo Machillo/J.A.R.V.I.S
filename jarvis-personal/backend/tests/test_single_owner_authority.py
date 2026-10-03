@@ -30,7 +30,13 @@ IDENTITIES = {
     "vip": {"id": 52, "role": "user", "plan": "vip"},
     "legacy admin": {"id": 53, "role": "admin", "plan": "vip"},
     "legacy viewer": {"id": 54, "role": "viewer", "plan": "vip"},
+    "legacy member": {"id": 56, "role": "member", "plan": "vip"},
     "client-flag owner": {"id": 55, "role": "user", "plan": "vip", "is_owner": True, "access_source": "owner"},
+    # Every account owns its personal workspace: data ownership, never DINCR authority.
+    "workspace data owner": {"id": 57, "role": "user", "plan": "free", "workspace_role": "owner", "account_role": "user"},
+    # A store review account: a normal user whose plan is a courtesy (plan only, never authority).
+    "vip courtesy review account": {"id": 58, "role": "user", "plan": "vip", "access_source": "courtesy",
+                                    "courtesy_note": "Cuenta demo para revisión de Google Play / App Store"},
 }
 
 
@@ -117,7 +123,7 @@ def test_the_owner_reaches_the_administrative_writes(as_role):
 
 
 # --- sessions: a stored legacy role is invalid, never promoted ---------------------------------
-@pytest.mark.parametrize("stored", ["admin", "viewer", "Admin", "superuser"])
+@pytest.mark.parametrize("stored", ["admin", "viewer", "member", "Admin", "superuser"])
 def test_a_stored_role_other_than_user_or_owner_gets_no_session(monkeypatch, stored):
     monkeypatch.setenv("OWNER_EMAILS", OWNER_EMAIL)
     with pytest.raises(HTTPException) as error:
@@ -132,6 +138,16 @@ def test_an_allowlisted_admin_is_never_the_owner(monkeypatch):
         owner_role.effective_role("admin", "listed-admin@example.test")
     assert owner_role.session_role("admin", "listed-admin@example.test") == "user"
     assert owner_role.effective_role("user", "listed-admin@example.test") == "user"
+
+
+@pytest.mark.parametrize("stored", ["user", "member", "admin", "viewer"])
+def test_owner_emails_alone_never_promotes_a_non_owner_account(monkeypatch, stored):
+    monkeypatch.setenv("OWNER_EMAILS", f"{OWNER_EMAIL},listed@example.test")
+    try:
+        assert owner_role.effective_role(stored, "listed@example.test") != "owner"
+    except HTTPException as error:
+        assert error.status_code == 403
+    assert owner_role.session_role(stored, "listed@example.test") == "user"
 
 
 def test_session_roles_for_user_and_owner(monkeypatch):
@@ -238,3 +254,58 @@ def test_no_runtime_code_grants_anything_to_an_admin_role():
     assert "require_roles(\"owner\", \"admin\")" not in (BACKEND / "main.py").read_text(encoding="utf-8")
     from backend.auth.service import VALID_ROLES
     assert VALID_ROLES == {"user"}
+
+
+# --- DINCR Owner != workspace data owner -----------------------------------------------------
+class _ContextConnection:
+    def __init__(self, row):
+        self.row = row
+
+    def execute(self, query, params=()):
+        assert "member_role" not in query, "membership has no role (P0.2d)"
+
+        class _R:
+            def __init__(self, row): self.row = row
+            def fetchone(self): return self.row
+        return _R(self.row)
+
+
+def test_workspace_membership_and_ownership_carry_no_dincr_authority():
+    # Every account owns its personal workspace and has an active membership of it: that is
+    # data ownership and isolation, and the resolved context carries no role at all.
+    from backend.auth.workspace_context import resolve_personal_workspace_context
+
+    context = resolve_personal_workspace_context(_ContextConnection({
+        "account_id": "00000000-0000-4000-8000-0000000000d1", "account_role": "user", "account_status": "active",
+        "workspace_id": "00000000-0000-4000-8000-0000000000d2", "workspace_name": "Personal", "workspace_type": "personal",
+        "workspace_status": "active", "membership_status": "active",
+    }), 77)
+    assert "workspace_role" not in context and "role" not in context
+    token = set_current_user({"id": 77, "role": "user", **context})
+    try:
+        with pytest.raises(HTTPException) as error:
+            require_owner()
+        assert error.value.status_code == 403
+    finally:
+        reset_current_user(token)
+
+
+def test_an_inactive_membership_still_closes_the_session():
+    # workspace_members.status = 'active' stays required (P0.2d removes only the role).
+    from backend.auth.workspace_context import resolve_personal_workspace_context
+
+    with pytest.raises(HTTPException) as error:
+        resolve_personal_workspace_context(_ContextConnection({
+            "account_id": "a", "account_role": "user", "account_status": "active", "workspace_id": "w",
+            "workspace_status": "active", "membership_status": "disabled"}), 1)
+    assert error.value.status_code == 403
+
+
+def test_no_runtime_code_reads_member_role_or_a_workspace_role():
+    import backend.auth.current_user as current_user
+
+    assert not hasattr(current_user, "get_current_workspace_role")
+    offenders = [relative for relative, source in _runtime_files()
+                 if relative.startswith("backend/") and re.search(r"member_role|workspace_role", source)]
+    assert offenders == []
+

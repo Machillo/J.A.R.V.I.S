@@ -60,22 +60,13 @@ def get_current_workspace_id() -> str:
     return str(workspace_id)
 
 
-def get_current_workspace_role() -> str:
-    workspace_role = get_current_user().get("workspace_role")
-    if not workspace_role:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="El request autenticado no tiene rol de workspace.",
-        )
-    return str(workspace_role)
-
-
 def require_owner():
     """The single verified Owner, DINCR's only administrative authority.
 
     The session role is "owner" only when the server verified it at login (the stored Owner
     role plus the deployment allowlist, backend/auth/owner_role.py); no request field, plan,
-    header or client value can set it. There is no other administrative role.
+    header or client value can set it. There is no other administrative role, and owning a
+    workspace (every account owns its personal one) is never DINCR Owner authority.
     """
     return require_roles("owner")
 

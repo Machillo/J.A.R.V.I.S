@@ -49,7 +49,6 @@ def main():
             "id": int(os.getenv("FINVA_BILLING_SMOKE_LEGACY_USER_ID", "1")),
             "account_id": account_id,
             "workspace_id": workspace_id,
-            "workspace_role": "owner",
             "role": "owner",
         }
     )
