@@ -30,12 +30,13 @@ def _account_last4(text: str) -> str | None:
     return None
 
 
-def parse_statement_movements(bank: str, text: str) -> list[dict[str, Any]]:
+def parse_statement_movements(bank: str, text: str, *, owner: bool = False) -> list[dict[str, Any]]:
+    """`owner` is the server's Owner check of the statement's own account; neutral by default."""
     bank_code = str(bank or "").lower()
     if bank_code == "bac":
-        return parse_bac_statement(text)
+        return parse_bac_statement(text, owner=owner)
     if bank_code == "multimoney":
-        return parse_multimoney_statement(text)
+        return parse_multimoney_statement(text, owner=owner)
     if bank_code == "popular":
         return parse_popular_statement(text)
     return []
@@ -43,7 +44,7 @@ def parse_statement_movements(bank: str, text: str) -> list[dict[str, Any]]:
 
 def statement_candidate(
     movement: dict[str, Any], *, bank: str, document_hash: str,
-    movement_index: int, statement_text: str,
+    movement_index: int, statement_text: str, owner: bool = False,
 ) -> dict[str, Any]:
     """Adapt a signed statement row to DINCR's canonical candidate contract."""
     direction = canonical_direction(movement.get("direction"))
@@ -78,7 +79,7 @@ def statement_candidate(
         "transaction_type": transaction_type,
         "movement_direction": direction,
         "movement_kind": movement_kind,
-        "category": normalize_category(movement.get("category"), transaction_type),
+        "category": normalize_category(movement.get("category"), transaction_type, owner=owner),
         "bank": str(bank or "unknown").lower(),
         "source_account_label": f"{str(bank or 'Banco').upper()} •••• {account_last4}" if account_last4 else str(bank or "Banco").upper(),
         "source_account_reference": source_reference,
@@ -96,6 +97,6 @@ def statement_candidate(
             **movement,
             "transaction_type": transaction_type,
             "movement_direction": direction,
-            "category": normalize_category(movement.get("category"), transaction_type),
+            "category": normalize_category(movement.get("category"), transaction_type, owner=owner),
         },
     }

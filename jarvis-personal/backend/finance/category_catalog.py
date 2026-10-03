@@ -4,8 +4,11 @@ import re
 from typing import Any
 
 from backend.core.database import get_connection
+from backend.finance import owner_category_compat
 
-
+# The canonical, neutral catalog every account resolves against. Nothing private to the
+# Owner belongs here (CLAUDE.md §4.A): his personal aliases and his broker category live in
+# `owner_category_compat` and apply only with `owner=True`, decided by the server's role.
 OFFICIAL_CATEGORIES: list[dict[str, Any]] = [
     # Ingresos
     {"group_name": "INGRESOS", "category_name": "Salario", "transaction_type": "income", "sort_order": 10, "aliases": ["salario", "sueldo", "planilla", "pago semanal", "pago", "nomina", "nómina"]},
@@ -43,15 +46,15 @@ OFFICIAL_CATEGORIES: list[dict[str, Any]] = [
     {"group_name": "SIN CLASIFICAR", "category_name": "Sin categoría", "transaction_type": "expense", "sort_order": 290, "aliases": ["sin categoria", "sin categoría", "desconocido", "unknown"]},
 
     # Deudas
-    {"group_name": "DEUDAS", "category_name": "Tarjeta BAC", "transaction_type": "expense", "sort_order": 310, "aliases": ["bac", "tarjeta bac", "visa bac", "mastercard bac"]},
+    {"group_name": "DEUDAS", "category_name": "Tarjeta BAC", "transaction_type": "expense", "sort_order": 310, "aliases": ["tarjeta bac", "visa bac", "mastercard bac"]},
     {"group_name": "DEUDAS", "category_name": "MultiMoney", "transaction_type": "expense", "sort_order": 320, "aliases": ["multimoney", "multi money"]},
-    {"group_name": "DEUDAS", "category_name": "Banco Popular", "transaction_type": "expense", "sort_order": 330, "aliases": ["banco popular", "popular", "prestamo popular", "préstamo popular"]},
-    {"group_name": "DEUDAS", "category_name": "Familiar", "transaction_type": "expense", "sort_order": 340, "aliases": ["familiar", "familia", "papa", "papá", "mama", "mamá"]},
+    {"group_name": "DEUDAS", "category_name": "Banco Popular", "transaction_type": "expense", "sort_order": 330, "aliases": ["banco popular", "prestamo popular", "préstamo popular"]},
+    {"group_name": "DEUDAS", "category_name": "Familiar", "transaction_type": "expense", "sort_order": 340, "aliases": ["familiar", "préstamo familiar", "prestamo familiar"]},
     {"group_name": "DEUDAS", "category_name": "Otros préstamos", "transaction_type": "expense", "sort_order": 350, "aliases": ["prestamo", "préstamo", "credito", "crédito", "deuda"]},
 
     # Ahorro
     {"group_name": "AHORRO", "category_name": "Fondo emergencia", "transaction_type": "transfer", "sort_order": 410, "aliases": ["fondo emergencia", "emergencia", "fondo de emergencia"]},
-    {"group_name": "AHORRO", "category_name": "Viajes", "transaction_type": "transfer", "sort_order": 420, "aliases": ["viaje", "viajes", "ecuador", "japon", "japón", "mexico", "méxico"]},
+    {"group_name": "AHORRO", "category_name": "Viajes", "transaction_type": "transfer", "sort_order": 420, "aliases": ["viaje", "viajes"]},
     {"group_name": "AHORRO", "category_name": "Meta personal", "transaction_type": "transfer", "sort_order": 430, "aliases": ["meta", "meta personal", "objetivo", "ahorro"]},
 
     # Cobros y ventas: money that comes in without being earned income.
@@ -60,28 +63,70 @@ OFFICIAL_CATEGORIES: list[dict[str, Any]] = [
     {"group_name": "COBROS Y VENTAS", "category_name": "Venta de activo", "transaction_type": "asset_sale", "sort_order": 460, "aliases": ["venta de activo", "venta de bien", "venta de vehiculo", "venta de vehículo"]},
 
     # Inversiones
-    {"group_name": "INVERSIONES", "category_name": "IBKR", "transaction_type": "transfer", "sort_order": 510, "aliases": ["ibkr", "interactive brokers", "acciones", "bolsa"]},
+    # A broker named explicitly is an institution, like BAC or Banco Popular: shared.
+    {"group_name": "INVERSIONES", "category_name": "IBKR", "transaction_type": "transfer", "sort_order": 510, "aliases": ["ibkr", "interactive brokers"]},
     {"group_name": "INVERSIONES", "category_name": "Cripto", "transaction_type": "transfer", "sort_order": 520, "aliases": ["cripto", "crypto", "bitcoin", "btc", "ethereum", "eth", "solana", "sol"]},
-    {"group_name": "INVERSIONES", "category_name": "Otros", "transaction_type": "transfer", "sort_order": 530, "aliases": ["otros", "otra inversion", "otra inversión"]},
+    # The generic investment category: the stock market in general names no institution.
+    {"group_name": "INVERSIONES", "category_name": "Otros", "transaction_type": "transfer", "sort_order": 530, "aliases": ["otros", "otra inversion", "otra inversión", "acciones", "bolsa"]},
 ]
 
-_CATEGORY_BY_NORMALIZED_NAME = {
-    item["category_name"].strip().lower(): item["category_name"]
-    for item in OFFICIAL_CATEGORIES
-}
-_CATEGORY_TRANSACTION_TYPE = {
-    item["category_name"]: item["transaction_type"]
-    for item in OFFICIAL_CATEGORIES
-}
-# One alias may belong to categories of different types ("viajes": the savings goal and
-# travel spending); the transaction type decides which one applies.
-_ALIAS_TO_CATEGORIES: dict[str, list[str]] = {}
-for item in OFFICIAL_CATEGORIES:
-    for alias in [item["category_name"], *item.get("aliases", [])]:
-        names = _ALIAS_TO_CATEGORIES.setdefault(alias.strip().lower(), [])
-        if item["category_name"] not in names:
-            names.append(item["category_name"])
-_ALIAS_TO_CATEGORY: dict[str, str] = {alias: names[0] for alias, names in _ALIAS_TO_CATEGORIES.items()}
+
+
+def _owner_categories() -> list[dict[str, Any]]:
+    """The Owner's catalog: the neutral one plus his compatibility entries, in catalog order."""
+    categories = [
+        {**item, "aliases": [*item["aliases"], *owner_category_compat.OWNER_EXTRA_ALIASES.get(item["category_name"], [])]}
+        for item in OFFICIAL_CATEGORIES
+    ]
+    return sorted([*categories, *owner_category_compat.OWNER_ONLY_CATEGORIES], key=lambda item: item["sort_order"])
+
+
+class _Catalog:
+    """Lookup tables of one catalog (neutral or Owner)."""
+
+    def __init__(self, categories: list[dict[str, Any]]):
+        self.categories = categories
+        self.by_normalized_name = {item["category_name"].strip().lower(): item["category_name"] for item in categories}
+        self.transaction_type = {item["category_name"]: item["transaction_type"] for item in categories}
+        # One alias may belong to categories of different types ("viajes": the savings goal and
+        # travel spending); the transaction type decides which one applies.
+        self.alias_to_categories: dict[str, list[str]] = {}
+        for item in categories:
+            for alias in [item["category_name"], *item.get("aliases", [])]:
+                names = self.alias_to_categories.setdefault(alias.strip().lower(), [])
+                if item["category_name"] not in names:
+                    names.append(item["category_name"])
+
+
+_NEUTRAL = _Catalog(OFFICIAL_CATEGORIES)
+_OWNER = _Catalog(_owner_categories())
+
+
+def owner_account_context(conn, account_id: object, workspace_id: object) -> bool:
+    """True only when the account and workspace whose data is processed are the verified Owner's.
+
+    Decided from stored records (`auth.owner_role.is_verified_owner_account`), so it holds in
+    background jobs too; never from a request field, header, plan or workspace role.
+    """
+    from backend.auth.owner_role import is_verified_owner_account
+
+    return is_verified_owner_account(conn, account_id, workspace_id) is True
+
+
+def owner_context() -> bool:
+    """True only when the server authenticated this request as the Owner.
+
+    The role comes from the verified session the auth middleware stores (the stored role,
+    gated server-side); no request field, header or plan can set it. Without an
+    authenticated request (background jobs, crons, OAuth callbacks) it is False: neutral.
+    """
+    try:
+        from backend.auth.current_user import get_current_user
+
+        return get_current_user().get("role") == "owner"
+    except Exception:
+        return False
+
 
 # Unknown is a category of its own: never a silent "Compras".
 UNKNOWN_EXPENSE_CATEGORY = "Sin categoría"
@@ -93,13 +138,13 @@ DEFAULT_INCOME_CATEGORY = "Otros ingresos"
 _OWN_CATEGORY_TYPE = {"receivable_payment": "receivable_payment", "receivable_offset": "receivable_payment", "asset_sale": "asset_sale"}
 
 
-def _category_matches_transaction_type(category: str, transaction_type: str | None) -> bool:
+def _category_matches_transaction_type(category: str, transaction_type: str | None, catalog: _Catalog = _NEUTRAL) -> bool:
     if transaction_type in _OWN_CATEGORY_TYPE:
-        return _CATEGORY_TRANSACTION_TYPE.get(category) == _OWN_CATEGORY_TYPE[transaction_type]
+        return catalog.transaction_type.get(category) == _OWN_CATEGORY_TYPE[transaction_type]
     if transaction_type == "income":
-        return _CATEGORY_TRANSACTION_TYPE.get(category) == "income"
+        return catalog.transaction_type.get(category) == "income"
     if transaction_type in {"expense", "debt_payment"}:
-        return _CATEGORY_TRANSACTION_TYPE.get(category) == "expense"
+        return catalog.transaction_type.get(category) == "expense"
     return True
 
 
@@ -120,48 +165,65 @@ def manual_expense_category(value: str | None) -> str:
     return UNKNOWN_EXPENSE_CATEGORY if clean.lower() in {"", "general"} else clean
 
 
-def _safe_category(category: str, transaction_type: str | None) -> str:
-    if _category_matches_transaction_type(category, transaction_type):
+def _safe_category(category: str, transaction_type: str | None, catalog: _Catalog) -> str:
+    if _category_matches_transaction_type(category, transaction_type, catalog):
         return category
     return default_category(transaction_type)
 
 
-def _compatible(names: list[str], transaction_type: str | None) -> str | None:
+def _compatible(names: list[str], transaction_type: str | None, catalog: _Catalog) -> str | None:
     """First category of the transaction's own type, else the first compatible one."""
-    exact = next((name for name in names if _CATEGORY_TRANSACTION_TYPE.get(name) == transaction_type), None)
-    return exact or next((name for name in names if _category_matches_transaction_type(name, transaction_type)), None)
+    exact = next((name for name in names if catalog.transaction_type.get(name) == transaction_type), None)
+    return exact or next((name for name in names if _category_matches_transaction_type(name, transaction_type, catalog)), None)
 
 
-def normalize_category(value: str | None, transaction_type: str | None = None) -> str:
+def normalize_category(value: str | None, transaction_type: str | None = None, *, owner: bool = False) -> str:
+    """Resolve a category against the neutral catalog; `owner=True` adds the Owner compatibility layer.
+
+    Callers pass `owner=owner_context()`, never a value taken from the request.
+    """
     if not value:
         return default_category(transaction_type)
+    catalog = _OWNER if owner is True else _NEUTRAL
 
     raw = value.strip()
     normalized = raw.lower()
 
     compact = re.sub(r"\s+", " ", normalized)
     for key in (normalized, compact):
-        exact_name = _CATEGORY_BY_NORMALIZED_NAME.get(key)
-        if exact_name and _category_matches_transaction_type(exact_name, transaction_type):
+        exact_name = catalog.by_normalized_name.get(key)
+        if exact_name and _category_matches_transaction_type(exact_name, transaction_type, catalog):
             return exact_name
-        if key in _ALIAS_TO_CATEGORIES:
+        if key in catalog.alias_to_categories:
             # A name or alias shared across types resolves to the one matching the transaction.
-            return _compatible(_ALIAS_TO_CATEGORIES[key], transaction_type) or _safe_category(_ALIAS_TO_CATEGORIES[key][0], transaction_type)
+            names = catalog.alias_to_categories[key]
+            return _compatible(names, transaction_type, catalog) or _safe_category(names[0], transaction_type, catalog)
 
     # Whole words only: a short alias ("ot", "ins", "box") must not match inside another word.
-    for alias, names in _ALIAS_TO_CATEGORIES.items():
+    for alias, names in catalog.alias_to_categories.items():
         if alias and re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", compact):
-            category = _compatible(names, transaction_type)
+            category = _compatible(names, transaction_type, catalog)
             if category:
                 return category
 
     return default_category(transaction_type)
 
 
-def expense_type_for_category(category: str) -> str:
-    category = normalize_category(category, "expense")
+def transfer_category(category: str, transaction_type: str | None, clean_text: str, *, owner: bool = False) -> str:
+    """A parsed transfer's category; with `owner=True`, the Owner's historical family rule applies.
+
+    The shared mail parser leaves an unclassified transfer as "Transferencias" for everyone.
+    """
+    if owner is True and transaction_type == "transfer" and category == "Transferencias":
+        return owner_category_compat.owner_transfer_category(clean_text) or category
+    return category
+
+
+def expense_type_for_category(category: str, *, owner: bool = False) -> str:
+    category = normalize_category(category, "expense", owner=owner)
+    catalog = _OWNER if owner is True else _NEUTRAL
     group = next(
-        (item["group_name"] for item in OFFICIAL_CATEGORIES if item["category_name"] == category),
+        (item["group_name"] for item in catalog.categories if item["category_name"] == category),
         "GASTOS VARIABLES",
     )
     if group == "GASTOS FIJOS":

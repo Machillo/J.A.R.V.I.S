@@ -167,15 +167,15 @@ CATEGORY_RULES = {
 }
 
 
-def detect_category(text: str):
+def detect_category(text: str, *, owner: bool = False):
     text = text.lower()
 
     for category, keywords in CATEGORY_RULES.items():
         for keyword in keywords:
             if keyword in text:
-                return normalize_category(category, "expense")
+                return normalize_category(category, "expense", owner=owner)
 
-    return normalize_category(text, "expense")
+    return normalize_category(text, "expense", owner=owner)
 
 
 def extract_amount(text: str):

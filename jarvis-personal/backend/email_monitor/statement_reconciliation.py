@@ -41,7 +41,7 @@ def _amount(value: str) -> float:
     return float(value.replace(",", ""))
 
 
-def parse_multimoney_statement(text: str) -> list[dict[str, Any]]:
+def parse_multimoney_statement(text: str, *, owner: bool = False) -> list[dict[str, Any]]:
     """Parse MultiMoney's extracted movement table without depending on PDF layout coordinates."""
     matches = list(DATE_LINE.finditer(text or ""))
     movements: list[dict[str, Any]] = []
@@ -73,7 +73,7 @@ def parse_multimoney_statement(text: str) -> list[dict[str, Any]]:
         elif "bateria" in normalized:
             category = "Transporte"
         else:
-            category = normalize_category(detect_category(description), transaction_type)
+            category = normalize_category(detect_category(description, owner=owner), transaction_type, owner=owner)
         movements.append({
             "transaction_date": datetime.strptime(match.group(1), "%d/%m/%Y").date().isoformat(),
             "reference": lines[0],
@@ -90,14 +90,14 @@ def parse_multimoney_statement(text: str) -> list[dict[str, Any]]:
     return movements
 
 
-def parse_bac_statement(text: str) -> list[dict[str, Any]]:
+def parse_bac_statement(text: str, *, owner: bool = False) -> list[dict[str, Any]]:
     """Parse BAC account statements that expose debit, credit and balance columns.
 
     Credit-card summaries without explicit debit/credit columns are deliberately
     rejected: importing an unsigned amount would risk reversing a payment or refund.
     """
     if "tarjeta de credito" in _plain(text):
-        return _parse_bac_credit_card_statement(text)
+        return _parse_bac_credit_card_statement(text, owner=owner)
 
     normalized_text = _plain(text)
     has_ledger_columns = (
@@ -138,7 +138,7 @@ def parse_bac_statement(text: str) -> list[dict[str, Any]]:
         ))
         transaction_type = "internal_transfer" if is_internal else "income" if credit > 0 else "expense"
         category = "Transferencia interna" if is_internal else normalize_category(
-            detect_category(description), transaction_type
+            detect_category(description, owner=owner), transaction_type, owner=owner
         )
         movements.append({
             "transaction_date": datetime.strptime(match.group(1), "%d/%m/%Y").date().isoformat(),
@@ -162,7 +162,7 @@ def _parse_bac_credit_card_date(value: str) -> str:
     return datetime(2000 + int(year), month, int(day)).date().isoformat()
 
 
-def _parse_bac_credit_card_statement(text: str, exchange_rate: float = 495.0) -> list[dict[str, Any]]:
+def _parse_bac_credit_card_statement(text: str, exchange_rate: float = 495.0, *, owner: bool = False) -> list[dict[str, Any]]:
     """Extract signed detail rows, excluding payments and summary/financing tables."""
     section: str | None = None
     card_last4: str | None = None
@@ -238,7 +238,7 @@ def _parse_bac_credit_card_statement(text: str, exchange_rate: float = 495.0) ->
         amount_crc = round(original_amount * exchange_rate, 2) if currency == "USD" else original_amount
         description = re.sub(r"[_]+", " ", match.group("description")).strip()
         transaction_type = "income" if is_credit else "expense"
-        category = normalize_category(detect_category(description), transaction_type)
+        category = normalize_category(detect_category(description, owner=owner), transaction_type, owner=owner)
         movements.append({
             "transaction_date": _parse_bac_credit_card_date(match.group("date")),
             "reference": match.group("reference"),
@@ -260,7 +260,8 @@ def _parse_bac_credit_card_statement(text: str, exchange_rate: float = 495.0) ->
     return movements
 
 
-def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: int) -> dict[str, Any]:
+def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: int, owner: bool = False) -> dict[str, Any]:
+    """`owner` comes from the caller's server-side Owner check; the default is neutral."""
     document = conn.execute(
         """
         SELECT * FROM email_statement_documents
@@ -274,12 +275,12 @@ def reconcile_statement(conn, *, user_id: int, workspace_id: str, statement_id: 
     bank = document.get("bank")
     if bank not in {"multimoney", "bac", "popular"}:
         raise HTTPException(status_code=400, detail="La conciliación admite estados MultiMoney, BAC y Banco Popular.")
-    parser = (
-        parse_multimoney_statement if bank == "multimoney"
-        else parse_popular_statement if bank == "popular"
-        else parse_bac_statement
+    text = document.get("extracted_text") or ""
+    movements = (
+        parse_multimoney_statement(text, owner=owner) if bank == "multimoney"
+        else parse_popular_statement(text) if bank == "popular"
+        else parse_bac_statement(text, owner=owner)
     )
-    movements = parser(document.get("extracted_text") or "")
     if not movements:
         raise HTTPException(status_code=422, detail=f"No pude extraer movimientos seguros del PDF de {bank.upper()}.")
 

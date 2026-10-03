@@ -13,10 +13,11 @@ from fastapi import HTTPException, status
 from backend.auth.current_user import get_current_user, get_current_user_id, require_roles
 from backend.core.database import get_connection
 from backend.finance import receivable_semantics
-from backend.finance.category_catalog import normalize_category
+from backend.finance.category_catalog import normalize_category, owner_context, transfer_category
 from backend.email_monitor.parser import (
     fingerprint_candidate,
     fingerprint_email,
+    normalize as normalize_mail_text,
     parse_financial_email,
 )
 from backend.email_monitor.parser_identity import owner_legacy_identity
@@ -694,10 +695,18 @@ def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transactio
         logger.warning("Receivable collection not linked (%s); run the receivables sync", type(exc).__name__)
 
 
+def _owner_layer_for(user_id: int) -> bool:
+    """The Owner category layer applies only to the Owner's own data, in his own request."""
+    try:
+        return owner_context() and int(get_current_user_id()) == int(user_id)
+    except Exception:
+        return False
+
+
 def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
     if candidate.get("transaction_type") in {"statement", "ignored", "internal_transfer"}:
         raise ValueError("Los estados de cuenta, correos ignorados o movimientos internos no se guardan como transacciones directas.")
-    category = normalize_category(candidate["category"], candidate["transaction_type"])
+    category = normalize_category(candidate["category"], candidate["transaction_type"], owner=_owner_layer_for(user_id))
     row = conn.execute(
         """
         INSERT INTO transactions (
@@ -1302,6 +1311,7 @@ def scan_email_text(
                         user_id=user_id,
                         workspace_id=workspace_id,
                         statement_id=int(statement_row["id"]),
+                        owner=_owner_layer_for(user_id),
                     )
                 except HTTPException as exc:
                     if parsed.get("bank") not in {"bac", "popular"} or exc.status_code != 422:
@@ -1374,7 +1384,10 @@ def scan_email_text(
                 description=parsed["description"],
                 bank=parsed["bank"],
             )
-        parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"])
+        owner = _owner_layer_for(user_id)
+        parsed["category"] = transfer_category(parsed["category"], parsed["transaction_type"],
+                                               normalize_mail_text(raw_description), owner=owner)
+        parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"], owner=owner)
 
         if _internal_mirror_exists(conn, workspace_id, parsed):
             removed_mirrors = _delete_pending_internal_mirrors(conn, workspace_id, parsed)
@@ -1832,7 +1845,7 @@ def classify_candidate(
         raise HTTPException(status_code=400, detail="Decime qué fue este movimiento.")
     if clean_type not in {"expense", "income", "debt_payment"}:
         raise HTTPException(status_code=400, detail="Tipo de movimiento inválido.")
-    clean_category = normalize_category(category, clean_type)
+    clean_category = normalize_category(category, clean_type, owner=owner_context())
 
     with get_connection() as conn:
         workspace_id = _workspace_id_for_user(conn, user_id)

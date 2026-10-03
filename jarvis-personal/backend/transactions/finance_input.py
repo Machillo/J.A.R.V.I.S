@@ -7,7 +7,7 @@ from typing import Any
 
 from pypdf import PdfReader
 
-from backend.finance.category_catalog import normalize_category
+from backend.finance.category_catalog import normalize_category, owner_context
 from backend.transactions.service import bulk_create_transactions
 
 MONEY_RE = re.compile(r"(?P<currency>₡|CRC|USD|\$)?\s*(?P<amount>-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|-?\d+(?:[.,]\d{2})?)", re.I)
@@ -118,7 +118,7 @@ def _detect_category(text: str, transaction_type: str) -> str:
     low = text.lower()
     for category, keywords in CATEGORY_HINTS.items():
         if any(keyword in low for keyword in keywords):
-            return normalize_category(category, transaction_type)
+            return normalize_category(category, transaction_type, owner=owner_context())
     if transaction_type == "income":
         return "Otros ingresos"
     if transaction_type == "loan_received":
