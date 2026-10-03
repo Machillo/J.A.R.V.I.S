@@ -83,7 +83,7 @@ def _account(cur, email, *, role="user", plan="vip", source="courtesy", status="
     workspace = str(uuid.uuid4())
     cur.execute("INSERT INTO workspaces(id, workspace_key, owner_account_id, name) VALUES (%s, %s, %s, 'Personal')",
                 (workspace, f"personal:{account}", account))
-    cur.execute("INSERT INTO workspace_members(workspace_id, account_id, member_role, status) VALUES (%s, %s, 'owner', %s)",
+    cur.execute("INSERT INTO workspace_members(workspace_id, account_id, status) VALUES (%s, %s, %s)",
                 (workspace, account, membership))
     if plan:
         cur.execute("""INSERT INTO account_subscriptions(account_id, plan_id, status, access_source, expires_at)
