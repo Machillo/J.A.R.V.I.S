@@ -2,6 +2,11 @@
 
 Specialist finance modules calculate facts. Advisor Core is the only module
 allowed to turn those facts into the current ordered strategy.
+
+Reading is pure (CLAUDE.md §4.C, master plan P0.2): `build_advisor_strategy` computes the
+strategy and reports, read-only, whether it differs from the stored current one. Storing it
+(`advisor_current_strategy`, and a history row only when its hash changes) is the explicit
+`_persist_strategy`, run by the daily financial-history job.
 """
 from __future__ import annotations
 
@@ -69,15 +74,41 @@ def _safe_usable_money(*, operating_surplus: float, liquidity: float, protected_
 STRATEGY_TABLES = ("advisor_current_strategy", "advisor_strategy_history")
 
 
-def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
-    workspace_id = get_current_workspace_id()
-    stable_strategy = {key: value for key, value in strategy.items() if key != "generated_at"}
+def _strategy_fingerprint(strategy: dict[str, Any]) -> tuple[str, str]:
+    """The canonical JSON of a strategy (without its wall-clock time) and its hash."""
+    stable_strategy = {key: value for key, value in strategy.items() if key not in {"generated_at", "persistence"}}
     canonical = json.dumps(stable_strategy, ensure_ascii=False, sort_keys=True, default=str)
-    fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return canonical, hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _persistence_preview(strategy: dict[str, Any]) -> dict[str, Any]:
+    """Read-only: the strategy's hash and whether it differs from the stored current one."""
+    _, fingerprint = _strategy_fingerprint(strategy)
+    with get_connection() as conn:
+        if not tables_exist(conn, STRATEGY_TABLES):
+            return {"strategy_hash": fingerprint, "changed": False, "persisted": False}
+        existing = conn.execute(
+            "SELECT strategy_hash FROM advisor_current_strategy WHERE workspace_id=%s",
+            (get_current_workspace_id(),),
+        ).fetchone()
+    changed = not existing or existing.get("strategy_hash") != fingerprint
+    return {"strategy_hash": fingerprint, "changed": changed, "persisted": False}
+
+
+def _persist_strategy(strategy: dict[str, Any]) -> dict[str, Any]:
+    """Explicit write: keep the current strategy and append history only when its hash changes.
+
+    A transaction-scoped advisory lock per workspace serializes concurrent runs, so two runs
+    of the same new strategy add one history row, not two (the history table has no unique
+    key on the hash; no migration needed).
+    """
+    workspace_id = get_current_workspace_id()
+    canonical, fingerprint = _strategy_fingerprint(strategy)
     with get_connection() as conn:
         # Created by migration 20260926125000; until it runs, the strategy is not kept.
         if not tables_exist(conn, STRATEGY_TABLES):
             return {"strategy_hash": fingerprint, "changed": False, "persisted": False}
+        conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"advisor-strategy:{workspace_id}",))
         existing = conn.execute(
             "SELECT strategy_hash FROM advisor_current_strategy WHERE workspace_id=%s",
             (workspace_id,),
@@ -146,7 +177,14 @@ def _data_quality(summary: dict[str, Any], accounts: list[dict[str, Any]], debts
     }
 
 
-def build_advisor_strategy(*, persist: bool = True) -> dict[str, Any]:
+def build_advisor_strategy() -> dict[str, Any]:
+    """Read-only: the current strategy plus a `persistence` block that says what storing it would do."""
+    strategy = compute_advisor_strategy()
+    return {**strategy, "persistence": _persistence_preview(strategy)}
+
+
+def compute_advisor_strategy() -> dict[str, Any]:
+    """The current ordered strategy, computed from canonical finance services. No writes."""
     summary = get_financial_summary()
     accounts_report = list_account_balances()
     accounts = accounts_report.get("items") or []
@@ -307,8 +345,7 @@ def build_advisor_strategy(*, persist: bool = True) -> dict[str, Any]:
         "advice": [actions[0].get("why") or ""],
         "warnings": [item["message"] for item in quality.get("issues") or []],
     }
-    persistence = _persist_strategy(strategy) if persist else {"changed": False, "strategy_hash": None}
-    return {**strategy, "persistence": persistence}
+    return strategy
 
 
 def get_strategy_history(limit: int = 20) -> list[dict[str, Any]]:
@@ -321,5 +358,4 @@ def get_strategy_history(limit: int = 20) -> list[dict[str, Any]]:
             FROM advisor_strategy_history WHERE workspace_id=%s
             ORDER BY created_at DESC,id DESC LIMIT %s
         """, (workspace_id, max(1, min(int(limit or 20), 100)))).fetchall()
-        conn.commit()
     return [dict(row) for row in rows]

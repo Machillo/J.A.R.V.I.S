@@ -1,4 +1,11 @@
-"""Deterministic financial deterioration signals with human-readable context."""
+"""Deterministic financial deterioration signals with human-readable context.
+
+Reading is pure (CLAUDE.md §4.C, master plan P0.2): `get_financial_deterioration` compares
+the current state with the latest stored observation and never writes one. The daily
+observation that makes "decline" provable is recorded only by an explicit operation,
+`record_daily_health_snapshot` (the daily financial-history job and the explicit lifecycle
+snapshot command), one row per workspace per Costa Rica calendar date.
+"""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -7,6 +14,7 @@ from typing import Any
 
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.database import get_connection
+from backend.core.time import costa_rica_today
 from backend.finance.emergency_fund import get_salvavidas_state, _monthly_amount
 from backend.finance.fixed_expenses import list_fixed_expenses
 from backend.finance.intelligence import list_account_balances
@@ -24,9 +32,15 @@ def _month(value: Any) -> str:
     return str(value or "")[:7]
 
 
-def get_financial_deterioration() -> dict[str, Any]:
+def get_financial_deterioration(as_of: date | None = None) -> dict[str, Any]:
+    """Read-only: the deterioration report; stores nothing."""
+    return compute_financial_deterioration(as_of)[0]
+
+
+def compute_financial_deterioration(as_of: date | None = None) -> tuple[dict[str, Any], dict[str, float]]:
+    """The report and the health observation of `as_of` (default: today in Costa Rica). No writes."""
     workspace_id = get_current_workspace_id()
-    today = date.today()
+    today = as_of or costa_rica_today()
     current_month = today.strftime("%Y-%m")
     with get_connection() as conn:
         rows = conn.execute(
@@ -73,29 +87,17 @@ def get_financial_deterioration() -> dict[str, Any]:
     net_worth = round(assets_total - debt_balance, 2)
     coverage = _n(salvavidas.get("coverage_months"))
 
-    # Persist one comparable observation per day. Without historical snapshots,
-    # a change detector can only describe the present and cannot prove decline.
-    previous = None
+    # Compare with the latest earlier observation. Without historical snapshots, a change
+    # detector can only describe the present and cannot prove decline; the observations are
+    # recorded by record_daily_health_snapshot, never by this read.
     with get_connection() as conn:
         previous = conn.execute("""
             SELECT * FROM financial_health_snapshots
             WHERE workspace_id=%s AND snapshot_date < %s
             ORDER BY snapshot_date DESC LIMIT 1
         """, (workspace_id, today.isoformat())).fetchone()
-        conn.execute("""
-            INSERT INTO financial_health_snapshots(
-                workspace_id,snapshot_date,liquidity,recurring_monthly,
-                debt_balance,debt_monthly,salvavidas_coverage,net_worth
-            ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT(workspace_id,snapshot_date) DO UPDATE SET
-                liquidity=EXCLUDED.liquidity,
-                recurring_monthly=EXCLUDED.recurring_monthly,
-                debt_balance=EXCLUDED.debt_balance,
-                debt_monthly=EXCLUDED.debt_monthly,
-                salvavidas_coverage=EXCLUDED.salvavidas_coverage,
-                net_worth=EXCLUDED.net_worth
-        """, (workspace_id, today.isoformat(), liquidity, recurring, debt_balance, debt_monthly, coverage, net_worth))
-        conn.commit()
+    observation = {"liquidity": liquidity, "recurring_monthly": recurring, "debt_balance": debt_balance,
+                   "debt_monthly": debt_monthly, "salvavidas_coverage": coverage, "net_worth": net_worth}
 
     signals: list[dict[str, Any]] = []
     def add_signal(code: str, title: str, severity: str, metric: float, comparison: float, unit: str, context: str):
@@ -131,8 +133,8 @@ def get_financial_deterioration() -> dict[str, Any]:
     severity_order = {"high": 0, "medium": 1, "low": 2}
     signals.sort(key=lambda item: severity_order.get(item["severity"], 9))
     cause = signals[0] if signals else None
-    return {
-        "status": "OK", "generated_at": date.today().isoformat(), "period": {"current": current_month, "compared_months": ordered[-4:]},
+    report = {
+        "status": "OK", "generated_at": today.isoformat(), "period": {"current": current_month, "compared_months": ordered[-4:]},
         "health": "deteriorating" if any(item["severity"] == "high" for item in signals) else "watch" if signals else "stable",
         "primary_cause": cause,
         "signals": signals,
@@ -140,3 +142,37 @@ def get_financial_deterioration() -> dict[str, Any]:
         "monthly": [{"month": key, **monthly[key]} for key in ordered[-6:]],
         "note": "Las señales son informativas y no cambian cuentas, deudas ni transacciones automáticamente.",
     }
+    return report, observation
+
+
+def persist_health_observation(conn, workspace_id: str, snapshot_date: date, observation: dict[str, float]) -> None:
+    """Store the day's observation: one row per workspace and date (UNIQUE(workspace_id, snapshot_date)).
+
+    Repeated or concurrent runs of the same day converge on one row (the last observation wins,
+    as before P0.2). The caller owns the transaction.
+    """
+    conn.execute("""
+        INSERT INTO financial_health_snapshots(
+            workspace_id,snapshot_date,liquidity,recurring_monthly,
+            debt_balance,debt_monthly,salvavidas_coverage,net_worth
+        ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT(workspace_id,snapshot_date) DO UPDATE SET
+            liquidity=EXCLUDED.liquidity,
+            recurring_monthly=EXCLUDED.recurring_monthly,
+            debt_balance=EXCLUDED.debt_balance,
+            debt_monthly=EXCLUDED.debt_monthly,
+            salvavidas_coverage=EXCLUDED.salvavidas_coverage,
+            net_worth=EXCLUDED.net_worth
+    """, (workspace_id, snapshot_date.isoformat(), observation["liquidity"], observation["recurring_monthly"],
+          observation["debt_balance"], observation["debt_monthly"], observation["salvavidas_coverage"],
+          observation["net_worth"]))
+
+
+def record_daily_health_snapshot(as_of: date | None = None) -> dict[str, Any]:
+    """Explicit write: compute today's health observation for the current workspace and store it."""
+    today = as_of or costa_rica_today()
+    report, observation = compute_financial_deterioration(today)
+    with get_connection() as conn:
+        persist_health_observation(conn, get_current_workspace_id(), today, observation)
+        conn.commit()
+    return {"snapshot_date": today.isoformat(), "health": report["health"]}

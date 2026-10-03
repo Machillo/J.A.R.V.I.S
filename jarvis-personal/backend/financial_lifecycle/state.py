@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
-from backend.advisor.core import build_advisor_strategy
+from backend.advisor.core import compute_advisor_strategy
 from backend.auth.current_user import get_current_workspace_id
 from backend.core.i18n import DEFAULT_LANGUAGE, use_language
 from backend.finance.deterioration import get_financial_deterioration
@@ -38,8 +38,8 @@ def _monthly_ledger(flow: dict[str, Any]) -> dict[str, float]:
 def build_financial_state() -> dict[str, Any]:
     """Build one read-only state from canonical finance services.
 
-    This function deliberately calls Advisor Core with persist=False. Phase 2A
-    observes the strategy; it does not create strategy-history side effects.
+    It computes the Advisor Core strategy without storing it (P0.2: reads never write);
+    Phase 2A observes the strategy and creates no strategy-history side effects.
     The state is persisted and compared across snapshots, so any text in it is
     kept in canonical Spanish; responses localize it when presenting.
     """
@@ -48,7 +48,7 @@ def build_financial_state() -> dict[str, Any]:
 
 
 def _build_financial_state() -> dict[str, Any]:
-    strategy = build_advisor_strategy(persist=False)
+    strategy = compute_advisor_strategy()
     accounts = list_account_balances().get("items") or []
     debts = [item for item in (get_debts() or []) if _n(item.get("remaining_amount")) > 0]
     salvavidas = get_salvavidas_state()

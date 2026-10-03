@@ -17,6 +17,7 @@ OAUTH_RETURNS = {"/user-product/vip/gmail/callback", "/user-product/vip/mail/mic
 # Crons, webhooks and bridges: each must verify its own secret/signature.
 SECRET_PROTECTED = {
     "/user-product/vip/gmail/maintenance", "/user-product/vip/gmail/push", "/notifications/cron",
+    "/financial-history/cron",
     "/deployment-monitor/webhook/github", "/deployment-monitor/webhook/vercel", "/deployment-monitor/webhook/render",
     "/integrations/ibkr/snapshot", "/integrations/ibkr/flex/cron", "/internal/owner-bridge/verify",
     # Store purchases: Apple's JWS signature, Google's OIDC token, the store cron secret.

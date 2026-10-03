@@ -25,6 +25,7 @@ from backend.auth.routes import router as auth_router
 from backend.ai.routes import router as ai_router
 from backend.email_monitor.routes import router as email_monitor_router
 from backend.notifications.routes import router as notifications_router
+from backend.finance.daily_history_routes import router as financial_history_router
 from backend.finance.investment_center import router as investment_center_router
 from backend.finance.business_center import router as business_center_router
 from backend.auth.current_user import require_roles, set_current_user, reset_current_user
@@ -98,6 +99,7 @@ PUBLIC_PATHS = {
     "/user-product/vip/gmail/maintenance",
     "/user-product/vip/gmail/push",
     "/notifications/cron",
+    "/financial-history/cron",
     # App Store / Google Play: authenticated by Apple's signature, Google's OIDC
     # token or the cron secret (backend/product_ops/store_verification.py).
     "/product-ops/billing/store/apple/notifications",
@@ -453,6 +455,7 @@ app.include_router(auth_router)
 app.include_router(ai_router)
 app.include_router(email_monitor_router)
 app.include_router(notifications_router)
+app.include_router(financial_history_router)
 app.include_router(investment_center_router, dependencies=INTERNAL_ONLY)
 app.include_router(ibkr_readonly_router)
 app.include_router(business_center_router, dependencies=INTERNAL_ONLY)

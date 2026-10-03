@@ -1002,6 +1002,13 @@
   "user_get": "denied"
  },
  {
+  "method": "POST",
+  "path": "/financial-history/cron",
+  "gates": [
+   "public"
+  ]
+ },
+ {
   "method": "GET",
   "path": "/goals/",
   "gates": [
