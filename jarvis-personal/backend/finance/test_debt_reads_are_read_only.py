@@ -150,7 +150,7 @@ def test_imported_transactions_then_home_keep_the_debt_in_context(store, monkeyp
         {"workspace_id": WS_A, "type": "debt_payment", "amount": 50000, "source": "finva_gmail"},
     ]
     for name, value in {
-        "build_advisor_strategy": lambda **_kw: {}, "list_account_balances": lambda: {"items": []},
+        "compute_advisor_strategy": lambda **_kw: {}, "list_account_balances": lambda: {"items": []},
         "get_salvavidas_state": lambda: {}, "get_real_availability": lambda: {},
         "get_financial_deterioration": lambda: {}, "get_monthly_financial_flow": lambda: {"months": []},
     }.items():

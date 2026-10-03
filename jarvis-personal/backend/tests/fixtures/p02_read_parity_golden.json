@@ -1,0 +1,574 @@
+{
+ "_about": "Responses of the P0.2 read surfaces BEFORE P0.2 (main 49d5da5b) on the synthetic inputs of backend/tests/p02_parity_harness.py; wall-clock fields removed.",
+ "advisor_strategy": {
+  "__strategy_hash": "e8f83c2318bad8ff76387ea1833b94b5e7ea9f24d7f3e6a7d2afcd391f034042",
+  "action_plan": [
+   {
+    "amount": 0,
+    "title": "Liquidez mensual a la baja",
+    "type": "mitigate_deterioration",
+    "why": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000."
+   },
+   {
+    "amount": 0.0,
+    "title": "Completar un mes de Salvavidas",
+    "type": "emergency_fund",
+    "why": "Es el mínimo protegido antes de acelerar deuda o invertir."
+   },
+   {
+    "amount": 0.0,
+    "title": "Abonar a Tarjeta sintética",
+    "type": "debt",
+    "why": "Doctor Strange comparó las rutas posibles y esta deuda abre la estrategia balanceada entre costo, tiempo y victorias rápidas. Queda en espera hasta completar el primer mes de Salvavidas."
+   }
+  ],
+  "advice": [
+   "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000."
+  ],
+  "advisor_version": "advisor-core-v2",
+  "confidence": 0.9,
+  "data_quality": {
+   "confidence": 0.9,
+   "fresh": false,
+   "issues": [
+    {
+     "code": "stale_accounts",
+     "message": "Saldos desactualizados: Cuenta A, Inversión",
+     "severity": "warning"
+    }
+   ],
+   "status": "review",
+   "sufficient": true
+  },
+  "debt_target": {
+   "id": 1,
+   "interest_rate": 36,
+   "name": "Tarjeta sintética",
+   "remaining_amount": 1200000,
+   "why": "Doctor Strange comparó las rutas posibles y esta deuda abre la estrategia balanceada entre costo, tiempo y victorias rápidas."
+  },
+  "decision_policy": "datos > riesgo 45 días > conciliación > 1 mes Salvavidas > deuda cara > metas > 3-6 meses Salvavidas > inversión",
+  "financial_score": 61,
+  "forecast": {
+   "ending_available": 420000,
+   "horizon_days": 45,
+   "minimum_projected_balance": 200000.0,
+   "opening_available": 350000
+  },
+  "fundable_goals": [
+   {
+    "blocked_by": "riesgo de liquidez en los próximos 45 días",
+    "current_amount": 100000,
+    "id": 7,
+    "monthly_needed": 50000,
+    "monthly_required": 0.0,
+    "name": "Meta sintética",
+    "priority": 1,
+    "remaining_amount": 400000.0,
+    "target_amount": 500000,
+    "target_date": "2027-03-01"
+   }
+  ],
+  "goal_portfolio": {
+   "active_goal": null,
+   "goal_allocation": 0.0,
+   "items": [
+    {
+     "blocked_by": "riesgo de liquidez en los próximos 45 días",
+     "current_amount": 100000,
+     "id": 7,
+     "monthly_needed": 50000,
+     "monthly_required": 0.0,
+     "name": "Meta sintética",
+     "priority": 1,
+     "remaining_amount": 400000.0,
+     "target_amount": 500000,
+     "target_date": "2027-03-01"
+    }
+   ],
+   "rule": "Una alternativa por grupo; metas solo después de liquidez, un mes de Salvavidas y deuda cara.",
+   "selected_alternatives": {}
+  },
+  "health": {
+   "inputs": {
+    "debt_service_ratio": 0.18,
+    "highest_debt_apr": 36
+   },
+   "level": "regular",
+   "score": 61
+  },
+  "health_label": "regular",
+  "immediate_risk": {
+   "deterioration_cause": {
+    "code": "liquidity",
+    "comparison": 350000.0,
+    "context": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000.",
+    "metric": -60000.0,
+    "severity": "high",
+    "title": "Liquidez mensual a la baja",
+    "unit": "CRC/mes"
+   },
+   "exists": true,
+   "first_negative_event": null,
+   "horizon_days": 45,
+   "minimum_projected_balance": 200000.0
+  },
+  "investment": {
+   "blockers": [
+    "datos financieros insuficientes o sin verificar",
+    "riesgo de liquidez en los próximos 45 días",
+    "Salvavidas menor a tres meses",
+    "deuda con tasa anual de 10% o más"
+   ],
+   "prudent": false,
+   "recommended_amount": 0,
+   "rule": "Invertir solo después de proteger liquidez, Salvavidas, deuda cara y metas financiables."
+  },
+  "minimum_protection": {
+   "coverage_months": 0.8,
+   "current": 360000.0,
+   "gap_one_month": 90000.0,
+   "monthly_minimum": 450000.0,
+   "target_months": 6
+  },
+  "next_action": {
+   "amount": 0,
+   "title": "Liquidez mensual a la baja",
+   "type": "mitigate_deterioration",
+   "why": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000."
+  },
+  "primary_diagnosis": {
+   "code": "liquidity",
+   "comparison": 350000.0,
+   "context": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000.",
+   "metric": -60000.0,
+   "severity": "high",
+   "title": "Liquidez mensual a la baja",
+   "unit": "CRC/mes"
+  },
+  "priorities": [
+   "Liquidez mensual a la baja",
+   "Completar un mes de Salvavidas",
+   "Abonar a Tarjeta sintética"
+  ],
+  "summary": {
+   "available_cash": 0.0,
+   "debt_payment_ratio": 0.18,
+   "debt_total": 1200000.0,
+   "main_goal": null,
+   "monthly_debt_payments": 150000.0,
+   "net_worth": -350000.0
+  },
+  "usable_money": {
+   "amount": 0.0,
+   "formula": "mínimo entre excedente operativo, liquidez sobre protección y piso proyectado sobre protección",
+   "liquidity": 350000.0,
+   "operating_surplus": 180000.0,
+   "timeline_floor": 200000.0
+  },
+  "warnings": [
+   "Saldos desactualizados: Cuenta A, Inversión"
+  ]
+ },
+ "deterioration_baseline": {
+  "context": {
+   "debt_balance": 1200000.0,
+   "debt_monthly_payments": 150000.0,
+   "latest_month": {
+    "debt_payments": 260000.0,
+    "expenses": 700000.0,
+    "income": 900000.0,
+    "net": -60000.0
+   },
+   "liquidity_available": 350000.0,
+   "net_worth": -350000.0,
+   "previous_snapshot_date": null,
+   "recent_average": {
+    "debt_payments": 150000.0,
+    "expenses": 400000.0,
+    "income": 900000.0,
+    "net": 350000.0
+   },
+   "recurring_expected": 145000.0,
+   "salvavidas_coverage_months": 0.8
+  },
+  "health": "deteriorating",
+  "monthly": [
+   {
+    "debt_payments": 150000.0,
+    "expenses": 400000.0,
+    "income": 900000.0,
+    "month": "2026-06",
+    "net": 350000.0
+   },
+   {
+    "debt_payments": 150000.0,
+    "expenses": 400000.0,
+    "income": 900000.0,
+    "month": "2026-07",
+    "net": 350000.0
+   },
+   {
+    "debt_payments": 150000.0,
+    "expenses": 400000.0,
+    "income": 900000.0,
+    "month": "2026-08",
+    "net": 350000.0
+   },
+   {
+    "debt_payments": 260000.0,
+    "expenses": 700000.0,
+    "income": 900000.0,
+    "month": "2026-09",
+    "net": -60000.0
+   }
+  ],
+  "note": "Las señales son informativas y no cambian cuentas, deudas ni transacciones automáticamente.",
+  "period": {
+   "compared_months": [
+    "2026-06",
+    "2026-07",
+    "2026-08",
+    "2026-09"
+   ],
+   "current": "2026-09"
+  },
+  "primary_cause": {
+   "code": "liquidity",
+   "comparison": 350000.0,
+   "context": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000.",
+   "metric": -60000.0,
+   "severity": "high",
+   "title": "Liquidez mensual a la baja",
+   "unit": "CRC/mes"
+  },
+  "signals": [
+   {
+    "code": "liquidity",
+    "comparison": 350000.0,
+    "context": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000.",
+    "metric": -60000.0,
+    "severity": "high",
+    "title": "Liquidez mensual a la baja",
+    "unit": "CRC/mes"
+   },
+   {
+    "code": "salvavidas",
+    "comparison": 1,
+    "context": "El fondo cubre aproximadamente 0.80 meses de obligaciones protegidas; la referencia mínima es 1 mes.",
+    "metric": 0.8,
+    "severity": "high",
+    "title": "Cobertura Salvavidas baja",
+    "unit": "meses"
+   },
+   {
+    "code": "debt_payments",
+    "comparison": 150000.0,
+    "context": "Los pagos de deuda del último periodo superan el promedio reciente.",
+    "metric": 260000.0,
+    "severity": "medium",
+    "title": "Mayor carga de cuotas",
+    "unit": "CRC/mes"
+   },
+   {
+    "code": "expenses",
+    "comparison": 400000.0,
+    "context": "Los gastos registrados crecieron más de 10% contra el promedio reciente.",
+    "metric": 700000.0,
+    "severity": "medium",
+    "title": "Gastos creciendo",
+    "unit": "CRC/mes"
+   }
+  ],
+  "status": "OK"
+ },
+ "deterioration_with_previous": {
+  "context": {
+   "debt_balance": 1200000.0,
+   "debt_monthly_payments": 150000.0,
+   "latest_month": {
+    "debt_payments": 260000.0,
+    "expenses": 700000.0,
+    "income": 900000.0,
+    "net": -60000.0
+   },
+   "liquidity_available": 350000.0,
+   "net_worth": -350000.0,
+   "previous_snapshot_date": "2026-09-14",
+   "recent_average": {
+    "debt_payments": 150000.0,
+    "expenses": 400000.0,
+    "income": 900000.0,
+    "net": 350000.0
+   },
+   "recurring_expected": 145000.0,
+   "salvavidas_coverage_months": 0.8
+  },
+  "health": "deteriorating",
+  "monthly": [
+   {
+    "debt_payments": 150000.0,
+    "expenses": 400000.0,
+    "income": 900000.0,
+    "month": "2026-06",
+    "net": 350000.0
+   },
+   {
+    "debt_payments": 150000.0,
+    "expenses": 400000.0,
+    "income": 900000.0,
+    "month": "2026-07",
+    "net": 350000.0
+   },
+   {
+    "debt_payments": 150000.0,
+    "expenses": 400000.0,
+    "income": 900000.0,
+    "month": "2026-08",
+    "net": 350000.0
+   },
+   {
+    "debt_payments": 260000.0,
+    "expenses": 700000.0,
+    "income": 900000.0,
+    "month": "2026-09",
+    "net": -60000.0
+   }
+  ],
+  "note": "Las señales son informativas y no cambian cuentas, deudas ni transacciones automáticamente.",
+  "period": {
+   "compared_months": [
+    "2026-06",
+    "2026-07",
+    "2026-08",
+    "2026-09"
+   ],
+   "current": "2026-09"
+  },
+  "primary_cause": {
+   "code": "liquidity",
+   "comparison": 350000.0,
+   "context": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000.",
+   "metric": -60000.0,
+   "severity": "high",
+   "title": "Liquidez mensual a la baja",
+   "unit": "CRC/mes"
+  },
+  "signals": [
+   {
+    "code": "liquidity",
+    "comparison": 350000.0,
+    "context": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000.",
+    "metric": -60000.0,
+    "severity": "high",
+    "title": "Liquidez mensual a la baja",
+    "unit": "CRC/mes"
+   },
+   {
+    "code": "salvavidas",
+    "comparison": 1,
+    "context": "El fondo cubre aproximadamente 0.80 meses de obligaciones protegidas; la referencia mínima es 1 mes.",
+    "metric": 0.8,
+    "severity": "high",
+    "title": "Cobertura Salvavidas baja",
+    "unit": "meses"
+   },
+   {
+    "code": "liquidity_history",
+    "comparison": 500000.0,
+    "context": "La liquidez cayó más de 15% desde la observación anterior.",
+    "metric": 350000.0,
+    "severity": "high",
+    "title": "Caída de liquidez",
+    "unit": "CRC"
+   },
+   {
+    "code": "debt_history",
+    "comparison": 1000000.0,
+    "context": "La deuda total aumentó más de 5% desde la observación anterior.",
+    "metric": 1200000.0,
+    "severity": "high",
+    "title": "Saldo de deuda en aumento",
+    "unit": "CRC"
+   },
+   {
+    "code": "debt_payments",
+    "comparison": 150000.0,
+    "context": "Los pagos de deuda del último periodo superan el promedio reciente.",
+    "metric": 260000.0,
+    "severity": "medium",
+    "title": "Mayor carga de cuotas",
+    "unit": "CRC/mes"
+   },
+   {
+    "code": "expenses",
+    "comparison": 400000.0,
+    "context": "Los gastos registrados crecieron más de 10% contra el promedio reciente.",
+    "metric": 700000.0,
+    "severity": "medium",
+    "title": "Gastos creciendo",
+    "unit": "CRC/mes"
+   },
+   {
+    "code": "recurring_history",
+    "comparison": 100000.0,
+    "context": "Los compromisos recurrentes aumentaron más de 10%.",
+    "metric": 145000.0,
+    "severity": "medium",
+    "title": "Obligaciones recurrentes en aumento",
+    "unit": "CRC/mes"
+   },
+   {
+    "code": "coverage_history",
+    "comparison": 1.2,
+    "context": "La cobertura protegida perdió al menos 0,1 meses.",
+    "metric": 0.8,
+    "severity": "medium",
+    "title": "Cobertura Salvavidas en descenso",
+    "unit": "meses"
+   }
+  ],
+  "status": "OK"
+ },
+ "lifecycle_state": {
+  "balance_sheet": {
+   "assets_total": 850000.0,
+   "debt_total": 1200000.0,
+   "liquid_assets": 350000.0,
+   "net_worth": -350000.0
+  },
+  "cashflow": {
+   "debt_payments": 260000.0,
+   "expenses": 700000.0,
+   "income": 900000.0,
+   "net_operational": -60000.0,
+   "real_availability": 180000.0,
+   "safe_available": 0.0
+  },
+  "debt": {
+   "active_count": 1,
+   "monthly_payments": 150000.0,
+   "target": {
+    "id": 1,
+    "interest_rate": 36,
+    "name": "Tarjeta sintética",
+    "remaining_amount": 1200000,
+    "why": "Doctor Strange comparó las rutas posibles y esta deuda abre la estrategia balanceada entre costo, tiempo y victorias rápidas."
+   },
+   "total": 1200000.0
+  },
+  "emergency_fund": {
+   "coverage_months": 0.8,
+   "current": 360000.0,
+   "monthly_base": 450000.0,
+   "target_months": 6
+  },
+  "goals": {
+   "active": null,
+   "fundable": [
+    {
+     "blocked_by": "riesgo de liquidez en los próximos 45 días",
+     "current_amount": 100000,
+     "id": 7,
+     "monthly_needed": 50000,
+     "monthly_required": 0.0,
+     "name": "Meta sintética",
+     "priority": 1,
+     "remaining_amount": 400000.0,
+     "target_amount": 500000,
+     "target_date": "2027-03-01"
+    }
+   ]
+  },
+  "health": {
+   "confidence": 0.9,
+   "data_status": "review",
+   "deterioration": "deteriorating",
+   "label": "regular",
+   "score": 61
+  },
+  "period": "2026-09",
+  "schema_version": "financial-state-v1",
+  "strategy": {
+   "advisor_version": "advisor-core-v2",
+   "decision_policy": "datos > riesgo 45 días > conciliación > 1 mes Salvavidas > deuda cara > metas > 3-6 meses Salvavidas > inversión",
+   "next_action": {
+    "amount": 0,
+    "title": "Liquidez mensual a la baja",
+    "type": "mitigate_deterioration",
+    "why": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000."
+   },
+   "priorities": [
+    "Liquidez mensual a la baja",
+    "Completar un mes de Salvavidas",
+    "Abonar a Tarjeta sintética"
+   ]
+  },
+  "workspace_id": "00000000-0000-4000-8000-0000000000a1"
+ },
+ "premium_strategy_summary": {
+  "action_plan": [
+   {
+    "amount": 0,
+    "title": "Liquidez mensual a la baja",
+    "type": "mitigate_deterioration",
+    "why": "El flujo neto de 2026-09 fue -60,000, frente a un promedio reciente de 350,000."
+   },
+   {
+    "amount": 0.0,
+    "title": "Completar un mes de Salvavidas",
+    "type": "emergency_fund",
+    "why": "Es el mínimo protegido antes de acelerar deuda o invertir."
+   },
+   {
+    "amount": 0.0,
+    "title": "Abonar a Tarjeta sintética",
+    "type": "debt",
+    "why": "Doctor Strange comparó las rutas posibles y esta deuda abre la estrategia balanceada entre costo, tiempo y victorias rápidas. Queda en espera hasta completar el primer mes de Salvavidas."
+   }
+  ],
+  "allocations": [
+   {
+    "amount": 90000,
+    "label": "Salvavidas"
+   }
+  ],
+  "data_quality": {
+   "confidence": 0.9,
+   "fresh": false,
+   "issues": [
+    {
+     "code": "stale_accounts",
+     "message": "Saldos desactualizados: Cuenta A, Inversión",
+     "severity": "warning"
+    }
+   ],
+   "status": "review",
+   "sufficient": true
+  },
+  "decision_policy": "datos > riesgo 45 días > conciliación > 1 mes Salvavidas > deuda cara > metas > 3-6 meses Salvavidas > inversión",
+  "forecast": {
+   "months": 3
+  },
+  "health": {
+   "score": 61
+  },
+  "source": "live_database",
+  "status": "OK",
+  "strategy": {
+   "allocation_items": [
+    {
+     "amount": 90000,
+     "label": "Salvavidas"
+    }
+   ],
+   "objective": "Ordenar deuda",
+   "priority": {
+    "detail": "Primero liquidez"
+   },
+   "title": "Estrategia sintética"
+  },
+  "summary": "Primero liquidez",
+  "title": "Estrategia sintética"
+ }
+}

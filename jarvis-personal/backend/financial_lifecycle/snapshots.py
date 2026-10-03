@@ -9,12 +9,16 @@ from typing import Any
 from backend.auth.current_user import get_current_account_id, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx
+from backend.finance.deterioration import record_daily_health_snapshot
 from backend.financial_lifecycle.progress import build_longitudinal_progress, compare_states
 from backend.financial_lifecycle.monthly_review import build_monthly_review
 from backend.financial_lifecycle.proactive import build_proactive_advisor
 from backend.financial_lifecycle.state import build_financial_state
 
 def capture_financial_snapshot() -> dict[str, Any]:
+    # An explicit command: it also records the day's health observation, through the same
+    # service as the daily financial-history job (reads no longer write it, P0.2).
+    record_daily_health_snapshot()
     state = build_financial_state()
     workspace_id = get_current_workspace_id()
     account_id = get_current_account_id()

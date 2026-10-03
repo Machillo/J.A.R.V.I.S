@@ -111,7 +111,7 @@ def test_users_request_modules_have_no_ddl():
 # reachable function contains DDL.
 USERS_ROUTE_MODULES = ("user_product/routes.py", "financial_lifecycle/routes.py", "auth/routes.py",
                        "product_ops/routes.py", "notifications/routes.py", "product_ops/store_routes.py",
-                       "product_ops/observability_routes.py")
+                       "product_ops/observability_routes.py", "finance/daily_history_routes.py")
 # Routers main.py mounts without INTERNAL_ONLY that are not Users entries, and why.
 OWNER_GATED_ROUTER_MODULES = {
     "ai/routes.py": "router dependency require_roles('owner', 'admin')",
@@ -179,13 +179,10 @@ def _function_has_ddl(fn) -> bool:
     return False
 
 
-# Call edges Users never take at runtime; each names its proof (a test below).
-GUARDED_EDGES = {
-    # build_advisor_strategy persists (writes) only when persist=True; every
-    # Users-reachable caller passes persist=False
-    # (test_users_build_the_advisor_strategy_without_persisting_it).
-    ("backend.advisor.core.build_advisor_strategy", "backend.advisor.core._persist_strategy"),
-}
+# Call edges Users never take at runtime; each names its proof (a test below). None today:
+# since P0.2 the advisor strategy is computed without a persist flag and stored only by the
+# daily financial-history job (test_history_writes_are_reached_only_from_explicit_commands).
+GUARDED_EDGES: set[tuple[str, str]] = set()
 
 
 def _users_reachable(entry_modules=USERS_ROUTE_MODULES, guarded=GUARDED_EDGES):
@@ -221,20 +218,42 @@ def test_users_routes_never_reach_ddl():
     assert _reachable_ddl() == {}, "A Users request path reaches runtime DDL; move it to a migration"
 
 
-def test_users_build_the_advisor_strategy_without_persisting_it():
-    functions, calls, seen, _ = _users_reachable()
-    callers = [key for key in seen if "backend.advisor.core.build_advisor_strategy" in calls.get(key, ())
-               and key != "backend.advisor.core.build_advisor_strategy"]
-    assert callers, "the guarded edge is obsolete; remove it from GUARDED_EDGES"
-    for key in callers:
-        invocations = [node for node in ast.walk(functions[key]) if isinstance(node, ast.Call)
-                       and getattr(node.func, "id", getattr(node.func, "attr", None)) == "build_advisor_strategy"]
-        assert invocations, f"{key} references build_advisor_strategy without calling it"
-        for node in invocations:
-            persist = [kw.value for kw in node.keywords if kw.arg == "persist"]
-            assert persist and isinstance(persist[0], ast.Constant) and persist[0].value is False, key
-    core = (BACKEND / "advisor" / "core.py").read_text(encoding="utf-8")
-    assert "_persist_strategy(strategy) if persist else" in core
+HISTORY_WRITERS = {
+    "backend.advisor.core._persist_strategy",
+    "backend.finance.deterioration.record_daily_health_snapshot",
+    "backend.finance.deterioration.persist_health_observation",
+}
+# The only route functions allowed to reach a history writer (P0.2): explicit commands.
+EXPLICIT_HISTORY_COMMANDS = {
+    "backend.finance.daily_history_routes.financial_history_cron": HISTORY_WRITERS,
+    "backend.financial_lifecycle.routes.lifecycle_snapshot": {
+        "backend.finance.deterioration.record_daily_health_snapshot",
+        "backend.finance.deterioration.persist_health_observation",
+    },
+}
+
+
+def _reaches(calls, start):
+    seen, stack = {start}, [start]
+    while stack:
+        for target in calls.get(stack.pop(), ()):
+            if target not in seen:
+                seen.add(target)
+                stack.append(target)
+    return seen
+
+
+def test_history_writes_are_reached_only_from_explicit_commands():
+    # Health observations and advisor strategies are stored by the daily job and the explicit
+    # lifecycle snapshot command; no other route (no GET) may reach those writers.
+    functions, calls = _call_graph()
+    route_modules = (*USERS_ROUTE_MODULES, "advisor/routes.py", "finance/routes.py", "ai/routes.py")
+    entries = [key for key in functions if any(key.startswith(_module_name(m) + ".") for m in route_modules)]
+    reached = {key: _reaches(calls, key) & HISTORY_WRITERS for key in entries}
+    offenders = {key: sorted(found) for key, found in reached.items() if found and key not in EXPLICIT_HISTORY_COMMANDS}
+    assert offenders == {}, f"a route reaches a history writer outside the explicit commands: {offenders}"
+    for key, expected in EXPLICIT_HISTORY_COMMANDS.items():
+        assert reached.get(key) == expected, f"{key} no longer records the history it must keep"
 
 
 def test_the_call_graph_guard_follows_calls_across_modules():
@@ -242,7 +261,7 @@ def test_the_call_graph_guard_follows_calls_across_modules():
     # ai.preferences; keep it able to see a chain like that.
     _, calls = _call_graph()
     assert "backend.finance.emergency_fund.update_salvavidas" in calls["backend.user_product.routes.vip_salvavidas_update"]
-    assert "backend.advisor.core.build_advisor_strategy" in calls["backend.financial_lifecycle.state._build_financial_state"]
+    assert "backend.advisor.core.compute_advisor_strategy" in calls["backend.financial_lifecycle.state._build_financial_state"]
 
 
 def test_every_mounted_router_is_classified():

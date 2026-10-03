@@ -1,5 +1,12 @@
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
+
+COSTA_RICA_TZ = ZoneInfo("America/Costa_Rica")
+
+
+def costa_rica_today() -> date:
+    """DINCR's canonical calendar date (America/Costa_Rica), independent of the server zone."""
+    return datetime.now(COSTA_RICA_TZ).date()
 
 
 def get_time():

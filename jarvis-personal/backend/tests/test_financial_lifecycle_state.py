@@ -76,6 +76,8 @@ def test_snapshot_capture_binds_authenticated_workspace_and_account(monkeypatch)
     state = {"period": "2026-09", "schema_version": "financial-state-v1"}
     connection = _Connection([_Result(one=None), _Result(one={"id": 7, "snapshot_date": "2026-09-20"})])
     monkeypatch.setattr(snapshots, "build_financial_state", lambda: state)
+    # The explicit command also records the day's health observation (P0.2); stubbed like the state.
+    monkeypatch.setattr(snapshots, "record_daily_health_snapshot", lambda: {"health": "stable"})
     monkeypatch.setattr(snapshots, "get_current_workspace_id", lambda: "workspace-a")
     monkeypatch.setattr(snapshots, "get_current_account_id", lambda: "account-a")
     monkeypatch.setattr(snapshots, "get_connection", lambda: connection)
@@ -106,6 +108,8 @@ def test_snapshot_queues_proactive_alerts_once_with_safe_payload(monkeypatch):
         _Result(),
     ])
     monkeypatch.setattr(snapshots, "build_financial_state", lambda: current)
+    # The explicit command also records the day's health observation (P0.2); stubbed like the state.
+    monkeypatch.setattr(snapshots, "record_daily_health_snapshot", lambda: {"health": "stable"})
     monkeypatch.setattr(snapshots, "get_current_workspace_id", lambda: "workspace-a")
     monkeypatch.setattr(snapshots, "get_current_account_id", lambda: "account-a")
     monkeypatch.setattr(snapshots, "get_connection", lambda: connection)
