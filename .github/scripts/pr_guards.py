@@ -7,7 +7,10 @@ They catch classes of errors that already happened:
 - a PR merged into a branch other than ``main``;
 - a file-size budget raised to let the same file pass;
 - a new database migration, which is a deployment gate: merging to main can
-  deploy the backend before production has the schema.
+  deploy the backend before production has the schema;
+- a feature removed, hidden from a plan, or an Owner-only feature exposed in
+  the feature reachability spec (master plan R1): reachability only changes
+  with an explicit decision.
 
 Each error has an explicit override label that a human sets on purpose. The
 guards cannot know production state: the migration label is a human
@@ -28,6 +31,10 @@ MIGRATIONS_DIR = "jarvis-personal/database/migrations/"
 LABEL_STACKED = "stacked-approved"
 LABEL_BUDGET = "budget-increase-approved"
 LABEL_MIGRATION = "migration-gate-acknowledged"
+REACHABILITY_SPEC = "jarvis-personal/native/feature-reachability.json"
+LABEL_REACHABILITY = "reachability-change-approved"
+# How reachable a state is for a plan: lowering it hides a capability.
+_REACH = {"AVAILABLE": 3, "VISIBLE_LOCKED": 2, "HIDDEN_BY_PLAN": 1}
 
 
 @dataclass
@@ -114,6 +121,38 @@ def check_migrations(added_files: list[str], labels: set[str], result: Result) -
     (result.notes if LABEL_MIGRATION in labels else result.errors).append(message)
 
 
+def _plan_states(feature: dict, platform: str) -> dict[str, str]:
+    return {**feature.get("plans", {}), **feature.get("platform_states", {}).get(platform, {})}
+
+
+def check_reachability(base_source: str | None, head_source: str | None, labels: set[str], result: Result) -> None:
+    """R1: no feature disappears, loses reach for a plan, or leaves Owner-only/security without a decision."""
+    if not base_source:
+        return
+    if not head_source:
+        problems = [f"{REACHABILITY_SPEC} was deleted"]
+    else:
+        base = {f["id"]: f for f in json.loads(base_source).get("features", [])}
+        head = {f["id"]: f for f in json.loads(head_source).get("features", [])}
+        problems = [f"feature '{fid}' removed" for fid in sorted(set(base) - set(head))]
+        for fid in sorted(set(base) & set(head)):
+            for platform in ("ios", "android"):
+                before, after = _plan_states(base[fid], platform), _plan_states(head[fid], platform)
+                for plan, old in before.items():
+                    new = after.get(plan)
+                    if new == old:
+                        continue
+                    if old in ("OWNER_ONLY", "HIDDEN_BY_SECURITY") or new in ("OWNER_ONLY", "HIDDEN_BY_SECURITY") \
+                            or _REACH.get(new, 0) < _REACH.get(old, 0):
+                        problems.append(f"'{fid}' {platform}/{plan}: {old} -> {new}")
+    if not problems:
+        return
+    message = ("Feature reachability changed (master plan R1): " + "; ".join(sorted(set(problems)))
+               + ". A function may only be removed, hidden or moved out of a plan with an explicit decision recorded in "
+               f"the spec; then a human adds the label '{LABEL_REACHABILITY}'.")
+    (result.warnings if LABEL_REACHABILITY in labels else result.errors).append(message)
+
+
 # --- CI entry point -----------------------------------------------------------
 
 def _git(*args: str) -> str:
@@ -155,6 +194,8 @@ def run(event: dict) -> Result:
                   _git_optional("show", f"{head_sha}:{BUDGET_SCRIPT}"), labels, result)
     added = _git("diff", "--name-only", "--diff-filter=A", f"{base}...{head_sha}").split()
     check_migrations(added, labels, result)
+    check_reachability(_git_optional("show", f"{base}:{REACHABILITY_SPEC}"),
+                       _git_optional("show", f"{head_sha}:{REACHABILITY_SPEC}"), labels, result)
     return result
 
 

@@ -1,0 +1,2262 @@
+[
+ {
+  "method": "GET",
+  "path": "/",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/advisor/habits",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/advisor/strategy",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/advisor/strategy/history",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/advisor/summary",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/ask",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/auth/allowed-users",
+  "gates": [
+   "roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/auth/allowed-users",
+  "gates": [
+   "roles:admin,owner"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/auth/allowed-users/{user_id}",
+  "gates": [
+   "roles:admin,owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/auth/health",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/auth/legal/accept",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/auth/me",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/auth/me",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/auth/me/export",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/auth/onboarding",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/auth/onboarding",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/plan",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/auth/plans",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/auth/profile-setup",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/decisions/extra-money",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/deployment-monitor",
+  "gates": [
+   "roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/deployment-monitor/webhook/{provider}",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/email-monitor/candidates",
+  "gates": [
+   "public"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/candidates/bulk-decision",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/candidates/classify",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/candidates/decision",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/cron",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/gmail-push",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/gmail-watch",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/scan-text",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/statements/reconcile",
+  "gates": [
+   "roles:admin,owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/email-monitor/status",
+  "gates": [
+   "public"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/sync-ccss-payroll",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/email-monitor/sync-gmail",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/events",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/events",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/account-balances",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/account-balances",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/finance/account-balances/{account_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/aguinaldo",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/allocation-plan",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/bonuses",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/bonuses",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/business-center",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/business-center/businesses",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/business-center/movements",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/cashflow/forecast",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/cashflow/next-pay-date",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/categories",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/credit-card-cycle",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/credit-card-settings",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/credit-card-settings",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/credit-card/evaluate-purchase",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/cycle-report",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/dashboard",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/debt-advisory",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/debt-payments",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/debts",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/debts",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/debts/apply-due-installments",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/finance/debts/{debt_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/debts/{debt_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/finance/debts/{debt_id}/extra-payment",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/finance/debts/{debt_id}/monthly-payment",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/debts/{debt_id}/payments",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/deterioration",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/employment-profile",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/employment-profile",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/engine",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/engine/debt-strategies",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/engine/emergency-fund",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/engine/forecast",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/engine/health",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/engine/reconcile",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/engine/simulate",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/evaluate-installment-purchase",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/evaluate-loan",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/expenses",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/expenses",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/finance/expenses/{expense_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/expenses/{expense_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/fixed-expenses",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/fixed-expenses",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/fixed-expenses/seed-owner-defaults",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/fixed-expenses/status",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "DELETE",
+  "path": "/finance/fixed-expenses/{fixed_expense_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/fixed-expenses/{fixed_expense_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/investment-center",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/investment-center/cashflows",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/investment-center/snapshots",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/investment-center/sync-ibkr",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/investments",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/investments",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/finance/investments/{investment_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/investments/{investment_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/net-worth",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/pay-schedule",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/pay-schedule",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/payroll-deductions",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/payroll-deductions",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/payroll-events",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/payroll-events",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/payroll/receipts",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/payroll/receipts/{receipt_id}",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/payroll/receipts/{receipt_id}/link",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/payroll/trusted-senders",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/payroll/trusted-senders",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/payroll/trusted-senders/{sender_id}/revoke",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/plan-goal",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/real-availability",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/real-balance",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/receivables",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/receivables",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/receivables/entries",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/receivables/sync",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/receivables/{receivable_id}/entries/{entry_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/finance/receivables/{receivable_id}/payments",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/reconciliation",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/reconciliation/{account_id}/confirm",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/salaries",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/salaries",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/salary-projection",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/salvavidas",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/salvavidas",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/savings",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/finance/savings",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/finance/savings/{saving_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/finance/savings/{saving_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/finance/strategies",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/strategies/recommended",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/strategies/report",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/summary",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/timeline",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/finance/user-status",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/goals/",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/goals/",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/goals/analysis/all",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "DELETE",
+  "path": "/goals/{goal_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/goals/{goal_id}",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PUT",
+  "path": "/goals/{goal_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/goals/{goal_id}/analysis",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PATCH",
+  "path": "/goals/{goal_id}/contribute",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/goals/{goal_id}/plan",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/health/live",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/health/ready",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/imports/bac-pdf/preview",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/integrations/ibkr/flex/cron",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/integrations/ibkr/snapshot",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/internal/owner-bridge/session",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/internal/owner-bridge/verify",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/calendar/upcoming",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/cards/additional-report",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/chat",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/memory",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/memory",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/memory/search",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/memory/summary",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "DELETE",
+  "path": "/jarvis/memory/{memory_id}",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/notifications/browser",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/preferences/profile",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/preferences/profile",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/preferences/sports",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/preferences/sports",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/premium/initial-strategy",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/premium/strategy-dashboard",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/premium/strategy-summary",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/jarvis/sports/defaults",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/jarvis/sports/radar",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/logs",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/cron",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/notifications/status",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/subscribe",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/test",
+  "gates": [
+   "router_roles:admin,owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/notifications/vapid-public-key",
+  "gates": [
+   "router_roles:admin,owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/product-ops/billing/catalog",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/billing/store/apple/notifications",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/billing/store/apple/transactions",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/product-ops/billing/store/catalog",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/billing/store/cron",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/billing/store/customer-token",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/product-ops/billing/store/entitlement",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/billing/store/google/notifications",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/billing/store/google/purchases",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/events",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/product-ops/feature-flags",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/product-ops/feedback",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/feedback",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/product-ops/feedback/{ticket_id}/resolution",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/product-ops/health",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/incidents",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/owner/billing/store/restore-owner-access",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/owner/billing/store/simulate",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/owner/billing/store/simulate/{target_account_id}",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/product-ops/owner/dashboard",
+  "gates": [
+   "roles:owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PATCH",
+  "path": "/product-ops/owner/feature-flags/{flag_key}",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/product-ops/owner/feedback/{ticket_id}",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/owner/feedback/{ticket_id}/resend",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/product-ops/owner/observability",
+  "gates": [
+   "roles:owner"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PATCH",
+  "path": "/product-ops/owner/release-policy/{platform}",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/product-ops/owner/support/discord/test",
+  "gates": [
+   "roles:owner"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/product-ops/release-policy",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/reports/annual",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/reports/monthly",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/reports/weekly",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/status",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/analysis/summary",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/bulk-import",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/currency/alerts",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/currency/rate",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/finance-input/commit",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/finance-input/pdf-preview",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/finance-input/preview",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/parse",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/transactions/parse-and-save",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/transactions/{transaction_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/transactions/{transaction_id}",
+  "gates": [
+   "internal_only"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "PUT",
+  "path": "/transactions/{transaction_id}",
+  "gates": [
+   "internal_only"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/basic/budget",
+  "gates": [
+   "feature:guided_budget"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/basic/budget",
+  "gates": [
+   "feature:guided_budget"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/basic/calendar",
+  "gates": [
+   "feature:financial_calendar"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/basic/dashboard",
+  "gates": [
+   "feature:basic_dashboard"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/basic/recurring",
+  "gates": [
+   "feature:recurring_items"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/basic/recurring",
+  "gates": [
+   "feature:recurring_items"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/basic/recurring/{item_id}",
+  "gates": [
+   "feature:recurring_items"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/basic/recurring/{item_id}",
+  "gates": [
+   "feature:recurring_items"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/basic/reports",
+  "gates": [
+   "feature:basic_reports"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/finance/debts",
+  "gates": [
+   "feature:debts"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/finance/debts",
+  "gates": [
+   "feature:debts"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/finance/debts/{debt_id}",
+  "gates": [
+   "feature:debts"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/finance/debts/{debt_id}",
+  "gates": [
+   "feature:strategy_basic"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/finance/debts/{debt_id}/payments",
+  "gates": [
+   "feature:debts"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/finance/expenses",
+  "gates": [
+   "feature:spending"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/finance/expenses",
+  "gates": [
+   "feature:spending"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/finance/expenses/{expense_id}",
+  "gates": [
+   "feature:spending"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/finance/expenses/{expense_id}",
+  "gates": [
+   "feature:spending"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/finance/income",
+  "gates": [
+   "feature:spending"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/finance/income",
+  "gates": [
+   "feature:spending"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/finance/income/{income_id}",
+  "gates": [
+   "feature:spending"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/finance/income/{income_id}",
+  "gates": [
+   "feature:spending"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/finance/strategy-basic",
+  "gates": [
+   "feature:strategy_basic"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/finance/strategy-basic/simulate",
+  "gates": [
+   "feature:strategy_basic"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/finance/strategy-vip",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/finance/strategy-vip/simulate",
+  "gates": [
+   "feature:strategy_vip"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/finance/summary",
+  "gates": [
+   "feature:finance_overview"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/financial-situation",
+  "gates": [
+   "feature:finance_overview"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/financial-situation",
+  "gates": [
+   "feature:finance_overview"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/free/dashboard",
+  "gates": [
+   "feature:finance_overview"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/free/monthly-summary",
+  "gates": [
+   "feature:finance_overview"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/free/movements",
+  "gates": [
+   "feature:transactions"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/free/movements/{movement_id}",
+  "gates": [
+   "feature:transactions"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/free/movements/{movement_id}",
+  "gates": [
+   "feature:transactions"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/goals",
+  "gates": [
+   "feature:goals"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/goals",
+  "gates": [
+   "feature:goals"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/goals/{goal_id}",
+  "gates": [
+   "feature:goals"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/goals/{goal_id}",
+  "gates": [
+   "feature:strategy_basic"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/goals/{goal_id}/contributions",
+  "gates": [
+   "feature:goals"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/savings-plans",
+  "gates": [
+   "feature:goals"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/savings-plans",
+  "gates": [
+   "feature:goals"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/savings-plans/{plan_id}",
+  "gates": [
+   "feature:goals"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/savings-plans/{plan_id}",
+  "gates": [
+   "feature:goals"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/savings-plans/{plan_id}/contributions",
+  "gates": [
+   "feature:goals"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/transactions",
+  "gates": [
+   "feature:transactions"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/transactions",
+  "gates": [
+   "feature:transactions"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/transactions/{transaction_id}",
+  "gates": [
+   "feature:transactions"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/aguinaldo",
+  "gates": [
+   "feature:gmail_automation"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/command-center",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/debt-advisory",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/debt-strategies",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/financial-identity",
+  "gates": [
+   "feature:gmail_automation"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/vip/financial-identity/accounts/{account_balance_id}",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/user-product/vip/gmail",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/gmail/callback",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/gmail/candidates/{candidate_id}/accept",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/vip/gmail/candidates/{candidate_id}/accept",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/gmail/candidates/{candidate_id}/own-transfer",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/gmail/candidates/{candidate_id}/reject",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/gmail/connect",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/gmail/consent",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/gmail/emails",
+  "gates": [
+   "feature:gmail_automation"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/gmail/maintenance",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/gmail/own-transfer-suggestions",
+  "gates": [
+   "feature:gmail_automation"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/gmail/push",
+  "gates": [
+   "public"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/gmail/status",
+  "gates": [
+   "feature:gmail_automation"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/gmail/sync",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/gmail/trust-analytics",
+  "gates": [
+   "feature:gmail_automation"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/lifecycle/monthly-review",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/lifecycle/proactive-advisor",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/lifecycle/progress",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/lifecycle/snapshots",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/lifecycle/snapshots",
+  "gates": [
+   "feature:strategy_vip"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/lifecycle/state",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/mail/microsoft/callback",
+  "gates": [
+   "public"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/mail/microsoft/connect",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/user-product/vip/mail/oauth/complete",
+  "gates": [
+   "feature:gmail_automation"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/salvavidas",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "PUT",
+  "path": "/user-product/vip/salvavidas",
+  "gates": [
+   "feature:strategy_vip"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/user-product/vip/strategy-dashboard",
+  "gates": [
+   "feature:strategy_vip"
+  ],
+  "user_get": "allowed"
+ },
+ {
+  "method": "GET",
+  "path": "/users-admin/users",
+  "gates": [
+   "owner_service"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "GET",
+  "path": "/users-admin/users/{account_id}",
+  "gates": [
+   "owner_service"
+  ],
+  "user_get": "denied"
+ },
+ {
+  "method": "DELETE",
+  "path": "/users-admin/users/{account_id}/courtesy",
+  "gates": [
+   "owner_service"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/users-admin/users/{account_id}/courtesy",
+  "gates": [
+   "owner_service"
+  ]
+ }
+]

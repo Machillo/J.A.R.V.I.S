@@ -92,6 +92,16 @@ android {
     }
 }
 
+// The shared reachability spec (native/feature-reachability.json, master plan R1) packaged as an
+// androidTest asset, so FeatureReachabilityUiTest checks the same file as iOS and the backend.
+val reachabilitySpecDir = layout.buildDirectory.dir("generated/reachability-spec")
+val copyReachabilitySpec by tasks.registering(Copy::class) {
+    from(rootProject.file("../feature-reachability.json"))
+    into(reachabilitySpecDir)
+}
+android.sourceSets.getByName("androidTest").assets.srcDir(reachabilitySpecDir)
+tasks.matching { it.name.endsWith("AndroidTestAssets") }.configureEach { dependsOn(copyReachabilitySpec) }
+
 kotlin { jvmToolchain(17) }
 
 dependencies {
