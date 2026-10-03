@@ -95,12 +95,18 @@ def test_the_owner_account_with_another_accounts_workspace_does_not_qualify(cur)
 @pytest.mark.parametrize("allowed_role, account_role, status", [
     ("user", "owner", "active"),      # one stored role alone is not enough
     ("owner", "user", "active"),
-    ("owner", "admin", "active"),
     ("owner", "owner", "pending"),    # an inactive Owner
 ])
 def test_both_stored_roles_and_an_active_status_are_required(cur, allowed_role, account_role, status):
     account, workspace = _person(cur, OWNER_EMAIL, allowed_role=allowed_role, account_role=account_role, status=status)
     assert is_verified_owner_account(_Conn(cur), account, workspace) is False
+
+
+def test_the_database_refuses_a_legacy_admin_role(cur):
+    # P0.2d migration: an account or allowlist row can only be "user" or "owner".
+    for allowed_role, account_role in (("owner", "admin"), ("admin", "user")):
+        with pytest.raises(psycopg2.errors.CheckViolation):
+            _person(cur, f"{allowed_role}-{account_role}@example.test", allowed_role=allowed_role, account_role=account_role)
 
 
 def test_the_deployment_allowlist_is_required(cur, monkeypatch):
