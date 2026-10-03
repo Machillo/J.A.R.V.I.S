@@ -44,7 +44,7 @@ fun JarvisHubScreen(model: AppModel, nav: Navigator) = OwnerOnly(model, nav) {
     }
 }
 
-/** A JARVIS section: a ported one (chat, agenda, analysis), or a "being restored" screen that never shows sample data. */
+/** A JARVIS section: a ported one (chat, agenda, analysis, money control), or a "being restored" screen that never shows sample data. */
 @Composable
 fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerOnly(model, nav) {
     val section = Jarvis.Section.from(wire)
@@ -62,6 +62,10 @@ fun JarvisSectionScreen(model: AppModel, nav: Navigator, wire: String?) = OwnerO
     }
     if (section == Jarvis.Section.ANALYSIS) {
         JarvisAnalysisScreen(model, nav)
+        return@OwnerOnly
+    }
+    if (section == Jarvis.Section.MONEY_CONTROL) {
+        JarvisReceivablesScreen(model, nav)
         return@OwnerOnly
     }
     DetailScaffold(section.title, onBack = nav::back) {
@@ -98,7 +102,7 @@ private val Jarvis.Section.summary: String get() = when (this) {
     Jarvis.Section.CALENDAR -> tx("Tus eventos y recordatorios", "Your events and reminders")
     Jarvis.Section.STRATEGY -> tx("Tu estrategia con tus ingresos reales", "Your strategy with your real income")
     Jarvis.Section.MONEY -> tx("Tu ciclo, tus cuentas y los pagos de tus deudas", "Your cycle, your accounts and your debt payments")
-    Jarvis.Section.MONEY_CONTROL -> tx("Cobros pendientes y tarjetas adicionales", "Money owed to you and additional cards")
+    Jarvis.Section.MONEY_CONTROL -> tx("Tus cuentas por cobrar: quién te debe y cuánto", "Money owed to you: who owes you and how much")
     Jarvis.Section.WEALTH -> tx("Patrimonio, inversiones y negocios", "Net worth, investments and businesses")
     Jarvis.Section.RECORDS -> tx("Importar, conciliar y tu línea de tiempo", "Import, reconcile and your timeline")
     Jarvis.Section.ANALYSIS -> tx("Gastos, flujo, patrimonio y salud financiera", "Spending, cash flow, net worth and financial health")

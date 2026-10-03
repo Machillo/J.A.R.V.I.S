@@ -1,6 +1,6 @@
 import Foundation
 
-// The fixture backend's Plan tab, Cuentas and JARVIS analysis routes (Debug demos and tests only).
+// The fixture backend's Plan tab, Cuentas and JARVIS analysis and receivables routes (Debug demos and tests only).
 // Same shapes and access rules as FastAPI: `/vip/*` needs VIP; `/jarvis/*`, `/transactions/*` and
 // `/finance/*` admit only owner and admin (INTERNAL_ONLY); Strategy and Salvavidas answer the Owner
 // model only to the server's Owner role. Every name and amount is invented (CLAUDE.md §4.F); the
@@ -28,6 +28,9 @@ extension FixtureBackend {
         case ("GET", "/transactions/analysis/summary"), ("GET", "/finance/net-worth"), ("GET", "/finance/engine"):
             guard isInternalRole else { return error(403, "No tienes permisos para realizar esta acción.") }
             return ok(analysis(path))
+        case ("GET", "/finance/receivables/view"):
+            guard isInternalRole else { return error(403, "No tienes permisos para realizar esta acción.") }
+            return ok(receivables())
         default:
             return nil
         }
@@ -230,6 +233,27 @@ extension FixtureBackend {
             ["id": 4, "account_name": "Cuenta de ejemplo", "bank_name": "Entidad de ejemplo", "institution_code": NSNull(), "institution_country": "CR",
              "account_type": "checking", "account_last4": "3456", "currency": "CRC", "ownership_status": "pending"],
         ]
+    }
+
+    // MARK: JARVIS · Control de dinero
+
+    /// Two invented people: one with a balance carried from earlier cycles, one fully paid.
+    func receivables() -> [String: Any] {
+        func entry(_ id: Int, _ type: String, _ amount: Int, _ description: String, _ daysAgo: Int) -> [String: Any] {
+            ["id": id, "entry_type": type, "amount": amount, "description": description, "entry_date": day(daysAgo),
+             "source_type": "manual", "source_key": NSNull(), "source_transaction_id": NSNull(), "created_at": day(daysAgo)]
+        }
+        let items: [[String: Any]] = [
+            ["id": 1, "person_name": "Persona de ejemplo", "status": "partial", "notes": NSNull(), "is_auto": false,
+             "current_amount_due": 85_000, "carried_pending": 60_000, "cycle_charges": 45_000, "cycle_payments": 20_000,
+             "history": [entry(11, "payment", 20_000, "Abono", 3), entry(12, "charge", 45_000, "Préstamo", 9)]],
+            ["id": 2, "person_name": "Otra persona de ejemplo", "status": "completed", "notes": NSNull(), "is_auto": false,
+             "current_amount_due": 0, "carried_pending": 0, "cycle_charges": 30_000, "cycle_payments": 30_000,
+             "history": [entry(21, "payment", 30_000, "Pago", 2), entry(22, "charge", 30_000, "Préstamo", 12)]],
+        ]
+        return ["status": "OK", "cycle": ["start": day(10), "end": day(-20)], "items": items,
+                "summary": ["total_pending": 85_000, "carried_pending": 60_000, "cycle_charges": 75_000, "cycle_payments": 50_000,
+                            "count_open": 1, "people_count": 2]]
     }
 
     // MARK: JARVIS · Análisis financiero

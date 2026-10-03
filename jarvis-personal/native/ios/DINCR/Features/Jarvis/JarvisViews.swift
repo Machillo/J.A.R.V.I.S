@@ -59,7 +59,7 @@ struct JarvisHubView: View {
     }
 }
 
-/// A JARVIS section: a ported one (chat, agenda, analysis), or a "being restored" screen that never shows sample data.
+/// A JARVIS section: a ported one (chat, agenda, analysis, money control), or a "being restored" screen that never shows sample data.
 struct JarvisSectionView: View {
     let section: Jarvis.Section
 
@@ -69,6 +69,7 @@ struct JarvisSectionView: View {
             case .chat: JarvisChatView()
             case .calendar: JarvisAgendaView()
             case .analysis: OwnerAnalysisView()
+            case .moneyControl: OwnerReceivablesView()
             default: restoring
             }
         }
@@ -125,7 +126,7 @@ extension Jarvis.Section {
         case .calendar: tx("Tus eventos y recordatorios", "Your events and reminders")
         case .strategy: tx("Tu estrategia con tus ingresos reales", "Your strategy with your real income")
         case .money: tx("Tu ciclo, tus cuentas y los pagos de tus deudas", "Your cycle, your accounts and your debt payments")
-        case .moneyControl: tx("Cobros pendientes y tarjetas adicionales", "Money owed to you and additional cards")
+        case .moneyControl: tx("Tus cuentas por cobrar: quién te debe y cuánto", "Money owed to you: who owes you and how much")
         case .wealth: tx("Patrimonio, inversiones y negocios", "Net worth, investments and businesses")
         case .records: tx("Importar, conciliar y tu línea de tiempo", "Import, reconcile and your timeline")
         case .analysis: tx("Gasto por categoría, flujo mensual, patrimonio y salud financiera", "Spending by category, monthly flow, net worth and financial health")

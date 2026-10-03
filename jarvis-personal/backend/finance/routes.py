@@ -106,6 +106,7 @@ from backend.finance.intelligence import (
     get_real_availability,
     get_debt_advisory,
     list_receivables,
+    read_receivables,
     create_receivable,
     add_receivable_entry,
     update_receivable_entry,
@@ -623,6 +624,12 @@ def debt_advisory(extra_cash: float | None = None):
 @router.get("/receivables")
 def receivables():
     return list_receivables()
+
+
+@router.get("/receivables/view")
+def receivables_view():
+    """Read only (native Owner app): no sync and nothing stored, unlike GET /receivables."""
+    return read_receivables()
 
 
 @router.post("/receivables")

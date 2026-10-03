@@ -174,7 +174,8 @@ def _backfill_receivable_entries(conn, user_id: int) -> None:
         )
 
 
-def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str, Any]:
+def _receivable_totals(conn, receivable_id: int) -> dict[str, Any]:
+    """Charged, paid, pending and status of one receivable, from its entries. Read only."""
     workspace_id = get_current_workspace_id()
     totals = conn.execute(
         """
@@ -191,6 +192,12 @@ def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str,
     paid = round(max(_as_float(totals.get("paid")), 0.0), 2)
     pending = round(charged - paid, 2)
     status = "credit" if pending < -0.01 else "completed" if abs(pending) <= 0.01 else "partial" if paid > 0 else "pending"
+    return {"original_amount": charged, "paid_amount": paid, "pending_amount": pending, "status": status}
+
+
+def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str, Any]:
+    workspace_id = get_current_workspace_id()
+    totals = _receivable_totals(conn, receivable_id)
     updated = conn.execute(
         """
         UPDATE receivables
@@ -202,9 +209,20 @@ def _recalculate_receivable(conn, user_id: int, receivable_id: int) -> dict[str,
         WHERE id = %s AND workspace_id = %s
         RETURNING *
         """,
-        (charged, paid, pending, status, receivable_id, workspace_id),
+        (totals["original_amount"], totals["paid_amount"], totals["pending_amount"], totals["status"],
+         receivable_id, workspace_id),
     ).fetchone()
     return dict(updated)
+
+
+def _computed_receivable(conn, receivable_id: int) -> dict[str, Any]:
+    """The receivable as `_recalculate_receivable` would leave it, without writing it."""
+    row = conn.execute(
+        "SELECT * FROM receivables WHERE id = %s AND workspace_id = %s",
+        (receivable_id, get_current_workspace_id()),
+    ).fetchone()
+    return {**dict(row), **_receivable_totals(conn, receivable_id)}
+
 
 def _fetch_additional_card_totals(
     conn, workspace_id: str, cycle_start: date, cycle_end: date
@@ -730,100 +748,114 @@ def get_debt_advisory(extra_cash: float | None = None) -> dict[str, Any]:
 
 
 def list_receivables() -> dict[str, Any]:
+    """The JARVIS web view: syncs card charges and income payments into receivables, then lists them."""
     user_id = get_current_user_id()
-    workspace_id = get_current_workspace_id()
-    cycle_start, cycle_end = _card_cycle_bounds()
     with get_connection() as conn:
         _backfill_receivable_entries(conn, user_id)
         _sync_auto_additional_card_receivables(conn, user_id)
         _sync_receivable_payments_from_income(conn, user_id)
-
-        account_rows = conn.execute(
-            """
-            SELECT id, person_name, original_amount, paid_amount, pending_amount,
-                   status, notes, source_type, source_key, created_at, updated_at
-            FROM receivables
-            WHERE workspace_id = %s
-            ORDER BY
-              CASE status WHEN 'pending' THEN 1 WHEN 'partial' THEN 2 ELSE 3 END,
-              person_name ASC,
-              id ASC
-            """,
-            (workspace_id,),
-        ).fetchall()
-        items: list[dict[str, Any]] = []
-        seen_people: set[str] = set()
-        for raw in account_rows:
-            row = dict(raw)
-            person_key = str(row.get("person_name") or "").strip().lower()
-            if not person_key or person_key in seen_people:
-                continue
-            seen_people.add(person_key)
-            item = _recalculate_receivable(conn, user_id, int(row["id"]))
-
-            cycle_totals = conn.execute(
-                """
-                SELECT
-                    COALESCE(SUM(amount) FILTER (
-                        WHERE entry_type = 'charge' AND entry_date < %s
-                    ), 0) AS prior_charges,
-                    COALESCE(SUM(amount) FILTER (
-                        WHERE entry_type = 'payment' AND entry_date < %s
-                    ), 0) AS prior_payments,
-                    COALESCE(SUM(amount) FILTER (
-                        WHERE entry_type = 'charge' AND entry_date >= %s AND entry_date < %s
-                    ), 0) AS cycle_charges,
-                    COALESCE(SUM(amount) FILTER (
-                        WHERE entry_type = 'payment' AND entry_date >= %s AND entry_date < %s
-                    ), 0) AS cycle_payments
-                FROM receivable_entries
-                WHERE workspace_id = %s AND receivable_id = %s
-                  AND COALESCE(is_archived, FALSE) = FALSE
-                """,
-                (
-                    cycle_start, cycle_start, cycle_start, cycle_end,
-                    cycle_start, cycle_end, workspace_id, row["id"],
-                ),
-            ).fetchone()
-            prior_pending = round(
-                _as_float(cycle_totals.get("prior_charges"))
-                - _as_float(cycle_totals.get("prior_payments")), 2
-            )
-            cycle_charges = max(_as_float(cycle_totals.get("cycle_charges")), 0.0)
-            cycle_payments = max(_as_float(cycle_totals.get("cycle_payments")), 0.0)
-            current_due = round(prior_pending + cycle_charges - cycle_payments, 2)
-
-            history_rows = conn.execute(
-                """
-                SELECT id, entry_type, amount, description, entry_date,
-                       source_type, source_key, source_transaction_id, created_at,
-                       cycle_start, cycle_end
-                FROM receivable_entries
-                WHERE workspace_id = %s AND receivable_id = %s
-                  AND COALESCE(is_archived, FALSE) = FALSE
-                  AND (entry_date >= %s OR %s > 0)
-                ORDER BY entry_date DESC, id DESC
-                """,
-                (workspace_id, row["id"], cycle_start, prior_pending),
-            ).fetchall()
-            item["history"] = [dict(entry) for entry in history_rows]
-            item["is_auto"] = any(
-                entry.get("source_type") == "additional_card_auto"
-                for entry in item["history"]
-            )
-            item["cycle_start"] = cycle_start.isoformat()
-            item["cycle_end"] = cycle_end.isoformat()
-            item["carried_pending"] = round(prior_pending, 2)
-            item["cycle_charges"] = round(cycle_charges, 2)
-            item["cycle_payments"] = round(cycle_payments, 2)
-            item["current_amount_due"] = round(current_due, 2)
-            # Keep compatibility for existing consumers, but expose only current debt.
-            item["pending_amount"] = round(current_due, 2)
-            item["original_amount"] = round(prior_pending + cycle_charges, 2)
-            item["paid_amount"] = round(cycle_payments, 2)
-            item["status"] = "credit" if current_due < -0.01 else "completed" if abs(current_due) <= 0.01 else "partial" if cycle_payments > 0 else "pending"
-            items.append(item)
+        result = _receivables_view(conn, user_id, persist=True)
         conn.commit()
+    return result
+
+
+def read_receivables() -> dict[str, Any]:
+    """The same list, read only: no sync, no backfill, no recalculation stored, no commit."""
+    with get_connection() as conn:
+        return _receivables_view(conn, get_current_user_id(), persist=False)
+
+
+def _receivables_view(conn, user_id: int, *, persist: bool) -> dict[str, Any]:
+    workspace_id = get_current_workspace_id()
+    cycle_start, cycle_end = _card_cycle_bounds()
+    account_rows = conn.execute(
+        """
+        SELECT id, person_name, original_amount, paid_amount, pending_amount,
+               status, notes, source_type, source_key, created_at, updated_at
+        FROM receivables
+        WHERE workspace_id = %s
+        ORDER BY
+          CASE status WHEN 'pending' THEN 1 WHEN 'partial' THEN 2 ELSE 3 END,
+          person_name ASC,
+          id ASC
+        """,
+        (workspace_id,),
+    ).fetchall()
+    items: list[dict[str, Any]] = []
+    seen_people: set[str] = set()
+    for raw in account_rows:
+        row = dict(raw)
+        person_key = str(row.get("person_name") or "").strip().lower()
+        if not person_key or person_key in seen_people:
+            continue
+        seen_people.add(person_key)
+        if persist:
+            item = _recalculate_receivable(conn, user_id, int(row["id"]))
+        else:
+            item = _computed_receivable(conn, int(row["id"]))
+
+        cycle_totals = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(amount) FILTER (
+                    WHERE entry_type = 'charge' AND entry_date < %s
+                ), 0) AS prior_charges,
+                COALESCE(SUM(amount) FILTER (
+                    WHERE entry_type = 'payment' AND entry_date < %s
+                ), 0) AS prior_payments,
+                COALESCE(SUM(amount) FILTER (
+                    WHERE entry_type = 'charge' AND entry_date >= %s AND entry_date < %s
+                ), 0) AS cycle_charges,
+                COALESCE(SUM(amount) FILTER (
+                    WHERE entry_type = 'payment' AND entry_date >= %s AND entry_date < %s
+                ), 0) AS cycle_payments
+            FROM receivable_entries
+            WHERE workspace_id = %s AND receivable_id = %s
+              AND COALESCE(is_archived, FALSE) = FALSE
+            """,
+            (
+                cycle_start, cycle_start, cycle_start, cycle_end,
+                cycle_start, cycle_end, workspace_id, row["id"],
+            ),
+        ).fetchone()
+        prior_pending = round(
+            _as_float(cycle_totals.get("prior_charges"))
+            - _as_float(cycle_totals.get("prior_payments")), 2
+        )
+        cycle_charges = max(_as_float(cycle_totals.get("cycle_charges")), 0.0)
+        cycle_payments = max(_as_float(cycle_totals.get("cycle_payments")), 0.0)
+        current_due = round(prior_pending + cycle_charges - cycle_payments, 2)
+
+        history_rows = conn.execute(
+            """
+            SELECT id, entry_type, amount, description, entry_date,
+                   source_type, source_key, source_transaction_id, created_at,
+                   cycle_start, cycle_end
+            FROM receivable_entries
+            WHERE workspace_id = %s AND receivable_id = %s
+              AND COALESCE(is_archived, FALSE) = FALSE
+              AND (entry_date >= %s OR %s > 0)
+            ORDER BY entry_date DESC, id DESC
+            """,
+            (workspace_id, row["id"], cycle_start, prior_pending),
+        ).fetchall()
+        item["history"] = [dict(entry) for entry in history_rows]
+        item["is_auto"] = any(
+            entry.get("source_type") == "additional_card_auto"
+            for entry in item["history"]
+        )
+        item["cycle_start"] = cycle_start.isoformat()
+        item["cycle_end"] = cycle_end.isoformat()
+        item["carried_pending"] = round(prior_pending, 2)
+        item["cycle_charges"] = round(cycle_charges, 2)
+        item["cycle_payments"] = round(cycle_payments, 2)
+        item["current_amount_due"] = round(current_due, 2)
+        # Keep compatibility for existing consumers, but expose only current debt.
+        item["pending_amount"] = round(current_due, 2)
+        item["original_amount"] = round(prior_pending + cycle_charges, 2)
+        item["paid_amount"] = round(cycle_payments, 2)
+        item["status"] = "credit" if current_due < -0.01 else "completed" if abs(current_due) <= 0.01 else "partial" if cycle_payments > 0 else "pending"
+        items.append(item)
 
     return {
         "status": "OK",

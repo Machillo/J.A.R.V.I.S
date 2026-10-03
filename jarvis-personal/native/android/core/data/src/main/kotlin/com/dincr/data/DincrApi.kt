@@ -172,6 +172,10 @@ class DincrApi(private val client: ApiClient) {
     suspend fun netWorth(): NetWorthReport = client.get("/finance/net-worth")
     suspend fun financialEngine(): FinancialEngineReport = client.get("/finance/engine")
 
+    // --- JARVIS "Control de dinero" (Owner; owner/admin router). Read only, unlike the web's
+    // GET /finance/receivables, which syncs and stores on every read. -----------------------------------
+    suspend fun receivables(): ReceivablesReport = client.get("/finance/receivables/view")
+
     // --- Store billing ----------------------------------------------------------------------------------
     suspend fun storeCatalog(): StoreCatalog = client.get("/product-ops/billing/store/catalog")
     suspend fun storeEntitlement(): StoreEntitlement = client.get("/product-ops/billing/store/entitlement")

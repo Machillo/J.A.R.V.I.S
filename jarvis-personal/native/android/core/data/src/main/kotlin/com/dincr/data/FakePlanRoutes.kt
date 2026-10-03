@@ -8,7 +8,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * The Plan, Salvavidas and Owner-analysis answers of [FakeBackend] (Debug demos and UI tests only).
+ * The Plan, Salvavidas, Owner-analysis and Owner-receivables answers of [FakeBackend] (Debug demos and UI tests only).
  * They mirror the backend's shapes (`ai/strategy_dashboard.py`, `finance/emergency_fund.py`,
  * `transactions/analyzer.py`, `finance/service.py`, `finance/strategic_engine.py`) on the fake's
  * synthetic data; every name and amount is invented. The Users answers never read Owner data, and
@@ -195,6 +195,24 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             milestones = milestones(base, ownerAmount),
             verification = Salvavidas.Verification("manual", false, "Guardá el saldo para crear y vincular la cuenta financiera Salvavidas."),
         )
+    }
+
+    // --- Owner receivables (owner/admin router) ------------------------------------------------------
+
+    /** Two invented people: one with a balance carried from earlier cycles, one fully paid. */
+    fun receivables(): String {
+        fun entry(id: Long, type: String, amount: Int, description: String, daysAgo: Long) =
+            Receivable.Entry(id, type, BigDecimal(amount), description, today.minusDays(daysAgo).toString())
+        val items = listOf(
+            Receivable(1, "Persona de ejemplo", "partial", BigDecimal(85_000), BigDecimal(60_000), BigDecimal(45_000), BigDecimal(20_000),
+                isAuto = false, history = listOf(entry(11, "payment", 20_000, "Abono", 3), entry(12, "charge", 45_000, "Préstamo", 9))),
+            Receivable(2, "Otra persona de ejemplo", "completed", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal(30_000), BigDecimal(30_000),
+                isAuto = false, history = listOf(entry(21, "payment", 30_000, "Pago", 2), entry(22, "charge", 30_000, "Préstamo", 12))),
+        )
+        return json.encodeToString(ReceivablesReport(
+            ReceivablesReport.Cycle(today.minusDays(10).toString(), today.plusDays(20).toString()), items,
+            ReceivablesReport.Summary(BigDecimal(85_000), BigDecimal(60_000), BigDecimal(75_000), BigDecimal(50_000), countOpen = 1, peopleCount = 2),
+        ))
     }
 
     // --- Owner analysis (owner/admin routers) -------------------------------------------------------

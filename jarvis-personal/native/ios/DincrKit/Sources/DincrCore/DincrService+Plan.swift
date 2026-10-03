@@ -71,6 +71,12 @@ extension DincrService {
 
     public func financialEngine() async throws -> FinancialEngineReport { try await client.get("/finance/engine") }
 
+    // MARK: JARVIS · Control de dinero (Owner only; owner/admin routes)
+
+    /// The cuentas por cobrar, read only: unlike the web's `GET /finance/receivables`, this route
+    /// syncs nothing and stores nothing.
+    public func receivables() async throws -> ReceivablesReport { try await client.get("/finance/receivables/view") }
+
     /// The three answers together; one failure fails the screen (it offers a retry).
     public func ownerAnalysis() async throws -> OwnerAnalysis {
         async let analysis = self.transactionAnalysis()

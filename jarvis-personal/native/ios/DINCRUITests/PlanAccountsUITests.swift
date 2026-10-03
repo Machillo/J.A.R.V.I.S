@@ -2,7 +2,7 @@ import XCTest
 
 /// The Plan tab (Aguinaldo, Estrategia, Salvavidas, Distribución), the relocated screens, Cuentas
 /// sharing the Email Monitor's review, the onboarding logos, the financial situation's work days and
-/// the Owner's financial analysis, on synthetic fixture data. Android: `PlanAccountsUiTest`.
+/// the Owner's financial analysis and receivables, on synthetic fixture data. Android: `PlanAccountsUiTest`.
 @MainActor
 final class PlanAccountsUITests: XCTestCase {
     private func launch(_ scenario: String = "populated", plan: String? = nil, role: String? = nil, tab: String? = nil) -> XCUIApplication {
@@ -206,5 +206,24 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(element("profile.situation", in: user).waitForExistence(timeout: 5))
         XCTAssertFalse(element("profile.jarvis", in: user).exists)
         XCTAssertFalse(element("jarvis.section.analysis", in: user).exists)
+    }
+
+    /// Cuentas por cobrar (JARVIS · Control de dinero): the Owner reads them; no plan reaches JARVIS.
+    func testOnlyTheOwnerGetsTheReceivables() {
+        let owner = launch(role: "owner", tab: "profile")
+        open("profile.jarvis", in: owner)
+        open("jarvis.section.money_control", in: owner)
+        XCTAssertTrue(element("jarvis.receivables.summary", in: owner).waitForExistence(timeout: 10))
+        XCTAssertTrue(element("jarvis.receivables.item.1", in: owner).exists)
+        XCTAssertFalse(element("jarvis.restoring", in: owner).exists, "money control is no longer a placeholder")
+        owner.terminate()
+
+        for plan in ["free", "basic", "vip"] {
+            let user = launch(plan: plan == "free" ? nil : plan, tab: "profile")
+            XCTAssertTrue(element("profile.situation", in: user).waitForExistence(timeout: 5))
+            XCTAssertFalse(element("profile.jarvis", in: user).exists)
+            XCTAssertFalse(element("jarvis.section.money_control", in: user).exists)
+            user.terminate()
+        }
     }
 }

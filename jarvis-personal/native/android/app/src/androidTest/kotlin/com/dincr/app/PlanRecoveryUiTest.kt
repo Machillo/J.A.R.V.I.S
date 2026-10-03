@@ -31,7 +31,7 @@ import org.junit.Test
 /**
  * Plan recovery on the FakeBackend (Debug only; synthetic data): the Plan tab's four rows, the
  * relocated screens, the three strategy contracts, Salvavidas, the distribution, Cuentas as the
- * second surface of the mail review, bank logos, the Owner's "Análisis financiero" and the
+ * second surface of the mail review, bank logos, the Owner's "Análisis financiero" and receivables, and the
  * situation form. Copy is resolved with the app's own `tx`, so the tests pass in either language.
  */
 class PlanRecoveryUiTest {
@@ -264,6 +264,31 @@ class PlanRecoveryUiTest {
         launch(plan = "vip", role = "admin")
         waitForText(tx("Esta cuenta usa DINCR Owner", "This account uses DINCR Owner"))
         assertTrue(!present(tx("Análisis financiero", "Financial analysis")))
+    }
+
+    @Test fun theOwnerReachesDebtsGoalsAndReceivables() {
+        launch(role = "owner")
+        home()
+        // Debts and goals: the same Hoy rows as every plan.
+        click(tx("Deudas", "Debts"))
+        waitForText(tx("Cuotas del mes", "Monthly payments"))
+        back()
+        click(tx("Metas y ahorros", "Goals and savings"))
+        waitForText(tx("Planes de ahorro", "Savings plans"))
+        back()
+        // Cuentas por cobrar: JARVIS → Control de dinero, no longer a placeholder.
+        click(tx("Perfil", "Profile"))
+        click("JARVIS")
+        click(tx("Control de dinero", "Money control"))
+        waitForTag("receivables.summary")
+        waitForText("Persona de ejemplo")
+        assertTrue(!present(tx("En restauración", "Being restored")))
+        // A VIP user has no JARVIS, so no receivables.
+        launch(plan = "vip")
+        home()
+        click(tx("Perfil", "Profile"))
+        waitForText(tx("Mi situación financiera", "My financial situation"))
+        assertTrue(!present("JARVIS") && !present(tx("Control de dinero", "Money control")))
     }
 
     @Test fun theSituationFormSendsWorkDaysForAFixedIncome() {

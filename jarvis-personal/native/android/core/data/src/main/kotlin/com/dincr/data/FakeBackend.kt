@@ -202,6 +202,8 @@ class FakeBackend(
                 path == "/finance/engine" -> ok(planRoutes.engine(snapshot()))
                 else -> ok(planRoutes.analysis(snapshot()))
             }
+            path == "/finance/receivables/view" && method == "GET" ->
+                if (!isInternal) error(403, "No tienes permisos para realizar esta acción.") else ok(planRoutes.receivables())
             path == "/auth/me/export" -> ok("""{"format_version":1,"generated_at":"${today}T12:00:00Z","account":{"id":1},"workspaces":[],"data":{},"truncated_tables":[],"notes":[]}""")
             path == "/auth/profile-setup" -> {
                 profile = profile.copy(displayName = text("display_name"), profileSetupCompleted = true, baseCurrency = text("base_currency") ?: "CRC",
