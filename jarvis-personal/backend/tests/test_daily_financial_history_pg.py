@@ -122,11 +122,13 @@ def test_eligibility_is_vip_and_the_verified_owner_only(db):
         "no legacy identity": _account(cur, "nolegacy@example.test", legacy=False),
         "unlisted owner": _account(cur, "owner2@example.test", role="owner", source="owner"),
         "disabled membership": _account(cur, "disabled@example.test", membership="disabled"),
+        "admin without VIP": _account(cur, "admin-free@example.test", role="admin", plan="free", source="self_service"),
     }
     eligible = _eligible()
     assert set(eligible) == {owner["workspace"], vip["workspace"], vip_store["workspace"], admin_vip["workspace"]}
     assert eligible[owner["workspace"]]["role"] == "owner"
-    assert eligible[vip["workspace"]]["role"] == "user" and eligible[admin_vip["workspace"]]["role"] == "admin"
+    # A legacy "admin" role grants nothing: eligible only through its VIP plan, as a plain VIP.
+    assert eligible[vip["workspace"]]["role"] == "user" and eligible[admin_vip["workspace"]]["role"] == "user"
     assert eligible[vip["workspace"]] == {"id": vip["legacy"], "account_id": vip["account"], "workspace_id": vip["workspace"],
                                           "role": "user", "status": "active"}
     assert not {item["workspace"] for item in excluded.values()} & set(eligible)
@@ -290,4 +292,36 @@ def test_a_second_run_while_one_is_in_progress_returns_without_writing(db, monke
         other.rollback()
         other.close()
     assert run_daily_financial_history(DAY1)["recorded"] == 1      # the guard ends with the other run
+
+
+def test_history_by_identity_free_basic_vip_owner_and_legacy_admin(db, monkeypatch):
+    from backend.finance.daily_history import run_daily_financial_history
+
+    cur = db["cur"]
+    people = {
+        "free": _account(cur, "free@example.test", plan="free", source="self_service"),
+        "basic": _account(cur, "basic@example.test", plan="basic", source="self_service", store=("active", "2099-01-01")),
+        "vip": _account(cur, "vip@example.test"),
+        "owner": _account(cur, OWNER_EMAIL, role="owner", source="owner"),
+        "admin without VIP": _account(cur, "admin-free@example.test", role="admin", plan="free", source="self_service"),
+        "admin with VIP": _account(cur, "admin-vip@example.test", role="admin"),
+        # Listed in OWNER_EMAILS but stored as admin: never the Owner.
+        "listed admin": _account(cur, "listed-admin@example.test", role="admin", plan="free", source="self_service"),
+    }
+    monkeypatch.setenv("OWNER_EMAILS", f"{OWNER_EMAIL},listed-admin@example.test")
+    h.install(monkeypatch, None, real_database=True)
+    run_daily_financial_history(DAY1)
+
+    def rows(table, person):
+        cur.execute(f"SELECT count(*) AS n FROM {table} WHERE workspace_id = %s", (people[person]["workspace"],))
+        return cur.fetchone()["n"]
+
+    expected = {  # person: (health history, strategy history)
+        "free": (0, 0), "basic": (0, 0), "vip": (1, 0), "owner": (1, 1),
+        "admin without VIP": (0, 0), "admin with VIP": (1, 0), "listed admin": (0, 0),
+    }
+    actual = {person: (rows("financial_health_snapshots", person),
+                       int(rows("advisor_current_strategy", person) > 0 or rows("advisor_strategy_history", person) > 0))
+              for person in people}
+    assert actual == expected
 

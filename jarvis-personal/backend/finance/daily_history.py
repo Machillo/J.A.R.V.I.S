@@ -9,9 +9,12 @@ kept, and so its future effects (deterioration history signals, strategy history
   - VIP workspaces: the read-only equivalent of `require_feature("strategy_vip")` (their
     lifecycle reads stored it);
   - the Owner workspace: the stored, allowlisted Owner identity (`is_verified_owner_account`);
-- the strategy, only for the roles whose reads stored it (the internal advisor routes: the
-  Owner, and an eligible admin). VIP reads computed the strategy without storing it, so the
-  job stores none for them: no new personal data.
+- the strategy, only for the verified Owner. VIP reads computed the strategy without storing
+  it, so the job stores none for them: no new personal data.
+
+DINCR's identities are Free, Basic, VIP and the single Owner. A stored "admin" role is a
+legacy value here: it grants nothing in this job (an admin account is eligible only through
+its own VIP plan, and then exactly like any VIP), and it is never treated as the Owner.
 
 Free and Basic never had this history (the lifecycle routes require `strategy_vip`; the
 advisor and deterioration routes are internal), so they are not included.
@@ -37,8 +40,8 @@ from backend.finance.deterioration import record_daily_health_snapshot
 
 logger = logging.getLogger(__name__)
 
-# Roles whose reads stored the strategy before P0.2 (the advisor routes are internal).
-STRATEGY_HISTORY_ROLES = frozenset({"owner", "admin"})
+# Only the verified Owner keeps an advisor strategy history.
+STRATEGY_HISTORY_ROLES = frozenset({"owner"})
 RUN_LOCK = "daily-financial-history"
 
 _CANDIDATES = """
@@ -81,7 +84,7 @@ def eligible_workspaces(conn) -> list[dict[str, Any]]:
             if row["access_source"] == "self_service" and row["plan_code"] in {"basic", "vip"} \
                     and not has_store_entitlement(conn, row["account_id"], row["plan_code"]):
                 continue
-            role = "admin" if row["account_role"] == "admin" else "user"
+            role = "user"  # any other stored role (incl. legacy "admin") is a plain VIP here
         eligible.append({
             "id": int(row["legacy_user_id"]),
             "account_id": row["account_id"],
@@ -95,8 +98,8 @@ def eligible_workspaces(conn) -> list[dict[str, Any]]:
 def _record_workspace(identity: dict[str, Any], today: date) -> dict[str, Any]:
     """Health observation, then strategy, for one workspace, inside its own identity."""
     token = set_current_user(identity)
-    # The text context of the app the data belongs to: the public DINCR app for a regular
-    # account (as its /user-product reads), the internal one for the Owner and an admin.
+    # The text context of the app the data belongs to: the public DINCR app for a VIP (as
+    # its /user-product reads), the internal one for the Owner.
     users_token = set_dincr_users(identity["role"] == "user")
     try:
         with use_language(DEFAULT_LANGUAGE):
