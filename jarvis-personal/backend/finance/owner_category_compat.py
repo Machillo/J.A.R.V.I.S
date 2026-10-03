@@ -1,9 +1,9 @@
 """Owner-only category compatibility (CLAUDE.md §4.A; master plan P0.1).
 
-The DINCR Owner's historical records use a few aliases and one category that come from
-his own life, not from the product: the personal words for family members, the trips he
-saved for, standalone bank words that only made sense in his own notes, and his broker as
-an investment category. They keep resolving for the Owner, and only for the Owner:
+The DINCR Owner's historical records use a few aliases and one category that are personal
+to that account, not part of the product: family words, specific destinations, standalone
+bank words that are ambiguous as plain text, and a broker used as an investment category.
+They keep resolving for the Owner, and only for the Owner:
 
 - `backend.finance.category_catalog` resolves the neutral catalog by default and merges
   these entries only when the caller passes `owner=True`;
@@ -25,7 +25,7 @@ OWNER_ONLY_CATEGORIES: list[dict[str, Any]] = [
 ]
 
 # Owner aliases for categories of the neutral catalog: removed from the neutral matching
-# because they are personal (family words, the Owner's trips) or ambiguous as plain text
+# because they are personal (family words, specific destinations) or ambiguous as plain text
 # ("bac", "popular", "familia").
 OWNER_EXTRA_ALIASES: dict[str, list[str]] = {
     "Tarjeta BAC": ["bac"],
@@ -36,7 +36,7 @@ OWNER_EXTRA_ALIASES: dict[str, list[str]] = {
 
 
 def owner_transfer_category(clean_text: str) -> str | None:
-    """The Owner's historical rule for a transfer to his father: "Familiar".
+    """The Owner's historical rule for a family transfer: "Familiar".
 
     Kept exactly as the shared parser applied it before P0.1 (a substring of the
     normalized text), so the Owner's mail resolves as it always did.

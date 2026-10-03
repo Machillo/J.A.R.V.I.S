@@ -696,10 +696,18 @@ def _auto_apply_receivable_payment_from_candidate(conn, user_id: int, transactio
         logger.warning("Receivable collection not linked (%s); run the receivables sync", type(exc).__name__)
 
 
+def _owner_layer_for(user_id: int) -> bool:
+    """The Owner category layer applies only to the Owner's own data, in his own request."""
+    try:
+        return owner_context() and int(get_current_user_id()) == int(user_id)
+    except Exception:
+        return False
+
+
 def _insert_transaction(conn, user_id: int, candidate: dict[str, Any]) -> int:
     if candidate.get("transaction_type") in {"statement", "ignored", "internal_transfer"}:
         raise ValueError("Los estados de cuenta, correos ignorados o movimientos internos no se guardan como transacciones directas.")
-    category = normalize_category(candidate["category"], candidate["transaction_type"], owner=owner_context())
+    category = normalize_category(candidate["category"], candidate["transaction_type"], owner=_owner_layer_for(user_id))
     row = conn.execute(
         """
         INSERT INTO transactions (
@@ -1376,7 +1384,7 @@ def scan_email_text(
                 description=parsed["description"],
                 bank=parsed["bank"],
             )
-        owner = owner_context()
+        owner = _owner_layer_for(user_id)
         if owner and parsed["transaction_type"] == "transfer" and parsed["category"] == "Transferencias":
             # The Owner's historical family rule, removed from the shared parser (P0.1).
             parsed["category"] = owner_transfer_category(normalize_mail_text(raw_description)) or parsed["category"]

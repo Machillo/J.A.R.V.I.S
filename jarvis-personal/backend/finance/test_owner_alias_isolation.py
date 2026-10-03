@@ -5,6 +5,7 @@ against. The Owner's personal aliases and his broker category live in
 `owner_category_compat` and apply only with `owner=owner_context()`, which is True only for a
 request the server authenticated as the Owner. Synthetic values only.
 """
+import ast
 import json
 import re
 from contextlib import contextmanager
@@ -101,7 +102,10 @@ def test_shared_users_code_never_reaches_the_owner_layer():
             continue
         source = path.read_text(encoding="utf-8")
         assert not IMPORTS_OWNER_LAYER.search(source), path.name
-        assert not re.search(r"(normalize_category|expense_type_for_category)\([^)]*owner\s*=", source), path.name
+        selects_owner = [node.lineno for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Call)
+                         and getattr(node.func, "id", getattr(node.func, "attr", "")) in {"normalize_category", "expense_type_for_category"}
+                         and any(keyword.arg == "owner" or keyword.arg is None for keyword in node.keywords)]
+        assert not selects_owner, (path.name, selects_owner)
     for name in ("parser.py", "statement_reconciliation.py", "popular_pdf.py"):
         source = (BACKEND / "email_monitor" / name).read_text(encoding="utf-8")
         assert not IMPORTS_OWNER_LAYER.search(source) and "owner_context" not in source, name
@@ -178,7 +182,7 @@ def test_structured_banco_popular_evidence_still_works():
     parsed = parse_popular_loan_payment(
         "COMPROBANTEDEPAGODE PRESTAMOS\nNúmero de Operación 1040900012345\nFecha Aplicación 07/09/2026 08:15:20\n"
         "Patrono 123456 - EMPRESA PRUEBA SA\nNúmero Comprobante 20260907007302\nFecha Planilla AGOSTO 2026\n"
-        "Monto delPago ₡ 65 480,40\nSaldo Anterior ₡ 1,500,000.00\nAmortización Saldo ₡ 45 000,00\n"
+        "Monto delPago ₡ 12 345,67\nSaldo Anterior ₡ 1,500,000.00\nAmortización Saldo ₡ 45 000,00\n"
         "Intereses Corrientes ₡ 15 000,00\nIntereses de Mora ₡ 0,00\nCargos por Pólizas ₡ 5 480,40\n"
         "Fracciones o Excesos ₡ 0,00\nOtros Cargos ₡ 0,00\nNuevo Saldo ₡ 1 455 000,00\nTasa Anual 12,00 %\n"
         "Medio de Pago 04-PLANILLAS",
@@ -300,7 +304,7 @@ class _Conn:
     def execute(self, query, params=()): raise AssertionError(f"unexpected SQL in this test: {query[:60]}")
 
 
-def _owner_scan_category(monkeypatch, user, description):
+def _owner_scan_category(monkeypatch, user, description, scanned_user_id=None):
     """Run the Owner's manual mail scan up to category normalization, with a synthetic transfer."""
     from backend.email_monitor import service
 
@@ -317,7 +321,7 @@ def _owner_scan_category(monkeypatch, user, description):
     monkeypatch.setattr(service, "_internal_mirror_exists", lambda conn, ws, item: (_ for _ in ()).throw(_Captured(item)))
     with _as(user), pytest.raises(_Captured) as captured:
         service.scan_email_text(subject="Notificación de transferencia", sender="avisos@multimoney.com", body="synthetic",
-                                user_id=int(user["id"]), provider_message_id="synthetic-4")
+                                user_id=int(scanned_user_id or user["id"]), provider_message_id="synthetic-4")
     return captured.value.parsed["category"]
 
 
@@ -330,3 +334,9 @@ def test_the_owner_scan_keeps_his_family_transfer_rule(monkeypatch):
 def test_the_scan_path_without_the_owner_role_never_applies_the_family_rule(monkeypatch, plan):
     # Even if a regular account's request reached this code, the rule follows the server's role.
     assert _owner_scan_category(monkeypatch, _user(plan), "envio papa") != "Familiar"
+
+
+
+def test_an_owner_request_scanning_another_accounts_mail_stays_neutral(monkeypatch):
+    # The layer follows whose data is processed, not only who asks.
+    assert _owner_scan_category(monkeypatch, OWNER, "envio papa", scanned_user_id=2) != "Familiar"
