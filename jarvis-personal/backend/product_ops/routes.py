@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Query
 
 from backend.auth.current_user import require_roles
-from backend.product_ops.models import AutomaticIncidentCreate, FeatureFlagUpdate, FeedbackCreate, FeedbackResolutionUpdate, FeedbackUpdate, ProductEvent, ReleasePolicyUpdate, StoreLifecycleSimulation
+from backend.product_ops.analytics_relay import relay_event
+from backend.product_ops.models import AnalyticsEventIn, AutomaticIncidentCreate, FeatureFlagUpdate, FeedbackCreate, FeedbackResolutionUpdate, FeedbackUpdate, ProductEvent, ReleasePolicyUpdate, StoreLifecycleSimulation
 from backend.product_ops.service import catalog, create_automatic_incident, create_feedback, list_feedback, owner_dashboard, record_event, release_policy, resend_feedback_email, send_discord_test, update_feature_flag, update_feedback, update_release_policy, update_user_feedback_resolution
 from backend.core.feature_flags import user_feature_flags
 from backend.product_ops.health_cache import cached_platform_health
@@ -35,6 +36,10 @@ def billing_store_simulate(payload: StoreLifecycleSimulation):
 
 @router.post("/events")
 def event(payload: ProductEvent): return record_event(**payload.model_dump())
+
+# Native apps' product analytics (contract v2): validated and relayed to PostHog, never stored.
+@router.post("/analytics")
+def analytics(payload: AnalyticsEventIn): return relay_event(payload.model_dump())
 
 @router.get("/feedback")
 def feedback_list(): return list_feedback()

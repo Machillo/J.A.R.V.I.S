@@ -2,22 +2,22 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { createRequire } from "node:module";
-import { analyticsEvents, analyticsPropertyNames, endpointModule, mailOAuthErrorCodes, safeAnalyticsProperties } from "../src/lib/analyticsContract.js";
+import { analyticsEvents, analyticsPropertyNames, endpointModule, jarvisSections, mailOAuthErrorCodes, ownerEvents, reviewLatencyBucket, safeAnalyticsProperties, usefulActionFor, userEvents, userScreens } from "../src/lib/analyticsContract.js";
 import { DINCR_APP_ID, isDincrAppId } from "../src/lib/appIdentity.js";
 
 const sdk = fs.readFileSync(new URL("../src/lib/productAnalytics.js", import.meta.url), "utf8");
 const gmail = fs.readFileSync(new URL("../src/users/pages/GmailAutomation.jsx", import.meta.url), "utf8");
 
 assert.deepEqual(safeAnalyticsProperties({
-  plan: "vip", platform: "android", success: true, scan_scope: "year_to_date",
+  plan: "vip", platform: "android", success: true, decision: "corrected",
   bank: "Banco de mi papá", account: "1234", amount: 5000,
   balance: 7000, debt: 8000, email: "private@example.com", subject: "pago",
   sender: "bank@example.com", description: "salary", token: "private", pdf: "%PDF",
   $current_url: "https://example.com/#access_token=secret", $set: { email: "private@example.com" },
-}), { plan: "vip", platform: "android", success: true, scan_scope: "year_to_date" });
+}), { plan: "vip", platform: "android", success: true, decision: "corrected" });
 assert.deepEqual(safeAnalyticsProperties({ plan: "VIP@gmail.com", platform: "web", source_type: "BAC", screen: "/debts/1234" }), {});
-assert.deepEqual(safeAnalyticsProperties({ app_version: "1.9.11", duration_ms: 1288, initial_scan_complete: false }), {
-  app_version: "1.9.11", duration_ms: 1000, initial_scan_complete: false,
+assert.deepEqual(safeAnalyticsProperties({ app_version: "1.9.11", success: false, is_transfer: true, constructor: "x", toString: "y" }), {
+  app_version: "1.9.11", success: false,
 });
 assert.ok(analyticsEvents.has("account_deletion_started"));
 assert.equal(analyticsEvents.has("$pageview"), false);
@@ -27,12 +27,15 @@ assert.match(sdk, /disable_session_recording: true/);
 assert.match(sdk, /capture_exceptions: false/);
 assert.match(sdk, /person_profiles: "never"/);
 assert.match(sdk, /before_send:/);
-assert.match(sdk, /user\?\.legal\?\.required === false/);
+assert.match(sdk, /user\?\.legal\?\.required !== false\) return null/);
 assert.doesNotMatch(sdk, /posthog\.identify\(/);
 assert.doesNotMatch(gmail, /bank: item\.|institution_country: item\.|auto_saved: result\./);
-assert.match(gmail, /if \(outcome\.provider !== "gmail"\) trackEvent\("mail_connected"/, "Gmail connections are counted once, by the backend");
+assert.match(gmail, /trackEvent\("mailbox_connected", \{ provider: outcome\.provider \}\)/, "every provider's connection is counted on the device");
+assert.match(gmail, /review_latency: reviewLatencyBucket\(item\.created_at\) \}/, "review latency: a bucket of DINCR's detection time, nothing from the email");
+const reviewEvent = gmail.slice(gmail.indexOf('trackEvent("mail_candidate_reviewed"'), gmail.indexOf('trackEvent("useful_action"'));
+assert.ok(reviewEvent.length > 0 && !/received_at|is_internal_transfer|is_transfer|bank|subject|sender/.test(reviewEvent), "no value derived from the email is sent with a review");
 
-function runSdk({ key = "", mobile = true, legal = false, appId = "com.dincr.app" } = {}) {
+function runSdk({ key = "", mobile = true, legal = false, appId = "com.dincr.app", role = "user", plan = "vip" } = {}) {
   const calls = [];
   const sdkStub = {
     init: (_token, config) => { calls.push(["init", config]); sdkStub.config = config; },
@@ -43,14 +46,14 @@ function runSdk({ key = "", mobile = true, legal = false, appId = "com.dincr.app
   };
   const source = sdk.replace(/^import .*;\r?\n/gm, "").replaceAll("import.meta.env", "env").replace(/export const /g, "const ");
   const context = {
-    posthog: sdkStub, analyticsEvents, safeAnalyticsProperties, DINCR_APP_ID, isDincrAppId,
+    posthog: sdkStub, analyticsEvents, userEvents, ownerEvents, safeAnalyticsProperties, DINCR_APP_ID, isDincrAppId,
     Capacitor: { isNativePlatform: () => mobile, getPlatform: () => "android" },
     env: { VITE_POSTHOG_KEY: key, VITE_POSTHOG_HOST: "https://us.i.posthog.com", VITE_NATIVE_APP_ID: appId },
     window: {},
   };
   vm.runInNewContext(`${source}\nglobalThis.run = { setProductAnalyticsUser, captureProductEvent, noteLoginCompleted };`, context);
   context.posthogConfig = () => sdkStub.config;
-  context.run.setProductAnalyticsUser({ id: "account-id", role: "user", legal: { required: !legal }, subscription: { plan: "vip" } });
+  context.run.setProductAnalyticsUser({ id: "account-id", role, legal: { required: !legal }, subscription: { plan } });
   return { calls, context };
 }
 
@@ -61,18 +64,20 @@ assert.ok(runSdk({ key: "public-key", legal: true, appId: "com.dincr.app" }).cal
 assert.deepEqual(runSdk({ key: "public-key", legal: true, appId: "com.jarvis.personal" }).calls, [], "a non-DINCR build never sends analytics");
 const { calls, context } = runSdk({ key: "public-key", legal: true });
 assert.deepEqual(calls.filter(([name]) => name === "capture").map(([, event]) => event.event), ["app_opened"]);
-context.run.captureProductEvent("transaction_confirmed", { amount: 1234, bank: "BAC", source_type: "email" });
+context.run.captureProductEvent("mail_candidate_reviewed", { amount: 1234, bank: "BAC", decision: "accepted", audience: "owner" });
 const event = calls.at(-1)[1];
 assert.deepEqual(Object.keys(event).sort(), ["event", "properties", "uuid"]);
 assert.equal(event.properties.amount, undefined);
 assert.equal(event.properties.$current_url, undefined);
 assert.equal(event.properties.$set, undefined);
 assert.equal(event.properties.email, undefined);
-assert.equal(event.properties.source_type, "email");
+assert.equal(event.properties.decision, "accepted");
+assert.equal(event.properties.audience, "user", "the caller can never change the audience");
 assert.equal(event.properties.token, "phc_public_project_key", "the public project key is required for ingestion");
 assert.equal(event.properties.$process_person_profile, false, "no person profiles");
 assert.equal(event.properties.$geoip_disable, true, "no IP geolocation");
-assert.deepEqual(Object.keys(event.properties).sort(), ["$geoip_disable", "$process_person_profile", "distinct_id", "environment", "plan", "platform", "source_type", "token"]);
+assert.deepEqual(Object.keys(event.properties).sort(), ["$geoip_disable", "$process_person_profile", "audience", "client", "decision", "distinct_id", "environment", "plan", "platform", "token"]);
+assert.equal(event.properties.client, "capacitor");
 assert.equal(event.properties.environment, "development", "non-production builds are labelled");
 
 // The real posthog-js pipeline must accept what before_send returns. It silently
@@ -84,15 +89,19 @@ const ingested = realSdk._runBeforeSend({ event: "app_opened", uuid: "u", proper
 assert.ok(ingested, "posthog-js keeps DINCR events after before_send");
 assert.deepEqual(JSON.parse(JSON.stringify(ingested.properties)), { token: "phc_public_project_key", distinct_id: "d", $process_person_profile: false, $geoip_disable: true, plan: "vip" });
 assert.equal(realSdk._runBeforeSend({ event: "$pageview", uuid: "u", properties: { token: "t", distinct_id: "d" } }), null, "unlisted events stay dropped");
-context.run.captureProductEvent("unapproved_event", { source_type: "email" });
-assert.equal(calls.filter(([name]) => name === "capture").length, 2);
+const sessionUuid = "0192f0c4-7b1a-7c3e-9a51-3f2b8d6e1a90";
+assert.equal(realSdk._runBeforeSend({ event: "app_opened", uuid: "u", properties: { token: "t", distinct_id: "d", $session_id: sessionUuid } }).properties.$session_id, sessionUuid, "the random session id is kept to count sessions");
+assert.equal(realSdk._runBeforeSend({ event: "app_opened", uuid: "u", properties: { token: "t", distinct_id: "d", $session_id: "ana@example.com" } }).properties.$session_id, undefined, "anything that is not a UUID is dropped");
+context.run.captureProductEvent("unapproved_event", { decision: "accepted" });
+context.run.captureProductEvent("jarvis_section_viewed", { jarvis_section: "chats" });
+assert.equal(calls.filter(([name]) => name === "capture").length, 2, "Users accounts never send Owner events");
 context.run.setProductAnalyticsUser({ id: "second-account", role: "user", legal: { required: false }, subscription: { plan: "free" } });
 assert.ok(calls.some(([name]) => name === "reset"), "switching accounts must rotate the anonymous ID");
 assert.equal(calls.filter(([name, value]) => name === "capture" && value.event === "app_opened").length, 2);
 
 // --- Privacy guard: no allowed property name may describe financial content,
 // mail content, identity or credentials. Adding one to the contract fails here.
-const SENSITIVE = /amount|balance|salary|income|debt|iban|account_?(id|number)|workspace|card|sinpe|subject|body|snippet|sender|recipient|counterpart|payee|payer|email|mail_?address|name|token|secret|password|cookie|auth|header|raw|payload|description|merchant|url|path|query|stack|(^|_)message($|_)|(^|_)ip($|_)|phone|user_?id|person/i;
+const SENSITIVE = /amount|balance|salary|income|debt|iban|account_?(id|number)|workspace|card|sinpe|subject|body|snippet|sender|recipient|counterpart|payee|payer|email|mail_?address|name|token|secret|password|cookie|auth|header|raw|payload|description|merchant|url|path|query|stack|(^|_)message($|_)|(^|_)ip($|_)|phone|user_?id|person|prompt|(^|_)text($|_)|chat|conversation|transcript|calendar|title|note|content|(^|_)date|(^|_)at$|address|location|wealth/i;
 for (const name of analyticsPropertyNames) assert.doesNotMatch(name, SENSITIVE, `analytics property '${name}' looks sensitive`);
 const hostile = {
   amount: 12500, balance: 1, salary: 1, debt: 1, iban: "CR05015202001026284066", account_number: "1234",
@@ -100,13 +109,58 @@ const hostile = {
   counterparty: "Persona", email: "a@b.com", name: "Persona", access_token: "t", refresh_token: "t",
   authorization: "Bearer x", cookie: "c", password: "p", raw_payload: { amount: 1 }, description: "x",
   account_id: "uuid", workspace_id: "uuid", user_id: 1, $current_url: "https://x", $set: { email: "a@b.com" },
-  endpoint: "/user-product/vip/gmail/42", status_code: "500", messages_scanned: -1, candidates_pending: 1.5, provider: "yahoo",
+  endpoint: "/user-product/vip/gmail/42", status_code: "500", provider: "yahoo",
+  prompt: "cuanto gane", text: "hola", chat_message: "x", calendar_title: "Cita", received_at: "2026-09-30",
+  jarvis_section: "chat: pagar a Ana", action_type: "transfer 5000", review_latency: "3h", strategy_tool: "x", audience: "admin",
 };
 assert.deepEqual(safeAnalyticsProperties(hostile), {}, "hostile or malformed values never pass");
 
-// --- New categories and bounded counts.
-assert.deepEqual(safeAnalyticsProperties({ provider: "microsoft", error_code: "denied", messages_scanned: 250000, candidates_pending: 3, duplicates: 0, status_code: 503, endpoint: "mail", method: "POST", error_category: "server", environment: "production" }),
-  { provider: "microsoft", error_code: "denied", messages_scanned: 100000, candidates_pending: 3, duplicates: 0, status_code: 503, endpoint: "mail", method: "POST", error_category: "server", environment: "production" });
+// --- Closed categories.
+assert.deepEqual(safeAnalyticsProperties({ provider: "microsoft", error_code: "denied", status_code: 503, endpoint: "mail", method: "POST", error_category: "server", environment: "production", audience: "owner", jarvis_section: "chats", action_type: "goal_created", review_latency: "under_1d", strategy_tool: "aguinaldo", plan_change: "scheduled" }),
+  { provider: "microsoft", error_code: "denied", status_code: 503, endpoint: "mail", method: "POST", error_category: "server", environment: "production", audience: "owner", jarvis_section: "chats", action_type: "goal_created", review_latency: "under_1d", strategy_tool: "aguinaldo", plan_change: "scheduled" });
+
+// --- Useful actions: a successful write, identified by method + path; the path never leaves.
+for (const [method, path, type] of [
+  ["PUT", "/user-product/financial-situation", "financial_profile_saved"], ["POST", "/user-product/goals", "goal_created"],
+  ["POST", "/user-product/goals/12/contributions", "goal_contribution_recorded"], ["POST", "/user-product/finance/debts/9/payments", "debt_payment_recorded"],
+  ["PUT", "/user-product/vip/salvavidas", "salvavidas_saved"], ["POST", "/user-product/transactions?x=1", "transaction_added"],
+  ["GET", "/user-product/goals", null], ["POST", "/user-product/finance/strategy-vip/simulate", null], ["POST", "/user-product/vip/gmail/connect", null],
+  ["DELETE", "/user-product/goals/12", null], ["POST", "/product-ops/events", null],
+]) assert.equal(usefulActionFor(method, path), type, `${method} ${path}`);
+const now = Date.parse("2026-10-01T12:00:00Z");
+assert.equal(reviewLatencyBucket("2026-10-01T11:30:00Z", now), "under_1h");
+assert.equal(reviewLatencyBucket("2026-09-30T20:00:00Z", now), "under_1d");
+assert.equal(reviewLatencyBucket("2026-09-27T12:00:00Z", now), "under_7d");
+assert.equal(reviewLatencyBucket("2026-08-01T12:00:00Z", now), "over_7d");
+assert.equal(reviewLatencyBucket("not a date", now), undefined);
+assert.equal(reviewLatencyBucket("2026-10-02T12:00:00Z", now), undefined, "a future date is unknown, not zero");
+
+// --- Users and Owner are separate audiences.
+for (const name of ownerEvents) assert.ok(name.startsWith("jarvis_") && !userEvents.has(name), name);
+{
+  const owner = runSdk({ key: "public-key", legal: true, role: "owner", plan: "owner" });
+  owner.context.run.captureProductEvent("screen_viewed", { screen: "overview" });
+  owner.context.run.captureProductEvent("useful_action", { action_type: "goal_created" });
+  owner.context.run.captureProductEvent("jarvis_section_viewed", { jarvis_section: "chats", plan: "vip", audience: "user" });
+  const sent = owner.calls.filter(([name]) => name === "capture").map(([, e]) => e);
+  assert.deepEqual(sent.map((e) => e.event), ["jarvis_opened", "jarvis_section_viewed"], "the Owner sends only JARVIS events");
+  for (const e of sent) assert.equal(e.properties.audience, "owner");
+  assert.equal(sent[1].properties.jarvis_section, "chats");
+  assert.equal(sent[0].properties.plan, undefined, "the Owner has no commercial plan");
+  assert.deepEqual(runSdk({ key: "public-key", legal: true, role: "admin" }).calls, [], "admins are never tracked");
+  assert.deepEqual(runSdk({ key: "public-key", legal: false, role: "owner" }).calls, [], "the Owner needs the legal acceptance too");
+}
+
+// --- Enumerations match the screens that exist.
+const registry = fs.readFileSync(new URL("../src/products/finva/features/registry.jsx", import.meta.url), "utf8");
+const registryBody = registry.slice(registry.indexOf("  return {"), registry.lastIndexOf("};"));
+const registryPages = new Set([...registryBody.matchAll(/^ {4}"?([a-z-]+)"?:/gm)].map((m) => m[1]));
+assert.deepEqual([...registryPages].sort(), [...userScreens].sort(), "screen enum = every Users page id");
+const personal = fs.readFileSync(new URL("../src/personal/PersonalApp.jsx", import.meta.url), "utf8");
+const ownerPages = [...personal.matchAll(/case "([^"]+)":/g)].map((m) => m[1]);
+assert.ok(ownerPages.length >= 20, "the Owner page switch was found");
+for (const page of ownerPages) assert.ok(jarvisSections.has(page), `JARVIS page '${page}' missing from jarvisSections`);
+assert.ok(jarvisSections.has("dashboard"));
 assert.ok(mailOAuthErrorCodes.has("other"));
 for (const [path, module] of [["/user-product/vip/gmail/sync", "mail"], ["/user-product/vip/mail/oauth/complete?flow=secret", "mail"], ["/auth/me", "auth"],
   ["/user-product/vip/strategy-dashboard", "strategy"], ["/user-product/debts/12", "debts"], ["/user-product/movements", "transactions"], ["/weird/place", "other"]]) {
@@ -125,12 +179,9 @@ const walk = (dir) => {
   }
 };
 walk(new URL("../src", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
-// Owner-only screens still call trackEvent for a few events; the contract drops them (the
-// Owner is never tracked) and no other system receives them.
-const OWNER_FIREBASE_ONLY = new Set(["salvavidas_saved", "salvavidas_target_selected"]);
 for (const [file, text] of sources) {
   for (const match of text.matchAll(/(?:trackEvent|captureProductEvent)\(\s*"([a-z_]+)"\s*(?:,\s*\{([^}]*)\})?/g)) {
-    assert.ok(analyticsEvents.has(match[1]) || OWNER_FIREBASE_ONLY.has(match[1]), `${file}: event '${match[1]}' is not in analyticsContract.js`);
+    assert.ok(analyticsEvents.has(match[1]), `${file}: event '${match[1]}' is not in analyticsContract.js`);
     for (const key of (match[2] || "").matchAll(/([A-Za-z_$][\w$]*)\s*:/g)) {
       assert.doesNotMatch(key[1], SENSITIVE, `${file}: '${match[1]}' passes sensitive property '${key[1]}'`);
     }

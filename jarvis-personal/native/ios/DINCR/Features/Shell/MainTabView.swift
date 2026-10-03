@@ -25,6 +25,7 @@ struct MainTabView: View {
             tabs
                 .safeAreaInset(edge: .top, spacing: 0) { GlobalBanners() }
                 .overlay(alignment: .bottom) { NoticeToast() }
+                .onChange(of: selection, initial: true) { _, tab in model.trackScreen(tab.rawValue) }
                 .onChange(of: model.pendingRoute) { _, route in
                     guard route == "mail" else { return }
                     model.pendingRoute = nil
@@ -95,12 +96,14 @@ enum ProfileRoute: Hashable {
 
 private struct ProfileRouteDestination: View {
     let route: ProfileRoute
+    @Environment(AppModel.self) private var model
 
     var body: some View {
+        // Analytics: navigation metadata only (the backend relay decides the audience).
         switch route {
-        case .mail: EmailMonitorView()
-        case .jarvis: JarvisHubView()
-        case .jarvisSection(let section): JarvisSectionView(section: section)
+        case .mail: EmailMonitorView().onAppear { model.trackScreen("mail") }
+        case .jarvis: JarvisHubView().onAppear { model.trackJarvisOpened() }
+        case .jarvisSection(let section): JarvisSectionView(section: section).onAppear { model.trackJarvisSection(section) }
         }
     }
 }

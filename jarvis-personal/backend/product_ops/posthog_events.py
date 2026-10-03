@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -145,6 +146,46 @@ def capture_backend_event(event_name: str, properties: dict[str, Any] | None = N
         response.raise_for_status()
     except requests.RequestException:
         logger.warning("DINCR aggregate analytics unavailable")
+
+
+def is_configured() -> bool:
+    return _configuration() is not None
+
+
+# The native relay has its own small pool and a bounded backlog: a flood of client events is
+# dropped instead of growing memory or delaying the server's own health events above.
+RELAY_BACKLOG = 500
+_relay_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="dincr-analytics-relay")
+_relay_slots = threading.BoundedSemaphore(RELAY_BACKLOG)
+
+
+def _send_prepared(payload: dict[str, Any]) -> None:
+    try:
+        configuration = _configuration()
+        if not configuration:
+            return
+        key, host = configuration
+        response = requests.post(f"{host}/capture/", json={"api_key": key, **payload}, timeout=(0.5, 1.5))
+        response.raise_for_status()
+    except requests.RequestException:
+        logger.warning("DINCR product analytics relay unavailable")
+    finally:
+        _relay_slots.release()
+
+
+def capture_prepared_later(payload: dict[str, Any]) -> bool:
+    """Queue an already validated relay payload (analytics_relay.build_relay_payload).
+
+    Returns False (and sends nothing) when analytics is off or the backlog is full.
+    """
+    if not is_configured() or not _relay_slots.acquire(blocking=False):
+        return False
+    try:
+        _relay_executor.submit(_send_prepared, dict(payload))
+    except RuntimeError:  # interpreter shutting down
+        _relay_slots.release()
+        return False
+    return True
 
 
 def capture_backend_event_later(event_name: str, properties: dict[str, Any] | None = None) -> None:

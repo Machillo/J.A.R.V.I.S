@@ -1,18 +1,27 @@
 // Analytics observes product behavior, never the user's financial content.
 // Fixed categories only: never forward financial data, mail content, OAuth URLs,
-// identifiers or form fields. See docs/analytics/posthog-event-taxonomy.md.
-export const analyticsEvents = new Set([
-  "app_opened", "app_resumed", "screen_viewed", "onboarding_started",
-  "onboarding_completed", "plan_selected", "plan_access_granted",
-  "login_completed", "logout",
-  "gmail_connection_started", "gmail_connected", "mail_connected", "mailbox_connection_failed",
-  "gmail_sync_started", "gmail_sync_completed", "gmail_sync_failed", "gmail_disconnected",
-  "financial_account_detected", "financial_account_confirmed",
-  "financial_account_ownership_reviewed", "email_candidate_reviewed", "transaction_candidate_reviewed",
-  "transaction_confirmed", "transaction_rejected", "account_deletion_started",
-  "account_deletion_failed", "data_export_completed",
+// identifiers, free text or form fields. See docs/analytics/posthog-event-taxonomy.md.
+
+// Users (Free, Basic, VIP) events. Canonical names (contract v2); the taxonomy doc
+// lists the legacy names they replace. No client event was ever ingested under the
+// legacy names, so renaming them loses no history.
+export const userEvents = new Set([
+  "app_opened", "app_resumed", "screen_viewed", "login_completed", "logout",
+  "onboarding_started", "onboarding_completed", "plan_selected", "plan_access_granted",
+  "financial_profile_saved", "useful_action", "strategy_tool_opened",
+  "mailbox_connection_started", "mailbox_connected", "mailbox_connection_failed",
+  "mailbox_disconnected", "mail_sync_requested", "mail_candidate_reviewed",
+  "financial_account_reviewed",
+  "account_deletion_started", "account_deletion_failed", "data_export_completed",
   "api_error", "app_error",
 ]);
+
+// Owner (JARVIS) events: internal usage, sent with audience=owner and never mixed
+// with Users metrics. Navigation metadata only: never chat text, prompts, calendar
+// entries, names, amounts or any personal data.
+export const ownerEvents = new Set(["jarvis_opened", "jarvis_section_viewed"]);
+
+export const analyticsEvents = new Set([...userEvents, ...ownerEvents]);
 
 // Mail OAuth outcomes the app can receive; anything else is reported as "other".
 export const mailOAuthErrorCodes = new Set([
@@ -20,28 +29,97 @@ export const mailOAuthErrorCodes = new Set([
   "already_processed", "completion_pending", "completion_failed", "other",
 ]);
 
+// Every page id of products/finva/features/registry.jsx (checked by the contract test).
+export const userScreens = new Set([
+  "overview", "finance", "plan", "advisor", "profile", "debts", "strategy", "gmail", "accounts",
+  "goals", "savings", "transactions", "situation", "more", "settings", "plan-settings", "budget",
+  "calendar", "recurring", "reports", "monthly", "feedback", "vip-recommendation", "vip-projections",
+  "vip-projection-detail", "vip-scenarios", "vip-reality", "vip-monthly-review", "vip-today",
+  "vip-emergency", "vip-aguinaldo", "vip-preferences",
+]);
+
+// Every Owner page of personal/PersonalApp.jsx and every native Jarvis.Section wire value
+// (both checked by the contract tests). A section is navigation only, never its content.
+export const jarvisSections = new Set([
+  "dashboard", "finance", "receivables", "wealth", "financialAccounts", "netWorth", "financialTimeline",
+  "reconciliation", "deterioration", "investments", "businesses", "goals", "transactions", "memory",
+  "strategy", "additionalCards", "emails", "settings", "chats", "moneyControl", "userManagement",
+  "productOperations", "profile",
+  "chat", "calendar", "money", "money_control", "records",
+]);
+
+// A useful action is a successful write the user made on purpose: the activation
+// and retention signal ("meaningful activity"). Matched on method + API path; the
+// path never leaves the device, only the action type.
+const usefulActionRules = [
+  ["PUT", /^\/user-product\/financial-situation$/, "financial_profile_saved"],
+  ["POST", /^\/user-product\/finance\/income$/, "income_added"],
+  ["PUT", /^\/user-product\/finance\/income\/[^/]+$/, "income_updated"],
+  ["POST", /^\/user-product\/finance\/expenses$/, "expense_added"],
+  ["PUT", /^\/user-product\/finance\/expenses\/[^/]+$/, "expense_updated"],
+  ["POST", /^\/user-product\/finance\/debts$/, "debt_added"],
+  ["PUT", /^\/user-product\/finance\/debts\/[^/]+$/, "debt_updated"],
+  ["POST", /^\/user-product\/finance\/debts\/[^/]+\/payments$/, "debt_payment_recorded"],
+  ["PUT", /^\/user-product\/vip\/salvavidas$/, "salvavidas_saved"],
+  ["POST", /^\/user-product\/goals$/, "goal_created"],
+  ["PUT", /^\/user-product\/goals\/[^/]+$/, "goal_updated"],
+  ["POST", /^\/user-product\/goals\/[^/]+\/contributions$/, "goal_contribution_recorded"],
+  ["POST", /^\/user-product\/savings-plans$/, "savings_plan_created"],
+  ["PUT", /^\/user-product\/savings-plans\/[^/]+$/, "savings_plan_updated"],
+  ["POST", /^\/user-product\/savings-plans\/[^/]+\/contributions$/, "savings_contribution_recorded"],
+  ["POST", /^\/user-product\/transactions$/, "transaction_added"],
+  ["PUT", /^\/user-product\/free\/movements\/[^/]+$/, "transaction_updated"],
+  ["PUT", /^\/user-product\/basic\/budget$/, "budget_saved"],
+  ["POST", /^\/user-product\/basic\/recurring$/, "recurring_added"],
+  ["PUT", /^\/user-product\/basic\/recurring\/[^/]+$/, "recurring_updated"],
+];
+export const usefulActionTypes = new Set([...usefulActionRules.map(([, , type]) => type), "mail_candidate_reviewed"]);
+
+// The action type of a successful Users write, or null when it is not a useful action.
+export function usefulActionFor(method, path) {
+  const verb = String(method || "").toUpperCase();
+  const clean = String(path || "").split(/[?#]/, 1)[0].replace(/\/+$/, "");
+  for (const [ruleMethod, pattern, type] of usefulActionRules) if (verb === ruleMethod && pattern.test(clean)) return type;
+  return null;
+}
+
+// How long a mail candidate waited for review since DINCR detected it, as a bucket
+// (never a date). Uses the candidate's own creation time, not the email's date.
+export function reviewLatencyBucket(detectedAt, now = Date.now()) {
+  const detected = Date.parse(detectedAt || "");
+  if (!Number.isFinite(detected) || detected > now) return undefined;
+  const hours = (now - detected) / 3_600_000;
+  if (hours < 1) return "under_1h";
+  if (hours < 24) return "under_1d";
+  if (hours < 24 * 7) return "under_7d";
+  return "over_7d";
+}
+
 const categories = {
   plan: new Set(["free", "basic", "vip"]),
+  audience: new Set(["user", "owner"]),
   platform: new Set(["android", "ios"]),
+  // Which app sent it: the Capacitor app (posthog-js) or the native apps (backend relay).
+  client: new Set(["capacitor", "native"]),
   environment: new Set(["production", "staging", "development"]),
-  // Every page id registered in products/finva/features/registry.jsx.
-  screen: new Set(["overview", "finance", "debts", "goals", "transactions", "strategy", "gmail", "accounts", "budget", "calendar", "recurring", "reports", "settings", "feedback", "advisor", "monthly", "more", "plan", "profile", "savings", "situation"]),
+  screen: userScreens,
+  jarvis_section: jarvisSections,
   access_type: new Set(["free", "promotion"]),
-  source_type: new Set(["email", "manual"]),
+  plan_change: new Set(["immediate", "scheduled", "kept"]),
   decision: new Set(["accepted", "corrected", "rejected"]),
+  review_latency: new Set(["under_1h", "under_1d", "under_7d", "over_7d"]),
   ownership_status: new Set(["own", "not_mine"]),
-  scan_scope: new Set(["recent", "year_to_date", "current_month", "current_year"]),
   provider: new Set(["gmail", "microsoft"]),
   error_code: mailOAuthErrorCodes,
+  action_type: usefulActionTypes,
+  strategy_tool: new Set(["salvavidas", "investments", "debts", "distribution", "aguinaldo"]),
   // Product module of a failing API call (see endpointModule), never the URL.
   endpoint: new Set(["auth", "home", "transactions", "debts", "goals", "budget", "strategy", "reports", "mail", "accounts", "notifications", "settings", "support", "billing", "other"]),
   method: new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]),
   error_category: new Set(["window_error", "unhandled_rejection", "render_error", "network", "server", "client"]),
 };
 
-const booleans = new Set(["success", "initial_scan_complete"]);
-// Aggregate message counts of a mail sync: how many, never which or what.
-const counts = new Set(["messages_scanned", "candidates_pending", "duplicates"]);
+const booleans = new Set(["success"]);
 
 const endpointRules = [
   [/^\/auth\b/, "auth"],
@@ -69,7 +147,7 @@ export function endpointModule(path) {
 
 // Every property name that can ever leave the device (checked by the privacy guard test).
 export const analyticsPropertyNames = new Set([
-  ...booleans, ...Object.keys(categories), ...counts, "app_version", "duration_ms", "status_code",
+  ...booleans, ...Object.keys(categories), "app_version", "status_code",
 ]);
 
 export function safeAnalyticsProperties(properties = {}) {
@@ -77,12 +155,8 @@ export function safeAnalyticsProperties(properties = {}) {
   if (!properties || typeof properties !== "object") return safe;
   for (const [name, value] of Object.entries(properties)) {
     if (booleans.has(name) && typeof value === "boolean") safe[name] = value;
-    else if (categories[name]?.has(value)) safe[name] = value;
+    else if (Object.hasOwn(categories, name) && categories[name].has(value)) safe[name] = value;
     else if (name === "app_version" && typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value)) safe[name] = value;
-    else if (name === "duration_ms" && Number.isFinite(value) && value >= 0) {
-      safe.duration_ms = Math.min(60_000, Math.round(value / 1000) * 1000);
-    }
-    else if (counts.has(name) && Number.isInteger(value) && value >= 0) safe[name] = Math.min(value, 100_000);
     else if (name === "status_code" && Number.isInteger(value) && value >= 100 && value <= 599) safe[name] = value;
   }
   return safe;

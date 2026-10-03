@@ -1,6 +1,8 @@
 import { API_URL } from "../../lib/apiUrl";
 import { apiError, apiNetworkError } from "../../lib/apiErrors";
 import { flushIncidentQueue } from "../../lib/incidentReporter";
+import { usefulActionFor } from "../../lib/analyticsContract";
+import { captureProductEvent } from "../../lib/productAnalytics";
 import { flushPendingOperations, recoverableFetch } from "../../lib/operationRecovery";
 
 const OBSERVABILITY_PATHS = new Set([
@@ -27,6 +29,10 @@ async function request(path, options = {}) {
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw apiError(response, payload, path, method, autoReport);
+  // Activation/retention signal: only the type of a successful write, never its content.
+  const usefulAction = usefulActionFor(method, path);
+  if (usefulAction === "financial_profile_saved") captureProductEvent("financial_profile_saved");
+  if (usefulAction) captureProductEvent("useful_action", { action_type: usefulAction });
   if (path !== "/product-ops/incidents") flushIncidentQueue();
   if (path !== "/product-ops/incidents") flushPendingOperations();
   if (!OBSERVABILITY_PATHS.has(path)) {

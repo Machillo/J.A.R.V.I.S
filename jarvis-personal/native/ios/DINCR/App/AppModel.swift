@@ -51,6 +51,8 @@ final class AppModel {
     var planTier: PlanTier { profile?.planTier ?? .free }
 
     let service: DincrService
+    /// Product analytics (contract v2) through the backend relay: live backend only, on while the identity is ready.
+    let analytics: NativeAnalytics?
     /// The Owner's JARVIS chat for this session only; emptied on sign-out and whenever the
     /// identity is no longer the Owner.
     let jarvisChat: JarvisChatSession
@@ -81,13 +83,21 @@ final class AppModel {
             let sessions = SessionManager(auth: auth, store: KeychainSessionStore())
             self.auth = auth
             self.sessions = sessions
-            service = DincrService(client: APIClient(baseURL: apiURL, tokens: sessions))
+            let analytics = NativeAnalytics(
+                version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0",
+                build: Self.analyticsBuild,
+                send: NativeAnalytics.relay(APIClient(baseURL: apiURL, tokens: sessions))
+            )
+            self.analytics = analytics
+            service = DincrService(client: APIClient(baseURL: apiURL, tokens: sessions, onSuccessfulWrite: analytics.writeHook))
         case let .fixtures(scenario, plan, role):
+            self.analytics = nil
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
             let latency: Duration = ProcessInfo.processInfo.arguments.contains("-DincrDisableAnimations") ? .milliseconds(50) : .milliseconds(300)
             service = FixtureBackend.service(FixtureBackend(scenario: scenario, plan: plan, role: role, latency: latency))
         case let .unconfigured(reason):
+            self.analytics = nil
             self.auth = nil
             self.sessions = SessionManager(auth: nil, store: InMemorySessionStore())
             service = DincrService(client: APIClient(baseURL: FixtureBackend.baseURL, tokens: FixtureTokens(), transport: UnconfiguredTransport()))
@@ -98,6 +108,14 @@ final class AppModel {
     }
 
     var language: AppLanguage { .current }
+
+    private static var analyticsBuild: String {
+        #if DEBUG
+        "debug"
+        #else
+        "release"
+        #endif
+    }
     var moneyFormat: MoneyFormat { MoneyFormat(profile: profile) }
     var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
 
@@ -250,6 +268,24 @@ final class AppModel {
                 }
             }
         }
+        let ready = phase == .ready
+        if let analytics { Task { await analytics.setEnabled(ready) } }
+    }
+
+    // MARK: Analytics (closed-list navigation metadata only; the backend decides the audience)
+
+    /// A Users screen by its native name (tab or route); unknown names are not sent.
+    func trackScreen(_ name: String) {
+        if let analytics { Task { await analytics.screen(name) } }
+    }
+
+    /// JARVIS navigation (Owner): the hub and its sections, never their content.
+    func trackJarvisOpened() {
+        if let analytics { Task { await analytics.jarvisOpened() } }
+    }
+
+    func trackJarvisSection(_ section: Jarvis.Section) {
+        if let analytics { Task { await analytics.jarvisSection(section) } }
     }
 
     // MARK: Gates
@@ -404,6 +440,7 @@ final class AppModel {
         appLock.detach()
         DataExport.clear()
         jarvisChat.reset()
+        if let analytics { Task { await analytics.reset() } }
         phase = .signedOut
     }
 }

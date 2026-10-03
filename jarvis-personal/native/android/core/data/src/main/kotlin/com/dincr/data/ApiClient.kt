@@ -65,6 +65,8 @@ class ApiClient(
     private val transport: HttpTransport = OkHttpTransport(),
     private val language: AppLanguage = AppLanguage.current(),
     private val backoff: suspend (Int) -> Unit = { attempt -> delay(400L shl attempt) },
+    /** Told (method, path) after each successful write: the analytics `useful_action` signal. */
+    private val onSuccessfulWrite: ((String, String) -> Unit)? = null,
 ) {
     val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
 
@@ -127,6 +129,7 @@ class ApiClient(
                 backoff(attempt); attempt += 1; continue
             }
             if (response.status !in 200..299) throw ApiError.from(response.status, response.body, language, requestId)
+            if (!safe) runCatching { onSuccessfulWrite?.invoke(method, path) }
             return response.body
         }
     }
