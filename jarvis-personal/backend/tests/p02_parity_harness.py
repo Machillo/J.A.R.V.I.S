@@ -96,6 +96,8 @@ class FakeConnection:
         if upper.startswith("INSERT INTO ADVISOR_CURRENT_STRATEGY"):
             self.store["current"][params[0]] = params[2]
             return _Result(one={"workspace_id": params[0]})
+        if upper.startswith("SELECT PG_TRY_ADVISORY_XACT_LOCK"):
+            return _Result(one={"acquired": not self.store.get("run_locked")})
         if upper.startswith("SELECT PG_ADVISORY_XACT_LOCK"):
             return _Result(one={"pg_advisory_xact_lock": ""})
         raise AssertionError(f"unexpected SQL in the parity harness: {sql[:80]}")

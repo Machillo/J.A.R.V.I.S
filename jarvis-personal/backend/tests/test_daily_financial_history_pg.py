@@ -38,7 +38,7 @@ def _block(text: str, name: str) -> str:
 
 def _ddl() -> list[str]:
     statements = [_block(SCHEMA, name) for name in
-                  ("allowed_users", "accounts", "workspaces", "plans", "features", "plan_features", "account_subscriptions", "transactions")]
+                  ("allowed_users", "accounts", "workspaces", "workspace_members", "plans", "features", "plan_features", "account_subscriptions", "transactions")]
     statements.append("ALTER TABLE transactions ADD COLUMN workspace_id UUID")  # added by a later migration
     statements.append(_block((ROOT / "migrations" / "20260925130000_request_path_schema.sql").read_text(encoding="utf-8"), "store_subscriptions"))
     statements.append((ROOT / "migrations" / "20260908_financial_health_snapshots.sql").read_text(encoding="utf-8"))
@@ -72,7 +72,7 @@ def db(tmp_path, monkeypatch):
 
 
 def _account(cur, email, *, role="user", plan="vip", source="courtesy", status="active", expires="2099-01-01",
-             account_status="active", store=None, legacy=True):
+             account_status="active", store=None, legacy=True, membership="active"):
     legacy_id = None
     if legacy:
         cur.execute("INSERT INTO allowed_users(email, role, status) VALUES (%s, %s, 'active') RETURNING id", (email, role))
@@ -83,6 +83,8 @@ def _account(cur, email, *, role="user", plan="vip", source="courtesy", status="
     workspace = str(uuid.uuid4())
     cur.execute("INSERT INTO workspaces(id, workspace_key, owner_account_id, name) VALUES (%s, %s, %s, 'Personal')",
                 (workspace, f"personal:{account}", account))
+    cur.execute("INSERT INTO workspace_members(workspace_id, account_id, member_role, status) VALUES (%s, %s, 'owner', %s)",
+                (workspace, account, membership))
     if plan:
         cur.execute("""INSERT INTO account_subscriptions(account_id, plan_id, status, access_source, expires_at)
                        SELECT %s, id, %s, %s, %s FROM plans WHERE code = %s""", (account, status, source, expires, plan))
@@ -119,6 +121,7 @@ def test_eligibility_is_vip_and_the_verified_owner_only(db):
         "blocked account": _account(cur, "blocked@example.test", account_status="blocked"),
         "no legacy identity": _account(cur, "nolegacy@example.test", legacy=False),
         "unlisted owner": _account(cur, "owner2@example.test", role="owner", source="owner"),
+        "disabled membership": _account(cur, "disabled@example.test", membership="disabled"),
     }
     eligible = _eligible()
     assert set(eligible) == {owner["workspace"], vip["workspace"], vip_store["workspace"], admin_vip["workspace"]}
@@ -164,7 +167,7 @@ def test_day1_day2_history_end_to_end(db, monkeypatch):
 
     # DAY 1: the job records health and strategy A for VIP and the Owner only.
     first = run_daily_financial_history(DAY1)
-    assert first == {"status": "OK", "date": "2026-09-14", "eligible": 2, "recorded": 2, "strategy_changed": 2, "failed": 0}
+    assert first == {"status": "OK", "date": "2026-09-14", "eligible": 2, "recorded": 2, "strategy_changed": 1, "failed": 0}
     cur.execute("SELECT workspace_id::text, snapshot_date FROM financial_health_snapshots ORDER BY 1")
     assert sorted((r["workspace_id"], r["snapshot_date"]) for r in cur.fetchall()) == sorted(
         [(owner["workspace"], DAY1), (vip["workspace"], DAY1)])
@@ -173,7 +176,9 @@ def test_day1_day2_history_end_to_end(db, monkeypatch):
 
     # The same day again: no duplicate observation, no duplicate history (A -> A).
     again = run_daily_financial_history(DAY1)
-    assert again["strategy_changed"] == 0 and _counts(cur)["health"] == 2 and _counts(cur)["history"] == 2
+    assert again["strategy_changed"] == 0 and _counts(cur)["health"] == 2 and _counts(cur)["history"] == 1
+    cur.execute("SELECT count(*) AS n FROM advisor_strategy_history WHERE workspace_id = %s", (vip["workspace"],))
+    assert cur.fetchone()["n"] == 0          # VIP reads never stored a strategy; the job stores none either
 
     # DAY 2, before the job: the condition deteriorated; reads compare with DAY 1 and write nothing.
     h.install(monkeypatch, None, real_database=True,
@@ -184,6 +189,10 @@ def test_day1_day2_history_end_to_end(db, monkeypatch):
     try:
         report = get_financial_deterioration(DAY2)
         get_financial_deterioration(DAY2)
+    finally:
+        reset_current_user(token)
+    token = set_current_user({**_identity(owner), "role": "owner"})
+    try:
         strategy = build_advisor_strategy()
     finally:
         reset_current_user(token)
@@ -194,8 +203,8 @@ def test_day1_day2_history_end_to_end(db, monkeypatch):
 
     # DAY 2 job: strategy B adds exactly one history row per workspace (A -> B), current is B.
     second = run_daily_financial_history(DAY2)
-    assert second["strategy_changed"] == 2 and _counts(cur)["history"] == 4 and _counts(cur)["health"] == 4
-    cur.execute("SELECT strategy_hash FROM advisor_current_strategy WHERE workspace_id = %s", (vip["workspace"],))
+    assert second["strategy_changed"] == 1 and _counts(cur)["history"] == 2 and _counts(cur)["health"] == 4
+    cur.execute("SELECT strategy_hash FROM advisor_current_strategy WHERE workspace_id = %s", (owner["workspace"],))
     assert cur.fetchone()["strategy_hash"] == strategy["persistence"]["strategy_hash"]
 
 
@@ -264,3 +273,21 @@ def test_a_concurrent_strategy_run_waits_for_the_workspace_lock_and_adds_no_dupl
     assert result == {"strategy_hash": hash_b, "changed": False, "persisted": True}
     db["cur"].execute("SELECT strategy_hash FROM advisor_strategy_history WHERE workspace_id = %s ORDER BY id", (vip["workspace"],))
     assert [row["strategy_hash"] for row in db["cur"].fetchall()][1:] == [hash_b]   # B once, not twice
+
+
+def test_a_second_run_while_one_is_in_progress_returns_without_writing(db, monkeypatch):
+    from backend.finance.daily_history import RUN_LOCK, run_daily_financial_history
+
+    _account(db["cur"], "vip@example.test")
+    h.install(monkeypatch, None, real_database=True)
+    other = psycopg2.connect(db["uri"])
+    with other.cursor() as c:
+        c.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (RUN_LOCK,))
+    try:
+        assert run_daily_financial_history(DAY1) == {"status": "ALREADY_RUNNING", "date": "2026-09-14"}
+        assert _counts(db["cur"])["health"] == 0
+    finally:
+        other.rollback()
+        other.close()
+    assert run_daily_financial_history(DAY1)["recorded"] == 1      # the guard ends with the other run
+

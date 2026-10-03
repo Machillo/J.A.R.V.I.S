@@ -230,25 +230,41 @@ def _job(monkeypatch, identities, *, failing=None):
 
 
 def test_the_job_records_each_workspace_under_its_own_identity(monkeypatch):
-    result, store = _job(monkeypatch, [_identity(WS_A), _identity(WS_B, "owner")])
-    assert result == {"status": "OK", "date": "2026-09-14", "eligible": 2, "recorded": 2, "strategy_changed": 2, "failed": 0}
-    assert sorted(store["health"]) == [(WS_A, DAY1), (WS_B, DAY1)]
-    assert sorted(store["current"]) == [WS_A, WS_B] and sorted(item[0] for item in store["history"]) == [WS_A, WS_B]
+    result, store = _job(monkeypatch, [_identity(WS_A), _identity(WS_B, "owner"), _identity(WS_C, "admin")])
+    assert result == {"status": "OK", "date": "2026-09-14", "eligible": 3, "recorded": 3, "strategy_changed": 2, "failed": 0}
+    assert sorted(store["health"]) == [(WS_A, DAY1), (WS_B, DAY1), (WS_C, DAY1)]
+    # The strategy is kept only where reads kept it (Owner, admin); a VIP gets no new strategy data.
+    assert sorted(store["current"]) == [WS_B, WS_C] and sorted(item[0] for item in store["history"]) == [WS_B, WS_C]
     from backend.finance.category_catalog import owner_context
     assert owner_context() is False                     # no identity leaks out of the job
 
 
-def test_a_failing_workspace_never_writes_and_never_stops_the_others(monkeypatch):
+def test_a_workspace_failing_before_any_write_writes_nothing_and_never_stops_the_others(monkeypatch):
     result, store = _job(monkeypatch, [_identity(WS_A), _identity(WS_B), _identity(WS_C)], failing=WS_B)
     assert result["eligible"] == 3 and result["recorded"] == 2 and result["failed"] == 1
     assert sorted(store["health"]) == [(WS_A, DAY1), (WS_C, DAY1)]
     assert WS_B not in store["current"] and all(item[0] != WS_B for item in store["history"])
 
 
+def test_a_failure_after_the_health_observation_leaves_only_that_idempotent_row(monkeypatch):
+    # The health observation commits on its own; a strategy failure afterwards counts the
+    # workspace as failed and stores no strategy. A rerun the same day converges on one row.
+    from backend.advisor import core
+    from backend.finance import daily_history
+
+    monkeypatch.setattr(daily_history, "compute_advisor_strategy", lambda: (_ for _ in ()).throw(RuntimeError("synthetic")))
+    result, store = _job(monkeypatch, [_identity(WS_A, "owner")])
+    assert result["failed"] == 1 and result["recorded"] == 0
+    assert list(store["health"]) == [(WS_A, DAY1)] and store["current"] == {} and store["history"] == []
+    monkeypatch.setattr(daily_history, "compute_advisor_strategy", core.compute_advisor_strategy)
+    again = daily_history.run_daily_financial_history(DAY1)
+    assert again["failed"] == 0 and list(store["health"]) == [(WS_A, DAY1)] and len(store["history"]) == 1
+
+
 def test_repeated_runs_of_the_same_day_add_no_history(monkeypatch):
     from backend.finance import daily_history
 
-    result, store = _job(monkeypatch, [_identity(WS_A)])
+    result, store = _job(monkeypatch, [_identity(WS_A, "owner")])
     again = daily_history.run_daily_financial_history(DAY1)
     assert again["strategy_changed"] == 0 and again["recorded"] == 1
     assert len(store["history"]) == 1 and list(store["health"]) == [(WS_A, DAY1)]
@@ -259,6 +275,26 @@ def test_the_job_logs_no_financial_data(monkeypatch, caplog):
     assert result["failed"] == 1
     text = caplog.text
     assert "RuntimeError" in text and WS_B not in text and "350000" not in text and "synthetic failure" not in text
+
+
+def test_an_overlapping_run_does_nothing(monkeypatch):
+    from backend.finance import daily_history
+
+    result, store = _job(monkeypatch, [_identity(WS_A, "owner")])
+    store["run_locked"] = True                               # another run holds the guard
+    before = (dict(store["health"]), dict(store["current"]), list(store["history"]))
+    assert daily_history.run_daily_financial_history(DAY1) == {"status": "ALREADY_RUNNING", "date": "2026-09-14"}
+    assert (dict(store["health"]), dict(store["current"]), list(store["history"])) == before
+
+
+def test_the_cron_answers_409_while_a_run_is_in_progress(monkeypatch):
+    from backend.finance import daily_history_routes
+
+    monkeypatch.setenv("NOTIFICATION_CRON_SECRET", "synthetic-secret")
+    monkeypatch.setattr(daily_history_routes, "run_daily_financial_history", lambda: {"status": "ALREADY_RUNNING", "date": "2026-09-14"})
+    with pytest.raises(HTTPException) as error:
+        daily_history_routes.financial_history_cron("synthetic-secret")
+    assert error.value.status_code == 409
 
 
 # Cron authorization: the existing /notifications/cron mechanism.
@@ -273,7 +309,7 @@ def test_the_cron_fails_closed_without_a_configured_secret(monkeypatch):
     assert error.value.status_code == 503
 
 
-@pytest.mark.parametrize("supplied", [None, "", "wrong-secret"])
+@pytest.mark.parametrize("supplied", [None, "", "wrong-secret", "s\xffcret"])
 def test_the_cron_rejects_a_missing_or_wrong_secret(monkeypatch, supplied):
     from backend.finance import daily_history_routes
 
@@ -303,3 +339,32 @@ def test_the_cron_route_is_public_only_behind_its_secret(monkeypatch):
     response = TestClient(main.app).post("/financial-history/cron", headers={"X-Cron-Secret": "wrong"})
     assert response.status_code == 403                 # reaches the secret check, never runs the job
     assert main._is_public_path("/financial-history/cron")
+
+
+def test_the_job_with_the_real_finance_services_writes_only_the_history_tables(monkeypatch):
+    # No input is stubbed here: the job runs every real finance service over the recording
+    # database of the P0.0 GET gate (an empty, migrated database). Any write outside the three
+    # history tables fails, whichever service it comes from.
+    import socket
+    from backend.core import database
+    from backend.finance import daily_history
+    from backend.tests import get_route_harness as gate
+
+    recorder = gate.Recorder()
+    monkeypatch.setattr(database.PostgresConnection, "__init__", lambda self: setattr(self, "_released", False))
+    def execute(self, query, params=()):
+        if "pg_try_advisory_xact_lock" in query:   # the run guard is free
+            return database.PostgresCursorResult(rows=[{"acquired": True}], rowcount=1)
+        return recorder.execute(query)
+    monkeypatch.setattr(database.PostgresConnection, "execute", execute)
+    for name in ("commit", "rollback", "close"):
+        monkeypatch.setattr(database.PostgresConnection, name, lambda self: None)
+    monkeypatch.setattr(socket.socket, "connect", gate._refuse_network)
+    identities = [{**{k: gate.USERS[role][k] for k in ("id", "account_id", "workspace_id", "role")}, "status": "active"}
+                  for role in ("user", "owner")]
+    monkeypatch.setattr(daily_history, "eligible_workspaces", lambda conn: [dict(item) for item in identities])
+
+    result = daily_history.run_daily_financial_history(DAY1)
+    assert result["failed"] == 0 and result["recorded"] == 2
+    tables = {table for _, table in recorder.writes}
+    assert tables == {"financial_health_snapshots", "advisor_current_strategy", "advisor_strategy_history"}

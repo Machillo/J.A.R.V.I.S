@@ -2,11 +2,16 @@
 
 The health observation (`financial_health_snapshots`) and the Advisor Core strategy
 (`advisor_current_strategy`, plus `advisor_strategy_history` when the strategy changes) used to
-be written by GET requests. Reads are pure now; this job keeps both histories, and so their
-future effects (deterioration history signals, strategy history), for every eligible workspace:
+be written by GET requests. Reads are pure now; this job keeps exactly the history those reads
+kept, and so its future effects (deterioration history signals, strategy history):
 
-- VIP workspaces: the read-only equivalent of `require_feature("strategy_vip")`;
-- the Owner workspace: the stored, allowlisted Owner identity (`is_verified_owner_account`).
+- the health observation, for every eligible workspace:
+  - VIP workspaces: the read-only equivalent of `require_feature("strategy_vip")` (their
+    lifecycle reads stored it);
+  - the Owner workspace: the stored, allowlisted Owner identity (`is_verified_owner_account`);
+- the strategy, only for the roles whose reads stored it (the internal advisor routes: the
+  Owner, and an eligible admin). VIP reads computed the strategy without storing it, so the
+  job stores none for them: no new personal data.
 
 Free and Basic never had this history (the lifecycle routes require `strategy_vip`; the
 advisor and deterioration routes are internal), so they are not included.
@@ -26,11 +31,15 @@ from backend.advisor.core import _persist_strategy, compute_advisor_strategy
 from backend.auth.current_user import reset_current_user, set_current_user
 from backend.auth.owner_role import is_verified_owner_account
 from backend.core.database import get_connection
-from backend.core.i18n import DEFAULT_LANGUAGE, use_language
+from backend.core.i18n import DEFAULT_LANGUAGE, reset_dincr_users, set_dincr_users, use_language
 from backend.core.time import costa_rica_today
 from backend.finance.deterioration import record_daily_health_snapshot
 
 logger = logging.getLogger(__name__)
+
+# Roles whose reads stored the strategy before P0.2 (the advisor routes are internal).
+STRATEGY_HISTORY_ROLES = frozenset({"owner", "admin"})
+RUN_LOCK = "daily-financial-history"
 
 _CANDIDATES = """
     SELECT a.id::text AS account_id, w.id::text AS workspace_id, a.legacy_allowed_user_id AS legacy_user_id,
@@ -42,6 +51,7 @@ _CANDIDATES = """
     FROM accounts a
     JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
                      AND w.workspace_key = 'personal:' || a.id::text AND w.status = 'active'
+    JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.account_id = a.id AND wm.status = 'active'
     LEFT JOIN account_subscriptions s ON s.account_id = a.id AND s.status = 'active'
           AND (s.access_source <> 'courtesy' OR (s.expires_at IS NOT NULL AND s.expires_at > NOW()))
     LEFT JOIN plans p ON p.id = s.plan_id
@@ -85,11 +95,16 @@ def eligible_workspaces(conn) -> list[dict[str, Any]]:
 def _record_workspace(identity: dict[str, Any], today: date) -> dict[str, Any]:
     """Health observation, then strategy, for one workspace, inside its own identity."""
     token = set_current_user(identity)
+    # The text context of the app the data belongs to: the public DINCR app for a regular
+    # account (as its /user-product reads), the internal one for the Owner and an admin.
+    users_token = set_dincr_users(identity["role"] == "user")
     try:
         with use_language(DEFAULT_LANGUAGE):
             health = record_daily_health_snapshot(today)
-            persistence = _persist_strategy(compute_advisor_strategy())
+            persistence = (_persist_strategy(compute_advisor_strategy())
+                           if identity["role"] in STRATEGY_HISTORY_ROLES else {"changed": False, "persisted": False})
     finally:
+        reset_dincr_users(users_token)
         reset_current_user(token)
     return {"health": health["health"], "strategy_changed": bool(persistence.get("changed")),
             "strategy_persisted": bool(persistence.get("persisted"))}
@@ -102,16 +117,22 @@ def run_daily_financial_history(today: date | None = None) -> dict[str, Any]:
     a failure is counted and logged by error class only, and never touches another workspace.
     """
     day = today or costa_rica_today()
-    with get_connection() as conn:
-        workspaces = eligible_workspaces(conn)
-    counts = {"eligible": len(workspaces), "recorded": 0, "strategy_changed": 0, "failed": 0}
-    for identity in workspaces:
-        try:
-            result = contextvars.copy_context().run(_record_workspace, identity, day)
-        except Exception as exc:  # isolate the workspace; no financial data in the log
-            counts["failed"] += 1
-            logger.warning("Daily financial history failed for one workspace error=%s", type(exc).__name__)
-            continue
-        counts["recorded"] += 1
-        counts["strategy_changed"] += int(result["strategy_changed"])
+    # One run at a time: a scheduler retry or a second caller gets ALREADY_RUNNING instead of
+    # an overlapping full recompute. The lock lives in this connection's open transaction and
+    # ends with it (transaction-scoped, safe behind the transaction pooler).
+    with get_connection() as guard:
+        acquired = guard.execute("SELECT pg_try_advisory_xact_lock(hashtextextended(%s, 0)) AS acquired", (RUN_LOCK,)).fetchone()
+        if not (acquired or {}).get("acquired"):
+            return {"status": "ALREADY_RUNNING", "date": day.isoformat()}
+        workspaces = eligible_workspaces(guard)
+        counts = {"eligible": len(workspaces), "recorded": 0, "strategy_changed": 0, "failed": 0}
+        for identity in workspaces:
+            try:
+                result = contextvars.copy_context().run(_record_workspace, identity, day)
+            except Exception as exc:  # isolate the workspace; no financial data in the log
+                counts["failed"] += 1
+                logger.warning("Daily financial history failed for one workspace error=%s", type(exc).__name__)
+                continue
+            counts["recorded"] += 1
+            counts["strategy_changed"] += int(result["strategy_changed"])
     return {"status": "OK", "date": day.isoformat(), **counts}
