@@ -1,9 +1,10 @@
 """Owner aliases never reach Users; the Owner keeps his historical resolution (master plan P0.1).
 
 The neutral catalog (`category_catalog.OFFICIAL_CATEGORIES`) is what every account resolves
-against. The Owner's personal aliases and his broker category live in
-`owner_category_compat` and apply only with `owner=owner_context()`, which is True only for a
-request the server authenticated as the Owner. Synthetic values only.
+against. The Owner's personal aliases live in `owner_category_compat` and apply only when the
+server decides the data is the Owner's: `owner_context()` (verified session role) in Owner-only
+modules, `owner_account_context()` (stored Owner identity of the account and workspace) in the
+shared mail pipeline, including background sync. Synthetic values only.
 """
 import ast
 import json
@@ -94,18 +95,44 @@ def test_without_an_authenticated_request_the_context_is_neutral():
 IMPORTS_OWNER_LAYER = re.compile(r"^\s*(from|import)\s+\S*owner_category_compat", re.M)
 
 
-def test_shared_users_code_never_reaches_the_owner_layer():
-    # The Users product (manual entries, mail candidates, statements) resolves only the neutral
-    # catalog: it neither imports the Owner layer nor selects it.
+OWNER_AWARE = {"normalize_category", "expense_type_for_category", "transfer_category", "canonical_candidate",
+               "statement_candidate", "parse_statement_movements", "parse_bac_statement", "parse_multimoney_statement",
+               "detect_category", "_create_candidate_transaction", "_publish_confirmed_financial_input"}
+
+
+def _call_name(node):
+    return getattr(node.func, "id", getattr(node.func, "attr", ""))
+
+
+def test_shared_users_code_selects_the_owner_layer_only_from_the_stored_owner_identity():
+    # The shared Users pipeline (mail candidates, statements, reviews) may carry an `owner` flag,
+    # but only one computed by owner_account_context() from the stored account/workspace of the
+    # data; never a literal, a request value, the session role or the Owner module itself.
     for path in sorted((BACKEND / "user_product").glob("*.py")):
         if path.name.startswith("test_"):
             continue
         source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
         assert not IMPORTS_OWNER_LAYER.search(source), path.name
-        selects_owner = [node.lineno for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Call)
-                         and getattr(node.func, "id", getattr(node.func, "attr", "")) in {"normalize_category", "expense_type_for_category"}
-                         and any(keyword.arg == "owner" or keyword.arg is None for keyword in node.keywords)]
-        assert not selects_owner, (path.name, selects_owner)
+        assert not [n for n in ast.walk(tree) if isinstance(n, ast.Call) and _call_name(n) == "owner_context"], path.name
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "owner" for t in node.targets):
+                assert isinstance(node.value, ast.Call) and _call_name(node.value) == "owner_account_context", (path.name, node.lineno)
+            if isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if _call_name(node) in OWNER_AWARE:  # no **kwargs smuggling an owner flag
+                        assert keyword.arg is not None, (path.name, node.lineno)
+                    if keyword.arg == "owner":
+                        assert isinstance(keyword.value, ast.Name) and keyword.value.id == "owner", (path.name, node.lineno)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                arguments = node.args
+                for arg, default in zip(arguments.kwonlyargs, arguments.kw_defaults):
+                    if arg.arg == "owner":
+                        assert isinstance(default, ast.Constant) and default.value is False, (path.name, node.name)
+                positional = arguments.args[len(arguments.args) - len(arguments.defaults):]
+                for arg, default in zip(positional, arguments.defaults):
+                    if arg.arg == "owner":
+                        assert isinstance(default, ast.Constant) and default.value is False, (path.name, node.name)
     for name in ("parser.py", "statement_reconciliation.py", "popular_pdf.py"):
         source = (BACKEND / "email_monitor" / name).read_text(encoding="utf-8")
         assert not IMPORTS_OWNER_LAYER.search(source) and "owner_context" not in source, name
@@ -138,21 +165,29 @@ def test_the_owners_family_transfer_rule_lives_only_in_his_layer():
     assert owner_transfer_category("pago alquiler") is None
 
 
-# 5–6. Investments: Users get the generic category, the Owner keeps IBKR.
+# 5–6. Investments: generic stock words are generic; a named broker is a shared institution.
 @pytest.mark.parametrize("plan", PLANS)
 def test_a_users_stock_words_resolve_to_the_generic_investment_category(plan):
     with _as(_user(plan)):
-        for word in ("acciones", "bolsa", "bolsa de valores", "IBKR", "interactive brokers"):
+        for word in ("acciones", "bolsa", "bolsa de valores"):
             assert _resolve(word, "transfer") == "Otros", word
             assert _resolve(word) != "IBKR", word
-    assert "IBKR" not in {item["category_name"] for item in OFFICIAL_CATEGORIES}
+
+
+@pytest.mark.parametrize("plan", PLANS)
+def test_an_explicitly_named_broker_is_a_shared_institution(plan):
+    # Like BAC, MultiMoney or Banco Popular: evidence that names the institution resolves it.
+    with _as(_user(plan)):
+        for word in ("ibkr", "IBKR", "interactive brokers", "transferencia a Interactive Brokers"):
+            assert _resolve(word, "transfer") == "IBKR", word
+    assert "IBKR" in {item["category_name"] for item in OFFICIAL_CATEGORIES}
+    assert OWNER_ONLY_CATEGORIES == []
 
 
 def test_the_owner_still_resolves_ibkr():
     with _as(OWNER):
         for word in ("acciones", "bolsa", "ibkr", "IBKR", "interactive brokers"):
             assert _resolve(word, "transfer") == "IBKR", word
-    assert [item["category_name"] for item in OWNER_ONLY_CATEGORIES] == ["IBKR"]
 
 
 # 7–8. BAC: structured evidence still resolves the card; the bare word does not.
@@ -340,3 +375,115 @@ def test_the_scan_path_without_the_owner_role_never_applies_the_family_rule(monk
 def test_an_owner_request_scanning_another_accounts_mail_stays_neutral(monkeypatch):
     # The layer follows whose data is processed, not only who asks.
     assert _owner_scan_category(monkeypatch, OWNER, "envio papa", scanned_user_id=2) != "Familiar"
+
+
+# Owner connected Gmail: ONE shared pipeline; the Owner layer follows the connection's stored identity.
+OWNER_CONNECTION = {"id": 41, "account_id": OWNER["account_id"], "workspace_id": OWNER["workspace_id"],
+                    "legacy_user_id": 1, "display_name": "Owner Prueba", "provider": "gmail"}
+
+
+def _user_connection(plan):
+    user = _user(plan)
+    return {"id": 42, "account_id": user["account_id"], "workspace_id": user["workspace_id"],
+            "legacy_user_id": 900, "display_name": "Persona Prueba", "provider": "gmail"}
+
+
+class _Row:
+    def __init__(self, one=None):
+        self.one = one
+
+    def fetchone(self):
+        return self.one
+
+
+class _MailConn:
+    def __enter__(self): return self
+    def __exit__(self, *_a): return False
+    def commit(self): pass
+
+    def execute(self, query, params=()):
+        if query.lstrip().startswith("SELECT id,status FROM finva_email_messages"):
+            return _Row(None)
+        if query.lstrip().startswith("INSERT INTO finva_email_messages"):
+            return _Row({"id": 9})
+        if query.lstrip().startswith("UPDATE finva_email_messages"):
+            return _Row(None)
+        raise AssertionError(f"unexpected SQL in this test: {query[:60]}")
+
+
+def _gmail_candidate(monkeypatch, connection, description, transaction_type="transfer", category="Transferencias"):
+    """Run the shared Gmail/Outlook ingestion (no request user: background sync or push)."""
+    from backend.auth import owner_role
+    from backend.user_product import gmail_service
+
+    # The stored Owner identity (both roles, allowlist, single Owner, own workspace) is proven on
+    # a real PostgreSQL in tests/test_owner_category_context_pg.py; here it answers for the Owner's
+    # own account and workspace only.
+    monkeypatch.setattr(owner_role, "is_verified_owner_account",
+                        lambda conn, account_id, workspace_id: (account_id, workspace_id) == (OWNER["account_id"], OWNER["workspace_id"]))
+    parsed = {"email_kind": "movement", "transaction_type": transaction_type, "category": category,
+              "description": description, "amount": 10_000.0, "currency": "CRC", "transaction_date": "2026-09-22",
+              "bank": "multimoney", "confidence": 0.9}
+    captured = {}
+    monkeypatch.setattr(gmail_service, "get_connection", lambda: _MailConn())
+    monkeypatch.setattr(gmail_service, "bank_sender_allowed", lambda sender: True)
+    monkeypatch.setattr(gmail_service, "parse_popular_email_document", lambda **kw: None)
+    monkeypatch.setattr(gmail_service, "parse_financial_email", lambda *a, **k: dict(parsed))
+    monkeypatch.setattr(gmail_service, "identify_received_payroll", lambda item, **kw: item)
+    monkeypatch.setattr(gmail_service, "_insert_finva_candidate",
+                        lambda conn, **kw: captured.update(kw["candidate"]) or {"status": "pending"})
+    gmail_service._ingest_message_once(connection, "synthetic-msg", subject="Aviso", sender="avisos@multimoney.com", body="synthetic")
+    return captured["category"]
+
+
+def test_the_owners_connected_gmail_keeps_his_historical_aliases_in_background_sync(monkeypatch):
+    assert owner_context() is False      # no request user: background sync / Gmail push
+    assert _gmail_candidate(monkeypatch, OWNER_CONNECTION, "envio papa") == "Familiar"
+    assert _gmail_candidate(monkeypatch, OWNER_CONNECTION, "compra acciones", category="acciones") == "IBKR"
+    assert _gmail_candidate(monkeypatch, OWNER_CONNECTION, "pago", "expense", category="bac") == "Tarjeta BAC"
+
+
+@pytest.mark.parametrize("plan", PLANS)
+def test_a_regular_connected_gmail_never_consumes_owner_aliases(monkeypatch, plan):
+    connection = _user_connection(plan)
+    assert _gmail_candidate(monkeypatch, connection, "envio papa") != "Familiar"
+    assert _gmail_candidate(monkeypatch, connection, "compra acciones", category="acciones") == "Otros"
+    assert _gmail_candidate(monkeypatch, connection, "pago", "expense", category="bac") != "Tarjeta BAC"
+    assert _gmail_candidate(monkeypatch, connection, "aporte", category="Interactive Brokers") == "IBKR"   # shared institution
+
+
+def test_the_mailbox_identity_decides_not_the_session(monkeypatch):
+    # A regular mailbox processed during an Owner request stays neutral, and the Owner's mailbox
+    # processed during anyone else's request keeps his layer: only stored identity counts.
+    with _as(OWNER):
+        assert _gmail_candidate(monkeypatch, _user_connection("vip"), "envio papa") != "Familiar"
+    with _as({**_user("vip"), "plan": "owner", "access_source": "owner"}):
+        assert _gmail_candidate(monkeypatch, OWNER_CONNECTION, "envio papa") == "Familiar"
+
+
+@pytest.mark.parametrize("forged", [
+    {"role": "owner"}, {"plan": "owner"}, {"access_source": "owner"}, {"is_owner": True}, {"workspace_role": "owner"},
+])
+def test_connection_fields_cannot_claim_the_owner(monkeypatch, forged):
+    # Only the stored account and workspace are consulted, never any other field on the row.
+    assert _gmail_candidate(monkeypatch, {**_user_connection("vip"), **forged}, "envio papa") != "Familiar"
+
+
+STATEMENT = """TARJETA DE CREDITO
+Fecha de corte: 21-AGO-26
+B) Detalle de compras del periodo
+************9001 PERSONA
+100000000001 25-JUL-26 REGALO MAMA CRC 5,340.00
+Total de compras del periodo 5,340.00"""
+
+
+def test_statement_lines_use_the_owner_layer_only_with_the_owner_identity():
+    from backend.user_product.statement_candidate import parse_statement_movements, statement_candidate, statement_hash
+
+    def category(owner):
+        rows = parse_statement_movements("bac", STATEMENT, owner=owner)
+        return statement_candidate(rows[0], bank="bac", document_hash=statement_hash(STATEMENT), movement_index=0,
+                                   statement_text=STATEMENT, owner=owner)["category"]
+
+    assert category(False) == "Sin categoría"
+    assert category(True) == "Familiar"

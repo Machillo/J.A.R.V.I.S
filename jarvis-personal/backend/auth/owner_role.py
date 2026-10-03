@@ -48,6 +48,36 @@ def enabled_owner_email(conn) -> str:
     return enabled[0]
 
 
+def is_verified_owner_account(conn, account_id: object, workspace_id: object) -> bool:
+    """Whether this account and workspace are the enabled Owner's, from stored records only.
+
+    For shared pipelines that run without a session (background mail sync): both stored
+    roles (accounts and allowed_users), an active status, the deployment allowlist and the
+    single-Owner rule must hold, and the workspace must belong to that account. Nothing a
+    client sends is consulted; anything missing or ambiguous is False.
+    """
+    if not account_id or not workspace_id or not owner_allowlist():
+        return False  # no allowlisted Owner in this deployment: nobody qualifies, no query
+    try:
+        owner_email = enabled_owner_email(conn)
+    except RuntimeError:
+        return False
+    # enabled_owner_email proved the allowed_users side (Owner role, active, listed, single);
+    # the account is matched canonically by its own id, role, status and email.
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM accounts a
+        JOIN workspaces w ON w.owner_account_id = a.id
+        WHERE a.id = %s AND w.id = %s
+          AND a.role = %s AND a.status = 'active'
+          AND LOWER(a.primary_email) = %s
+        """,
+        (str(account_id), str(workspace_id), OWNER_ROLE, owner_email),
+    ).fetchone()
+    return bool(row)
+
+
 def session_role(stored_role: str | None, email: str | None) -> str:
     """Role for a path that must not fail (finishing a deletion): an ungated Owner is a User there."""
     return stored_role if stored_role != OWNER_ROLE or owner_enabled(email) else "user"

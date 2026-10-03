@@ -63,9 +63,11 @@ OFFICIAL_CATEGORIES: list[dict[str, Any]] = [
     {"group_name": "COBROS Y VENTAS", "category_name": "Venta de activo", "transaction_type": "asset_sale", "sort_order": 460, "aliases": ["venta de activo", "venta de bien", "venta de vehiculo", "venta de vehículo"]},
 
     # Inversiones
+    # A broker named explicitly is an institution, like BAC or Banco Popular: shared.
+    {"group_name": "INVERSIONES", "category_name": "IBKR", "transaction_type": "transfer", "sort_order": 510, "aliases": ["ibkr", "interactive brokers"]},
     {"group_name": "INVERSIONES", "category_name": "Cripto", "transaction_type": "transfer", "sort_order": 520, "aliases": ["cripto", "crypto", "bitcoin", "btc", "ethereum", "eth", "solana", "sol"]},
-    # The generic investment category: a broker or the stock market is not a category of its own.
-    {"group_name": "INVERSIONES", "category_name": "Otros", "transaction_type": "transfer", "sort_order": 530, "aliases": ["otros", "otra inversion", "otra inversión", "acciones", "bolsa", "ibkr", "interactive brokers"]},
+    # The generic investment category: the stock market in general names no institution.
+    {"group_name": "INVERSIONES", "category_name": "Otros", "transaction_type": "transfer", "sort_order": 530, "aliases": ["otros", "otra inversion", "otra inversión", "acciones", "bolsa"]},
 ]
 
 
@@ -98,6 +100,17 @@ class _Catalog:
 
 _NEUTRAL = _Catalog(OFFICIAL_CATEGORIES)
 _OWNER = _Catalog(_owner_categories())
+
+
+def owner_account_context(conn, account_id: object, workspace_id: object) -> bool:
+    """True only when the account and workspace whose data is processed are the verified Owner's.
+
+    Decided from stored records (`auth.owner_role.is_verified_owner_account`), so it holds in
+    background jobs too; never from a request field, header, plan or workspace role.
+    """
+    from backend.auth.owner_role import is_verified_owner_account
+
+    return is_verified_owner_account(conn, account_id, workspace_id) is True
 
 
 def owner_context() -> bool:
@@ -194,6 +207,16 @@ def normalize_category(value: str | None, transaction_type: str | None = None, *
                 return category
 
     return default_category(transaction_type)
+
+
+def transfer_category(category: str, transaction_type: str | None, clean_text: str, *, owner: bool = False) -> str:
+    """A parsed transfer's category; with `owner=True`, the Owner's historical family rule applies.
+
+    The shared mail parser leaves an unclassified transfer as "Transferencias" for everyone.
+    """
+    if owner is True and transaction_type == "transfer" and category == "Transferencias":
+        return owner_category_compat.owner_transfer_category(clean_text) or category
+    return category
 
 
 def expense_type_for_category(category: str, *, owner: bool = False) -> str:

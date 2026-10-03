@@ -33,8 +33,12 @@ def canonical_candidate(
     subject: str,
     movement_index: int = 0,
     source_provider: str = "gmail",
+    owner: bool = False,
 ) -> dict[str, Any]:
-    """Adapt a producer payload into DINCR's provider-independent candidate shape."""
+    """Adapt a producer payload into DINCR's provider-independent candidate shape.
+
+    `owner` is the server's Owner check of the mailbox's own account (never a client value).
+    """
     transaction_type = str(parsed.get("transaction_type") or "")
     original_currency = str(parsed.get("original_currency") or "").upper() or None
     # Parser amounts are normalized to CRC today; preserve the source currency
@@ -58,7 +62,7 @@ def canonical_candidate(
         "transaction_type": transaction_type,
         "movement_direction": direction,
         "movement_kind": _movement_kind(parsed),
-        "category": normalize_category(parsed.get("category"), transaction_type),
+        "category": normalize_category(parsed.get("category"), transaction_type, owner=owner),
         "bank": str(parsed.get("bank") or "unknown"),
         "source_account_label": str(parsed.get("account") or "")[:200] or None,
         "source_account_reference": str(

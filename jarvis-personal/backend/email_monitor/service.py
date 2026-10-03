@@ -13,8 +13,7 @@ from fastapi import HTTPException, status
 from backend.auth.current_user import get_current_user, get_current_user_id, require_roles
 from backend.core.database import get_connection
 from backend.finance import receivable_semantics
-from backend.finance.category_catalog import normalize_category, owner_context
-from backend.finance.owner_category_compat import owner_transfer_category
+from backend.finance.category_catalog import normalize_category, owner_context, transfer_category
 from backend.email_monitor.parser import (
     fingerprint_candidate,
     fingerprint_email,
@@ -1312,6 +1311,7 @@ def scan_email_text(
                         user_id=user_id,
                         workspace_id=workspace_id,
                         statement_id=int(statement_row["id"]),
+                        owner=_owner_layer_for(user_id),
                     )
                 except HTTPException as exc:
                     if parsed.get("bank") not in {"bac", "popular"} or exc.status_code != 422:
@@ -1385,9 +1385,8 @@ def scan_email_text(
                 bank=parsed["bank"],
             )
         owner = _owner_layer_for(user_id)
-        if owner and parsed["transaction_type"] == "transfer" and parsed["category"] == "Transferencias":
-            # The Owner's historical family rule, removed from the shared parser (P0.1).
-            parsed["category"] = owner_transfer_category(normalize_mail_text(raw_description)) or parsed["category"]
+        parsed["category"] = transfer_category(parsed["category"], parsed["transaction_type"],
+                                               normalize_mail_text(raw_description), owner=owner)
         parsed["category"] = normalize_category(parsed["category"], parsed["transaction_type"], owner=owner)
 
         if _internal_mirror_exists(conn, workspace_id, parsed):

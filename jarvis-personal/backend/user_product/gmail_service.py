@@ -25,13 +25,13 @@ from backend.auth.current_user import (
 )
 from backend.core import observability
 from backend.core.database import get_connection
-from backend.email_monitor.parser import parse_financial_email
+from backend.email_monitor.parser import normalize as normalize_mail_text, parse_financial_email
 from backend.email_monitor.parser_identity import for_account_holder
 from backend.email_monitor.popular_pdf import parse_popular_email_document
 from backend.email_monitor.payroll_statement import parse_ccss_order_patronal
 from backend.email_monitor.sender_trust import single_sender_address as _single_sender_address
 from backend.email_monitor.gmail_content import collect_attachments, extract_pdf_attachment_text, plain_text_from_html
-from backend.finance.category_catalog import normalize_category
+from backend.finance.category_catalog import normalize_category, owner_account_context, transfer_category
 from backend.user_product.financial_candidate import canonical_candidate
 from backend.user_product.candidate_currency import native_money, transaction_amounts
 from backend.user_product.financial_identity import discover_candidate_account
@@ -395,9 +395,11 @@ def list_gmail_emails(
     ]}
 
 
-def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[str, Any], money: dict[str, Any]) -> int:
+def _create_candidate_transaction(
+    conn, candidate: dict[str, Any], values: dict[str, Any], money: dict[str, Any], *, owner: bool = False,
+) -> int:
     # `money` comes from candidate_currency.transaction_amounts: never the reviewed amount as is.
-    category = normalize_category(values["category"], values["transaction_type"])
+    category = normalize_category(values["category"], values["transaction_type"], owner=owner)
     source = "finva_statement" if candidate.get("source_type") == "statement" else "finva_gmail"
     note = (
         "Confirmado por el usuario desde un estado de cuenta."
@@ -424,7 +426,7 @@ def _create_candidate_transaction(conn, candidate: dict[str, Any], values: dict[
 
 def _publish_confirmed_financial_input(
     conn, candidate: dict[str, Any], values: dict[str, Any], transaction_id: int, allowed_user_id: int,
-    money: dict[str, Any],
+    money: dict[str, Any], *, owner: bool = False,
 ) -> None:
     """Publish the privacy-safe Phase 1 boundary in the same DB transaction.
 
@@ -436,7 +438,7 @@ def _publish_confirmed_financial_input(
     reference allowed_users. ``candidate["legacy_user_id"]`` is a users.id
     (legacy finance FK) and must not be used here.
     """
-    category = normalize_category(values["category"], values["transaction_type"])
+    category = normalize_category(values["category"], values["transaction_type"], owner=owner)
     payload = {
         "transaction_id": transaction_id,
         "transaction_date": str(values["transaction_date"]),
@@ -586,9 +588,11 @@ def review_gmail_candidate(candidate_id: int, action: str, corrections: dict[str
             key for key, value in corrections.items()
             if _corrected(key, value, original.get(key))
         )
-        transaction_id = _create_candidate_transaction(conn, candidate, values, money)
-        _publish_confirmed_financial_input(conn, candidate, values, transaction_id, get_current_user_id(), money)
-        category = normalize_category(values["category"], values["transaction_type"])
+        # Owner compatibility follows the candidate's own stored account, never a request field.
+        owner = owner_account_context(conn, candidate["account_id"], candidate["workspace_id"])
+        transaction_id = _create_candidate_transaction(conn, candidate, values, money, owner=owner)
+        _publish_confirmed_financial_input(conn, candidate, values, transaction_id, get_current_user_id(), money, owner=owner)
+        category = normalize_category(values["category"], values["transaction_type"], owner=owner)
         # A correction of a USD movement updates its original amount; the stored
         # (matching-only) amount keeps its meaning.
         from_original = native_currency != str(candidate.get("currency") or "CRC").upper()
@@ -1013,6 +1017,9 @@ def _ingest_message_once(
     transaction_id = None
 
     with get_connection() as conn:
+        # Owner compatibility follows the connection's own stored account and workspace
+        # (bound at OAuth), so it holds in background sync and push too.
+        owner = owner_account_context(conn, connection["account_id"], connection["workspace_id"])
         existing = conn.execute(
             "SELECT id,status FROM finva_email_messages WHERE connection_id=%s AND provider_message_id=%s",
             (int(connection["id"]), message_id),
@@ -1095,7 +1102,7 @@ def _ingest_message_once(
         elif kind == "statement":
             document_text = attachment_text or financial_text
             document_hash = statement_hash(document_text)
-            movements = parse_statement_movements(str(parsed.get("bank") or "unknown"), document_text)
+            movements = parse_statement_movements(str(parsed.get("bank") or "unknown"), document_text, owner=owner)
             document_status = (
                 "candidates_ready" if movements else
                 "unsupported" if parsed.get("bank") not in {"bac", "multimoney", "popular"} else "empty"
@@ -1117,7 +1124,7 @@ def _ingest_message_once(
                 candidate = statement_candidate(
                     movement, bank=str(parsed.get("bank") or "unknown"),
                     document_hash=document_hash, movement_index=index,
-                    statement_text=document_text,
+                    statement_text=document_text, owner=owner,
                 )
                 resolutions.append(_insert_finva_candidate(
                     conn, email_message_id=int(email_row["id"]), connection=connection,
@@ -1131,11 +1138,16 @@ def _ingest_message_once(
                 reason = "Estado de cuenta detectado, pero el formato todavía no tiene filas firmadas compatibles."
             conn.execute("UPDATE finva_email_messages SET parse_reason=%s WHERE id=%s", (reason, int(email_row["id"])))
         elif kind == "movement" and parsed.get("amount") and parsed.get("transaction_type"):
+            parsed = {**parsed, "category": transfer_category(
+                parsed.get("category"), parsed.get("transaction_type"),
+                normalize_mail_text(str(parsed.get("description") or "")), owner=owner,
+            )}
             candidate = canonical_candidate(
                 parsed,
                 provider_message_id=message_id,
                 subject=subject,
                 source_provider=_mail_provider(connection),
+                owner=owner,
             )
             resolution = _insert_finva_candidate(
                 conn, email_message_id=int(email_row["id"]), connection=connection,
