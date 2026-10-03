@@ -46,7 +46,6 @@ def test_unknown_text_falls_back_to_the_default_of_its_type():
     ("Airbnb Cuenca", "expense", "Viajes y turismo"),
     ("Viajes", "transfer", "Viajes"),                 # saving for a trip stays the savings goal
     ("viajes", "transfer", "Viajes"),
-    ("ecuador", "transfer", "Viajes"),
     ("Venta de activo", "asset_sale", "Venta de activo"),
     ("Cuentas por cobrar", "receivable_payment", "Cuentas por cobrar"),
 ])
@@ -86,3 +85,9 @@ def test_text_import_and_chat_import_never_default_to_compras():
     from backend.transactions.finance_input import _detect_category
     assert _detect_category("XYZ 5000", "expense") == "Sin categoría"
     assert chat_category("algo raro") == "Sin categoría"
+
+
+def test_a_personal_destination_is_an_alias_for_the_owner_only():
+    # P0.1: the Owner's trips are not catalog words for other accounts.
+    assert normalize_category("ecuador", "transfer") == "Sin categoría"
+    assert normalize_category("ecuador", "transfer", owner=True) == "Viajes"

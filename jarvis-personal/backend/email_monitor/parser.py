@@ -675,8 +675,8 @@ def infer_category(text: str, transaction_type: str, email_kind: str = "movement
     if transaction_type == "transfer":
         if "terapia" in clean:
             return "Salud"
-        if "papa" in clean or "papá" in clean:
-            return "Familiar"
+        # Neutral for every account: the Owner's own family rule lives in
+        # backend.finance.owner_category_compat and applies only in his scan.
         return "Transferencias"
 
     rules = [

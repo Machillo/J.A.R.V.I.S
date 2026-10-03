@@ -1,6 +1,6 @@
 from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
-from backend.finance.category_catalog import normalize_category
+from backend.finance.category_catalog import normalize_category, owner_context
 
 
 def _saved_exchange_rate(conn, workspace_id: str, transaction_date: str, currency: str = "USD"):
@@ -68,7 +68,7 @@ def create_transaction(
 ):
     user_id = get_current_user_id()
     workspace_id = get_current_workspace_id()
-    category = normalize_category(category, transaction_type)
+    category = normalize_category(category, transaction_type, owner=owner_context())
     currency = (original_currency or "").upper()
 
     with get_connection() as conn:
@@ -242,7 +242,7 @@ def update_transaction(
     exchange_rate: float | None = None
 ):
     workspace_id = get_current_workspace_id()
-    category = normalize_category(category, transaction_type)
+    category = normalize_category(category, transaction_type, owner=owner_context())
 
     with get_connection() as conn:
         existing = conn.execute(

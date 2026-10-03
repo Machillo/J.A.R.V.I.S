@@ -7,7 +7,7 @@ from backend.core.database import get_connection
 from backend.auth.current_user import get_current_user_id, get_current_workspace_id
 from backend.finance import balance_movements, payroll_receipts
 from backend.finance.debt_automation import schedule_automation_enabled
-from backend.finance.category_catalog import normalize_category, expense_type_for_category
+from backend.finance.category_catalog import normalize_category, expense_type_for_category, owner_context
 
 
 def _as_float(value, default: float = 0.0) -> float:
@@ -1088,9 +1088,10 @@ def add_expense(
 ):
     user_id = get_current_user_id()  # legacy compatibility during migration
     workspace_id = get_current_workspace_id()
-    category = normalize_category(category, "expense")
+    owner = owner_context()
+    category = normalize_category(category, "expense", owner=owner)
     if not expense_type or expense_type == "variable":
-        expense_type = expense_type_for_category(category)
+        expense_type = expense_type_for_category(category, owner=owner)
 
     with get_connection() as conn:
         cursor = conn.execute(
@@ -2083,9 +2084,10 @@ def update_expense(
     description: str = ""
 ):
     workspace_id = get_current_workspace_id()
-    category = normalize_category(category, "expense")
+    owner = owner_context()
+    category = normalize_category(category, "expense", owner=owner)
     if not expense_type or expense_type == "variable":
-        expense_type = expense_type_for_category(category)
+        expense_type = expense_type_for_category(category, owner=owner)
 
     with get_connection() as conn:
         expense = conn.execute(
