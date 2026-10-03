@@ -127,7 +127,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const isPersonal = ownerBridgeMode || currentUser?.role === "owner" || currentUser?.role === "admin";
+    const isPersonal = ownerBridgeMode || currentUser?.role === "owner";
     document.title = isPersonal ? "DINCR Owner" : "DINCR";
   }, [ownerBridgeMode, currentUser]);
 
@@ -246,11 +246,11 @@ export default function App() {
     return <BootScreen />;
   }
 
-  if (currentUser.role !== "owner" && currentUser.role !== "admin" && releasePolicy?.required) {
+  if (currentUser.role !== "owner" && releasePolicy?.required) {
     return <ReleaseUpdateNotice policy={releasePolicy} required onRefresh={refreshReleasePolicy} />;
   }
 
-  if (currentUser.role !== "owner" && currentUser.role !== "admin" && currentUser.legal?.required) {
+  if (currentUser.role !== "owner" && currentUser.legal?.required) {
     return <LegalConsent user={currentUser} onAccepted={setCurrentUser} />;
   }
 
@@ -258,7 +258,7 @@ export default function App() {
     return <ProfileSetup user={currentUser} onComplete={setCurrentUser} />;
   }
 
-  if (currentUser.role === "owner" || currentUser.role === "admin") {
+  if (currentUser.role === "owner") {
     const personalApp = <Suspense fallback={<BootScreen />}><PersonalApp /></Suspense>;
     if (!isDincrDistribution) return personalApp;
     return (

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from backend.email_monitor.models import EmailCandidateBulkDecisionRequest, EmailCandidateClassifyRequest, EmailCandidateDecisionRequest, EmailStatementReconcileRequest, EmailTextScanRequest
 from backend.email_monitor.statement_reconciliation import reconcile_statement
 from backend.finance.category_catalog import owner_context
-from backend.auth.current_user import get_current_user_id, require_roles
+from backend.auth.current_user import get_current_user_id, require_owner, require_roles
 from backend.core.database import get_connection
 from backend.email_monitor.service import (
     _workspace_id_for_user,
@@ -22,11 +22,11 @@ router = APIRouter(prefix="/email-monitor", tags=["Email Monitor"])
 
 @router.post("/statements/reconcile")
 def email_monitor_statement_reconcile(request: EmailStatementReconcileRequest):
-    require_roles("owner", "admin")
+    require_owner()
     user_id = get_current_user_id()
     with get_connection() as conn:
         workspace_id = _workspace_id_for_user(conn, user_id)
-        # The Owner's own statement, in his verified session (an admin stays neutral).
+        # The Owner's own statement, in his verified session.
         result = reconcile_statement(conn, user_id=user_id, workspace_id=workspace_id, statement_id=request.statement_id,
                                      owner=owner_context())
         conn.commit()

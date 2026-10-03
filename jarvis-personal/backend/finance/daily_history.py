@@ -12,9 +12,8 @@ kept, and so its future effects (deterioration history signals, strategy history
 - the strategy, only for the verified Owner. VIP reads computed the strategy without storing
   it, so the job stores none for them: no new personal data.
 
-DINCR's identities are Free, Basic, VIP and the single Owner. A stored "admin" role is a
-legacy value here: it grants nothing in this job (an admin account is eligible only through
-its own VIP plan, and then exactly like any VIP), and it is never treated as the Owner.
+DINCR's identities are Free, Basic, VIP and the single Owner: any account that is not the
+verified Owner is eligible only through its own VIP plan, exactly like any VIP.
 
 Free and Basic never had this history (the lifecycle routes require `strategy_vip`; the
 advisor and deterioration routes are internal), so they are not included.
@@ -84,7 +83,7 @@ def eligible_workspaces(conn) -> list[dict[str, Any]]:
             if row["access_source"] == "self_service" and row["plan_code"] in {"basic", "vip"} \
                     and not has_store_entitlement(conn, row["account_id"], row["plan_code"]):
                 continue
-            role = "user"  # any other stored role (incl. legacy "admin") is a plain VIP here
+            role = "user"  # every account that is not the verified Owner is a plain VIP here
         eligible.append({
             "id": int(row["legacy_user_id"]),
             "account_id": row["account_id"],

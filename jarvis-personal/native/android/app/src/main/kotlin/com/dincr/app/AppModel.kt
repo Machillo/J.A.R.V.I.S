@@ -93,7 +93,7 @@ sealed interface Phase {
     data object LoadingIdentity : Phase
     data class IdentityError(val message: String, val deletionPending: Boolean = false) : Phase
     data class UpdateRequired(val policy: ReleasePolicy) : Phase
-    data object OwnerNotSupported : Phase
+    data object UnsupportedRole : Phase
     data object LegalRequired : Phase
     data object ProfileSetup : Phase
     data object ChoosePlan : Phase
@@ -261,7 +261,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         val policy = withTimeoutOrNull(8_000) { runCatching { api.releasePolicy(appVersion) }.getOrNull() } ?: return
         _release.value = policy
         val current = _phase.value
-        if (policy.isRequired && _profile.value?.usesInternalAppOnly != true) _phase.value = Phase.UpdateRequired(policy)
+        if (policy.isRequired && _profile.value?.hasUnsupportedRole != true) _phase.value = Phase.UpdateRequired(policy)
         else if (current is Phase.UpdateRequired) { if (_profile.value != null) apply(_profile.value!!) else _phase.value = if (sessions.hasSession) Phase.LoadingIdentity else Phase.SignedOut }
     }
 
@@ -381,9 +381,9 @@ class AppModel(application: Application) : AndroidViewModel(application) {
         if (previous?.id != profile.id) appLock.attach(profile.id.toString())
         profile.subscription?.accessNotice?.let { notice -> notice.message?.let { _notice.value = listOfNotNull(notice.title, it).joinToString(". ") } }
         val release = _release.value
-        _phase.value = if (release?.isRequired == true && !profile.usesInternalAppOnly) Phase.UpdateRequired(release) else when (IdentityGate.of(profile)) {
-            // Owner boundary (CLAUDE.md §4.A): admin sessions are not served; Owner uses the public app.
-            IdentityGate.INTERNAL_ONLY -> Phase.OwnerNotSupported
+        _phase.value = if (release?.isRequired == true && !profile.hasUnsupportedRole) Phase.UpdateRequired(release) else when (IdentityGate.of(profile)) {
+            // Only "user" and the single Owner are served; any other role is refused, never promoted.
+            IdentityGate.UNSUPPORTED_ROLE -> Phase.UnsupportedRole
             IdentityGate.LEGAL_REQUIRED -> Phase.LegalRequired
             IdentityGate.PROFILE_SETUP -> Phase.ProfileSetup
             IdentityGate.CHOOSE_PLAN -> Phase.ChoosePlan

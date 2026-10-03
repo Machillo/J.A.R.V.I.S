@@ -37,7 +37,7 @@ class JarvisAccessTest {
         assertEquals(PlanTier.VIP, owner.planTier)
         assertTrue(Feature.entries.all { owner.planTier.allows(it) })
         // …and admin still stays out of the public app.
-        assertEquals(IdentityGate.INTERNAL_ONLY, IdentityGate.of(profile("admin", "vip")))
+        assertEquals(IdentityGate.UNSUPPORTED_ROLE, IdentityGate.of(profile("admin", "vip")))
     }
 
     @Test fun noClientStateOpensJarvis() {
@@ -69,9 +69,9 @@ class JarvisAccessTest {
         assertTrue(owner.isOwner && Jarvis.isAvailable(owner))
         assertEquals("vip", owner.subscription?.plan)
         assertEquals("owner", owner.subscription?.accessSource)
-        val admin = api(PlanTier.VIP, FakeBackend.Role.ADMIN).me()
+        val admin = api(PlanTier.VIP, FakeBackend.Role.LEGACY_ADMIN).me()
         assertFalse(Jarvis.isAvailable(admin))
-        assertEquals(IdentityGate.INTERNAL_ONLY, IdentityGate.of(admin))
+        assertEquals(IdentityGate.UNSUPPORTED_ROLE, IdentityGate.of(admin))
         PlanTier.entries.forEach { plan ->
             val user = api(plan).me()
             assertEquals("user", user.role)

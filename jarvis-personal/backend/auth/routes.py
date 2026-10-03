@@ -10,7 +10,7 @@ from backend.auth.service import (
     delete_allowed_user,
     delete_current_account,
 )
-from backend.auth.current_user import get_current_user, require_roles
+from backend.auth.current_user import get_current_user, require_owner
 from backend.auth.saas import complete_onboarding, complete_profile_setup, enrich_identity, get_available_plans, get_onboarding_status, select_plan
 
 
@@ -30,13 +30,13 @@ def health():
 
 @router.get("/allowed-users")
 def allowed_users():
-    require_roles("owner", "admin")
+    require_owner()
     return get_allowed_users()
 
 
 @router.post("/allowed-users")
 def add_allowed_user(request: AllowedUserRequest):
-    require_roles("owner", "admin")
+    require_owner()
     return create_allowed_user(
         email=request.email,
         role=request.role,
@@ -46,7 +46,7 @@ def add_allowed_user(request: AllowedUserRequest):
 
 @router.delete("/allowed-users/{user_id}")
 def remove_allowed_user(user_id: int):
-    require_roles("owner", "admin")
+    require_owner()
     return delete_allowed_user(user_id)
 
 

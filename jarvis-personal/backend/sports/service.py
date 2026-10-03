@@ -119,7 +119,7 @@ def get_sports_calendar_summary(scope: str | dict[str, Any] = "all") -> dict[str
 
 
 def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
-    """Creates one daily sports digest push job for owner/admin users.
+    """Creates one daily sports digest push job for the verified Owner.
 
     This is intentionally conservative: it schedules a single concise digest per day,
     instead of spamming one notification per uncertain web result.
@@ -143,10 +143,10 @@ def enqueue_owner_sports_digest_notifications() -> dict[str, Any]:
                 FROM allowed_users au
                 JOIN accounts a ON a.legacy_allowed_user_id = au.id
                 JOIN workspaces w ON w.owner_account_id = a.id AND w.workspace_type = 'personal'
-                WHERE au.role IN ('owner', 'admin') AND au.status = 'active'
+                WHERE au.role = 'owner' AND au.status = 'active'
                 """
             ).fetchall()
-            if row["role"] != "owner" or owner_enabled(row["email"])
+            if owner_enabled(row["email"])
         ]
 
         created = 0

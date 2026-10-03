@@ -56,9 +56,10 @@ class JarvisAgendaTest {
         assertTrue(url, url.endsWith("/jarvis/calendar/upcoming?days=45"))
     }
 
-    @Test fun onlyTheOwnerAndAdminReachTheAgendaEndpoint() = runTest {
+    @Test fun onlyTheOwnerReachesTheAgendaEndpoint() = runTest {
         assertEquals(2, fixture().second.jarvisUpcomingEvents().size)
-        fixture(FakeBackend.Role.ADMIN).second.jarvisUpcomingEvents()
+        val legacy = runCatching { fixture(FakeBackend.Role.LEGACY_ADMIN).second.jarvisUpcomingEvents() }.exceptionOrNull() as ApiError
+        assertEquals(ApiError.Kind.FORBIDDEN, legacy.kind)
         PlanTier.entries.forEach { plan ->
             val error = runCatching { fixture(FakeBackend.Role.USER, plan).second.jarvisUpcomingEvents() }.exceptionOrNull() as ApiError
             assertEquals(ApiError.Kind.FORBIDDEN, error.kind)

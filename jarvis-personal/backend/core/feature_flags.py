@@ -127,7 +127,8 @@ def _request_flag(method: str, path: str):
 
 
 def disabled_feature_for_request(method: str, path: str, user: dict | None = None):
-    if user and user.get("role") in {"owner", "admin"}:
+    # Only the verified Owner (the server-derived session role) is exempt from a kill-switch.
+    if user and user.get("role") == "owner":
         return None
     flag_keys = _request_flags(method, path)
     if not flag_keys:

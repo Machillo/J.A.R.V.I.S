@@ -62,7 +62,7 @@ Only the Supabase **anon/publishable** key is ever configured in the apps (git-i
 
 | Endpoint | Request | Response fields read (nullable?) | Errors handled |
 |---|---|---|---|
-| `GET /auth/me` | — | `id` **int**; `email`; `display_name`?; `role` (`user`/`admin`/`owner`); `plan_selected`, `profile_setup_completed` (always bool; missing → unknown → gate stays closed); `base_currency` (backend defaults `CRC`); `number_format`; `currency_placement`; `subscription.plan`/`status`?; `legal.required`? (`entry_currencies`, `enabled_currencies` are not used: the prototype records in the base currency only) | 401 → refresh/sign out; 403; 409 `account_deletion_pending` (object detail, message shown) |
+| `GET /auth/me` | — | `id` **int**; `email`; `display_name`?; `role` (`user`/`owner`; any other value is refused by the app); `plan_selected`, `profile_setup_completed` (always bool; missing → unknown → gate stays closed); `base_currency` (backend defaults `CRC`); `number_format`; `currency_placement`; `subscription.plan`/`status`?; `legal.required`? (`entry_currencies`, `enabled_currencies` are not used: the prototype records in the base currency only) | 401 → refresh/sign out; 403; 409 `account_deletion_pending` (object detail, message shown) |
 | `POST /auth/profile-setup` | `display_name` (1–80), `usage_goal` (`debt`,`save`,`partner`,`life_change`,`control`,`explore`), `base_currency` (`CRC`/`USD`), `enabled_currencies` (`CRC`/`USD`), `number_format`, `currency_placement`, `selected_financial_institutions` (8 known ids) | `{"status","profile"}`; `profile` as `/auth/me` | 422 (list detail → generic copy). Plain UPDATE: a repeat submit is harmless; the app also blocks double taps |
 | `GET /user-product/free/dashboard` | — | `month`; `income`, `expenses` (numbers, base currency); `debt_paid`, `debt_balance`, `balance`, `available_after_commitments` (read as optional; backend always sends them); `categories[{category, amount}]`; `monthly_history` (always 6 months, oldest first, zero-filled) | 401, 402, 403, 5xx |
 | `GET /user-product/free/movements` | no query parameters (whole history) | rows: `movement_id` (`origin:id`), `source_id` int, `origin`, `transaction_date` (`YYYY-MM-DD`, may be null), `description`?, `amount` (positive, base currency), `transaction_type` (`income`/`expense` only), `category`?, `notes`, `editable`; `original_amount`?, `original_currency`?, `exchange_rate`? (#269 manual entries, #273 mail transactions) | 401, 402, 403, 5xx |
@@ -71,7 +71,7 @@ Only the Supabase **anon/publishable** key is ever configured in the apps (git-i
 | `DELETE /user-product/free/movements/{id}` | — | `{"status","movement_id"}` | 404 (already gone → list refreshed), 422, 503 |
 
 `/free/*` serves Free, Basic and VIP (feature minimum `free`). The Owner uses it at VIP level
-(plus the native JARVIS UI, Owner only); admin sessions stop at a notice.
+(plus the native JARVIS UI, Owner only); a session with any other role stops at a notice.
 
 **JARVIS chat (Owner, J1).** `POST /jarvis/chat` `{"message"}` → an untyped dict: `message` (required,
 shown as is), `intent`, `status`, `pending`, `action_type`, `data` (shape per intent, read only for
@@ -132,7 +132,7 @@ submission is retried). The plan gate in the app mirrors `BUILTIN_FEATURE_MIN_PL
   against their declared savings (unknown stays unknown); `PUT` takes `target_months` and/or
   `current_amount` (the declared savings). The Owner keeps his historical model (`scope: "owner"`).
 - Owner "Análisis financiero" (JARVIS section): `GET /transactions/analysis/summary`,
-  `/finance/engine`, `/finance/net-worth` (owner/admin routes). `/finance/net-worth` stores a net-worth
+  `/finance/engine`, `/finance/net-worth` (Owner routes). `/finance/net-worth` stores a net-worth
   snapshot on read (historical Owner behaviour).
 
 ## Currency edits (#269, #273)

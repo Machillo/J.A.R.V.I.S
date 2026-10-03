@@ -46,7 +46,7 @@ final class JarvisAccessUITests: XCTestCase {
 
     func testAdminGetsNeitherThePublicAppNorJarvis() {
         let app = launch(role: "admin", plan: "vip")
-        XCTAssertTrue(app.staticTexts["Esta cuenta usa DINCR Owner"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Esta cuenta no está disponible en DINCR"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.tabBars.firstMatch.exists)
         XCTAssertFalse(element("profile.jarvis", in: app).exists)
     }

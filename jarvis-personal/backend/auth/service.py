@@ -23,7 +23,9 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 SUPABASE_ADMIN_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SECRET_KEY")
 
-VALID_ROLES = {"owner", "admin", "user", "viewer"}
+# Roles an allowlist request may assign. DINCR's identities are Free/Basic/VIP (role "user",
+# the plan decides the tier) and the single Owner, which is never assigned through the API.
+VALID_ROLES = {"user"}
 VALID_STATUSES = {"active", "blocked", "pending"}
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ DELETION_STAGES = (
     "COMMIT", "MAIL_TOKEN_REVOKE", "SUPABASE_AUTH_DELETE", "FINALIZE", "DONE",
 )
 # allowed_users tombstone while a self-deletion is in progress. Internal only:
-# not part of VALID_STATUSES, so the admin API can never set it.
+# not part of VALID_STATUSES, so the allowlist API can never set it.
 DELETION_PENDING_STATUS = "deletion_pending"
 IDENTITY_REJECTED_ES = "No pudimos iniciar sesión con esta cuenta. Contactá a soporte."
 IDENTITY_REJECTED_EN = "We couldn't sign in with this account. Please contact support."
@@ -238,7 +240,7 @@ def create_allowed_user(email: str, role: str = "user", status: str = "active"):
     normalized_email = _normalize_email(email)
 
     # Owner is provisioned through trusted server configuration/database operations,
-    # never through an administrative request body (including from an admin account).
+    # never through a request body.
     if role == "owner":
         raise HTTPException(status_code=403, detail="El rol owner no se asigna desde la API.")
 

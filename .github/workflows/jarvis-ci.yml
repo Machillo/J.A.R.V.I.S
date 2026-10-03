@@ -58,6 +58,7 @@ jobs:
       - run: npm run test:mail-currency
       - run: npm run test:bank-accounts
       - run: npm run test:phase0j
+      - run: npm run test:single-owner
       - run: npm run test:phase0h
       - run: npm run test:unified-movements
       - run: npm run test:currency

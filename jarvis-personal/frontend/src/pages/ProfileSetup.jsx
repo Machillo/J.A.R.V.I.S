@@ -85,7 +85,7 @@ function BrandArt({ isJarvis }) {
 }
 
 export default function ProfileSetup({ user, onComplete }) {
-  const isJarvis = user?.role === "owner" || user?.role === "admin";
+  const isJarvis = user?.role === "owner";
   const product = "DINCR";
   const platform = Capacitor.getPlatform();
   const supported = (code) => CURRENCIES.some((item) => item.code === code);

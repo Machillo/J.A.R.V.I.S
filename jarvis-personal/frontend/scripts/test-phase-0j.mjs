@@ -24,7 +24,7 @@ const infoPlist = readFileSync(new URL("../ios-dincr/App/App/Info.plist", import
 const iosProductScript = readFileSync(new URL("./ios-product.mjs", import.meta.url), "utf8");
 
 assert.match(app, /<FinvaAppLock/, "authenticated DINCR is protected by the local lock gate");
-assert.match(app, /if \(!isDincrDistribution\) return personalApp;[\s\S]*<FinvaAppLock userId=\{currentUser\.id\}/, "DINCR protects owner and admin sessions");
+assert.match(app, /if \(!isDincrDistribution\) return personalApp;[\s\S]*<FinvaAppLock userId=\{currentUser\.id\}/, "DINCR protects the Owner session");
 assert.match(app, /import \{ isDincrDistribution \} from "\.\/lib\/appIdentity"/, "owner protection is scoped to the DINCR distribution");
 assert.match(settings, /Bloquear ahora/, "settings provide a manual lock action");
 assert.doesNotMatch(settings, /<select/, "users cannot weaken the DINCR-owned timeout");

@@ -2,13 +2,13 @@ import Foundation
 
 // The fixture backend's Plan tab, Cuentas and JARVIS analysis routes (Debug demos and tests only).
 // Same shapes and access rules as FastAPI: `/vip/*` needs VIP; `/jarvis/*`, `/transactions/*` and
-// `/finance/*` admit only owner and admin (INTERNAL_ONLY); Strategy and Salvavidas answer the Owner
+// `/finance/*` admit only the verified Owner (INTERNAL_ONLY); Strategy and Salvavidas answer the Owner
 // model only to the server's Owner role. Every name and amount is invented (CLAUDE.md §4.F); the
 // figures are fixed samples or simple sums of the fixture's own rows.
 extension FixtureBackend {
     private var role: String { profile["role"] as? String ?? "user" }
     private var isOwnerRole: Bool { role == "owner" }
-    private var isInternalRole: Bool { ["owner", "admin"].contains(role) }
+    private var isInternalRole: Bool { role == "owner" }
 
     /// The routes of this file, or nil to keep routing.
     func planRoute(_ method: String, _ path: String, _ query: [String: String], _ body: [String: Any]) -> Answer? {

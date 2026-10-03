@@ -30,7 +30,7 @@ import Testing
         #expect(owner.planTier == .vip)
         #expect(Feature.allCases.allSatisfy { owner.planTier.allows($0) })
         // …and admin still stays out of the public app.
-        #expect(IdentityGate.of(profile(role: "admin", plan: "vip")) == .internalOnly)
+        #expect(IdentityGate.of(profile(role: "admin", plan: "vip")) == .unsupportedRole)
     }
 
     @Test func noClientStateOpensJarvis() throws {
@@ -62,8 +62,8 @@ import Testing
         let owner = try await FixtureBackend.service(FixtureBackend(role: .owner, latency: .zero)).me()
         #expect(owner.isOwner && Jarvis.isAvailable(to: owner))
         #expect(owner.subscription?.plan == "vip" && owner.subscription?.accessSource == "owner")
-        let admin = try await FixtureBackend.service(FixtureBackend(plan: .vip, role: .admin, latency: .zero)).me()
-        #expect(!Jarvis.isAvailable(to: admin) && IdentityGate.of(admin) == .internalOnly)
+        let admin = try await FixtureBackend.service(FixtureBackend(plan: .vip, role: .legacyAdmin, latency: .zero)).me()
+        #expect(!Jarvis.isAvailable(to: admin) && IdentityGate.of(admin) == .unsupportedRole)
         for plan in [PlanTier.free, .basic, .vip] {
             let user = try await FixtureBackend.service(FixtureBackend(plan: plan, latency: .zero)).me()
             #expect(user.role == "user" && !Jarvis.isAvailable(to: user))

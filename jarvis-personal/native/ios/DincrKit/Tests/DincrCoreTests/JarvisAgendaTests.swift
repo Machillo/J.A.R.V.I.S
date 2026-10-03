@@ -61,9 +61,10 @@ import Testing
         #expect(request.url?.query == "days=45")
     }
 
-    @Test func onlyTheOwnerAndAdminReachTheAgendaEndpoint() async throws {
+    @Test func onlyTheOwnerReachesTheAgendaEndpoint() async throws {
         #expect(try await FixtureBackend.service(FixtureBackend(role: .owner, latency: .zero)).jarvisUpcomingEvents().count == 2)
-        _ = try await FixtureBackend.service(FixtureBackend(role: .admin, latency: .zero)).jarvisUpcomingEvents()
+        let legacy = FixtureBackend.service(FixtureBackend(role: .legacyAdmin, latency: .zero))
+        await #expect(throws: APIError.self) { try await legacy.jarvisUpcomingEvents() }
         for plan in [PlanTier.free, .basic, .vip] {
             let user = FixtureBackend.service(FixtureBackend(plan: plan, latency: .zero))
             await #expect(throws: APIError.self) { try await user.jarvisUpcomingEvents() }

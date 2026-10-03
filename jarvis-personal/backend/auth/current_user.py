@@ -70,6 +70,16 @@ def get_current_workspace_role() -> str:
     return str(workspace_role)
 
 
+def require_owner():
+    """The single verified Owner, DINCR's only administrative authority.
+
+    The session role is "owner" only when the server verified it at login (the stored Owner
+    role plus the deployment allowlist, backend/auth/owner_role.py); no request field, plan,
+    header or client value can set it. There is no other administrative role.
+    """
+    return require_roles("owner")
+
+
 def require_roles(*allowed_roles: str):
     user = get_current_user()
     role = user.get("role")

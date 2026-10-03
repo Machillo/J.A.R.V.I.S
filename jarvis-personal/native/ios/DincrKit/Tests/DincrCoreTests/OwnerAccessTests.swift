@@ -38,7 +38,7 @@ import Testing
         let owner = profile(role: "owner", plan: "owner")
         #expect(Feature.allCases.filter { owner.planTier.allows($0) } == Feature.allCases.filter { PlanTier.vip.allows($0) })
         // Admin sessions stay out of the public app, as before.
-        #expect(IdentityGate.of(profile(role: "admin", plan: "vip")) == .internalOnly)
+        #expect(IdentityGate.of(profile(role: "admin", plan: "vip")) == .unsupportedRole)
         #expect(!profile(role: "admin", plan: "vip").isOwner)
     }
 

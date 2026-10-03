@@ -78,15 +78,27 @@ def is_verified_owner_account(conn, account_id: object, workspace_id: object) ->
     return bool(row)
 
 
+USER_ROLE = "user"
+# DINCR has two account roles: "user" (Free/Basic/VIP, the plan decides) and the single Owner.
+# Any other stored value (a legacy "admin" or "viewer") is invalid: never promoted, never
+# passed through as a session role.
+ACCOUNT_ROLES = frozenset({USER_ROLE, OWNER_ROLE})
+INVALID_ROLE = "Esta cuenta tiene un rol que DINCR ya no admite."
+
+
 def session_role(stored_role: str | None, email: str | None) -> str:
-    """Role for a path that must not fail (finishing a deletion): an ungated Owner is a User there."""
-    return stored_role if stored_role != OWNER_ROLE or owner_enabled(email) else "user"
+    """Role for a path that must not fail (finishing a deletion): anything but an enabled Owner is a User."""
+    return OWNER_ROLE if stored_role == OWNER_ROLE and owner_enabled(email) else USER_ROLE
 
 
 def effective_role(stored_role: str | None, email: str | None, *, account_ref: object = None) -> str:
-    """The role a session gets: the stored one, with the Owner role gated by the allowlist."""
-    if stored_role != OWNER_ROLE:
-        return stored_role or "user"
+    """The role a session gets: "user", or "owner" only with the allowlist; any other stored role is refused."""
+    if stored_role in (None, "", USER_ROLE):
+        return USER_ROLE
+    if stored_role not in ACCOUNT_ROLES:
+        # Fail closed: an invalid stored role gets no session (no Owner, no User, no write).
+        logger.warning("Login refused: the account has an invalid stored role")
+        raise HTTPException(status_code=403, detail=INVALID_ROLE)
     if owner_enabled(email):
         return OWNER_ROLE
     # Fail closed without demoting: no Owner session, no User session, no write.

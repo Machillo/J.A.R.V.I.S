@@ -2,10 +2,10 @@
 
 Reads the gate of every route from the app itself, deterministically:
 
-- ``internal_only``: mounted with ``main.INTERNAL_ONLY`` (owner/admin router dependency);
-- ``router_roles:<roles>``: a router-level ``require_roles(...)`` dependency;
+- ``internal_only``: mounted with ``main.INTERNAL_ONLY`` (the verified-Owner router dependency);
+- ``router_roles:<roles>``: a router-level ``require_roles(...)`` / ``require_owner()`` dependency;
 - ``feature:<code>``: the endpoint calls ``require_feature("<code>")``;
-- ``roles:<roles>``: the endpoint calls ``require_roles(...)``;
+- ``roles:<roles>``: the endpoint calls ``require_roles(...)`` (``require_owner()`` is ``roles:owner``);
 - ``owner_service``: the endpoint calls an Owner guard helper (``_require_owner_user``, ``_owner_only``);
 - ``public``: none of the above (auth middleware only, or explicitly public routes).
 
@@ -28,7 +28,9 @@ from pathlib import Path
 INVENTORY = Path(__file__).parent / "fixtures" / "route_gate_inventory.json"
 _FEATURE = re.compile(r"require_feature\(\s*[\"'](\w+)[\"']")
 _ROLES = re.compile(r"require_roles\(([^)]*)\)")
-_OWNER_SERVICE = re.compile(r"_require_owner_user\(|require_owner\(|_owner_only\(")
+_OWNER_SERVICE = re.compile(r"_require_owner_user\(|_owner_only\(")
+# The canonical verified-Owner guard (backend/auth/current_user.py): require_roles("owner").
+_REQUIRE_OWNER = re.compile(r"\brequire_owner\(\)")
 
 
 def _roles(arguments: str) -> str:
@@ -48,12 +50,17 @@ def gates_of(route, internal_only) -> list[str]:
         if dependency is internal_only:
             gates.append("internal_only")
             continue
-        found = _ROLES.search(_source(dependency.dependency))
+        dependency_source = _source(dependency.dependency)
+        found = _ROLES.search(dependency_source)
         if found:
             gates.append(f"router_roles:{_roles(found.group(1))}")
+        elif _REQUIRE_OWNER.search(dependency_source) or getattr(dependency.dependency, "__name__", "") == "require_owner":
+            gates.append("router_roles:owner")
     source = _source(route.endpoint)
     gates += [f"feature:{code}" for code in sorted(set(_FEATURE.findall(source)))]
     gates += [f"roles:{_roles(found)}" for found in sorted(set(_ROLES.findall(source)))]
+    if _REQUIRE_OWNER.search(source):
+        gates.append("roles:owner")
     if _OWNER_SERVICE.search(source):
         gates.append("owner_service")
     return sorted(set(gates)) or ["public"]

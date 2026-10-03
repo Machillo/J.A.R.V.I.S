@@ -42,6 +42,7 @@
     "test:phase0h": "node scripts/test-phase-0h.mjs",
     "test:phase0i": "node scripts/test-phase-0i.mjs",
     "test:phase0j": "node scripts/test-phase-0j.mjs",
+    "test:single-owner": "node scripts/test-single-owner.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "android:apk": "node scripts/android-apk.mjs",

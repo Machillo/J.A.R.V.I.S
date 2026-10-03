@@ -33,7 +33,8 @@ class FakeBackend(
      * The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
      * app still learns the role only from `/auth/me`, exactly as with the real backend.
      */
-    enum class Role(val wire: String) { USER("user"), OWNER("owner"), ADMIN("admin") }
+    /** LEGACY_ADMIN: a stored role DINCR no longer admits, only to prove the app refuses it. */
+    enum class Role(val wire: String) { USER("user"), OWNER("owner"), LEGACY_ADMIN("admin") }
 
     private val store = if (scenario == Scenario.STORE) StoreSample(language) else null
     private val today: LocalDate = if (store != null) StoreSample.TODAY else currentDate
@@ -58,7 +59,7 @@ class FakeBackend(
     private val planRoutes = FakePlanRoutes(json, today)
     private fun snapshot() = FakePlanRoutes.Snapshot(movements.toList(), debts.toList(), goals.toList(), savings.toList(), recurring.toList(), situation)
     private val isOwner get() = profile.role == "owner"
-    private val isInternal get() = profile.role == "owner" || profile.role == "admin"
+    private val isInternal get() = profile.role == "owner"
 
     init {
         if (scenario == Scenario.POPULATED) seed()
@@ -118,7 +119,7 @@ class FakeBackend(
      * "respuesta rara" answers without a message. Anything else gets a plain reply.
      */
     private fun jarvisChat(message: String): HttpResponse {
-        if (profile.role != "owner" && profile.role != "admin") return error(403, "No tienes permisos para realizar esta acción.")
+        if (profile.role != "owner") return error(403, "No tienes permisos para realizar esta acción.")
         val text = message.lowercase().trim()
         if ("falla" in text) return error(500, "Error interno.")
         if (jarvisClarifying) {
@@ -188,14 +189,14 @@ class FakeBackend(
             // Identity
             path == "/auth/me" && method == "GET" -> ok(profile)
             path == "/auth/me" && method == "DELETE" -> ok("""{"status":"OK","message":"Cuenta eliminada","deletion_id":"del_demo"}""")
-            // JARVIS chat: /jarvis/* admits owner and admin, like the backend.
+            // JARVIS chat: /jarvis/* admits only the verified Owner, like the backend.
             path == "/jarvis/chat" && method == "POST" -> jarvisChat(text("message").orEmpty())
             path == "/jarvis/calendar/upcoming" && method == "GET" ->
-                if (profile.role != "owner" && profile.role != "admin") error(403, "No tienes permisos para realizar esta acción.") else ok(agendaBody())
+                if (profile.role != "owner") error(403, "No tienes permisos para realizar esta acción.") else ok(agendaBody())
             // The Owner's strategy: this fake serves it to the Owner role only.
             path == "/jarvis/premium/strategy-dashboard" && method == "GET" ->
                 if (!isOwner) error(403, "No tienes permisos para realizar esta acción.") else ok(planRoutes.strategyDashboard(snapshot(), owner = true, role = profile.role))
-            // JARVIS "Análisis financiero": the internal routers admit owner and admin, like main.py INTERNAL_ONLY.
+            // JARVIS "Análisis financiero": the internal routers admit only the verified Owner (main.py INTERNAL_ONLY).
             path == "/transactions/analysis/summary" || path == "/finance/net-worth" || path == "/finance/engine" -> when {
                 !isInternal -> error(403, "No tienes permisos para realizar esta acción.")
                 path == "/finance/net-worth" -> ok(planRoutes.netWorth(snapshot()))

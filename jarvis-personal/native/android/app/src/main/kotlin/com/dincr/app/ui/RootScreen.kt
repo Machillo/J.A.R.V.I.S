@@ -72,9 +72,9 @@ fun RootScreen(model: AppModel, appearance: Appearance, onAppearance: (Appearanc
                 Phase.SignedOut -> LoginScreen(model)
                 is Phase.IdentityError -> IdentityErrorScreen(model, current)
                 is Phase.UpdateRequired -> UpdateRequiredScreen(model, current.policy)
-                // Owner boundary (CLAUDE.md §4.A): the public app never renders Owner features.
-                Phase.OwnerNotSupported -> GateScreen(Icons.Rounded.Lock, tx("Esta cuenta usa DINCR Owner", "This account uses DINCR Owner"),
-                    tx("La app pública de DINCR no muestra funciones internas. Cerrá sesión para entrar con otra cuenta.", "The public DINCR app doesn’t show internal features. Sign out to use another account."),
+                // A role DINCR no longer admits (only "user" and the single Owner exist): not served.
+                Phase.UnsupportedRole -> GateScreen(Icons.Rounded.Lock, tx("Esta cuenta no está disponible en DINCR", "This account isn’t available in DINCR"),
+                    tx("Su rol ya no es compatible con DINCR. Cerrá sesión para entrar con otra cuenta.", "Its role is no longer supported by DINCR. Sign out to use another account."),
                     primary = null, onSignOut = { model.signOut() })
                 Phase.LegalRequired -> LegalConsentScreen(model)
                 Phase.ProfileSetup -> ProfileSetupScreen(model)

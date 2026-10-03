@@ -262,7 +262,7 @@ class PlanRecoveryUiTest {
         waitForText(tx("Mi situación financiera", "My financial situation"))
         assertTrue(!present("JARVIS") && !present(tx("Análisis financiero", "Financial analysis")))
         launch(plan = "vip", role = "admin")
-        waitForText(tx("Esta cuenta usa DINCR Owner", "This account uses DINCR Owner"))
+        waitForText(tx("Esta cuenta no está disponible en DINCR", "This account isn’t available in DINCR"))
         assertTrue(!present(tx("Análisis financiero", "Financial analysis")))
     }
 

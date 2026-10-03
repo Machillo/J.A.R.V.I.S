@@ -28,7 +28,7 @@ from backend.notifications.routes import router as notifications_router
 from backend.finance.daily_history_routes import router as financial_history_router
 from backend.finance.investment_center import router as investment_center_router
 from backend.finance.business_center import router as business_center_router
-from backend.auth.current_user import require_roles, set_current_user, reset_current_user
+from backend.auth.current_user import require_owner, reset_current_user, set_current_user
 from backend.auth.service import authenticate_access_token
 from backend.auth.owner_bridge import authenticate_owner_bridge_token
 from backend.users_admin.routes import router as users_admin_router
@@ -442,7 +442,7 @@ async def auth_middleware(request: Request, call_next):
 # account, so these must check the role server-side: the public DINCR app only uses
 # /user-product, /product-ops and /auth. Routers with public cron/webhook endpoints
 # (notifications, IBKR bridge, email monitor) enforce roles per route instead.
-INTERNAL_ONLY = [Depends(lambda: require_roles("owner", "admin"))]
+INTERNAL_ONLY = [Depends(require_owner)]
 
 app.include_router(finance_router, dependencies=INTERNAL_ONLY)
 app.include_router(goals_router, dependencies=INTERNAL_ONLY)

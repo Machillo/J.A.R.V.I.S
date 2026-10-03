@@ -65,7 +65,9 @@ public actor FixtureBackend: HTTPTransport {
     /// The role this fake server gives its account in `/auth/me` (UI tests of the role matrix). The
     /// app still learns the role only from `/auth/me`, exactly as with the real backend.
     public enum Role: String, Sendable, CaseIterable {
-        case user, owner, admin
+        case user, owner
+        /// A stored role DINCR no longer admits (legacy "admin"): only to prove the app refuses it.
+        case legacyAdmin = "admin"
     }
 
     public init(scenario: Scenario = .populated, plan: PlanTier = .free, role: Role = .user, latency: Duration = .milliseconds(300),
@@ -190,10 +192,10 @@ public actor FixtureBackend: HTTPTransport {
         // Identity and account
         case ("GET", "/auth/me"): return ok(profile)
         case ("DELETE", "/auth/me"): return ok(["status": "OK", "deletion_id": "del_demo"])
-        // JARVIS chat: /jarvis/* admits owner and admin, like the backend.
+        // JARVIS chat: /jarvis/* admits only the verified Owner, like the backend.
         case ("POST", "/jarvis/chat"): return jarvisChat(body["message"] as? String ?? "")
         case ("GET", "/jarvis/calendar/upcoming"):
-            guard ["owner", "admin"].contains(profile["role"] as? String ?? "") else { return error(403, "No tienes permisos para realizar esta acción.") }
+            guard profile["role"] as? String == "owner" else { return error(403, "No tienes permisos para realizar esta acción.") }
             return ok(["events": jarvisEvents])
         case ("GET", "/auth/me/export"): return ok(["format_version": 1, "account": ["id": 1], "data": [String: Any]()])
         case ("POST", "/auth/profile-setup"):
@@ -671,7 +673,7 @@ public actor FixtureBackend: HTTPTransport {
     /// / "horas de OT" shows a payroll change and waits for "sí" / "no", "falla" answers 500 and
     /// "respuesta rara" answers without a message. Anything else gets a plain reply.
     private func jarvisChat(_ message: String) -> Answer {
-        guard ["owner", "admin"].contains(profile["role"] as? String ?? "") else { return error(403, "No tienes permisos para realizar esta acción.") }
+        guard profile["role"] as? String == "owner" else { return error(403, "No tienes permisos para realizar esta acción.") }
         let text = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         if text.contains("falla") { return error(500, "Error interno.") }
         if jarvisClarifying {

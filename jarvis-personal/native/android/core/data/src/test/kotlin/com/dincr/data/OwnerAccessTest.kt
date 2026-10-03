@@ -47,7 +47,7 @@ class OwnerAccessTest {
         val owner = profile("owner", "owner")
         assertEquals(Feature.entries.filter { PlanTier.VIP.allows(it) }, Feature.entries.filter { owner.planTier.allows(it) })
         // Admin sessions stay out of the public app, as before.
-        assertEquals(IdentityGate.INTERNAL_ONLY, IdentityGate.of(profile("admin", "vip")))
+        assertEquals(IdentityGate.UNSUPPORTED_ROLE, IdentityGate.of(profile("admin", "vip")))
         assertFalse(profile("admin", "vip").isOwner)
     }
 

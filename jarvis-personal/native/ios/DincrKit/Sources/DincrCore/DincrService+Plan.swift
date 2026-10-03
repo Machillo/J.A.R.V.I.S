@@ -8,7 +8,7 @@ extension DincrService {
     /// VIP Users: the neutral dashboard (`strategy.scope == "users"`).
     public func strategyDashboard() async throws -> StrategyDashboard { try await client.get("/user-product/vip/strategy-dashboard") }
 
-    /// Owner only (an owner/admin route). Never called for another role: `StrategySource` decides
+    /// Owner only (an Owner route). Never called for another role: `StrategySource` decides
     /// from the server role, and the backend refuses everyone else.
     public func ownerStrategyDashboard() async throws -> StrategyDashboard { try await client.get("/jarvis/premium/strategy-dashboard") }
 
@@ -62,7 +62,7 @@ extension DincrService {
         return list.items ?? []
     }
 
-    // MARK: JARVIS · Análisis financiero (Owner only; owner/admin routes)
+    // MARK: JARVIS · Análisis financiero (Owner only; Owner routes)
 
     public func transactionAnalysis() async throws -> TransactionAnalysis { try await client.get("/transactions/analysis/summary") }
 

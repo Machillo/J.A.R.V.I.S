@@ -85,7 +85,7 @@ class JarvisAccessUiTest {
 
     @Test fun adminGetsNeitherThePublicAppNorJarvis() {
         launch(role = "admin", plan = "vip")
-        waitForText(tx("Esta cuenta usa DINCR Owner", "This account uses DINCR Owner"))
+        waitForText(tx("Esta cuenta no está disponible en DINCR", "This account isn’t available in DINCR"))
         assertTrue(!present("JARVIS"))
         assertTrue(!present(tx("Movimientos", "Transactions")))
     }
