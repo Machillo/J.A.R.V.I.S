@@ -101,3 +101,49 @@ def test_a_new_migration_is_a_visible_human_gate(labels, blocked):
     none = result()
     guards.check_migrations(["jarvis-personal/backend/main.py"], set(), none)
     assert not none.errors and not none.notes
+
+
+def _spec(states, ios_override=None, extra=()):
+    import json
+    feature = {"id": "home.debts", "plans": dict(zip(("free", "basic", "vip", "owner"), states))}
+    if ios_override:
+        feature["platform_states"] = {"ios": ios_override}
+    return json.dumps({"features": [feature, *extra]})
+
+
+AVAILABLE_EVERYWHERE = ("AVAILABLE",) * 4
+
+
+def test_reachability_may_grow_without_a_label():
+    grown = result()
+    guards.check_reachability(_spec(("VISIBLE_LOCKED", "AVAILABLE", "AVAILABLE", "AVAILABLE")), _spec(AVAILABLE_EVERYWHERE), set(), grown)
+    assert not grown.errors and not grown.warnings
+
+
+@pytest.mark.parametrize("head", [
+    _spec(("VISIBLE_LOCKED", "AVAILABLE", "AVAILABLE", "AVAILABLE")),     # Free loses the debts screen
+    _spec(AVAILABLE_EVERYWHERE, ios_override={"vip": "HIDDEN_BY_PLAN"}),  # hidden on one platform
+    '{"features": []}',                                                  # feature removed
+    None,                                                                # spec deleted
+])
+def test_hiding_or_removing_a_feature_needs_an_explicit_decision(head):
+    blocked = result()
+    guards.check_reachability(_spec(AVAILABLE_EVERYWHERE), head, set(), blocked)
+    assert blocked.errors and "R1" in blocked.errors[0]
+    approved = result()
+    guards.check_reachability(_spec(AVAILABLE_EVERYWHERE), head, {guards.LABEL_REACHABILITY}, approved)
+    assert not approved.errors and approved.warnings
+
+
+def test_exposing_an_owner_only_feature_is_flagged():
+    exposed = result()
+    guards.check_reachability(_spec(("OWNER_ONLY", "OWNER_ONLY", "OWNER_ONLY", "AVAILABLE")),
+                              _spec(("OWNER_ONLY", "OWNER_ONLY", "AVAILABLE", "AVAILABLE")), set(), exposed)
+    assert exposed.errors and "OWNER_ONLY -> AVAILABLE" in exposed.errors[0]
+
+
+def test_the_real_reachability_spec_is_checked_against_itself():
+    source = (REPO / guards.REACHABILITY_SPEC).read_text(encoding="utf-8")
+    unchanged = result()
+    guards.check_reachability(source, source, set(), unchanged)
+    assert not unchanged.errors and not unchanged.warnings

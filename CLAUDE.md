@@ -163,9 +163,17 @@ Skills and agents change only through a reviewed PR, never silently.
   - the PR must not contain another open PR's head (stacking);
   - a merge into a non-`main` branch is flagged;
   - a file-size budget may not be raised;
-  - a new migration requires the `migration-gate-acknowledged` label.
+  - a new migration requires the `migration-gate-acknowledged` label;
+  - a feature removed, hidden from a plan, or an Owner-only feature exposed in `jarvis-personal/native/feature-reachability.json` requires the `reachability-change-approved` label (R1).
   - Overrides are explicit labels, set by a human.
 - **Engineering tests** (`jarvis-personal/backend/tests/test_engineering_guards.py`, `test_read_surfaces_are_read_only.py`): Owner configuration stays out of shared Users code; Users read surfaces cannot write financial tables; agent and Skill files are valid and portable.
+- **Functional protection gates (R1):** `jarvis-personal/native/feature-reachability.json` is the single source of truth for what each plan reaches. It is checked by:
+  - `backend/tests/test_feature_reachability_spec.py`: spec shape, decisions, routes and plan gates;
+  - `test_route_gate_inventory.py`: no route or gate changes without updating `fixtures/route_gate_inventory.json`; Owner GETs stay denied to regular accounts;
+  - `test_get_routes_are_read_only.py`: every GET, no writes beyond `fixtures/read_purity_exceptions.json`;
+  - iOS `FeatureReachabilitySpecTests` / `FeatureReachabilityUITests` and Android `FeatureReachabilitySpecTest` / `FeatureReachabilityUiTest`.
+
+  Moving a feature means updating the spec in the same PR.
 - **Existing tests:**
   - `test_no_generative_ai.py`: no AI provider reachable from the app;
   - `check_file_size_budget.py`;

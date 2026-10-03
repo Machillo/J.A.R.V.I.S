@@ -1,0 +1,111 @@
+{
+ "description": "Temporary, documented exceptions to GET = READ (CLAUDE.md §4.C). Each entry names the route, the tables it writes, why, and the master-plan PR that removes the write. The gate fails on any write not listed here and on any listed write that no longer happens, so this file only shrinks.",
+ "known_get_writes": [
+  {
+   "path": "/user-product/vip/lifecycle/state",
+   "writes": [
+    [
+     "INSERT",
+     "financial_health_snapshots"
+    ]
+   ],
+   "category": "A",
+   "reason": "VIP lifecycle state persists a health snapshot on read (financial_lifecycle/state.py:56 -> finance/deterioration.py:86-98)",
+   "removed_by": "P0.2"
+  },
+  {
+   "path": "/user-product/vip/lifecycle/progress",
+   "writes": [
+    [
+     "INSERT",
+     "financial_health_snapshots"
+    ]
+   ],
+   "category": "A",
+   "reason": "VIP lifecycle state persists a health snapshot on read (financial_lifecycle/state.py:56 -> finance/deterioration.py:86-98)",
+   "removed_by": "P0.2"
+  },
+  {
+   "path": "/user-product/vip/lifecycle/monthly-review",
+   "writes": [
+    [
+     "INSERT",
+     "financial_health_snapshots"
+    ]
+   ],
+   "category": "A",
+   "reason": "VIP lifecycle state persists a health snapshot on read (financial_lifecycle/state.py:56 -> finance/deterioration.py:86-98)",
+   "removed_by": "P0.2"
+  },
+  {
+   "path": "/user-product/vip/lifecycle/proactive-advisor",
+   "writes": [
+    [
+     "INSERT",
+     "financial_health_snapshots"
+    ]
+   ],
+   "category": "A",
+   "reason": "VIP lifecycle state persists a health snapshot on read (financial_lifecycle/state.py:56 -> finance/deterioration.py:86-98)",
+   "removed_by": "P0.2"
+  },
+  {
+   "path": "/finance/deterioration",
+   "writes": [
+    [
+     "INSERT",
+     "financial_health_snapshots"
+    ]
+   ],
+   "category": "A",
+   "reason": "Owner deterioration persists the same health snapshot on read (get_financial_deterioration)",
+   "removed_by": "P0.2"
+  },
+  {
+   "path": "/finance/net-worth",
+   "writes": [
+    [
+     "INSERT",
+     "net_worth_snapshots"
+    ]
+   ],
+   "category": "A",
+   "reason": "Owner net-worth daily snapshot on read: temporary compatibility (decision D12)",
+   "removed_by": "P5.2c"
+  }
+ ],
+ "not_executable_in_harness": [
+  {
+   "path": "/auth/me",
+   "reason": "needs the provisioned account/workspace rows an empty database does not have (covered by auth tests)"
+  },
+  {
+   "path": "/auth/onboarding",
+   "reason": "needs the provisioned account/workspace rows an empty database does not have (covered by auth tests)"
+  },
+  {
+   "path": "/email-monitor/status",
+   "reason": "Owner email monitor needs the Owner's workspace row (_workspace_id_for_user)"
+  },
+  {
+   "path": "/email-monitor/candidates",
+   "reason": "Owner email monitor needs the Owner's workspace row (_workspace_id_for_user)"
+  },
+  {
+   "path": "/product-ops/feedback",
+   "reason": "product_ops.ensure_schema verifies real tables; not emulated by the harness"
+  },
+  {
+   "path": "/product-ops/health",
+   "reason": "product_ops.ensure_schema verifies real tables; not emulated by the harness"
+  },
+  {
+   "path": "/product-ops/owner/dashboard",
+   "reason": "product_ops.ensure_schema verifies real tables; not emulated by the harness"
+  },
+  {
+   "path": "/health/ready",
+   "reason": "opens its own database connection to report readiness (503 without a database, by design)"
+  }
+ ]
+}

@@ -1,0 +1,1563 @@
+{
+ "version": 1,
+ "baseline": "81fd2cc4da3962dc5ac24fcc6380f7027d5ce705",
+ "description": "DINCR functional protection spec (master plan R1 / P0.0). One source of truth for what each plan can reach today, read by the backend gate tests, the iOS and Android reachability tests and the PR guard. A feature may only be removed, hidden, moved or have a plan state lowered in a PR that changes this file with an explicit decision (and the 'reachability-change-approved' label).",
+ "plans": [
+  "free",
+  "basic",
+  "vip",
+  "owner"
+ ],
+ "states": {
+  "AVAILABLE": "Reachable and usable.",
+  "VISIBLE_LOCKED": "Shown with its plan badge; opens the plans screen.",
+  "OWNER_ONLY": "Owner only: never shown to any other plan or role.",
+  "HIDDEN_BY_SECURITY": "Never shown to this plan/role for a security or account-protection reason.",
+  "HIDDEN_BY_PLAN": "Baseline only: not shown today for this plan. Each use names the PR that turns it into VISIBLE_LOCKED or AVAILABLE (P6.4)."
+ },
+ "decisions": [
+  "baseline-81fd2cc4",
+  "D1",
+  "D2",
+  "D3",
+  "D4",
+  "D5",
+  "D6",
+  "D7",
+  "D8",
+  "D9",
+  "D10",
+  "D11",
+  "D12",
+  "D13",
+  "D14",
+  "D15",
+  "D16",
+  "D17",
+  "D18",
+  "D19",
+  "D20",
+  "R1",
+  "P-1"
+ ],
+ "fixtures": {
+  "ios": {
+   "arguments": [
+    "-DincrDisableAnimations",
+    "-DincrFixtures",
+    "populated",
+    "-DincrSkipLogin",
+    "-AppleLanguages",
+    "(es)",
+    "-AppleLocale",
+    "es_CR"
+   ],
+   "plan": "-DincrPlan",
+   "role": "-DincrRole",
+   "tab": "-DincrTab"
+  },
+  "android": {
+   "extras": {
+    "dincrFixtures": "POPULATED",
+    "dincrSkipLogin": true,
+    "dincrLatencyMs": 0
+   },
+   "plan": "dincrPlan",
+   "role": "dincrRole"
+  }
+ },
+ "features": [
+  {
+   "id": "tab.home",
+   "name": "Pestaña Hoy",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6.2/P6.3 redistribute tabs (Hoy, Movimientos, Plan, Patrimonio, Perfil)",
+   "backend": [],
+   "ios": {
+    "tab_button": "Hoy"
+   },
+   "android": {
+    "tab_button": "Hoy",
+    "en": {
+     "tab_button": "Today"
+    }
+   }
+  },
+  {
+   "id": "tab.movements",
+   "name": "Pestaña Movimientos",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6.2/P6.3 redistribute tabs (Hoy, Movimientos, Plan, Patrimonio, Perfil)",
+   "backend": [],
+   "ios": {
+    "tab_button": "Movimientos"
+   },
+   "android": {
+    "tab_button": "Movimientos",
+    "en": {
+     "tab_button": "Transactions"
+    }
+   }
+  },
+  {
+   "id": "tab.plan",
+   "name": "Pestaña Plan",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6.2/P6.3 redistribute tabs (Hoy, Movimientos, Plan, Patrimonio, Perfil)",
+   "backend": [],
+   "ios": {
+    "tab_button": "Plan"
+   },
+   "android": {
+    "tab_button": "Plan",
+    "en": {
+     "tab_button": "Plan"
+    }
+   }
+  },
+  {
+   "id": "tab.advisor",
+   "name": "Pestaña DINCR",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6.2/P6.3 redistribute tabs (Hoy, Movimientos, Plan, Patrimonio, Perfil)",
+   "backend": [],
+   "ios": {
+    "tab_button": "DINCR"
+   },
+   "android": {
+    "tab_button": "DINCR",
+    "en": {
+     "tab_button": "DINCR"
+    }
+   }
+  },
+  {
+   "id": "tab.profile",
+   "name": "Pestaña Perfil",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6.2/P6.3 redistribute tabs (Hoy, Movimientos, Plan, Patrimonio, Perfil)",
+   "backend": [],
+   "ios": {
+    "tab_button": "Perfil"
+   },
+   "android": {
+    "tab_button": "Perfil",
+    "en": {
+     "tab_button": "Profile"
+    }
+   }
+  },
+  {
+   "id": "home.debts",
+   "name": "Deudas (Hoy → Tus finanzas)",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Plan → Deudas",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/finance/debts",
+     "gate": "feature:debts",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "home",
+    "id": "home.debts",
+    "owner_id": "owner.home.debts"
+   },
+   "android": {
+    "tab": "Hoy",
+    "text": "Deudas",
+    "en": {
+     "tab": "Today",
+     "text": "Debts"
+    }
+   }
+  },
+  {
+   "id": "home.goals",
+   "name": "Metas y ahorros (Hoy → Tus finanzas)",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Plan → Metas y ahorro",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/goals",
+     "gate": "feature:goals",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    },
+    {
+     "method": "GET",
+     "path": "/user-product/savings-plans",
+     "gate": "feature:goals",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "home",
+    "id": "home.goals",
+    "owner_id": "owner.home.goals"
+   },
+   "android": {
+    "tab": "Hoy",
+    "text": "Metas y ahorros",
+    "en": {
+     "tab": "Today",
+     "text": "Goals and savings"
+    }
+   }
+  },
+  {
+   "id": "owner.home",
+   "name": "Hoy del Owner (saludo, atención, agenda, JARVIS)",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/jarvis/calendar/upcoming",
+     "gate": "router_roles:admin,owner",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "home",
+    "id": "owner.home"
+   },
+   "android": null,
+   "android_gap": "P1.2 — Android has no Owner home (iOS only today)"
+  },
+  {
+   "id": "movements.list",
+   "name": "Movimientos (lista)",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/free/movements",
+     "gate": "feature:transactions",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    },
+    {
+     "method": "POST",
+     "path": "/user-product/finance/income",
+     "gate": "feature:spending",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    },
+    {
+     "method": "POST",
+     "path": "/user-product/finance/expenses",
+     "gate": "feature:spending",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "movements",
+    "id": "movements.add"
+   },
+   "android": {
+    "tab": "Movimientos",
+    "tag": "movements.add",
+    "en": {
+     "tab": "Transactions"
+    }
+   }
+  },
+  {
+   "id": "plan.aguinaldo",
+   "name": "Plan → Aguinaldo",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/aguinaldo",
+     "gate": "feature:gmail_automation",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "id": "plan.aguinaldo",
+    "locked_label": "Disponible desde"
+   },
+   "android": {
+    "tab": "Plan",
+    "text": "Aguinaldo",
+    "locked_text": "Disponible desde VIP",
+    "en": {
+     "tab": "Plan",
+     "text": "Aguinaldo",
+     "locked_text": "Available from VIP"
+    }
+   }
+  },
+  {
+   "id": "plan.strategy",
+   "name": "Plan → Estrategia",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/finance/strategy-basic",
+     "gate": "feature:strategy_basic",
+     "used_by": [
+      "basic",
+      "vip"
+     ]
+    },
+    {
+     "method": "GET",
+     "path": "/user-product/vip/strategy-dashboard",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "id": "plan.strategy",
+    "locked_label": "Disponible desde"
+   },
+   "android": {
+    "tab": "Plan",
+    "text": "Estrategia",
+    "locked_text": "Disponible desde Basic",
+    "en": {
+     "tab": "Plan",
+     "text": "Strategy",
+     "locked_text": "Available from Basic"
+    }
+   }
+  },
+  {
+   "id": "plan.salvavidas",
+   "name": "Plan → Salvavidas",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "VISIBLE_LOCKED",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Plan (D17: Salvavidas for every plan in P3.4)",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/salvavidas",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "id": "plan.salvavidas",
+    "locked_label": "Disponible desde"
+   },
+   "android": {
+    "tab": "Plan",
+    "text": "Salvavidas",
+    "locked_text": "Disponible desde VIP",
+    "en": {
+     "tab": "Plan",
+     "text": "Emergency fund",
+     "locked_text": "Available from VIP"
+    }
+   }
+  },
+  {
+   "id": "plan.distribution",
+   "name": "Plan → Distribución de dinero",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "VISIBLE_LOCKED",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/finance/strategy-basic",
+     "gate": "feature:strategy_basic",
+     "used_by": [
+      "basic",
+      "vip"
+     ]
+    },
+    {
+     "method": "GET",
+     "path": "/user-product/vip/strategy-dashboard",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "id": "plan.distribution",
+    "locked_label": "Disponible desde"
+   },
+   "android": {
+    "tab": "Plan",
+    "text": "Distribución de dinero",
+    "locked_text": "Disponible desde Basic",
+    "en": {
+     "tab": "Plan",
+     "text": "Money distribution",
+     "locked_text": "Available from Basic"
+    }
+   }
+  },
+  {
+   "id": "advisor.summary",
+   "name": "DINCR → Resumen del mes",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Movimientos → Análisis",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/free/monthly-summary",
+     "gate": "feature:finance_overview",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "advisor",
+    "id": "advisor.summary"
+   },
+   "android": {
+    "tab": "DINCR",
+    "text": "Resumen del mes",
+    "en": {
+     "tab": "DINCR",
+     "text": "Monthly summary"
+    }
+   }
+  },
+  {
+   "id": "advisor.reports",
+   "name": "DINCR → Reportes",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6.4: Free VISIBLE_LOCKED on both platforms",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/basic/reports",
+     "gate": "feature:basic_reports",
+     "used_by": [
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "advisor",
+    "id": "advisor.reports"
+   },
+   "android": {
+    "tab": "DINCR",
+    "text": "Reportes",
+    "locked_text": "Disponible desde Basic",
+    "en": {
+     "tab": "DINCR",
+     "text": "Reports",
+     "locked_text": "Available from Basic"
+    }
+   },
+   "platform_states": {
+    "android": {
+     "free": "VISIBLE_LOCKED"
+    }
+   },
+   "parity_gap": "P6.4 — iOS hides Reports for Free; Android shows it locked"
+  },
+  {
+   "id": "advisor.today",
+   "name": "DINCR → DINCR hoy",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "HIDDEN_BY_PLAN",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Hoy / Movimientos → Análisis / Patrimonio → Proyecciones",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/lifecycle/proactive-advisor",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "advisor",
+    "id": "advisor.today"
+   },
+   "android": {
+    "tab": "DINCR",
+    "text": "DINCR hoy",
+    "locked_text": "Director financiero",
+    "en": {
+     "tab": "DINCR",
+     "text": "DINCR today",
+     "locked_text": "Financial director"
+    }
+   },
+   "platform_states": {
+    "android": {
+     "free": "VISIBLE_LOCKED",
+     "basic": "VISIBLE_LOCKED"
+    }
+   },
+   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row"
+  },
+  {
+   "id": "advisor.projections",
+   "name": "DINCR → Proyecciones",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "HIDDEN_BY_PLAN",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Hoy / Movimientos → Análisis / Patrimonio → Proyecciones",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/command-center",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "advisor",
+    "id": "advisor.projections"
+   },
+   "android": {
+    "tab": "DINCR",
+    "text": "Proyecciones",
+    "locked_text": "Director financiero",
+    "en": {
+     "tab": "DINCR",
+     "text": "Projections",
+     "locked_text": "Financial director"
+    }
+   },
+   "platform_states": {
+    "android": {
+     "free": "VISIBLE_LOCKED",
+     "basic": "VISIBLE_LOCKED"
+    }
+   },
+   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row"
+  },
+  {
+   "id": "advisor.scenarios",
+   "name": "DINCR → Escenarios",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "HIDDEN_BY_PLAN",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Hoy / Movimientos → Análisis / Patrimonio → Proyecciones",
+   "backend": [
+    {
+     "method": "POST",
+     "path": "/user-product/finance/strategy-vip/simulate",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "advisor",
+    "id": "advisor.scenarios"
+   },
+   "android": {
+    "tab": "DINCR",
+    "text": "Escenarios",
+    "locked_text": "Director financiero",
+    "en": {
+     "tab": "DINCR",
+     "text": "Scenarios",
+     "locked_text": "Financial director"
+    }
+   },
+   "platform_states": {
+    "android": {
+     "free": "VISIBLE_LOCKED",
+     "basic": "VISIBLE_LOCKED"
+    }
+   },
+   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row"
+  },
+  {
+   "id": "advisor.review",
+   "name": "DINCR → Revisión mensual",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "HIDDEN_BY_PLAN",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Hoy / Movimientos → Análisis / Patrimonio → Proyecciones",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/lifecycle/monthly-review",
+     "gate": "feature:strategy_vip",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "advisor",
+    "id": "advisor.review"
+   },
+   "android": {
+    "tab": "DINCR",
+    "text": "Revisión mensual",
+    "locked_text": "Director financiero",
+    "en": {
+     "tab": "DINCR",
+     "text": "Monthly review",
+     "locked_text": "Financial director"
+    }
+   },
+   "platform_states": {
+    "android": {
+     "free": "VISIBLE_LOCKED",
+     "basic": "VISIBLE_LOCKED"
+    }
+   },
+   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row"
+  },
+  {
+   "id": "profile.situation",
+   "name": "Perfil → Situación financiera",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Plan → Ingresos y base",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/financial-situation",
+     "gate": "feature:finance_overview",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.situation"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Mi situación financiera",
+    "en": {
+     "tab": "Profile",
+     "text": "My financial situation"
+    }
+   }
+  },
+  {
+   "id": "profile.plan",
+   "name": "Perfil → Plan",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/auth/plans",
+     "gate": "public",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.plan"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Mi plan",
+    "en": {
+     "tab": "Profile",
+     "text": "My plan"
+    }
+   }
+  },
+  {
+   "id": "profile.security",
+   "name": "Perfil → Seguridad (bloqueo)",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.security"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Seguridad",
+    "en": {
+     "tab": "Profile",
+     "text": "Security"
+    }
+   }
+  },
+  {
+   "id": "profile.support",
+   "name": "Perfil → Soporte",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "POST",
+     "path": "/product-ops/feedback",
+     "gate": "public",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "label": "Soporte"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Ayuda y soporte",
+    "en": {
+     "tab": "Profile",
+     "text": "Help and support"
+    }
+   }
+  },
+  {
+   "id": "profile.export",
+   "name": "Perfil → Descargar mis datos",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/auth/me/export",
+     "gate": "public",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "label": "Descargar mis datos"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "Ajustes de cuenta"
+    ],
+    "text": "Descargar mis datos",
+    "en": {
+     "tab": "Profile",
+     "text": "Download my data",
+     "via": [
+      "Account settings"
+     ]
+    }
+   }
+  },
+  {
+   "id": "profile.delete",
+   "name": "Perfil → Eliminar mi cuenta",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "HIDDEN_BY_SECURITY"
+   },
+   "backend": [
+    {
+     "method": "DELETE",
+     "path": "/auth/me",
+     "gate": "public",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "label": "Eliminar mi cuenta"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "Ajustes de cuenta"
+    ],
+    "text": "Eliminar mi cuenta",
+    "en": {
+     "tab": "Profile",
+     "text": "Delete my account",
+     "via": [
+      "Account settings"
+     ]
+    }
+   },
+   "security_note": "The Owner account is never deletable from the app (canDeleteAccountInApp = !isOwner)"
+  },
+  {
+   "id": "profile.mail",
+   "name": "Perfil → Correos financieros",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "HIDDEN_BY_PLAN",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Perfil → Conexiones (connect) / Movimientos → Por revisar / Patrimonio → Cuentas",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/gmail/status",
+     "gate": "feature:gmail_automation",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.mail"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Correos financieros",
+    "en": {
+     "tab": "Profile",
+     "text": "Financial emails"
+    }
+   }
+  },
+  {
+   "id": "profile.accounts",
+   "name": "Perfil → Cuentas",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "HIDDEN_BY_PLAN",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Perfil → Conexiones (connect) / Movimientos → Por revisar / Patrimonio → Cuentas",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/vip/financial-identity",
+     "gate": "feature:gmail_automation",
+     "used_by": [
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.accounts"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Cuentas",
+    "en": {
+     "tab": "Profile",
+     "text": "Accounts"
+    }
+   }
+  },
+  {
+   "id": "profile.budget",
+   "name": "Perfil → Finanzas → Presupuesto",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Plan → Presupuesto / Calendario / Recurrentes",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/basic/budget",
+     "gate": "feature:guided_budget",
+     "used_by": [
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.budget"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Presupuesto",
+    "locked_text": "Presupuesto, calendario y recurrentes",
+    "en": {
+     "tab": "Profile",
+     "text": "Budget",
+     "locked_text": "Budget, calendar and recurring"
+    }
+   },
+   "platform_states": {
+    "android": {
+     "free": "VISIBLE_LOCKED"
+    }
+   },
+   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row"
+  },
+  {
+   "id": "profile.calendar",
+   "name": "Perfil → Finanzas → Calendario financiero",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Plan → Presupuesto / Calendario / Recurrentes",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/basic/calendar",
+     "gate": "feature:financial_calendar",
+     "used_by": [
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.calendar"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Calendario financiero",
+    "locked_text": "Presupuesto, calendario y recurrentes",
+    "en": {
+     "tab": "Profile",
+     "text": "Financial calendar",
+     "locked_text": "Budget, calendar and recurring"
+    }
+   },
+   "platform_states": {
+    "android": {
+     "free": "VISIBLE_LOCKED"
+    }
+   },
+   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row"
+  },
+  {
+   "id": "profile.recurring",
+   "name": "Perfil → Finanzas → Pagos recurrentes",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "HIDDEN_BY_PLAN",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "target": "P6: Plan → Presupuesto / Calendario / Recurrentes",
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/basic/recurring",
+     "gate": "feature:recurring_items",
+     "used_by": [
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.recurring"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "Pagos recurrentes",
+    "locked_text": "Presupuesto, calendario y recurrentes",
+    "en": {
+     "tab": "Profile",
+     "text": "Recurring payments",
+     "locked_text": "Budget, calendar and recurring"
+    }
+   },
+   "platform_states": {
+    "android": {
+     "free": "VISIBLE_LOCKED"
+    }
+   },
+   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row"
+  },
+  {
+   "id": "profile.jarvis",
+   "name": "Perfil → JARVIS",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [],
+   "ios": {
+    "tab": "profile",
+    "id": "profile.jarvis"
+   },
+   "android": {
+    "tab": "Perfil",
+    "text": "JARVIS",
+    "en": {
+     "tab": "Profile",
+     "text": "JARVIS"
+    }
+   }
+  },
+  {
+   "id": "jarvis.chat",
+   "name": "JARVIS → Chat",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "POST",
+     "path": "/jarvis/chat",
+     "gate": "router_roles:admin,owner",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "via": [
+     "profile.jarvis"
+    ],
+    "id": "jarvis.section.chat"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "JARVIS"
+    ],
+    "text": "Chat",
+    "en": {
+     "tab": "Profile",
+     "text": "Chat",
+     "via": [
+      "JARVIS"
+     ]
+    }
+   }
+  },
+  {
+   "id": "jarvis.calendar",
+   "name": "JARVIS → Agenda",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/jarvis/calendar/upcoming",
+     "gate": "router_roles:admin,owner",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "via": [
+     "profile.jarvis"
+    ],
+    "id": "jarvis.section.calendar"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "JARVIS"
+    ],
+    "text": "Agenda",
+    "en": {
+     "tab": "Profile",
+     "text": "Calendar",
+     "via": [
+      "JARVIS"
+     ]
+    }
+   }
+  },
+  {
+   "id": "jarvis.analysis",
+   "name": "JARVIS → Análisis financiero",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/transactions/analysis/summary",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "GET",
+     "path": "/finance/net-worth",
+     "gate": "internal_only",
+     "used_by": []
+    },
+    {
+     "method": "GET",
+     "path": "/finance/engine",
+     "gate": "internal_only",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "via": [
+     "profile.jarvis"
+    ],
+    "id": "jarvis.section.analysis"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "JARVIS"
+    ],
+    "text": "Análisis financiero",
+    "en": {
+     "tab": "Profile",
+     "text": "Financial analysis",
+     "via": [
+      "JARVIS"
+     ]
+    }
+   }
+  },
+  {
+   "id": "jarvis.memory",
+   "name": "JARVIS → Memoria",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/jarvis/memory",
+     "gate": "router_roles:admin,owner",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "via": [
+     "profile.jarvis"
+    ],
+    "id": "jarvis.section.memory"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "JARVIS"
+    ],
+    "text": "Memoria",
+    "en": {
+     "tab": "Profile",
+     "text": "Memory",
+     "via": [
+      "JARVIS"
+     ]
+    }
+   },
+   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+  },
+  {
+   "id": "jarvis.strategy",
+   "name": "JARVIS → Estrategia personal",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/jarvis/premium/strategy-dashboard",
+     "gate": "router_roles:admin,owner",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "via": [
+     "profile.jarvis"
+    ],
+    "id": "jarvis.section.strategy"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "JARVIS"
+    ],
+    "text": "Estrategia personal",
+    "en": {
+     "tab": "Profile",
+     "text": "Personal strategy",
+     "via": [
+      "JARVIS"
+     ]
+    }
+   },
+   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+  },
+  {
+   "id": "jarvis.money",
+   "name": "JARVIS → Mi dinero",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [],
+   "ios": {
+    "tab": "profile",
+    "via": [
+     "profile.jarvis"
+    ],
+    "id": "jarvis.section.money"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "JARVIS"
+    ],
+    "text": "Mi dinero",
+    "en": {
+     "tab": "Profile",
+     "text": "My money",
+     "via": [
+      "JARVIS"
+     ]
+    }
+   },
+   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+  },
+  {
+   "id": "jarvis.money_control",
+   "name": "JARVIS → Control de dinero",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/finance/receivables",
+     "gate": "internal_only",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "via": [
+     "profile.jarvis"
+    ],
+    "id": "jarvis.section.money_control"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "JARVIS"
+    ],
+    "text": "Control de dinero",
+    "en": {
+     "tab": "Profile",
+     "text": "Money control",
+     "via": [
+      "JARVIS"
+     ]
+    }
+   },
+   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+  },
+  {
+   "id": "jarvis.wealth",
+   "name": "JARVIS → Patrimonio",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/finance/investment-center",
+     "gate": "internal_only",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "via": [
+     "profile.jarvis"
+    ],
+    "id": "jarvis.section.wealth"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "JARVIS"
+    ],
+    "text": "Patrimonio",
+    "en": {
+     "tab": "Profile",
+     "text": "Wealth",
+     "via": [
+      "JARVIS"
+     ]
+    }
+   },
+   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+  },
+  {
+   "id": "jarvis.records",
+   "name": "JARVIS → Registros",
+   "decision": "baseline-81fd2cc4",
+   "plans": {
+    "free": "OWNER_ONLY",
+    "basic": "OWNER_ONLY",
+    "vip": "OWNER_ONLY",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/finance/timeline",
+     "gate": "internal_only",
+     "used_by": []
+    }
+   ],
+   "ios": {
+    "tab": "profile",
+    "via": [
+     "profile.jarvis"
+    ],
+    "id": "jarvis.section.records"
+   },
+   "android": {
+    "tab": "Perfil",
+    "via": [
+     "JARVIS"
+    ],
+    "text": "Registros",
+    "en": {
+     "tab": "Profile",
+     "text": "Records",
+     "via": [
+      "JARVIS"
+     ]
+    }
+   },
+   "placeholder": "opens 'being restored' today; recovered in P1 (master plan §3b)"
+  }
+ ]
+}
