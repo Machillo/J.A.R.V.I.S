@@ -1,5 +1,5 @@
 {
- "description": "Temporary, documented exceptions to GET = READ (CLAUDE.md §4.C). Each entry names the route, the tables it writes, why, and the master-plan PR that removes the write. The gate fails on any write not listed here and on any listed write that no longer happens, so this file only shrinks.",
+ "description": "Temporary, documented exceptions to GET = READ (CLAUDE.md §4.C). Each entry names the route, the tables it writes, why, and the master-plan PR that removes the write. The gate fails on any write not listed here and on any listed write that no longer happens, so this file only shrinks. The routes the harness cannot execute are baselined by identity: the gate fails if one is added (it would escape the gate) or one becomes executable again (remove it here). None of them is read-purity verified.",
  "known_get_writes": [
   {
    "path": "/user-product/vip/lifecycle/state",
@@ -11,7 +11,9 @@
    ],
    "category": "A",
    "reason": "VIP lifecycle state persists a health snapshot on read (financial_lifecycle/state.py:56 -> finance/deterioration.py:86-98)",
-   "removed_by": "P0.2"
+   "removed_by": "P0.2",
+   "scope": "users (VIP)",
+   "risk": "MEDIUM / derived health snapshot written on read"
   },
   {
    "path": "/user-product/vip/lifecycle/progress",
@@ -23,7 +25,9 @@
    ],
    "category": "A",
    "reason": "VIP lifecycle state persists a health snapshot on read (financial_lifecycle/state.py:56 -> finance/deterioration.py:86-98)",
-   "removed_by": "P0.2"
+   "removed_by": "P0.2",
+   "scope": "users (VIP)",
+   "risk": "MEDIUM / derived health snapshot written on read"
   },
   {
    "path": "/user-product/vip/lifecycle/monthly-review",
@@ -35,7 +39,9 @@
    ],
    "category": "A",
    "reason": "VIP lifecycle state persists a health snapshot on read (financial_lifecycle/state.py:56 -> finance/deterioration.py:86-98)",
-   "removed_by": "P0.2"
+   "removed_by": "P0.2",
+   "scope": "users (VIP)",
+   "risk": "MEDIUM / derived health snapshot written on read"
   },
   {
    "path": "/user-product/vip/lifecycle/proactive-advisor",
@@ -47,7 +53,9 @@
    ],
    "category": "A",
    "reason": "VIP lifecycle state persists a health snapshot on read (financial_lifecycle/state.py:56 -> finance/deterioration.py:86-98)",
-   "removed_by": "P0.2"
+   "removed_by": "P0.2",
+   "scope": "users (VIP)",
+   "risk": "MEDIUM / derived health snapshot written on read"
   },
   {
    "path": "/finance/deterioration",
@@ -59,7 +67,9 @@
    ],
    "category": "A",
    "reason": "Owner deterioration persists the same health snapshot on read (get_financial_deterioration)",
-   "removed_by": "P0.2"
+   "removed_by": "P0.2",
+   "scope": "owner-only",
+   "risk": "MEDIUM / derived health snapshot written on read"
   },
   {
    "path": "/finance/net-worth",
@@ -71,7 +81,131 @@
    ],
    "category": "A",
    "reason": "Owner net-worth daily snapshot on read: temporary compatibility (decision D12)",
+   "removed_by": "P5.2c",
+   "scope": "owner-only",
+   "risk": "LOW / derived net-worth snapshot written on read (D12 temporary compatibility)"
+  },
+  {
+   "path": "/transactions/currency/alerts",
+   "writes": [
+    [
+     "UPDATE",
+     "transactions"
+    ]
+   ],
+   "category": "C",
+   "scope": "owner-only",
+   "reason": "legacy currency-rate persistence during GET (_reuse_saved_rates: UPDATE transactions SET amount, exchange_rate)",
+   "risk": "HIGH / financial ledger mutation",
+   "removed_by": "P0.2b"
+  },
+  {
+   "path": "/advisor/summary",
+   "writes": [
+    [
+     "INSERT",
+     "advisor_current_strategy"
+    ],
+    [
+     "INSERT",
+     "advisor_strategy_history"
+    ],
+    [
+     "INSERT",
+     "financial_health_snapshots"
+    ]
+   ],
+   "category": "C",
+   "scope": "owner-only",
+   "reason": "advisor/JARVIS strategy read persists the computed strategy (advisor/core.py:75-100) and a health snapshot: read/calculation mixed with persistence",
+   "risk": "MEDIUM / derived strategy and health state written on read",
+   "removed_by": "P0.2"
+  },
+  {
+   "path": "/advisor/strategy",
+   "writes": [
+    [
+     "INSERT",
+     "advisor_current_strategy"
+    ],
+    [
+     "INSERT",
+     "advisor_strategy_history"
+    ],
+    [
+     "INSERT",
+     "financial_health_snapshots"
+    ]
+   ],
+   "category": "C",
+   "scope": "owner-only",
+   "reason": "advisor/JARVIS strategy read persists the computed strategy (advisor/core.py:75-100) and a health snapshot: read/calculation mixed with persistence",
+   "risk": "MEDIUM / derived strategy and health state written on read",
+   "removed_by": "P0.2"
+  },
+  {
+   "path": "/jarvis/premium/strategy-summary",
+   "writes": [
+    [
+     "INSERT",
+     "advisor_current_strategy"
+    ],
+    [
+     "INSERT",
+     "advisor_strategy_history"
+    ],
+    [
+     "INSERT",
+     "financial_health_snapshots"
+    ]
+   ],
+   "category": "C",
+   "scope": "owner-only",
+   "reason": "advisor/JARVIS strategy read persists the computed strategy (advisor/core.py:75-100) and a health snapshot: read/calculation mixed with persistence",
+   "risk": "MEDIUM / derived strategy and health state written on read",
+   "removed_by": "P0.2"
+  },
+  {
+   "path": "/finance/dashboard",
+   "writes": [
+    [
+     "INSERT",
+     "net_worth_snapshots"
+    ]
+   ],
+   "category": "C",
+   "scope": "owner-only",
+   "reason": "additional surface of the Owner net-worth snapshot on read (get_net_worth_report); same D12 mechanism, no new one",
+   "risk": "LOW / derived net-worth snapshot written on read",
    "removed_by": "P5.2c"
+  },
+  {
+   "path": "/finance/user-status",
+   "writes": [
+    [
+     "INSERT",
+     "net_worth_snapshots"
+    ]
+   ],
+   "category": "C",
+   "scope": "owner-only",
+   "reason": "additional surface of the Owner net-worth snapshot on read (get_net_worth_report); same D12 mechanism, no new one",
+   "risk": "LOW / derived net-worth snapshot written on read",
+   "removed_by": "P5.2c"
+  },
+  {
+   "path": "/jarvis/sports/radar",
+   "writes": [
+    [
+     "INSERT",
+     "user_preferences"
+    ]
+   ],
+   "category": "C",
+   "scope": "owner-only",
+   "reason": "sports radar persists sports preferences during GET (ai/preferences.py)",
+   "risk": "LOW / non-financial state mutation",
+   "removed_by": "P0.2c"
   }
  ],
  "not_executable_in_harness": [

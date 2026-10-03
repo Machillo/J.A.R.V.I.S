@@ -36,8 +36,23 @@ def test_no_get_route_writes_except_the_listed_temporary_exceptions(monkeypatch)
     assert not stale, f"exceptions that no longer write: remove them from read_purity_exceptions.json: {stale}"
 
 
-def test_routes_the_harness_cannot_run_are_known(monkeypatch):
-    # A route that errors on an empty database escapes the gate: keep that set explicit.
+def test_every_exception_is_one_exact_route_with_its_risk_and_pr():
+    from backend.tests.get_route_harness import get_routes
+
+    routes = set(get_routes())
+    for entry in EXCEPTIONS["known_get_writes"]:
+        assert entry["path"] in routes, f"{entry['path']}: not a GET route (no wildcards)"
+        assert entry.get("risk") and entry.get("removed_by") and entry.get("reason") and entry.get("scope"), entry["path"]
+    paths = [entry["path"] for entry in EXCEPTIONS["not_executable_in_harness"]]
+    assert len(paths) == len(set(paths)), "each non-runnable route is listed once"
+    for entry in EXCEPTIONS["not_executable_in_harness"]:
+        assert entry["path"] in routes and entry.get("reason"), f"{entry['path']}: exact GET route with a concrete reason"
+
+
+def test_the_routes_the_harness_cannot_run_are_baselined_by_identity(monkeypatch):
+    # A route that errors on an empty database escapes the gate, so the set is frozen: a new one
+    # fails until it is classified here; one that runs again must be removed (it is now verified).
     unreachable = {path for path, result in call_every_get(monkeypatch, "owner").items() if result["status"] >= 500}
-    known = {entry["path"] for entry in EXCEPTIONS["not_executable_in_harness"] if entry.get("reason")}
-    assert unreachable <= known, f"GET routes the harness can no longer run (they escape the gate): {sorted(unreachable - known)}"
+    known = {entry["path"] for entry in EXCEPTIONS["not_executable_in_harness"]}
+    assert not unreachable - known, f"new GET routes the harness cannot run (classify them): {sorted(unreachable - known)}"
+    assert not known - unreachable, f"routes that run again: remove them from not_executable_in_harness: {sorted(known - unreachable)}"

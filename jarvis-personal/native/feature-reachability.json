@@ -13,7 +13,7 @@
   "VISIBLE_LOCKED": "Shown with its plan badge; opens the plans screen.",
   "OWNER_ONLY": "Owner only: never shown to any other plan or role.",
   "HIDDEN_BY_SECURITY": "Never shown to this plan/role for a security or account-protection reason.",
-  "HIDDEN_BY_PLAN": "Baseline only: not shown today for this plan. Each use names the PR that turns it into VISIBLE_LOCKED or AVAILABLE (P6.4)."
+  "HIDDEN_BY_PLAN": "TRANSITIONAL CURRENT-STATE REPRESENTATION: not shown today for this plan (neither locked nor hidden for security). Never a permanent way to hide a capability: every use is listed in the feature's 'transitional_hidden' with plan, platform, reason and the PR that turns it into VISIBLE_LOCKED or AVAILABLE."
  },
  "decisions": [
   "baseline-81fd2cc4",
@@ -580,7 +580,15 @@
      "free": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides Reports for Free; Android shows it locked"
+   "parity_gap": "P6.4 — iOS hides Reports for Free; Android shows it locked",
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "ios",
+     "reason": "iOS omits the Reports row below Basic instead of showing it locked (Android shows it locked)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "advisor.today",
@@ -623,7 +631,21 @@
      "basic": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row"
+   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row",
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "ios",
+     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    },
+    {
+     "plan": "basic",
+     "platform": "ios",
+     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "advisor.projections",
@@ -666,7 +688,21 @@
      "basic": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row"
+   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row",
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "ios",
+     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    },
+    {
+     "plan": "basic",
+     "platform": "ios",
+     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "advisor.scenarios",
@@ -709,7 +745,21 @@
      "basic": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row"
+   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row",
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "ios",
+     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    },
+    {
+     "plan": "basic",
+     "platform": "ios",
+     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "advisor.review",
@@ -752,7 +802,21 @@
      "basic": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row"
+   "parity_gap": "P6.4 — iOS hides VIP advisor rows below VIP; Android shows one locked 'Director financiero' row",
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "ios",
+     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    },
+    {
+     "plan": "basic",
+     "platform": "ios",
+     "reason": "iOS omits the VIP advisor rows below VIP (Android shows one locked 'Director financiero' row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "profile.situation",
@@ -999,7 +1063,21 @@
      "tab": "Profile",
      "text": "Financial emails"
     }
-   }
+   },
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "both",
+     "reason": "the mail rows are shown only to VIP; no locked row exists for Free/Basic on either platform",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    },
+    {
+     "plan": "basic",
+     "platform": "both",
+     "reason": "the mail rows are shown only to VIP; no locked row exists for Free/Basic on either platform",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "profile.accounts",
@@ -1033,7 +1111,21 @@
      "tab": "Profile",
      "text": "Accounts"
     }
-   }
+   },
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "both",
+     "reason": "the accounts rows are shown only to VIP; no locked row exists for Free/Basic on either platform",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    },
+    {
+     "plan": "basic",
+     "platform": "both",
+     "reason": "the accounts rows are shown only to VIP; no locked row exists for Free/Basic on either platform",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "profile.budget",
@@ -1076,7 +1168,15 @@
      "free": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row"
+   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row",
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "ios",
+     "reason": "iOS omits Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "profile.calendar",
@@ -1119,7 +1219,15 @@
      "free": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row"
+   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row",
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "ios",
+     "reason": "iOS omits Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "profile.recurring",
@@ -1162,7 +1270,15 @@
      "free": "VISIBLE_LOCKED"
     }
    },
-   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row"
+   "parity_gap": "P6.4 — iOS hides Finanzas for Free; Android shows one locked row",
+   "transitional_hidden": [
+    {
+     "plan": "free",
+     "platform": "ios",
+     "reason": "iOS omits Perfil → Finanzas for Free instead of a locked row (Android shows one locked row)",
+     "resolved_by": "P6.4 (locked/paused row policy, both platforms)"
+    }
+   ]
   },
   {
    "id": "profile.jarvis",

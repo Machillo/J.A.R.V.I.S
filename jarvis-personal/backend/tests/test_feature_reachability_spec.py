@@ -44,11 +44,21 @@ def test_every_feature_traces_to_a_decision():
         assert feature.get("decision") in SPEC["decisions"], feature["id"]
 
 
-def test_baseline_only_hidden_states_name_the_pr_that_resolves_them():
+def _effective(feature, platform):
+    return {**feature["plans"], **feature.get("platform_states", {}).get(platform, {})}
+
+
+def test_hidden_by_plan_is_transitional_and_every_use_is_documented():
+    # HIDDEN_BY_PLAN is a transitional current-state representation, never a permanent way to hide a
+    # capability: each (feature, plan, platform) use names its reason and the PR that resolves it.
+    assert "TRANSITIONAL" in SPEC["states"]["HIDDEN_BY_PLAN"]
     for feature in _features():
-        states = list(feature["plans"].values()) + [s for o in feature.get("platform_states", {}).values() for s in o.values()]
-        if "HIDDEN_BY_PLAN" in states:
-            assert feature.get("target") or feature.get("parity_gap"), f"{feature['id']}: HIDDEN_BY_PLAN needs a target PR"
+        documented = {(entry["plan"], platform) for entry in feature.get("transitional_hidden", [])
+                      for platform in (("ios", "android") if entry["platform"] == "both" else (entry["platform"],))
+                      if entry.get("reason") and entry.get("resolved_by")}
+        used = {(plan, platform) for platform in ("ios", "android")
+                for plan, state in _effective(feature, platform).items() if state == "HIDDEN_BY_PLAN"}
+        assert used == documented, f"{feature['id']}: HIDDEN_BY_PLAN uses {sorted(used)} vs documented {sorted(documented)}"
 
 
 def test_owner_only_features_are_owner_only_for_every_other_plan():
