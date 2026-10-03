@@ -144,11 +144,27 @@ def test_two_concurrent_cron_runs_send_each_job_once(cur, monkeypatch):
     lock = threading.Lock()
     probe = psycopg2.connect(database.DATABASE_URL)
     probe.autocommit = True
+    # Every database backend each scheduler uses, by thread. The other scheduler may be between a
+    # statement and its commit (claim, subscription read) while this one pushes: that is not a
+    # transaction held across a push. What must never happen is the pushing scheduler itself
+    # holding a transaction, on any of its connections, while it calls the push service.
+    backends: dict[str, set[int]] = {}
+    real_get_connection = service.get_connection
+
+    def tracked_get_connection():
+        connection = real_get_connection()
+        with lock:
+            backends.setdefault(threading.current_thread().name, set()).add(connection.conn.get_backend_pid())
+        return connection
+
+    monkeypatch.setattr(service, "get_connection", tracked_get_connection)
 
     def fake_send(_conn, _subscription, title, _body, _category):
-        with probe.cursor() as c:  # nothing of the scheduler holds a transaction during the push
+        with lock:
+            own = sorted(backends.get(threading.current_thread().name, set()))
+        with probe.cursor() as c:  # the pushing scheduler holds no transaction during its push
             c.execute("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() "
-                      "AND state LIKE 'idle in transaction%%' AND pid <> pg_backend_pid()")
+                      "AND state LIKE 'idle in transaction%%' AND pid = ANY(%s)", (own,))
             open_tx.append(c.fetchone()[0])
         time.sleep(0.05)
         with lock:
@@ -156,14 +172,14 @@ def test_two_concurrent_cron_runs_send_each_job_once(cur, monkeypatch):
         return True, None
 
     monkeypatch.setattr(service, "_send_to_subscription", fake_send)
-    runs = [threading.Thread(target=service.send_due_notifications) for _ in range(2)]
+    runs = [threading.Thread(target=service.send_due_notifications, name=f"scheduler-{n}") for n in range(2)]
     for run in runs:
         run.start()
     for run in runs:
         run.join()
     probe.close()
     assert sorted(pushes) == sorted(f"t{i}" for i in range(12))  # each once, none lost
-    assert set(open_tx) == {0}
+    assert len(open_tx) == 12 and set(open_tx) == {0}
     cur.execute("SELECT DISTINCT status FROM notification_jobs")
     assert cur.fetchall() == [("sent",)]
 
