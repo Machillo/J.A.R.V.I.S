@@ -158,20 +158,21 @@ private struct MonthBars: View {
 }
 
 /// Spending by category as a donut (the backend's categories as they are; nothing is regrouped or
-/// summed here), with the bars below as the readable list.
+/// summed here), with the bars below as the readable list. Pilot consumer of the shared
+/// `CompositionDonut` (DESIGN.md → Data visualization): same data, one hue instead of the default
+/// rainbow, a selectable part, and the parts read by VoiceOver.
 private struct SpendingDonut: View {
     let categories: [CategoryAmount]
 
     var body: some View {
-        Chart {
-            ForEach(categories) { slice in
-                SectorMark(angle: .value("Monto", NSDecimalNumber(decimal: slice.amount).doubleValue), innerRadius: .ratio(0.6), angularInset: 1)
-                    .foregroundStyle(by: .value("Categoría", slice.category))
-            }
-        }
-        .chartLegend(position: .bottom, alignment: .leading)
-        .frame(height: 200)
-        .accessibilityHidden(true)
+        CompositionDonut(
+            title: tx("Distribución del gasto", "Spending by category"),
+            composition: Composition(categories.map {
+                CompositionItem(id: $0.category, label: CategoryStyle.label($0.category), value: $0.amount)
+            }),
+            color: DincrColor.chartExpense,
+            showsLegend: false
+        )
     }
 }
 

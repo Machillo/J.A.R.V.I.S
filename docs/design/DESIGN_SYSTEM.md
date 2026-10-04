@@ -198,8 +198,11 @@ Follows the dataviz method (validated palette in DESIGN.md).
 | Income vs expenses by month | Grouped bars, 2 series (income teal, expense indigo), 2 pt gap, 4 pt rounded data ends | Legend always; value labels on selection; table alternative |
 | Where the money goes | Horizontal bars, single hue (`chart-expense`), sorted desc, direct value labels | No legend (title names it) |
 | Budget use per category | Linear progress bar, tint; over-limit segment in `negative` with icon and "excedido" text | |
-| Debt / patrimony projection | Line, 2 pt, baseline at 0, markers ≥ 8 pt on selection only | One axis only |
-| Goal progress | Linear progress bar with "₡X de ₡Y" text | No rings |
+| Debt / patrimony projection, evolution over time | `TrendLineChart`: line, 2 pt, baseline at 0, markers ≥ 8 pt on selection only (a value isolated between gaps keeps a small marker); a period without data is a gap | One axis only |
+| Goal progress | `DincrProgressBar`: linear bar with "₡X de ₡Y" text; unknown shows "sin dato" | No rings |
+| What a whole is made of (debts, categories) | `CompositionDonut`: one hue in steps of strength, center label (total or the selected part), legend rows with value and % that select a part; the others dim to 40% | Not drawn when parts are unknown, negative or in mixed currencies; the reason is shown in words |
+| Quick trend on a card | `Sparkline`: 2 pt line, no axes or legend, spoken first/last summary | Only next to its figure |
+| Better or worse than before | `TrendIndicator`: arrow + word for the direction, color from the caller's meaning | Direction never implies good or bad |
 
 Charts: Swift Charts (iOS), Compose Canvas components in the shared UI module (Android). Grid lines
 recessive (`line`), axis labels `caption` in `text-muted`, values and legends in text tokens (never

@@ -20,7 +20,7 @@ import com.dincr.design.generated.DincrColors
 /** Resolved DINCR semantic colors for the current scheme (DESIGN.md → Colors). */
 @Immutable
 data class DincrPalette(
-    val bg: Color, val surface: Color, val surface2: Color, val line: Color, val fieldBorder: Color,
+    val bg: Color, val surface: Color, val surface2: Color, val line: Color, val lineStrong: Color, val fieldBorder: Color,
     val text: Color, val text2: Color, val textMuted: Color,
     val tint: Color, val tintPressed: Color, val tintContainer: Color, val onTint: Color, val onTintContainer: Color,
     val positive: Color, val positiveContainer: Color, val negative: Color, val negativeContainer: Color,
@@ -32,7 +32,7 @@ private fun palette(dark: Boolean): DincrPalette {
     fun DincrColorPair.pick() = if (dark) this.dark else light
     return with(DincrColors) {
         DincrPalette(
-            bg.pick(), surface.pick(), surface2.pick(), line.pick(), fieldBorder.pick(),
+            bg.pick(), surface.pick(), surface2.pick(), line.pick(), lineStrong.pick(), fieldBorder.pick(),
             text.pick(), text2.pick(), textMuted.pick(),
             tint.pick(), tintPressed.pick(), tintContainer.pick(), onTint.pick(), onTintContainer.pick(),
             positive.pick(), positiveContainer.pick(), negative.pick(), negativeContainer.pick(),

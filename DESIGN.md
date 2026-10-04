@@ -278,6 +278,29 @@ alone.
 dataviz six-checks validator in both modes (lightness band, chroma floor, CVD ΔE ≥ 13.7 deutan,
 normal-vision ΔE ≥ 19, ≥ 3:1 on surface). Single-series magnitude charts use `chart-expense` alone.
 
+**Visualize information; do not invent information.** A chart draws values the caller already
+has; it never computes, approximates or fills them in. Unknown stays "sin dato" (never 0), a period
+without data is a gap (never 0 and never interpolated), a share exists only when the whole is known
+and positive, and values in different currencies are never added. The models
+(`DincrCore/VisualModels.swift`, `com.dincr.data.VisualModels`) enforce this and are tested.
+
+**Direction ≠ financial meaning.** Up is not good and down is not bad: debt going down is good,
+savings going down is not. A trend's direction picks the arrow; the caller says what it means
+(`TrendMeaning`), and only that picks the color.
+
+The family (shared components on both platforms, same names):
+
+| Question | Component | Use when | Not when |
+|----------|-----------|----------|----------|
+| What is it made of? | `CompositionDonut` | Parts of one positive whole in one currency (debts, categories, assets); legend rows with value and %, tap a part to see it | Parts unknown, negative or in mixed currencies (it shows why, in words, instead); a single number; more parts than can be told apart without the legend |
+| How did it change over time? | `TrendLineChart` | Two or more known periods; baseline at 0; tap a period to read its value | One value (say it in text); comparing two categories side by side (bars) |
+| How far along? | `DincrProgressBar` | Progress toward a positive target, with the value in text next to it | Unknown or invalid target (it shows "sin dato"); decoration |
+| Quick trend on a card | `Sparkline` | Next to the figure it summarizes, on Hoy-style cards; no axes; spoken summary | As the only place a value appears; analysis screens (use the line chart) |
+| Better or worse than before? | `TrendIndicator` | A comparison of two known values, with the meaning given by the caller | No earlier value (it says "sin comparación") |
+
+Don't chart when a sentence or one number answers the question faster. Every chart is readable
+without the picture: screen readers get each value (and share or direction), not just a title.
+
 ### Named Rules
 
 - **Expenses are not red.** Spending money is normal; red is reserved for problems.
@@ -445,6 +468,7 @@ and changes only the scene, below a root that reads the server role (`dincrOwner
 - No gradients behind content, no glass cards, no glow.
 - No red for ordinary expenses; no green for "income" labels that are not events.
 - No uppercase eyebrow kickers; no section numbers.
-- No progress rings, sparklines or decorative charts; every chart answers a question.
+- No progress rings or decorative charts; every chart answers a question. A sparkline only sits
+  next to the figure it summarizes, never alone (Data visualization).
 - No custom navigation, custom back gestures or web-shaped controls.
 - No per-plan color themes.
