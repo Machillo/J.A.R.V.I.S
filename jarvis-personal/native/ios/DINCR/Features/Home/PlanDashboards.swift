@@ -125,7 +125,7 @@ private struct CommandCenterContent: View {
                 if !alerts.isEmpty {
                     SectionHeader(title: tx("Alertas", "Alerts"))
                     ForEach(Array(alerts.enumerated()), id: \.offset) { _, alert in
-                        StatusBanner(tone: alert.severity == "high" ? .error : .warning, title: alert.title ?? "",
+                        DincrMessage(.financial(severity: alert.severity), title: alert.title ?? "",
                                      message: [alert.context, alert.action].compactMap { $0 }.joined(separator: " "))
                     }
                 }

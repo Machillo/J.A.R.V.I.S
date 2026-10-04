@@ -19,16 +19,16 @@ import androidx.compose.ui.unit.dp
 import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.FinancialEngineReport
+import com.dincr.data.MessageKind
 import com.dincr.data.NetWorthReport
 import com.dincr.data.OwnerAnalysis
 import com.dincr.data.TransactionAnalysis
-import com.dincr.design.BannerTone
 import com.dincr.design.CategoryBars
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
+import com.dincr.design.DincrMessage
 import com.dincr.design.IncomeExpenseBars
 import com.dincr.design.MoneyText
-import com.dincr.design.StatusBanner
 import com.dincr.design.generated.DincrSpacing
 import java.math.BigDecimal
 import kotlinx.coroutines.async
@@ -85,7 +85,7 @@ private fun HealthSection(e: FinancialEngineReport) {
         }
         e.forecast?.let { f ->
             AmountLine(tx("Cierre de mes previsto", "Expected month-end balance"), f.projectedEndBalance, emphasize = true)
-            f.alert?.message?.let { StatusBanner(if (f.alert?.level == "high") BannerTone.WARNING else BannerTone.INFO, tx("Pronóstico", "Forecast"), it) }
+            f.alert?.message?.let { DincrMessage(MessageKind.financial(f.alert?.level), tx("Pronóstico", "Forecast"), it) }
         }
         e.emergencyFund?.let { f ->
             AmountLine(tx("Salvavidas", "Emergency fund"), f.current)

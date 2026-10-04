@@ -17,6 +17,7 @@ import com.dincr.app.tx
 import com.dincr.data.AppLanguage
 import com.dincr.data.DirectorStrategy
 import com.dincr.data.Distribution
+import com.dincr.data.MessageKind
 import com.dincr.data.OpsFlag
 import com.dincr.data.Strategy
 import com.dincr.data.StrategyContract
@@ -24,6 +25,7 @@ import com.dincr.data.StrategyDashboard
 import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
+import com.dincr.design.DincrMessage
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.EmptyState
 import com.dincr.design.MoneyText
@@ -97,7 +99,7 @@ fun StrategyScreen(model: AppModel, nav: Navigator) {
 private fun BasicStrategyView(s: Strategy, nav: Navigator) {
     if (s.status == "needs_income") { NeedsIncome(s.recommendation, nav); return }
     if (s.isIncomeObserved) ObservedIncomeNote()
-    if (s.status == "critical") StatusBanner(BannerTone.WARNING, tx("Tus compromisos superan tus ingresos", "Your commitments exceed your income"), s.recommendation.orEmpty())
+    if (s.status == "critical") DincrMessage(MessageKind.ATTENTION, tx("Tus compromisos superan tus ingresos", "Your commitments exceed your income"), s.recommendation.orEmpty())
     DincrCard {
         Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
             Text(tx("Margen para decidir", "Room to decide"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
@@ -141,7 +143,7 @@ private fun incomeSourceNote(source: String?): String? = when (source) {
 private fun DirectorStrategyView(s: DirectorStrategy, nav: Navigator) {
     if (s.status == "needs_income") { NeedsIncome(s.objective, nav); return }
     if (s.incomePolicy?.source in ESTIMATED_INCOME) ObservedIncomeNote()
-    if (s.status == "critical") StatusBanner(BannerTone.WARNING, tx("Este mes no hay sobrante real", "No real surplus this month"), s.objective.orEmpty())
+    if (s.status == "critical") DincrMessage(MessageKind.ATTENTION, tx("Este mes no hay sobrante real", "No real surplus this month"), s.objective.orEmpty())
     DincrCard {
         Column(Modifier.testTag("strategy.director.${s.scope}"), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s1)) {
             s.modeLabel?.let { Text(it, style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2) }

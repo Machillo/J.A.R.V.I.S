@@ -88,7 +88,8 @@ public struct EmptyStateView<Action: View>: View {
     }
 }
 
-/// Inline error with the recovery next to it (DESIGN.md → Do's).
+/// Inline technical error with the recovery next to it (DESIGN.md → Do's, Messages). It uses the
+/// technical-error look, so a failure of DINCR never reads as a situation in the user's money.
 public struct ErrorStateView: View {
     let message: String
     let retry: (() -> Void)?
@@ -98,11 +99,13 @@ public struct ErrorStateView: View {
     }
 
     public var body: some View {
+        let style = DincrMessageStyle(.technicalError)
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             Label {
                 Text(message).font(DincrFont.body).foregroundStyle(DincrColor.text)
             } icon: {
-                Image(systemName: "xmark.octagon").foregroundStyle(DincrColor.negative)
+                Image(systemName: style.symbol).foregroundStyle(style.color)
+                    .accessibilityLabel(style.spokenKind)
             }
             if let retry {
                 Button(AppLanguage.current.pick("Reintentar", "Try again"), action: retry)
@@ -113,15 +116,16 @@ public struct ErrorStateView: View {
         }
         .padding(DincrSpacing.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DincrColor.negativeContainer, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
+        .background(style.fill, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
         .accessibilityElement(children: .contain)
     }
 }
 
-/// Global notice (offline, degraded service, writes paused). Status colors always come with an
-/// icon and text.
+/// Neutral notice: demo mode, a new version, a promotion, an action's result. Anything that means
+/// something (a technical problem, a financial situation, a recommendation, progress) is a
+/// `DincrMessage`, so this banner has no warning or error tone (DESIGN.md → Messages).
 public struct StatusBanner: View {
-    public enum Tone: Sendable { case info, warning, error }
+    public enum Tone: Sendable { case info }
     let tone: Tone
     let title: String
     let message: String
@@ -133,8 +137,6 @@ public struct StatusBanner: View {
     public var body: some View {
         let (symbol, color, fill): (String, Color, Color) = switch tone {
         case .info: ("info.circle", DincrColor.info, DincrColor.infoContainer)
-        case .warning: ("exclamationmark.triangle", DincrColor.warning, DincrColor.warningContainer)
-        case .error: ("xmark.octagon", DincrColor.negative, DincrColor.negativeContainer)
         }
         HStack(alignment: .top, spacing: DincrSpacing.s3) {
             Image(systemName: symbol).foregroundStyle(color).accessibilityHidden(true)

@@ -24,6 +24,7 @@ import com.dincr.app.tx
 import com.dincr.data.ApiError
 import com.dincr.data.AuthException
 import com.dincr.data.Feature
+import com.dincr.data.MessageKind
 import com.dincr.data.MoneyFormat
 import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
@@ -32,6 +33,7 @@ import com.dincr.data.ScenarioResult
 import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
+import com.dincr.design.DincrMessage
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.EmptyState
 import com.dincr.design.StatusBanner
@@ -172,8 +174,7 @@ fun TodayScreen(model: AppModel, nav: Navigator) {
                     if (current.isNotEmpty()) {
                         SectionTitle(tx("Tu situación actual", "Your current situation"))
                         current.forEach { alert ->
-                            val tone = if (alert.severity in setOf("critical", "high")) BannerTone.WARNING else BannerTone.INFO
-                            StatusBanner(tone, alert.title.orEmpty(), listOfNotNull(alert.context, alert.action).filter { it.isNotBlank() }.joinToString(" "))
+                            DincrMessage(MessageKind.financial(alert.severity), alert.title.orEmpty(), listOfNotNull(alert.context, alert.action).filter { it.isNotBlank() }.joinToString(" "))
                         }
                     } else if (t.currentAlerts != null) {
                         EmptyState(Icons.Rounded.NotificationsActive, tx("Nada urgente hoy", "Nothing urgent today"), tx("Tu situación actual no tiene avisos.", "Your current situation has no alerts."))
@@ -181,8 +182,7 @@ fun TodayScreen(model: AppModel, nav: Navigator) {
                 }
                 a.alerts.isEmpty() -> EmptyState(Icons.Rounded.NotificationsActive, tx("Todo en orden", "All good"), a.message ?: tx("No hay cambios que requieran tu atención.", "Nothing needs your attention."))
                 else -> a.alerts.forEach { alert ->
-                    val tone = when (alert.severity) { "critical", "high" -> BannerTone.WARNING; "success" -> BannerTone.INFO; else -> BannerTone.INFO }
-                    StatusBanner(tone, alert.title.orEmpty(), alert.explanation.orEmpty())
+                    DincrMessage(MessageKind.financial(alert.severity), alert.title.orEmpty(), alert.explanation.orEmpty())
                     alert.action?.let { action ->
                         val route = when (action.route?.trim('/')) { "debts" -> "debts"; "goals" -> "goals"; "budget" -> "budget"; "finance", "movements" -> "movements"; "situation" -> "situation"; else -> null }
                         val label = action.label
