@@ -16,7 +16,7 @@ final class AppModel {
         case identityError(String, deletionPending: Bool)
         /// A1 — this version is no longer supported.
         case updateRequired(ReleasePolicy)
-        case ownerNotSupported
+        case unsupportedRole
         /// A8 — updated terms or privacy policy must be accepted before anything else.
         case legalRequired
         /// A11 — first plan choice.
@@ -231,8 +231,8 @@ final class AppModel {
         self.profile = profile
         lastIdentityRefresh = .now
         switch IdentityGate.of(profile) {
-        case .internalOnly:
-            phase = .ownerNotSupported
+        case .unsupportedRole:
+            phase = .unsupportedRole
         case .legalRequired:
             phase = .legalRequired
         case .profileSetup:

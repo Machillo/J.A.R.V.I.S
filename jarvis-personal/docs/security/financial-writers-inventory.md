@@ -4,7 +4,7 @@ Every code path that inserts, updates or deletes a financial table, grouped by t
 
 **Surfaces**
 - **Users:** `user_product/`, `auth/`.
-- **Owner:** internal modules behind `INTERNAL_ONLY` or an owner/admin role check.
+- **Owner:** internal modules behind `INTERNAL_ONLY` or a verified-Owner check (`require_owner`).
 - **Script:** operator scripts in `backend/scripts/`.
 
 Regenerate this file whenever a writer is added. Any Users writer must satisfy `CLAUDE.md` §4 (tenancy, reads never write) and the DINCR Data Integrity checklist.

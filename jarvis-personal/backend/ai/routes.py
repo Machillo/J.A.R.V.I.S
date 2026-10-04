@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from backend.ai.models import JarvisChatRequest, SportsPreferencesRequest, BrowserSubscriptionRequest, MemoryItemRequest, ProfilePreferencesRequest
 from backend.ai.jarvis_engine import process_message, create_initial_financial_strategy
 from backend.ai.premium_orchestrator import get_current_strategy_summary
-from backend.auth.current_user import require_roles
+from backend.auth.current_user import require_owner
 from backend.ai.preferences import get_sports_preferences, update_sports_preferences, save_browser_subscription
 from backend.core.events import get_upcoming_events
 from backend.sports.service import ensure_owner_sports_preferences, get_sports_calendar_summary
@@ -21,7 +21,8 @@ from backend.ai.memory_service import (
 )
 
 def require_internal_role():
-    return require_roles("owner", "admin")
+    # JARVIS is the Owner's: the single verified Owner, never another role.
+    return require_owner()
 
 
 router = APIRouter(

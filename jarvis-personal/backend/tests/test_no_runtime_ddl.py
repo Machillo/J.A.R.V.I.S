@@ -114,11 +114,11 @@ USERS_ROUTE_MODULES = ("user_product/routes.py", "financial_lifecycle/routes.py"
                        "product_ops/observability_routes.py", "finance/daily_history_routes.py")
 # Routers main.py mounts without INTERNAL_ONLY that are not Users entries, and why.
 OWNER_GATED_ROUTER_MODULES = {
-    "ai/routes.py": "router dependency require_roles('owner', 'admin')",
+    "ai/routes.py": "router dependency require_owner (the single verified Owner)",
     "email_monitor/routes.py": "require_roles in routes and _require_owner_user in the service",
     "users_admin/routes.py": "require_roles('owner')",
     "auth/owner_bridge_routes.py": "router dependency require_owner_bridge_key",
-    "deployment_monitor/routes.py": "HMAC secret and require_roles('owner', 'admin')",
+    "deployment_monitor/routes.py": "HMAC secret and require_owner",
     "integrations/ibkr_readonly.py": "HMAC secret headers (Owner cron and sync)",
 }
 

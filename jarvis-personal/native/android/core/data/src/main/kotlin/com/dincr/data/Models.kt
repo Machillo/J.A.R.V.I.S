@@ -86,8 +86,11 @@ data class Profile(
      * Owner every product feature), and no internal screen (the public app has none).
      */
     val isOwner: Boolean get() = role == "owner"
-    /** Admin sessions are not served by the public app (Owner boundary). */
-    val usesInternalAppOnly: Boolean get() = role == "admin"
+    /**
+     * DINCR's account roles are "user" (Free/Basic/VIP) and the single Owner. Any other role the
+     * server might report (a legacy stored value) is not served: never promoted, never a User.
+     */
+    val hasUnsupportedRole: Boolean get() = !role.isNullOrEmpty() && role != "user" && role != "owner"
     /** The Owner account is never deleted from the public app (DELETE /auth/me would remove it). */
     val canDeleteAccountInApp: Boolean get() = !isOwner
     val plan: String get() = subscription?.plan?.lowercase() ?: "free"
@@ -103,11 +106,11 @@ data class Profile(
  * setup, plan. The server decides role and plan; this only routes (iOS: `IdentityGate.of`).
  */
 enum class IdentityGate {
-    INTERNAL_ONLY, LEGAL_REQUIRED, PROFILE_SETUP, CHOOSE_PLAN, READY;
+    UNSUPPORTED_ROLE, LEGAL_REQUIRED, PROFILE_SETUP, CHOOSE_PLAN, READY;
 
     companion object {
         fun of(profile: Profile): IdentityGate = when {
-            profile.usesInternalAppOnly -> INTERNAL_ONLY
+            profile.hasUnsupportedRole -> UNSUPPORTED_ROLE
             profile.legal?.required == true -> LEGAL_REQUIRED
             profile.profileSetupCompleted != true -> PROFILE_SETUP
             // Owner's plan is granted by the backend, never chosen (POST /auth/plan ignores Owner).

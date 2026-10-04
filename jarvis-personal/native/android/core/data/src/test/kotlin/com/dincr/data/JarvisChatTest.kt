@@ -232,12 +232,14 @@ class JarvisChatTest {
 
     // --- Fake backend (what the UI tests run against) --------------------------------------------
 
-    @Test fun theFakeChatAnswersTheOwnerAndAdminOnly() = runTest {
+    @Test fun theFakeChatAnswersTheOwnerOnly() = runTest {
         val owner = fixture()
         assertTrue(owner.jarvisChat("Hoy hice 3 horas extra").awaitsConfirmation)
         assertTrue("registrado" in owner.jarvisChat("sí").message)
         assertFalse(owner.jarvisChat("¿Cuál es mi deuda más alta?").awaitsConfirmation)
-        fixture(FakeBackend.Role.ADMIN).jarvisChat("hola")
+        // A legacy stored "admin" is not the Owner: refused like any account (P0.2d).
+        val legacy = runCatching { fixture(FakeBackend.Role.LEGACY_ADMIN).jarvisChat("hola") }.exceptionOrNull() as ApiError
+        assertEquals(ApiError.Kind.FORBIDDEN, legacy.kind)
 
         PlanTier.entries.forEach { plan ->
             val error = runCatching { fixture(FakeBackend.Role.USER, plan).jarvisChat("hola") }.exceptionOrNull() as ApiError

@@ -17,7 +17,8 @@ SPEC_PATH = Path(__file__).resolve().parents[2] / "native" / "feature-reachabili
 SPEC = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
 PLANS = ("free", "basic", "vip", "owner")
 RANK = {"free": 1, "basic": 2, "vip": 3}
-OWNER_GATES = ("internal_only", "router_roles:admin,owner", "roles:owner", "roles:admin,owner", "owner_service")
+# The verified-Owner gates (DINCR has no other administrative role).
+OWNER_GATES = ("internal_only", "router_roles:owner", "roles:owner", "owner_service")
 
 
 def _features():

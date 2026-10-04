@@ -18,7 +18,7 @@ ALLOWED_TARGET_MONTHS = (1, 3, 6)
 # The Owner boundary. The historical JARVIS Salvavidas (his Casa/Línea/Liberty
 # obligations, the protected-expense picker over his fixed_expenses, the balance kept
 # in a MultiMoney account) runs only for the server-resolved Owner role. DINCR Users
-# (and admin) get the neutral model: months of their own real obligations.
+# get the neutral model: months of their own real obligations.
 OWNER_ROLE = "owner"
 
 

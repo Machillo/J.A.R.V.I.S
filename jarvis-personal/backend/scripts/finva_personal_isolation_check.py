@@ -56,8 +56,7 @@ def resolve_context(email: str) -> dict:
                 a.role AS account_role,
                 COALESCE(a.legacy_allowed_user_id, au.id) AS legacy_allowed_user_id,
                 w.id AS workspace_id,
-                w.name AS workspace_name,
-                wm.member_role AS workspace_role
+                w.name AS workspace_name
             FROM accounts a
             JOIN workspaces w
               ON w.owner_account_id = a.id
@@ -90,7 +89,6 @@ def resolve_context(email: str) -> dict:
         "account_role": row.get("account_role") or "user",
         "workspace_id": str(row["workspace_id"]),
         "workspace_name": row["workspace_name"],
-        "workspace_role": row.get("workspace_role") or "owner",
     }
 
 

@@ -6,7 +6,7 @@ import Foundation
 /// never a plan). The Owner uses the public app at VIP level (#296) and, on top of it, JARVIS.
 /// - Only the role in `/auth/me` opens it: never a plan code, a stored flag or a local copy of the
 ///   profile. The app only shows or hides the entry; the backend decides every JARVIS request.
-/// - Admin is not the Owner and never gets JARVIS.
+/// - Any other role (a legacy stored value) is not the Owner and never gets JARVIS.
 ///
 /// Android twin: `Jarvis.kt`.
 public enum Jarvis {

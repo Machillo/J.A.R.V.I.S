@@ -64,7 +64,7 @@ def test_every_legacy_route_requires_an_internal_role():
     for route in main.app.routes:
         path = getattr(route, "path", "")
         if path.startswith(prefixes) or path in {"/ask", "/events", "/logs"}:
-            assert main.INTERNAL_ONLY[0] in route.dependencies, f"{path} must require owner/admin"
+            assert main.INTERNAL_ONLY[0] in route.dependencies, f"{path} must require the verified Owner"
 
 
 def test_public_dincr_app_routes_are_not_role_gated(as_role):

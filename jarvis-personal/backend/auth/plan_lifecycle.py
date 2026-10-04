@@ -70,7 +70,7 @@ def lock_subscription(conn, account_id: str) -> None:
 
 
 def clear_pending(conn, account_id: str) -> None:
-    """Drop a scheduled change (an upgrade, a new grant or an admin action replaces it)."""
+    """Drop a scheduled change (an upgrade, a new grant or an Owner action replaces it)."""
     if pending_supported(conn):
         conn.execute(
             """UPDATE account_subscriptions

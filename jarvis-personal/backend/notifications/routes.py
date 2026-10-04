@@ -4,7 +4,7 @@ import hmac
 import os
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
-from backend.auth.current_user import require_roles
+from backend.auth.current_user import require_owner
 from backend.core import observability
 
 from backend.notifications.service import (
@@ -17,7 +17,7 @@ from backend.notifications.service import (
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 # Browser push is an Owner (JARVIS) feature; only /cron is public (secret-protected).
-OWNER_ONLY = [Depends(lambda: require_roles("owner", "admin"))]
+OWNER_ONLY = [Depends(require_owner)]
 
 
 @router.get("/status", dependencies=OWNER_ONLY)

@@ -1,7 +1,7 @@
 import Foundation
 
 // JARVIS "Análisis financiero" (Owner only): the historical web Finanzas tab, read from three
-// owner/admin routes (the backend's INTERNAL_ONLY routers decide; the app shows the section only to
+// Owner routes (the backend's INTERNAL_ONLY routers decide; the app shows the section only to
 // the Owner role):
 // - `GET /transactions/analysis/summary` (transactions/analyzer.py `get_transaction_analysis`),
 // - `GET /finance/net-worth` (finance/service.py `get_net_worth_report`),

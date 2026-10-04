@@ -18,7 +18,7 @@ from backend.user_product.income_policy import load_income_baseline
 # The Owner boundary. The personal JARVIS strategy (payroll/OT/bonus income, the pay
 # cycle that rolls on day 6 with the card cut on the 21st, MultiMoney cash, the
 # Casa/Línea obligations, the Popular ordering, the Wise/IBKR funding model) runs
-# only for the server-resolved Owner role. DINCR Users (and admin) get the neutral
+# only for the server-resolved Owner role. DINCR Users get the neutral
 # strategy: their own income policy, calendar month, recurring items and debts.
 OWNER_ROLE = "owner"
 

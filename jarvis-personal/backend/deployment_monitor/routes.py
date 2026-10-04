@@ -8,7 +8,7 @@ import time
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from backend.deployment_monitor.service import deployment_summary, save_event
-from backend.auth.current_user import require_roles
+from backend.auth.current_user import require_owner
 
 router = APIRouter(prefix="/deployment-monitor", tags=["Deployment monitor"])
 
@@ -46,7 +46,7 @@ def _check_render_signature(raw: bytes, webhook_id: str | None, webhook_timestam
 @router.get("")
 def deployments():
     # Deployment history is internal operations data, not for DINCR customers.
-    require_roles("owner", "admin")
+    require_owner()
     return deployment_summary()
 
 

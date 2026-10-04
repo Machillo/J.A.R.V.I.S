@@ -20,7 +20,7 @@ DEFAULT_LANGUAGE = "es"
 # Two separate questions:
 # 1. Which routes follow Accept-Language? The routes the DINCR app calls.
 LOCALIZED_PATH_PREFIXES = ("/user-product/", "/auth/", "/product-ops/")
-# ...except Owner/admin operations mounted under those prefixes: always Spanish.
+# ...except Owner operations mounted under those prefixes: always Spanish.
 OWNER_PATH_PREFIXES = ("/product-ops/owner/", "/auth/allowed-users")
 # 2. Which routes serve DINCR Users (neutral voice via voice())? Only the
 #    Users product. /product-ops/ and /auth/ are shared operations/account

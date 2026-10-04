@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // JARVIS "Análisis financiero" (Owner only; parity with the historical web Finanzas tab). Three
-// read endpoints of the Owner's internal routers (owner/admin on the server; the app shows the
+// read endpoints of the Owner's internal routers (Owner-only on the server; the app shows the
 // section only for the Owner role): /transactions/analysis/summary, /finance/net-worth and
 // /finance/engine. Every figure is the backend's, in the account's base currency; the app only
 // formats it. Decoding is tolerant: unknown keys are ignored, every number is optional.

@@ -50,7 +50,7 @@
   "method": "GET",
   "path": "/auth/allowed-users",
   "gates": [
-   "roles:admin,owner"
+   "roles:owner"
   ],
   "user_get": "denied"
  },
@@ -58,14 +58,14 @@
   "method": "POST",
   "path": "/auth/allowed-users",
   "gates": [
-   "roles:admin,owner"
+   "roles:owner"
   ]
  },
  {
   "method": "DELETE",
   "path": "/auth/allowed-users/{user_id}",
   "gates": [
-   "roles:admin,owner"
+   "roles:owner"
   ]
  },
  {
@@ -154,7 +154,7 @@
   "method": "GET",
   "path": "/deployment-monitor",
   "gates": [
-   "roles:admin,owner"
+   "roles:owner"
   ],
   "user_get": "denied"
  },
@@ -226,7 +226,7 @@
   "method": "POST",
   "path": "/email-monitor/statements/reconcile",
   "gates": [
-   "roles:admin,owner"
+   "roles:owner"
   ]
  },
  {
@@ -1131,7 +1131,7 @@
   "method": "GET",
   "path": "/jarvis/calendar/upcoming",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1139,7 +1139,7 @@
   "method": "GET",
   "path": "/jarvis/cards/additional-report",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1147,14 +1147,14 @@
   "method": "POST",
   "path": "/jarvis/chat",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "GET",
   "path": "/jarvis/memory",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1162,14 +1162,14 @@
   "method": "POST",
   "path": "/jarvis/memory",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "GET",
   "path": "/jarvis/memory/search",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1177,7 +1177,7 @@
   "method": "GET",
   "path": "/jarvis/memory/summary",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1185,21 +1185,21 @@
   "method": "DELETE",
   "path": "/jarvis/memory/{memory_id}",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "POST",
   "path": "/jarvis/notifications/browser",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "GET",
   "path": "/jarvis/preferences/profile",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1207,14 +1207,14 @@
   "method": "POST",
   "path": "/jarvis/preferences/profile",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "GET",
   "path": "/jarvis/preferences/sports",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1222,21 +1222,21 @@
   "method": "POST",
   "path": "/jarvis/preferences/sports",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "POST",
   "path": "/jarvis/premium/initial-strategy",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "GET",
   "path": "/jarvis/premium/strategy-dashboard",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1244,7 +1244,7 @@
   "method": "GET",
   "path": "/jarvis/premium/strategy-summary",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1252,14 +1252,14 @@
   "method": "POST",
   "path": "/jarvis/sports/defaults",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "GET",
   "path": "/jarvis/sports/radar",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1282,7 +1282,7 @@
   "method": "GET",
   "path": "/notifications/status",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },
@@ -1290,21 +1290,21 @@
   "method": "POST",
   "path": "/notifications/subscribe",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "POST",
   "path": "/notifications/test",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ]
  },
  {
   "method": "GET",
   "path": "/notifications/vapid-public-key",
   "gates": [
-   "router_roles:admin,owner"
+   "router_roles:owner"
   ],
   "user_get": "denied"
  },

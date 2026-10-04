@@ -49,8 +49,9 @@ import Testing
     @Test func ownerAndAdminSessionsAreRecognized() throws {
         let decode = { (role: String) in try APIClient.decoder.decode(Profile.self, from: Data(#"{"id":1,"role":"\#(role)"}"#.utf8)) }
         let owner = try decode("owner"), admin = try decode("admin")
-        #expect(owner.isOwner && !owner.usesInternalAppOnly)
-        #expect(admin.usesInternalAppOnly && !admin.isOwner)
+        #expect(owner.isOwner && !owner.hasUnsupportedRole)
+        #expect(admin.hasUnsupportedRole && !admin.isOwner)  // a legacy stored role: refused, never Owner
+        #expect(!(try decode("user")).hasUnsupportedRole)
     }
 
     @Test func encodesRequestBodiesInSnakeCase() throws {

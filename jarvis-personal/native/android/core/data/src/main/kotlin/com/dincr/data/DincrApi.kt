@@ -167,7 +167,7 @@ class DincrApi(private val client: ApiClient) {
     suspend fun setAccountOwnership(id: Long, own: Boolean): Acknowledgement =
         client.send("PUT", "/user-product/vip/financial-identity/accounts/$id", OwnershipRequest(if (own) "own" else "not_mine"))
 
-    // --- JARVIS "Análisis financiero" (Owner; the routers are owner/admin on the server) --------------
+    // --- JARVIS "Análisis financiero" (Owner; the routers are Owner-only on the server) --------------
     suspend fun transactionAnalysis(): TransactionAnalysis = client.get("/transactions/analysis/summary")
     suspend fun netWorth(): NetWorthReport = client.get("/finance/net-worth")
     suspend fun financialEngine(): FinancialEngineReport = client.get("/finance/engine")

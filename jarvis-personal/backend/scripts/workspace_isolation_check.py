@@ -79,8 +79,8 @@ def owner_contexts():
         )
         conn.execute(
             """
-            INSERT INTO workspace_members(workspace_id, account_id, member_role, status)
-            VALUES (%s,%s,'owner','active')
+            INSERT INTO workspace_members(workspace_id, account_id, status)
+            VALUES (%s,%s,'active')
             """,
             (workspace_b, row["account_id"]),
         )
@@ -93,7 +93,6 @@ def owner_contexts():
         "status": "active",
         "account_id": str(row["account_id"]),
         "account_role": "owner",
-        "workspace_role": "owner",
     }
     a = {**base, "workspace_id": str(row["workspace_id"]), "workspace_name": row["workspace_name"]}
     b = {**base, "workspace_id": workspace_b, "workspace_name": "4E Isolation Temporary"}

@@ -10,6 +10,11 @@ def resolve_personal_workspace_context(conn, legacy_allowed_user_id: int) -> dic
 
     Durante la migración conservamos allowed_users.id como compatibilidad, pero
     toda funcionalidad nueva debe usar account_id/workspace_id de este contexto.
+
+    Workspace data owner != DINCR Owner. Every account owns its personal workspace
+    (workspaces.owner_account_id, an active workspace_members row): that is ownership of its
+    own financial data and isolation, never DINCR authority. The only DINCR Owner is the
+    session role "owner" (backend/auth/owner_role.py). Membership has no role (P0.2d).
     """
     row = conn.execute(
         """
@@ -21,7 +26,6 @@ def resolve_personal_workspace_context(conn, legacy_allowed_user_id: int) -> dic
             w.name AS workspace_name,
             w.workspace_type,
             w.status AS workspace_status,
-            wm.member_role,
             wm.status AS membership_status
         FROM accounts a
         JOIN workspaces w
@@ -75,7 +79,6 @@ def resolve_personal_workspace_context(conn, legacy_allowed_user_id: int) -> dic
         "workspace_id": str(data["workspace_id"]),
         "workspace_name": data.get("workspace_name"),
         "workspace_type": data.get("workspace_type"),
-        "workspace_role": data.get("member_role"),
     }
 
 

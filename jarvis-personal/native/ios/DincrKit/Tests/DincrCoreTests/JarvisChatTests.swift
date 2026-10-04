@@ -207,13 +207,15 @@ import Testing
 
     // MARK: Fixture backend (what the UI tests run against)
 
-    @Test func theFixtureChatAnswersTheOwnerAndAdminOnly() async throws {
+    @Test func theFixtureChatAnswersTheOwnerOnly() async throws {
         let owner = FixtureBackend.service(FixtureBackend(role: .owner, latency: .zero))
         let change = try await owner.jarvisChat("Hoy hice 3 horas extra")
         #expect(change.awaitsConfirmation)
         #expect(try await owner.jarvisChat("sí").message.contains("registrado"))
         #expect(try await !owner.jarvisChat("¿Cuál es mi deuda más alta?").awaitsConfirmation)
-        _ = try await FixtureBackend.service(FixtureBackend(role: .admin, latency: .zero)).jarvisChat("hola")
+        // A legacy stored "admin" is not the Owner: refused like any account (P0.2d).
+        let legacy = FixtureBackend.service(FixtureBackend(role: .legacyAdmin, latency: .zero))
+        await #expect(throws: APIError.self) { try await legacy.jarvisChat("hola") }
 
         for plan in [PlanTier.free, .basic, .vip] {
             let user = FixtureBackend.service(FixtureBackend(plan: plan, latency: .zero))

@@ -49,12 +49,12 @@ struct RootView: View {
                     primary: Self.storeURL(policy.updateUrl).map { url in (tx("Actualizar", "Update"), { UIApplication.shared.open(url) }) },
                     showsSignOut: false
                 )
-            case .ownerNotSupported:
-                // Owner boundary (CLAUDE.md §4.A): the public app never renders Owner features.
+            case .unsupportedRole:
+                // A role DINCR no longer admits (only "user" and the single Owner exist): not served.
                 GateMessageView(
                     symbol: "lock.shield",
-                    title: tx("Esta cuenta usa DINCR Owner", "This account uses DINCR Owner"),
-                    message: tx("La app pública de DINCR no muestra funciones internas. Cerrá sesión para entrar con otra cuenta.", "The public DINCR app doesn’t show internal features. Sign out to use another account."),
+                    title: tx("Esta cuenta no está disponible en DINCR", "This account isn’t available in DINCR"),
+                    message: tx("Su rol ya no es compatible con DINCR. Cerrá sesión para entrar con otra cuenta.", "Its role is no longer supported by DINCR. Sign out to use another account."),
                     primary: nil
                 )
             case .legalRequired:

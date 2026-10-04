@@ -47,17 +47,23 @@ def test_jarvis_backend_rejects_plans_and_client_flags(user):
         reset_current_user(token)
 
 
-@pytest.mark.parametrize("role", ["owner", "admin"])
-def test_jarvis_backend_keeps_its_historical_roles(role):
-    # /jarvis/* keeps owner + admin (the web Owner app); the native JARVIS UI is the Owner's only.
-    token = set_current_user({"role": role, "plan": "vip"})
+def test_jarvis_backend_admits_only_the_owner():
+    # /jarvis/* is the Owner's (web and native); a legacy "admin" never reaches it (P0.2d).
+    token = set_current_user({"role": "owner", "plan": "vip"})
     try:
-        assert internal_ai_routes.require_internal_role()["role"] == role
+        assert internal_ai_routes.require_internal_role()["role"] == "owner"
+    finally:
+        reset_current_user(token)
+    token = set_current_user({"role": "admin", "plan": "vip"})
+    try:
+        with pytest.raises(HTTPException) as exc:
+            internal_ai_routes.require_internal_role()
+        assert exc.value.status_code == 403
     finally:
         reset_current_user(token)
 
 
-def test_owner_cannot_be_provisioned_by_admin_request():
+def test_owner_cannot_be_provisioned_by_a_request():
     with pytest.raises(HTTPException) as exc:
         service.create_allowed_user("customer@example.com", role="owner")
     assert exc.value.status_code == 403

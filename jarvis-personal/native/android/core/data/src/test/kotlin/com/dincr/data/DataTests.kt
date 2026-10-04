@@ -55,8 +55,10 @@ class ContractTest {
     @Test fun ownerAndAdminSessionsAreRecognized() {
         val owner = json.decodeFromString<Profile>("""{"id":1,"role":"owner"}""")
         val admin = json.decodeFromString<Profile>("""{"id":1,"role":"admin"}""")
-        assertTrue(owner.isOwner && !owner.usesInternalAppOnly)
-        assertTrue(admin.usesInternalAppOnly && !admin.isOwner)
+        assertTrue(owner.isOwner && !owner.hasUnsupportedRole)
+        assertTrue(admin.hasUnsupportedRole && !admin.isOwner)  // a legacy stored role: refused, never Owner
+        assertFalse(json.decodeFromString<Profile>("""{"id":2,"role":"user"}""").hasUnsupportedRole)
+        assertFalse(json.decodeFromString<Profile>("""{"id":3}""").hasUnsupportedRole)
     }
 
     @Test fun encodesBodiesInSnakeCaseWithExactAmounts() {

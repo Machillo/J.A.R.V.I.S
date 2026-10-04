@@ -229,10 +229,10 @@ def send_system_push(title: str, body: str, category: str = "system", url: str =
             row for row in conn.execute(
                 """SELECT ns.*, au.role AS recipient_role, au.email AS recipient_email FROM notification_subscriptions ns
                    JOIN allowed_users au ON au.id = ns.user_id
-                   WHERE ns.enabled = TRUE AND au.role IN ('owner', 'admin') AND au.status = 'active'"""
+                   WHERE ns.enabled = TRUE AND au.role = 'owner' AND au.status = 'active'"""
             ).fetchall()
-            # An Owner no longer listed in OWNER_EMAILS stops receiving Owner alerts at once.
-            if row["recipient_role"] != "owner" or owner_enabled(row["recipient_email"])
+            # Only the allowlisted Owner: one no longer listed in OWNER_EMAILS stops at once.
+            if owner_enabled(row["recipient_email"])
         ]
         for subscription in subscriptions:
             ok, _ = _send_to_subscription(conn, subscription, title, body, category)

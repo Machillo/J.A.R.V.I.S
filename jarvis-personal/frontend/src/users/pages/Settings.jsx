@@ -16,7 +16,7 @@ const language = deviceLanguage();
 const tx = (es, en) => language === "es" ? es : en;
 
 const icons = { free: WalletCards, basic: Sparkles, vip: Crown };
-const ROLE_LABELS = { owner: ["Propietario", "Owner"], admin: ["Administrador", "Admin"], user: ["Usuario", "User"] };
+const ROLE_LABELS = { owner: ["Propietario", "Owner"], user: ["Usuario", "User"] };
 const roleLabel = (role) => ROLE_LABELS[role] ? tx(...ROLE_LABELS[role]) : role;
 const PLAN_RANK = { free: 1, basic: 2, vip: 3 };
 // Access ends at a stored instant; show the last day it still includes, in Costa Rica time

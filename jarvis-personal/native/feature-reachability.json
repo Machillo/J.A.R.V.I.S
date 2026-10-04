@@ -275,7 +275,7 @@
     {
      "method": "GET",
      "path": "/jarvis/calendar/upcoming",
-     "gate": "router_roles:admin,owner",
+     "gate": "router_roles:owner",
      "used_by": []
     }
    ],
@@ -1318,7 +1318,7 @@
     {
      "method": "POST",
      "path": "/jarvis/chat",
-     "gate": "router_roles:admin,owner",
+     "gate": "router_roles:owner",
      "used_by": []
     }
    ],
@@ -1358,7 +1358,7 @@
     {
      "method": "GET",
      "path": "/jarvis/calendar/upcoming",
-     "gate": "router_roles:admin,owner",
+     "gate": "router_roles:owner",
      "used_by": []
     }
    ],
@@ -1450,7 +1450,7 @@
     {
      "method": "GET",
      "path": "/jarvis/memory",
-     "gate": "router_roles:admin,owner",
+     "gate": "router_roles:owner",
      "used_by": []
     }
    ],
@@ -1491,7 +1491,7 @@
     {
      "method": "GET",
      "path": "/jarvis/premium/strategy-dashboard",
-     "gate": "router_roles:admin,owner",
+     "gate": "router_roles:owner",
      "used_by": []
     }
    ],

@@ -197,7 +197,7 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
         )
     }
 
-    // --- Owner analysis (owner/admin routers) -------------------------------------------------------
+    // --- Owner analysis (Owner routers) -------------------------------------------------------
 
     fun analysis(data: Snapshot): String {
         val months = (5 downTo 0).map { today.minusMonths(it.toLong()).toString().take(7) }

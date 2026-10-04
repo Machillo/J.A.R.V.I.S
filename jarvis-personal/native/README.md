@@ -38,12 +38,12 @@ in `docs/native/PARITY_MATRIX.md`.
   `X-Request-ID`, retries only for safe methods, one token refresh on 401, 20 s timeout.
 - **Owner boundary**: the Owner (a server role, never a plan) uses the public app at VIP level and,
   on top of it, JARVIS, its personal space (Profile → JARVIS; `Jarvis.swift` / `Jarvis.kt`). Only
-  the role in `/auth/me` shows it; the backend still decides every request (`/jarvis/*` keeps its
-  historical owner + admin access for the web Owner app, but the native JARVIS UI is Owner-only). JARVIS
+  the role in `/auth/me` shows it; the backend still decides every request (`/jarvis/*` admits only the
+  single verified Owner, as on web). JARVIS
   sections are ported step by step (JARVIS recovery roadmap; the chat since J1, `JarvisChatSession`,
   session-only history, changes saved only after Confirmar; the agenda since J2, the next 45 days of
   events, created only through the chat via "Agendar con JARVIS"); until then each one says it is being
-  restored. Free, Basic and VIP never see it; an admin session sees a notice and no app. The Owner's
+  restored. Free, Basic and VIP never see it; a role other than `user`/`owner` sees a notice and no app. The Owner's
   strategy comes from `/jarvis/premium/strategy-dashboard` (his historical JARVIS inputs) and his
   "Análisis financiero" JARVIS section from the Owner finance routes; VIP users use the neutral
   `/vip/strategy-dashboard` and `/vip/salvavidas` (the backend runs the Owner's personal rules only for the

@@ -88,8 +88,9 @@ public struct Profile: Decodable, Sendable, Equatable {
     /// The Owner uses the public app like any account: its own data, at least VIP (the backend grants
     /// Owner every product feature), and no internal screen (the public app has none).
     public var isOwner: Bool { role == "owner" }
-    /// Admin sessions are not served by the public app (Owner boundary).
-    public var usesInternalAppOnly: Bool { role == "admin" }
+    /// DINCR's account roles are "user" (Free/Basic/VIP) and the single Owner. Any other role the
+    /// server might report (a legacy stored value) is not served: never promoted, never a User.
+    public var hasUnsupportedRole: Bool { guard let role, !role.isEmpty else { return false }; return role != "user" && role != "owner" }
     /// The Owner account is never deleted from the public app (DELETE /auth/me would remove it).
     public var canDeleteAccountInApp: Bool { !isOwner }
     public var plan: String { subscription?.plan ?? "free" }
@@ -106,10 +107,10 @@ public struct Profile: Decodable, Sendable, Equatable {
 /// Where a signed-in identity lands in the public app, in order: the Owner boundary, legal, profile
 /// setup, plan. The server decides role and plan; this only routes (Android: `IdentityGate.of`).
 public enum IdentityGate: Equatable, Sendable {
-    case internalOnly, legalRequired, profileSetup, choosePlan, ready
+    case unsupportedRole, legalRequired, profileSetup, choosePlan, ready
 
     public static func of(_ profile: Profile) -> IdentityGate {
-        if profile.usesInternalAppOnly { return .internalOnly }
+        if profile.hasUnsupportedRole { return .unsupportedRole }
         if profile.legal?.required == true { return .legalRequired }
         if profile.profileSetupCompleted != true { return .profileSetup }
         // Owner's plan is granted by the backend, never chosen (POST /auth/plan ignores Owner).
