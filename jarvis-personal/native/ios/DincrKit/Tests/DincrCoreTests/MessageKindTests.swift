@@ -7,17 +7,23 @@ import Testing
 /// Android checks the same mapping in `MessageKindTest.kt`.
 @Suite struct MessageKindTests {
     @Test func everySeverityTheBackendSendsHasItsKind() {
-        for severity in ["critical", "high", "medium", "blocking", "warning"] {
+        for severity in ["critical", "high", "medium"] {
             #expect(MessageKind.financial(severity: severity) == .attention, "\(severity)")
         }
         #expect(MessageKind.financial(severity: "success") == .positive)
-        #expect(MessageKind.financial(severity: "low") == .opportunity)
-        #expect(MessageKind.financial(severity: "info") == .opportunity)
     }
 
     @Test func aFinancialAlertIsNeverATechnicalError() {
         for severity in ["critical", "high", "medium", "low", "success", "blocking", "warning", "info", "error", "", "unexpected", nil] {
             #expect(MessageKind.financial(severity: severity) != .technicalError, "\(severity ?? "nil")")
+        }
+    }
+
+    /// A problem is never downplayed to a suggestion: severities the alert screens don't receive
+    /// today (`low`, `info`, data-quality `blocking`/`warning`) stay attention too.
+    @Test func noSeverityIsDowngradedToASuggestion() {
+        for severity in ["low", "info", "blocking", "warning", "error"] {
+            #expect(MessageKind.financial(severity: severity) == .attention, "\(severity)")
         }
     }
 

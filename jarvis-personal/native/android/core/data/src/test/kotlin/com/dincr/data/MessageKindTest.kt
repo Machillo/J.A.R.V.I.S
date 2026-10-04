@@ -13,17 +13,25 @@ import java.io.File
  */
 class MessageKindTest {
     @Test fun everySeverityTheBackendSendsHasItsKind() {
-        for (severity in listOf("critical", "high", "medium", "blocking", "warning")) {
+        for (severity in listOf("critical", "high", "medium")) {
             assertEquals(severity, MessageKind.ATTENTION, MessageKind.financial(severity))
         }
         assertEquals(MessageKind.POSITIVE, MessageKind.financial("success"))
-        assertEquals(MessageKind.OPPORTUNITY, MessageKind.financial("low"))
-        assertEquals(MessageKind.OPPORTUNITY, MessageKind.financial("info"))
     }
 
     @Test fun aFinancialAlertIsNeverATechnicalError() {
         for (severity in listOf("critical", "high", "medium", "low", "success", "blocking", "warning", "info", "error", "", "unexpected", null)) {
             assertNotEquals(severity.toString(), MessageKind.TECHNICAL_ERROR, MessageKind.financial(severity))
+        }
+    }
+
+    /**
+     * A problem is never downplayed to a suggestion: severities the alert screens don't receive
+     * today (`low`, `info`, data-quality `blocking`/`warning`) stay attention too.
+     */
+    @Test fun noSeverityIsDowngradedToASuggestion() {
+        for (severity in listOf("low", "info", "blocking", "warning", "error")) {
+            assertEquals(severity, MessageKind.ATTENTION, MessageKind.financial(severity))
         }
     }
 

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.Button
@@ -46,7 +47,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dincr.data.AppLanguage
-import com.dincr.data.MessageKind
 import com.dincr.data.MoneyFormat
 import com.dincr.data.MovementKind
 import com.dincr.design.generated.DincrRadius
@@ -159,15 +159,12 @@ fun EmptyState(icon: ImageVector, title: String, message: String, action: (@Comp
     }
 }
 
-/** Inline technical error with the recovery next to it. */
+/** Inline error with the recovery next to it. */
 @Composable
 fun ErrorState(message: String, onRetry: (() -> Unit)? = null) {
-    // The technical-error look (DESIGN.md → Messages): a failure of DINCR never reads as a
-    // situation in the user's money.
-    val style = messageStyle(MessageKind.TECHNICAL_ERROR)
-    Column(Modifier.fillMaxWidth().background(style.fill, RoundedCornerShape(DincrRadius.md)).padding(DincrSpacing.s4)) {
+    Column(Modifier.fillMaxWidth().background(Dincr.colors.negativeContainer, RoundedCornerShape(DincrRadius.md)).padding(DincrSpacing.s4)) {
         Row(verticalAlignment = Alignment.Top) {
-            Icon(style.icon, contentDescription = style.spokenKind, tint = style.color)
+            Icon(Icons.Rounded.Error, contentDescription = null, tint = Dincr.colors.negative)
             Text(message, style = MaterialTheme.typography.bodyLarge, color = Dincr.colors.text, modifier = Modifier.padding(start = DincrSpacing.s3))
         }
         onRetry?.let {

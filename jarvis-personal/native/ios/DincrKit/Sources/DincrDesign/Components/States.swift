@@ -88,8 +88,7 @@ public struct EmptyStateView<Action: View>: View {
     }
 }
 
-/// Inline technical error with the recovery next to it (DESIGN.md → Do's, Messages). It uses the
-/// technical-error look, so a failure of DINCR never reads as a situation in the user's money.
+/// Inline error with the recovery next to it (DESIGN.md → Do's).
 public struct ErrorStateView: View {
     let message: String
     let retry: (() -> Void)?
@@ -99,13 +98,11 @@ public struct ErrorStateView: View {
     }
 
     public var body: some View {
-        let style = DincrMessageStyle(.technicalError)
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             Label {
                 Text(message).font(DincrFont.body).foregroundStyle(DincrColor.text)
             } icon: {
-                Image(systemName: style.symbol).foregroundStyle(style.color)
-                    .accessibilityLabel(style.spokenKind)
+                Image(systemName: "xmark.octagon").foregroundStyle(DincrColor.negative)
             }
             if let retry {
                 Button(AppLanguage.current.pick("Reintentar", "Try again"), action: retry)
@@ -116,7 +113,7 @@ public struct ErrorStateView: View {
         }
         .padding(DincrSpacing.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(style.fill, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
+        .background(DincrColor.negativeContainer, in: RoundedRectangle(cornerRadius: DincrRadius.md, style: .continuous))
         .accessibilityElement(children: .contain)
     }
 }

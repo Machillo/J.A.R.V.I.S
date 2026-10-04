@@ -59,16 +59,16 @@ fun DincrMessage(kind: MessageKind, title: String, message: String = "") {
  * Icon, colors and spoken name of each message kind. Technical errors are neutral (no financial
  * red or amber), so they can't be mistaken for a situation in the user's money.
  */
-internal data class MessageStyle(val icon: ImageVector, val color: Color, val fill: Color, val spokenKind: String)
+private data class MessageStyle(val icon: ImageVector, val color: Color, val fill: Color, val spokenKind: String)
 
 @Composable
-internal fun messageStyle(kind: MessageKind): MessageStyle {
+private fun messageStyle(kind: MessageKind): MessageStyle {
     val c = Dincr.colors
     val language = AppLanguage.current()
     return when (kind) {
         MessageKind.TECHNICAL_ERROR -> MessageStyle(Icons.Rounded.CloudOff, c.text2, c.surface2, language.pick("Problema técnico", "Technical problem"))
         MessageKind.ATTENTION -> MessageStyle(Icons.Rounded.NotificationsActive, c.warning, c.warningContainer, language.pick("Para atender", "Needs attention"))
-        MessageKind.OPPORTUNITY -> MessageStyle(Icons.Rounded.AutoAwesome, c.info, c.infoContainer, language.pick("Recomendación", "Suggestion"))
+        MessageKind.OPPORTUNITY -> MessageStyle(Icons.Rounded.AutoAwesome, c.tint, c.tintContainer, language.pick("Recomendación", "Suggestion"))
         MessageKind.POSITIVE -> MessageStyle(Icons.Rounded.Verified, c.positive, c.positiveContainer, language.pick("Buenas noticias", "Good news"))
     }
 }

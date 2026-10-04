@@ -57,7 +57,7 @@ struct DincrMessageStyle {
             (symbol, color, fill) = ("bell.badge", DincrColor.warning, DincrColor.warningContainer)
             spokenKind = language.pick("Para atender", "Needs attention")
         case .opportunity:
-            (symbol, color, fill) = ("sparkles", DincrColor.info, DincrColor.infoContainer)
+            (symbol, color, fill) = ("sparkles", DincrColor.tint, DincrColor.tintContainer)
             spokenKind = language.pick("Recomendación", "Suggestion")
         case .positive:
             (symbol, color, fill) = ("checkmark.seal", DincrColor.positive, DincrColor.positiveContainer)
