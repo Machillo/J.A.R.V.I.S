@@ -181,13 +181,23 @@ components:
     textColor: "{colors.text}"
     rounded: "{rounded.md}"
     padding: "12px 16px"
-  banner-warning:
+  message-technical-error:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.md}"
+    padding: "12px 16px"
+  message-attention:
     backgroundColor: "{colors.warning-container}"
     textColor: "{colors.text}"
     rounded: "{rounded.md}"
     padding: "12px 16px"
-  banner-error:
-    backgroundColor: "{colors.negative-container}"
+  message-opportunity:
+    backgroundColor: "{colors.tint-container}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.md}"
+    padding: "12px 16px"
+  message-positive:
+    backgroundColor: "{colors.positive-container}"
     textColor: "{colors.text}"
     rounded: "{rounded.md}"
     padding: "12px 16px"
@@ -254,9 +264,9 @@ retired.
 | Role | Meaning | Never used for |
 |------|---------|----------------|
 | positive | received money, goal reached, success confirmation | decoration, "income" labels that are not a completed event |
-| negative | error, overspent budget, overdue payment, destructive action | ordinary expenses |
-| warning | needs attention soon (missing data, payment in ≤ 3 days, needs reconnection) | promotions |
-| info | neutral system notices, service status | brand accents |
+| negative | inline error (`ErrorState`: invalid input or a failed load/save), overspent budget, overdue payment, destructive action | ordinary expenses, a financial alert (see Messages) |
+| warning | a financial situation that needs attention (payment in ≤ 3 days, commitments above income, missing data the user can add) | promotions, a failure of DINCR |
+| info | neutral notices (`StatusBanner`) | brand accents, a recommendation (see Messages) |
 | vip | the VIP plan badge only | anything else |
 
 Status colors always ship with an icon and text. Money is signed with `+` / `−` — never by color
@@ -370,6 +380,30 @@ in text.
   tab, sheets for create/edit, large titles.
 - Android: `NavigationBar` (compact) / `NavigationRail` (expanded) with the same five
   destinations, top app bar per screen, predictive back, modal bottom sheets for create/edit.
+
+### Messages
+
+Every message that means something is a `DincrMessage` with one of four kinds. The kind is
+recognisable before reading (icon, color, shape) and is read first by VoiceOver/TalkBack.
+
+| Kind | Means | Look | Never used for |
+|------|-------|------|----------------|
+| Technical error | something in DINCR failed or is degraded: network, service, paused changes, a mail connection to redo | neutral `surface-2`, cloud icon, `text-2` | a financial situation |
+| Attention | a financial situation worth attention | `warning-container`, bell icon, leading `warning` accent bar | a failure of DINCR, promotions |
+| Opportunity | something DINCR found that could help | `tint-container`, sparkles icon in `tint` | a problem, blocking or warning the user |
+| Positive | progress, an improvement, a milestone | `positive-container`, seal icon | hiding a problem |
+
+- Financial alerts get their kind only from their backend severity, through `MessageKind.financial`:
+  `success` → positive; every other severity, including unknown ones → attention. A problem is
+  never downplayed to a suggestion, and a financial alert is never a technical error.
+  Opportunity is set explicitly by the screen that offers a recommendation.
+- Global or connection problems (service slow or interrupted, changes paused, a mail connection
+  that failed) use the technical-error look. The user declining a permission or a plan gate is a
+  neutral notice.
+- `ErrorState` (inline errors that mix invalid input and failed requests) keeps the `negative`
+  look until each use is classified.
+- `StatusBanner` is only for neutral notices (demo mode, a new version, a promotion, an action's
+  result); it has no warning or error tone.
 
 ### Money row (signature component)
 

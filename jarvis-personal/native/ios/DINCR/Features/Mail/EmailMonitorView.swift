@@ -50,8 +50,14 @@ private struct MailMonitorContent: View {
     var body: some View {
         ScreenScroll(title: tx("Monitor de correo", "Email Monitor")) {
             if let outcome = model.mailOutcome {
-                StatusBanner(tone: .warning, title: tx("Conexión de correo", "Mail connection"), message: outcome)
-                    .accessibilityIdentifier("mail.outcome")
+                Group {
+                    if model.mailOutcomeIsFailure {
+                        DincrMessage(.technicalError, title: tx("Conexión de correo", "Mail connection"), message: outcome)
+                    } else {
+                        StatusBanner(tone: .info, title: tx("Conexión de correo", "Mail connection"), message: outcome)
+                    }
+                }
+                .accessibilityIdentifier("mail.outcome")
                 if model.hasPendingMailReturn {
                     Button(tx("Reintentar conexión", "Retry connection")) { Task { await model.retryPendingMailReturn(); generation += 1 } }
                         .buttonStyle(.dincrSecondary)

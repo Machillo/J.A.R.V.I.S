@@ -114,9 +114,9 @@ private struct GlobalBanners: View {
         VStack(spacing: DincrSpacing.s2) {
             switch model.health?.status {
             case "degraded"?:
-                StatusBanner(tone: .warning, title: tx("Servicio con demoras", "Service is slow"), message: tx("Algunas funciones pueden tardar más de lo normal.", "Some features may take longer than usual."))
+                DincrMessage(.technicalError, title: tx("Servicio con demoras", "Service is slow"), message: tx("Algunas funciones pueden tardar más de lo normal.", "Some features may take longer than usual."))
             case "major_outage"?:
-                StatusBanner(tone: .error, title: tx("Servicio interrumpido", "Service interrupted"), message: tx("Estamos trabajando para restablecer DINCR. Tus datos están a salvo.", "We’re working to restore DINCR. Your data is safe."))
+                DincrMessage(.technicalError, title: tx("Servicio interrumpido", "Service interrupted"), message: tx("Estamos trabajando para restablecer DINCR. Tus datos están a salvo.", "We’re working to restore DINCR. Your data is safe."))
             default:
                 EmptyView()
             }

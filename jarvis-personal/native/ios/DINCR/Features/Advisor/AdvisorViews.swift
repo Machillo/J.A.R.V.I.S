@@ -121,7 +121,7 @@ struct StrategyContent: View {
             .dincrCard()
         }
         ForEach(Array((strategy.warnings ?? []).enumerated()), id: \.offset) { _, warning in
-            StatusBanner(tone: .warning, title: tx("Tomá en cuenta", "Keep in mind"), message: warning)
+            DincrMessage(.attention, title: tx("Tomá en cuenta", "Keep in mind"), message: warning)
         }
     }
 }
@@ -259,7 +259,7 @@ private struct TodayContent: View {
                 Text(tx("Tu situación actual", "Your current situation")).font(DincrFont.title2).foregroundStyle(DincrColor.text)
                     .accessibilityAddTraits(.isHeader)
                 ForEach(Array(current.enumerated()), id: \.offset) { _, alert in
-                    StatusBanner(tone: Self.tone(alert.severity), title: alert.title ?? "",
+                    DincrMessage(.financial(severity: alert.severity), title: alert.title ?? "",
                                  message: [alert.context, alert.action].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " "))
                         .accessibilityIdentifier("today.current.alert")
                 }
@@ -274,17 +274,8 @@ private struct TodayContent: View {
                                message: today.advisor.message ?? tx("DINCR te avisa cuando algo cambie en tus números.", "DINCR lets you know when something changes in your numbers.")) { EmptyView() }
             }
             ForEach(Array(alerts.enumerated()), id: \.offset) { _, alert in
-                StatusBanner(tone: alert.severity == "high" ? .error : (alert.severity == "low" ? .info : .warning), title: alert.title ?? "", message: alert.explanation ?? "")
+                DincrMessage(.financial(severity: alert.severity), title: alert.title ?? "", message: alert.explanation ?? "")
             }
-        }
-    }
-
-    /// Command-center severities: critical/high are errors, low/info informational, the rest warnings.
-    static func tone(_ severity: String?) -> StatusBanner.Tone {
-        switch severity {
-        case "critical", "high": .error
-        case "low", "info": .info
-        default: .warning
         }
     }
 }

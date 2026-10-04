@@ -25,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -176,15 +175,18 @@ fun ErrorState(message: String, onRetry: (() -> Unit)? = null) {
     }
 }
 
-enum class BannerTone { INFO, WARNING, ERROR }
+/**
+ * Neutral notice: demo mode, a new version, a promotion, an action's result. Anything that means
+ * something (a technical problem, a financial situation, a recommendation, progress) is a
+ * [DincrMessage], so this banner has no warning or error tone (DESIGN.md → Messages).
+ */
+enum class BannerTone { INFO }
 
 @Composable
 fun StatusBanner(tone: BannerTone, title: String, message: String) {
     val c = Dincr.colors
     val (icon, color, fill) = when (tone) {
         BannerTone.INFO -> Triple(Icons.Rounded.Info, c.info, c.infoContainer)
-        BannerTone.WARNING -> Triple(Icons.Rounded.Warning, c.warning, c.warningContainer)
-        BannerTone.ERROR -> Triple(Icons.Rounded.Error, c.negative, c.negativeContainer)
     }
     Row(Modifier.fillMaxWidth().background(fill, RoundedCornerShape(DincrRadius.md)).padding(horizontal = DincrSpacing.s4, vertical = DincrSpacing.s3)) {
         Icon(icon, contentDescription = null, tint = color)

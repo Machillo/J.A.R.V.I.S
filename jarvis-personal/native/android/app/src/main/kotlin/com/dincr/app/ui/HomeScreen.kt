@@ -33,18 +33,18 @@ import com.dincr.data.CommandCenter
 import com.dincr.data.FinancialCalendar
 import com.dincr.data.FinancialSituation
 import com.dincr.data.FreeDashboard
+import com.dincr.data.MessageKind
 import com.dincr.data.MoneyFormat
 import com.dincr.data.OpsFlag
 import com.dincr.data.PlanTier
-import com.dincr.design.BannerTone
 import com.dincr.design.CategoryBars
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
+import com.dincr.design.DincrMessage
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.EmptyState
 import com.dincr.design.IncomeExpenseBars
 import com.dincr.design.MoneyText
-import com.dincr.design.StatusBanner
 import com.dincr.design.generated.DincrSpacing
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -176,7 +176,7 @@ private fun VipHome(c: CommandCenter, nav: Navigator) {
         }
     }
     c.alerts.firstOrNull()?.let { a ->
-        StatusBanner(if (a.severity == "critical" || a.severity == "high") BannerTone.WARNING else BannerTone.INFO, a.title.orEmpty(), listOfNotNull(a.context, a.action).joinToString(" "))
+        DincrMessage(MessageKind.financial(a.severity), a.title.orEmpty(), listOfNotNull(a.context, a.action).joinToString(" "))
     }
     if (c.roadmap.isNotEmpty()) Section(tx("Tu plan de acción", "Your action plan")) {
         c.roadmap.sortedBy { it.order ?: Int.MAX_VALUE }.take(3).forEach { step ->

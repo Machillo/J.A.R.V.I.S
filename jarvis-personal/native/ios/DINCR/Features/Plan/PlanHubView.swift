@@ -95,7 +95,7 @@ struct WritesPausedBanner: View {
     @Environment(AppModel.self) private var model
     var body: some View {
         if !model.flags.isEnabled(.financialWrites) {
-            StatusBanner(tone: .warning, title: tx("Cambios temporalmente pausados", "Changes temporarily paused"),
+            DincrMessage(.technicalError, title: tx("Cambios temporalmente pausados", "Changes temporarily paused"),
                          message: model.flags.message(.financialWrites, language: model.language)
                             ?? tx("Podés ver tu información; guardar cambios está en pausa por mantenimiento.", "You can see your information; saving changes is paused for maintenance."))
         }

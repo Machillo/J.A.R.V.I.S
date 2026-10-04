@@ -118,10 +118,11 @@ public struct ErrorStateView: View {
     }
 }
 
-/// Global notice (offline, degraded service, writes paused). Status colors always come with an
-/// icon and text.
+/// Neutral notice: demo mode, a new version, a promotion, an action's result. Anything that means
+/// something (a technical problem, a financial situation, a recommendation, progress) is a
+/// `DincrMessage`, so this banner has no warning or error tone (DESIGN.md → Messages).
 public struct StatusBanner: View {
-    public enum Tone: Sendable { case info, warning, error }
+    public enum Tone: Sendable { case info }
     let tone: Tone
     let title: String
     let message: String
@@ -133,8 +134,6 @@ public struct StatusBanner: View {
     public var body: some View {
         let (symbol, color, fill): (String, Color, Color) = switch tone {
         case .info: ("info.circle", DincrColor.info, DincrColor.infoContainer)
-        case .warning: ("exclamationmark.triangle", DincrColor.warning, DincrColor.warningContainer)
-        case .error: ("xmark.octagon", DincrColor.negative, DincrColor.negativeContainer)
         }
         HStack(alignment: .top, spacing: DincrSpacing.s3) {
             Image(systemName: symbol).foregroundStyle(color).accessibilityHidden(true)

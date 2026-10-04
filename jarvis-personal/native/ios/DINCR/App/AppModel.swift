@@ -48,6 +48,8 @@ final class AppModel {
     var pendingRoute: String?
     /// The outcome of the last mail connection, for the Email Monitor screen.
     private(set) var mailOutcome: String?
+    /// Whether `mailOutcome` is a failure of the connection (technical-error look) or a neutral notice.
+    private(set) var mailOutcomeIsFailure = true
     var planTier: PlanTier { profile?.planTier ?? .free }
 
     let service: DincrService
@@ -339,6 +341,7 @@ final class AppModel {
         guard mailReturn.isAuthorized, let flow = mailReturn.flow, let completion = mailReturn.completion else {
             remember(mailReturn)
             mailOutcome = MailReturn.message(mailReturn.status, language: language)
+            mailOutcomeIsFailure = MailReturn.isFailure(mailReturn.status)
             pendingRoute = "mail"
             return
         }
@@ -364,10 +367,12 @@ final class AppModel {
             // Offline or a server hiccup: the one-time completion stays valid for a while; retry on resume.
             retryMailReturn = mailReturn
             mailOutcome = error.message
+            mailOutcomeIsFailure = true
         } catch {
             remember(mailReturn)
             retryMailReturn = nil
             mailOutcome = message(for: error, epoch: epoch, fallback: MailReturn.message("error", language: language))
+            mailOutcomeIsFailure = true
             pendingRoute = "mail"
         }
     }

@@ -347,6 +347,6 @@ fun ReportsScreen(model: AppModel, nav: Navigator) {
 /** B17 — a paused feature shows the server's message instead of the screen. */
 @Composable
 fun FeaturePaused(model: AppModel, flag: OpsFlag) {
-    com.dincr.design.StatusBanner(com.dincr.design.BannerTone.WARNING, tx("En mantenimiento", "Under maintenance"),
+    com.dincr.design.DincrMessage(com.dincr.data.MessageKind.TECHNICAL_ERROR, tx("En mantenimiento", "Under maintenance"),
         model.flags.value.message(flag, com.dincr.data.AppLanguage.current()) ?: tx("Esta función está en pausa por mantenimiento. Intentá más tarde.", "This feature is paused for maintenance. Please try later."))
 }

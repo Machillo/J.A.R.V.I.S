@@ -48,9 +48,11 @@ import com.dincr.app.AppModel
 import com.dincr.app.Appearance
 import com.dincr.app.tx
 import com.dincr.data.AppLanguage
+import com.dincr.data.MessageKind
 import com.dincr.data.OpsFlag
 import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
+import com.dincr.design.DincrMessage
 import com.dincr.design.StatusBanner
 import com.dincr.design.generated.DincrSpacing
 
@@ -176,12 +178,12 @@ private fun GlobalBanners(model: AppModel) {
     val language = AppLanguage.current()
     Column(Modifier.fillMaxWidth().padding(horizontal = DincrSpacing.s4), verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2), horizontalAlignment = Alignment.CenterHorizontally) {
         if (!flags.isEnabled(OpsFlag.FINANCIAL_WRITES) && flags.flags.isNotEmpty()) Box(Modifier.widthIn(max = ContentMaxWidth).padding(top = DincrSpacing.s2)) {
-            StatusBanner(BannerTone.WARNING, tx("Cambios temporalmente pausados", "Changes temporarily paused"),
+            DincrMessage(MessageKind.TECHNICAL_ERROR, tx("Cambios temporalmente pausados", "Changes temporarily paused"),
                 flags.message(OpsFlag.FINANCIAL_WRITES, language) ?: tx("Podés ver tu información; guardar cambios está en pausa por mantenimiento.", "You can see your information; saving changes is paused for maintenance."))
         }
         when (health?.status) {
-            "degraded" -> Box(Modifier.widthIn(max = ContentMaxWidth)) { StatusBanner(BannerTone.WARNING, tx("Servicio con demoras", "Service is slow"), tx("Algunas funciones pueden tardar más de lo normal.", "Some features may take longer than usual.")) }
-            "major_outage" -> Box(Modifier.widthIn(max = ContentMaxWidth)) { StatusBanner(BannerTone.ERROR, tx("Servicio interrumpido", "Service interrupted"), tx("Estamos trabajando para restablecer DINCR. Tus datos están a salvo.", "We’re working to restore DINCR. Your data is safe.")) }
+            "degraded" -> Box(Modifier.widthIn(max = ContentMaxWidth)) { DincrMessage(MessageKind.TECHNICAL_ERROR, tx("Servicio con demoras", "Service is slow"), tx("Algunas funciones pueden tardar más de lo normal.", "Some features may take longer than usual.")) }
+            "major_outage" -> Box(Modifier.widthIn(max = ContentMaxWidth)) { DincrMessage(MessageKind.TECHNICAL_ERROR, tx("Servicio interrumpido", "Service interrupted"), tx("Estamos trabajando para restablecer DINCR. Tus datos están a salvo.", "We’re working to restore DINCR. Your data is safe.")) }
         }
         release?.takeIf { it.isOptional && !model.optionalUpdateDismissed }?.let { policy ->
             Box(Modifier.widthIn(max = ContentMaxWidth)) {

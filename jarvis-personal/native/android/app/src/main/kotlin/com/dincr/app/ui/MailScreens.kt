@@ -31,16 +31,16 @@ import com.dincr.data.AuthException
 import com.dincr.data.MailCandidate
 import com.dincr.data.MailReturn
 import com.dincr.data.MailStatus
+import com.dincr.data.MessageKind
 import com.dincr.data.OpsFlag
 import com.dincr.data.OwnTransferRequest
 import com.dincr.data.OwnTransferSuggestions
-import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
+import com.dincr.design.DincrMessage
 import com.dincr.design.DincrPrimaryButton
 import com.dincr.design.EmptyState
 import com.dincr.design.ErrorState
-import com.dincr.design.StatusBanner
 import kotlinx.coroutines.launch
 
 private data class MailData(val status: MailStatus, val candidates: List<MailCandidate>, val transfers: OwnTransferSuggestions)
@@ -68,7 +68,7 @@ fun MailScreen(model: AppModel, nav: Navigator) {
         if (!model.isOn(OpsFlag.GMAIL_AUTOMATION)) { FeaturePaused(model, OpsFlag.GMAIL_AUTOMATION); return@DetailScaffold }
         LoadContent(data) { (status, candidates, transfers) ->
             if (!status.connected) ConnectMail(model, status) else {
-                if (status.needsReauthorization) StatusBanner(BannerTone.WARNING, tx("Volvé a conectar tu correo", "Reconnect your mail"), tx("El permiso venció o fue revocado.", "The permission expired or was revoked."))
+                if (status.needsReauthorization) DincrMessage(MessageKind.TECHNICAL_ERROR, tx("Volvé a conectar tu correo", "Reconnect your mail"), tx("El permiso venció o fue revocado.", "The permission expired or was revoked."))
                 DincrCard {
                     Column {
                         status.visibleConnections.forEach { c ->

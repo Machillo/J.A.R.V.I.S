@@ -150,6 +150,11 @@ import Testing
         let good = MailReturn.parse(URL(string: "com.finva.app://gmail/callback?gmail=authorized&flow=f1&completion=c1&ret=r1")!, schemes: schemes)
         #expect(good?.provider == .gmail && good?.isAuthorized == true && good?.flow == "f1" && good?.completion == "c1")
         #expect(MailReturn.parse(URL(string: "com.dincr.app://gmail/callback?microsoft=denied&ret=r")!, schemes: schemes)?.isAuthorized == false)
+        // Declining the permission or the VIP gate is a neutral notice, never a technical failure.
+        #expect(!MailReturn.isFailure("denied") && !MailReturn.isFailure("vip_required"))
+        for status in ["error", "invalid_state", "already_processed", "permission_missing", "mailbox_missing", "mailbox_unavailable"] {
+            #expect(MailReturn.isFailure(status), "\(status)")
+        }
         let rejected = [
             "evil.app://gmail/callback?gmail=authorized&flow=f&completion=c",
             "com.finva.app://auth/callback?gmail=authorized&flow=f&completion=c",

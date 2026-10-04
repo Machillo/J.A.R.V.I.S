@@ -377,6 +377,13 @@ public struct MailReturn: Sendable, Equatable {
                           completion: single("completion").flatMap { $0.isEmpty ? nil : $0 }, ret: single("ret"))
     }
 
+    /// Whether a provider status that is not a success is a failure of the connection. The user
+    /// declining the permission or the VIP gate are not failures: they show as a neutral notice,
+    /// never with the technical-error look (DESIGN.md → Messages).
+    public static func isFailure(_ status: String) -> Bool {
+        !["denied", "vip_required"].contains(status)
+    }
+
     /// Copy for a provider status that is not a success.
     public static func message(_ status: String, language: AppLanguage) -> String {
         switch status {
