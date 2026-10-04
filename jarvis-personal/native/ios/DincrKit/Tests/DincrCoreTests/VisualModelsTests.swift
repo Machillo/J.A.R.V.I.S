@@ -71,6 +71,33 @@ import Testing
         #expect(same.status == .complete && same.total == 400)
     }
 
+    /// Amounts are read and shown in the parts' own currency: USD is never read as colones, and a
+    /// part without a currency is never added to parts with one.
+    @Test func thePartsCurrencyIsKeptAndNeverMixed() {
+        let usd = Composition([
+            CompositionItem(id: "a", label: "Inversión", value: 100, currency: "USD"),
+            CompositionItem(id: "b", label: "Ahorro", value: 300, currency: "USD"),
+        ])
+        #expect(usd.currency == "USD")
+        let spoken = usd.spokenParts(format: format, language: .spanish).joined()
+        #expect(spoken.contains("dólares") && !spoken.contains("colones"), "\(spoken)")
+        let partial = Composition([CompositionItem(id: "a", label: "A", value: 100, currency: "USD"), CompositionItem(id: "b", label: "B", value: 100)])
+        #expect(partial.status == .invalid && partial.total == nil && partial.currency == nil)
+        #expect(Composition([CompositionItem(id: "a", label: "A", value: 100)]).currency == nil)
+    }
+
+    @Test func aZeroPartHasNoArcToTap() {
+        let composition = Composition([
+            CompositionItem(id: "zero", label: "Cero", value: 0),
+            CompositionItem(id: "a", label: "A", value: 50),
+            CompositionItem(id: "b", label: "B", value: 50),
+        ])
+        #expect(composition.status == .complete)
+        #expect(composition.segment(atFraction: 0)?.id == "a")
+        #expect(composition.segment(atFraction: 1)?.id == "b")
+        #expect(composition.segment(id: "zero")?.share == 0)   // still listed, with its real 0 %
+    }
+
     @Test func selectionFindsTheSegmentUnderATapOrById() {
         let composition = Composition([
             CompositionItem(id: "a", label: "A", value: 25),
@@ -229,6 +256,15 @@ import Testing
         #expect(ProgressValue(fraction: nil).displayFraction == nil)
         #expect(ProgressValue(fraction: .nan).fraction == nil)
         #expect(ProgressValue(fraction: 0.5).percent == 50)
+    }
+
+    /// Binary floating point must not turn a whole percent into the one below it.
+    @Test func wholePercentsAreNotLostToFloatingPoint() {
+        for value in [29, 57, 58] {
+            #expect(ProgressValue(current: Decimal(value), target: 100).percent == value)
+            #expect(ProgressValue(fraction: Double(value) / 100).percent == value)
+        }
+        #expect(ProgressValue(fraction: 1e300).percent == 1_000_000_000)   // capped, never a crash
     }
 
     @Test func almostDoneNeverReadsAsDone() {

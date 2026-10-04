@@ -11,18 +11,24 @@ import SwiftUI
 // MARK: - Donut
 
 /// Composition of a whole: one hue in steps (no rainbow; parts are told apart by the legend's
-/// direct labels, never by color alone), a center label, and a legend whose rows select a part. When the parts can't form an exact whole, the donut is not drawn and the
-/// legend still lists every part, unknown ones as "no data".
+/// direct labels, never by color alone), a center label, and a legend whose rows select a part.
+/// When the parts can't form an exact whole, the donut is not drawn and the legend still lists
+/// every known part and every unknown one as "no data". Amounts are shown in the parts' currency.
 public struct CompositionDonut: View {
     let title: String
     let composition: Composition
     let color: Color
     let showsLegend: Bool
+    let showsTotal: Bool
     @Environment(\.moneyFormat) private var format
     @State private var selectedID: String?
 
-    public init(title: String, composition: Composition, color: Color = DincrColor.chartExpense, showsLegend: Bool = true) {
+    /// `showsTotal: false` when the caller has its own total and the sum of the parts must not be
+    /// shown as one (the center then shows only a selected part).
+    public init(title: String, composition: Composition, color: Color = DincrColor.chartExpense, showsLegend: Bool = true,
+                showsTotal: Bool = true) {
         self.title = title; self.composition = composition; self.color = color; self.showsLegend = showsLegend
+        self.showsTotal = showsTotal
     }
 
     public var body: some View {
@@ -30,7 +36,7 @@ public struct CompositionDonut: View {
             if composition.isDrawable {
                 chart
             } else {
-                VisualNotice(text: notice)
+                VisualNotice(text: notice).accessibilityLabel("\(title). \(notice)")
             }
             if showsLegend { legend }
         }
@@ -76,13 +82,13 @@ public struct CompositionDonut: View {
         if let segment = composition.segment(id: selectedID) {
             VStack(spacing: 2) {
                 Text(segment.label).font(DincrFont.caption).foregroundStyle(DincrColor.text2).lineLimit(2).multilineTextAlignment(.center)
-                MoneyText(segment.value, font: DincrFont.title2.monospacedDigit())
+                MoneyText(segment.value, currency: composition.currency, font: DincrFont.title2.monospacedDigit())
                 if let share = segment.share { Text(VisualText.percent(share)).font(DincrFont.caption).foregroundStyle(DincrColor.text2) }
             }
-        } else if let total = composition.total {
+        } else if showsTotal, let total = composition.total {
             VStack(spacing: 2) {
                 Text(AppLanguage.current.pick("Total", "Total")).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
-                MoneyText(total, font: DincrFont.title2.monospacedDigit())
+                MoneyText(total, currency: composition.currency, font: DincrFont.title2.monospacedDigit())
             }
         }
     }
@@ -97,7 +103,7 @@ public struct CompositionDonut: View {
                     Text(segment.label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text).multilineTextAlignment(.leading)
                     Spacer(minLength: DincrSpacing.s2)
                     VStack(alignment: .trailing, spacing: 0) {
-                        MoneyText(segment.value, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
+                        MoneyText(segment.value, currency: composition.currency, font: DincrFont.bodySmall.weight(.semibold).monospacedDigit())
                         if let share = segment.share {
                             Text(VisualText.percent(share)).font(DincrFont.caption).foregroundStyle(DincrColor.text2)
                         }
@@ -116,6 +122,7 @@ public struct CompositionDonut: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(composition.spokenParts(format: format)[index])
+                .accessibilityAddTraits(composition.isDrawable ? .isButton : [])
                 .accessibilityAddTraits(selectedID == segment.id ? .isSelected : [])
             }
             ForEach(composition.unknown) { item in
@@ -191,8 +198,8 @@ public struct TrendLineChart: View {
                     .accessibilityElement(children: .combine)
                 }
             } else {
-                VisualNotice(text: AppLanguage.current.pick("Todavía no hay suficientes datos para ver una tendencia.",
-                                                           "Not enough data yet to show a trend."))
+                let notice = AppLanguage.current.pick("Todavía no hay suficientes datos para ver una tendencia.", "Not enough data yet to show a trend.")
+                VisualNotice(text: notice).accessibilityLabel("\(title). \(notice)")
                 if let only = series.knownPoints.first, let value = only.value {
                     HStack {
                         Text(only.label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
@@ -273,6 +280,13 @@ public struct TrendLineChart: View {
 }
 
 enum VisualAxis {
+    /// The known values' own range (a flat series gets a little room so it sits in the middle).
+    static func dataDomain(_ range: ClosedRange<Decimal>?) -> ClosedRange<Double> {
+        guard let range else { return 0...1 }
+        let low = CompositionDonut.double(range.lowerBound), high = CompositionDonut.double(range.upperBound)
+        return low == high ? (low - 1)...(high + 1) : low...high
+    }
+
     /// The y domain always includes 0, so the baseline is real and a small change is not magnified.
     static func domainWithZero(_ range: ClosedRange<Decimal>?) -> ClosedRange<Double> {
         guard let range else { return 0...1 }
@@ -323,6 +337,9 @@ public struct Sparkline: View {
                     }
                 }
                 .chartXScale(domain: series.points.map(\.period))
+                // A sparkline spans its own range (unlike the full line chart, no baseline at 0), the
+                // same on both platforms; its spoken summary carries the actual values.
+                .chartYScale(domain: VisualAxis.dataDomain(series.range))
                 .chartXAxis(.hidden)
                 .chartYAxis(.hidden)
                 .chartLegend(.hidden)
@@ -340,8 +357,9 @@ public struct Sparkline: View {
 
 // MARK: - Trend indicator
 
-/// Which way something moved (arrow and word) and what the caller says it means (color). The
-/// direction never picks the color: debt going down and savings going down look different.
+/// Which way something moved (arrow and word) and what the caller says it means (color and, when
+/// it has one, a word: never color alone). The direction never picks the color: debt going down
+/// and savings going down look different.
 public struct TrendIndicator: View {
     let label: String
     let signal: TrendSignal
@@ -354,7 +372,7 @@ public struct TrendIndicator: View {
         let (foreground, fill) = Self.colors(signal.tone)
         HStack(spacing: DincrSpacing.s1) {
             Image(systemName: Self.symbol(signal.direction)).font(DincrFont.caption.weight(.semibold))
-            Text(VisualText.direction(signal.direction).capitalizedFirst).font(DincrFont.caption.weight(.semibold))
+            Text(visibleText).font(DincrFont.caption.weight(.semibold))
         }
         .foregroundStyle(foreground)
         .padding(.horizontal, DincrSpacing.s2)
@@ -362,6 +380,12 @@ public struct TrendIndicator: View {
         .background(fill, in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(signal.spoken(label: label))
+    }
+
+    private var visibleText: String {
+        let direction = VisualText.direction(signal.direction).capitalizedFirst
+        let meaning = signal.direction == .insufficient ? "" : VisualText.meaning(signal.meaning)
+        return meaning.isEmpty ? direction : "\(direction) · \(meaning)"
     }
 
     static func symbol(_ direction: TrendDirection) -> String {

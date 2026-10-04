@@ -16,8 +16,11 @@ import kotlin.math.roundToInt
 /** One part of a whole. `value == null` means unknown. Parts in different currencies are never added. */
 data class CompositionItem(val id: String, val label: String, val value: BigDecimal?, val currency: String? = null)
 
-/** A whole split into parts, with each part's share only when it can be computed honestly. */
-class Composition(items: List<CompositionItem>) {
+/**
+ * A whole split into parts, with each part's share only when it can be computed honestly.
+ * Equal inputs give equal compositions, so a remembered selection survives recomposition.
+ */
+data class Composition(val items: List<CompositionItem>) {
     enum class Status {
         /** Every part is known and the total is positive: shares are exact. */
         COMPLETE,
@@ -27,7 +30,10 @@ class Composition(items: List<CompositionItem>) {
         ZERO_TOTAL,
         /** Some parts are unknown: the known ones are listed, but no total or share is shown. */
         PARTIAL,
-        /** A negative part or parts in different currencies: not a composition. */
+        /**
+         * A negative part, or parts in different currencies (or only some with a currency): not a
+         * composition. Nothing is drawn or totalled; the reason is shown in words.
+         */
         INVALID,
     }
 
@@ -41,13 +47,18 @@ class Composition(items: List<CompositionItem>) {
     val unknown: List<CompositionItem> = items.filter { it.value == null }
     /** Sum of the parts, only when [status] is [Status.COMPLETE]. */
     val total: BigDecimal?
+    /** The parts' currency when they carry one; every amount is shown in it, never in another. */
+    val currency: String?
 
     init {
         val known = items.mapNotNull { item -> item.value?.let { item to it } }
         val sum = known.fold(BigDecimal.ZERO) { acc, (_, value) -> acc + value }
+        val currencies = items.mapNotNull { it.currency }.toSet()
+        val someWithoutCurrency = currencies.isNotEmpty() && items.any { it.currency == null }
+        currency = if (currencies.size == 1 && !someWithoutCurrency) currencies.first() else null
         status = when {
             items.isEmpty() -> Status.EMPTY
-            known.any { it.second.signum() < 0 } || items.mapNotNull { it.currency }.toSet().size > 1 -> Status.INVALID
+            known.any { it.second.signum() < 0 } || currencies.size > 1 || someWithoutCurrency -> Status.INVALID
             unknown.isNotEmpty() -> Status.PARTIAL
             sum.signum() == 0 -> Status.ZERO_TOTAL
             else -> Status.COMPLETE
@@ -68,10 +79,12 @@ class Composition(items: List<CompositionItem>) {
         if (!isDrawable || fraction < 0 || fraction > 1) return null
         var end = 0.0
         for (segment in segments) {
-            end += segment.share ?: 0.0
+            val share = segment.share ?: continue
+            if (share <= 0) continue   // a zero part has no arc to tap
+            end += share
             if (fraction <= end) return segment
         }
-        return segments.lastOrNull()
+        return segments.lastOrNull { (it.share ?: 0.0) > 0 }
     }
 
     companion object {
@@ -90,7 +103,7 @@ class Composition(items: List<CompositionItem>) {
     /** "Tarjeta: ₡120.000, 48 %" / "Préstamo: sin dato" — one line per part, for TalkBack and the legend. */
     fun spokenParts(format: MoneyFormat, language: AppLanguage = AppLanguage.current()): List<String> =
         segments.map { segment ->
-            "${segment.label}: ${format.spoken(segment.value, language = language)}" +
+            "${segment.label}: ${format.spoken(segment.value, language = language, currencyOverride = currency)}" +
                 (segment.share?.let { ", ${VisualText.percent(it)}" } ?: "")
         } + unknown.map { "${it.label}: ${VisualText.noData(language)}" }
 }
@@ -107,11 +120,12 @@ data class KnownPoint(val period: String, val label: String, val value: BigDecim
 
 /**
  * A series in chronological order. Missing periods are never filled in: a period without data is
- * a gap, and the line is drawn only between consecutive known points.
+ * a gap, and the line is drawn only between consecutive known points. Equal inputs give equal
+ * series, so a remembered selection survives recomposition.
  */
-class TrendSeries(points: List<TrendPoint>) {
+data class TrendSeries(private val input: List<TrendPoint>) {
     /** Sorted by period; when a period repeats, the first one given is kept. */
-    val points: List<TrendPoint> = points.distinctBy { it.period }.sortedBy { it.period }
+    val points: List<TrendPoint> = input.distinctBy { it.period }.sortedBy { it.period }
 
     val knownPoints: List<TrendPoint> get() = points.filter { it.value != null }
 
@@ -233,8 +247,11 @@ class ProgressValue private constructor(val status: Status, val fraction: Double
     val displayFraction: Double? get() = fraction?.coerceIn(0.0, 1.0)
     val isOver: Boolean get() = (fraction ?: 0.0) > 1
     val isComplete: Boolean get() = (fraction ?: 0.0) >= 1
-    /** Whole percent rounded down, so 99.6 % never reads as done. */
-    val percent: Int? get() = fraction?.let { floor(it * 100).toInt() }
+    /**
+     * Whole percent rounded down, so 99.6 % never reads as done. A tiny tolerance keeps binary
+     * floating point from turning 29 % into 28 %.
+     */
+    val percent: Int? get() = fraction?.let { floor(it * 100 + 1e-9).toInt() }
 
     companion object {
         fun of(current: BigDecimal?, target: BigDecimal?): ProgressValue = when {

@@ -32,7 +32,8 @@ public struct Composition: Sendable, Equatable {
         case zeroTotal
         /// Some parts are unknown: the known ones are listed, but no total or share is shown.
         case partial
-        /// A negative part or parts in different currencies: not a composition.
+        /// A negative part, or parts in different currencies (or only some with a currency): not a
+        /// composition. Nothing is drawn or totalled; the reason is shown in words.
         case invalid
     }
 
@@ -51,15 +52,19 @@ public struct Composition: Sendable, Equatable {
     public let unknown: [CompositionItem]
     /// Sum of the parts, only when `status == .complete`.
     public let total: Decimal?
+    /// The parts' currency when they carry one; every amount is shown in it, never in another.
+    public let currency: String?
 
     public init(_ items: [CompositionItem]) {
         let known = items.compactMap { item in item.value.map { (item, $0) } }
         unknown = items.filter { $0.value == nil }
         let currencies = Set(items.compactMap(\.currency))
+        let someWithoutCurrency = !currencies.isEmpty && items.contains { $0.currency == nil }
+        currency = currencies.count == 1 && !someWithoutCurrency ? currencies.first : nil
         let status: Status
         if items.isEmpty {
             status = .empty
-        } else if known.contains(where: { $0.1 < 0 }) || currencies.count > 1 {
+        } else if known.contains(where: { $0.1 < 0 }) || currencies.count > 1 || someWithoutCurrency {
             status = .invalid
         } else if !unknown.isEmpty {
             status = .partial
@@ -87,10 +92,11 @@ public struct Composition: Sendable, Equatable {
         guard isDrawable, fraction >= 0, fraction <= 1 else { return nil }
         var end = 0.0
         for segment in segments {
-            end += segment.share ?? 0
+            guard let share = segment.share, share > 0 else { continue }   // a zero part has no arc to tap
+            end += share
             if fraction <= end { return segment }
         }
-        return segments.last
+        return segments.last { ($0.share ?? 0) > 0 }
     }
 
     /// Position around a ring (0 at the top, clockwise, as the parts are drawn) of a tap at
@@ -106,7 +112,7 @@ public struct Composition: Sendable, Equatable {
     /// and the legend.
     public func spokenParts(format: MoneyFormat, language: AppLanguage = .current) -> [String] {
         segments.map { segment in
-            var text = "\(segment.label): \(format.spoken(segment.value, language: language))"
+            var text = "\(segment.label): \(format.spoken(segment.value, currency: currency, language: language))"
             if let share = segment.share { text += ", \(VisualText.percent(share, language: language))" }
             return text
         } + unknown.map { "\($0.label): \(VisualText.noData(language))" }
@@ -285,8 +291,9 @@ public struct ProgressValue: Sendable, Equatable {
     public var displayFraction: Double? { fraction.map { min(max($0, 0), 1) } }
     public var isOver: Bool { (fraction ?? 0) > 1 }
     public var isComplete: Bool { (fraction ?? 0) >= 1 }
-    /// Whole percent rounded down, so 99.6 % never reads as done.
-    public var percent: Int? { fraction.map { Int(($0 * 100).rounded(.down)) } }
+    /// Whole percent rounded down, so 99.6 % never reads as done. A tiny tolerance keeps binary
+    /// floating point from turning 29 % into 28 %; very large ratios are capped instead of trapping.
+    public var percent: Int? { fraction.map { Int(min(($0 * 100 + 1e-9).rounded(.down), 1_000_000_000)) } }
 }
 
 // MARK: - Shared wording

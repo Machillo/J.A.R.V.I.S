@@ -73,11 +73,16 @@ import kotlin.math.min
 
 /**
  * Composition of a whole: one hue in steps (no rainbow; parts are told apart by the legend's direct
- * labels, never by color alone), a center label, and a legend whose rows select a part. When the parts can't form an exact whole, the donut is not drawn and the legend
- * still lists every part, unknown ones as "no data".
+ * labels, never by color alone), a center label, and a legend whose rows select a part. When the
+ * parts can't form an exact whole, the donut is not drawn and the legend still lists every known
+ * part and every unknown one as "no data". Amounts are shown in the parts' currency.
+ * `showsTotal = false` when the caller has its own total and the sum of the parts must not be shown
+ * as one (the center then shows only a selected part).
  */
 @Composable
-fun CompositionDonut(title: String, composition: Composition, color: Color = Dincr.colors.chartExpense, showsLegend: Boolean = true) {
+fun CompositionDonut(
+    title: String, composition: Composition, color: Color = Dincr.colors.chartExpense, showsLegend: Boolean = true, showsTotal: Boolean = true,
+) {
     var selectedId by remember(composition) { mutableStateOf<String?>(null) }
     val format = Dincr.money
     val parts = composition.spokenParts(format)
@@ -104,9 +109,10 @@ fun CompositionDonut(title: String, composition: Composition, color: Color = Din
                     var start = -90f
                     composition.segments.forEachIndexed { index, segment ->
                         val sweep = ((segment.share ?: 0.0) * 360).toFloat()
+                        if (sweep <= 0f) return@forEachIndexed   // a zero part has no arc
                         val gap = if (composition.segments.size > 1) min(1.5f, sweep / 4) else 0f
                         drawArc(
-                            color = shade(index, segment.id), startAngle = start + gap / 2, sweepAngle = max(sweep - gap, 0.1f), useCenter = false,
+                            color = shade(index, segment.id), startAngle = start + gap / 2, sweepAngle = sweep - gap, useCenter = false,
                             topLeft = Offset(inset, inset), size = Size(size.width - stroke, size.height - stroke), style = Stroke(stroke),
                         )
                         start += sweep
@@ -116,16 +122,16 @@ fun CompositionDonut(title: String, composition: Composition, color: Color = Din
                 Column(Modifier.widthIn(max = 110.dp).clearAndSetSemantics { }, horizontalAlignment = Alignment.CenterHorizontally) {
                     if (selected != null) {
                         Text(selected.label, style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2, textAlign = TextAlign.Center, maxLines = 2)
-                        MoneyText(selected.value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                        MoneyText(selected.value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), currency = composition.currency)
                         selected.share?.let { Text(VisualText.percent(it), style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2) }
-                    } else composition.total?.let {
+                    } else if (showsTotal) composition.total?.let {
                         Text(AppLanguage.current().pick("Total", "Total"), style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2)
-                        MoneyText(it, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                        MoneyText(it, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), currency = composition.currency)
                     }
                 }
             }
         } else {
-            VisualNotice(compositionNotice(composition.status))
+            VisualNotice(compositionNotice(composition.status), title)
         }
         if (showsLegend) {
             Column {
@@ -142,7 +148,7 @@ fun CompositionDonut(title: String, composition: Composition, color: Color = Din
                         Text(segment.label, style = MaterialTheme.typography.bodyMedium, color = Dincr.colors.text,
                             modifier = Modifier.weight(1f).padding(start = if (composition.isDrawable) DincrSpacing.s3 else 0.dp, end = DincrSpacing.s2))
                         Column(horizontalAlignment = Alignment.End) {
-                            MoneyText(segment.value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                            MoneyText(segment.value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), currency = composition.currency)
                             segment.share?.let { Text(VisualText.percent(it), style = MaterialTheme.typography.labelMedium, color = Dincr.colors.text2) }
                         }
                     }
@@ -190,7 +196,7 @@ fun TrendLineChart(title: String, series: TrendSeries, color: Color = Dincr.colo
     var selectedPeriod by remember(series) { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
         if (!series.hasTrend) {
-            VisualNotice(AppLanguage.current().pick("Todavía no hay suficientes datos para ver una tendencia.", "Not enough data yet to show a trend."))
+            VisualNotice(AppLanguage.current().pick("Todavía no hay suficientes datos para ver una tendencia.", "Not enough data yet to show a trend."), title)
             series.knownPoints.firstOrNull()?.let { only ->
                 Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }) {
                     Text(only.label, style = MaterialTheme.typography.bodyMedium, color = c.text2, modifier = Modifier.weight(1f))
@@ -256,7 +262,9 @@ fun TrendLineChart(title: String, series: TrendSeries, color: Color = Dincr.colo
         series.points.firstOrNull { it.period == selectedPeriod }?.let { point ->
             Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }) {
                 Text(point.label, style = MaterialTheme.typography.bodyMedium, color = c.text2, modifier = Modifier.weight(1f))
-                MoneyText(point.value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                val value = point.value
+                if (value != null) MoneyText(value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                else Text(VisualText.noData().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyMedium, color = c.textMuted)
             }
         }
     }
@@ -317,8 +325,9 @@ fun Sparkline(label: String, series: TrendSeries, color: Color = Dincr.colors.ch
 // region Trend indicator
 
 /**
- * Which way something moved (arrow and word) and what the caller says it means (color). The
- * direction never picks the color: debt going down and savings going down look different.
+ * Which way something moved (arrow and word) and what the caller says it means (color and, when it
+ * has one, a word: never color alone). The direction never picks the color: debt going down and
+ * savings going down look different.
  */
 @Composable
 fun TrendIndicator(label: String, signal: TrendSignal) {
@@ -341,7 +350,9 @@ fun TrendIndicator(label: String, signal: TrendSignal) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, contentDescription = null, tint = foreground, modifier = Modifier.size(14.dp))
-        Text(VisualText.direction(signal.direction).replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+        val direction = VisualText.direction(signal.direction).replaceFirstChar { it.uppercase() }
+        val meaning = if (signal.direction == TrendDirection.INSUFFICIENT) "" else VisualText.meaning(signal.meaning)
+        Text(if (meaning.isEmpty()) direction else "$direction · $meaning", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = foreground, modifier = Modifier.padding(start = DincrSpacing.s1))
     }
 }
@@ -376,11 +387,12 @@ fun DincrProgressBar(progress: ProgressValue, overMeaning: TrendMeaning = TrendM
 
 // endregion
 
-/** Why a chart isn't drawn, in words. */
+/** Why a chart isn't drawn, in words; TalkBack hears which chart it is about. */
 @Composable
-private fun VisualNotice(text: String) {
+private fun VisualNotice(text: String, title: String) {
     Row(
-        Modifier.fillMaxWidth().background(Dincr.colors.surface2, RoundedCornerShape(DincrRadius.md)).padding(DincrSpacing.s3),
+        Modifier.fillMaxWidth().background(Dincr.colors.surface2, RoundedCornerShape(DincrRadius.md)).padding(DincrSpacing.s3)
+            .clearAndSetSemantics { contentDescription = "$title. $text" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Rounded.PieChart, contentDescription = null, tint = Dincr.colors.textMuted)

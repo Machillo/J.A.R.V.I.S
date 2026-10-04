@@ -77,6 +77,30 @@ class VisualModelsTest {
         assertEquals(bd(400), same.total)
     }
 
+    /**
+     * Amounts are read and shown in the parts' own currency: USD is never read as colones, and a
+     * part without a currency is never added to parts with one.
+     */
+    @Test fun thePartsCurrencyIsKeptAndNeverMixed() {
+        val usd = Composition(listOf(CompositionItem("a", "Inversión", bd(100), "USD"), CompositionItem("b", "Ahorro", bd(300), "USD")))
+        assertEquals("USD", usd.currency)
+        val spoken = usd.spokenParts(format, es).joinToString()
+        assertTrue(spoken, spoken.contains("dólares") && !spoken.contains("colones"))
+        val partial = Composition(listOf(item("a", 100, "USD"), item("b", 100)))
+        assertEquals(Composition.Status.INVALID, partial.status)
+        assertNull(partial.total)
+        assertNull(partial.currency)
+        assertNull(Composition(listOf(item("a", 100))).currency)
+    }
+
+    @Test fun aZeroPartHasNoArcToTap() {
+        val composition = Composition(listOf(item("zero", 0), item("a", 50), item("b", 50)))
+        assertEquals(Composition.Status.COMPLETE, composition.status)
+        assertEquals("a", composition.segmentAtFraction(0.0)?.id)
+        assertEquals("b", composition.segmentAtFraction(1.0)?.id)
+        assertEquals(0.0, composition.segment("zero")?.share!!, 0.0)   // still listed, with its real 0 %
+    }
+
     @Test fun selectionFindsTheSegmentUnderATapOrById() {
         val composition = Composition(listOf(item("a", 25), item("b", 75)))
         assertEquals("a", composition.segmentAtFraction(0.0)?.id)
@@ -226,6 +250,20 @@ class VisualModelsTest {
         assertNull(ProgressValue.ofFraction(null).displayFraction)
         assertNull(ProgressValue.ofFraction(Double.NaN).fraction)
         assertEquals(50, ProgressValue.ofFraction(0.5).percent)
+    }
+
+    /** Binary floating point must not turn a whole percent into the one below it. */
+    @Test fun wholePercentsAreNotLostToFloatingPoint() {
+        for (value in listOf(29, 57, 58)) {
+            assertEquals(value, ProgressValue.of(bd(value.toLong()), bd(100)).percent)
+            assertEquals(value, ProgressValue.ofFraction(value / 100.0).percent)
+        }
+    }
+
+    /** Equal inputs give equal models, so a remembered selection survives recomposition. */
+    @Test fun equalInputsGiveEqualModels() {
+        assertEquals(Composition(listOf(item("a", 1))), Composition(listOf(item("a", 1))))
+        assertEquals(TrendSeries(listOf(TrendPoint("2026-09", "set", bd(1)))), TrendSeries(listOf(TrendPoint("2026-09", "set", bd(1)))))
     }
 
     @Test fun almostDoneNeverReadsAsDone() {
