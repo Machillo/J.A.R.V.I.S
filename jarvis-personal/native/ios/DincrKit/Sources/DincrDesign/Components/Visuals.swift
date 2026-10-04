@@ -44,7 +44,7 @@ public struct CompositionDonut: View {
 
     private var chart: some View {
         Chart(composition.segments) { segment in
-            SectorMark(angle: .value("Monto", Self.double(segment.value)), innerRadius: .ratio(0.62), angularInset: 1.5)
+            SectorMark(angle: .value("Monto", VisualAxis.double(segment.value)), innerRadius: .ratio(0.62), angularInset: 1.5)
                 .cornerRadius(3)
                 .foregroundStyle(shade(for: segment.id))
         }
@@ -156,7 +156,6 @@ public struct CompositionDonut: View {
         }
     }
 
-    static func double(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
 }
 
 /// Opacity steps for the parts of one hue: strong first, never fainter than readable.
@@ -218,15 +217,15 @@ public struct TrendLineChart: View {
         Chart {
             ForEach(Array(series.runs.enumerated()), id: \.offset) { run, points in
                 ForEach(points) { point in
-                    LineMark(x: .value("Periodo", point.period), y: .value("Monto", CompositionDonut.double(point.value)),
+                    LineMark(x: .value("Periodo", point.period), y: .value("Monto", VisualAxis.double(point.value)),
                              series: .value("Tramo", run))
                         .foregroundStyle(color)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     if point.period == selectedPeriod {
-                        PointMark(x: .value("Periodo", point.period), y: .value("Monto", CompositionDonut.double(point.value)))
+                        PointMark(x: .value("Periodo", point.period), y: .value("Monto", VisualAxis.double(point.value)))
                             .symbol { Circle().fill(color).frame(width: 10, height: 10).overlay(Circle().stroke(DincrColor.surface, lineWidth: 2)) }
                     } else if points.count == 1 {
-                        PointMark(x: .value("Periodo", point.period), y: .value("Monto", CompositionDonut.double(point.value)))
+                        PointMark(x: .value("Periodo", point.period), y: .value("Monto", VisualAxis.double(point.value)))
                             .foregroundStyle(color).symbolSize(30)
                     }
                 }
@@ -280,18 +279,22 @@ public struct TrendLineChart: View {
 }
 
 enum VisualAxis {
+    /// A chart coordinate from a decimal amount. Kept outside the views: a `View`'s static members are
+    /// main-actor isolated on older SDKs, and the axis helpers below are not.
+    static func double(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
+
     /// The known values' own range (a flat series gets a little room so it sits in the middle).
     static func dataDomain(_ range: ClosedRange<Decimal>?) -> ClosedRange<Double> {
         guard let range else { return 0...1 }
-        let low = CompositionDonut.double(range.lowerBound), high = CompositionDonut.double(range.upperBound)
+        let low = VisualAxis.double(range.lowerBound), high = VisualAxis.double(range.upperBound)
         return low == high ? (low - 1)...(high + 1) : low...high
     }
 
     /// The y domain always includes 0, so the baseline is real and a small change is not magnified.
     static func domainWithZero(_ range: ClosedRange<Decimal>?) -> ClosedRange<Double> {
         guard let range else { return 0...1 }
-        let low = min(CompositionDonut.double(range.lowerBound), 0)
-        let high = max(CompositionDonut.double(range.upperBound), 0)
+        let low = min(VisualAxis.double(range.lowerBound), 0)
+        let high = max(VisualAxis.double(range.upperBound), 0)
         return low == high ? low...(high + 1) : low...high
     }
 
@@ -325,12 +328,12 @@ public struct Sparkline: View {
                 Chart {
                     ForEach(Array(series.runs.enumerated()), id: \.offset) { run, points in
                         ForEach(points) { point in
-                            LineMark(x: .value("Periodo", point.period), y: .value("Monto", CompositionDonut.double(point.value)),
+                            LineMark(x: .value("Periodo", point.period), y: .value("Monto", VisualAxis.double(point.value)),
                                      series: .value("Tramo", run))
                                 .foregroundStyle(color)
                                 .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                             if points.count == 1 {
-                                PointMark(x: .value("Periodo", point.period), y: .value("Monto", CompositionDonut.double(point.value)))
+                                PointMark(x: .value("Periodo", point.period), y: .value("Monto", VisualAxis.double(point.value)))
                                     .foregroundStyle(color).symbolSize(16)
                             }
                         }
