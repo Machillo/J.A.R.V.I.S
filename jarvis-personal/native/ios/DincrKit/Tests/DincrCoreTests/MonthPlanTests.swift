@@ -96,6 +96,19 @@ import Testing
         #expect(MonthPlan(try dashboard(#"{"scope":"users","status":"critical"}"#)).isCritical)
     }
 
+    /// A critical answer keeps its message (Basic recommendation, dashboard objective) and the
+    /// summary keeps the priority when it says something else; nothing is said twice.
+    @Test func aCriticalPlanKeepsItsMessageAndThePriority() throws {
+        let basicPlan = MonthPlan(try basic(#"{"status":"critical","recommendation":"Cubrí lo esencial."}"#))
+        #expect(basicPlan.criticalDetail == "Cubrí lo esencial.")
+        #expect(basicPlan.summaryHeadline == nil)                      // already in the critical message
+        let dashboardPlan = MonthPlan(try dashboard(#"{"scope":"users","status":"critical","objective":"Sin sobrante.","priority":{"title":"Proteger el Salvavidas"}}"#))
+        #expect(dashboardPlan.criticalDetail == "Sin sobrante.")
+        #expect(dashboardPlan.summaryHeadline == "Proteger el Salvavidas")  // the priority stays visible
+        let calm = MonthPlan(try dashboard(#"{"scope":"users","status":"controlled","objective":"O"}"#))
+        #expect(calm.summaryHeadline == "O")
+    }
+
     /// The plan reads the backend's figures as they are: rebuilding it never changes them, and the
     /// parts carry no currency of their own (they are never mixed with another one).
     @Test func readingThePlanNeverChangesTheFigures() throws {

@@ -81,7 +81,7 @@ private struct MonthPlanContent: View {
 
     var body: some View {
         if case .dashboard(let dashboard) = strategy, dashboard.strategy == nil {
-            EmptyStateView(symbol: "map", title: tx("Sin plan por ahora", "No plan for now"),
+            EmptyStateView(symbol: "map", title: tx("Sin plan todavía", "No plan yet"),
                            message: dashboard.content ?? tx("Volvé a intentarlo más tarde.", "Try again later.")) { EmptyView() }
         } else {
             let plan = MonthPlan(strategy)
@@ -92,10 +92,16 @@ private struct MonthPlanContent: View {
                 if plan.isCritical {
                     DincrMessage(.attention, title: plan.kind == .basic ? tx("Tus compromisos superan tus ingresos", "Your commitments exceed your income")
                                                                    : tx("Este mes no hay sobrante real", "No real surplus this month"),
-                                 message: plan.headline ?? "")
+                                 message: plan.criticalDetail ?? "")
                 }
                 MonthPlanSummary(plan: plan)
                 MonthPlanSplit(plan: plan)
+                // Cautions stay in sight, never behind "¿Por qué?".
+                if case .basic(let basic) = strategy {
+                    ForEach(Array((basic.warnings ?? []).enumerated()), id: \.offset) { _, warning in
+                        DincrMessage(.attention, title: tx("Tomá en cuenta", "Keep in mind"), message: warning)
+                    }
+                }
                 switch strategy {
                 case .basic(let basic): BasicPlanDetail(strategy: basic)
                 case .dashboard(let dashboard): if let detail = dashboard.strategy { DashboardPlanDetail(plan: detail) }
@@ -121,7 +127,7 @@ private struct MonthPlanSummary: View {
             Text(plan.kind == .basic ? tx("Margen para decidir", "Margin to decide") : tx("Sobrante para repartir", "Surplus to allocate"))
                 .font(DincrFont.label).foregroundStyle(DincrColor.text2)
             MoneyText(plan.base, font: DincrFont.displayAmount)
-            if !plan.isCritical, let headline = plan.headline {
+            if let headline = plan.summaryHeadline {
                 Text(headline).font(DincrFont.body).foregroundStyle(DincrColor.text)
             }
         }
@@ -141,9 +147,8 @@ private struct MonthPlanSplit: View {
         VStack(alignment: .leading, spacing: DincrSpacing.s3) {
             SectionHeader(title: title)
             if plan.parts.isEmpty {
-                Text(plan.kind == .basic ? tx("Este mes no hay margen seguro para repartir.", "This month there is no safe margin to split.")
-                                         : tx("Este mes no tiene sobrante real. Primero cubrí obligaciones y gastos registrados.",
-                                              "This month has no real surplus. Cover obligations and recorded expenses first."))
+                Text(plan.kind == .basic ? tx("Este mes no hay margen para repartir.", "There’s no margin to split this month.")
+                                         : tx("Este mes no hay sobrante real para repartir.", "There’s no real surplus to allocate this month."))
                     .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
             } else if plan.showsComposition {
                 CompositionDonut(title: title, composition: plan.composition)
@@ -179,7 +184,7 @@ private struct BasicPlanDetail: View {
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) {
-                StrategyContent(strategy: strategy, showsAllocations: false, showsRecommendation: false)
+                StrategyContent(strategy: strategy, showsAllocations: false, showsRecommendation: false, showsWarnings: false)
                 if let paycheck = strategy.nextPaycheck, let envelopes = paycheck.envelopes, !envelopes.isEmpty {
                     VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                         SectionHeader(title: tx("Tu próximo ingreso", "Your next paycheck"))
@@ -234,7 +239,7 @@ private struct DashboardPlanDetail: View {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) { sections }
                 .padding(.top, DincrSpacing.s2)
         } label: {
-            Text(tx("Ver todo el detalle", "See every detail")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+            Text(tx("Ver todo el detalle", "See full details")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
         }
         .tint(DincrColor.tint)
         .accessibilityIdentifier("plan.month.detail")
@@ -270,8 +275,11 @@ private struct DashboardPlanDetail: View {
                 FigureRow(label: tx("Ahorro actual", "Current savings"), amount: plan.emergencyKnown ? fund.current : nil)
                 FigureRow(label: tx("Base mensual", "Monthly base"), amount: fund.monthlyBase)
                 FigureRow(label: tx("Próxima meta", "Next target"), amount: fund.nextTarget)
-                FigureRow(label: tx("Te falta", "Still missing"), amount: fund.gapToNextTarget)
-                if let level = StrategyText.emergencyLevel(fund.level) { InfoRow(label: tx("Nivel", "Level"), value: level) }
+                // What is missing and the stage are measured from the savings: only when they are known.
+                if plan.emergencyKnown {
+                    FigureRow(label: tx("Te falta", "Still missing"), amount: fund.gapToNextTarget)
+                    if let level = StrategyText.emergencyLevel(fund.level) { InfoRow(label: tx("Nivel", "Level"), value: level) }
+                }
             }
             .dincrCard()
             .accessibilityElement(children: .contain)

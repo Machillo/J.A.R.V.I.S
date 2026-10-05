@@ -25,6 +25,8 @@ public struct MonthPlan: Sendable, Equatable {
     public let headline: String?
     /// The commitments exceed the income / there is no real surplus this month.
     public let isCritical: Bool
+    /// What a critical answer says: Basic recommendation, dashboard objective (as before UX-3).
+    public let criticalDetail: String?
     public let needsIncome: Bool
     /// The income was estimated from recorded movements (Basic answers say so).
     public let usesObservedIncome: Bool
@@ -40,6 +42,7 @@ public struct MonthPlan: Sendable, Equatable {
             }
             headline = Self.text(basic.recommendation) ?? Self.text(basic.directorNote)
             isCritical = basic.status == "critical"
+            criticalDetail = Self.text(basic.recommendation)
             needsIncome = basic.needsIncome
             usesObservedIncome = basic.usesObservedIncome
         case .dashboard(let dashboard):
@@ -52,9 +55,16 @@ public struct MonthPlan: Sendable, Equatable {
             }
             headline = Self.text(plan?.priority?.title) ?? Self.text(plan?.objective) ?? Self.text(dashboard.content)
             isCritical = plan?.status == "critical"
+            criticalDetail = Self.text(plan?.objective)
             needsIncome = plan?.needsIncome ?? false
             usesObservedIncome = false
         }
+    }
+
+    /// The summary's sentence: the headline, unless a critical message already says the same.
+    public var summaryHeadline: String? {
+        guard let headline else { return nil }
+        return isCritical && headline == criticalDetail ? nil : headline
     }
 
     /// The parts as a composition (no currency of their own: every amount is the profile currency the

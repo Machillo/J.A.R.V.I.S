@@ -18,6 +18,8 @@ data class MonthPlan(
     val headline: String?,
     /** The commitments exceed the income / there is no real surplus this month. */
     val isCritical: Boolean,
+    /** What a critical answer says: Basic recommendation, dashboard objective (as before UX-3). */
+    val criticalDetail: String?,
     val needsIncome: Boolean,
     /** The income was estimated from recorded movements (Basic answers say so). */
     val usesObservedIncome: Boolean,
@@ -26,6 +28,9 @@ data class MonthPlan(
 
     /** One part of the split, as the backend sent it. [percentage] exists only for the dashboard. */
     data class Part(val id: String, val label: String, val amount: BigDecimal?, val percentage: Double?)
+
+    /** The summary's sentence: the headline, unless a critical message already says the same. */
+    val summaryHeadline: String? get() = headline?.takeUnless { isCritical && it == criticalDetail }
 
     /** The parts as a composition (no currency of their own: the profile currency of the answer). */
     val composition: Composition get() = Composition(parts.map { CompositionItem(it.id, it.label, it.amount) })
@@ -51,6 +56,7 @@ data class MonthPlan(
             },
             headline = text(strategy.recommendation) ?: text(strategy.directorNote),
             isCritical = strategy.status == "critical",
+            criticalDetail = text(strategy.recommendation),
             needsIncome = strategy.status == "needs_income",
             usesObservedIncome = strategy.isIncomeObserved,
         )
@@ -65,6 +71,7 @@ data class MonthPlan(
                 },
                 headline = text(plan?.priority?.title) ?: text(plan?.objective) ?: text(dashboard.content),
                 isCritical = plan?.status == "critical",
+                criticalDetail = text(plan?.objective),
                 needsIncome = plan?.status == "needs_income",
                 usesObservedIncome = false,
             )

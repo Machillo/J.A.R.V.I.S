@@ -103,6 +103,20 @@ class MonthPlanTest {
         assertTrue(dashboard("""{"scope":"users","status":"critical"}""").isCritical)
     }
 
+    /**
+     * A critical answer keeps its message (Basic recommendation, dashboard objective) and the
+     * summary keeps the priority when it says something else; nothing is said twice.
+     */
+    @Test fun aCriticalPlanKeepsItsMessageAndThePriority() {
+        val basicPlan = basic("""{"status":"critical","recommendation":"Cubrí lo esencial."}""")
+        assertEquals("Cubrí lo esencial.", basicPlan.criticalDetail)
+        assertNull(basicPlan.summaryHeadline)
+        val dashboardPlan = dashboard("""{"scope":"users","status":"critical","objective":"Sin sobrante.","priority":{"title":"Proteger el Salvavidas"}}""")
+        assertEquals("Sin sobrante.", dashboardPlan.criticalDetail)
+        assertEquals("Proteger el Salvavidas", dashboardPlan.summaryHeadline)
+        assertEquals("O", dashboard("""{"scope":"users","status":"controlled","objective":"O"}""").summaryHeadline)
+    }
+
     /** Reading the plan never changes the figures; the parts carry no currency of their own. */
     @Test fun readingThePlanNeverChangesTheFigures() {
         val strategy = json.decodeFromString<Strategy>("""{"strategic_margin":100.5,"allocations":[{"bucket":"a","label":"A","amount":100.5}]}""")

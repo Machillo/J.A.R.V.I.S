@@ -128,9 +128,10 @@ class PlanRecoveryUiTest {
         back()
         click(tx("Pagos recurrentes", "Recurring payments"))
         waitForText(tx("Gastos fijos por mes", "Fixed expenses per month"))
-        // Estrategia left the DINCR tab.
+        // The plan (formerly Estrategia) is not in the DINCR tab.
         click("DINCR")
         waitForText(tx("Resumen del mes", "Monthly summary"))
+        assertTrue(!present(tx("Tu plan del mes", "Your plan for the month")))
         assertTrue(!present(tx("Estrategia", "Strategy")))
     }
 
@@ -166,7 +167,7 @@ class PlanRecoveryUiTest {
         click(tx("Tu plan del mes", "Your plan for the month"))
         waitForTag("strategy.director.users")
         // UX-3: the strategy's sections are in "Tu plan del mes" → "Ver todo el detalle".
-        click(tx("Ver todo el detalle", "See every detail"))
+        click(tx("Ver todo el detalle", "See full details"))
         assertTrue(!present(tx("Tu ciclo", "Your cycle")))
         // The savings were never declared: "Sin dato" in the strategy too.
         compose.onNodeWithText(tx("Sin dato", "No data")).performScrollTo()
@@ -190,7 +191,7 @@ class PlanRecoveryUiTest {
         click(tx("Plan", "Plan"))
         click(tx("Tu plan del mes", "Your plan for the month"))
         waitForTag("strategy.director.owner")
-        click(tx("Ver todo el detalle", "See every detail"))
+        click(tx("Ver todo el detalle", "See full details"))
         waitForText(tx("Tu ciclo", "Your cycle"))
         back()
         click(tx("Salvavidas", "Emergency fund"))
@@ -212,7 +213,7 @@ class PlanRecoveryUiTest {
         assertTrue("the detail starts closed", !present(tx("Podés gastar con tranquilidad", "Safe to spend")))
         click(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?"))
         waitForText(tx("De dónde sale", "Where it comes from"))
-        click(tx("Ver todo el detalle", "See every detail"))
+        click(tx("Ver todo el detalle", "See full details"))
         waitForText(tx("Podés gastar con tranquilidad", "Safe to spend"))
         assertTrue("Users never see the Owner's cycle", !present(tx("Tu ciclo", "Your cycle")))
         assertTrue("Users never see an account cash line", !present(tx("Efectivo disponible ahora", "Cash available now")))

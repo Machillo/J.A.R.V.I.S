@@ -82,8 +82,9 @@ private struct SummaryContent: View {
 struct StrategyContent: View {
     let strategy: Strategy
     var showsAllocations = true
-    /// "Tu plan del mes" already leads with the recommendation.
+    /// "Tu plan del mes" already leads with the recommendation and keeps the cautions in sight.
     var showsRecommendation = true
+    var showsWarnings = true
 
     var body: some View {
         if showsRecommendation, let recommendation = strategy.recommendation ?? strategy.directorNote {
@@ -122,7 +123,7 @@ struct StrategyContent: View {
             }
             .dincrCard()
         }
-        ForEach(Array((strategy.warnings ?? []).enumerated()), id: \.offset) { _, warning in
+        ForEach(Array((showsWarnings ? strategy.warnings ?? [] : []).enumerated()), id: \.offset) { _, warning in
             DincrMessage(.attention, title: tx("Tomá en cuenta", "Keep in mind"), message: warning)
         }
     }
