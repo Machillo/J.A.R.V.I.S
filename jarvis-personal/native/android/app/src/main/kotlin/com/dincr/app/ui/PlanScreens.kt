@@ -53,10 +53,12 @@ import java.time.LocalDate
 import kotlinx.coroutines.launch
 
 /**
- * E1 — the Plan tab: exactly Aguinaldo, Estrategia, Salvavidas and Distribución de dinero, each
- * behind its historical plan gate. A row the plan does not include stays visible, locked, and opens
- * the plans screen. The Owner passes every gate by the server role ([Profile.planTier]). Debts and
- * goals live in Hoy; budget, calendar and recurring payments in Perfil → Finanzas.
+ * E1 — the Plan tab: exactly Aguinaldo, Tu plan del mes (UX-3: Estrategia + Distribución as one
+ * plan; the row keeps the Estrategia route and gate), Salvavidas and Distribución de dinero (kept as
+ * a transitional access until its retirement is approved), each behind its historical plan gate.
+ * A row the plan does not include stays visible, locked, and opens the plans screen. The Owner
+ * passes every gate by the server role ([Profile.planTier]). Debts and goals live in Hoy; budget,
+ * calendar and recurring payments in Perfil → Finanzas.
  */
 @Composable
 fun PlanHubScreen(model: AppModel, nav: Navigator) {
@@ -68,8 +70,8 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
             Column {
                 PlanRow(plan.allows(Feature.GMAIL_AUTOMATION), PlanTier.VIP, Icons.Rounded.Redeem, tx("Aguinaldo", "Aguinaldo"),
                     tx("Estimación con las órdenes de la CCSS", "Estimate from CCSS payroll notices"), nav, "aguinaldo")
-                PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.AutoAwesome, tx("Estrategia", "Strategy"),
-                    tx("Tu prioridad y el plan de tus deudas", "Your priority and your debt plan"), nav, "strategy")
+                PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.AutoAwesome, tx("Tu plan del mes", "Your plan for the month"),
+                    tx("Cuánto podés repartir y cómo", "How much you can split, and how"), nav, "strategy")
                 PlanRow(plan.allows(Feature.STRATEGY_VIP), PlanTier.VIP, Icons.Rounded.Shield, tx("Salvavidas", "Emergency fund"),
                     tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers"), nav, "salvavidas")
                 PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.PieChart, tx("Distribución de dinero", "Money distribution"),

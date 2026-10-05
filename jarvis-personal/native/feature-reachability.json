@@ -378,7 +378,7 @@
   },
   {
    "id": "plan.strategy",
-   "name": "Plan → Estrategia",
+   "name": "Plan → Tu plan del mes (Estrategia + Distribución, UX-3)",
    "decision": "baseline-81fd2cc4",
    "plans": {
     "free": "VISIBLE_LOCKED",
@@ -412,11 +412,11 @@
    },
    "android": {
     "tab": "Plan",
-    "text": "Estrategia",
+    "text": "Tu plan del mes",
     "locked_text": "Disponible desde Basic",
     "en": {
      "tab": "Plan",
-     "text": "Strategy",
+     "text": "Your plan for the month",
      "locked_text": "Available from Basic"
     }
    }

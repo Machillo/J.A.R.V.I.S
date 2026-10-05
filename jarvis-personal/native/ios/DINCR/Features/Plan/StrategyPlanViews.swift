@@ -2,14 +2,16 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY F2/F3 — Estrategia (Plan tab). Three contracts, chosen from the server role and plan
-/// (`StrategySource`): Basic reads `/finance/strategy-basic`, VIP Users `/vip/strategy-dashboard`,
-/// the Owner `/jarvis/premium/strategy-dashboard`. Every figure is the backend's.
+/// UX-3 — "Tu plan del mes" (Plan tab): Estrategia and Distribución as one plan. Three contracts,
+/// chosen from the server role and plan (`StrategySource`): Basic reads `/finance/strategy-basic`,
+/// VIP Users `/vip/strategy-dashboard`, the Owner `/jarvis/premium/strategy-dashboard`. Every figure
+/// is the backend's: first the amount to plan, how DINCR splits it and why in one sentence; the
+/// derivation and every historical detail stay one tap away ("¿Por qué?", "Ver todo el detalle").
 struct PlanStrategyView: View {
     var body: some View {
-        ScreenScroll(title: tx("Estrategia", "Strategy")) {
+        ScreenScroll(title: tx("Tu plan del mes", "Your plan for the month")) {
             StrategyLoader { strategy in
-                StrategyPlanContent(strategy: strategy)
+                MonthPlanContent(strategy: strategy)
             }
             FinancialDisclaimer()
         }
@@ -74,54 +76,182 @@ struct ObservedIncomeNote: View {
     }
 }
 
-private struct StrategyPlanContent: View {
+private struct MonthPlanContent: View {
     let strategy: PlanStrategy
 
     var body: some View {
-        switch strategy {
-        case .basic(let basic):
-            if basic.needsIncome {
-                NeedsIncomeState(message: basic.recommendation)
+        if case .dashboard(let dashboard) = strategy, dashboard.strategy == nil {
+            EmptyStateView(symbol: "map", title: tx("Sin plan todavía", "No plan yet"),
+                           message: dashboard.content ?? tx("Volvé a intentarlo más tarde.", "Try again later.")) { EmptyView() }
+        } else {
+            let plan = MonthPlan(strategy)
+            if plan.needsIncome {
+                NeedsIncomeState(message: needsIncomeMessage)
             } else {
-                if basic.usesObservedIncome { ObservedIncomeNote() }
-                StrategyContent(strategy: basic, showsAllocations: false)
-            }
-        case .dashboard(let dashboard):
-            if let plan = dashboard.strategy {
-                if plan.needsIncome {
-                    NeedsIncomeState(message: plan.objective ?? dashboard.content)
-                } else {
-                    DashboardStrategyContent(title: dashboard.title, plan: plan)
+                if plan.usesObservedIncome { ObservedIncomeNote() }
+                if plan.isCritical {
+                    DincrMessage(.attention, title: plan.kind == .basic ? tx("Tus compromisos superan tus ingresos", "Your commitments exceed your income")
+                                                                   : tx("Este mes no hay sobrante real", "No real surplus this month"),
+                                 message: plan.criticalDetail ?? "")
                 }
-            } else {
-                EmptyStateView(symbol: "map", title: tx("Sin estrategia por ahora", "No strategy for now"),
-                               message: dashboard.content ?? tx("Volvé a intentarlo más tarde.", "Try again later.")) { EmptyView() }
+                MonthPlanSummary(plan: plan)
+                MonthPlanSplit(plan: plan)
+                // Cautions stay in sight, never behind "¿Por qué?".
+                if case .basic(let basic) = strategy {
+                    ForEach(Array((basic.warnings ?? []).enumerated()), id: \.offset) { _, warning in
+                        DincrMessage(.attention, title: tx("Tomá en cuenta", "Keep in mind"), message: warning)
+                    }
+                }
+                switch strategy {
+                case .basic(let basic): BasicPlanDetail(strategy: basic)
+                case .dashboard(let dashboard): if let detail = dashboard.strategy { DashboardPlanDetail(plan: detail) }
+                }
             }
+        }
+    }
+
+    private var needsIncomeMessage: String? {
+        switch strategy {
+        case .basic(let basic): basic.recommendation
+        case .dashboard(let dashboard): dashboard.strategy?.objective ?? dashboard.content
         }
     }
 }
 
-/// VIP Users and Owner dashboard. Owner-only figures appear only when the backend sent the Owner
-/// model (`scope == "owner"`); a Users answer never shows a cash balance.
-private struct DashboardStrategyContent: View {
-    let title: String?
-    let plan: DashboardStrategy
+/// The result first: the amount DINCR plans with and, in one sentence, what it recommends.
+private struct MonthPlanSummary: View {
+    let plan: MonthPlan
 
     var body: some View {
         VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-            Text(title ?? plan.title ?? tx("Tu estrategia", "Your strategy")).font(DincrFont.title2).foregroundStyle(DincrColor.text)
-                .accessibilityAddTraits(.isHeader)
-            if let objective = plan.objective { Text(objective).font(DincrFont.body).foregroundStyle(DincrColor.text2) }
+            Text(plan.kind == .basic ? tx("Margen para decidir", "Margin to decide") : tx("Sobrante para repartir", "Surplus to allocate"))
+                .font(DincrFont.label).foregroundStyle(DincrColor.text2)
+            MoneyText(plan.base, font: DincrFont.displayAmount)
+            if let headline = plan.summaryHeadline {
+                Text(headline).font(DincrFont.body).foregroundStyle(DincrColor.text)
+            }
         }
         .dincrCard()
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("strategy.dashboard")
+        .accessibilityIdentifier(plan.kind == .basic ? "strategy.basic" : "strategy.dashboard")
+    }
+}
 
-        if let priority = plan.priority, priority.title != nil || priority.detail != nil {
+/// How DINCR splits the amount. A donut only when the parts exactly make up the amount
+/// (`MonthPlan.showsComposition`); otherwise each part as the backend sent it.
+private struct MonthPlanSplit: View {
+    let plan: MonthPlan
+    private var title: String { tx("Cómo DINCR lo reparte", "How DINCR splits it") }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+            SectionHeader(title: title)
+            if plan.parts.isEmpty {
+                Text(plan.kind == .basic ? tx("Este mes no hay margen para repartir.", "There’s no margin to split this month.")
+                                         : tx("Este mes no hay sobrante real para repartir.", "There’s no real surplus to allocate this month."))
+                    .font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2)
+            } else if plan.showsComposition {
+                CompositionDonut(title: title, composition: plan.composition)
+            } else {
+                ForEach(plan.parts) { part in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(part.label).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text)
+                            Spacer(minLength: DincrSpacing.s3)
+                            if let percentage = part.percentage {
+                                Text(String(format: "%.0f%%", percentage)).font(DincrFont.caption.monospacedDigit()).foregroundStyle(DincrColor.textMuted)
+                            }
+                            MoneyText(part.amount, font: DincrFont.amount)
+                        }
+                        // The backend's own share, when it sent one; never a bar for an unknown share.
+                        if part.percentage != nil { DincrProgressBar(ProgressValue(fraction: part.percentage.map { $0 / 100 })) }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .dincrCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("plan.month.split")
+    }
+}
+
+/// Basic: the derivation and the rest of the strategy, one tap away.
+private struct BasicPlanDetail: View {
+    let strategy: Strategy
+    @State private var expanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: DincrSpacing.s3) {
+                StrategyContent(strategy: strategy, showsAllocations: false, showsRecommendation: false, showsWarnings: false)
+                if let paycheck = strategy.nextPaycheck, let envelopes = paycheck.envelopes, !envelopes.isEmpty {
+                    VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                        SectionHeader(title: tx("Tu próximo ingreso", "Your next paycheck"))
+                        FigureRow(label: tx("Estimado", "Estimated"), amount: paycheck.estimatedPaycheck)
+                        ForEach(Array(envelopes.enumerated()), id: \.offset) { _, envelope in
+                            FigureRow(label: envelope.label ?? envelope.bucket ?? "", amount: envelope.amount)
+                        }
+                        if let unassigned = paycheck.unassigned, unassigned != 0 {
+                            FigureRow(label: tx("Sin asignar", "Unassigned"), amount: unassigned)
+                        }
+                    }
+                    .dincrCard()
+                }
+            }
+            .padding(.top, DincrSpacing.s2)
+        } label: {
+            // The identifier goes on the label: on the group it would replace the identifiers inside.
+            Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+                .accessibilityIdentifier("plan.month.why")
+        }
+        .tint(DincrColor.tint)
+    }
+}
+
+/// VIP Users and the Owner: why (the priority's detail and where the amount comes from) and every
+/// historical section, one tap away. Owner-only figures appear only when the backend sent the Owner
+/// model (`scope == "owner"`); a Users answer never shows a cash balance.
+private struct DashboardPlanDetail: View {
+    let plan: DashboardStrategy
+    @State private var showsWhy = false
+    @State private var showsDetail = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $showsWhy) {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                SectionHeader(title: tx("Tu prioridad", "Your priority"))
-                if let headline = priority.title { Text(headline).font(DincrFont.body.weight(.semibold)).foregroundStyle(DincrColor.text) }
-                if let detail = priority.detail { Text(detail).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2) }
+                if let detail = plan.priority?.detail { Text(detail).font(DincrFont.bodySmall).foregroundStyle(DincrColor.text2) }
+                if let lines = plan.distributionFormula?.lines, !lines.isEmpty {
+                    SectionHeader(title: tx("De dónde sale", "Where it comes from"))
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        FigureRow(label: DistributionLabels.formula(line.key), amount: line.amount)
+                    }
+                }
+            }
+            .dincrCard()
+            .padding(.top, DincrSpacing.s2)
+        } label: {
+            // The identifier goes on the label: on the group it would replace the identifiers inside.
+            Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+                .accessibilityIdentifier("plan.month.why")
+        }
+        .tint(DincrColor.tint)
+
+        DisclosureGroup(isExpanded: $showsDetail) {
+            VStack(alignment: .leading, spacing: DincrSpacing.s3) { sections }
+                .padding(.top, DincrSpacing.s2)
+        } label: {
+            Text(tx("Ver todo el detalle", "See full details")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+                .accessibilityIdentifier("plan.month.detail")
+        }
+        .tint(DincrColor.tint)
+    }
+
+    @ViewBuilder private var sections: some View {
+        if let title = plan.title, !title.isEmpty, let objective = plan.objective {
+            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
+                Text(title).font(DincrFont.title2).foregroundStyle(DincrColor.text).accessibilityAddTraits(.isHeader)
+                Text(objective).font(DincrFont.body).foregroundStyle(DincrColor.text2)
             }
             .dincrCard()
         }
@@ -143,13 +273,19 @@ private struct DashboardStrategyContent: View {
         if let fund = plan.emergencyFund {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: "Salvavidas")
-                FigureRow(label: tx("Ahorro actual", "Current savings"), amount: fund.current)
+                // Unknown Users savings read as "Sin dato", never ₡0 (`emergencyKnown`).
+                FigureRow(label: tx("Ahorro actual", "Current savings"), amount: plan.emergencyKnown ? fund.current : nil)
                 FigureRow(label: tx("Base mensual", "Monthly base"), amount: fund.monthlyBase)
                 FigureRow(label: tx("Próxima meta", "Next target"), amount: fund.nextTarget)
-                FigureRow(label: tx("Te falta", "Still missing"), amount: fund.gapToNextTarget)
-                if let level = StrategyText.emergencyLevel(fund.level) { InfoRow(label: tx("Nivel", "Level"), value: level) }
+                // What is missing and the stage are measured from the savings: only when they are known.
+                if plan.emergencyKnown {
+                    FigureRow(label: tx("Te falta", "Still missing"), amount: fund.gapToNextTarget)
+                    if let level = StrategyText.emergencyLevel(fund.level) { InfoRow(label: tx("Nivel", "Level"), value: level) }
+                }
             }
             .dincrCard()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("plan.month.salvavidas")
         }
 
         let timeline = plan.timeline ?? []

@@ -194,6 +194,8 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
     public let pendingRecurringTotal: Decimal?
     public let safeToSpend: Decimal?
     public let emergencyFund: EmergencyFund?
+    /// The Salvavidas state the strategy used; tells whether the savings are known (`emergencyKnown`).
+    public let salvavidas: Salvavidas?
     public let timeline: [TimelineItem]?
     public let estimatedDebtFreeDate: String?
     public let totalDebt: Decimal?
@@ -219,7 +221,7 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case scope, status, title, objective, priority, monthlyIncome, incomePolicy, monthlyExpenses
-        case debtCommitmentCurrentCycle, pendingRecurringTotal, safeToSpend, emergencyFund, timeline
+        case debtCommitmentCurrentCycle, pendingRecurringTotal, safeToSpend, emergencyFund, salvavidas, timeline
         case estimatedDebtFreeDate, totalDebt, debtProgressPercent, investmentRecommended, rules
         case allocationBaseAmount, allocationItems, distributionFormula
         case recurringMonthlyIncome, currentMonthExtraNet, incomeReceivedCurrentCycle, remainingIncomeCurrentCycle
@@ -241,6 +243,7 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
         pendingRecurringTotal = c.lenient(Decimal.self, .pendingRecurringTotal)
         safeToSpend = c.lenient(Decimal.self, .safeToSpend)
         emergencyFund = c.lenient(EmergencyFund.self, .emergencyFund)
+        salvavidas = c.lenient(Salvavidas.self, .salvavidas)
         timeline = c.lenient([TimelineItem].self, .timeline)
         estimatedDebtFreeDate = c.lenient(String.self, .estimatedDebtFreeDate)
         totalDebt = c.lenient(Decimal.self, .totalDebt)
@@ -267,6 +270,13 @@ public struct DashboardStrategy: Decodable, Sendable, Equatable {
     /// The historical JARVIS model, sent only to the server-resolved Owner.
     public var isOwnerScope: Bool { scope == "owner" }
     public var needsIncome: Bool { status == "needs_income" }
+
+    /// Whether `emergency_fund.current` is a real amount. The director reads unknown Users savings
+    /// as 0 for its allocation, so a Users answer whose Salvavidas says the savings are unknown shows
+    /// "Sin dato", never ₡0 (unknown ≠ zero). Android: `DirectorStrategy.emergencyKnown`.
+    public var emergencyKnown: Bool {
+        emergencyFund?.current != nil && (isOwnerScope || salvavidas?.currentAmountKnown != false)
+    }
 }
 
 /// Which strategy contract an identity reads. The role comes from `/auth/me` only: the Owner reads
