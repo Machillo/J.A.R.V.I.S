@@ -29,6 +29,7 @@ import com.dincr.app.AppModel
 import com.dincr.app.tx
 import com.dincr.data.BasicDashboard
 import com.dincr.data.Budget
+import com.dincr.data.AttentionList
 import com.dincr.data.CommandCenter
 import com.dincr.data.FinancialCalendar
 import com.dincr.data.FinancialSituation
@@ -78,7 +79,7 @@ fun HomeScreen(model: AppModel, padding: PaddingValues, nav: Navigator) {
                 when (data) {
                     is HomeData.Free -> FreeHome(data.dashboard, nav)
                     is HomeData.Basic -> BasicHome(data, nav)
-                    is HomeData.Vip -> VipHome(data.center, nav)
+                    is HomeData.Vip -> VipHome(data.center, flags.isEnabled(OpsFlag.GMAIL_AUTOMATION), nav)
                 }
             }
             YourFinances(nav)
@@ -160,7 +161,7 @@ private fun BasicHome(data: HomeData.Basic, nav: Navigator) {
 }
 
 @Composable
-private fun VipHome(c: CommandCenter, nav: Navigator) {
+private fun VipHome(c: CommandCenter, mailReviewAvailable: Boolean, nav: Navigator) {
     DincrCard {
         Column(verticalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
             Text(tx("Podés gastar con tranquilidad", "Safe to spend"), style = MaterialTheme.typography.labelLarge, color = Dincr.colors.text2)
@@ -175,9 +176,8 @@ private fun VipHome(c: CommandCenter, nav: Navigator) {
             if (d.dataComplete == false) TextButton({ nav.open("situation") }) { Text(tx("Completar mi situación", "Complete my situation"), color = Dincr.colors.tint) }
         }
     }
-    c.alerts.firstOrNull()?.let { a ->
-        DincrMessage(MessageKind.financial(a.severity), a.title.orEmpty(), listOfNotNull(a.context, a.action).joinToString(" "))
-    }
+    // UX-5: alerts and pending mail notices, ordered and deduplicated; left out when there are none.
+    AttentionSection(AttentionList.today(c, mailReviewAvailable), nav)
     if (c.roadmap.isNotEmpty()) Section(tx("Tu plan de acción", "Your action plan")) {
         c.roadmap.sortedBy { it.order ?: Int.MAX_VALUE }.take(3).forEach { step ->
             Column(Modifier.padding(vertical = DincrSpacing.s1)) {

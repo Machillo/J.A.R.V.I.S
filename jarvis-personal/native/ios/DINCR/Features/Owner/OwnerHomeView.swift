@@ -5,7 +5,7 @@ import SwiftUI
 /// The Owner's "Hoy" (DINCR Owner redesign). It stays DINCR's Today tab and answers, in order:
 /// 1. who and when (greeting with the profile's first name),
 /// 2. how am I (the backend's key figure: safe to spend, or the month's balance without VIP intelligence),
-/// 3. what needs attention (mail notices to review, alerts),
+/// 3. what needs attention ("Para atender": alerts and mail notices, UX-5),
 /// 4. your finances (debts and goals: the same screens the other plans reach from their Today),
 /// 5. what comes next (the JARVIS agenda),
 /// 6. JARVIS (chat and agenda), also reachable from the mark in the header.
@@ -122,40 +122,14 @@ struct OwnerHomeView: View {
 
     // MARK: 3. Attention
 
+    /// UX-5: the same "Para atender" as VIP (critical → high → medium → success). Only from a loaded
+    /// command center: with VIP intelligence off, or nothing to show, the section is left out — never
+    /// a "Nada pendiente" DINCR hasn't checked.
     @ViewBuilder
     private var attentionSection: some View {
-        if case .loaded(let value) = summary {
-            let items = OwnerHome.attention(from: value.center)
-            OwnerSectionHeader(tx("Necesita tu atención", "Needs your attention"))
-            OwnerGroup {
-                if items.isEmpty {
-                    OwnerRow(symbol: "checkmark.circle", title: tx("Nada pendiente", "Nothing pending"),
-                             detail: tx("No hay avisos ni alertas por revisar.", "No notices or alerts to review."),
-                             tone: .neutral, showsChevron: false)
-                        .accessibilityIdentifier("owner.home.attention.none")
-                }
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    if index > 0 { OwnerDivider() }
-                    attentionRow(item)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func attentionRow(_ item: OwnerHome.Attention) -> some View {
-        switch item.kind {
-        case .mailReview:
-            NavigationLink(value: ProfileRoute.mail) {
-                OwnerRow(symbol: "envelope.badge", title: tx("Avisos del correo por revisar", "Mail notices to review"),
-                         detail: tx("\(item.count ?? 0) pendientes", "\(item.count ?? 0) pending"))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.attention.mail")
-        case .urgentAlert, .alert:
-            OwnerRow(symbol: "exclamationmark.triangle", title: item.title, detail: item.detail,
-                     tone: item.kind == .urgentAlert ? .negative : .warning, showsChevron: false)
-                .accessibilityIdentifier("owner.home.attention.alert")
+        if case .loaded(let value) = summary, let center = value.center {
+            AttentionSection(today: AttentionList.today(center: center, mailReviewAvailable: model.flags.isEnabled(.gmailAutomation)),
+                             idPrefix: "owner.home.attention", ownerStyle: true)
         }
     }
 

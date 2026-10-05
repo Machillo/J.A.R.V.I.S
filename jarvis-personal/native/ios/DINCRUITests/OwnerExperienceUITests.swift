@@ -55,10 +55,12 @@ final class OwnerExperienceUITests: XCTestCase {
         XCTAssertTrue(element("owner.home.hero", in: app).waitForExistence(timeout: 10), "the backend's key figure")
         XCTAssertTrue((element("owner.home.greeting", in: app).label).contains("Ana."), "the greeting uses the profile's first name")
         XCTAssertTrue(element("owner.home.jarvis.mark", in: app).exists)
-        // Attention: the mail notices to review and the command center's alert, in the backend's words.
-        reveal("owner.home.attention.mail", in: app)
-        XCTAssertTrue(element("owner.home.attention.alert", in: app).exists)
+        // Para atender (UX-5): the command center's alerts in the backend's words, high first, and
+        // "Ver todas" because there are more than three.
+        reveal("owner.home.attention.item.center", in: app)
+        XCTAssertTrue(text("Reserva menor a un mes", in: app).exists)
         XCTAssertTrue(text("Pago de tarjeta en 5 días", in: app).exists)
+        XCTAssertTrue(element("owner.home.attention.all", in: app).exists)
         // Next: the JARVIS agenda, next event first.
         reveal("owner.home.agenda.event", in: app)
         XCTAssertTrue(text("Reunión con el contador", in: app).exists)
@@ -75,7 +77,9 @@ final class OwnerExperienceUITests: XCTestCase {
         XCTAssertTrue(text("Cita médica", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(element("jarvis.agenda.schedule", in: app).exists)
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        reveal("owner.home.attention.mail", in: app).tap()
+        // The mail notices are the fourth item: "Ver todas" → their link opens the Email Monitor.
+        reveal("owner.home.attention.all", in: app).tap()
+        reveal("attention.link.review", in: app).tap()
         XCTAssertTrue(text("Por revisar", in: app).waitForExistence(timeout: 10), "the Email Monitor's review list")
     }
 
@@ -118,7 +122,7 @@ final class OwnerExperienceUITests: XCTestCase {
     func testOwnerTodayHoldsAtTheLargestTextSize() {
         let app = launch(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         XCTAssertTrue(element("owner.home.hero", in: app).waitForExistence(timeout: 10))
-        reveal("owner.home.attention.mail", in: app)
+        reveal("owner.home.attention.all", in: app)
         reveal("owner.home.jarvis.chat", in: app).tap()
         XCTAssertTrue(element("jarvis.chat.input", in: app).waitForExistence(timeout: 5))
         // The quick actions wrap instead of disappearing.

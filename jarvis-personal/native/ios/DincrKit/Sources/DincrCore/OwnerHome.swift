@@ -1,7 +1,8 @@
 import Foundation
 
 /// The Owner's "Hoy" (presentation only). It answers, in this order: how am I today, what needs my
-/// attention, what comes next, and how to reach JARVIS. Every figure and item comes from the backend
+/// attention (`AttentionList`, the same "Para atender" as VIP), what comes next, and how to reach
+/// JARVIS. Every figure and item comes from the backend
 /// (`/user-product/vip/command-center` or `/basic/dashboard`, and the JARVIS agenda); nothing here
 /// computes money. Android twin: none yet (iOS-first Owner redesign).
 public enum OwnerHome {
@@ -17,44 +18,6 @@ public enum OwnerHome {
         case 12..<19: .afternoon
         default: .evening
         }
-    }
-
-    /// One thing that needs the Owner's attention, in the backend's words.
-    public struct Attention: Sendable, Equatable, Identifiable {
-        public enum Kind: String, Sendable, Equatable {
-            /// Bank notices waiting for Confirm / Correct / Dismiss (Email Monitor).
-            case mailReview
-            /// A high-severity alert of the command center.
-            case urgentAlert
-            /// Any other alert of the command center.
-            case alert
-        }
-
-        public let id: String
-        public let kind: Kind
-        /// The alert's title; empty for `mailReview`, whose wording is the app's.
-        public let title: String
-        public let detail: String?
-        /// For `mailReview`: how many notices wait.
-        public let count: Int?
-    }
-
-    /// Pending mail notices first, then urgent alerts, then the rest, each in the backend's order.
-    /// Alerts without a title are left out (nothing is shown that the backend did not say).
-    public static func attention(from center: CommandCenter?) -> [Attention] {
-        guard let center else { return [] }
-        var items: [Attention] = []
-        if let review = center.automation?.review, review > 0 {
-            items.append(Attention(id: "mail", kind: .mailReview, title: "", detail: nil, count: review))
-        }
-        let alerts = (center.alerts ?? []).enumerated().compactMap { index, alert -> Attention? in
-            guard let title = alert.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else { return nil }
-            let detail = [alert.context, alert.action].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
-            return Attention(id: "alert.\(index)", kind: alert.severity == "high" ? .urgentAlert : .alert,
-                             title: title, detail: detail.isEmpty ? nil : detail, count: nil)
-        }
-        items += alerts.filter { $0.kind == .urgentAlert } + alerts.filter { $0.kind == .alert }
-        return items
     }
 
     /// The next events of the agenda, in the backend's chronological order.

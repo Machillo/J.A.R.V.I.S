@@ -308,11 +308,24 @@ public struct MonthlyReview: Decodable, Sendable, Equatable {
 /// `GET /user-product/vip/lifecycle/proactive-advisor` (VIP).
 public struct ProactiveAdvisor: Decodable, Sendable, Equatable {
     public struct Alert: Decodable, Sendable, Equatable, Identifiable {
+        /// Where the advisor suggests looking (`route` is a backend code, mapped by `AttentionList`).
+        public struct Action: Decodable, Sendable, Equatable {
+            public let label: String?
+            public let route: String?
+
+            public init(label: String?, route: String?) { self.label = label; self.route = route }
+        }
+
         public let id: String?
         public let code: String?
         public let severity: String?
         public let title: String?
         public let explanation: String?
+        public let action: Action?
+
+        public init(id: String?, code: String?, severity: String?, title: String?, explanation: String?, action: Action? = nil) {
+            self.id = id; self.code = code; self.severity = severity; self.title = title; self.explanation = explanation; self.action = action
+        }
     }
     public let status: String?
     public let asOf: String?
