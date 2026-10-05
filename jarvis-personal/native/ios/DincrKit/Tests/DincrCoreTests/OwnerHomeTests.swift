@@ -25,26 +25,6 @@ import Testing
         #expect(OwnerHome.greeting(at: at(hour: 19), calendar: calendar) == .evening)
     }
 
-    @Test func attentionPutsMailFirstThenUrgentAlertsAndKeepsTheBackendsWords() throws {
-        let value = try center(#"""
-        {"alerts":[{"severity":"medium","title":"Pago en 5 días","context":"El mínimo vence pronto.","action":"Revisá la deuda"},
-                   {"severity":"high","title":"Saldo bajo","context":null,"action":null},
-                   {"severity":"high","title":"  ","context":"sin título"}],
-         "automation":{"confirmed":4,"review":3,"duplicates":0}}
-        """#)
-        let items = OwnerHome.attention(from: value)
-        #expect(items.map(\.kind) == [.mailReview, .urgentAlert, .alert])
-        #expect(items[0].count == 3)
-        #expect(items[1].title == "Saldo bajo" && items[1].detail == nil)
-        #expect(items[2].title == "Pago en 5 días" && items[2].detail == "El mínimo vence pronto. Revisá la deuda")
-    }
-
-    @Test func nothingPendingMeansNoAttentionItems() throws {
-        #expect(OwnerHome.attention(from: nil).isEmpty)
-        #expect(OwnerHome.attention(from: try center(#"{"automation":{"review":0},"alerts":[]}"#)).isEmpty)
-        #expect(OwnerHome.attention(from: try center(#"{}"#)).isEmpty)
-    }
-
     @Test func upcomingKeepsTheAgendaOrderAndLimit() {
         let events = (1...5).map { JarvisEvent(id: $0, title: "E\($0)", eventDate: "2026-10-0\($0)") }
         #expect(OwnerHome.upcoming(events).map(\.id) == [1, 2, 3])

@@ -87,6 +87,7 @@ struct VipHomeView: View {
 }
 
 private struct CommandCenterContent: View {
+    @Environment(AppModel.self) private var model
     let center: CommandCenter
 
     var body: some View {
@@ -113,22 +114,8 @@ private struct CommandCenterContent: View {
                     }
                     .dincrCard()
                 }
-                if let automation = center.automation, (automation.review ?? 0) > 0 {
-                    NavigationLink { EmailMonitorView() } label: {
-                        HubRow(symbol: "envelope.badge", title: tx("Avisos del correo por revisar", "Mail notices to review"),
-                               subtitle: tx("\(automation.review ?? 0) pendientes", "\(automation.review ?? 0) pending"))
-                    }
-                    .buttonStyle(.plain)
-                    .dincrCard(padding: DincrSpacing.s3)
-                }
-                let alerts = center.alerts ?? []
-                if !alerts.isEmpty {
-                    SectionHeader(title: tx("Alertas", "Alerts"))
-                    ForEach(Array(alerts.enumerated()), id: \.offset) { _, alert in
-                        DincrMessage(.financial(severity: alert.severity), title: alert.title ?? "",
-                                     message: [alert.context, alert.action].compactMap { $0 }.joined(separator: " "))
-                    }
-                }
+                // UX-5: alerts and pending mail notices, ordered and deduplicated; left out when there are none.
+                AttentionSection(today: AttentionList.today(center: center, mailReviewAvailable: model.flags.isEnabled(.gmailAutomation)))
                 let roadmap = center.roadmap ?? []
                 if !roadmap.isEmpty {
                     VStack(alignment: .leading, spacing: DincrSpacing.s3) {

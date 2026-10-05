@@ -436,10 +436,17 @@ class FakeBackend(
             CommandCenter.Score(72, "Estable", listOf(CommandCenter.Factor("Ahorro de emergencia", "warning"))),
             CommandCenter.DebtPlanner(CommandCenter.Plan("finva", "Tarjeta de ejemplo", BigDecimal(95000), 14, BigDecimal(84000))),
             CommandCenter.SafeToSpend(BigDecimal(118000), BigDecimal(214000), BigDecimal(96000)),
-            listOf(CommandCenter.Alert("medium", "Pago de tarjeta en 5 días", "El pago mínimo vence pronto.", "Revisá la deuda")),
+            // More than Hoy's three (UX-5), including the backend's own pending-review alert.
+            listOf(CommandCenter.Alert("medium", "Pago de tarjeta en 5 días", "El pago mínimo vence pronto.", "Revisá la deuda"),
+                CommandCenter.Alert("high", "Reserva menor a un mes", "La cobertura estimada es 0.7 meses.", "Protegé el siguiente excedente en el fondo de emergencia."),
+                CommandCenter.Alert("medium", "Recurrente con variación", "Servicio de ejemplo cambió más de 10% entre cobros.", "Confirmá si fue un aumento, consumo variable o cargo incorrecto.")) +
+                candidates.count { it.isPending }.let { pending ->
+                    if (pending > 0) listOf(CommandCenter.Alert("medium", "Movimientos por revisar", "Hay $pending movimientos importados sin confirmar.", "Revisalos antes de confiar en el cierre mensual.")) else emptyList()
+                },
             listOf(1, 3, 6).map { CommandCenter.ProjectionPoint(it, BigDecimal(200000 * it), BigDecimal(900000 - 90000 * it), BigDecimal(-700000 + 290000 * it), "medium") },
             listOf(CommandCenter.RoadmapStep(1, "Completá tu fondo de emergencia inicial", BigDecimal(50000), "Te protege de imprevistos."),
                 CommandCenter.RoadmapStep(2, "Pagá extra a la tarjeta", BigDecimal(40000), "Tiene la tasa más alta.")),
+            automation = CommandCenter.Automation(4, candidates.count { it.isPending }, 0),
         ))
         "/user-product/finance/strategy-vip" -> store?.let { ok(it.engine("strategy_vip")) } ?: ok(strategy().copy(directorNote = "Priorizamos la deuda con tasa más alta."))
         "/user-product/finance/strategy-vip/simulate" -> ok(ScenarioResult(strategy(), strategy().copy(strategicMargin = BigDecimal(260000)), ScenarioResult.Delta(BigDecimal(46000), BigDecimal(50000), BigDecimal(4000))))
