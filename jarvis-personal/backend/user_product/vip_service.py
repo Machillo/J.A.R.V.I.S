@@ -179,6 +179,14 @@ def get_vip_command_center() -> dict:
     net_worth = round(all_assets - debt_balance, 2)
 
     coverage = savings / known_commitments if known_commitments else 0
+    # Unknown ≠ 0: an alert states a financial fact only when the data behind it is known.
+    # The income is known when the income policy found a source (declared or recorded) or the
+    # user keeps active recurring income items; source "none" is an income nobody knows, not an
+    # income of 0. Liquid savings are known only when declared (NULL is unknown), and a coverage
+    # needs known commitments to divide by: without them there is no coverage to state.
+    income_known = income["source"] != "none" or any(row["item_type"] == "income" for row in recurring)
+    savings_known = profile.get("liquid_savings") is not None
+    coverage_known = savings_known and known_commitments > 0
     debt_ratio = debt_minimums / monthly_income if monthly_income else 1
     cashflow_ratio = max(min((margin / monthly_income) if monthly_income else -1, 1), -1)
     completeness = sum([monthly_income > 0, essentials > 0 or recurring_expense > 0, all(row.get("monthly_payment") for row in debts) if debts else True, bool(balance_accounts), emergency_target > 0]) / 5
@@ -202,9 +210,9 @@ def get_vip_command_center() -> dict:
     action_amount = abs(margin) if margin < 0 else min(max(margin, 0), emergency_gap) if priority == "emergency" else max(margin, 0)
 
     alerts = []
-    if margin < 0:
+    if income_known and margin < 0:
         alerts.append({"severity": "critical", "title": tx("Cierre mensual negativo", "Negative monthly close"), "context": tx(f"Faltan {_money_text(abs(margin))} para cubrir compromisos conocidos.", f"{_money_text(abs(margin))} is missing to cover known commitments."), "action": tx("Reducí variables o aumentá ingreso antes de asumir otra obligación.", "Reduce variable spending or increase income before taking on another obligation.")})
-    if coverage < 1:
+    if coverage_known and coverage < 1:
         alerts.append({"severity": "high", "title": tx("Reserva menor a un mes", "Reserve below one month"), "context": tx(f"La cobertura estimada es {coverage:.1f} meses.", f"Estimated coverage is {coverage:.1f} months."), "action": tx("Protegé el siguiente excedente en el fondo de emergencia.", "Protect the next surplus in the emergency fund.")})
     if variability > 20:
         alerts.append({"severity": "medium", "title": tx("Ingreso variable", "Variable income"), "context": tx(f"La variación reciente es {variability}%.", f"Recent variation is {variability}%."), "action": tx("Presupuestá con el ingreso conservador, no con el mejor mes.", "Budget with the conservative income, not your best month.")})
