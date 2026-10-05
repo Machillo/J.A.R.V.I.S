@@ -60,7 +60,9 @@ class AttentionUiTest {
         compose.onAllNodes(hasTestTag(tag)).onFirst().performSemanticsAction(SemanticsActions.OnClick)
     }
 
-    private fun top(text: String) = texts(text).first().boundsInRoot.top
+    // Unclipped: on a small screen boundsInRoot is cut to the visible scroll area, so two items both
+    // below the fold would share the same edge; positionInRoot keeps their real layout order.
+    private fun top(text: String) = texts(text).first().positionInRoot.y
 
     @Test fun vipHoyShowsThreeMattersInOrderAndSeeAll() {
         launch("vip")
