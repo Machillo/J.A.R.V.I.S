@@ -85,8 +85,8 @@ private struct OwnerAnalysisContent: View {
                 if let label = transactions.spendingBreakdown?.period?.label {
                     Text(label).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
                 }
-                SpendingDonut(categories: categories)
-                CategoryBars(categories: categories, limit: 8)
+                SpendingDonut(rows: transactions.spendingBreakdown?.categories ?? [])
+                CategoryBars(categories: categories, limit: SpendingDonut.barsLimit)
             }
             .dincrCard()
             .accessibilityElement(children: .contain)
@@ -157,21 +157,27 @@ private struct MonthBars: View {
     }
 }
 
-/// Spending by category as a donut (the backend's categories as they are; nothing is regrouped or
-/// summed here), with the bars below as the readable list.
+/// Spending by category as a donut (the backend's categories as they are; nothing is regrouped),
+/// with the bars below as the readable list. Pilot consumer of the shared `CompositionDonut`
+/// (DESIGN.md → Data visualization): same rows, one hue instead of the default rainbow, a
+/// selectable part, and the parts read by VoiceOver. A row without a total stays unknown (so no
+/// proportions are claimed), the sum of the parts is not shown as a total (the backend has its
+/// own), and when the bars below list only some categories the donut keeps its own legend so every
+/// category stays named, as the previous chart's legend did.
 private struct SpendingDonut: View {
-    let categories: [CategoryAmount]
+    let rows: [TransactionAnalysis.CategoryTotal]
+    static let barsLimit = 8
 
     var body: some View {
-        Chart {
-            ForEach(categories) { slice in
-                SectorMark(angle: .value("Monto", NSDecimalNumber(decimal: slice.amount).doubleValue), innerRadius: .ratio(0.6), angularInset: 1)
-                    .foregroundStyle(by: .value("Categoría", slice.category))
-            }
-        }
-        .chartLegend(position: .bottom, alignment: .leading)
-        .frame(height: 200)
-        .accessibilityHidden(true)
+        CompositionDonut(
+            title: tx("Distribución del gasto", "Spending by category"),
+            composition: Composition(rows.enumerated().map { index, row in
+                CompositionItem(id: "\(index)-\(row.category ?? "")", label: CategoryStyle.label(row.category), value: row.total)
+            }),
+            color: DincrColor.chartExpense,
+            showsLegend: rows.count > Self.barsLimit,
+            showsTotal: false
+        )
     }
 }
 

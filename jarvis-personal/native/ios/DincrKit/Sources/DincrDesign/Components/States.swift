@@ -150,24 +150,43 @@ public struct StatusBanner: View {
     }
 }
 
-/// Linear progress with its value in text (no rings — DESIGN.md → Shapes).
+/// Linear progress with its value in text (no rings — DESIGN.md → Shapes). The caller shows the
+/// value in text next to it; the bar itself is hidden from VoiceOver.
 public struct DincrProgressBar: View {
-    let fraction: Double
+    let fraction: Double?
     let isOver: Bool
+    let overColor: Color
 
     public init(fraction: Double, isOver: Bool = false) {
-        self.fraction = min(max(fraction, 0), 1); self.isOver = isOver
+        self.fraction = min(max(fraction, 0), 1); self.isOver = isOver; overColor = DincrColor.negative
+    }
+
+    /// Progress from known values (DESIGN.md → Data visualization). Unknown or invalid progress
+    /// shows "no data" in words, never an empty bar that would read as 0 %. Going past 100 % means
+    /// what the caller says: over a goal is good, over a budget is not.
+    public init(_ progress: ProgressValue, overMeaning: TrendMeaning = .neutral) {
+        fraction = progress.displayFraction
+        isOver = progress.isOver
+        overColor = switch overMeaning {
+        case .favorable: DincrColor.positive
+        case .unfavorable: DincrColor.negative
+        case .neutral: DincrColor.tint
+        }
     }
 
     public var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(DincrColor.surface2)
-                Capsule().fill(isOver ? DincrColor.negative : DincrColor.tint)
-                    .frame(width: max(proxy.size.width * fraction, fraction > 0 ? 6 : 0))
+        if let fraction {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(DincrColor.surface2)
+                    Capsule().fill(isOver ? overColor : DincrColor.tint)
+                        .frame(width: max(proxy.size.width * fraction, fraction > 0 ? 6 : 0))
+                }
             }
+            .frame(height: 8)
+            .accessibilityHidden(true)
+        } else {
+            Text(VisualText.noData().capitalizedFirst).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
         }
-        .frame(height: 8)
-        .accessibilityHidden(true)
     }
 }
