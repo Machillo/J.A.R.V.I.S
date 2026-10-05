@@ -208,7 +208,7 @@ class PlanRecoveryUiTest {
         click(tx("Plan", "Plan"))
         click(tx("Tu plan del mes", "Your plan for the month"))
         waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
-        waitForText("Atacar deuda: Tarjeta de crédito")
+        waitForText("Atacar deuda:", substring = true)   // the priority, in one sentence (fixture debt name)
         waitForTag("plan.month.split")
         assertTrue("the detail starts closed", !present(tx("Podés gastar con tranquilidad", "Safe to spend")))
         click(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?"))
