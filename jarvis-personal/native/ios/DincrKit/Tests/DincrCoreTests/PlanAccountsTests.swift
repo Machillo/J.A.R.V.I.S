@@ -26,12 +26,16 @@ import Testing
 
     // MARK: Plan tab
 
-    @Test func planHasExactlyTheFourRowsInOrder() {
-        #expect(PlanHubItem.allCases.map(\.rawValue) == ["aguinaldo", "strategy", "salvavidas", "distribution"])
+    @Test func planHasExactlyItsRowsInOrder() {
+        // UX-4: Deudas joins Plan after "Tu plan del mes"; the other rows keep their order.
+        #expect(PlanHubItem.allCases.map(\.rawValue) == ["aguinaldo", "strategy", "debts", "salvavidas", "distribution"])
     }
 
     @Test func eachRowKeepsItsHistoricalGate() {
         let on = Self.allOn
+        // Debts are every plan's own reality: available to Free, never paused by an intelligence switch.
+        #expect(PlanTier.allCases.allSatisfy { PlanHubItem.debts.availability(tier: $0, flags: on) == .available })
+        #expect(PlanHubItem.debts.availability(tier: .free, flags: Self.off(.vipIntelligence)) == .available)
         #expect(PlanHubItem.strategy.availability(tier: .free, flags: on) == .locked(.basic))
         #expect(PlanHubItem.distribution.availability(tier: .free, flags: on) == .locked(.basic))
         #expect(PlanHubItem.salvavidas.availability(tier: .basic, flags: on) == .locked(.vip))

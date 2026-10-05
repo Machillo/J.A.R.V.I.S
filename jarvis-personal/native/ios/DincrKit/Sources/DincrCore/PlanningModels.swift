@@ -23,6 +23,14 @@ public struct Debt: Decodable, Sendable, Equatable, Identifiable {
         self.remainingAmount = remainingAmount; self.monthlyPayment = monthlyPayment; self.interestRate = interestRate
         self.paymentDay = paymentDay; self.nextPaymentDate = nextPaymentDate; self.progressPercent = progressPercent
     }
+
+    /// The backend's paid percentage, only when it can be true: the list answers 0 % when the
+    /// original amount is unknown (`ELSE 0`), which is not a fact about the debt. Unknown ≠ 0 %.
+    /// Android: `Debt.knownProgressPercent`.
+    public var knownProgressPercent: Double? {
+        guard let totalAmount, totalAmount > 0 else { return nil }
+        return progressPercent
+    }
 }
 
 /// `POST /finance/debts/{id}/payments`.

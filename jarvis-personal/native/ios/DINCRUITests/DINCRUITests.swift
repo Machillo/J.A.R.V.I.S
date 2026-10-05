@@ -150,7 +150,7 @@ final class DINCRUITests: XCTestCase {
 
     func testDebtPaymentIsRecorded() {
         let app = launch()
-        // Debts live on Hoy (moved from the Plan tab).
+        // Hoy keeps its shortcut to the debts screen (managed in Plan → Deudas since UX-4).
         open("home.debts", in: app)
         let pay = app.buttons["debt.pay.31"]
         XCTAssertTrue(pay.waitForExistence(timeout: 5))

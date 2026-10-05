@@ -29,9 +29,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +68,15 @@ enum class Destination(val route: String, val icon: ImageVector) {
     }
 
     companion object {
+        /**
+         * Screens opened from several tabs (UX-4: Deudas, from Plan and from the shortcuts on Hoy,
+         * Movimientos, Salvavidas and DINCR): they keep the tab they were opened from highlighted.
+         */
+        private val SHARED = setOf("debts")
+
+        /** The tab a pushed screen belongs to, or null when it is opened from several ([SHARED]). */
+        fun owner(route: String?): Destination? = if (route?.substringBefore('/') in SHARED) null else of(route)
+
         /** Which tab a pushed screen belongs to (the tab stays highlighted, as in the Capacitor app). */
         fun of(route: String?): Destination = when (route?.substringBefore('/')) {
             null, "home", "debts", "goals" -> HOME
@@ -97,7 +108,12 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
     val controller = rememberNavController()
     val nav = remember(controller) { Navigator(controller) }
     val entry by controller.currentBackStackEntryAsState()
-    val current = Destination.of(entry?.destination?.route)
+    // A shared screen (Deudas) keeps the tab it was opened from; every other screen names its own.
+    val owner = Destination.owner(entry?.destination?.route)
+    var lastTab by rememberSaveable { mutableStateOf(Destination.HOME) }
+    val current = owner ?: lastTab
+    SideEffect { owner?.let { lastTab = it } }
+    fun select(destination: Destination) { lastTab = destination; nav.tab(destination) }
     val snackbar = remember { SnackbarHostState() }
     val notice by model.notice.collectAsStateWithLifecycle()
     val route by model.pendingRoute.collectAsStateWithLifecycle()
@@ -113,7 +129,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
             bottomBar = {
                 if (!expanded) NavigationBar(containerColor = Dincr.colors.surface) {
                     Destination.entries.forEach { d ->
-                        NavigationBarItem(selected = current == d, onClick = { nav.tab(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label, maxLines = 1) })
+                        NavigationBarItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label, maxLines = 1) })
                     }
                 }
             },
@@ -121,7 +137,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
             Row(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
                 if (expanded) NavigationRail(containerColor = Dincr.colors.surface) {
                     Destination.entries.forEach { d ->
-                        NavigationRailItem(selected = current == d, onClick = { nav.tab(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label) })
+                        NavigationRailItem(selected = current == d, onClick = { select(d) }, icon = { Icon(d.icon, contentDescription = null) }, label = { Text(d.label) })
                     }
                 }
                 Column(Modifier.weight(1f).statusBarsPadding()) {

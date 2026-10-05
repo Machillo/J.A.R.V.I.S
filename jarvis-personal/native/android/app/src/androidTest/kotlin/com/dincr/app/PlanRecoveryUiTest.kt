@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -102,21 +103,23 @@ class PlanRecoveryUiTest {
 
     private fun home() = waitForText(tx("Hoy", "Today"))
 
-    private val planRows get() = listOf(tx("Aguinaldo", "Aguinaldo"), tx("Tu plan del mes", "Your plan for the month"), tx("Salvavidas", "Emergency fund"), tx("Distribución de dinero", "Money distribution"))
+    private val planRows get() = listOf(tx("Aguinaldo", "Aguinaldo"), tx("Tu plan del mes", "Your plan for the month"), tx("Deudas", "Debts"), tx("Salvavidas", "Emergency fund"), tx("Distribución de dinero", "Money distribution"))
 
-    @Test fun planHasExactlyFourRowsAndTheRelocatedScreensAreReachable() {
+    @Test fun planHasExactlyItsRowsAndTheRelocatedScreensAreReachable() {
         launch(plan = "basic")
         home()
-        // Debts and goals live in Hoy.
+        // Hoy keeps its shortcuts to debts (managed in Plan → Deudas since UX-4) and goals.
         click(tx("Deudas", "Debts"))
         waitForText("Tarjeta de ejemplo")
+        // Opened from Hoy, the shared debts screen keeps Hoy selected.
+        compose.onNode(hasText(tx("Hoy", "Today")) and isSelected()).assertExists()
         back()
         click(tx("Metas y ahorros", "Goals and savings"))
         waitForText("Fondo de emergencia")
         back()
         click(tx("Plan", "Plan"))
         planRows.forEach { waitForText(it) }
-        listOf(tx("Deudas", "Debts"), tx("Metas y ahorros", "Goals and savings"), tx("Presupuesto", "Budget"), tx("Cuántos meses te cubre", "How many months it covers"))
+        listOf(tx("Metas y ahorros", "Goals and savings"), tx("Presupuesto", "Budget"), tx("Cuántos meses te cubre", "How many months it covers"))
             .forEach { assertTrue("$it must not be in Plan", !present(it)) }
         // Basic: Aguinaldo and Salvavidas stay visible, locked from VIP.
         waitForText(tx("Disponible desde VIP", "Available from VIP"))
@@ -220,6 +223,52 @@ class PlanRecoveryUiTest {
         back()
         click(tx("Distribución de dinero", "Money distribution"))
         waitForText(tx("Sobrante a repartir", "Surplus to allocate"))
+    }
+
+    /**
+     * UX-4 — Plan → Deudas is where debts are managed, for every plan, with the actions each plan has
+     * today: Free records, pays and deletes; editing stays Basic+ (backend gate). The screen keeps
+     * the Plan tab selected.
+     */
+    @Test fun debtsAreManagedFromPlanForEveryPlan() {
+        launch(plan = "free")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Deudas", "Debts"))
+        waitForText("Tarjeta de ejemplo")
+        // Opened from Plan, the screen keeps Plan selected.
+        compose.onNode(hasText(tx("Plan", "Plan")) and isSelected()).assertExists()
+        waitForText(tx("Registrar pago", "Record payment"))
+        waitForText(tx("Eliminar", "Delete"))
+        assertTrue("editing stays Basic+ (PUT is gated strategy_basic)", !present(tx("Editar", "Edit")))
+        compose.onNode(hasContentDescription(tx("Agregar deuda", "Add debt"))).performClick()
+        waitForText(tx("Nueva deuda", "New debt"))
+    }
+
+    @Test fun basicEditsItsDebtsFromPlan() {
+        launch(plan = "basic")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Deudas", "Debts"))
+        waitForText("Tarjeta de ejemplo")
+        click(tx("Editar", "Edit"))
+        waitForText(tx("Editar deuda", "Edit debt"))
+    }
+
+    @Test fun vipReachesDebtsFromPlan() {
+        launch(plan = "vip")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Deudas", "Debts"))
+        waitForText("Tarjeta de ejemplo")
+    }
+
+    @Test fun theOwnerReachesDebtsFromPlan() {
+        launch(role = "owner")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Deudas", "Debts"))
+        waitForText("Tarjeta de ejemplo")
     }
 
     @Test fun aReviewInCuentasShowsInCorreosAndViceVersa() {

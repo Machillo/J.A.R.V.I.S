@@ -39,12 +39,12 @@ final class PlanAccountsUITests: XCTestCase {
 
     // MARK: Plan tab
 
-    func testPlanHasExactlyTheFourRows() {
+    func testPlanHasExactlyItsRows() {
         let app = launch(plan: "vip", tab: "plan")
-        for id in ["plan.aguinaldo", "plan.strategy", "plan.salvavidas", "plan.distribution"] {
+        for id in ["plan.aguinaldo", "plan.strategy", "plan.debts", "plan.salvavidas", "plan.distribution"] {
             XCTAssertTrue(element(id, in: app).waitForExistence(timeout: 5), id)
         }
-        for id in ["plan.debts", "plan.goals", "plan.budget", "plan.calendar", "plan.recurring", "plan.emergency"] {
+        for id in ["plan.goals", "plan.budget", "plan.calendar", "plan.recurring", "plan.emergency"] {
             XCTAssertFalse(element(id, in: app).exists, "\(id) left the Plan tab")
         }
     }
@@ -55,6 +55,51 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(text("Disponible desde VIP", in: app).exists)
         open("plan.strategy", in: app)
         XCTAssertTrue(text("Plan actual", in: app).waitForExistence(timeout: 10))
+    }
+
+    /// UX-4 — Plan → Deudas is where debts are managed, for every plan, with the actions each plan
+    /// has today: Free records, pays and deletes; editing stays Basic+ (backend gate). Hoy keeps its
+    /// shortcut to the same screen.
+    func testDebtsAreManagedFromPlanForEveryPlan() {
+        let free = launch(tab: "plan")
+        open("plan.debts", in: free)
+        XCTAssertTrue(free.navigationBars["Deudas"].waitForExistence(timeout: 10))
+        XCTAssertTrue(element("debts.add", in: free).exists, "Free records its debts")
+        XCTAssertTrue(free.buttons["debt.pay.31"].waitForExistence(timeout: 10), "Free records a payment")
+        free.buttons["Más acciones"].firstMatch.tap()
+        XCTAssertTrue(free.buttons["Eliminar"].waitForExistence(timeout: 5), "Free deletes")
+        XCTAssertFalse(free.buttons["Editar"].exists, "editing stays Basic+ (PUT is gated strategy_basic)")
+        free.terminate()
+
+        let basic = launch(plan: "basic", tab: "plan")
+        open("plan.debts", in: basic)
+        XCTAssertTrue(basic.buttons["debt.pay.31"].waitForExistence(timeout: 10))
+        basic.buttons["Más acciones"].firstMatch.tap()
+        XCTAssertTrue(basic.buttons["Editar"].waitForExistence(timeout: 5), "Basic edits")
+        basic.buttons["Editar"].tap()
+        XCTAssertTrue(element("debt.save", in: basic).waitForExistence(timeout: 5), "the edit form")
+        basic.terminate()
+
+        for (plan, role) in [("vip", "user"), (nil, "owner")] as [(String?, String)] {
+            let app = launch(plan: plan, role: role, tab: "plan")
+            open("plan.debts", in: app)
+            XCTAssertTrue(app.navigationBars["Deudas"].waitForExistence(timeout: 10), "\(plan ?? role) reaches Deudas")
+            app.terminate()
+        }
+    }
+
+    func testANewDebtIsRecordedFromPlan() {
+        let app = launch(tab: "plan")
+        open("plan.debts", in: app)
+        open("debts.add", in: app)
+        let name = element("debt.name", in: app)
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap(); name.typeText("Préstamo de prueba")
+        let remaining = element("debt.remaining", in: app)
+        remaining.tap(); remaining.typeText("120.000")
+        open("debt.save", in: app)
+        XCTAssertTrue(element("plan.notice", in: app).waitForExistence(timeout: 10), "the debt is saved")
+        XCTAssertTrue(text("Préstamo de prueba", in: app).waitForExistence(timeout: 10), "and listed")
     }
 
     func testRelocatedScreensAreReachable() {

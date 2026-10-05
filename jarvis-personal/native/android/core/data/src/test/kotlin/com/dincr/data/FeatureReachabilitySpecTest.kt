@@ -32,7 +32,7 @@ class FeatureReachabilitySpecTest {
 
     /** Each spec entry whose plan gate lives in core/data, with the feature that gates it. */
     private val gated = mapOf(
-        "plan.aguinaldo" to Feature.GMAIL_AUTOMATION, "plan.strategy" to Feature.STRATEGY_BASIC,
+        "plan.aguinaldo" to Feature.GMAIL_AUTOMATION, "plan.strategy" to Feature.STRATEGY_BASIC, "plan.debts" to Feature.DEBTS,
         "plan.salvavidas" to Feature.STRATEGY_VIP, "plan.distribution" to Feature.STRATEGY_BASIC,
         "advisor.reports" to Feature.BASIC_REPORTS, "advisor.today" to Feature.STRATEGY_VIP,
         "advisor.projections" to Feature.STRATEGY_VIP, "advisor.scenarios" to Feature.STRATEGY_VIP,

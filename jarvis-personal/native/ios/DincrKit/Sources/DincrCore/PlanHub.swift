@@ -1,19 +1,22 @@
 import Foundation
 
-/// The Plan tab: exactly four rows, in this order (product decision; same on Android, `PlanHub.kt`).
+/// The Plan tab: exactly these rows, in this order (product decision; same on Android, `PlanHub.kt`).
 /// Each keeps its historical plan gate; a row the plan does not include stays visible, locked, and
-/// opens the plans screen. Debts and goals live on Home; budget, calendar and recurring items in
-/// Profile → Finanzas. The Owner passes every gate by role (`Profile.planTier` is VIP for the
-/// server's Owner role only); the backend still decides every request.
+/// opens the plans screen. Debts are managed here (UX-4: Plan → Deudas; Home keeps a shortcut);
+/// goals live on Home; budget, calendar and recurring items in Profile → Finanzas. The Owner passes
+/// every gate by role (`Profile.planTier` is VIP for the server's Owner role only); the backend
+/// still decides every request.
 public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
-    case aguinaldo, strategy, salvavidas, distribution
+    case aguinaldo, strategy, debts, salvavidas, distribution
 
     public var id: String { rawValue }
 
+    /// Deudas: every plan (`debts`: everyone can record and keep their real debts).
     /// Estrategia and Distribución: Basic (`strategy_basic`). Salvavidas: VIP (`strategy_vip`).
     /// Aguinaldo: VIP (`gmail_automation`).
     public var minimum: PlanTier {
         switch self {
+        case .debts: .free
         case .strategy, .distribution: .basic
         case .aguinaldo, .salvavidas: .vip
         }
@@ -24,7 +27,7 @@ public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
     public var killSwitch: OpsFlag? {
         switch self {
         case .aguinaldo, .salvavidas: .vipIntelligence
-        case .strategy, .distribution: nil
+        case .strategy, .debts, .distribution: nil
         }
     }
 

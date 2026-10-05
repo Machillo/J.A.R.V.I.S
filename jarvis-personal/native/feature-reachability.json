@@ -179,7 +179,7 @@
   },
   {
    "id": "home.debts",
-   "name": "Deudas (Hoy → Tus finanzas)",
+   "name": "Deudas (Hoy → Tus finanzas: shortcut; managed in Plan → Deudas since UX-4)",
    "decision": "baseline-81fd2cc4",
    "plans": {
     "free": "AVAILABLE",
@@ -187,7 +187,7 @@
     "vip": "AVAILABLE",
     "owner": "AVAILABLE"
    },
-   "target": "P6: Plan → Deudas",
+   "target": "UX-7: the Hoy shortcut is reconsidered when Hoy is rebuilt; Plan → Deudas is the home (UX-4)",
    "backend": [
     {
      "method": "GET",
@@ -418,6 +418,41 @@
      "tab": "Plan",
      "text": "Your plan for the month",
      "locked_text": "Available from Basic"
+    }
+   }
+  },
+  {
+   "id": "plan.debts",
+   "name": "Plan → Deudas (UX-4: where debts are managed)",
+   "decision": "D7",
+   "plans": {
+    "free": "AVAILABLE",
+    "basic": "AVAILABLE",
+    "vip": "AVAILABLE",
+    "owner": "AVAILABLE"
+   },
+   "backend": [
+    {
+     "method": "GET",
+     "path": "/user-product/finance/debts",
+     "gate": "feature:debts",
+     "used_by": [
+      "free",
+      "basic",
+      "vip"
+     ]
+    }
+   ],
+   "ios": {
+    "tab": "plan",
+    "id": "plan.debts"
+   },
+   "android": {
+    "tab": "Plan",
+    "text": "Deudas",
+    "en": {
+     "tab": "Plan",
+     "text": "Debts"
     }
    }
   },
