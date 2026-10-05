@@ -201,10 +201,11 @@ private struct BasicPlanDetail: View {
             }
             .padding(.top, DincrSpacing.s2)
         } label: {
+            // The identifier goes on the label: on the group it would replace the identifiers inside.
             Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+                .accessibilityIdentifier("plan.month.why")
         }
         .tint(DincrColor.tint)
-        .accessibilityIdentifier("plan.month.why")
     }
 }
 
@@ -230,19 +231,20 @@ private struct DashboardPlanDetail: View {
             .dincrCard()
             .padding(.top, DincrSpacing.s2)
         } label: {
+            // The identifier goes on the label: on the group it would replace the identifiers inside.
             Text(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+                .accessibilityIdentifier("plan.month.why")
         }
         .tint(DincrColor.tint)
-        .accessibilityIdentifier("plan.month.why")
 
         DisclosureGroup(isExpanded: $showsDetail) {
             VStack(alignment: .leading, spacing: DincrSpacing.s3) { sections }
                 .padding(.top, DincrSpacing.s2)
         } label: {
             Text(tx("Ver todo el detalle", "See full details")).font(DincrFont.label).foregroundStyle(DincrColor.tint)
+                .accessibilityIdentifier("plan.month.detail")
         }
         .tint(DincrColor.tint)
-        .accessibilityIdentifier("plan.month.detail")
     }
 
     @ViewBuilder private var sections: some View {
