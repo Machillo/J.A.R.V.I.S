@@ -54,11 +54,12 @@ import kotlinx.coroutines.launch
 
 /**
  * E1 — the Plan tab: exactly Aguinaldo, Tu plan del mes (UX-3: Estrategia + Distribución as one
- * plan; the row keeps the Estrategia route and gate), Salvavidas and Distribución de dinero (kept as
- * a transitional access until its retirement is approved), each behind its historical plan gate.
- * A row the plan does not include stays visible, locked, and opens the plans screen. The Owner
- * passes every gate by the server role ([Profile.planTier]). Debts and goals live in Hoy; budget,
- * calendar and recurring payments in Perfil → Finanzas.
+ * plan; the row keeps the Estrategia route and gate), Deudas (UX-4: where debts are managed, every
+ * plan; Hoy keeps a shortcut), Salvavidas and Distribución de dinero (kept as a transitional access
+ * until its retirement is approved), each behind its historical plan gate. A row the plan does not
+ * include stays visible, locked, and opens the plans screen. The Owner passes every gate by the
+ * server role ([Profile.planTier]). Goals live in Hoy; budget, calendar and recurring payments in
+ * Perfil → Finanzas.
  */
 @Composable
 fun PlanHubScreen(model: AppModel, nav: Navigator) {
@@ -72,6 +73,8 @@ fun PlanHubScreen(model: AppModel, nav: Navigator) {
                     tx("Estimación con las órdenes de la CCSS", "Estimate from CCSS payroll notices"), nav, "aguinaldo")
                 PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.AutoAwesome, tx("Tu plan del mes", "Your plan for the month"),
                     tx("Cuánto podés repartir y cómo", "How much you can split, and how"), nav, "strategy")
+                PlanRow(plan.allows(Feature.DEBTS), PlanTier.FREE, Icons.Rounded.CreditCard, tx("Deudas", "Debts"),
+                    tx("Saldos, cuotas y pagos", "Balances, payments"), nav, "debts")
                 PlanRow(plan.allows(Feature.STRATEGY_VIP), PlanTier.VIP, Icons.Rounded.Shield, tx("Salvavidas", "Emergency fund"),
                     tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers"), nav, "salvavidas")
                 PlanRow(plan.allows(Feature.STRATEGY_BASIC), PlanTier.BASIC, Icons.Rounded.PieChart, tx("Distribución de dinero", "Money distribution"),
@@ -113,8 +116,9 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
             } else {
                 DincrCard {
                     Column {
-                        AmountLine(tx("Total pendiente", "Total outstanding"), list.sumOf { it.remainingAmount ?: BigDecimal.ZERO }, emphasize = true)
-                        AmountLine(tx("Cuotas del mes", "Monthly payments"), list.sumOf { it.monthlyPayment ?: BigDecimal.ZERO })
+                        // A total only when every debt has the figure: an unknown one is never added as 0.
+                        AmountLine(tx("Total pendiente", "Total outstanding"), knownSum(list.map { it.remainingAmount }), emphasize = true)
+                        AmountLine(tx("Cuotas del mes", "Monthly payments"), knownSum(list.map { it.monthlyPayment }))
                     }
                 }
                 list.forEach { debt -> DebtCard(debt, advanced, onEdit = { editing = debt }, onPay = { paying = debt }, onDelete = { deleting = debt }) }
@@ -157,7 +161,8 @@ private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: (
                 }
                 MoneyText(debt.remainingAmount)
             }
-            debt.progressPercent?.let { ProgressLine(it / 100.0, tx("${it.toInt()} % pagado", "${it.toInt()} % paid")) }
+            // The backend sends 0 % when the original amount is unknown: progress only from a known one.
+            debt.knownProgressPercent?.let { ProgressLine(it / 100.0, tx("${it.toInt()} % pagado", "${it.toInt()} % paid")) }
             debt.monthlyPayment?.let { AmountLine(tx("Cuota mensual", "Monthly payment"), it) }
             debt.nextPaymentDate?.let { InfoLine(tx("Próximo pago", "Next payment"), dateLabel(it)) }
             Row(horizontalArrangement = Arrangement.spacedBy(DincrSpacing.s2)) {
@@ -169,6 +174,10 @@ private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: (
         }
     }
 }
+
+/** The sum of the amounts, or null (shown as "Sin dato") when any of them is unknown. */
+private fun knownSum(amounts: List<BigDecimal?>): BigDecimal? =
+    if (amounts.any { it == null }) null else amounts.requireNoNulls().fold(BigDecimal.ZERO, BigDecimal::add)
 
 fun debtTypeLabel(type: String?) = when (type) {
     "credit_card" -> tx("Tarjeta de crédito", "Credit card")

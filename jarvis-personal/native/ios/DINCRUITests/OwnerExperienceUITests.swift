@@ -89,11 +89,11 @@ final class OwnerExperienceUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         reveal("owner.home.goals", in: app).tap()
         XCTAssertTrue(app.navigationBars["Metas y ahorro"].waitForExistence(timeout: 10), "the goals screen")
-        // Plan keeps its four rows: debts and goals are not brought back there.
+        // UX-4: debts are managed in Plan → Deudas too (Today keeps its shortcut); goals stay on Today.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.tabBars.buttons["Plan"].tap()
         XCTAssertTrue(element("plan.strategy", in: app).waitForExistence(timeout: 10))
-        XCTAssertFalse(element("plan.debts", in: app).exists)
+        XCTAssertTrue(element("plan.debts", in: app).exists)
         XCTAssertFalse(element("plan.goals", in: app).exists)
     }
 

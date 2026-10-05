@@ -68,9 +68,10 @@ enum class Destination(val route: String, val icon: ImageVector) {
     companion object {
         /** Which tab a pushed screen belongs to (the tab stays highlighted, as in the Capacitor app). */
         fun of(route: String?): Destination = when (route?.substringBefore('/')) {
-            null, "home", "debts", "goals" -> HOME
+            null, "home", "goals" -> HOME
             "movements", "monthly" -> MOVEMENTS
-            "plan", "aguinaldo", "strategy", "salvavidas", "distribution" -> PLAN
+            // UX-4: debts are managed in Plan, whichever shortcut opened them.
+            "plan", "aguinaldo", "strategy", "debts", "salvavidas", "distribution" -> PLAN
             "advisor", "scenarios", "review", "today", "projections", "reports" -> ADVISOR
             // Perfil → Finanzas (budget, calendar, recurring), Cuentas and everything else.
             else -> PROFILE

@@ -91,7 +91,8 @@ private struct DebtList: View {
                     MoneyText(debt.remainingAmount)
                 }
                 .accessibilityElement(children: .combine)
-                if let percent = debt.progressPercent {
+                // The backend sends 0 % when the original amount is unknown: progress only from a known one.
+                if let percent = debt.knownProgressPercent {
                     DincrProgressBar(fraction: percent / 100)
                     Text(tx("\(Int(percent.rounded()))% pagado", "\(Int(percent.rounded()))% paid")).font(DincrFont.caption).foregroundStyle(DincrColor.textMuted)
                 }

@@ -2,13 +2,13 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// PARITY E1 — the Plan tab: exactly four rows, in this order (`PlanHubItem`): Aguinaldo,
+/// PARITY E1 — the Plan tab: exactly five rows, in this order (`PlanHubItem`): Aguinaldo,
 /// Tu plan del mes (UX-3: Estrategia + Distribución as one plan; the row keeps the Estrategia
-/// identifier and gate), Salvavidas and Distribución de dinero (kept as a transitional access until
-/// its retirement is approved). A row the plan does not include stays
-/// visible, locked ("Disponible desde Basic/VIP"), and opens the plans screen; a row paused by an
-/// operational switch says so. Debts and goals are on Home; budget, calendar and recurring items in
-/// Profile → Finanzas.
+/// identifier and gate), Deudas (UX-4: where debts are managed, every plan; Home keeps a shortcut),
+/// Salvavidas and Distribución de dinero (kept as a transitional access until its retirement is
+/// approved). A row the plan does not include stays visible, locked ("Disponible desde Basic/VIP"),
+/// and opens the plans screen; a row paused by an operational switch says so. Goals are on Home;
+/// budget, calendar and recurring items in Profile → Finanzas.
 struct PlanHubView: View {
     @Environment(AppModel.self) private var model
 
@@ -57,6 +57,7 @@ struct PlanHubView: View {
         switch item {
         case .aguinaldo: AguinaldoView()
         case .strategy: PlanStrategyView()
+        case .debts: DebtsView()
         case .salvavidas: SalvavidasView()
         case .distribution: DistributionView()
         }
@@ -68,6 +69,7 @@ extension PlanHubItem {
         switch self {
         case .aguinaldo: tx("Aguinaldo", "Aguinaldo")
         case .strategy: tx("Tu plan del mes", "Your plan for the month")
+        case .debts: tx("Deudas", "Debts")
         case .salvavidas: "Salvavidas"
         case .distribution: tx("Distribución de dinero", "Money distribution")
         }
@@ -77,6 +79,7 @@ extension PlanHubItem {
         switch self {
         case .aguinaldo: tx("Estimado según tus salarios", "Estimated from your salaries")
         case .strategy: tx("Cuánto podés repartir y cómo", "How much you can split, and how")
+        case .debts: tx("Saldos, cuotas y pagos", "Balances, payments")
         case .salvavidas: tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers")
         case .distribution: tx("Cómo repartir tu sobrante del mes", "How to split this month’s surplus")
         }
@@ -86,6 +89,7 @@ extension PlanHubItem {
         switch self {
         case .aguinaldo: "gift"
         case .strategy: "map"
+        case .debts: "creditcard"
         case .salvavidas: "lifepreserver"
         case .distribution: "chart.pie"
         }

@@ -21,7 +21,14 @@ data class Debt(
     @SerialName("payment_day") val paymentDay: Int? = null,
     @SerialName("next_payment_date") val nextPaymentDate: String? = null,
     @SerialName("progress_percent") val progressPercent: Double? = null,
-)
+) {
+    /**
+     * The backend's paid percentage, only when it can be true: the list answers 0 % when the
+     * original amount is unknown (`ELSE 0`), which is not a fact about the debt. Unknown ≠ 0 %.
+     * iOS: `Debt.knownProgressPercent`.
+     */
+    val knownProgressPercent: Double? get() = progressPercent.takeIf { (totalAmount?.signum() ?: -1) > 0 }
+}
 
 /** Body of `POST /finance/debts` and `PUT /finance/debts/{id}` (the edit needs Basic). */
 @Serializable
