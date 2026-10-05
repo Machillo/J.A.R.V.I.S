@@ -125,7 +125,7 @@ class StoreScreenshots {
         launch("basic")
         waitForText(today)
         click(tx("Plan", "Plan"))
-        click(tx("Estrategia", "Strategy"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
         waitForText(tx("Margen para decidir", "Room to decide"))
         capture("07-strategy")
     }

@@ -102,7 +102,7 @@ class PlanRecoveryUiTest {
 
     private fun home() = waitForText(tx("Hoy", "Today"))
 
-    private val planRows get() = listOf(tx("Aguinaldo", "Aguinaldo"), tx("Estrategia", "Strategy"), tx("Salvavidas", "Emergency fund"), tx("Distribución de dinero", "Money distribution"))
+    private val planRows get() = listOf(tx("Aguinaldo", "Aguinaldo"), tx("Tu plan del mes", "Your plan for the month"), tx("Salvavidas", "Emergency fund"), tx("Distribución de dinero", "Money distribution"))
 
     @Test fun planHasExactlyFourRowsAndTheRelocatedScreensAreReachable() {
         launch(plan = "basic")
@@ -142,7 +142,7 @@ class PlanRecoveryUiTest {
         waitForText(tx("Disponible desde Basic", "Available from Basic"))
         waitForText(tx("Disponible desde VIP", "Available from VIP"))
         // A locked row opens the plans screen.
-        click(tx("Estrategia", "Strategy"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
         waitForText(tx("Plan actual", "Current plan"))
     }
 
@@ -150,7 +150,7 @@ class PlanRecoveryUiTest {
         launch(plan = "basic")
         home()
         click(tx("Plan", "Plan"))
-        click(tx("Estrategia", "Strategy"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
         waitForText(tx("Estimado con tus ingresos registrados (no declarado)", "Estimated from your recorded income (not declared)"))
         waitForText(tx("Margen para decidir", "Room to decide"))
         back()
@@ -163,8 +163,10 @@ class PlanRecoveryUiTest {
         launch(plan = "vip")
         home()
         click(tx("Plan", "Plan"))
-        click(tx("Estrategia", "Strategy"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
         waitForTag("strategy.director.users")
+        // UX-3: the strategy's sections are in "Tu plan del mes" → "Ver todo el detalle".
+        click(tx("Ver todo el detalle", "See every detail"))
         assertTrue(!present(tx("Tu ciclo", "Your cycle")))
         // The savings were never declared: "Sin dato" in the strategy too.
         compose.onNodeWithText(tx("Sin dato", "No data")).performScrollTo()
@@ -186,12 +188,37 @@ class PlanRecoveryUiTest {
         launch(role = "owner")
         home()
         click(tx("Plan", "Plan"))
-        click(tx("Estrategia", "Strategy"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
         waitForTag("strategy.director.owner")
+        click(tx("Ver todo el detalle", "See every detail"))
         waitForText(tx("Tu ciclo", "Your cycle"))
         back()
         click(tx("Salvavidas", "Emergency fund"))
         waitForText(tx("Gastos protegidos", "Protected expenses"))
+    }
+
+    /**
+     * UX-3 — "Tu plan del mes": the result first (amount to plan, split, one-sentence why), every
+     * historical detail one tap away, and Distribución de dinero still reachable on its own row.
+     */
+    @Test fun theMonthPlanLeadsWithTheResultAndKeepsEveryDetail() {
+        launch(plan = "vip")
+        home()
+        click(tx("Plan", "Plan"))
+        click(tx("Tu plan del mes", "Your plan for the month"))
+        waitForText(tx("Sobrante para repartir", "Surplus to allocate"))
+        waitForText("Atacar deuda: Tarjeta de crédito")
+        waitForTag("plan.month.split")
+        assertTrue("the detail starts closed", !present(tx("Podés gastar con tranquilidad", "Safe to spend")))
+        click(tx("¿Por qué DINCR recomienda esto?", "Why does DINCR recommend this?"))
+        waitForText(tx("De dónde sale", "Where it comes from"))
+        click(tx("Ver todo el detalle", "See every detail"))
+        waitForText(tx("Podés gastar con tranquilidad", "Safe to spend"))
+        assertTrue("Users never see the Owner's cycle", !present(tx("Tu ciclo", "Your cycle")))
+        assertTrue("Users never see an account cash line", !present(tx("Efectivo disponible ahora", "Cash available now")))
+        back()
+        click(tx("Distribución de dinero", "Money distribution"))
+        waitForText(tx("Sobrante a repartir", "Surplus to allocate"))
     }
 
     @Test fun aReviewInCuentasShowsInCorreosAndViceVersa() {

@@ -99,7 +99,32 @@ final class PlanAccountsUITests: XCTestCase {
         let app = launch(role: "owner", tab: "plan")
         open("plan.strategy", in: app)
         XCTAssertTrue(element("strategy.dashboard", in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(element("strategy.owner", in: app).exists)
+        // UX-3: the Owner's cycle is in "Tu plan del mes" → "Ver todo el detalle".
+        open("plan.month.detail", in: app)
+        XCTAssertTrue(element("strategy.owner", in: app).waitForExistence(timeout: 10))
+    }
+
+    /// UX-3 — "Tu plan del mes": the result first (amount to plan, split, one-sentence why), every
+    /// historical detail one tap away, and Distribución de dinero still reachable on its own row.
+    func testTheMonthPlanLeadsWithTheResultAndKeepsEveryDetail() {
+        let app = launch(plan: "vip", tab: "plan")
+        XCTAssertTrue(text("Tu plan del mes", in: app).waitForExistence(timeout: 5))
+        open("plan.strategy", in: app)
+        XCTAssertTrue(app.navigationBars["Tu plan del mes"].waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Sobrante para repartir", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Atacar deuda: Tarjeta de crédito", in: app).exists, "the priority, in one sentence")
+        XCTAssertTrue(element("plan.month.split", in: app).exists)
+        XCTAssertTrue(text("Ataque de deuda · Tarjeta de crédito", in: app).exists, "each part with its label")
+        XCTAssertFalse(element("plan.month.salvavidas", in: app).exists, "the detail starts closed")
+        open("plan.month.why", in: app)
+        XCTAssertTrue(text("De dónde sale", in: app).waitForExistence(timeout: 5))
+        open("plan.month.detail", in: app)
+        XCTAssertTrue(element("plan.month.salvavidas", in: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(element("strategy.owner", in: app).exists, "Users never see the Owner's cycle")
+        XCTAssertFalse(text("Efectivo disponible ahora", in: app).exists, "Users never see a cash balance")
+        back(app)
+        open("plan.distribution", in: app)
+        XCTAssertTrue(element("distribution.dashboard", in: app).waitForExistence(timeout: 10))
     }
 
     // MARK: Salvavidas

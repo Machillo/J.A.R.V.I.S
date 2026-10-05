@@ -82,9 +82,11 @@ private struct SummaryContent: View {
 struct StrategyContent: View {
     let strategy: Strategy
     var showsAllocations = true
+    /// "Tu plan del mes" already leads with the recommendation.
+    var showsRecommendation = true
 
     var body: some View {
-        if let recommendation = strategy.recommendation ?? strategy.directorNote {
+        if showsRecommendation, let recommendation = strategy.recommendation ?? strategy.directorNote {
             VStack(alignment: .leading, spacing: DincrSpacing.s2) {
                 SectionHeader(title: tx("Recomendación", "Recommendation"))
                 Text(recommendation).font(DincrFont.body).foregroundStyle(DincrColor.text)

@@ -3,7 +3,9 @@ import DincrDesign
 import SwiftUI
 
 /// PARITY E1 — the Plan tab: exactly four rows, in this order (`PlanHubItem`): Aguinaldo,
-/// Estrategia, Salvavidas and Distribución de dinero. A row the plan does not include stays
+/// Tu plan del mes (UX-3: Estrategia + Distribución as one plan; the row keeps the Estrategia
+/// identifier and gate), Salvavidas and Distribución de dinero (kept as a transitional access until
+/// its retirement is approved). A row the plan does not include stays
 /// visible, locked ("Disponible desde Basic/VIP"), and opens the plans screen; a row paused by an
 /// operational switch says so. Debts and goals are on Home; budget, calendar and recurring items in
 /// Profile → Finanzas.
@@ -65,7 +67,7 @@ extension PlanHubItem {
     var title: String {
         switch self {
         case .aguinaldo: tx("Aguinaldo", "Aguinaldo")
-        case .strategy: tx("Estrategia", "Strategy")
+        case .strategy: tx("Tu plan del mes", "Your plan for the month")
         case .salvavidas: "Salvavidas"
         case .distribution: tx("Distribución de dinero", "Money distribution")
         }
@@ -74,7 +76,7 @@ extension PlanHubItem {
     var subtitle: String {
         switch self {
         case .aguinaldo: tx("Estimado según tus salarios", "Estimated from your salaries")
-        case .strategy: tx("Tu prioridad y el plan de tus deudas", "Your priority and your debt plan")
+        case .strategy: tx("Cuánto podés repartir y cómo", "How much you can split, and how")
         case .salvavidas: tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers")
         case .distribution: tx("Cómo repartir tu sobrante del mes", "How to split this month’s surplus")
         }
