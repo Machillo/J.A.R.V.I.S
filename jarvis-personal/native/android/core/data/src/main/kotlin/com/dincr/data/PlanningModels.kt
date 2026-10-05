@@ -28,6 +28,16 @@ data class Debt(
      * iOS: `Debt.knownProgressPercent`.
      */
     val knownProgressPercent: Double? get() = progressPercent.takeIf { (totalAmount?.signum() ?: -1) > 0 }
+
+    companion object {
+        /**
+         * The sum of the debts' amounts, or null (shown as "—", read as "sin dato") when any of them is
+         * unknown: an unknown amount is never added as 0. Debts carry no currency of their own (the
+         * profile's), so nothing is mixed.
+         */
+        fun knownSum(amounts: List<java.math.BigDecimal?>): java.math.BigDecimal? =
+            if (amounts.any { it == null }) null else amounts.requireNoNulls().fold(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
+    }
 }
 
 /** Body of `POST /finance/debts` and `PUT /finance/debts/{id}` (the edit needs Basic). */

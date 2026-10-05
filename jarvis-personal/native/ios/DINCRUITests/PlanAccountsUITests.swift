@@ -99,6 +99,7 @@ final class PlanAccountsUITests: XCTestCase {
         remaining.tap(); remaining.typeText("120.000")
         open("debt.save", in: app)
         XCTAssertTrue(element("plan.notice", in: app).waitForExistence(timeout: 10), "the debt is saved")
+        XCTAssertTrue(text("Préstamo de prueba", in: app).waitForExistence(timeout: 10), "and listed")
     }
 
     func testRelocatedScreensAreReachable() {

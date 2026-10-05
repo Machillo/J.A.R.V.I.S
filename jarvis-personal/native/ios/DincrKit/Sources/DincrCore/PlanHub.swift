@@ -3,8 +3,9 @@ import Foundation
 /// The Plan tab: exactly these rows, in this order (product decision; same on Android, `PlanHub.kt`).
 /// Each keeps its historical plan gate; a row the plan does not include stays visible, locked, and
 /// opens the plans screen. Debts are managed here (UX-4: Plan → Deudas; Home keeps a shortcut);
-/// goals live on Home; budget, calendar and recurring items in Profile → Finanzas. The Owner passes every gate by role (`Profile.planTier` is VIP for the
-/// server's Owner role only); the backend still decides every request.
+/// goals live on Home; budget, calendar and recurring items in Profile → Finanzas. The Owner passes
+/// every gate by role (`Profile.planTier` is VIP for the server's Owner role only); the backend
+/// still decides every request.
 public enum PlanHubItem: String, CaseIterable, Sendable, Identifiable {
     case aguinaldo, strategy, debts, salvavidas, distribution
 

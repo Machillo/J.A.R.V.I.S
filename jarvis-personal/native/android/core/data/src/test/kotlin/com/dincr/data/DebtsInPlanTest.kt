@@ -15,7 +15,8 @@ import org.junit.Test
 class DebtsInPlanTest {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
 
-    @Test fun openingDebtsOnlyReadsTheList() = runTest {
+    /** The debts screen's only request is this GET (its other request is screen analytics, not money). */
+    @Test fun theDebtsListIsReadWithASingleGet() = runTest {
         for (plan in PlanTier.entries) {
             val backend = FakeBackend(FakeBackend.Scenario.POPULATED, plan)
             val api = DincrApi(ApiClient("https://fixtures.invalid", { "t" }, backend, AppLanguage.SPANISH, backoff = {}))
@@ -41,6 +42,13 @@ class DebtsInPlanTest {
         assertNull(debt("""{"id":2,"total_amount":null,"remaining_amount":300000,"progress_percent":0}""").knownProgressPercent)
         assertNull(debt("""{"id":3,"total_amount":0,"remaining_amount":0,"progress_percent":0}""").knownProgressPercent)
         assertEquals(100.0, debt("""{"id":4,"total_amount":100,"remaining_amount":0,"progress_percent":100}""").knownProgressPercent!!, 0.0)
+    }
+
+    @Test fun aTotalIsShownOnlyWhenEveryDebtHasTheFigure() {
+        fun bd(value: Long) = java.math.BigDecimal.valueOf(value)
+        assertEquals(bd(450), Debt.knownSum(listOf(bd(300), bd(150))))
+        assertNull(Debt.knownSum(listOf(bd(300), null)))          // never 300 + 0
+        assertEquals(java.math.BigDecimal.ZERO, Debt.knownSum(emptyList()))
     }
 
     @Test fun unknownFiguresStayUnknown() {

@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -104,12 +105,14 @@ class PlanRecoveryUiTest {
 
     private val planRows get() = listOf(tx("Aguinaldo", "Aguinaldo"), tx("Tu plan del mes", "Your plan for the month"), tx("Deudas", "Debts"), tx("Salvavidas", "Emergency fund"), tx("Distribución de dinero", "Money distribution"))
 
-    @Test fun planHasExactlyFourRowsAndTheRelocatedScreensAreReachable() {
+    @Test fun planHasExactlyItsRowsAndTheRelocatedScreensAreReachable() {
         launch(plan = "basic")
         home()
         // Hoy keeps its shortcuts to debts (managed in Plan → Deudas since UX-4) and goals.
         click(tx("Deudas", "Debts"))
         waitForText("Tarjeta de ejemplo")
+        // Opened from Hoy, the shared debts screen keeps Hoy selected.
+        compose.onNode(hasText(tx("Hoy", "Today")) and isSelected()).assertExists()
         back()
         click(tx("Metas y ahorros", "Goals and savings"))
         waitForText("Fondo de emergencia")
@@ -233,6 +236,8 @@ class PlanRecoveryUiTest {
         click(tx("Plan", "Plan"))
         click(tx("Deudas", "Debts"))
         waitForText("Tarjeta de ejemplo")
+        // Opened from Plan, the screen keeps Plan selected.
+        compose.onNode(hasText(tx("Plan", "Plan")) and isSelected()).assertExists()
         waitForText(tx("Registrar pago", "Record payment"))
         waitForText(tx("Eliminar", "Delete"))
         assertTrue("editing stays Basic+ (PUT is gated strategy_basic)", !present(tx("Editar", "Edit")))

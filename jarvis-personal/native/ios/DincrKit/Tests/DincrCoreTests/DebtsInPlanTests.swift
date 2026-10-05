@@ -10,7 +10,8 @@ import Testing
         DincrService(client: APIClient(baseURL: URL(string: "https://api.example.test")!, tokens: CountingTokens(), transport: transport, language: .spanish, backoff: { _ in }))
     }
 
-    @Test func openingDebtsOnlyReadsTheList() async throws {
+    /// The debts screen's only request is this GET.
+    @Test func theDebtsListIsReadWithASingleGet() async throws {
         let list = #"[{"id":7,"name":"Tarjeta","debt_type":"credit_card","total_amount":500000,"remaining_amount":300000,"monthly_payment":45000,"progress_percent":40.0}]"#
         let transport = ScriptedTransport([.status(200, list)])
         let debts = try await service(transport).debts()

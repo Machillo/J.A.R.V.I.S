@@ -117,8 +117,8 @@ fun DebtsScreen(model: AppModel, nav: Navigator) {
                 DincrCard {
                     Column {
                         // A total only when every debt has the figure: an unknown one is never added as 0.
-                        AmountLine(tx("Total pendiente", "Total outstanding"), knownSum(list.map { it.remainingAmount }), emphasize = true)
-                        AmountLine(tx("Cuotas del mes", "Monthly payments"), knownSum(list.map { it.monthlyPayment }))
+                        AmountLine(tx("Total pendiente", "Total outstanding"), Debt.knownSum(list.map { it.remainingAmount }), emphasize = true)
+                        AmountLine(tx("Cuotas del mes", "Monthly payments"), Debt.knownSum(list.map { it.monthlyPayment }))
                     }
                 }
                 list.forEach { debt -> DebtCard(debt, advanced, onEdit = { editing = debt }, onPay = { paying = debt }, onDelete = { deleting = debt }) }
@@ -174,10 +174,6 @@ private fun DebtCard(debt: Debt, advanced: Boolean, onEdit: () -> Unit, onPay: (
         }
     }
 }
-
-/** The sum of the amounts, or null (shown as "Sin dato") when any of them is unknown. */
-private fun knownSum(amounts: List<BigDecimal?>): BigDecimal? =
-    if (amounts.any { it == null }) null else amounts.requireNoNulls().fold(BigDecimal.ZERO, BigDecimal::add)
 
 fun debtTypeLabel(type: String?) = when (type) {
     "credit_card" -> tx("Tarjeta de crédito", "Credit card")
