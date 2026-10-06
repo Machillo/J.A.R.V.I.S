@@ -71,9 +71,9 @@ enum class Destination(val route: String, val icon: ImageVector) {
         /**
          * Screens opened from several tabs (UX-4: Deudas, from Plan and from the shortcuts on Hoy,
          * Movimientos, Salvavidas and DINCR; UX-7: Ingresos y base, from Plan and from Hoy's missing
-         * figures): they keep the tab they were opened from highlighted.
+         * figures; Tus ahorros, from Metas y ahorros and Salvavidas): they keep the tab they were opened from highlighted.
          */
-        private val SHARED = setOf("debts", "incomeBase")
+        private val SHARED = setOf("debts", "incomeBase", "declaredSavings")
 
         /** The tab a pushed screen belongs to, or null when it is opened from several ([SHARED]). */
         fun owner(route: String?): Destination? = if (route?.substringBefore('/') in SHARED) null else of(route)
@@ -169,6 +169,7 @@ fun MainScaffold(model: AppModel, appearance: Appearance, onAppearance: (Appeara
                             composable("profile") { ProfileHubScreen(model, nav) }
                             composable("incomeBase") { IncomeBaseScreen(model, nav) }
                             composable("planPreferences") { PlanPreferencesScreen(model, nav) }
+                            composable("declaredSavings") { DeclaredSavingsScreen(model, nav) }
                             composable("settings") { SettingsScreen(model, nav, appearance, onAppearance) }
                             composable("plans") { PlanSettingsScreen(model, nav) }
                             composable("security") { SecurityScreen(model, nav) }

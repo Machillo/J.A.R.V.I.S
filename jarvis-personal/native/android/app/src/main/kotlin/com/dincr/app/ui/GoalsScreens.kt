@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Savings
@@ -76,6 +79,10 @@ fun GoalsScreen(model: AppModel, nav: Navigator) {
             DropdownMenuItem({ Text(tx("Nuevo plan de ahorro", "New savings plan")) }, { menu = false; creatingPlan = true })
         }
     }) {
+        // UX-7: the declared available savings and emergency-fund target (moved from Situación).
+        Box(Modifier.testTag("goals.declaredSavings")) {
+            DincrCard { NavRow(Icons.Rounded.Payments, tx("Tus ahorros", "Your savings"), tx("Ahorros disponibles y meta de fondo de emergencia", "Available savings and emergency fund target")) { nav.open("declaredSavings") } }
+        }
         LoadContent(data) { (goals, plans) ->
             SectionTitle(tx("Metas", "Goals"))
             if (goals.isEmpty()) EmptyState(Icons.Rounded.Flag, tx("Todavía no tenés metas", "No goals yet"), tx("Definí para qué estás ahorrando y cuánto necesitás.", "Set what you’re saving for and how much you need.")) {

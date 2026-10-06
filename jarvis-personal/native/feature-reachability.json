@@ -464,7 +464,7 @@
   },
   {
    "id": "plan.incomeBase",
-   "name": "Plan → Ingresos y base (UX-7: replaces Perfil → Situación financiera; the VIP priority and personal minimum moved to Tu plan del mes → Ajustes)",
+   "name": "Plan → Ingresos y base (UX-7: replaces Perfil → Situación financiera for income and essential expenses; savings and the emergency target moved to Metas y ahorros → Tus ahorros, the VIP priority and personal minimum to Tu plan del mes → Ajustes)",
    "decision": "UX-7",
    "plans": {
     "free": "AVAILABLE",

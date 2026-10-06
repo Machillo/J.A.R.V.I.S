@@ -243,13 +243,15 @@ public enum HomeInput: String, Sendable, Equatable, CaseIterable {
     case debtInterestRates = "debt_interest_rates"
 
     /// Where the user gives DINCR this input, in the flows that exist (never an estimate): income is
-    /// registered as a movement (salary / pay stub), debts in Deudas, the rest in Plan → Ingresos y
-    /// base (UX-7: the declared figures' home; there is no separate Situación screen).
+    /// registered as a movement (salary / pay stub), debts in Deudas, essential expenses in Plan →
+    /// Ingresos y base, savings and the emergency-fund target in Metas y ahorro → Tus ahorros (UX-7:
+    /// there is no separate Situación screen).
     public var destination: HomeDestination {
         switch self {
         case .income: .registerIncome
         case .debtPayments, .debtInterestRates: .debts
-        case .essentialExpenses, .savings, .emergencyFundTarget: .incomeBase
+        case .essentialExpenses: .incomeBase
+        case .savings, .emergencyFundTarget: .goals
         }
     }
 

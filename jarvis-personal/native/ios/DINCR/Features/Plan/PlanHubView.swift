@@ -5,7 +5,7 @@ import SwiftUI
 /// PARITY E1 — the Plan tab: exactly six rows, in this order (`PlanHubItem`): Aguinaldo,
 /// Tu plan del mes (UX-3: Estrategia + Distribución as one plan; the row keeps the Estrategia
 /// identifier and gate), Deudas (UX-4: where debts are managed, every plan; Home keeps a shortcut),
-/// Ingresos y base (UX-7: the declared income and base figures, every plan), Salvavidas and
+/// Ingresos y base (UX-7: the declared income and essential expenses, every plan), Salvavidas and
 /// Distribución de dinero (kept as a transitional access until its retirement is
 /// approved). A row the plan does not include stays visible, locked ("Disponible desde Basic/VIP"),
 /// and opens the plans screen; a row paused by an operational switch says so. Goals are on Home;
@@ -83,7 +83,7 @@ extension PlanHubItem {
         case .aguinaldo: tx("Estimado según tus salarios", "Estimated from your salaries")
         case .strategy: tx("Cuánto podés repartir y cómo", "How much you can split, and how")
         case .debts: tx("Saldos, cuotas y pagos", "Balances, payments")
-        case .incomeBase: tx("Ingreso, gastos esenciales y ahorros", "Income, essential expenses and savings")
+        case .incomeBase: tx("Ingreso y gastos esenciales", "Income and essential expenses")
         case .salvavidas: tx("Cuántos meses de obligaciones te cubre", "How many months of obligations it covers")
         case .distribution: tx("Cómo repartir tu sobrante del mes", "How to split this month’s surplus")
         }

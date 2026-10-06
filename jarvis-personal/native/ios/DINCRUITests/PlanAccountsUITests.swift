@@ -181,7 +181,7 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(coverage.waitForExistence(timeout: 10))
         XCTAssertEqual(coverage.label, "Sin dato")
         XCTAssertFalse(text("0 meses", in: app).exists)
-        XCTAssertTrue(element("salvavidas.completeIncomeBase", in: app).exists)
+        XCTAssertTrue(element("salvavidas.completeSavings", in: app).exists)
     }
 
     func testTheOwnerSalvavidasHasProtectedExpenses() {
@@ -265,11 +265,16 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(text("Guardado", in: app).waitForExistence(timeout: 10))
     }
 
-    func testFreeKeepsEveryDeclaredFigureInIngresosYBaseAndPerfilHasNoSituacion() {
+    func testFreeKeepsEveryDeclaredFigureInItsHomeAndPerfilHasNoSituacion() {
+        // UX-7: income and essential expenses in Plan → Ingresos y base; savings in Metas y ahorro.
         let app = launch(tab: "plan")
         open("plan.incomeBase", in: app)
+        XCTAssertTrue(text("Gastos esenciales del mes", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(text("Ahorros disponibles", in: app).exists, "savings live in Ahorros")
+        app.tabBars.buttons["Hoy"].tap()
+        open("home.goals", in: app)
+        open("goals.declaredSavings", in: app)
         XCTAssertTrue(text("Ahorros disponibles", in: app).waitForExistence(timeout: 10))
-        XCTAssertTrue(text("Gastos esenciales del mes", in: app).exists)
         XCTAssertTrue(text("Meta de fondo de emergencia", in: app).exists)
         app.tabBars.buttons["Perfil"].tap()
         XCTAssertTrue(element("profile.plan", in: app).waitForExistence(timeout: 5))

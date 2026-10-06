@@ -184,7 +184,7 @@ class PlanRecoveryUiTest {
         waitForTag("salvavidas.fund")
         // Unknown savings: "Sin dato" and the way to declare them, never "0 meses".
         waitForText(tx("Sin dato", "No data"))
-        waitForText(tx("Completar ingresos y base", "Complete income and base"))
+        waitForText(tx("Completar tus ahorros", "Complete your savings"))
         assertTrue(!present(tx("0 meses", "0 months"), substring = true))
     }
 
@@ -362,16 +362,22 @@ class PlanRecoveryUiTest {
         compose.onNodeWithTag("incomeBase.days").assert(hasText("5"))
     }
 
-    @Test fun freeKeepsEveryDeclaredFigureInIngresosYBaseAndPerfilHasNoSituacion() {
+    @Test fun freeKeepsEveryDeclaredFigureInItsHomeAndPerfilHasNoSituacion() {
+        // UX-7: income and essential expenses in Plan → Ingresos y base; savings in Metas y ahorros.
         launch(plan = "free")
         home()
         click(tx("Plan", "Plan"))
         click(tx("Ingresos y base", "Income and base"))
         waitForTag("incomeBase.days")
-        scrollTo(tx("Ahorros disponibles", "Available savings"))
         scrollTo(tx("Gastos esenciales del mes", "Essential monthly expenses"))
-        scrollTo(tx("Meta de fondo de emergencia", "Emergency fund target"))
+        assertTrue("savings live in Ahorros", !present(tx("Ahorros disponibles", "Available savings")))
         back()
+        click(tx("Hoy", "Today"))
+        click(tx("Metas y ahorros", "Goals and savings"))
+        click(tx("Tus ahorros", "Your savings"))
+        waitForText(tx("Ahorros disponibles", "Available savings"))
+        scrollTo(tx("Meta de fondo de emergencia", "Emergency fund target"))
+        back(); back()
         click(tx("Perfil", "Profile"))
         waitForText(tx("Ajustes de cuenta", "Account settings"))
         assertTrue("no Situación row in Perfil", !present(tx("Mi situación financiera", "My financial situation")))

@@ -75,7 +75,7 @@ fun SalvavidasScreen(model: AppModel, nav: Navigator) {
                 TextButton({ nav.open("debts") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(tx("Ver deudas", "See debts"), color = Dincr.colors.tint) }
                 return@LoadContent
             }
-            FundCard(s, onEdit = { editingAmount = true }, onSituation = { nav.open("incomeBase") })
+            FundCard(s, onEdit = { editingAmount = true }, onSituation = { nav.open("declaredSavings") })
             Section(tx("Objetivo", "Target")) {
                 ChoiceChips(s.targetChoices.map { it to tx("$it ${if (it == 1) "mes" else "meses"}", "$it month${if (it == 1) "" else "s"}") }, s.targetMonths ?: 6,
                     { months -> if (months != s.targetMonths) update(SalvavidasUpdate.target(months)) })
@@ -108,7 +108,7 @@ fun SalvavidasScreen(model: AppModel, nav: Navigator) {
     if (editingAmount) {
         val owner = (state.state as? Load.Ready)?.value?.isOwnerScope == true
         AmountDialog(if (owner) tx("Saldo del Salvavidas", "Emergency fund balance") else tx("Actualizar ahorros", "Update savings"),
-            if (owner) null else tx("Se guarda como tus ahorros disponibles de Ingresos y base.", "It’s saved as the available savings in Income and base."),
+            if (owner) null else tx("Se guarda como tus ahorros disponibles de Metas y ahorros → Tus ahorros.", "It’s saved as the available savings in Goals and savings → Your savings."),
             tx("Guardar", "Save"), onDismiss = { editingAmount = false }) { amount, _ ->
             var error: String? = null
             model.load(tx("No pudimos guardar el Salvavidas.", "We couldn’t save the emergency fund.")) { model.api.updateSalvavidas(SalvavidasUpdate.amount(amount)) }
@@ -134,7 +134,7 @@ private fun FundCard(s: Salvavidas, onEdit: () -> Unit, onSituation: () -> Unit)
                 Text(tx("Sin dato", "No data"), style = MaterialTheme.typography.displaySmall, color = Dincr.colors.text)
                 InfoLine(tx("Te cubre", "Covers you for"), tx("Sin dato", "No data"))
                 Caption(tx("Declará tus ahorros para medir cuántos meses te cubre.", "Declare your savings to measure how many months it covers."))
-                TextButton(onSituation, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Completar ingresos y base", "Complete income and base"), color = Dincr.colors.tint) }
+                TextButton(onSituation, modifier = Modifier.heightIn(min = 48.dp)) { Text(tx("Completar tus ahorros", "Complete your savings"), color = Dincr.colors.tint) }
             }
             TextButton(onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(if (s.isOwnerScope) tx("Editar saldo", "Edit balance") else tx("Actualizar ahorros", "Update savings"), color = Dincr.colors.tint)

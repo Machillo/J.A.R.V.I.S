@@ -25,12 +25,11 @@ import com.dincr.design.ErrorState
 import kotlinx.coroutines.launch
 
 /**
- * UX-7 — Plan → Ingresos y base: the declared income, essential expenses, available savings and
- * emergency-fund target, for every plan (it replaces the Situación screen; same source,
- * `financial_profiles`, and the same endpoint). Empty means unknown (null), never zero; the
- * observed income average is a hint only and is never copied into the declared salary. Saving keeps
- * the fields edited elsewhere (the VIP priority and personal minimum, in Tu plan del mes → Ajustes)
- * exactly as stored. iOS twin: `IncomeBaseView`.
+ * UX-7 — Plan → Ingresos y base: the declared income and essential expenses, for every plan (with
+ * Metas y ahorros → Tus ahorros and Tu plan del mes → Ajustes it replaces the Situación screen;
+ * same source, `financial_profiles`, and the same endpoint). Empty means unknown (null), never zero;
+ * the observed income average is a hint only and is never copied into the declared salary. Saving
+ * keeps the fields edited elsewhere exactly as stored. iOS twin: `IncomeBaseView`.
  */
 @Composable
 fun IncomeBaseScreen(model: AppModel, nav: Navigator) {
@@ -52,8 +51,6 @@ private fun IncomeBaseForm(model: AppModel, current: FinancialProfile?, observed
     var hours by remember { mutableStateOf(current?.hoursPerDay?.let(format::inputText).orEmpty()) }
     var frequency by remember { mutableStateOf(current?.payFrequency ?: "monthly") }
     var essentials by remember { mutableStateOf(text(current?.essentialMonthlyExpenses)) }
-    var savings by remember { mutableStateOf(text(current?.liquidSavings)) }
-    var emergency by remember { mutableStateOf(text(current?.emergencyFundTarget)) }
     var errors by remember { mutableStateOf(mapOf<String, String>()) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -68,10 +65,8 @@ private fun IncomeBaseForm(model: AppModel, current: FinancialProfile?, observed
         if (incomeType == "hourly") FormField(tx("Horas por día", "Hours per day"), hours, { hours = it }, errors["hours"], KeyboardType.Decimal)
         ChoiceChips(listOf("weekly" to tx("Semanal", "Weekly"), "biweekly" to tx("Quincenal", "Every two weeks"), "monthly" to tx("Mensual", "Monthly")), frequency, { frequency = it }, tx("Te pagan", "You get paid"))
     }
-    Section(tx("Gastos, ahorro y fondo de emergencia", "Expenses, savings and emergency fund")) {
+    Section(tx("Gastos esenciales", "Essential expenses")) {
         MoneyField(tx("Gastos esenciales del mes", "Essential monthly expenses"), essentials, { essentials = it }, errors["essentials"])
-        MoneyField(tx("Ahorros disponibles", "Available savings"), savings, { savings = it }, errors["savings"])
-        MoneyField(tx("Meta de fondo de emergencia", "Emergency fund target"), emergency, { emergency = it }, errors["emergency"])
         Caption(tx("Dejá vacío lo que no sabés: DINCR lo trata como desconocido, no como cero.", "Leave empty what you don’t know: DINCR treats it as unknown, not zero."))
     }
     error?.let { ErrorState(it) }
@@ -88,8 +83,6 @@ private fun IncomeBaseForm(model: AppModel, current: FinancialProfile?, observed
             hoursPerDay = if (incomeType == "hourly" && hours.isNotBlank()) AmountInput.parseDecimal(hours, format.separators, 2, java.math.BigDecimal(24), allowZero = false).also { if (it == null) found["hours"] = tx("Entre 0 y 24.", "0 to 24.") } else current?.hoursPerDay,
             payFrequency = frequency,
             essentialMonthlyExpenses = money("essentials", essentials),
-            liquidSavings = money("savings", savings),
-            emergencyFundTarget = money("emergency", emergency),
         )
         errors = found
         if (found.isNotEmpty()) return@DincrPrimaryButton
@@ -128,15 +121,8 @@ private fun PlanPreferencesForm(model: AppModel, nav: Navigator, current: Financ
     val scope = rememberCoroutineScope()
     // The backend saves the whole declared profile, which needs a declared income: until there is one,
     // the settings say where to declare it (the old Situación form asked for it on the same page).
-    val incomeDeclared = when (current?.incomeType) {
-        "fixed" -> current.fixedMonthlySalary != null
-        "hourly" -> current.hourlyRate != null && current.hoursPerDay != null
-        else -> false
-    }
-    if (!incomeDeclared) Section(tx("Primero tu ingreso", "Your income first")) {
-        Caption(tx("Primero declará tu ingreso: tus ajustes se guardan junto con él.", "Declare your income first: your settings are saved with it."))
-        DincrPrimaryButton(tx("Completar ingresos y base", "Complete income and base"), { nav.open("incomeBase") })
-    }
+    val incomeDeclared = incomeDeclared(current)
+    if (!incomeDeclared) DeclareIncomeFirst(tx("Primero declará tu ingreso: tus ajustes se guardan junto con él.", "Declare your income first: your settings are saved with it."), nav)
     Section(tx("Prioridad", "Priority")) {
         ChoiceChips(StrategyPreference.choices.map { (it?.code ?: "") to preferenceLabel(it) }, preference, { preference = it })
         MoneyField(tx("Mínimo personal por mes", "Personal minimum per month"), minimum, { minimum = it }, minimumError)
@@ -147,10 +133,7 @@ private fun PlanPreferencesForm(model: AppModel, nav: Navigator, current: Financ
         val minimumValue = if (minimum.isBlank()) null else AmountInput.parseZeroOrMore(minimum, format.separators)
         minimumError = if (minimum.isNotBlank() && minimumValue == null) tx("Monto no válido.", "Not a valid amount.") else null
         if (minimumError != null) return@DincrPrimaryButton
-        val request = (current ?: FinancialProfile()).copy(
-            // The same defaults the old Situación form sent for what was never stored.
-            workDaysPerWeek = SituationDefaults.workDays(current),
-            payFrequency = current?.payFrequency ?: "monthly",
+        val request = withDefaults(current).copy(
             strategyPreference = preference.ifEmpty { null },
             discretionaryMonthlyMinimum = minimumValue,
         )
@@ -171,4 +154,73 @@ private fun preferenceLabel(choice: StrategyPreference?): String = when (choice)
     StrategyPreference.EMERGENCY -> tx("Fondo de emergencia", "Emergency fund")
     StrategyPreference.GOALS -> tx("Metas", "Goals")
     StrategyPreference.BALANCED -> tx("Equilibrado", "Balanced")
+}
+
+/**
+ * UX-7 — Metas y ahorros → Tus ahorros: the declared available savings and the emergency-fund
+ * target, for every plan (moved from the Situación screen; the same `financial_profiles` fields and
+ * endpoint, the same figures Salvavidas reads). Saving needs a declared income, as before. iOS twin:
+ * `DeclaredSavingsView`.
+ */
+@Composable
+fun DeclaredSavingsScreen(model: AppModel, nav: Navigator) {
+    val situation = rememberLoad(model) { model.api.financialSituation() }
+    DetailScaffold(tx("Tus ahorros", "Your savings"), nav::back) {
+        LoadContent(situation) { s -> DeclaredSavingsForm(model, nav, s.profile) { situation.replace(it) } }
+    }
+}
+
+@Composable
+private fun DeclaredSavingsForm(model: AppModel, nav: Navigator, current: FinancialProfile?, onSaved: (FinancialSituation) -> Unit) {
+    val format = Dincr.money
+    fun text(value: java.math.BigDecimal?) = value?.let(format::inputText).orEmpty()
+    var savings by remember { mutableStateOf(text(current?.liquidSavings)) }
+    var emergency by remember { mutableStateOf(text(current?.emergencyFundTarget)) }
+    var errors by remember { mutableStateOf(mapOf<String, String>()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val incomeDeclared = incomeDeclared(current)
+    if (!incomeDeclared) DeclareIncomeFirst(tx("Primero declará tu ingreso: tus ahorros se guardan junto con él.", "Declare your income first: your savings are saved with it."), nav)
+    Section(tx("Tus ahorros", "Your savings")) {
+        MoneyField(tx("Ahorros disponibles", "Available savings"), savings, { savings = it }, errors["savings"])
+        MoneyField(tx("Meta de fondo de emergencia", "Emergency fund target"), emergency, { emergency = it }, errors["emergency"])
+        Caption(tx("Dejá vacío lo que no sabés: DINCR lo trata como desconocido, no como cero.", "Leave empty what you don’t know: DINCR treats it as unknown, not zero."))
+    }
+    error?.let { ErrorState(it) }
+    if (incomeDeclared) DincrPrimaryButton(tx("Guardar", "Save"), loading = saving, onClick = {
+        val found = mutableMapOf<String, String>()
+        fun money(key: String, value: String) = if (value.isBlank()) null else
+            AmountInput.parseZeroOrMore(value, format.separators).also { if (it == null) found[key] = tx("Monto no válido.", "Not a valid amount.") }
+        val request = withDefaults(current).copy(liquidSavings = money("savings", savings), emergencyFundTarget = money("emergency", emergency))
+        errors = found
+        if (found.isNotEmpty()) return@DincrPrimaryButton
+        saving = true; error = null
+        val key = IdempotencyKey.new()
+        scope.launch {
+            model.load(tx("No pudimos guardar tus ahorros.", "We couldn’t save your savings.")) { model.api.updateFinancialSituation(request, key) }
+                .onSuccess { onSaved(it); model.showNotice(tx("Ahorros guardados", "Savings saved")) }
+                .onFailure { if (it !is AuthException.SignedOut) error = it.message }
+            saving = false
+        }
+    }, modifier = Modifier.testTag("declaredSavings.save"))
+}
+
+/** Whether the stored profile has the income the backend requires to save it. */
+private fun incomeDeclared(current: FinancialProfile?): Boolean = when (current?.incomeType) {
+    "fixed" -> current.fixedMonthlySalary != null
+    "hourly" -> current.hourlyRate != null && current.hoursPerDay != null
+    else -> false
+}
+
+/** The stored profile with the same defaults the old Situación form sent for what was never stored. */
+private fun withDefaults(current: FinancialProfile?): FinancialProfile =
+    (current ?: FinancialProfile()).copy(workDaysPerWeek = SituationDefaults.workDays(current), payFrequency = current?.payFrequency ?: "monthly")
+
+@Composable
+private fun DeclareIncomeFirst(message: String, nav: Navigator) {
+    Section(tx("Primero tu ingreso", "Your income first")) {
+        Caption(message)
+        DincrPrimaryButton(tx("Completar ingresos y base", "Complete income and base"), { nav.open("incomeBase") })
+    }
 }

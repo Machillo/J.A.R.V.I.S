@@ -163,12 +163,12 @@ private struct UsersSalvavidasContent: View {
                         .accessibilityIdentifier("salvavidas.updateSavings")
                 }
                 if !fund.savingsKnown {
-                    Text(tx("Declará tus ahorros en Plan → Ingresos y base para medir cuántos meses te cubren.",
-                            "Declare your savings in Plan → Income and base to measure how many months they cover."))
+                    Text(tx("Declará tus ahorros en Metas y ahorro → Tus ahorros para medir cuántos meses te cubren.",
+                            "Declare your savings in Goals and savings → Your savings to measure how many months they cover."))
                         .font(DincrFont.caption).foregroundStyle(DincrColor.text2)
-                    NavigationLink { IncomeBaseView() } label: { Text(tx("Completar ingresos y base", "Complete income and base")) }
+                    NavigationLink { DeclaredSavingsView() } label: { Text(tx("Completar tus ahorros", "Complete your savings")) }
                         .buttonStyle(.dincrPrimary)
-                        .accessibilityIdentifier("salvavidas.completeIncomeBase")
+                        .accessibilityIdentifier("salvavidas.completeSavings")
                 }
             }
             .dincrCard()
@@ -297,7 +297,7 @@ private struct SavingsAmountSheet: View {
                 Section {
                     MoneyField(label: tx("Ahorro disponible", "Available savings"), text: $text, error: error, identifier: "salvavidas.amount")
                 } footer: {
-                    Text(tx("Es el mismo dato de ahorros de Ingresos y base.", "It’s the same savings figure as in Income and base."))
+                    Text(tx("Es el mismo dato de Metas y ahorro → Tus ahorros.", "It’s the same figure as in Goals and savings → Your savings."))
                 }
             }
             .navigationTitle(tx("Ahorros", "Savings"))

@@ -182,7 +182,8 @@ class HomeTodayTest {
     @Test fun missingInputsLeadToTheRealFlows() {
         assertEquals(HomeDestination.REGISTER_INCOME, HomeInput.INCOME.destination)
         assertEquals(HomeDestination.DEBTS, HomeInput.DEBT_PAYMENTS.destination)
-        assertTrue(listOf(HomeInput.ESSENTIAL_EXPENSES, HomeInput.SAVINGS, HomeInput.EMERGENCY_FUND_TARGET).all { it.destination == HomeDestination.INCOME_BASE })  // UX-7: Plan → Ingresos y base
+        assertEquals(HomeDestination.INCOME_BASE, HomeInput.ESSENTIAL_EXPENSES.destination)  // UX-7: Plan → Ingresos y base
+        assertTrue(listOf(HomeInput.SAVINGS, HomeInput.EMERGENCY_FUND_TARGET).all { it.destination == HomeDestination.GOALS })  // UX-7: savings in Ahorros
         assertEquals(listOf(HomeInput.ESSENTIAL_EXPENSES, HomeInput.SAVINGS, HomeInput.EMERGENCY_FUND_TARGET),
             HomeInput.codes(listOf("essential_expenses", "savings", "emergency_fund_target")))
     }

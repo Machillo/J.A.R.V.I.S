@@ -2,12 +2,11 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// UX-7 — Plan → Ingresos y base: the declared income, essential expenses, available savings and
-/// emergency-fund target, for every plan (it replaces the Situación screen; same source,
-/// `financial_profiles`, and the same endpoint). An empty field is unknown and is sent as null,
-/// never as zero; the observed income average is shown apart and never copied into a declared
-/// value. Saving keeps the fields edited elsewhere (the VIP priority and personal minimum, in Tu plan
-/// del mes → Ajustes) exactly as stored.
+/// UX-7 — Plan → Ingresos y base: the declared income and essential expenses, for every plan (with
+/// Metas y ahorros → Tus ahorros and Tu plan del mes → Ajustes it replaces the Situación screen;
+/// same source, `financial_profiles`, and the same endpoint). An empty field is unknown and is sent
+/// as null, never as zero; the observed income average is shown apart and never copied into a
+/// declared value. Saving keeps the fields edited elsewhere exactly as stored.
 struct IncomeBaseView: View {
     @Environment(AppModel.self) private var model
 
@@ -30,8 +29,6 @@ private struct IncomeBaseForm: View {
     @State private var hours = ""
     @State private var frequency = "monthly"
     @State private var essentials = ""
-    @State private var savings = ""
-    @State private var emergency = ""
     @State private var save = ProfileSave()
     @State private var loaded = false
 
@@ -69,10 +66,8 @@ private struct IncomeBaseForm: View {
                     Text(tx("Mensual", "Monthly")).tag("monthly")
                 }
             }
-            Section(tx("Gastos, ahorro y fondo de emergencia", "Expenses, savings and emergency fund")) {
+            Section(tx("Gastos esenciales", "Essential expenses")) {
                 MoneyField(label: tx("Gastos esenciales del mes", "Essential monthly expenses"), text: $essentials)
-                MoneyField(label: tx("Ahorros disponibles", "Available savings"), text: $savings)
-                MoneyField(label: tx("Meta de fondo de emergencia", "Emergency fund target"), text: $emergency)
             }
             ProfileSaveSection(save: save, id: "incomeBase.save") { Task { await submit() } }
         }
@@ -92,15 +87,12 @@ private struct IncomeBaseForm: View {
         hours = profile?.hoursPerDay.map { "\($0)" } ?? ""
         frequency = profile?.payFrequency ?? "monthly"
         essentials = profile?.essentialMonthlyExpenses.map(format.inputText) ?? ""
-        savings = profile?.liquidSavings.map(format.inputText) ?? ""
-        emergency = profile?.emergencyFundTarget.map(format.inputText) ?? ""
     }
 
     private func submit() async {
         let separators = model.moneyFormat.separators
         guard let salaryValue = ProfileSave.optional(salary, separators), let hourlyValue = ProfileSave.optional(hourly, separators),
-              let essentialsValue = ProfileSave.optional(essentials, separators), let savingsValue = ProfileSave.optional(savings, separators),
-              let emergencyValue = ProfileSave.optional(emergency, separators) else {
+              let essentialsValue = ProfileSave.optional(essentials, separators) else {
             save.error = model.moneyFormat.amountHint; return
         }
         guard let workDays = WorkDays.parse(days) else {
@@ -114,8 +106,6 @@ private struct IncomeBaseForm: View {
         profile.hoursPerDay = incomeType == "hourly" ? Decimal(string: hours.replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX")) : nil
         profile.payFrequency = frequency
         profile.essentialMonthlyExpenses = essentialsValue
-        profile.liquidSavings = savingsValue
-        profile.emergencyFundTarget = emergencyValue
         await save.run(profile, model: model)
     }
 }
@@ -145,14 +135,7 @@ private struct PlanPreferencesForm: View {
 
     /// The backend saves the whole declared profile, which needs a declared income: until there is
     /// one, the settings say where to declare it (the old Situación form asked for it on the same page).
-    private var incomeDeclared: Bool {
-        guard let profile = situation.financialProfile else { return false }
-        switch profile.incomeType {
-        case "fixed": return profile.fixedMonthlySalary != nil
-        case "hourly": return profile.hourlyRate != nil && profile.hoursPerDay != nil
-        default: return false
-        }
-    }
+    private var incomeDeclared: Bool { ProfileSave.incomeDeclared(situation.financialProfile) }
 
     var body: some View {
         Form {
@@ -202,12 +185,74 @@ private struct PlanPreferencesForm: View {
         guard let minimumValue = ProfileSave.optional(minimum, model.moneyFormat.separators) else {
             save.error = model.moneyFormat.amountHint; return
         }
-        var profile = situation.financialProfile ?? FinancialProfile()
-        // The same defaults the old Situación form sent for what was never stored.
-        profile.workDaysPerWeek = profile.workDaysPerWeek ?? WorkDays.defaultValue
-        profile.payFrequency = profile.payFrequency ?? "monthly"
+        var profile = ProfileSave.withDefaults(situation.financialProfile)
         profile.strategyPreference = preference.isEmpty ? nil : preference
         profile.discretionaryMonthlyMinimum = minimumValue
+        await save.run(profile, model: model)
+    }
+}
+
+/// UX-7 — Metas y ahorros → Tus ahorros: the declared available savings and the emergency-fund
+/// target, for every plan (moved from the Situación screen; the same `financial_profiles` fields and
+/// endpoint, the same figures Salvavidas reads). Saving needs a declared income, as before.
+struct DeclaredSavingsView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        AsyncContent(load: { try await model.service.financialSituation() }) { situation, _ in
+            DeclaredSavingsForm(situation: situation)
+        }
+        .navigationTitle(tx("Tus ahorros", "Your savings"))
+        .dincrScreenBackground()
+    }
+}
+
+private struct DeclaredSavingsForm: View {
+    @Environment(AppModel.self) private var model
+    let situation: FinancialSituation
+    @State private var savings = ""
+    @State private var emergency = ""
+    @State private var save = ProfileSave()
+    @State private var loaded = false
+
+    private var incomeDeclared: Bool { ProfileSave.incomeDeclared(situation.financialProfile) }
+
+    var body: some View {
+        Form {
+            if !incomeDeclared {
+                Section {
+                    Text(tx("Primero declará tu ingreso: tus ahorros se guardan junto con él.", "Declare your income first: your savings are saved with it."))
+                        .foregroundStyle(DincrColor.text2)
+                    NavigationLink { IncomeBaseView() } label: { Text(tx("Completar ingresos y base", "Complete income and base")) }
+                        .accessibilityIdentifier("declaredSavings.declareIncome")
+                }
+            }
+            Section {
+                MoneyField(label: tx("Ahorros disponibles", "Available savings"), text: $savings)
+                MoneyField(label: tx("Meta de fondo de emergencia", "Emergency fund target"), text: $emergency)
+            }
+            if incomeDeclared {
+                ProfileSaveSection(save: save, id: "declaredSavings.save") { Task { await submit() } }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            let format = model.moneyFormat
+            savings = situation.financialProfile?.liquidSavings.map(format.inputText) ?? ""
+            emergency = situation.financialProfile?.emergencyFundTarget.map(format.inputText) ?? ""
+        }
+    }
+
+    private func submit() async {
+        let separators = model.moneyFormat.separators
+        guard let savingsValue = ProfileSave.optional(savings, separators), let emergencyValue = ProfileSave.optional(emergency, separators) else {
+            save.error = model.moneyFormat.amountHint; return
+        }
+        var profile = ProfileSave.withDefaults(situation.financialProfile)
+        profile.liquidSavings = savingsValue
+        profile.emergencyFundTarget = emergencyValue
         await save.run(profile, model: model)
     }
 }
@@ -218,6 +263,24 @@ private final class ProfileSave {
     var error: String?
     var saved = false
     var saving = false
+
+    /// Whether the stored profile has the income the backend requires to save it.
+    nonisolated static func incomeDeclared(_ profile: FinancialProfile?) -> Bool {
+        guard let profile else { return false }
+        switch profile.incomeType {
+        case "fixed": return profile.fixedMonthlySalary != nil
+        case "hourly": return profile.hourlyRate != nil && profile.hoursPerDay != nil
+        default: return false
+        }
+    }
+
+    /// The stored profile with the same defaults the old Situación form sent for what was never stored.
+    nonisolated static func withDefaults(_ stored: FinancialProfile?) -> FinancialProfile {
+        var profile = stored ?? FinancialProfile()
+        profile.workDaysPerWeek = profile.workDaysPerWeek ?? WorkDays.defaultValue
+        profile.payFrequency = profile.payFrequency ?? "monthly"
+        return profile
+    }
 
     /// Empty → nil (unknown); anything else must parse, or nothing is sent.
     nonisolated static func optional(_ text: String, _ separators: MoneyFormat.Separators) -> Decimal?? {

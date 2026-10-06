@@ -3,8 +3,8 @@ import Foundation
 /// The Plan tab: exactly these rows, in this order (product decision; same on Android, `PlanHubScreen`).
 /// Each keeps its historical plan gate; a row the plan does not include stays visible, locked, and
 /// opens the plans screen. Debts are managed here (UX-4: Plan → Deudas; Home keeps a shortcut);
-/// Ingresos y base holds the declared income, essential expenses, savings and emergency target
-/// (UX-7: every plan; it replaces the Situación screen);
+/// Ingresos y base holds the declared income and essential expenses (UX-7: every plan; with
+/// Metas y ahorro → Tus ahorros it replaces the Situación screen);
 /// goals live on Home; budget, calendar and recurring items in Profile → Finanzas. The Owner passes
 /// every gate by role (`Profile.planTier` is VIP for the server's Owner role only); the backend
 /// still decides every request.
