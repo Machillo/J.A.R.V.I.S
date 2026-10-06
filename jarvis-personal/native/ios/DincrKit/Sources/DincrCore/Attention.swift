@@ -17,7 +17,7 @@ public struct AttentionItem: Sendable, Equatable, Identifiable {
     /// Screens an item can open. Only destinations that exist on both platforms; an item without
     /// one is shown without a link (no route is invented from free text).
     public enum Destination: String, Sendable, Equatable, CaseIterable {
-        case review, debts, salvavidas, situation, strategy, movements, monthlyReview
+        case review, debts, salvavidas, incomeBase, strategy, movements, monthlyReview
     }
 
     public let id: String
@@ -66,7 +66,8 @@ public enum AttentionList {
         switch route?.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")).lowercased() {
         case "debts": .debts
         case "vip-emergency": .salvavidas
-        case "situation": .situation
+        // The declared situation lives in Plan → Ingresos y base (UX-7).
+        case "situation": .incomeBase
         case "strategy": .strategy
         case "finance", "movements": .movements
         case "vip-monthly-review": .monthlyReview

@@ -448,11 +448,11 @@ def _users_salvavidas_from(data: dict[str, Any], target_months: int) -> dict[str
         "verification": {
             "mode": "declared",
             "message": (
-                tx("El fondo es el ahorro que declaraste en tu situación financiera.",
-                   "The fund is the savings you declared in your financial situation.")
+                tx("El fondo es el ahorro disponible que declaraste.",
+                   "The fund is the available savings you declared.")
                 if known else
-                tx("Declará tus ahorros en tu situación financiera para medir la cobertura.",
-                   "Declare your savings in your financial situation to measure coverage.")
+                tx("Declará tus ahorros disponibles para medir la cobertura.",
+                   "Declare your available savings to measure coverage.")
             ),
         },
     }
@@ -504,8 +504,8 @@ def _update_users_salvavidas(
             ).fetchone()
             if not updated:
                 raise ValueError(tx(
-                    "Completá primero tu situación financiera para guardar tus ahorros.",
-                    "Complete your financial situation first to save your savings.",
+                    "Declará primero tus ingresos para guardar tus ahorros.",
+                    "Declare your income first to save your savings.",
                 ))
             conn.commit()
     if clean_target is not None:

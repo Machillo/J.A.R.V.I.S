@@ -70,7 +70,7 @@ public struct HomeToday: Sendable, Equatable {
         if director?.priority == "incomplete" || !HomeInput.codes(director?.missing).isEmpty {
             let missing = HomeInput.codes(director?.missing)
             next = HomeNext(kind: .needsInformation, title: text(director?.headline), missing: missing,
-                            destination: missing.first?.destination ?? .situation)
+                            destination: missing.first?.destination ?? .incomeBase)
         } else if let headline = text(director?.headline) {
             next = HomeNext(kind: .recommendation, title: headline, detail: text(director?.nextAction), destination: .monthPlan)
         } else {
@@ -243,12 +243,13 @@ public enum HomeInput: String, Sendable, Equatable, CaseIterable {
     case debtInterestRates = "debt_interest_rates"
 
     /// Where the user gives DINCR this input, in the flows that exist (never an estimate): income is
-    /// registered as a movement (salary / pay stub), debts in Deudas, the rest in Situación.
+    /// registered as a movement (salary / pay stub), debts in Deudas, the rest in Plan → Ingresos y
+    /// base (UX-7: the declared figures' home; there is no separate Situación screen).
     public var destination: HomeDestination {
         switch self {
         case .income: .registerIncome
         case .debtPayments, .debtInterestRates: .debts
-        case .essentialExpenses, .savings, .emergencyFundTarget: .situation
+        case .essentialExpenses, .savings, .emergencyFundTarget: .incomeBase
         }
     }
 
@@ -258,7 +259,7 @@ public enum HomeInput: String, Sendable, Equatable, CaseIterable {
 
 /// Screens Hoy opens. All exist on both platforms.
 public enum HomeDestination: String, Sendable, Equatable, CaseIterable {
-    case registerIncome, registerMovement, movements, debts, goals, situation, monthPlan
+    case registerIncome, registerMovement, movements, debts, goals, incomeBase, monthPlan
 }
 
 /// Accesos rápidos: the same essentials for every plan.

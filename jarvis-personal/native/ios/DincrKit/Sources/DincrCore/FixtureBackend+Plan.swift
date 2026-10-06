@@ -135,8 +135,8 @@ extension FixtureBackend {
                 return ["months": m, "target": number(goal), "reached": current.map { base > 0 && $0 >= goal } ?? false]
             },
             "verification": ["mode": "declared", "message": current == nil
-                ? "Declará tus ahorros en tu situación financiera para medir la cobertura."
-                : "El fondo es el ahorro que declaraste en tu situación financiera."],
+                ? "Declará tus ahorros disponibles para medir la cobertura."
+                : "El fondo es el ahorro disponible que declaraste."],
         ]
         if let current, base > 0 {
             answer["coverage_months"] = number(current / base)
@@ -189,7 +189,7 @@ extension FixtureBackend {
         let protectedIDs = body["protected_expense_ids"] as? [Int]
         if !isOwnerRole {
             if let ids = protectedIDs, !ids.isEmpty { return error(422, "Los gastos protegidos no aplican a tu Salvavidas.") }
-            if amount != nil, situation == nil { return error(422, "Completá tu situación financiera antes de actualizar tus ahorros.") }
+            if amount != nil, situation == nil { return error(422, "Declará primero tus ingresos para guardar tus ahorros.") }
         }
         if let months { salvavidasTargetMonths = months }
         if isOwnerRole {

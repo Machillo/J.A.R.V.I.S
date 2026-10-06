@@ -133,7 +133,7 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
         if (target != null && target !in Salvavidas.ALLOWED_TARGET_MONTHS) return Triple(422, "El objetivo del Salvavidas debe ser de 1, 3 o 6 meses.", null)
         if (amount != null && amount.signum() < 0) return Triple(422, "El ahorro no puede ser negativo.", null)
         if (!owner && !protectedIds.isNullOrEmpty()) return Triple(422, "En DINCR todas tus obligaciones cuentan para el Salvavidas.", null)
-        if (!owner && amount != null && data.situation == null) return Triple(422, "Completá primero tu situación financiera para guardar tus ahorros.", null)
+        if (!owner && amount != null && data.situation == null) return Triple(422, "Declará primero tus ingresos para guardar tus ahorros.", null)
         target?.let { targetMonths = it }
         if (owner) {
             amount?.let { ownerAmount = it }
@@ -172,8 +172,8 @@ internal class FakePlanRoutes(private val json: Json, private val today: LocalDa
             progressPercent = current?.takeIf { target.signum() > 0 }?.let { ratio(it * BigDecimal(100), target).min(BigDecimal(100)).toDouble() },
             components = Salvavidas.Components(debtMonthlyPayments = debtMonthly, recurringObligations = recurringMonthly),
             debts = debts, obligations = obligations, milestones = milestones(base, current),
-            verification = Salvavidas.Verification("declared", message = if (current != null) "El fondo es el ahorro que declaraste en tu situación financiera."
-                else "Declará tus ahorros en tu situación financiera para medir la cobertura."),
+            verification = Salvavidas.Verification("declared", message = if (current != null) "El fondo es el ahorro disponible que declaraste."
+                else "Declará tus ahorros disponibles para medir la cobertura."),
         )
     }
 

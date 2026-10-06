@@ -8,10 +8,22 @@ import SwiftUI
 /// is the backend's: first the amount to plan, how DINCR splits it and why in one sentence; the
 /// derivation and every historical detail stay one tap away ("¿Por qué?", "Ver todo el detalle").
 struct PlanStrategyView: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         ScreenScroll(title: tx("Tu plan del mes", "Your plan for the month")) {
             StrategyLoader { strategy in
                 MonthPlanContent(strategy: strategy)
+            }
+            if model.planTier == .vip {
+                // UX-7: the plan priority and personal minimum (moved from the Situación screen).
+                NavigationLink { PlanPreferencesView() } label: {
+                    HubRow(symbol: "slider.horizontal.3", title: tx("Ajustes del plan", "Plan settings"),
+                           subtitle: tx("Prioridad y mínimo personal", "Priority and personal minimum"))
+                }
+                .buttonStyle(.plain)
+                .dincrCard(padding: DincrSpacing.s3)
+                .accessibilityIdentifier("plan.month.preferences")
             }
             FinancialDisclaimer()
         }
@@ -50,17 +62,17 @@ struct StrategyLoader<Content: View>: View {
     }
 }
 
-/// No income to plan with: ask for the financial situation (never a strategy built on zero).
+/// No income to plan with: ask for the declared income (never a strategy built on zero).
 struct NeedsIncomeState: View {
     let message: String?
 
     var body: some View {
         EmptyStateView(symbol: "banknote", title: tx("Necesitamos tus ingresos", "We need your income"),
-                       message: message ?? tx("Registrá tus ingresos o completá tu situación financiera para armar tu estrategia.",
-                                              "Record your income or complete your financial situation to build your strategy.")) {
-            NavigationLink { SituationView() } label: { Text(tx("Completar situación financiera", "Complete financial situation")) }
+                       message: message ?? tx("Registrá tus ingresos o completá Ingresos y base para armar tu estrategia.",
+                                              "Record your income or complete Income and base to build your strategy.")) {
+            NavigationLink { IncomeBaseView() } label: { Text(tx("Completar ingresos y base", "Complete income and base")) }
                 .buttonStyle(.dincrPrimary)
-                .accessibilityIdentifier("strategy.completeSituation")
+                .accessibilityIdentifier("strategy.completeIncomeBase")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("strategy.needsIncome")
@@ -71,8 +83,8 @@ struct NeedsIncomeState: View {
 struct ObservedIncomeNote: View {
     var body: some View {
         StatusBanner(tone: .info, title: IncomeSourceLabel.observedNote(),
-                     message: tx("Declará tu ingreso en Perfil → Situación financiera para una estrategia más precisa.",
-                                 "Declare your income in Profile → Financial situation for a more precise strategy."))
+                     message: tx("Declará tu ingreso en Plan → Ingresos y base para una estrategia más precisa.",
+                                 "Declare your income in Plan → Income and base for a more precise strategy."))
     }
 }
 

@@ -182,7 +182,7 @@ class HomeTodayTest {
     @Test fun missingInputsLeadToTheRealFlows() {
         assertEquals(HomeDestination.REGISTER_INCOME, HomeInput.INCOME.destination)
         assertEquals(HomeDestination.DEBTS, HomeInput.DEBT_PAYMENTS.destination)
-        assertTrue(listOf(HomeInput.ESSENTIAL_EXPENSES, HomeInput.SAVINGS, HomeInput.EMERGENCY_FUND_TARGET).all { it.destination == HomeDestination.SITUATION })
+        assertTrue(listOf(HomeInput.ESSENTIAL_EXPENSES, HomeInput.SAVINGS, HomeInput.EMERGENCY_FUND_TARGET).all { it.destination == HomeDestination.INCOME_BASE })  // UX-7: Plan → Ingresos y base
         assertEquals(listOf(HomeInput.ESSENTIAL_EXPENSES, HomeInput.SAVINGS, HomeInput.EMERGENCY_FUND_TARGET),
             HomeInput.codes(listOf("essential_expenses", "savings", "emergency_fund_target")))
     }
@@ -197,7 +197,7 @@ class HomeTodayTest {
 
     @Test fun destinationsAreTheSameScreensAsIos() {
         // Routes registered in MainScaffold; the movement editor (income or any movement) is a sheet.
-        assertEquals(mapOf("MOVEMENTS" to "movements", "DEBTS" to "debts", "GOALS" to "goals", "SITUATION" to "situation", "MONTH_PLAN" to "strategy"),
+        assertEquals(mapOf("MOVEMENTS" to "movements", "DEBTS" to "debts", "GOALS" to "goals", "INCOME_BASE" to "incomeBase", "MONTH_PLAN" to "strategy"),
             HomeDestination.entries.filter { it.route != null }.associate { it.name to it.route })
     }
 }

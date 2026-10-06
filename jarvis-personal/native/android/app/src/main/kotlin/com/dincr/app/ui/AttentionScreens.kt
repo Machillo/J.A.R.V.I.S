@@ -116,7 +116,7 @@ private val AttentionItem.Destination.title: String
         AttentionItem.Destination.REVIEW -> tx("Revisar avisos del correo", "Review mail notices")
         AttentionItem.Destination.DEBTS -> tx("Ver deudas", "See debts")
         AttentionItem.Destination.SALVAVIDAS -> tx("Ver Salvavidas", "See Salvavidas")
-        AttentionItem.Destination.SITUATION -> tx("Ver tu situación", "See your situation")
+        AttentionItem.Destination.INCOME_BASE -> tx("Ver ingresos y base", "See income and base")
         AttentionItem.Destination.STRATEGY -> tx("Ver tu plan del mes", "See your plan for the month")
         AttentionItem.Destination.MOVEMENTS -> tx("Ver movimientos", "See transactions")
         AttentionItem.Destination.MONTHLY_REVIEW -> tx("Ver revisión del mes", "See monthly review")

@@ -59,7 +59,7 @@ class JarvisAccessUiTest {
     private fun openProfile() {
         waitForText(tx("Hoy", "Today"))
         compose.onAllNodesWithText(tx("Perfil", "Profile")).onFirst().performClick()
-        waitForText(tx("Mi situación financiera", "My financial situation"))
+        waitForText(tx("Ajustes de cuenta", "Account settings"))
     }
 
     @Test fun ownerGetsJarvisOnTopOfDincr() {

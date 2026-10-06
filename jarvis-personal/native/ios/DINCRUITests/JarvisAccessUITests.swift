@@ -38,7 +38,7 @@ final class JarvisAccessUITests: XCTestCase {
     func testFreeBasicAndVipNeverSeeJarvis() {
         for plan in [nil, "basic", "vip"] as [String?] {
             let app = launch(plan: plan)
-            XCTAssertTrue(element("profile.situation", in: app).waitForExistence(timeout: 5), plan ?? "free")
+            XCTAssertTrue(element("profile.plan", in: app).waitForExistence(timeout: 5), plan ?? "free")
             XCTAssertFalse(element("profile.jarvis", in: app).exists, plan ?? "free")
             app.terminate()
         }
@@ -57,7 +57,7 @@ final class JarvisAccessUITests: XCTestCase {
         XCTAssertTrue(element("profile.jarvis", in: owner).waitForExistence(timeout: 5))
         owner.terminate()
         let user = launch(plan: "vip")
-        XCTAssertTrue(element("profile.situation", in: user).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("profile.plan", in: user).waitForExistence(timeout: 5))
         XCTAssertFalse(element("profile.jarvis", in: user).exists)
     }
 }

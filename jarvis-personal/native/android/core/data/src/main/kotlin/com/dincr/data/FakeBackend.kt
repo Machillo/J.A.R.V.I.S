@@ -559,7 +559,7 @@ class FakeBackend(
     private fun strategy(): Strategy {
         val (source, _) = planRoutes.basicIncome(snapshot())
         val basis = Strategy.IncomeBasis(source, if (source == "declared") null else "income-policy-v1", if (source == "observed") "transactions" else null)
-        if (source == "none") return Strategy("needs_income", recommendation = "Registrá tus ingresos o completá tu situación financiera para armar tu estrategia.",
+        if (source == "none") return Strategy("needs_income", recommendation = "Registrá tus ingresos o completá Ingresos y base para armar tu estrategia.",
             incomeSource = source, incomeBasis = basis)
         return Strategy(
             "tight", "debt", BigDecimal(865000), BigDecimal(420000), BigDecimal(95000), BigDecimal(214000),

@@ -123,12 +123,12 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(text("Margen para decidir", in: app).exists)
     }
 
-    func testBasicStrategyWithoutIncomeAsksForTheSituation() {
+    func testBasicStrategyWithoutIncomeAsksForIngresosYBase() {
         let app = launch("empty", plan: "basic", tab: "plan")
         open("plan.strategy", in: app)
         XCTAssertTrue(element("strategy.needsIncome", in: app).waitForExistence(timeout: 10))
-        open("strategy.completeSituation", in: app)
-        XCTAssertTrue(element("situation.save", in: app).waitForExistence(timeout: 10))
+        open("strategy.completeIncomeBase", in: app)
+        XCTAssertTrue(element("incomeBase.save", in: app).waitForExistence(timeout: 10))
     }
 
     func testDistributionReadsTheStrategyDashboard() {
@@ -181,7 +181,7 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(coverage.waitForExistence(timeout: 10))
         XCTAssertEqual(coverage.label, "Sin dato")
         XCTAssertFalse(text("0 meses", in: app).exists)
-        XCTAssertTrue(element("salvavidas.completeSituation", in: app).exists)
+        XCTAssertTrue(element("salvavidas.completeIncomeBase", in: app).exists)
     }
 
     func testTheOwnerSalvavidasHasProtectedExpenses() {
@@ -253,15 +253,50 @@ final class PlanAccountsUITests: XCTestCase {
         XCTAssertTrue(text("no conecta tus cuentas", in: app).exists)
     }
 
-    func testFixedIncomeSituationSendsTheWorkDays() {
-        let app = launch(tab: "profile")
-        open("profile.situation", in: app)
-        let days = element("situation.workDays", in: app)
+    func testFixedIncomeSendsTheWorkDaysFromIngresosYBase() {
+        // UX-7: the declared income lives in Plan → Ingresos y base (no Situación screen in Perfil).
+        let app = launch(tab: "plan")
+        open("plan.incomeBase", in: app)
+        let days = element("incomeBase.workDays", in: app)
         XCTAssertTrue(days.waitForExistence(timeout: 10))
         XCTAssertEqual(days.value as? String, "5", "the web form's default, visible and editable")
-        open("situation.save", in: app)
+        open("incomeBase.save", in: app)
         // The fixture, like the backend, answers 422 without work_days_per_week.
         XCTAssertTrue(text("Guardado", in: app).waitForExistence(timeout: 10))
+    }
+
+    func testFreeKeepsEveryDeclaredFigureInIngresosYBaseAndPerfilHasNoSituacion() {
+        let app = launch(tab: "plan")
+        open("plan.incomeBase", in: app)
+        XCTAssertTrue(text("Ahorros disponibles", in: app).waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Gastos esenciales del mes", in: app).exists)
+        XCTAssertTrue(text("Meta de fondo de emergencia", in: app).exists)
+        app.tabBars.buttons["Perfil"].tap()
+        XCTAssertTrue(element("profile.plan", in: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(element("profile.situation", in: app).exists)
+    }
+
+    func testVipEditsThePriorityAndMinimumInTuPlanDelMes() {
+        // Saved with the declared profile: without an income, the settings say where to declare it.
+        let undeclared = launch(plan: "vip", tab: "plan")
+        open("plan.strategy", in: undeclared)
+        open("plan.month.preferences", in: undeclared)
+        XCTAssertTrue(element("planPreferences.declareIncome", in: undeclared).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("planPreferences.save", in: undeclared).exists)
+        undeclared.terminate()
+
+        let app = launch("store", plan: "vip", tab: "plan")  // a declared fixed income
+        open("plan.strategy", in: app)
+        open("plan.month.preferences", in: app)
+        XCTAssertTrue(element("planPreferences.priority", in: app).waitForExistence(timeout: 10))
+        open("planPreferences.save", in: app)
+        XCTAssertTrue(text("Guardado", in: app).waitForExistence(timeout: 10))
+        app.terminate()
+
+        let basic = launch(plan: "basic", tab: "plan")
+        open("plan.strategy", in: basic)
+        XCTAssertTrue(text("Tu plan del mes", in: basic).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("plan.month.preferences", in: basic).exists, "the priority and minimum are VIP")
     }
 
     func testOnlyTheOwnerGetsTheFinancialAnalysis() {
@@ -273,7 +308,7 @@ final class PlanAccountsUITests: XCTestCase {
         owner.terminate()
 
         let user = launch(plan: "vip", tab: "profile")
-        XCTAssertTrue(element("profile.situation", in: user).waitForExistence(timeout: 5))
+        XCTAssertTrue(element("profile.plan", in: user).waitForExistence(timeout: 5))
         XCTAssertFalse(element("profile.jarvis", in: user).exists)
         XCTAssertFalse(element("jarvis.section.analysis", in: user).exists)
     }

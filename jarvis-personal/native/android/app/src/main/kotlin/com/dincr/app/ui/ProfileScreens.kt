@@ -25,7 +25,6 @@ import androidx.compose.material.icons.rounded.Gavel
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.SupportAgent
@@ -47,8 +46,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
@@ -58,17 +55,12 @@ import com.dincr.app.AppModel
 import com.dincr.app.Appearance
 import com.dincr.app.StoreBilling
 import com.dincr.app.tx
-import com.dincr.data.AmountInput
 import com.dincr.data.AuthException
-import com.dincr.data.FinancialProfile
-import com.dincr.data.IdempotencyKey
 import com.dincr.data.Jarvis
 import com.dincr.data.OpsFlag
 import com.dincr.data.PlanChangeRequest
 import com.dincr.data.PlanTier
-import com.dincr.data.SituationDefaults
 import com.dincr.data.SupportRequest
-import com.dincr.data.WholeNumberInput
 import com.dincr.design.BannerTone
 import com.dincr.design.Dincr
 import com.dincr.design.DincrCard
@@ -115,7 +107,6 @@ fun ProfileHubScreen(model: AppModel, nav: Navigator) {
         FinanceSection(plan, nav)
         DincrCard {
             Column {
-                NavRow(Icons.Rounded.Person, tx("Mi situación financiera", "My financial situation"), tx("Ingresos, gastos esenciales y ahorros", "Income, essential expenses and savings")) { nav.open("situation") }
                 NavRow(Icons.Rounded.Star, tx("Mi plan", "My plan"), planName(profile?.plan) + (if (profile?.isCourtesy == true) tx(" · cortesía", " · courtesy") else "")) { nav.open("plans") }
                 if (plan == PlanTier.VIP && model.isOn(OpsFlag.GMAIL_AUTOMATION)) {
                     NavRow(Icons.Rounded.Email, tx("Correos financieros", "Financial emails"), tx("Avisos de tu banco para revisar", "Bank notices to review")) { nav.open("mail") }
@@ -150,92 +141,6 @@ private fun FinanceSection(plan: PlanTier, nav: Navigator) {
             }
         }
     }
-}
-
-/**
- * G2 — the declared financial situation. Empty means unknown (null), never zero; the observed
- * income average is shown as a hint only and is never copied into the declared salary.
- */
-@Composable
-fun SituationScreen(model: AppModel, nav: Navigator) {
-    val profile by model.profile.collectAsStateWithLifecycle()
-    val plan = profile?.planTier ?: PlanTier.FREE
-    val situation = rememberLoad(model) { model.api.financialSituation() }
-    DetailScaffold(tx("Mi situación financiera", "My financial situation"), nav::back) {
-        LoadContent(situation) { s -> SituationForm(model, s.profile, s.observed?.monthlyIncomeAverage, plan) { situation.replace(it) } }
-    }
-}
-
-@Composable
-private fun SituationForm(model: AppModel, current: FinancialProfile?, observedIncome: java.math.BigDecimal?, plan: PlanTier, onSaved: (com.dincr.data.FinancialSituation) -> Unit) {
-    val format = Dincr.money
-    fun text(value: java.math.BigDecimal?) = value?.let(format::inputText).orEmpty()
-    var incomeType by remember { mutableStateOf(current?.incomeType ?: "fixed") }
-    var salary by remember { mutableStateOf(text(current?.fixedMonthlySalary)) }
-    var hourly by remember { mutableStateOf(text(current?.hourlyRate)) }
-    // Every income type needs work_days_per_week (1–7, NOT NULL): prefilled, or 5 like the web form.
-    var days by remember { mutableStateOf(SituationDefaults.workDays(current).toString()) }
-    var hours by remember { mutableStateOf(current?.hoursPerDay?.let(format::inputText).orEmpty()) }
-    var frequency by remember { mutableStateOf(current?.payFrequency ?: "monthly") }
-    var essentials by remember { mutableStateOf(text(current?.essentialMonthlyExpenses)) }
-    var savings by remember { mutableStateOf(text(current?.liquidSavings)) }
-    var emergency by remember { mutableStateOf(text(current?.emergencyFundTarget)) }
-    var preference by remember { mutableStateOf(current?.strategyPreference ?: "balanced") }
-    var minimum by remember { mutableStateOf(text(current?.discretionaryMonthlyMinimum)) }
-    var errors by remember { mutableStateOf(mapOf<String, String>()) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    Section(tx("Tus ingresos", "Your income")) {
-        observedIncome?.takeIf { it.signum() > 0 }?.let { Caption(tx("En los últimos 90 días registraste en promedio ${format.format(it)} por mes.", "In the last 90 days you recorded ${format.format(it)} per month on average.")) }
-        ChoiceChips(listOf("fixed" to tx("Salario fijo", "Fixed salary"), "hourly" to tx("Por horas", "Hourly")), incomeType, { incomeType = it })
-        if (incomeType == "fixed") MoneyField(tx("Salario mensual", "Monthly salary"), salary, { salary = it }, errors["salary"])
-        else MoneyField(tx("Pago por hora", "Hourly rate"), hourly, { hourly = it }, errors["hourly"])
-        FormField(tx("Días que trabajás por semana", "Days you work per week"), days, { days = it }, errors["days"], KeyboardType.Number,
-            supporting = tx("Entre 1 y 7.", "1 to 7."), modifier = Modifier.testTag("situation.days"))
-        if (incomeType == "hourly") FormField(tx("Horas por día", "Hours per day"), hours, { hours = it }, errors["hours"], KeyboardType.Decimal)
-        ChoiceChips(listOf("weekly" to tx("Semanal", "Weekly"), "biweekly" to tx("Quincenal", "Every two weeks"), "monthly" to tx("Mensual", "Monthly")), frequency, { frequency = it }, tx("Te pagan", "You get paid"))
-    }
-    if (plan != PlanTier.FREE) Section(tx("Gastos y ahorros", "Expenses and savings")) {
-        MoneyField(tx("Gastos esenciales del mes", "Essential monthly expenses"), essentials, { essentials = it }, errors["essentials"])
-        MoneyField(tx("Ahorros disponibles", "Available savings"), savings, { savings = it }, errors["savings"])
-        MoneyField(tx("Meta de fondo de emergencia", "Emergency fund target"), emergency, { emergency = it }, errors["emergency"])
-    }
-    if (plan == PlanTier.VIP) Section(tx("Preferencias del director", "Director preferences")) {
-        ChoiceChips(listOf("debt" to tx("Salir de deudas", "Get out of debt"), "emergency" to tx("Fondo de emergencia", "Emergency fund"), "goals" to tx("Metas", "Goals"), "balanced" to tx("Equilibrado", "Balanced")), preference, { preference = it }, tx("Prioridad", "Priority"))
-        MoneyField(tx("Mínimo personal por mes", "Personal minimum per month"), minimum, { minimum = it }, errors["minimum"])
-    }
-    error?.let { ErrorState(it) }
-    DincrPrimaryButton(tx("Guardar", "Save"), loading = saving, onClick = {
-        val found = mutableMapOf<String, String>()
-        fun money(key: String, value: String, positive: Boolean = false) = if (value.isBlank()) null else
-            (if (positive) AmountInput.parse(value, format.separators) else AmountInput.parseZeroOrMore(value, format.separators)).also { if (it == null) found[key] = tx("Monto no válido.", "Not a valid amount.") }
-        val request = FinancialProfile(
-            incomeType = incomeType,
-            fixedMonthlySalary = if (incomeType == "fixed") money("salary", salary, positive = true) else null,
-            hourlyRate = if (incomeType == "hourly") money("hourly", hourly, positive = true) else null,
-            // Always sent, for every income type (the backend answers 422 without it).
-            workDaysPerWeek = WholeNumberInput.parse(days, SituationDefaults.WORK_DAYS_RANGE).also { if (it == null) found["days"] = tx("Entre 1 y 7.", "1 to 7.") },
-            hoursPerDay = if (incomeType == "hourly" && hours.isNotBlank()) com.dincr.data.AmountInput.parseDecimal(hours, format.separators, 2, java.math.BigDecimal(24), allowZero = false).also { if (it == null) found["hours"] = tx("Entre 0 y 24.", "0 to 24.") } else current?.hoursPerDay,
-            payFrequency = frequency,
-            paydayNote = current?.paydayNote,
-            essentialMonthlyExpenses = if (plan != PlanTier.FREE) money("essentials", essentials) else current?.essentialMonthlyExpenses,
-            liquidSavings = if (plan != PlanTier.FREE) money("savings", savings) else current?.liquidSavings,
-            emergencyFundTarget = if (plan != PlanTier.FREE) money("emergency", emergency) else current?.emergencyFundTarget,
-            strategyPreference = if (plan == PlanTier.VIP) preference else current?.strategyPreference,
-            discretionaryMonthlyMinimum = if (plan == PlanTier.VIP) money("minimum", minimum) else current?.discretionaryMonthlyMinimum,
-        )
-        errors = found
-        if (found.isNotEmpty()) return@DincrPrimaryButton
-        saving = true; error = null
-        val key = IdempotencyKey.new()
-        scope.launch {
-            model.load(tx("No pudimos guardar tu situación.", "We couldn’t save your situation.")) { model.api.updateFinancialSituation(request, key) }
-                .onSuccess { onSaved(it); model.showNotice(tx("Situación guardada", "Situation saved")) }
-                .onFailure { if (it !is AuthException.SignedOut) error = it.message }
-            saving = false
-        }
-    })
 }
 
 /** G4, G7, G8, G9 — appearance, legal, data export and account deletion. */
