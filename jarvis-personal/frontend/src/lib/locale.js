@@ -21,7 +21,7 @@ const dictionaries = {
     frequencies: { weekly: "Semanal", biweekly: "Quincenal", monthly: "Mensual", yearly: "Anual", annual: "Anual" },
     eventKinds: { income: "Ingreso", expense: "Gasto", debt: "Deuda", goal: "Meta" },
     priorities: { low: "Baja", medium: "Media", high: "Alta", critical: "Crítica" },
-    vipPriorities: { stabilize: "Estabilizar", emergency: "Fondo de emergencia", debt: "Deuda", goals: "Metas", invest: "Inversión", balanced: "Balanceada" },
+    vipPriorities: { stabilize: "Estabilizar", emergency: "Fondo de emergencia", debt: "Deuda", goals: "Metas", invest: "Inversión", balanced: "Balanceada", incomplete: "Falta información" },
     wealth: { eyebrow: "CENTRO PATRIMONIAL", title: "Patrimonio", intro: "Una vista ordenada de lo que tenés, lo que debés y lo que está construyendo valor.", control: "Control", netWorthHelp: "Activos, inversiones y deudas consolidados", investmentsHelp: "Aportes, rendimiento, dividendos y costos", businessesHelp: "Proyectos, sociedades e ingresos extra", timelineHelp: "Ingresos, cuotas y compromisos próximos", reconciliationHelp: "Diferencias, gastos olvidados y duplicados", deteriorationHelp: "Alertas tempranas y cambios negativos" },
   },
   en: {
@@ -46,7 +46,7 @@ const dictionaries = {
     frequencies: { weekly: "Weekly", biweekly: "Biweekly", monthly: "Monthly", yearly: "Yearly", annual: "Yearly" },
     eventKinds: { income: "Income", expense: "Expense", debt: "Debt", goal: "Goal" },
     priorities: { low: "Low", medium: "Medium", high: "High", critical: "Critical" },
-    vipPriorities: { stabilize: "Stabilize", emergency: "Emergency fund", debt: "Debt", goals: "Goals", invest: "Invest", balanced: "Balanced" },
+    vipPriorities: { stabilize: "Stabilize", emergency: "Emergency fund", debt: "Debt", goals: "Goals", invest: "Invest", balanced: "Balanced", incomplete: "Information missing" },
     wealth: { eyebrow: "WEALTH CENTER", title: "Wealth", intro: "An organized view of what you own, what you owe, and what is building value.", control: "Control", netWorthHelp: "Consolidated assets, investments, and debts", investmentsHelp: "Contributions, performance, dividends, and costs", businessesHelp: "Projects, companies, and extra income", timelineHelp: "Upcoming income, payments, and commitments", reconciliationHelp: "Differences, forgotten expenses, and duplicates", deteriorationHelp: "Early warnings and negative changes" },
   },
 };

@@ -923,7 +923,8 @@
           "priority": "emergency",
           "headline": "Completar el fondo de emergencia",
           "next_action": "Asigná ₡350,000 a esta prioridad.",
-          "data_complete": true
+          "data_complete": true,
+          "missing": []
         },
         "score": {
           "value": 67,
@@ -1009,7 +1010,8 @@
         "safe_to_spend": {
           "amount": 120100.0,
           "monthly_margin": 350000.0,
-          "next_45_days_minimum": 120100.0
+          "next_45_days_minimum": 120100.0,
+          "missing": []
         },
         "alerts": [
           {
@@ -2299,7 +2301,8 @@
           "priority": "emergency",
           "headline": "Complete the emergency fund",
           "next_action": "Assign ₡350,000 to this priority.",
-          "data_complete": true
+          "data_complete": true,
+          "missing": []
         },
         "score": {
           "value": 67,
@@ -2385,7 +2388,8 @@
         "safe_to_spend": {
           "amount": 120100.0,
           "monthly_margin": 350000.0,
-          "next_45_days_minimum": 120100.0
+          "next_45_days_minimum": 120100.0,
+          "missing": []
         },
         "alerts": [
           {

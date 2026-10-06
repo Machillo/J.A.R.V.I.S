@@ -198,7 +198,32 @@ def get_vip_command_center() -> dict:
         {"label": tx("Calidad de datos", "Data quality"), "impact": "positive" if completeness >= .8 else "warning", "value": round(completeness * 100)},
     ]
 
-    priority = "stabilize" if margin < 0 else "emergency" if emergency_gap > 0 else "debt" if debts else "goals" if goals else "invest"
+    # Unknown ≠ 0 for what Hoy states (safe to spend, margin, priority, roadmap): a figure that needs
+    # a missing input is null, and `missing` names the inputs with stable codes. Essential expenses
+    # are known when declared (NULL is unknown; a declared 0 is a known zero). Debt payments: until
+    # the schema can store an unknown payment, an active debt (balance > 0) with monthly_payment 0 is
+    # treated as an unknown payment (create_user_debt stores an unknown one as 0) — a heuristic to
+    # replace once the schema represents it explicitly. Cash for the 45-day view is known from
+    # confirmed balances or declared savings. The reserve gap is known with a declared target and
+    # declared savings (or a target of 0). Score, projections and net worth are unchanged here.
+    essentials_known = profile.get("essential_monthly_expenses") is not None
+    debt_payments_known = all(_money(row.get("monthly_payment")) > 0 for row in debts)
+    target_known = profile.get("emergency_fund_target") is not None
+    gap_known = target_known and (savings_known or emergency_target <= 0)
+    margin_missing = [code for code, known in (("income", income_known), ("essential_expenses", essentials_known), ("debt_payments", debt_payments_known)) if not known]
+    cash_missing = [code for code, known in (("debt_payments", debt_payments_known), ("savings", bool(balance_accounts) or savings_known)) if not known]
+    reserve_missing = [code for code, known in (("savings", savings_known), ("emergency_fund_target", target_known)) if not known]
+    safe_missing = list(dict.fromkeys(margin_missing + cash_missing))
+
+    if margin_missing:
+        priority, director_missing = "incomplete", margin_missing
+    elif margin >= 0 and not gap_known and (target_known or not (debts or goals)):
+        # Choosing the reserve (or investing) needs the reserve gap: never a gap or an "invest" from
+        # an unknown. Debt and goal priorities don't depend on it and stay as they were.
+        priority, director_missing = "incomplete", reserve_missing
+    else:
+        priority = "stabilize" if margin < 0 else "emergency" if emergency_gap > 0 else "debt" if debts else "goals" if goals else "invest"
+        director_missing = []
     highest_rate_debt = max(debts, key=lambda x: _money(x.get('interest_rate'))).get('name') if debts else None
     labels = {
         "stabilize": tx("Cerrar el déficit mensual", "Close the monthly deficit"),
@@ -206,6 +231,7 @@ def get_vip_command_center() -> dict:
         "debt": tx(f"Atacar {highest_rate_debt}", f"Pay down {highest_rate_debt}") if debts else tx("Deuda", "Debt"),
         "goals": tx("Financiar la meta prioritaria", "Fund the priority goal"),
         "invest": tx("Preparar inversión", "Prepare to invest"),
+        "incomplete": tx("Aún no tengo suficiente información para recomendarte una prioridad", "I don’t have enough information to recommend a priority yet"),
     }
     action_amount = abs(margin) if margin < 0 else min(max(margin, 0), emergency_gap) if priority == "emergency" else max(margin, 0)
 
@@ -261,7 +287,8 @@ def get_vip_command_center() -> dict:
     for event in sorted(events, key=lambda row: row["date"]):
         balance += event["amount"] if event["kind"] == "income" else -event["amount"]
         timeline.append({**event, "projected_balance": round(balance, 2)})
-    safe_to_spend = round(max(min(margin, min([row["projected_balance"] for row in timeline], default=liquid_assets)), 0), 2)
+    lowest_balance = min([row["projected_balance"] for row in timeline], default=liquid_assets) if not cash_missing else None
+    safe_to_spend = round(max(min(margin, lowest_balance), 0), 2) if not safe_missing else None
 
     projection = []
     for months_ahead in (1, 3, 6, 12):
@@ -270,24 +297,31 @@ def get_vip_command_center() -> dict:
         projection.append({"months": months_ahead, "cash": projected_cash, "debt": projected_debt, "net_worth": round(projected_cash - projected_debt, 2), "confidence": "medium" if positive_incomes else "low"})
 
     roadmap = []
-    if margin < 0:
-        roadmap.append({"order": 1, "title": tx("Eliminar déficit", "Eliminate deficit"), "amount": abs(margin), "why": tx("Sin flujo positivo no hay dinero seguro para deuda, metas o inversión.", "Without positive cash flow, there is no safe money for debt, goals, or investing.")})
-    if emergency_gap > 0:
-        roadmap.append({"order": len(roadmap)+1, "title": tx("Completar reserva", "Complete emergency fund"), "amount": min(max(margin, 0), emergency_gap), "why": tx("Protege tus obligaciones ante un imprevisto.", "It protects your obligations against the unexpected.")})
-    if best and margin > 0:
-        roadmap.append({"order": len(roadmap)+1, "title": tx(f"Abonar a {best['target']}", f"Pay extra toward {best['target']}"), "amount": margin, "why": tx("Es el uso de menor costo financiero según saldo y tasa conocidos.", "It is the lowest-cost use based on known balances and rates.")})
-    if goals and margin > 0:
-        roadmap.append({"order": len(roadmap)+1, "title": tx(f"Financiar {goals[0]['name']}", f"Fund {goals[0]['name']}"), "amount": min(margin, goal_guidance[0].get("monthly_required") or margin), "why": tx("Alinea el aporte con fecha y prioridad.", "It aligns the contribution with its date and priority.")})
-    investing_allowed = margin > 0 and emergency_gap <= 0 and debt_ratio <= .30
-    roadmap.append({"order": len(roadmap)+1, "title": tx("Invertir", "Invest") if investing_allowed else tx("Esperar para invertir", "Wait before investing"), "amount": margin if investing_allowed else 0, "why": tx("Primero deben estar protegidos el flujo, la reserva y la deuda cara.", "Cash flow, reserves, and expensive debt must be protected first.")})
+    investing_allowed = margin > 0 and gap_known and emergency_gap <= 0 and debt_ratio <= .30
+    # The roadmap's steps rest on the margin and the priority: none is stated from an unknown.
+    if priority != "incomplete":
+        if margin < 0:
+            roadmap.append({"order": 1, "title": tx("Eliminar déficit", "Eliminate deficit"), "amount": abs(margin), "why": tx("Sin flujo positivo no hay dinero seguro para deuda, metas o inversión.", "Without positive cash flow, there is no safe money for debt, goals, or investing.")})
+        if gap_known and emergency_gap > 0:
+            roadmap.append({"order": len(roadmap)+1, "title": tx("Completar reserva", "Complete emergency fund"), "amount": min(max(margin, 0), emergency_gap), "why": tx("Protege tus obligaciones ante un imprevisto.", "It protects your obligations against the unexpected.")})
+        if best and margin > 0:
+            roadmap.append({"order": len(roadmap)+1, "title": tx(f"Abonar a {best['target']}", f"Pay extra toward {best['target']}"), "amount": margin, "why": tx("Es el uso de menor costo financiero según saldo y tasa conocidos.", "It is the lowest-cost use based on known balances and rates.")})
+        if goals and margin > 0:
+            roadmap.append({"order": len(roadmap)+1, "title": tx(f"Financiar {goals[0]['name']}", f"Fund {goals[0]['name']}"), "amount": min(margin, goal_guidance[0].get("monthly_required") or margin), "why": tx("Alinea el aporte con fecha y prioridad.", "It aligns the contribution with its date and priority.")})
+        roadmap.append({"order": len(roadmap)+1, "title": tx("Invertir", "Invest") if investing_allowed else tx("Esperar para invertir", "Wait before investing"), "amount": margin if investing_allowed else 0, "why": tx("Primero deben estar protegidos el flujo, la reserva y la deuda cara.", "Cash flow, reserves, and expensive debt must be protected first.")})
 
     return {
         "as_of": today.isoformat(),
-        "director": {"priority": priority, "headline": labels[priority], "next_action": tx(f"Asigná {_money_text(action_amount)} a esta prioridad.", f"Assign {_money_text(action_amount)} to this priority."), "data_complete": completeness >= .8},
+        "director": {
+            "priority": priority, "headline": labels[priority],
+            "next_action": tx("Completá la información que falta para que DINCR pueda recomendarte.", "Complete the missing information so DINCR can recommend.") if priority == "incomplete"
+            else tx(f"Asigná {_money_text(action_amount)} a esta prioridad.", f"Assign {_money_text(action_amount)} to this priority."),
+            "data_complete": completeness >= .8, "missing": director_missing,
+        },
         "score": {"value": score, "label": tx("Fuerte", "Strong") if score >= 75 else tx("En progreso", "In progress") if score >= 50 else tx("Vulnerable", "Vulnerable"), "factors": score_factors},
         "goals": goal_guidance,
         "debt_planner": {"strategies": strategies, "recommended": best},
-        "safe_to_spend": {"amount": safe_to_spend, "monthly_margin": margin, "next_45_days_minimum": min([row["projected_balance"] for row in timeline], default=liquid_assets)},
+        "safe_to_spend": {"amount": safe_to_spend, "monthly_margin": margin if not margin_missing else None, "next_45_days_minimum": lowest_balance, "missing": safe_missing},
         "alerts": alerts,
         "calendar": timeline,
         "projections": projection,
