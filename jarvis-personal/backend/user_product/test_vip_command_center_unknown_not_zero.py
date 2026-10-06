@@ -77,7 +77,7 @@ def _titles(center):
 def test_unknown_income_never_says_the_month_closes_negative(ledger):
     _profile(ledger).update({"fixed_monthly_salary": None})  # nothing declared, nothing recorded
     center = _center()
-    assert center["safe_to_spend"]["monthly_margin"] < 0      # the margin itself is unchanged here
+    assert center["safe_to_spend"]["monthly_margin"] is None  # unknown, not −commitments (UX-6)
     assert NEGATIVE_CLOSE not in _titles(center)
 
 
@@ -145,9 +145,10 @@ def test_a_reserve_of_one_month_or_more_has_no_reserve_alert(ledger):
 def test_the_other_alerts_and_the_figures_are_unchanged(ledger):
     _profile(ledger).update({"fixed_monthly_salary": None, "liquid_savings": None})
     center = _center()
-    # Pending imported transactions still raise their alert; margins and score keep their values.
+    # Pending imported transactions still raise their alert; with the income unknown the margin is
+    # unknown too (UX-6: null instead of −commitments).
     assert "Movimientos por revisar" in _titles(center)
-    assert center["safe_to_spend"]["monthly_margin"] == -450000.0
+    assert center["safe_to_spend"]["monthly_margin"] is None
     assert {"severity", "title", "context", "action"} == set(center["alerts"][0])
 
 

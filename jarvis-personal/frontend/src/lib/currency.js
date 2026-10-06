@@ -31,6 +31,11 @@ export function formatMoney(value, currency = base, { maximumFractionDigits } = 
   }).format(Number(value) || 0);
 }
 
+// A figure the backend may not know (null = unknown, never ₡0): "—" for unknown, the amount
+// otherwise. A known 0 is still ₡0.
+export const formatKnownMoney = (value, currency = base) =>
+  value === null || value === undefined || value === "" ? "—" : formatMoney(value, currency);
+
 export const currencySymbol = (currency = base) => formatMoney(0, currency, { maximumFractionDigits: 0 }).replace(/[\d\s.,]/g, "");
 
 // Base-currency amount for a typed amount, mirroring the backend: the rate is

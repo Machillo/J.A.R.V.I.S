@@ -15,6 +15,7 @@
     "test:plans": "node scripts/test-plan-selection.mjs",
     "test:store-billing": "node scripts/test-store-billing.mjs",
     "test:strategy-optional-actions": "node scripts/test-strategy-optional-actions.mjs",
+    "test:vip-unknown-contract": "node scripts/test-vip-unknown-contract.mjs",
     "test:theme": "node scripts/test-theme.mjs",
     "test:design-tokens": "node scripts/test-design-tokens.mjs",
     "test:debts-in-transactions": "node scripts/test-debts-in-transactions.mjs",
