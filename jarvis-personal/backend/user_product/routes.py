@@ -218,11 +218,11 @@ def vip_strategy_dashboard():
 
 @router.get("/vip/debt-advisory")
 def vip_debt_advisory(extra_cash: float | None = None):
-    require_feature("strategy_vip"); return get_debt_advisory(extra_cash=extra_cash)
+    require_feature("strategy_vip"); return get_debt_advisory(extra_cash=extra_cash, canonical_rates=True)
 
 @router.get("/vip/debt-strategies")
 def vip_debt_strategies():
-    require_feature("strategy_vip"); return calculate_debt_strategies()
+    require_feature("strategy_vip"); return calculate_debt_strategies(canonical_rates=True)
 
 @router.get("/vip/salvavidas")
 def vip_salvavidas():

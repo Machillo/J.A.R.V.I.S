@@ -80,6 +80,7 @@ jobs:
       - run: npm run test:strategy-optional-actions
       - run: npm run test:theme
       - run: npm run test:debts-in-transactions
+      - run: npm run test:debt-rate-unknown
 
   frontend-lint-report:
     name: Frontend lint report
