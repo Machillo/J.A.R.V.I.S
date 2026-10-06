@@ -30,6 +30,18 @@ UNION ALL
 SELECT 'column already exists: ' || data_type FROM information_schema.columns
 WHERE table_schema = 'public' AND table_name = 'debts' AND column_name = 'interest_rate_known'
 """
+# The postflight in the migration's header (run after COMMIT, as apply_migration's protocol says).
+POSTFLIGHT = """
+SELECT 'column missing or wrong type' AS problem
+WHERE NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'debts' AND column_name = 'interest_rate_known'
+      AND data_type = 'boolean' AND is_nullable = 'YES' AND column_default IS NULL
+)
+UNION ALL
+SELECT 'existing rows were marked: ' || count(*) FROM public.debts WHERE interest_rate_known IS NOT NULL
+HAVING count(*) > 0
+"""
 # Historical rows as create_user_debt wrote them (no rate given → 0) and real rates.
 HISTORICAL = [("Sin tasa", "credit_card", 0), ("Tasa cero", "tasa_cero", 0), ("Con tasa", "loan", 24), ("Nula", "other", None)]
 
@@ -70,8 +82,10 @@ def test_preflight_passes_and_the_migration_marks_no_existing_row(db):
         assert cur.fetchall() == []
         cur.execute("SELECT name, debt_type, interest_rate FROM debts ORDER BY id")
         before = cur.fetchall()
-    postflight = _run(db, MIGRATION)
-    assert postflight == []  # the column exists as a nullable boolean and no row was marked
+    _run(db, MIGRATION)
+    with db.cursor() as cur:
+        cur.execute(POSTFLIGHT)
+        assert cur.fetchall() == []  # the column exists as a nullable boolean and no row was marked
     after = _rows(db)
     assert [row[:3] for row in after] == before  # no rate rewritten
     assert all(row[3] is None for row in after)  # every historical row stays "not verified"
@@ -81,9 +95,17 @@ def test_preflight_passes_and_the_migration_marks_no_existing_row(db):
         assert cur.fetchone() == ("boolean", "YES", None)
 
 
+def test_it_is_one_transaction_the_apply_tool_accepts():
+    from backend.scripts.apply_migration import check_single_transaction
+    check_single_transaction(MIGRATION.read_text(encoding="utf-8"))  # BEGIN … COMMIT, nothing after
+
+
 def test_it_is_idempotent(db):
     _run(db, MIGRATION)
-    assert _run(db, MIGRATION) == []
+    _run(db, MIGRATION)
+    with db.cursor() as cur:
+        cur.execute(POSTFLIGHT)
+        assert cur.fetchall() == []
 
 
 def test_the_sql_unknown_rule_matches_the_python_one(db):
@@ -112,4 +134,7 @@ def test_manual_rollback_keeps_the_knowledge_and_reapply_works(db):
         cur.execute("SELECT interest_rate, interest_rate_known FROM debt_interest_rate_known_rollback_snapshot")
         assert cur.fetchall() == [(24, True)]
     _run(db, ROLLBACK)  # idempotent
-    assert _run(db, MIGRATION) == []
+    _run(db, MIGRATION)
+    with db.cursor() as cur:
+        cur.execute(POSTFLIGHT)
+        assert cur.fetchall() == []

@@ -21,7 +21,17 @@
 --   UNION ALL
 --   SELECT 'column already exists: ' || data_type FROM information_schema.columns
 --   WHERE table_schema = 'public' AND table_name = 'debts' AND column_name = 'interest_rate_known';
--- Postflight: the query at the end of this file returns zero rows.
+-- Postflight (read-only, run after COMMIT as its own query): must return zero rows — the
+-- column exists as a nullable boolean with no default, and no existing row was marked.
+--   SELECT 'column missing or wrong type' AS problem
+--   WHERE NOT EXISTS (
+--       SELECT 1 FROM information_schema.columns
+--       WHERE table_schema = 'public' AND table_name = 'debts' AND column_name = 'interest_rate_known'
+--         AND data_type = 'boolean' AND is_nullable = 'YES' AND column_default IS NULL
+--   )
+--   UNION ALL
+--   SELECT 'existing rows were marked: ' || count(*) FROM public.debts WHERE interest_rate_known IS NOT NULL
+--   HAVING count(*) > 0;
 -- Rollback (manual, human decision): database/rollback/20261006120000_debt_interest_rate_known_rollback.sql
 
 BEGIN;
@@ -36,15 +46,3 @@ COMMENT ON COLUMN public.debts.interest_rate_known IS
     'NULL: written before 20261006120000, not verified (see backend/user_product/debt_rates.py).';
 
 COMMIT;
-
--- Postflight (read-only): must return zero rows right after applying (the column exists, is a
--- nullable boolean, and no existing row was marked).
-SELECT 'column missing or wrong type' AS problem
-WHERE NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'debts' AND column_name = 'interest_rate_known'
-      AND data_type = 'boolean' AND is_nullable = 'YES' AND column_default IS NULL
-)
-UNION ALL
-SELECT 'existing rows were marked: ' || count(*) FROM public.debts WHERE interest_rate_known IS NOT NULL
-HAVING count(*) > 0;
