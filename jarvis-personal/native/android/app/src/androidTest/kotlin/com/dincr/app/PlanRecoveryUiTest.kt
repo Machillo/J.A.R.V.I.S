@@ -361,10 +361,10 @@ class PlanRecoveryUiTest {
         compose.onNodeWithTag("situation.days").assert(hasText("5"))
     }
 
-    @Test fun basicHomeHasTheHistoryChartAndMovementsShowTheOriginalCurrency() {
+    @Test fun basicHomeOpensMovementsWhichShowTheOriginalCurrency() {
         launch(plan = "basic")
-        waitForText(tx("Balance del mes", "Month balance"))
-        compose.onNodeWithText(tx("Ingresos y gastos", "Income and expenses")).performScrollTo()
+        waitForText(tx("Resultado del mes", "This month’s result"))
+        // UX-6: the month's history chart left Hoy (it lives in Resumen del mes / Movimientos).
         click(tx("Movimientos", "Transactions"))
         // The rate follows the app language's decimal separator (507,5 / 507.5): match what both share.
         waitForText(tx("TC 507", "Rate 507"), substring = true)

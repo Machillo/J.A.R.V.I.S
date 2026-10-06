@@ -79,7 +79,7 @@ import Testing
 
     /// #292: the safe-to-spend minimum is the lowest expected balance, never "commitments".
     @Test func homeLabelsTheMinimumAsTheLowestExpectedBalance() throws {
-        let file = Self.native.appendingPathComponent("ios/DINCR/Features/Home/PlanDashboards.swift")
+        let file = Self.native.appendingPathComponent("ios/DINCR/Features/Home/HomeBlocks.swift")
         let source = try String(contentsOf: file, encoding: .utf8)
         #expect(source.contains("Saldo mínimo previsto (45 días)") && source.contains("Lowest expected balance (45 days)"))
         #expect(!source.contains("Compromisos próximos 45 días") && !source.contains("Mínimo próximos 45 días"))

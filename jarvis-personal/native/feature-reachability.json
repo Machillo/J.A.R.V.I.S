@@ -263,7 +263,7 @@
   },
   {
    "id": "owner.home",
-   "name": "Hoy del Owner (saludo, atención, agenda, JARVIS)",
+   "name": "Hoy del Owner (JARVIS primero: saludo, Chat/Agenda/Todo JARVIS, próximos eventos; luego los cuatro bloques)",
    "decision": "baseline-81fd2cc4",
    "plans": {
     "free": "OWNER_ONLY",
@@ -283,8 +283,13 @@
     "tab": "home",
     "id": "owner.home"
    },
-   "android": null,
-   "android_gap": "P1.2 — Android has no Owner home (iOS only today)"
+   "android": {
+    "tab": "Hoy",
+    "tag": "owner.home",
+    "en": {
+     "tab": "Today"
+    }
+   }
   },
   {
    "id": "movements.list",

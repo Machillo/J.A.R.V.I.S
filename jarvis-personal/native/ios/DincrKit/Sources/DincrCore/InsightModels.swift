@@ -193,6 +193,8 @@ public struct CommandCenter: Decodable, Sendable, Equatable {
         public let headline: String?
         public let nextAction: String?
         public let dataComplete: Bool?
+        /// With priority `incomplete`: the inputs DINCR needs before recommending (stable codes, #326).
+        public let missing: [String]?
     }
     public struct Factor: Decodable, Sendable, Equatable {
         public let label: String?
@@ -218,9 +220,11 @@ public struct CommandCenter: Decodable, Sendable, Equatable {
         public let amount: Decimal?
         public let monthlyMargin: Decimal?
         public let next45DaysMinimum: Decimal?
+        /// Why a figure is null: the inputs DINCR doesn't know (stable codes, #326). Unknown ≠ 0.
+        public let missing: [String]?
 
         enum CodingKeys: String, CodingKey {
-            case amount, monthlyMargin
+            case amount, monthlyMargin, missing
             // convertFromSnakeCase turns `next_45_days_minimum` into `next45DaysMinimum`.
             case next45DaysMinimum
         }
@@ -258,6 +262,12 @@ public struct CommandCenter: Decodable, Sendable, Equatable {
     public let projections: [ProjectionPoint]?
     public let roadmap: [RoadmapStep]?
     public let automation: Automation?
+    /// The ledger of recorded movements; `current` is this month's (Hoy's month facts for VIP).
+    public let reports: Reports?
+
+    public struct Reports: Decodable, Sendable, Equatable {
+        public let current: MonthTotals?
+    }
 }
 
 /// `GET /user-product/vip/aguinaldo` (VIP; 409 when not applicable). CRC by law.

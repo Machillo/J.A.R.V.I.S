@@ -165,9 +165,21 @@ data class CommandCenter(
     val roadmap: List<RoadmapStep> = emptyList(),
     @SerialName("variable_income") val variableIncome: VariableIncome? = null,
     val automation: Automation? = null,
+    /** The ledger of recorded movements; `current` is this month's (Hoy's month facts for VIP). */
+    val reports: Reports? = null,
 ) {
     @Serializable
-    data class Director(val priority: String? = null, val headline: String? = null, @SerialName("next_action") val nextAction: String? = null, @SerialName("data_complete") val dataComplete: Boolean? = null)
+    data class Reports(val current: MonthTotals? = null)
+
+    @Serializable
+    data class Director(
+        val priority: String? = null,
+        val headline: String? = null,
+        @SerialName("next_action") val nextAction: String? = null,
+        @SerialName("data_complete") val dataComplete: Boolean? = null,
+        /** With priority `incomplete`: the inputs DINCR needs before recommending (stable codes, #326). */
+        val missing: List<String>? = null,
+    )
 
     @Serializable
     data class Score(val value: Int? = null, val label: String? = null, val factors: List<Factor> = emptyList())
@@ -183,7 +195,13 @@ data class CommandCenter(
 
     /** [next45DaysMinimum] is the lowest projected balance over the next 45 days after known obligations, not their total. */
     @Serializable
-    data class SafeToSpend(val amount: Money? = null, @SerialName("monthly_margin") val monthlyMargin: Money? = null, @SerialName("next_45_days_minimum") val next45DaysMinimum: Money? = null)
+    data class SafeToSpend(
+        val amount: Money? = null,
+        @SerialName("monthly_margin") val monthlyMargin: Money? = null,
+        @SerialName("next_45_days_minimum") val next45DaysMinimum: Money? = null,
+        /** Why a figure is null: the inputs DINCR doesn't know (stable codes, #326). Unknown ≠ 0. */
+        val missing: List<String>? = null,
+    )
 
     @Serializable
     data class Alert(val severity: String? = null, val title: String? = null, val context: String? = null, val action: String? = null)

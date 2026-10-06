@@ -77,20 +77,20 @@ class StoreScreenshots {
     @Test fun s01Home() {
         launch("vip")
         waitForText(tx("Podés gastar con tranquilidad", "Safe to spend"))
-        waitForText(tx("Tu prioridad", "Your priority"))
+        waitForText(tx("Qué sigue", "What’s next"))
         capture("01-home")
     }
 
     @Test fun s02Overview() {
         launch("free")
-        waitForText(tx("Disponible este mes", "Available this month"))
-        waitForText(tx("Ingresos y gastos", "Income and expenses"))
+        waitForText(tx("Resultado del mes", "This month’s result"))
+        waitForText(tx("Accesos rápidos", "Quick access"))
         capture("02-overview")
     }
 
     @Test fun s03Movements() {
         launch("free")
-        waitForText(tx("Disponible este mes", "Available this month"))
+        waitForText(tx("Resultado del mes", "This month’s result"))
         click(tx("Movimientos", "Transactions"))
         waitForText(tx("Supermercado", "Groceries"))
         capture("03-movements")

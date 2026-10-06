@@ -18,14 +18,19 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(google.waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["login.apple"].exists)
         google.tap()
-        XCTAssertTrue(app.staticTexts["Disponible este mes"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Resultado del mes"].waitForExistence(timeout: 5))
     }
 
-    func testHomeShowsKeyFigureAndSections() {
+    func testHomeShowsItsFourBlocks() {
+        // UX-6: Estado de hoy, Qué sigue and Accesos rápidos (Free has no "Para atender" source).
         let app = launch()
-        XCTAssertTrue(app.staticTexts["Disponible este mes"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Ingresos y gastos"].exists)
-        XCTAssertTrue(app.staticTexts["En qué se va el dinero"].exists)
+        XCTAssertTrue(app.staticTexts["Resultado del mes"].waitForExistence(timeout: 5))
+        for id in ["home.status", "home.next", "home.shortcuts"] {
+            XCTAssertTrue(app.descendants(matching: .any)[id].exists, id)
+        }
+        // The month's analysis lives in Movimientos, not on Hoy.
+        XCTAssertFalse(app.staticTexts["Ingresos y gastos"].exists)
+        XCTAssertFalse(app.staticTexts["En qué se va el dinero"].exists)
     }
 
     func testAddExpenseValidatesAndSaves() {
@@ -100,9 +105,11 @@ final class DINCRUITests: XCTestCase {
     }
 
     func testEmptyAccountTeachesTheFirstAction() {
+        // UX-6: nothing registered is unknown (never ₡0), and Qué sigue starts with the month's income.
         let app = launch("empty")
-        XCTAssertTrue(app.staticTexts["Todavía no hay movimientos"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Agregar movimiento"].exists)
+        XCTAssertTrue(app.staticTexts["Aún no puedo calcularlo"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["home.next.action"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Registrá tus ingresos del mes")).firstMatch.exists)
     }
 
     func testFailingBackendShowsRecovery() {
@@ -126,7 +133,7 @@ final class DINCRUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Elegí tu plan"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Próximamente en las tiendas"].exists)
         app.buttons["Elegir Free"].tap()
-        XCTAssertTrue(app.staticTexts["Disponible este mes"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Resultado del mes"].waitForExistence(timeout: 5))
     }
 
     func testLegalConsentIsRequiredBeforeTheApp() {
@@ -139,7 +146,8 @@ final class DINCRUITests: XCTestCase {
         }
         XCTAssertTrue(accept.isEnabled)
         accept.tap()
-        XCTAssertTrue(app.staticTexts["Disponible este mes"].waitForExistence(timeout: 5))
+        // Hoy loads its blocks after the consent is saved (10 s, like the other Hoy waits).
+        XCTAssertTrue(app.staticTexts["Resultado del mes"].waitForExistence(timeout: 10))
     }
 
     private func open(_ identifier: String, in app: XCUIApplication) {
@@ -183,7 +191,8 @@ final class DINCRUITests: XCTestCase {
 
     func testBasicHomeShowsItsDashboardAndBudget() {
         let app = launch(extra: ["-DincrPlan", "basic"])
-        XCTAssertTrue(app.descendants(matching: .any)["home.basic"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["home.status"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["home.status.budget"].exists, "Basic adds the user's own budget left")
         // The budget lives in Perfil → Finanzas.
         app.tabBars.buttons["Perfil"].tap()
         open("profile.budget", in: app)
@@ -202,7 +211,7 @@ final class DINCRUITests: XCTestCase {
 
     func testVipHomeShowsSafeToSpend() {
         let app = launch(extra: ["-DincrPlan", "vip"])
-        XCTAssertTrue(app.descendants(matching: .any)["home.safeToSpend"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["home.status.amount"].waitForExistence(timeout: 5))
         // The strategy left the DINCR tab: it lives in Plan → Estrategia.
         app.tabBars.buttons["DINCR"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["advisor.summary"].waitForExistence(timeout: 5))

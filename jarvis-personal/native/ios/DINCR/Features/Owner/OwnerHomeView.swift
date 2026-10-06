@@ -2,29 +2,28 @@ import DincrCore
 import DincrDesign
 import SwiftUI
 
-/// The Owner's "Hoy" (DINCR Owner redesign). It stays DINCR's Today tab and answers, in order:
-/// 1. who and when (greeting with the profile's first name),
-/// 2. how am I (the backend's key figure: safe to spend, or the month's balance without VIP intelligence),
-/// 3. what needs attention ("Para atender": alerts and mail notices, UX-5),
-/// 4. your finances (debts and goals: the same screens the other plans reach from their Today),
-/// 5. what comes next (the JARVIS agenda),
-/// 6. JARVIS (chat and agenda), also reachable from the mark in the header.
-/// Read-only: opening it never writes. Each part loads on its own, so a failing agenda never hides
-/// the money, and nothing is invented when the backend sends no value ("—").
+/// The Owner's "Hoy" (DINCR Owner; UX-6). The Owner is Kenneth's identity, not a plan: JARVIS comes
+/// first, as it historically did, and the financial blocks follow.
+/// 0. JARVIS — who and when (greeting), the JARVIS mark, Chat / Agenda / Todo JARVIS and the next
+///    agenda events;
+/// 1–4. the same four blocks as the public Hoy (Estado de hoy, Para atender, Qué sigue, Accesos
+///    rápidos), from the command center while `vip_intelligence` is on (Basic's sources otherwise).
+/// Read-only: opening it never writes. The money and the agenda load on their own, so a failing
+/// agenda never hides the money, and nothing is invented when the backend sends no value ("—").
 struct OwnerHomeView: View {
     @Environment(AppModel.self) private var model
-    @State private var summary: LoadState<OwnerSummary> = .loading
+    var openMovements: (() -> Void)?
+    @State private var home: LoadState<HomeToday> = .loading
     @State private var agenda: LoadState<[JarvisEvent]> = .loading
 
     var body: some View {
+        let tier = ownerTier
         ScrollView {
             VStack(alignment: .leading, spacing: DincrSpacing.s4) {
                 header
-                summarySection
-                attentionSection
-                financesSection
-                upcomingSection
                 jarvisSection
+                upcomingSection
+                financesSection(tier)
             }
             .padding(.horizontal, DincrSpacing.s4)
             .padding(.bottom, DincrSpacing.s8)
@@ -37,15 +36,18 @@ struct OwnerHomeView: View {
         .navigationTitle(tx("Hoy", "Today"))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
-            await loadSummary()
+            await loadHome(tier)
             await loadAgenda()
         }
         // Two independent tasks: the money and the agenda load in parallel and fail separately.
-        .task { await loadSummary() }
+        .task(id: tier) { await loadHome(tier) }
         .task { await loadAgenda() }
     }
 
-    // MARK: 1. Greeting
+    /// The Owner's financial blocks read the command center while VIP intelligence is on (as before).
+    private var ownerTier: HomeToday.Tier { model.flags.isEnabled(.vipIntelligence) ? .vip : .basic }
+
+    // MARK: 0. JARVIS — greeting
 
     private var header: some View {
         HStack(alignment: .center, spacing: DincrSpacing.s3) {
@@ -78,86 +80,21 @@ struct OwnerHomeView: View {
         }
     }
 
-    // MARK: 2. Money
+    // MARK: 1–4. Finances
 
     @ViewBuilder
-    private var summarySection: some View {
-        switch summary {
+    private func financesSection(_ tier: HomeToday.Tier) -> some View {
+        switch home {
         case .loading:
-            SkeletonView(rows: 1)
+            SkeletonView(rows: 2)
         case .failed(let message):
-            ErrorStateView(message: message) { Task { await loadSummary() } }
-        case .loaded(.center(let center)):
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                Text(tx("Podés gastar con tranquilidad", "Safe to spend")).font(DincrFont.label).foregroundStyle(OwnerColor.text2)
-                MoneyText(center.safeToSpend?.amount, font: DincrFont.displayAmount)
-                    .accessibilityIdentifier("owner.home.hero")
-                FigureRow(label: tx("Margen del mes", "Monthly margin"), amount: center.safeToSpend?.monthlyMargin)
-                FigureRow(label: tx("Saldo mínimo previsto (45 días)", "Lowest expected balance (45 days)"),
-                          amount: center.safeToSpend?.next45DaysMinimum)
-                if let headline = center.director?.headline, !headline.isEmpty {
-                    OwnerDivider().padding(.vertical, DincrSpacing.s1)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(tx("Tu prioridad", "Your priority")).font(DincrFont.caption).foregroundStyle(OwnerColor.textMuted)
-                        Text(headline).font(DincrFont.body.weight(.semibold)).foregroundStyle(OwnerColor.text)
-                        if let next = center.director?.nextAction, !next.isEmpty {
-                            Text(next).font(DincrFont.bodySmall).foregroundStyle(OwnerColor.text2)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            .dincrCard()
-        case .loaded(.basic(let dashboard)):
-            VStack(alignment: .leading, spacing: DincrSpacing.s2) {
-                Text(tx("Balance del mes", "Balance this month")).font(DincrFont.label).foregroundStyle(OwnerColor.text2)
-                MoneyText(dashboard.balance, font: DincrFont.displayAmount)
-                    .accessibilityIdentifier("owner.home.hero")
-                FigureRow(label: tx("Ingresos", "Income"), amount: dashboard.income, sign: .income)
-                FigureRow(label: tx("Gastos", "Expenses"), amount: dashboard.expenses, sign: .expense)
-            }
-            .dincrCard()
+            ErrorStateView(message: message) { Task { await loadHome(tier) } }
+        case .loaded(let value):
+            HomeBlocks(home: value, idPrefix: "owner.home", ownerStyle: true, openMovements: openMovements) { await loadHome(tier) }
         }
     }
 
-    // MARK: 3. Attention
-
-    /// UX-5: the same "Para atender" as VIP (critical → high → medium → success). Only from a loaded
-    /// command center: with VIP intelligence off, or nothing to show, the section is left out — never
-    /// a "Nada pendiente" DINCR hasn't checked.
-    @ViewBuilder
-    private var attentionSection: some View {
-        if case .loaded(let value) = summary, let center = value.center {
-            AttentionSection(today: AttentionList.today(center: center, mailReviewAvailable: model.flags.isEnabled(.gmailAutomation)),
-                             idPrefix: "owner.home.attention", ownerStyle: true)
-        }
-    }
-
-    // MARK: 4. Finances
-
-    /// Debts and goals left the Plan tab for Today; the Owner's Today keeps them, opening the same
-    /// screens (navigation only: their data and rules are unchanged).
-    @ViewBuilder
-    private var financesSection: some View {
-        OwnerSectionHeader(tx("Tus finanzas", "Your finances"))
-        OwnerGroup {
-            NavigationLink { DebtsView() } label: {
-                OwnerRow(symbol: "creditcard", title: tx("Deudas", "Debts"),
-                         detail: tx("Saldos, pagos y avance", "Balances, payments and progress"))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.debts")
-            OwnerDivider()
-            NavigationLink { GoalsView() } label: {
-                OwnerRow(symbol: "target", title: tx("Metas y ahorro", "Goals and savings"),
-                         detail: tx("Metas, aportes y planes de ahorro", "Goals, contributions and savings plans"))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("owner.home.goals")
-        }
-    }
-
-    // MARK: 5. Next
+    // MARK: 0. JARVIS — agenda
 
     @ViewBuilder
     private var upcomingSection: some View {
@@ -190,7 +127,7 @@ struct OwnerHomeView: View {
         }
     }
 
-    // MARK: 6. JARVIS
+    // MARK: 0. JARVIS — chat, agenda, everything
 
     @ViewBuilder
     private var jarvisSection: some View {
@@ -219,18 +156,16 @@ struct OwnerHomeView: View {
 
     // MARK: Loading
 
-    private func loadSummary() async {
+    private func loadHome(_ tier: HomeToday.Tier) async {
         let epoch = model.currentEpoch
         do {
-            let value: OwnerSummary = model.flags.isEnabled(.vipIntelligence)
-                ? .center(try await model.service.commandCenter())
-                : .basic(try await model.service.basicDashboard())
-            if epoch == model.currentEpoch { summary = .loaded(value) }
+            let value = try await HomeTodayLoader.load(model, tier: tier)
+            if epoch == model.currentEpoch { home = .loaded(value) }
         } catch is CancellationError {
             return
         } catch {
             if let message = model.message(for: error, epoch: epoch, fallback: tx("No pudimos cargar tu resumen.", "We couldn’t load your overview.")) {
-                summary = .failed(message)
+                home = .failed(message)
             }
         }
     }
@@ -247,17 +182,6 @@ struct OwnerHomeView: View {
                 agenda = .failed(message)
             }
         }
-    }
-}
-
-/// The Owner's money summary: the VIP command center, or the month's dashboard while VIP intelligence is off.
-enum OwnerSummary: Equatable {
-    case center(CommandCenter)
-    case basic(BasicDashboard)
-
-    var center: CommandCenter? {
-        if case .center(let value) = self { return value }
-        return nil
     }
 }
 

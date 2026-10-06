@@ -239,10 +239,13 @@ public struct Budget: Decodable, Sendable, Equatable {
     public let items: [Item]?
     public let totalBudgeted: Decimal?
     public let availableForCategories: Decimal?
+    /// True when the user has no budget yet and the items are DINCR's proposal, not the user's.
+    public let isProposal: Bool?
     public let period: String?
 
-    public init(items: [Item]?, totalBudgeted: Decimal?, availableForCategories: Decimal?, period: String?) {
+    public init(items: [Item]?, totalBudgeted: Decimal?, availableForCategories: Decimal?, period: String?, isProposal: Bool? = nil) {
         self.items = items; self.totalBudgeted = totalBudgeted; self.availableForCategories = availableForCategories; self.period = period
+        self.isProposal = isProposal
     }
 }
 

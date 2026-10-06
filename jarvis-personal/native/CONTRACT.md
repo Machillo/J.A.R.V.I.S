@@ -118,6 +118,20 @@ submission is retried). The plan gate in the app mirrors `BUILTIN_FEATURE_MIN_PL
 | Support | `GET/POST /product-ops/feedback`, resolution | |
 | Export | `GET /auth/me/export` | Shared as a file from the app cache, never logged |
 
+## Hoy (UX-6)
+
+Four blocks for every public plan — Estado de hoy, Para atender, Qué sigue, Accesos rápidos — built by
+one presentation model per platform (`HomeToday`, DincrCore / core:data). Reads only (GETs):
+- Free: `/free/dashboard` (registered income, expenses, the month's result) + `/finance/debts` (the
+  next known payment for Qué sigue).
+- Basic: `/basic/dashboard`, `/basic/budget` (only the user's own budget, never `is_proposal`),
+  `/basic/calendar` (this month's pending payments), `/finance/strategy-basic` (Qué sigue), debts.
+- VIP (`vip_intelligence` on): `/vip/command-center` (safe to spend, `missing`, the director,
+  `reports.current`, Para atender), budget, calendar, debts. VIP with the flag off reads as Basic.
+- Unknown is never ₡0: no registered income → the month's result is unknown; a null command-center
+  figure shows "—" with a "?" naming the `missing` inputs and the real flow to add them (income: the
+  movement editor opened as income). The Owner gets its JARVIS space first, then the same blocks.
+
 ## Plan, Strategy and Owner analysis
 
 - Plan holds only Aguinaldo, Estrategia, Salvavidas and Distribución. Deudas and Metas live in Hoy;

@@ -80,7 +80,11 @@ private val incomeCategories = listOf("Salario", "Boleta de pago", "Bono", "Reem
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit, onSaved: (String) -> Unit, onDelete: (Movement) -> Unit, latestRate: BigDecimal? = null) {
+fun MovementEditorSheet(
+    model: AppModel, mode: EditorMode, onDismiss: () -> Unit, onSaved: (String) -> Unit, onDelete: (Movement) -> Unit, latestRate: BigDecimal? = null,
+    /** What a new movement starts as (Hoy opens it as an income to register the month's pay). */
+    initialKind: MovementKind = MovementKind.EXPENSE,
+) {
     val format = Dincr.money
     val profile by model.profile.collectAsStateWithLifecycle()
     val editing = (mode as? EditorMode.Edit)?.movement
@@ -90,7 +94,7 @@ fun MovementEditorSheet(model: AppModel, mode: EditorMode, onDismiss: () -> Unit
     // on edit only for manual income/expense rows (the backend refuses it for anything else).
     val otherCurrency = entryCurrencies.firstOrNull { it != base }?.takeIf { base in entryCurrencies && (editing == null || editing.acceptsCurrency) }
     val storedForeign = editing?.takeIf { it.isCurrencyEditable(entryCurrencies) }
-    var kind by remember { mutableStateOf(editing?.kind ?: MovementKind.EXPENSE) }
+    var kind by remember { mutableStateOf(editing?.kind ?: initialKind) }
     var currency by remember { mutableStateOf(storedForeign?.originalCurrency?.uppercase() ?: base) }
     // A row typed in another currency is edited in that currency (its original amount).
     val prefilledAmount = remember { editing?.let { storedForeign?.originalAmount?.let(format::inputText) ?: format.inputText(it.amount) } ?: "" }

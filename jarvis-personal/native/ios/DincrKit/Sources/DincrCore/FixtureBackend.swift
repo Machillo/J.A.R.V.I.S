@@ -469,7 +469,8 @@ public actor FixtureBackend: HTTPTransport {
                        "projections": [1, 3, 6].map { ["months": $0, "cash": 200_000 * $0, "debt": 900_000 - 90_000 * $0, "net_worth": -700_000 + 290_000 * $0, "confidence": "medium"] },
                        "roadmap": [["order": 1, "title": "Completá tu fondo de emergencia inicial", "amount": 50_000, "why": "Te protege de imprevistos."],
                                    ["order": 2, "title": "Pagá extra a la tarjeta", "amount": 40_000, "why": "Tiene la tasa más alta."]],
-                       "automation": ["confirmed": 4, "review": pendingCount(), "duplicates": 0]])
+                       "automation": ["confirmed": 4, "review": pendingCount(), "duplicates": 0],
+                       "reports": ["current": currentMonthTotals()]])
         case "/user-product/finance/strategy-vip":
             return ok(Self.strategy.merging(["director_note": "Priorizamos la deuda con la tasa más alta."]) { $1 })
         case "/user-product/finance/strategy-vip/simulate":
@@ -651,6 +652,13 @@ public actor FixtureBackend: HTTPTransport {
                 "goals": ["current": number(sum(goals, "current_amount")), "target": number(sum(goals, "target_amount")), "progress": 40.0]]
     }
 
+    /// This month's recorded movements, as the command center's `reports.current`.
+    private func currentMonthTotals() -> [String: Any] {
+        let month = String(day(0).prefix(7))
+        let (income, expenses) = totals(month)
+        return ["month": month, "income": number(income), "expenses": number(expenses), "debt_paid": 0, "balance": number(income - expenses)]
+    }
+
     private func budgetView() -> [String: Any] {
         let month = String(day(0).prefix(7))
         let spent = Dictionary(categories(month).map { (($0["category"] as? String ?? "").lowercased(), $0["amount"]!) }, uniquingKeysWith: { a, _ in a })
@@ -659,7 +667,9 @@ public actor FixtureBackend: HTTPTransport {
             row["spent"] = spent[(item["category"] as? String ?? "").lowercased()] ?? 0
             return row
         }
-        return ["items": items, "total_budgeted": number(sum(budget, "monthly_limit")), "available_for_categories": 420_000, "period": month]
+        // As the backend: the user's own items are never a proposal.
+        return ["items": items, "total_budgeted": number(sum(budget, "monthly_limit")), "available_for_categories": 420_000, "period": month,
+                "is_proposal": budget.isEmpty]
     }
 
     private func financialSituation() -> [String: Any] {
