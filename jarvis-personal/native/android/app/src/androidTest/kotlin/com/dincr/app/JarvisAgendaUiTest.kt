@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -55,7 +56,9 @@ class JarvisAgendaUiTest {
 
     private fun click(text: String) {
         waitUntil("\"$text\"") { present(text) }
-        val node = compose.onAllNodesWithText(text).onFirst()
+        // The clickable row with this text (the Owner's Hoy also has a "JARVIS" heading, UX-6).
+        val clickable = compose.onAllNodes(hasText(text) and hasClickAction())
+        val node = if (clickable.fetchSemanticsNodes().isNotEmpty()) clickable.onFirst() else compose.onAllNodesWithText(text).onFirst()
         runCatching { node.performScrollTo() }
         node.performClick()
     }

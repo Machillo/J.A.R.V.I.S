@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -93,7 +94,8 @@ class FlowsTest {
         waitForTag("editor.amount")
     }
 
-    private fun tab(label: String) = compose.onAllNodesWithText(label).onFirst().performClick()
+    /** The bottom-bar tab itself (selectable), never a Hoy shortcut with the same text (UX-6). */
+    private fun tab(label: String) = compose.onAllNodes(hasText(label) and isSelectable()).onFirst().performClick()
 
     private fun openMovements() {
         waitForText(tx("Resultado del mes", "This month’s result"))
