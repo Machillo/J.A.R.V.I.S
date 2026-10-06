@@ -48,7 +48,8 @@ def build_financial_state() -> dict[str, Any]:
 
 
 def _build_financial_state() -> dict[str, Any]:
-    strategy = compute_advisor_strategy()
+    # The lifecycle is the Users VIP surface: an unknown debt rate is never 0% here.
+    strategy = compute_advisor_strategy(canonical_rates=True)
     accounts = list_account_balances().get("items") or []
     debts = [item for item in (get_debts() or []) if _n(item.get("remaining_amount")) > 0]
     salvavidas = get_salvavidas_state()

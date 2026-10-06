@@ -156,7 +156,7 @@ def install(monkeypatch, store: dict[str, Any] | None, today: dt.date = TODAY, *
     availability = {"money_really_available": 180_000}
     monkeypatch.setattr(core, "get_real_availability", lambda: dict(availability))
     monkeypatch.setattr(state, "get_real_availability", lambda: dict(availability))
-    monkeypatch.setattr(core, "calculate_debt_strategies", lambda: {
+    monkeypatch.setattr(core, "calculate_debt_strategies", lambda **_rates: {
         "status": "OK", "debts": [{"id": 1, "name": "Tarjeta sintética", "interest_rate": 36, "remaining_amount": 1_200_000}],
         "doctor_strange": {"strategies": {"balanced": {"order": [{"id": 1}]}}}})
     monkeypatch.setattr(core, "_fetch_active_goals", lambda workspace_id: [])
