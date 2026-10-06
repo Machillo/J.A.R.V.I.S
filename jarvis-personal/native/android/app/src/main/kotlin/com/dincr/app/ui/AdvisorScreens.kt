@@ -143,7 +143,9 @@ fun MonthlyReviewScreen(model: AppModel, nav: Navigator) {
                 if (r.scorecard.isNotEmpty()) Section(tx("Indicadores", "Indicators")) {
                     r.scorecard.forEach { line ->
                         val trend = when (line.trend) { "improved" -> tx("mejoró", "improved"); "declined" -> tx("empeoró", "declined"); else -> tx("igual", "unchanged") }
-                        if (line.unit == "CRC") AmountLine("${line.label.orEmpty()} · $trend", line.current?.toBigDecimal()) else InfoLine(line.label.orEmpty(), "${line.current ?: "—"} · $trend")
+                        val explanation = line.explanation
+                        if (explanation != null) InfoLine(line.label.orEmpty(), explanation)
+                        else if (line.unit == "CRC") AmountLine("${line.label.orEmpty()} · $trend", line.current?.toBigDecimal()) else InfoLine(line.label.orEmpty(), "${line.current ?: "—"} · $trend")
                     }
                 }
             }

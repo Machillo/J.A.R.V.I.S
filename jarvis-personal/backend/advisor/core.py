@@ -209,7 +209,7 @@ def compute_advisor_strategy(*, canonical_rates: bool = False) -> dict[str, Any]
     salvavidas = get_salvavidas_state()
     availability = get_real_availability()
     goals = calculate_goal_reserves(_fetch_active_goals(get_current_workspace_id()))
-    health = calculate_financial_health_score()
+    health = calculate_financial_health_score(canonical_rates=True) if canonical_rates else calculate_financial_health_score()
 
     liquidity = _n(timeline.get("opening_available"))
     timeline_floor = _minimum_projected_balance(timeline)

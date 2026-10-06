@@ -70,6 +70,7 @@ def _build_financial_state() -> dict[str, Any]:
     debt_total = round(sum(_n(item.get("remaining_amount")) for item in debts), 2)
     monthly_debt = round(sum(_n(item.get("monthly_payment")) for item in debts), 2)
 
+    health_missing = (strategy.get("health") or {}).get("missing") or []
     goal = (strategy.get("summary") or {}).get("main_goal")
     next_action = strategy.get("next_action") or {}
     quality = strategy.get("data_quality") or {}
@@ -107,8 +108,10 @@ def _build_financial_state() -> dict[str, Any]:
             "fundable": strategy.get("fundable_goals") or [],
         },
         "health": {
+            # None while a debt's rate is missing (then `missing` says why): never a number out of 100.
             "score": strategy.get("financial_score"),
             "label": strategy.get("health_label"),
+            **({"missing": health_missing} if health_missing else {}),
             "confidence": quality.get("confidence"),
             "data_status": quality.get("status"),
             "deterioration": deterioration.get("health"),

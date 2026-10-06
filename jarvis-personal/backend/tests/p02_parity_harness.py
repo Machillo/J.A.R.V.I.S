@@ -163,7 +163,7 @@ def install(monkeypatch, store: dict[str, Any] | None, today: dt.date = TODAY, *
     monkeypatch.setattr(core, "calculate_goal_reserves", lambda goals: {"items": [
         {"id": 7, "name": "Meta sintética", "target_amount": 500_000, "current_amount": 100_000,
          "monthly_needed": 50_000, "priority": 1, "target_date": "2027-03-01"}]})
-    monkeypatch.setattr(core, "calculate_financial_health_score", lambda: {
+    monkeypatch.setattr(core, "calculate_financial_health_score", lambda **_rates: {
         "score": 61, "level": "regular", "inputs": {"debt_service_ratio": 0.18, "highest_debt_apr": 36}})
     monkeypatch.setattr(state, "get_monthly_financial_flow", lambda: {"months": [
         {"month": "2026-08", "income": 900_000, "expenses": 400_000, "debt_payments": 150_000, "net_operational": 350_000},

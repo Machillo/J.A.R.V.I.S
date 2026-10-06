@@ -54,6 +54,27 @@ class DebtInterestRateTest {
         assertEquals(HomeDestination.DEBTS, HomeInput.DEBT_INTEREST_RATES.destination)
     }
 
+    @Test fun anIncompleteHealthScoreDecodesAsTextNotANumber() {
+        val review = json.decodeFromString<MonthlyReview>("""{"status":"OK","scorecard":[{"key":"health_score","label":"Salud financiera","unit":"points","current":null,"baseline":70,"delta":null,"trend":"unknown",
+            "explanation":"Falta la tasa de interés de una deuda para completar tu salud financiera."},
+            {"key":"health_score_known","unit":"points","current":61,"baseline":70,"delta":-9,"trend":"declined"}]}""")
+        val line = review.scorecard.first()
+        assertNull(line.current); assertNull(line.delta); assertEquals("unknown", line.trend)
+        assertTrue(line.explanation!!.startsWith("Falta la tasa de interés"))
+        assertEquals(61.0, review.scorecard.last().current); assertNull(review.scorecard.last().explanation)  // a known score is unchanged
+    }
+
+    @Test fun theMissingRateLeadsToDebtsAndNoScoreReturnsToHoy() {
+        val advisor = json.decodeFromString<ProactiveAdvisor>("""{"status":"ALERTS","alerts":[{"id":"i","code":"health_score_incomplete","severity":"medium","title":"Falta la tasa de interés de una deuda",
+            "explanation":"DINCR la necesita para completar tu salud financiera.","action":{"label":"Revisar deudas","route":"debts"}}]}""")
+        val items = AttentionList.items(null, advisor)
+        assertEquals(1, items.size)
+        assertEquals(AttentionItem.Destination.DEBTS, items.single().destination)  // explains and opens Deudas; states no score
+        // Hoy's own block reads only the command center: the advisor never brings a score back to Hoy.
+        assertTrue(AttentionList.today(null).visible.isEmpty())
+        assertFalse(HomeToday::class.java.declaredFields.any { it.name.contains("score", ignoreCase = true) })
+    }
+
     @Test fun theVipPlanCarriesBasicsWarningAndTheMissingCode() {
         val plan = json.decodeFromString<DirectorStrategy>(
             """{"scope":"users","warnings":["Falta la tasa de interés de 1 deuda; la prioridad usa los datos disponibles."],"missing":["debt_interest_rates"]}""")

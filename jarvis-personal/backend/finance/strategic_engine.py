@@ -446,10 +446,17 @@ def calculate_emergency_fund() -> dict[str, Any]:
     }
 
 
-def calculate_financial_health_score() -> dict[str, Any]:
+def calculate_financial_health_score(*, canonical_rates: bool = False) -> dict[str, Any]:
+    """The 0-100 health score.
+
+    `canonical_rates` (the Users VIP lifecycle) reads rates with debts.interest_rate_known: while
+    an outstanding debt's rate is unknown, the debt-cost component can't be computed, so it and
+    the total score are unknown (status INCOMPLETE, missing debt_interest_rates) — never 0%, no
+    rescaling of the other components. The default (the Owner) keeps the raw stored rate.
+    """
     flow = get_monthly_financial_flow()
     emergency = calculate_emergency_fund()
-    debts = _fetch_debts()
+    debts = _fetch_debts(rate_flag=canonical_rates)
 
     average_income = _as_float(flow.get("averages", {}).get("income"))
     average_net = _as_float(flow.get("averages", {}).get("net_operational"))
@@ -461,19 +468,27 @@ def calculate_financial_health_score() -> dict[str, Any]:
     coverage = emergency_fund_current / fixed_expenses if fixed_expenses > 0 else 0.0
     savings_rate = average_net / average_income if average_income > 0 else 0.0
     debt_service_ratio = debt_minimums / average_income if average_income > 0 else 1.0
-    highest_apr = max([_as_float(debt.get("interest_rate")) for debt in debts] or [0.0])
+    if canonical_rates:
+        rates = [(known_interest_rate(debt), _as_float(debt.get("remaining_amount"))) for debt in debts]
+        rate_unknown = any(rate is None and remaining > 0 for rate, remaining in rates)
+        highest_apr = None if rate_unknown else max([rate for rate, _ in rates if rate is not None] or [0.0])
+    else:
+        highest_apr = max([_as_float(debt.get("interest_rate")) for debt in debts] or [0.0])
 
     components = {
         "cashflow": max(0.0, min((savings_rate + 0.05) / 0.25, 1.0)) * 30,
         "emergency_coverage": min(coverage / 6, 1.0) * 30,
         "debt_service": max(0.0, min((0.50 - debt_service_ratio) / 0.30, 1.0)) * 25,
-        "debt_cost": max(0.0, min((40 - highest_apr) / 40, 1.0)) * 15,
+        "debt_cost": None if highest_apr is None else max(0.0, min((40 - highest_apr) / 40, 1.0)) * 15,
     }
-    score = round(sum(components.values()), 2)
+    # A component that can't be computed leaves the score unknown: never a number out of 100.
+    score = None if highest_apr is None else round(sum(components.values()), 2)
     known_inputs = sum([average_income > 0, fixed_expenses > 0, bool(debts), flow.get("status") == "OK"])
     confidence = round(known_inputs / 4, 2)
 
-    if score >= 80:
+    if score is None:
+        level = None
+    elif score >= 80:
         level = "strong"
     elif score >= 50:
         level = "stable"
@@ -482,12 +497,12 @@ def calculate_financial_health_score() -> dict[str, Any]:
     else:
         level = "critical"
 
-    return {
-        "status": "OK",
+    result = {
+        "status": "OK" if score is not None else "INCOMPLETE",
         "formula": "30% flujo + 30% cobertura + 25% carga de deuda + 15% costo de deuda",
         "score": score,
         "confidence": confidence,
-        "components": {key: round(value, 2) for key, value in components.items()},
+        "components": {key: None if value is None else round(value, 2) for key, value in components.items()},
         "level": level,
         "inputs": {
             "monthly_saving_estimate": round(monthly_saving, 2),
@@ -497,11 +512,18 @@ def calculate_financial_health_score() -> dict[str, Any]:
             "savings_rate": round(savings_rate, 4),
             "debt_service_ratio": round(debt_service_ratio, 4),
             "emergency_coverage_months": round(coverage, 2),
-            "highest_debt_apr": round(highest_apr, 4),
+            "highest_debt_apr": None if highest_apr is None else round(highest_apr, 4),
             "total_debt": round(total_debt, 2),
             "fixed_expenses_base": round(fixed_expenses, 2),
         },
     }
+    if score is None:  # only in canonical mode; a complete score keeps the historical shape
+        result["missing"] = [RATES_MISSING]
+        result["explanation"] = localized(
+            "Falta la tasa de interés de una deuda para completar tu salud financiera.",
+            "A debt's interest rate is missing to complete your financial health.",
+        )
+    return result
 
 
 def detect_micro_spending(limit: int = 12) -> dict[str, Any]:

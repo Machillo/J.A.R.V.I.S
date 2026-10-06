@@ -299,7 +299,10 @@ public struct MonthlyReview: Decodable, Sendable, Equatable {
         public let current: Double?
         public let baseline: Double?
         public let delta: Double?
+        /// `unknown` when a side can't be stated (the health score while a debt's rate is missing).
         public let trend: String?
+        /// Why the line has no number (then `current` is nil): shown instead of a value.
+        public let explanation: String?
     }
     public struct NextMonth: Decodable, Sendable, Equatable {
         public let priority: String?

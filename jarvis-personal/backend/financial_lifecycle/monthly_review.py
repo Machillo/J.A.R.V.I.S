@@ -89,10 +89,13 @@ def _scorecard(metrics: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         ("health_score", tx("Salud financiera", "Financial health"), "points"),
         ("net_operational", tx("Flujo operativo", "Operating cash flow"), "CRC"),
     )
-    return [
-        {"key": key, "label": label, "unit": unit, **metrics[key]}
-        for key, label, unit in definitions
-    ]
+    lines = [{"key": key, "label": label, "unit": unit, **metrics[key]} for key, label, unit in definitions]
+    for line in lines:
+        if line["key"] == "health_score" and line["trend"] == "unknown":
+            # Not a number out of 100 while a debt's rate is missing.
+            line["explanation"] = tx("Falta la tasa de interés de una deuda para completar tu salud financiera.",
+                                     "A debt's interest rate is missing to complete your financial health.")
+    return lines
 
 
 def _headline(wins: list[dict[str, Any]], deviations: list[dict[str, Any]]) -> str:

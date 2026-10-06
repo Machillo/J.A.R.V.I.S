@@ -27,6 +27,7 @@ CARD = {"id": 1, "name": "Tarjeta sintética", "debt_type": "credit_card", "rema
 # A loan whose 0 was never confirmed (the old "no rate given → 0"): unknown, never 0%.
 LOAN = {"id": 2, "name": "Préstamo sintético", "debt_type": "loan", "remaining_amount": 900_000,
         "monthly_payment": 40_000, "interest_rate": 0, "interest_rate_known": None}
+FLOW = {"status": "OK", "averages": {"income": 900_000, "net_operational": 200_000}}
 UNKNOWN_ISSUE = "debt_rates_missing"
 RATE_BLOCKER = "falta la tasa de interés de una deuda"
 
@@ -47,8 +48,10 @@ def lifecycle(monkeypatch):
         for module in (core, state):
             monkeypatch.setattr(module, "get_salvavidas_state", lambda: dict(protected), raising=False)
         monkeypatch.setattr(core, "get_financial_deterioration", lambda: {"health": "stable", "primary_cause": None})
-        monkeypatch.setattr(core, "calculate_financial_health_score", lambda: {
-            "score": 70, "level": "stable", "inputs": {"debt_service_ratio": 0.1, "highest_debt_apr": 30}})
+        # The real health score over synthetic flow and Salvavidas inputs.
+        monkeypatch.setattr(strategic_engine, "get_monthly_financial_flow", lambda: dict(FLOW))
+        monkeypatch.setattr(strategic_engine, "calculate_emergency_fund", lambda: {"current": 540_000, "monthly_base": 450_000})
+        monkeypatch.setattr(core, "calculate_financial_health_score", strategic_engine.calculate_financial_health_score)
 
     return install
 
@@ -138,3 +141,102 @@ def test_the_owner_daily_history_keeps_the_default_advisor(monkeypatch):
     user = {**owner, "role": "user"}
     daily_history._record_workspace(user, dt.date(2026, 10, 6))
     assert calls == [{}]  # a VIP's daily history stores no strategy at all (health only)
+
+
+# Health score ------------------------------------------------------------------------------------
+
+@pytest.fixture
+def health(monkeypatch):
+    def install(rows):
+        monkeypatch.setattr(strategic_engine, "get_monthly_financial_flow", lambda: dict(FLOW))
+        monkeypatch.setattr(strategic_engine, "calculate_emergency_fund", lambda: {"current": 540_000, "monthly_base": 450_000})
+        monkeypatch.setattr(strategic_engine, "_fetch_debts",
+                            lambda rate_flag=False: [dict(row) if rate_flag else
+                                                     {k: v for k, v in row.items() if k != "interest_rate_known"} for row in rows])
+    return install
+
+
+def test_a_known_rate_keeps_the_health_score(health):
+    health([CARD, {**LOAN, "interest_rate": 12}])
+    assert strategic_engine.calculate_financial_health_score(canonical_rates=True) == strategic_engine.calculate_financial_health_score()
+
+
+def test_a_known_zero_percent_is_a_valid_debt_cost(health):
+    health([{**CARD, "interest_rate": 0}, {**LOAN, "interest_rate_known": True}])
+    score = strategic_engine.calculate_financial_health_score(canonical_rates=True)
+    assert score["status"] == "OK" and score["components"]["debt_cost"] == 15.0 and score["score"] is not None
+
+
+def test_an_unknown_rate_leaves_debt_cost_and_the_score_unknown_without_rescaling(health):
+    health([CARD, LOAN])
+    unknown = strategic_engine.calculate_financial_health_score(canonical_rates=True)
+    assert unknown["components"]["debt_cost"] is None  # not 0 points, not 15
+    assert unknown["score"] is None and unknown["level"] is None and unknown["status"] == "INCOMPLETE"
+    assert unknown["missing"] == ["debt_interest_rates"] and "falta la tasa de interés" in unknown["explanation"].lower()
+    assert unknown["inputs"]["highest_debt_apr"] is None
+    known = strategic_engine.calculate_financial_health_score()  # the raw reading of the same rows
+    # The known components keep their weights and values: nothing is rescaled to /100.
+    assert {k: v for k, v in unknown["components"].items() if k != "debt_cost"} == \
+           {k: v for k, v in known["components"].items() if k != "debt_cost"}
+
+
+def test_a_paid_off_debt_without_a_rate_does_not_block_the_score(health):
+    health([CARD, {**LOAN, "remaining_amount": 0}])
+    assert strategic_engine.calculate_financial_health_score(canonical_rates=True)["score"] is not None
+
+
+def test_the_owner_health_score_keeps_the_stored_rate(health):
+    health([CARD, LOAN])
+    owner = strategic_engine.calculate_financial_health_score()
+    assert owner["status"] == "OK" and owner["score"] is not None and "missing" not in owner
+    assert owner["inputs"]["highest_debt_apr"] == 30.0  # the unconfirmed 0 still reads as 0 for the Owner
+
+
+def test_the_lifecycle_state_never_shows_an_incomplete_score_as_a_number(lifecycle):
+    lifecycle([CARD, LOAN])
+    current = state.build_financial_state()
+    assert current["health"]["score"] is None and current["health"]["label"] is None
+    assert current["health"]["missing"] == ["debt_interest_rates"]
+    lifecycle([CARD, {**LOAN, "interest_rate_known": True}])
+    complete = state.build_financial_state()
+    assert isinstance(complete["health"]["score"], float) and "missing" not in complete["health"]
+
+
+def _observed(score, missing=()):
+    return {"health": {"score": score, **({"missing": list(missing)} if missing else {})},
+            "strategy": {"next_action": {"type": "hold"}}}
+
+
+def test_an_unknown_score_is_never_compared(lifecycle):
+    from backend.financial_lifecycle.progress import compare_states
+    for current, baseline in ((None, 70), (70, None)):
+        metric = compare_states(_observed(current), _observed(baseline))["metrics"]["health_score"]
+        assert metric["delta"] is None and metric["trend"] == "unknown"
+    comparison = compare_states(_observed(60), _observed(70))
+    assert comparison["metrics"]["health_score"]["trend"] == "declined"  # known scores still compare
+    assert comparison["summary"]["declined"] == 1
+
+
+def test_the_proactive_advisor_makes_no_score_drop_or_rise_from_an_unknown(lifecycle):
+    from backend.financial_lifecycle.proactive import build_proactive_advisor
+    today = dt.date(2026, 10, 6)
+    went_unknown = build_proactive_advisor(current=_observed(None, ["debt_interest_rates"]), previous=_observed(70),
+                                           baseline_date="2026-10-05", as_of=today)
+    codes = {alert["code"]: alert for alert in went_unknown["alerts"]}
+    assert "health_score_drop" not in codes  # 70 → unknown is not a drop
+    assert codes["health_score_incomplete"]["action"]["route"] == "debts"
+    assert "falta la tasa de interés" in codes["health_score_incomplete"]["title"].lower()
+    back = build_proactive_advisor(current=_observed(55), previous=_observed(None, ["debt_interest_rates"]),
+                                   baseline_date="2026-10-05", as_of=today)
+    assert back["alerts"] == []  # unknown → 55 is neither a drop nor a rise
+    known = build_proactive_advisor(current=_observed(60), previous=_observed(70), baseline_date="2026-10-05", as_of=today)
+    assert [alert["code"] for alert in known["alerts"]] == ["health_score_drop"]  # known comparisons still alert
+
+
+def test_the_monthly_review_explains_an_incomplete_score(lifecycle):
+    from backend.financial_lifecycle.monthly_review import build_monthly_review
+    observations = [{"snapshot_date": "2026-10-01", "state": _observed(70)}, {"snapshot_date": "2026-10-05", "state": _observed(70)}]
+    review = build_monthly_review(period="2026-10", closing_state=_observed(None, ["debt_interest_rates"]), observations=observations)
+    line = next(item for item in review["scorecard"] if item["key"] == "health_score")
+    assert line["current"] is None and line["trend"] == "unknown" and "falta la tasa de interés" in line["explanation"].lower()
+    assert all(item["key"] != "health_score" for item in review["wins"] + review["deviations"])

@@ -74,7 +74,15 @@ def build_proactive_advisor(
         ))
 
     health = metrics["health_score"]
-    if health["delta"] <= -5:
+    if (current.get("health") or {}).get("missing"):
+        # The score can't be stated (no comparison is made from it): say why and where to fix it.
+        alerts.append(_alert(
+            "health_score_incomplete", "medium",
+            tx("Falta la tasa de interés de una deuda", "A debt's interest rate is missing"),
+            tx("DINCR la necesita para completar tu salud financiera.", "DINCR needs it to complete your financial health."),
+            tx("Revisar deudas", "Review debts"), "debts", health, baseline_date, today,
+        ))
+    elif health["delta"] is not None and health["delta"] <= -5:
         alerts.append(_alert(
             "health_score_drop", "high" if health["delta"] <= -15 else "medium",
             tx("Bajó tu salud financiera", "Your financial health dropped"),

@@ -46,6 +46,32 @@ import Testing
         #expect(HomeInput.debtInterestRates.destination == .debts)
     }
 
+    @Test func anIncompleteHealthScoreDecodesAsTextNotANumber() throws {
+        let review = try APIClient.decoder.decode(MonthlyReview.self, from: Data(#"""
+        {"status":"OK","scorecard":[{"key":"health_score","label":"Salud financiera","unit":"points","current":null,"baseline":70,"delta":null,"trend":"unknown",
+          "explanation":"Falta la tasa de interés de una deuda para completar tu salud financiera."},
+         {"key":"health_score_known","unit":"points","current":61,"baseline":70,"delta":-9,"trend":"declined"}]}
+        """#.utf8))
+        let line = try #require(review.scorecard?.first)
+        #expect(line.current == nil && line.delta == nil && line.trend == "unknown")
+        #expect(line.explanation?.hasPrefix("Falta la tasa de interés") == true)
+        #expect(review.scorecard?.last?.current == 61 && review.scorecard?.last?.explanation == nil)  // a known score is unchanged
+    }
+
+    @Test func theMissingRateLeadsToDebtsAndNoScoreReturnsToHoy() throws {
+        let advisor = try APIClient.decoder.decode(ProactiveAdvisor.self, from: Data(#"""
+        {"status":"ALERTS","alerts":[{"id":"i","code":"health_score_incomplete","severity":"medium","title":"Falta la tasa de interés de una deuda",
+          "explanation":"DINCR la necesita para completar tu salud financiera.","action":{"label":"Revisar deudas","route":"debts"}}]}
+        """#.utf8))
+        let items = AttentionList.items(center: nil, advisor: advisor)
+        #expect(items.count == 1 && items[0].destination == .debts)  // explains and opens Deudas; states no score
+        // Hoy's own block reads only the command center: the advisor never brings a score back to Hoy.
+        #expect(AttentionList.today(center: nil).visible.isEmpty)
+        let center = try APIClient.decoder.decode(CommandCenter.self, from: Data("{}".utf8))
+        let home = HomeToday.vip(center, budget: nil, calendar: nil, debts: [])
+        #expect(!Mirror(reflecting: home).children.contains { $0.label?.lowercased().contains("score") == true })
+    }
+
     @Test func theVipPlanCarriesBasicsWarningAndTheMissingCode() throws {
         let plan = try APIClient.decoder.decode(DashboardStrategy.self, from: Data(#"""
         {"scope":"users","warnings":["Falta la tasa de interés de 1 deuda; la prioridad usa los datos disponibles."],"missing":["debt_interest_rates"]}
