@@ -65,7 +65,9 @@ public struct HomeToday: Sendable, Equatable {
                                 budget: budgetLeft(budget), pending: pending(calendar, today: today))
         let next: HomeNext
         let director = center.director
-        if director?.priority == "incomplete" {
+        // The director needs inputs before recommending: priority `incomplete` (#326), or a known
+        // priority whose target can't be chosen yet (a debt's rate is missing: `debt_interest_rates`).
+        if director?.priority == "incomplete" || !HomeInput.codes(director?.missing).isEmpty {
             let missing = HomeInput.codes(director?.missing)
             next = HomeNext(kind: .needsInformation, title: text(director?.headline), missing: missing,
                             destination: missing.first?.destination ?? .situation)
@@ -237,13 +239,15 @@ public enum HomeInput: String, Sendable, Equatable, CaseIterable {
     case debtPayments = "debt_payments"
     case savings
     case emergencyFundTarget = "emergency_fund_target"
+    /// A debt's interest rate, needed to choose which debt to pay down first.
+    case debtInterestRates = "debt_interest_rates"
 
     /// Where the user gives DINCR this input, in the flows that exist (never an estimate): income is
     /// registered as a movement (salary / pay stub), debts in Deudas, the rest in Situación.
     public var destination: HomeDestination {
         switch self {
         case .income: .registerIncome
-        case .debtPayments: .debts
+        case .debtPayments, .debtInterestRates: .debts
         case .essentialExpenses, .savings, .emergencyFundTarget: .situation
         }
     }

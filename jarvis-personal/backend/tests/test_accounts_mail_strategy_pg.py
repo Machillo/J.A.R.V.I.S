@@ -44,7 +44,8 @@ CREATE TABLE payroll_events (id BIGSERIAL PRIMARY KEY, workspace_id UUID, amount
 CREATE TABLE expenses (id BIGSERIAL PRIMARY KEY, workspace_id UUID, amount NUMERIC(12,2), created_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE debts (
     id BIGSERIAL PRIMARY KEY, workspace_id UUID NOT NULL, name TEXT NOT NULL, debt_type TEXT, total_amount NUMERIC(14,2),
-    remaining_amount NUMERIC(14,2), monthly_payment NUMERIC(14,2), interest_rate NUMERIC(8,2)
+    remaining_amount NUMERIC(14,2), monthly_payment NUMERIC(14,2), interest_rate NUMERIC(8,2),
+    interest_rate_known BOOLEAN  -- 20261006120000
 );
 CREATE TABLE financial_profiles (
     account_id UUID PRIMARY KEY, workspace_id UUID NOT NULL, income_type TEXT, fixed_monthly_salary NUMERIC(14,2),

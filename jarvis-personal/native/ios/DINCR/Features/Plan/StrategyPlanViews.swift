@@ -102,6 +102,21 @@ private struct MonthPlanContent: View {
                         DincrMessage(.attention, title: tx("Tomá en cuenta", "Keep in mind"), message: warning)
                     }
                 }
+                // VIP (Users): the same cautions, and the way to complete a missing debt rate.
+                if case .dashboard(let dashboard) = strategy, let detail = dashboard.strategy {
+                    ForEach(Array((detail.warnings ?? []).enumerated()), id: \.offset) { _, warning in
+                        DincrMessage(.attention, title: tx("Tomá en cuenta", "Keep in mind"), message: warning)
+                    }
+                    if detail.needsDebtRates {
+                        NavigationLink { DebtsView() } label: {
+                            HubRow(symbol: "creditcard", title: tx("Revisar deudas", "Review debts"),
+                                   subtitle: tx("Completá las tasas de interés", "Add the interest rates"))
+                        }
+                        .buttonStyle(.plain)
+                        .dincrCard(padding: DincrSpacing.s3)
+                        .accessibilityIdentifier("plan.month.debtRates")
+                    }
+                }
                 switch strategy {
                 case .basic(let basic): BasicPlanDetail(strategy: basic)
                 case .dashboard(let dashboard): if let detail = dashboard.strategy { DashboardPlanDetail(plan: detail) }

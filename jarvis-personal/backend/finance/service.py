@@ -8,6 +8,7 @@ from backend.auth.current_user import get_current_user_id, get_current_workspace
 from backend.finance import balance_movements, payroll_receipts
 from backend.finance.debt_automation import schedule_automation_enabled
 from backend.finance.category_catalog import normalize_category, expense_type_for_category, owner_context
+from backend.user_product.debt_rates import rate_for_update
 
 
 def _as_float(value, default: float = 0.0) -> float:
@@ -720,7 +721,7 @@ def add_debt(
     total_amount: float,
     remaining_amount: float,
     monthly_payment: float,
-    interest_rate: float = 0,
+    interest_rate: float | None = None,
     term_months: int | None = None,
     payment_day: int | None = None,
     start_date: str | None = None,
@@ -745,6 +746,7 @@ def add_debt(
                 remaining_amount,
                 monthly_payment,
                 interest_rate,
+                interest_rate_known,
                 term_months,
                 payment_day,
                 start_date,
@@ -757,7 +759,7 @@ def add_debt(
                 created_at,
                 updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             RETURNING id
             """,
             (
@@ -767,6 +769,7 @@ def add_debt(
                 remaining_amount,
                 monthly_payment,
                 interest_rate,
+                interest_rate is not None,  # no rate given = unknown (NULL), never 0%
                 term_months,
                 payment_day,
                 normalized_start.isoformat(),
@@ -2202,7 +2205,7 @@ def update_debt(
     total_amount: float,
     remaining_amount: float,
     monthly_payment: float,
-    interest_rate: float = 0,
+    interest_rate: float | None = None,
     term_months: int | None = None,
     payment_day: int | None = None,
     start_date: str | None = None,
@@ -2218,7 +2221,7 @@ def update_debt(
     with get_connection() as conn:
         debt = conn.execute(
             """
-            SELECT id, installments_paid, start_date, first_payment_date
+            SELECT id, installments_paid, start_date, first_payment_date, interest_rate, interest_rate_known, debt_type
             FROM debts
             WHERE id = %s
             AND workspace_id = %s
@@ -2241,6 +2244,7 @@ def update_debt(
                 remaining_amount = %s,
                 monthly_payment = %s,
                 interest_rate = %s,
+                interest_rate_known = %s,
                 term_months = %s,
                 payment_day = %s,
                 start_date = %s,
@@ -2259,7 +2263,7 @@ def update_debt(
                 total_amount,
                 remaining_amount,
                 monthly_payment,
-                interest_rate,
+                *rate_for_update(dict(debt), interest_rate, None),  # saving never confirms a loaded rate
                 term_months,
                 payment_day,
                 (_parse_date(start_date) or _parse_date(debt.get("start_date")) or date.today()).isoformat(),

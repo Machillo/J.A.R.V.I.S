@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from backend.auth.current_user import get_current_account_id, get_current_user, get_current_workspace_id
 from backend.core.database import get_connection
 from backend.core.i18n import tx
+from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
 from backend.user_product.income_policy import imported_income_by_month, income_baseline
 from backend.user_product.basic_service import (
     _basic_tables_ready,
@@ -47,10 +48,13 @@ def _table_exists(conn, table: str) -> bool:
     return bool(conn.execute("SELECT to_regclass(%s) IS NOT NULL AS exists", (f"public.{table}",)).fetchone()["exists"])
 
 
-def _payoff(balance: float, payment: float, annual_rate: float) -> dict:
-    balance, payment, rate = max(balance, 0), max(payment, 0), max(annual_rate, 0) / 1200
-    if not balance:
+def _payoff(balance: float, payment: float, annual_rate: float | None) -> dict:
+    if not max(balance, 0):
         return {"months": 0, "interest": 0}
+    if annual_rate is None:
+        # An unknown rate gives no payoff or interest estimate (it is not 0%).
+        return {"months": None, "interest": None}
+    balance, payment, rate = max(balance, 0), max(payment, 0), max(annual_rate, 0) / 1200
     if not payment or (rate and payment <= balance * rate):
         return {"months": None, "interest": None}
     original, interest = balance, 0.0
@@ -64,16 +68,24 @@ def _payoff(balance: float, payment: float, annual_rate: float) -> dict:
 
 
 def _debt_plan(debts: list[dict], extra: float, method: str) -> dict:
+    """One debt plan. Rates are the known ones (None = unknown, see debt_rates.py): a plan that
+    orders by rate can't choose between debts while one rate is unknown, and an estimate that
+    needs the target's rate is unknown without it. Snowball orders by balance only."""
     active = [dict(row) for row in debts if _money(row.get("remaining_amount")) > 0]
+    rates_unknown = any(row.get("interest_rate") is None for row in active)
+    if method != "snowball" and rates_unknown and len(active) > 1:
+        return {"method": method, "target": None, "target_id": None, "monthly_to_target": None, "months": None, "interest": None}
     if method == "snowball":
-        ordered = sorted(active, key=lambda row: (_money(row.get("remaining_amount")), -_money(row.get("interest_rate"))))
+        # Balance first; the rate only breaks ties, and only when every rate is known.
+        ordered = sorted(active, key=lambda row: (_money(row.get("remaining_amount")),
+                                                  -float(row.get("interest_rate")) if not rates_unknown else (row.get("id") or 0)))
     elif method == "avalanche":
         ordered = sorted(active, key=lambda row: (-_money(row.get("interest_rate")), _money(row.get("remaining_amount"))))
     else:
         ordered = sorted(active, key=lambda row: (-_money(row.get("interest_rate")) * .7, _money(row.get("remaining_amount")) * .3))
     target = ordered[0] if ordered else None
     payment = _money(target.get("monthly_payment")) + max(extra, 0) if target else 0
-    projection = _payoff(_money(target.get("remaining_amount")), payment, _money(target.get("interest_rate"))) if target else {"months": 0, "interest": 0}
+    projection = _payoff(_money(target.get("remaining_amount")), payment, target.get("interest_rate")) if target else {"months": 0, "interest": 0}
     return {
         "method": method,
         "target": target.get("name") if target else None,
@@ -90,11 +102,12 @@ def get_vip_command_center() -> dict:
     with get_connection() as conn:
         recurring_ready = _basic_tables_ready(conn, "finva_recurring_items")
         profile = _profile(conn, account_id, workspace_id)
-        debts = [dict(row) for row in conn.execute(
-            """SELECT id,name,remaining_amount,total_amount,monthly_payment,NULLIF(interest_rate,0) interest_rate,
+        # Known rates only (None = unknown, never 0%: debt_rates.py).
+        debts = with_known_rates([dict(row) for row in conn.execute(
+            """SELECT id,name,remaining_amount,total_amount,monthly_payment,interest_rate,interest_rate_known,debt_type,
                       payment_day,next_payment_date FROM debts WHERE workspace_id=%s AND remaining_amount>0 ORDER BY id""",
             (workspace_id,),
-        ).fetchall()]
+        ).fetchall()])
         goals = [dict(row) for row in conn.execute(
             """SELECT id,name,target_amount,current_amount,target_date,priority FROM financial_goals
                WHERE workspace_id=%s AND status='active' ORDER BY target_date NULLS LAST,id""",
@@ -224,11 +237,19 @@ def get_vip_command_center() -> dict:
     else:
         priority = "stabilize" if margin < 0 else "emergency" if emergency_gap > 0 else "debt" if debts else "goals" if goals else "invest"
         director_missing = []
-    highest_rate_debt = max(debts, key=lambda x: _money(x.get('interest_rate'))).get('name') if debts else None
+    # Which debt to attack compares rates: with two or more debts and an unknown rate, DINCR names
+    # none (the priority stays "debt") and says the rates are missing. One debt needs no comparison.
+    rate_comparison_blocked = len(debts) > 1 and unknown_rate_count(debts) > 0
+    if priority == "debt" and rate_comparison_blocked:
+        director_missing = [RATES_MISSING]
+    highest_rate_debt = (None if rate_comparison_blocked or not debts
+                         else debts[0].get('name') if len(debts) == 1
+                         else max(debts, key=lambda x: x['interest_rate']).get('name'))  # every rate known here
     labels = {
         "stabilize": tx("Cerrar el déficit mensual", "Close the monthly deficit"),
         "emergency": tx("Completar el fondo de emergencia", "Complete the emergency fund"),
-        "debt": tx(f"Atacar {highest_rate_debt}", f"Pay down {highest_rate_debt}") if debts else tx("Deuda", "Debt"),
+        "debt": (tx("Completá las tasas de interés para saber qué deuda atacar primero", "Add your debts’ interest rates to know which one to pay down first")
+                 if rate_comparison_blocked else tx(f"Atacar {highest_rate_debt}", f"Pay down {highest_rate_debt}") if debts else tx("Deuda", "Debt")),
         "goals": tx("Financiar la meta prioritaria", "Fund the priority goal"),
         "invest": tx("Preparar inversión", "Prepare to invest"),
         "incomplete": tx("Aún no tengo suficiente información para recomendarte una prioridad", "I don’t have enough information to recommend a priority yet"),
@@ -261,7 +282,8 @@ def get_vip_command_center() -> dict:
         goal_guidance.append({**goal, "remaining": remaining, "months_left": months_left, "monthly_required": required, "viable": required is not None and required <= max(margin, 0), "alternative_months": ceil(remaining / max(margin, 1)) if margin > 0 else None})
 
     strategies = [_debt_plan(debts, max(margin, 0), method) for method in ("avalanche", "snowball", "finva")]
-    best = min((row for row in strategies if row["months"] is not None), key=lambda row: (row["interest"], row["months"]), default=None)
+    # The recommended plan compares the plans' interest: with an unknown rate there is none to recommend.
+    best = None if unknown_rate_count(debts) else min((row for row in strategies if row["months"] is not None), key=lambda row: (row["interest"], row["months"]), default=None)
 
     events = []
     start = today.replace(day=1)
@@ -315,6 +337,7 @@ def get_vip_command_center() -> dict:
         "director": {
             "priority": priority, "headline": labels[priority],
             "next_action": tx("Completá la información que falta para que DINCR pueda recomendarte.", "Complete the missing information so DINCR can recommend.") if priority == "incomplete"
+            else tx(f"Asigná {_money_text(action_amount)} a tus deudas.", f"Assign {_money_text(action_amount)} to your debts.") if director_missing
             else tx(f"Asigná {_money_text(action_amount)} a esta prioridad.", f"Assign {_money_text(action_amount)} to this priority."),
             "data_complete": completeness >= .8, "missing": director_missing,
         },

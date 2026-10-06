@@ -267,13 +267,15 @@ extension HomeInput {
         case .debtPayments: tx("Una de tus deudas no tiene su cuota mensual.", "One of your debts has no monthly payment.")
         case .savings: tx("Falta tu ahorro disponible o el saldo de una cuenta.", "Your available savings or an account balance is missing.")
         case .emergencyFundTarget: tx("Falta la meta de tu fondo de emergencia.", "Your emergency fund target is missing.")
+        case .debtInterestRates: tx("Falta la tasa de interés de una o más deudas. Con todas las tasas, DINCR puede decirte qué deuda atacar primero.",
+                                    "The interest rate of one or more debts is missing. With every rate, DINCR can tell you which debt to pay down first.")
         }
     }
 
     var actionTitle: String {
         switch self {
         case .income: tx("Registrar ingreso", "Record income")
-        case .debtPayments: tx("Revisar deudas", "Review debts")
+        case .debtPayments, .debtInterestRates: tx("Revisar deudas", "Review debts")
         case .essentialExpenses, .savings, .emergencyFundTarget: tx("Completar mi situación", "Complete my situation")
         }
     }

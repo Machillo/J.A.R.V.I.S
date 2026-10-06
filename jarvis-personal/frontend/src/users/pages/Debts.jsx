@@ -12,7 +12,7 @@ const tx = (es, en) => language === "es" ? es : en;
 // Amounts are in the account's base currency (CRC or USD).
 const money = (value) => value == null ? tx("Sin dato", "No data") : formatMoney(value);
 const empty = { name:"", debt_type:"other", total_amount:"", remaining_amount:"", monthly_payment:"", interest_rate:"", term_months:"", payment_day:"", next_payment_date:"" };
-const opt = (value) => value === "" ? null : Number(value);
+const opt = (value) => value === "" || value == null ? null : Number(value);
 const monthsLeft = (debt) => {
   const balance = Number(debt.remaining_amount) || 0;
   const payment = Number(debt.monthly_payment) || 0;

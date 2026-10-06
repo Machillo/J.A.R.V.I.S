@@ -87,6 +87,14 @@ def excess_savings_opportunity(snapshot: dict, apr_threshold: float | None = Non
     }
 
 
+def missing_rates_warning(count: int) -> str:
+    """The warning for debts without a known rate (Basic's text; VIP's plan reuses it)."""
+    return tx(
+        f"Falta la tasa de interés de {count} {plural(count, ('deuda', 'debt'), ('deudas', 'debts'))}; la prioridad usa los datos disponibles.",
+        f"The interest rate is missing for {count} {plural(count, ('deuda', 'debt'), ('deudas', 'debts'))}; the priority uses the available data.",
+    )
+
+
 def _debt_score(debt: dict) -> tuple:
     """Deterministic hybrid: known APR first, then due date and smaller balance."""
     rate = debt.get("interest_rate")
@@ -130,10 +138,7 @@ def build_basic_strategy(snapshot: dict, extra_monthly: float = 0) -> dict:
         ))
     missing_rates = sum(1 for d in debts if d.get("interest_rate") is None)
     if missing_rates:
-        warnings.append(tx(
-            f"Falta la tasa de interés de {missing_rates} {plural(missing_rates, ('deuda', 'debt'), ('deudas', 'debts'))}; la prioridad usa los datos disponibles.",
-            f"The interest rate is missing for {missing_rates} {plural(missing_rates, ('deuda', 'debt'), ('deudas', 'debts'))}; the priority uses the available data.",
-        ))
+        warnings.append(missing_rates_warning(missing_rates))
 
     base_margin = round(income - essentials - minimums, 2)
     if base_margin < 0:

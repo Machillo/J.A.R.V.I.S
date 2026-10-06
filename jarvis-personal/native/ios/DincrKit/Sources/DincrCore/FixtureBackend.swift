@@ -807,9 +807,9 @@ public actor FixtureBackend: HTTPTransport {
         dollars["original_amount"] = 10; dollars["original_currency"] = "USD"; dollars["exchange_rate"] = number(Decimal(string: "507.5")!)
         movements.append(dollars)
         let debts: [[String: Any]] = [["id": 31, "name": "Tarjeta de crédito", "debt_type": "credit_card", "total_amount": 600_000, "remaining_amount": 420_000, "monthly_payment": 45_000,
-                  "interest_rate": 36, "payment_day": 15, "progress_percent": 30.0],
+                  "interest_rate": 36, "interest_rate_known": true, "payment_day": 15, "progress_percent": 30.0],
                  ["id": 32, "name": "Préstamo del carro", "debt_type": "loan", "total_amount": 2_400_000, "remaining_amount": 820_000, "monthly_payment": 50_000,
-                  "interest_rate": 12, "payment_day": 1, "progress_percent": 65.8]]
+                  "interest_rate": 12, "interest_rate_known": true, "payment_day": 1, "progress_percent": 65.8]]
         let goals: [[String: Any]] = [["id": 41, "name": "Fondo de emergencia", "target_amount": 1_500_000, "current_amount": 380_000, "target_date": "2027-06-30", "priority": "high", "status": "active"],
                  ["id": 42, "name": "Viaje", "target_amount": 400_000, "current_amount": 90_000, "priority": "medium", "status": "active"]]
         let savings: [[String: Any]] = [["id": 44, "name": "Vacaciones", "monthly_amount": 25_000, "saved_amount": 75_000, "start_date": "2026-07-01", "end_date": "2027-07-01", "status": "active"]]

@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS debts (
     remaining_amount NUMERIC(14, 2) NOT NULL,
     monthly_payment NUMERIC(14, 2) NOT NULL,
     interest_rate NUMERIC(8, 4),
+    -- TRUE: given/confirmed (0 = real 0%); FALSE: unknown; NULL: historical, not verified (20261006120000).
+    interest_rate_known BOOLEAN,
     term_months INTEGER,
     payment_day INTEGER,
     start_date DATE,

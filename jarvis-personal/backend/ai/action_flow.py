@@ -480,7 +480,7 @@ def _save_action(action_type: str, payload: dict[str, Any]) -> dict[str, Any]:
             total_amount=final["total_amount"],
             remaining_amount=final["remaining_amount"],
             monthly_payment=final["monthly_payment"],
-            interest_rate=final.get("interest_rate", 0),
+            interest_rate=final.get("interest_rate"),  # not given = unknown, never 0%
             term_months=final.get("term_months"),
             payment_day=final.get("payment_day"),
         )

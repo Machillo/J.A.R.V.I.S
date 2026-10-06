@@ -13,7 +13,9 @@ from backend.finance.service import get_debts, get_financial_summary, calculate_
 from backend.finance.emergency_fund import get_salvavidas_state
 from backend.finance.fixed_expenses import get_fixed_expense_status
 from backend.goals.strategy import build_goal_portfolio
+from backend.user_product.debt_rates import MISSING_CODE as RATES_MISSING, unknown_rate_count, with_known_rates
 from backend.user_product.income_policy import load_income_baseline
+from backend.user_product.strategy_engine import missing_rates_warning
 
 # The Owner boundary. The personal JARVIS strategy (payroll/OT/bonus income, the pay
 # cycle that rolls on day 6 with the card cut on the 21st, MultiMoney cash, the
@@ -245,8 +247,12 @@ def _build_dynamic_director_allocation(
     goal_reserves: dict[str, Any],
     savings_total: float,
     emergency_monthly_base: float,
+    rates_known: bool = True,
 ) -> dict[str, Any]:
     """Motor de prioridades dinámicas del Director Financiero.
+
+    `rates_known` False (Users, a debt without a known rate): the highest rate is unknown, so the
+    "10% or more" rule is neither assumed true nor false (never computed from a missing rate as 0%).
 
     El porcentaje no es una regla rígida. Primero protege una meta con fecha,
     luego ajusta deuda/seguridad/vida según el tamaño real del colchón.
@@ -280,12 +286,13 @@ def _build_dynamic_director_allocation(
     }
 
     debt_exists = total_debt > 1
-    highest_debt_apr = max((_f(debt.get("interest_rate")) for debt in debts), default=0.0)
+    highest_debt_apr = max((_f(debt.get("interest_rate")) for debt in debts), default=0.0) if rates_known else None
     safety_gap_mini = max(mini_fund_target - savings_total, 0.0)
     safety_gap_month = max(one_month_target - savings_total, 0.0)
     investment_allowed = (
         not debt_exists
         and safety_gap_month <= 0.01
+        and highest_debt_apr is not None
         and highest_debt_apr < 10.0
     )
     goal_portfolio = build_goal_portfolio(
@@ -427,7 +434,8 @@ def _build_dynamic_director_allocation(
         "investment_blockers": [
             reason for blocked, reason in (
                 (debt_exists, tx("Hay deudas activas.", "There are active debts.")),
-                (highest_debt_apr >= 10.0, tx("Existe deuda con tasa anual de 10% o más.", "There is debt with an annual rate of 10% or more.")),
+                (highest_debt_apr is None, tx("Falta la tasa de interés de una deuda.", "A debt's interest rate is missing.")),
+                (highest_debt_apr is not None and highest_debt_apr >= 10.0, tx("Existe deuda con tasa anual de 10% o más.", "There is debt with an annual rate of 10% or more.")),
                 (safety_gap_month > 0.01, tx("El Salvavidas todavía no cubre un mes.", "The emergency fund doesn’t cover one month yet.")),
             ) if blocked
         ],
@@ -1257,10 +1265,12 @@ def _load_users_strategy_inputs(workspace_id: str, account_id: str, today: date)
     with get_connection() as conn:
         # Debts as the user stored them (no import repair), active and paid off (for progress).
         debts = [dict(row) for row in conn.execute(
-            """SELECT id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate
+            """SELECT id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,interest_rate_known
                FROM debts WHERE workspace_id=%s ORDER BY id""",
             (workspace_id,),
         ).fetchall()]
+        # Known rates only: None = unknown, never 0% (backend/user_product/debt_rates.py).
+        debts = with_known_rates(debts)
         income_policy = load_income_baseline(conn, account_id=account_id, workspace_id=workspace_id, today=today)
         month = _ledger_totals(conn, workspace_id, month_start, _next_month(month_start))
         recurring = [dict(row) for row in conn.execute(
@@ -1340,12 +1350,15 @@ def _users_blueprint_from_inputs(
     if emergency_monthly_base <= 0:
         emergency_monthly_base = recurring_expense_monthly + configured_debt_payments
 
+    # A debt without a known rate: no decision that compares rates is made from it (UNKNOWN ≠ 0%).
+    missing_rates = unknown_rate_count(debts)
     director = _build_dynamic_director_allocation(
         available_before_allocation=max(current_before_allocation, 0.0),
         debts=debts,
         goal_reserves=goal_reserves,
         savings_total=savings_total,
         emergency_monthly_base=emergency_monthly_base,
+        rates_known=not missing_rates,
     )
     emergency = dict(director.get("emergency") or {})
     emergency["current_known"] = savings_known
@@ -1362,16 +1375,26 @@ def _users_blueprint_from_inputs(
         goal_reserves=goal_reserves,
         savings_total=savings_total,
         emergency_monthly_base=emergency_monthly_base,
+        rates_known=not missing_rates,
     )
     recurring_debt_attack_extra = _f((recurring_director.get("allocation_amounts") or {}).get("ataque_de_deuda"))
-    base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
-        debts, recurring_monthly_extra=recurring_debt_attack_extra, first_month_extra=0.0,
-    )
     first_month_adjustment = current_debt_attack_extra - recurring_debt_attack_extra
-    timeline, total_months, payment_pool = _simulate_debt_cascade(
-        debts, recurring_monthly_extra=recurring_debt_attack_extra, first_month_extra=first_month_adjustment,
-    )
-    primary_debt_name = timeline[0].get("name") if timeline else None
+    if missing_rates:
+        # The payoff order and dates depend on every rate: none is simulated from an unknown one.
+        # The payment pool (minimums + the extra for debt) doesn't use rates.
+        pool = round(sum(max(_f(debt.get("monthly_payment")), 0.0) for debt in debts) + max(recurring_debt_attack_extra, 0.0), 2)
+        base_timeline, base_total_months, base_payment_pool = [], 0, pool
+        timeline, total_months, payment_pool = [], 0, pool
+        # One debt needs no comparison; with several, which one comes first is not decided.
+        primary_debt_name = debts[0].get("name") if len(debts) == 1 else None
+    else:
+        base_timeline, base_total_months, base_payment_pool = _simulate_debt_cascade(
+            debts, recurring_monthly_extra=recurring_debt_attack_extra, first_month_extra=0.0,
+        )
+        timeline, total_months, payment_pool = _simulate_debt_cascade(
+            debts, recurring_monthly_extra=recurring_debt_attack_extra, first_month_extra=first_month_adjustment,
+        )
+        primary_debt_name = timeline[0].get("name") if timeline else None
     for item in allocation_items:
         if item.get("key") == "ataque_de_deuda":
             item["target_name"] = primary_debt_name
@@ -1392,6 +1415,18 @@ def _users_blueprint_from_inputs(
     else:
         objective = tx(f"Modo {mode_label}: {director.get('mode_reason')}", f"{mode_label} mode: {director.get('mode_reason')}")
     priority = _build_current_priority(no_free_cash=no_free_cash, director=director, timeline=timeline)
+    warnings: list[str] = []
+    if missing_rates:
+        warnings.append(missing_rates_warning(missing_rates))
+        if not no_free_cash and priority.get("kind") not in {"cash", "goal"} and current_debt_attack_extra > 0:
+            # Debt is still the priority; which debt is named only when there is nothing to compare.
+            priority = {
+                "kind": "debt",
+                "title": (tx(f"Atacar deuda: {primary_debt_name}", f"Pay down debt: {primary_debt_name}") if primary_debt_name
+                          else tx("Completá las tasas de interés para saber qué deuda atacar primero",
+                                  "Add your debts’ interest rates to know which one to pay down first")),
+                "detail": warnings[0],
+            }
     period = inputs.get("period") or {}
 
     return {
@@ -1464,13 +1499,18 @@ def _users_blueprint_from_inputs(
         "debt_original_total": round(original_debt, 2),
         "debt_paid_total": round(paid_debt, 2),
         "debt_progress_percent": progress,
-        "estimated_total_months": total_months if timeline else 0,
-        "estimated_debt_free_date": _add_months_iso(today, total_months if total_months < 999 else None),
-        "base_estimated_total_months": base_total_months if base_timeline else 0,
-        "base_estimated_debt_free_date": _add_months_iso(today, base_total_months if base_total_months < 999 else None),
+        "estimated_total_months": None if missing_rates else (total_months if timeline else 0),
+        # Payoff dates need every rate: unknown (None) while one is missing, never "today".
+        "estimated_debt_free_date": None if missing_rates else _add_months_iso(today, total_months if total_months < 999 else None),
+        "base_estimated_total_months": None if missing_rates else (base_total_months if base_timeline else 0),
+        "base_estimated_debt_free_date": None if missing_rates else _add_months_iso(today, base_total_months if base_total_months < 999 else None),
         "months_saved_by_current_extras": months_saved,
         "timeline": timeline,
         "base_timeline": base_timeline,
+        # Basic's integrity pattern (strategy_engine warnings) and the #326 `missing` code.
+        "warnings": warnings,
+        # Asked for only when a decision compares rates (two or more debts), as the command center does.
+        "missing": [RATES_MISSING] if missing_rates and len(debts) > 1 else [],
         "rules": [
             tx("Solo se distribuye el sobrante que queda después de obligaciones y gastos ya registrados.",
                "Only the surplus left after obligations and recorded expenses is allocated."),

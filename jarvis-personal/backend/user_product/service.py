@@ -12,6 +12,7 @@ from backend.core.idempotency import mark_applied
 from backend.finance.service import get_payroll_events
 from backend.finance.category_catalog import manual_expense_category, normalize_category, expense_type_for_category
 from backend.user_product.basic_service import _require_basic_tables
+from backend.user_product.debt_rates import UNKNOWN_RATE_SQL, known_interest_rate, rate_for_create, rate_for_update, with_known_rates
 from backend.user_product.entry_currency import account_base_currency, resolve_entry_amount
 from backend.user_product.strategy_engine import (
     build_basic_strategy,
@@ -271,22 +272,24 @@ def create_user_debt(payload):
     remaining = float(payload.remaining_amount or 0)
     total = float(payload.total_amount if payload.total_amount is not None else remaining)
     monthly = float(payload.monthly_payment or 0)
-    interest = float(payload.interest_rate or 0)
+    # No rate given is an unknown rate (NULL), never 0%; any given rate, 0 included, is known.
+    interest, interest_known = rate_for_create(payload.interest_rate)
     with get_connection() as conn:
         row = conn.execute(
             """INSERT INTO debts(
                    user_id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,
-                   term_months,payment_day,created_at,first_payment_date,auto_update_monthly,
+                   interest_rate_known,term_months,payment_day,created_at,first_payment_date,auto_update_monthly,
                    installments_paid,updated_at,start_date,next_payment_date,last_payment_date,
                    interest_method,fixed_fee_amount,workspace_id
-               ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NULL,%s,0,NOW(),NULL,%s,NULL,'monthly',0,%s)
-               RETURNING id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,term_months,payment_day,next_payment_date,created_at""",
+               ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NULL,%s,0,NOW(),NULL,%s,NULL,'monthly',0,%s)
+               RETURNING id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,
+                         interest_rate_known,term_months,payment_day,next_payment_date,created_at""",
             (user_id, payload.name.strip(), payload.debt_type, max(total, remaining), remaining, monthly, interest,
-             payload.term_months, payload.payment_day, monthly > 0, payload.next_payment_date, workspace_id),
+             interest_known, payload.term_months, payload.payment_day, monthly > 0, payload.next_payment_date, workspace_id),
         ).fetchone()
         mark_applied(conn)
         conn.commit()
-    return row
+    return _with_rate_knowledge(row)
 
 
 def pay_user_debt(debt_id: int, amount: float):
@@ -329,12 +332,19 @@ def list_user_debts():
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT id,name,debt_type,total_amount,remaining_amount,monthly_payment,interest_rate,
-                      term_months,payment_day,next_payment_date,created_at,
+                      interest_rate_known,term_months,payment_day,next_payment_date,created_at,
                       CASE WHEN total_amount>0 THEN ROUND((1-(remaining_amount/total_amount))*100,1) ELSE 0 END AS progress_percent
                FROM debts WHERE workspace_id=%s ORDER BY id DESC""",
             (workspace_id,),
         ).fetchall()
-    return rows
+    # `interest_rate_known` is what DINCR knows (an unconfirmed historical 0 is not known); the
+    # stored `interest_rate` is returned as before.
+    return [_with_rate_knowledge(row) for row in rows]
+
+
+def _with_rate_knowledge(row) -> dict:
+    row = dict(row)
+    return {**row, "interest_rate_known": known_interest_rate(row) is not None}
 
 
 def update_user_debt(debt_id: int, payload):
@@ -342,22 +352,30 @@ def update_user_debt(debt_id: int, payload):
     remaining = float(payload.remaining_amount or 0)
     total = max(float(payload.total_amount if payload.total_amount is not None else remaining), remaining)
     with get_connection() as conn:
+        stored = conn.execute(
+            "SELECT interest_rate,interest_rate_known,debt_type FROM debts WHERE id=%s AND workspace_id=%s FOR UPDATE",
+            (debt_id, workspace_id),
+        ).fetchone()
+        if not stored:
+            raise HTTPException(status_code=404, detail="Deuda no encontrada.")
+        # Saving the debt never confirms its rate by itself (see debt_rates.rate_for_update).
+        interest, interest_known = rate_for_update(dict(stored), payload.interest_rate, payload.interest_rate_confirmed)
         row = conn.execute(
             """UPDATE debts SET name=%s,debt_type=%s,total_amount=%s,remaining_amount=%s,
-                      monthly_payment=%s,interest_rate=%s,term_months=%s,payment_day=%s,
+                      monthly_payment=%s,interest_rate=%s,interest_rate_known=%s,term_months=%s,payment_day=%s,
                       next_payment_date=%s,updated_at=NOW()
                WHERE id=%s AND workspace_id=%s
                RETURNING id,name,debt_type,total_amount,remaining_amount,monthly_payment,
-                         interest_rate,term_months,payment_day,next_payment_date""",
+                         interest_rate,interest_rate_known,term_months,payment_day,next_payment_date""",
             (payload.name.strip(), payload.debt_type, total, remaining, payload.monthly_payment or 0,
-             payload.interest_rate, payload.term_months, payload.payment_day, payload.next_payment_date,
+             interest, interest_known, payload.term_months, payload.payment_day, payload.next_payment_date,
              debt_id, workspace_id),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Deuda no encontrada.")
         mark_applied(conn)
         conn.commit()
-    return row
+    return _with_rate_knowledge(row)
 
 
 def delete_user_debt(debt_id: int):
@@ -600,8 +618,8 @@ def get_financial_situation():
             (account_id, workspace_id),
         ).fetchone()
         debts = conn.execute(
-            """SELECT COUNT(*) AS count, COALESCE(SUM(remaining_amount),0) AS balance,
-                      COUNT(*) FILTER (WHERE interest_rate IS NULL OR interest_rate=0) AS missing_interest
+            f"""SELECT COUNT(*) AS count, COALESCE(SUM(remaining_amount),0) AS balance,
+                      COUNT(*) FILTER (WHERE {UNKNOWN_RATE_SQL}) AS missing_interest
                FROM debts WHERE workspace_id=%s AND remaining_amount>0""",
             (workspace_id,),
         ).fetchone()
@@ -688,11 +706,12 @@ def _strategy_snapshot():
                FROM financial_profiles WHERE account_id=%s AND workspace_id=%s""",
             (account_id, workspace_id),
         ).fetchone()
-        debts = conn.execute(
-            """SELECT id,name,remaining_amount,monthly_payment,NULLIF(interest_rate,0) AS interest_rate,payment_day
+        # The known rate per debt (None when unknown, never 0 for "unknown"): see debt_rates.py.
+        debts = with_known_rates([dict(row) for row in conn.execute(
+            """SELECT id,name,remaining_amount,monthly_payment,interest_rate,interest_rate_known,debt_type,payment_day
                FROM debts WHERE workspace_id=%s AND remaining_amount>0 ORDER BY id""",
             (workspace_id,),
-        ).fetchall()
+        ).fetchall()])
         goals = conn.execute(
             """SELECT id,name,target_amount,current_amount,target_date,priority
                FROM financial_goals WHERE workspace_id=%s AND status='active'
